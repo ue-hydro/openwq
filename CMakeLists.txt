@@ -231,10 +231,19 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "crhm_openwq")
                         "/usr/include/"
                         "/code/")
 
+                # determine which version of libnetcdff.a to use based on users OS
+                execute_process(COMMAND uname -o OUTPUT_VARIABLE OPERATING_SYSTEM OUTPUT_STRIP_TRAILING_WHITESPACE)
+                IF(${OPERATING_SYSTEM} STREQUAL "GNU/Linux")
+                        SET(LIBNETCDFF_PATH "/usr/lib/x86_64-linux-gnu/libnetcdff.a")
+                ELSE()
+                        SET(LIBNETCDFF_PATH "/usr/lib/aarch64-linux-gnu/libnetcdff.a")
+                ENDIF()
+
                 TARGET_LINK_LIBRARIES(
                         ${exec_name} PUBLIC
                         #"/usr/lib/x86_64-linux-gnu/libnetcdff.a"
-                        "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        # "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        ${LIBNETCDFF_PATH}
                         ${Boost_LIBRARIES}
                         ${ARMADILLO_LIBRARIES}
                         ${HDF5_C_LIBRARY_hdf5})
@@ -524,9 +533,19 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
                 TARGET_INCLUDE_DIRECTORIES(SUMMA_COMM PRIVATE
                         "/usr/include/"
                         "/code/")
+
+                # determine which version of libnetcdff.a to use based on users OS
+                execute_process(COMMAND uname -o OUTPUT_VARIABLE OPERATING_SYSTEM OUTPUT_STRIP_TRAILING_WHITESPACE)
+                IF(${OPERATING_SYSTEM} STREQUAL "GNU/Linux")
+                        SET(LIBNETCDFF_PATH "/usr/lib/x86_64-linux-gnu/libnetcdff.a")
+                ELSE()
+                        SET(LIBNETCDFF_PATH "/usr/lib/aarch64-linux-gnu/libnetcdff.a")
+                ENDIF()
+
                 TARGET_LINK_LIBRARIES(SUMMA_COMM PUBLIC
                         #"/usr/lib/x86_64-linux-gnu/libnetcdff.a"
-                        "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        # "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        ${LIBNETCDFF_PATH}
                         SUMMA_NOAHMP)
 
                 # Create the executable with openWQ coupled to Summa                 
@@ -543,7 +562,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
                         TARGET_LINK_LIBRARIES(
                                 ${exec_name} PUBLIC
                                 #"/usr/lib/x86_64-linux-gnu/libnetcdff.a"
-                                "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                                # "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                                ${LIBNETCDFF_PATH}
                                 ${LAPACK_LIBRARIES}
                                 ${netCDF_LIBRARIES}
                                 SUMMA_COMM
@@ -711,10 +731,20 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         ${netCDF_INCLUDES}
                         "/usr/include/"
                         "/code/")
+
+                # determine which version of libnetcdff.a to use based on users OS
+                execute_process(COMMAND uname -o OUTPUT_VARIABLE OPERATING_SYSTEM OUTPUT_STRIP_TRAILING_WHITESPACE)
+                IF(${OPERATING_SYSTEM} STREQUAL "GNU/Linux")
+                        SET(LIBNETCDFF_PATH "/usr/lib/x86_64-linux-gnu/libnetcdff.a")
+                ELSE()
+                        SET(LIBNETCDFF_PATH "/usr/lib/aarch64-linux-gnu/libnetcdff.a")
+                ENDIF()
+                
                 TARGET_LINK_LIBRARIES(
                         ${exec_name} PUBLIC
                         #"/usr/lib/x86_64-linux-gnu/libnetcdff.a"
-                        "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        # "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        ${LIBNETCDFF_PATH}
                         ${LAPACK_LIBRARIES}
                         ${netCDF_LIBRARIES}
                         OPENWQ_OBJ)
@@ -792,10 +822,19 @@ SET(exec_name "${COMPILE_TARGET}_${COMPILE_MODE}")
                         "/usr/include/"
                         "/code/")
 
+                # determine which version of libnetcdff.a to use based on users OS
+                execute_process(COMMAND uname -o OUTPUT_VARIABLE OPERATING_SYSTEM OUTPUT_STRIP_TRAILING_WHITESPACE)
+                IF(${OPERATING_SYSTEM} STREQUAL "GNU/Linux")
+                        SET(LIBNETCDFF_PATH "/usr/lib/x86_64-linux-gnu/libnetcdff.a")
+                ELSE()
+                        SET(LIBNETCDFF_PATH "/usr/lib/aarch64-linux-gnu/libnetcdff.a")
+                ENDIF()
+
                 TARGET_LINK_LIBRARIES(
                         ${exec_name} PUBLIC
                         #"/usr/lib/x86_64-linux-gnu/libnetcdff.a"
-                        "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        # "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        ${LIBNETCDFF_PATH}
                         ${ARMADILLO_LIBRARIES}
                         ${HDF5_C_LIBRARY_hdf5}
                         )
