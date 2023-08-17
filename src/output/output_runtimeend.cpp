@@ -196,6 +196,7 @@ int OpenWQ_output::writeResults(
 
                 // Var: d_chemass_dt_chem
                 output_file_label.assign("d_output_dt_chemistry");
+                
                 OpenWQ_output::writeHDF5(
                     OpenWQ_json,
                     OpenWQ_hostModelconfig,
@@ -204,6 +205,7 @@ int OpenWQ_output::writeResults(
                     output_file_label,
                     timestr,
                     icmp);
+
 
                 // Var: d_chemass_dt_transp
                 output_file_label.assign("d_output_dt_transport");
@@ -452,7 +454,7 @@ int OpenWQ_output::writeHDF5(
 
 
     // Get number of cells to print for compartment icmp
-    num_cells2print = OpenWQ_wqconfig.cells2print_vec.at(icmp).n_rows;
+    num_cells2print = this->getNumDimensions();
     printflag = OpenWQ_wqconfig.cells2print_bool.at(icmp);
 
     // If nothing to prin, then exit
@@ -535,7 +537,7 @@ int OpenWQ_output::writeHDF5(
     // Save datasets for each time step
 
     // Get number of cell elements to print
-    num_cells2print = OpenWQ_wqconfig.cells2print_vec[icmp].n_rows;
+    num_cells2print = this->getNumDimensions();
 
     // Parallel I/O section (writting to files)
     #pragma omp parallel for private(chem_name,filename,ix,iy,iz,water_vol_i) collapse(1) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
@@ -565,9 +567,12 @@ int OpenWQ_output::writeHDF5(
         for (unsigned int celli=0;celli<num_cells2print;celli++){
 
             // Get ix, iy and iz from cells2print_vec 
-            ix = OpenWQ_wqconfig.cells2print_vec[icmp](celli,0);
-            iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli,1);
-            iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli,2);
+            // ix = OpenWQ_wqconfig.cells2print_vec[icmp](celli,0);
+            // iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli,1);
+            // iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli,2);
+            ix = 0;               
+            iy = 0;
+            iz = 0;
 
             // Get cell volume
             // only if concentration is asked as output
@@ -585,18 +590,17 @@ int OpenWQ_output::writeHDF5(
                 (OpenWQ_wqconfig.is_conentration_requested() &&
                 water_vol_i > OpenWQ_hostModelconfig.get_watervol_minlim()) 
                 || OpenWQ_wqconfig.is_conentration_requested() == false){
-             
                 data2print(celli,0) = 
                     (*OpenWQ_var2print)
                         (icmp)
-                        (OpenWQ_wqconfig.chem2print[ichem])
-                        (ix,iy,iz)
+                        (ichem)
+                        (celli,iy,iz)
                     * unit_multiplers[0]          // numerator unit conversion
                     / (  water_vol_i              // water volume (= 1 if mass requested (and not conc))
                         * unit_multiplers [1] );  // denominator unit conversion 
 
-            }else{
 
+            }else{
                 // Set as NaN because the concentration is not really zero,
                 // it simply does not exist when there is no water
                 data2print(celli,0) = OpenWQ_wqconfig.noWaterConc;
@@ -604,7 +608,6 @@ int OpenWQ_output::writeHDF5(
             }
 
         }
-        
         // Save results
         data2print
             .save(arma::hdf5_name(

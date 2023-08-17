@@ -43,6 +43,15 @@ class OpenWQ_output{
             std::string& msg_string,
             bool print_console,
             bool print_logFile);
+
+        int getNumDimensions(){
+            return this->numDimensions;
+        }
+
+        int setNumDimensions(int new_numDimensions){
+            this->numDimensions = new_numDimensions;
+        }
+
     private:
         // Print output in CSV
         int writeCSV(
@@ -64,7 +73,7 @@ class OpenWQ_output{
             std::string timestr,            // time step (in seconds)
             int icmp);
 
-
+        int numDimensions;
 
 };
 
