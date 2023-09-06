@@ -37,7 +37,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
 # optA3) summa_openwq -> compile with summa using hydrolink
 # optA4) mizuroute_openwq -> compile with mizuRoute using hydrolink
 # optA5) fluxos_openwq -> compile with fluxos using hydrolink
-SET(COMPILE_TARGET summa_openwq)
+SET(COMPILE_TARGET mizuroute_openwq)
 
 # B) Set Compilation mode:
 # optB1) debug -> set the necessary flags for debugging
@@ -615,6 +615,11 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                 SET(OPENWQ_DIR ${PARENT_DIR}/openwq/openwq)
                 SET(OPENWQ_INTERFACE_DIR ${OPENWQ_DIR}/..)
 
+                message(PARENT_DIR="${PARENT_DIR}")
+                message(MIZUROUTE_DIR="${MIZUROUTE_DIR}")
+                message(OPENWQ_DIR="${OPENWQ_DIR}")
+                message(OPENWQ_INTERFACE_DIR="${OPENWQ_INTERFACE_DIR}")
+
                 # Setting OpenWQ sources
                 SET(MIZUROUTE_UTILS
                         ${MIZUROUTE_DIR}/nrtype.f90
@@ -680,7 +685,19 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
                 # Setting MizuRoute sources
                 FILE(GLOB OPENWQ_SOURCES 
-                        ${OPENWQ_DIR}/src/*.cpp
+                        # ${OPENWQ_DIR}/src/*.cpp
+                        ${OPENWQ_DIR}/src/*.cpp 
+                        ${OPENWQ_DIR}/src/global/*.cpp
+                        ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
+                        ${OPENWQ_DIR}/src/initiate/*.cpp
+                        ${OPENWQ_DIR}/src/chem/*.cpp
+                        ${OPENWQ_DIR}/src/watertransp/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/*.cpp
+                        ${OPENWQ_DIR}/src/couplercalls/*.cpp
+                        ${OPENWQ_DIR}/src/output/*.cpp
+                        ${OPENWQ_DIR}/src/solver/*.cpp
+                        ${OPENWQ_DIR}/src/units/*.cpp
+                        ${OPENWQ_DIR}/src/utils/*.cpp
                         ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
                         ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
 

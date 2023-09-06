@@ -28,7 +28,7 @@ class OpenWQ_hostModelconfig
     private:
         // ########################
         // Host model COMPARTMENT or EXTERNAL FLUX characterization via tuple
-        typedef std::tuple<int,std::string,int, int, int> hydroTuple;
+        // typedef std::tuple<int,std::string,int, int, int> hydroTuple;
         // Add host_hydrological_model compartment:
         // (1) int => index in openWQ 
         // (2) std::string => reference name in JSON file
@@ -38,12 +38,12 @@ class OpenWQ_hostModelconfig
         // ########################
         // Vectors with characterization of the different 
         // model compartments and external fluxes
-        std::vector<hydroTuple> HydroComp;
-        std::vector<hydroTuple> HydroExtFlux;
-        std::vector<hydroTuple> HydroDepend;
+        // std::vector<hydroTuple> HydroComp;
+        // std::vector<hydroTuple> HydroExtFlux;
+        // std::vector<hydroTuple> HydroDepend;
 
         // Stores water fluxes when concentration are requested for outputs
-        std::unique_ptr<std::vector<arma::Cube<double>>> waterVol_hydromodel;
+        // std::unique_ptr<std::vector<arma::Cube<double>>> waterVol_hydromodel;
 
         // To store all dependency variables 
         // to be available for BGC calculations and expressionss
@@ -75,6 +75,12 @@ class OpenWQ_hostModelconfig
 
         /******** Methods *********/
         
+        // moved from private here to make compiler happy
+        typedef std::tuple<int,std::string,int, int, int> hydroTuple;
+        std::vector<hydroTuple> HydroComp;
+        std::vector<hydroTuple> HydroExtFlux;
+        std::vector<hydroTuple> HydroDepend;
+        std::unique_ptr<std::vector<arma::Cube<double>>> waterVol_hydromodel;
 
         
         /********************
