@@ -594,7 +594,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
         # Choose where to create the executable
         SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-        SET(EXEC_DIR ${PARENT_DIR}/../../../case_studies/testCase_cameo_v1.2/bin)
+        SET(EXEC_DIR ${PARENT_DIR}/../../../case_studies_mizuroute)
 
         IF(UNIX AND NOT APPLE)
 
