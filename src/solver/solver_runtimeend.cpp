@@ -74,10 +74,12 @@ void OpenWQ_solver::Numerical_Solver(
                         // 2
                         // SS (Sink & Sources)
                         // Discrete or continuous chemical load
-
+                        
+                        std::cout << (*OpenWQ_vars.d_chemass_ss)(icmp)(chemi)(ix,iy,iz) << std::endl;
                         dm_ss = (*OpenWQ_vars.d_chemass_ss)(icmp)(chemi)(ix,iy,iz);
                         // updating cumulative calc for output in debug mode
                         (*OpenWQ_vars.d_chemass_ss_out)(icmp)(chemi)(ix,iy,iz) += dm_ss;
+                        std::cout << (*OpenWQ_vars.d_chemass_ss)(icmp)(chemi)(ix,iy,iz) << std::endl;
 
                         // ####################################
                         // 3

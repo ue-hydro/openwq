@@ -61,7 +61,8 @@ int OpenWQ_output::writeResults(
 
     //#pragma omp parallel for private(it) num_threads(OpenWQ_wqconfig.num_threads_requested)
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
-
+    // for (unsigned int icmp=0;icmp<5;icmp++){
+        std::cout << OpenWQ_wqconfig.compt2print.data() << std::endl;
         // See if icmp is in compt2print 
         // (which means user wants to print variables for this compartment)
         it = std::find(
@@ -590,6 +591,7 @@ int OpenWQ_output::writeHDF5(
                 (OpenWQ_wqconfig.is_conentration_requested() &&
                 water_vol_i > OpenWQ_hostModelconfig.get_watervol_minlim()) 
                 || OpenWQ_wqconfig.is_conentration_requested() == false){
+                std::cout << (*OpenWQ_var2print)(icmp)(ichem)(celli,iy,iz) << " " << unit_multiplers[0] << " " << water_vol_i << " " << unit_multiplers [1] << std::endl;
                 data2print(celli,0) = 
                     (*OpenWQ_var2print)
                         (icmp)
@@ -608,6 +610,7 @@ int OpenWQ_output::writeHDF5(
             }
 
         }
+        std::cout << data2print << std::endl;
         // Save results
         data2print
             .save(arma::hdf5_name(

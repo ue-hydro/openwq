@@ -1442,6 +1442,7 @@ void OpenWQ_readjson::SetConfigInfo_output_what2print(
         true);
 
     // num of comartments to print
+    std::cout << json_output_subStruct_CmpCells << std::endl;
     num_compt2print = json_output_subStruct_CmpCells.size();
     
     // Get list of compartments to print from COMPARTMENTS_AND_CELLS
