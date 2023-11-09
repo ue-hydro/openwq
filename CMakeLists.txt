@@ -37,12 +37,12 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
 # optA3) summa_openwq -> compile with summa using hydrolink
 # optA4) mizuroute_openwq -> compile with mizuRoute using hydrolink
 # optA5) fluxos_openwq -> compile with fluxos using hydrolink
-SET(COMPILE_TARGET summa_openwq)
+SET(COMPILE_TARGET mizuroute_openwq)
 
 # B) Set Compilation mode:
 # optB1) debug -> set the necessary flags for debugging
 # optB2) fast -> set optimization flags
-SET(COMPILE_MODE fast)
+SET(COMPILE_MODE debug)
 
 #####
 # DON'T CHANGE BEYOND THIS POINT...............
@@ -569,11 +569,11 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
 # ..................
 ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
-        SET(exec_name "${COMPILE_TARGET}_${COMPILE_MODE}")
+        SET(exec_name "CSB0480-Mizuroute-main_UEHydro-openwq-develop_${COMPILE_MODE}")
 
         # Choose where to create the executable
         SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-        SET(EXEC_DIR ${PARENT_DIR}/../../../case_studies/testCase_cameo_v1.2/bin)
+        SET(EXEC_DIR ${PARENT_DIR}/../../../case_studies_mizuroute)
 
         IF(UNIX AND NOT APPLE)
 
@@ -659,7 +659,18 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
                 # Setting MizuRoute sources
                 FILE(GLOB OPENWQ_SOURCES 
-                        ${OPENWQ_DIR}/src/*.cpp
+                        ${OPENWQ_DIR}/src/*.cpp 
+                        ${OPENWQ_DIR}/src/global/*.cpp
+                        ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
+                        ${OPENWQ_DIR}/src/initiate/*.cpp
+                        ${OPENWQ_DIR}/src/chem/*.cpp
+                        ${OPENWQ_DIR}/src/watertransp/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/*.cpp
+                        ${OPENWQ_DIR}/src/couplercalls/*.cpp
+                        ${OPENWQ_DIR}/src/output/*.cpp
+                        ${OPENWQ_DIR}/src/solver/*.cpp
+                        ${OPENWQ_DIR}/src/units/*.cpp
+                        ${OPENWQ_DIR}/src/utils/*.cpp
                         ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
                         ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
 
@@ -713,8 +724,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         "/code/")
                 TARGET_LINK_LIBRARIES(
                         ${exec_name} PUBLIC
-                        #"/usr/lib/x86_64-linux-gnu/libnetcdff.a"
-                        "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        "/usr/lib/x86_64-linux-gnu/libnetcdff.a"
+                        # "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
                         ${LAPACK_LIBRARIES}
                         ${netCDF_LIBRARIES}
                         OPENWQ_OBJ)
