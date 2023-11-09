@@ -569,11 +569,12 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
 # ..................
 ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
-        SET(exec_name "CSB0480-Mizuroute-main_UEHydro-openwq-develop_${COMPILE_MODE}")
+        SET(exec_name "${COMPILE_TARGET}_${COMPILE_MODE}")
+
 
         # Choose where to create the executable
         SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-        SET(EXEC_DIR ${PARENT_DIR}/../../../case_studies_mizuroute)
+        SET(EXEC_DIR ${PARENT_DIR}/../../../case_studies/testCase_cameo_v1.2/bin)
 
         IF(UNIX AND NOT APPLE)
 
@@ -590,11 +591,35 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                 FortranCInterface_VERIFY(CXX)
 
                 # Get paths to source code
-                SET(MIZUROUTE_DIR ${PARENT_DIR}/src)
                 SET(OPENWQ_DIR ${PARENT_DIR}/openwq/openwq)
                 SET(OPENWQ_INTERFACE_DIR ${OPENWQ_DIR}/..)
 
-                # Setting OpenWQ sources
+                # File definitions for subcomponents - For OpenWQ
+                FILE(GLOB OPENWQ_SOURCES 
+                        ${OPENWQ_DIR}/src/*.cpp 
+                        ${OPENWQ_DIR}/src/global/*.cpp
+                        ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
+                        ${OPENWQ_DIR}/src/initiate/*.cpp
+                        ${OPENWQ_DIR}/src/chem/*.cpp
+                        ${OPENWQ_DIR}/src/watertransp/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/*.cpp
+                        ${OPENWQ_DIR}/src/couplercalls/*.cpp
+                        ${OPENWQ_DIR}/src/output/*.cpp
+                        ${OPENWQ_DIR}/src/solver/*.cpp
+                        ${OPENWQ_DIR}/src/units/*.cpp
+                        ${OPENWQ_DIR}/src/utils/*.cpp
+                        ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
+                        ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
+                
+                SET(OPENWQ_INCLUDES
+                        ${OPENWQ_DIR}/src/global/
+                        ${OPENWQ_DIR}/src/jnlohmann/
+                        ${PARENT_DIR})
+
+                SET(MIZUROUTE_DIR ${PARENT_DIR}/src)
+                
+
+                # Setting mizuroute
                 SET(MIZUROUTE_UTILS
                         ${MIZUROUTE_DIR}/nrtype.f90
                         ${MIZUROUTE_DIR}/nr_utility.f90
@@ -657,23 +682,6 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         ${MIZUROUTE_IO}
                         ${MIZUROUTE_CORE})
 
-                # Setting MizuRoute sources
-                FILE(GLOB OPENWQ_SOURCES 
-                        ${OPENWQ_DIR}/src/*.cpp 
-                        ${OPENWQ_DIR}/src/global/*.cpp
-                        ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
-                        ${OPENWQ_DIR}/src/initiate/*.cpp
-                        ${OPENWQ_DIR}/src/chem/*.cpp
-                        ${OPENWQ_DIR}/src/watertransp/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/*.cpp
-                        ${OPENWQ_DIR}/src/couplercalls/*.cpp
-                        ${OPENWQ_DIR}/src/output/*.cpp
-                        ${OPENWQ_DIR}/src/solver/*.cpp
-                        ${OPENWQ_DIR}/src/units/*.cpp
-                        ${OPENWQ_DIR}/src/utils/*.cpp
-                        ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
-                        ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
-
                 SET(CMAKE_CXX_STANDARD 17)
 
                 IF("${COMPILE_MODE}" STREQUAL "debug")
@@ -724,8 +732,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         "/code/")
                 TARGET_LINK_LIBRARIES(
                         ${exec_name} PUBLIC
-                        "/usr/lib/x86_64-linux-gnu/libnetcdff.a"
-                        # "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        # "/usr/lib/x86_64-linux-gnu/libnetcdff.a"
+                        "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
                         ${LAPACK_LIBRARIES}
                         ${netCDF_LIBRARIES}
                         OPENWQ_OBJ)
