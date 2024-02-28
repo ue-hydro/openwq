@@ -182,7 +182,13 @@ void OpenWQ_chem::BGC_Transform(
                             }
                             // New mass of consumed chemical
                             (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_cons)(ix,iy,iz) -= transf_mass;
-
+                            if (std::isinf((*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_cons)(ix,iy,iz) )){
+                                std::cerr << "Error: Inf detected in compartment\n"; 
+                                std::cerr << "transf_mass = " << transf_mass << "\n";
+                                std::cerr << "(*OpenWQ_vars.chemass)(icmp)(index_cons)(ix,iy,iz)," << (*OpenWQ_vars.chemass)(icmp)(index_cons)(ix,iy,iz) << "\n";
+                            
+                            exit(EXIT_FAILURE);
+                        }
                             // New mass of produced chemical
                             (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_prod)(ix,iy,iz) += transf_mass;
 

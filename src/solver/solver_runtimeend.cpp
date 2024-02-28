@@ -17,7 +17,8 @@
 
 
 #include "OpenWQ_solver.hpp"
-
+#include <cmath>  // Include this at the top of your file
+#include <iostream>
 /* #################################################
 // General numerical solver
 ################################################# */
@@ -95,6 +96,11 @@ void OpenWQ_solver::Numerical_Solver(
 
                         // Chemistry
                         dm_dt_chem = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi)(ix,iy,iz);
+                        if (std::isinf(dm_dt_chem)){
+                            std::cerr << "Error: Inf detected in compartment " 
+                                      << "OpenWQ_vars.d_chemass_dt_chem\n";
+                            exit(EXIT_FAILURE);
+                        }
                         // updating cumulative calc for output in debug mode
                         // No need to multiply by timestep because that has been done in chem module
                         (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp)(chemi)(ix,iy,iz) += dm_dt_chem;
@@ -118,6 +124,19 @@ void OpenWQ_solver::Numerical_Solver(
 
                         if((*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz) < 0){
                             (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz) = 0;
+                        }
+                        if (std::isnan((*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz))){
+
+                            std::cerr << "Error: NaN detected in compartment " 
+                                      << icmp << " for chemical " << chemi 
+                                      << " at cell " << ix << "," << iy << "," 
+                                      << iz << std::endl;
+                            std::cerr << "dm_ic = " << dm_ic << std::endl;
+                            std::cerr << "dm_ss = " << dm_ss << std::endl;
+                            std::cerr << "dm_ewf = " << dm_ewf << std::endl;
+                            std::cerr << "dm_dt_chem = " << dm_dt_chem << std::endl;
+                            std::cerr << "dm_dt_trans = " << dm_dt_trans << std::endl;
+                            exit(EXIT_FAILURE);
                         }
                     }
                 }
