@@ -56,7 +56,7 @@ endif()
 # optB1) debug -> set the necessary flags for debugging
 # optB2) fast -> set optimization flags
 if(NOT CMAKE_BUILD_TYPE)
-    set(COMPILE_MODE fast)
+    set(COMPILE_MODE debug)
 else()
     SET(COMPILE_MODE ${CMAKE_BUILD_TYPE})
 endif()
@@ -253,6 +253,30 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
     if(NOT UNIX)
         MESSAGE(STATUS "Current Operating System is not supported yet!")
     endif()
+
+    if(NOT CMAKE_SOLVER)
+        set(SOLVER_TYPE BE)
+    else()
+        SET(SOLVER_TYPE ${CMAKE_SOLVER})
+    endif()
+    MESSAGE(STATUS "SOLVER_TYPE ${SOLVER_TYPE}")
+
+    if (SOLVER_TYPE MATCHES Sundials)
+        add_compile_definitions(SUNDIALS_ACTIVE)
+        set(DIR_SUNDIALS "")
+        if(EXISTS $ENV{SUNDIALS_PATH})
+              set(DIR_SUNDIALS $ENV{SUNDIALS_PATH})
+        endif()
+        if(NOT DIR_SUNDIALS)
+               message(FATAL_ERROR "Did not find Sundials directory, set SUNDIALS_PATH to location")
+	endif()
+	link_directories(${DIR_SUNDIALS}/lib)
+	set(CMAKE_BUILD_RPATH "${DIR_SUNDIALS}/lib")
+        set(INC_SUNDIALS ${DIR_SUNDIALS}/include ${DIR_SUNDIALS}/fortran)
+
+	set(LIB_SUNDIALS -lsundials_fida_mod -lsundials_fnvecmanyvector_mod -lsundials_fnvecserial_mod -lsundials_fsunlinsoldense_mod -lsundials_fsunmatrixdense_mod -lsundials_fkinsol_mod -lsundials_fsunnonlinsolnewton_mod)
+
+    endif()
     
     PROJECT(openwq_summa LANGUAGES CXX Fortran)
     # Declare use of multiple Languages
@@ -305,6 +329,9 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
             ${DSHARE_DIR}/get_ixname.f90
             ${DSHARE_DIR}/popMetadat.f90
             ${DSHARE_DIR}/outpt_stat.f90)
+    SET(DATAMS_SUNDIALS
+	    ${DSHARE_DIR}/type4ida.f90
+	    ${DSHARE_DIR}/type4kinsol.f90)
     # utility modules
     SET(UTILMS
             ${ENGINE_DIR}/time_utils.f90
@@ -313,6 +340,10 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
             ${ENGINE_DIR}/soil_utils.f90
             ${ENGINE_DIR}/updatState.f90
             ${ENGINE_DIR}/matrixOper.f90)
+    SET(UTILMS_SUNDIALS
+            ${ENGINE_DIR}/soil_utilsAddPrime.f90
+            ${ENGINE_DIR}/updatStateWithPrime.f90)
+
     # Solver
     SET(SOLVER
             ${ENGINE_DIR}/vegPhenlgy.f90
@@ -321,6 +352,9 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
             ${ENGINE_DIR}/groundwatr.f90
             ${ENGINE_DIR}/vegSWavRad.f90
             ${ENGINE_DIR}/vegNrgFlux.f90
+            ${ENGINE_DIR}/computHeatCap.f90
+            ${ENGINE_DIR}/computSnowDepth.f90
+            ${ENGINE_DIR}/computThermConduct.f90
             ${ENGINE_DIR}/ssdNrgFlux.f90
             ${ENGINE_DIR}/vegLiqFlux.f90
             ${ENGINE_DIR}/snowLiqFlx.f90
@@ -330,13 +364,20 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
             ${ENGINE_DIR}/computResid.f90
             ${ENGINE_DIR}/computJacob.f90
             ${ENGINE_DIR}/eval8summa.f90
-            ${ENGINE_DIR}/summaSolve.f90
+            ${ENGINE_DIR}/summaSolve4numrec.f90
             ${ENGINE_DIR}/systemSolv.f90
             ${ENGINE_DIR}/varSubstep.f90
             ${ENGINE_DIR}/opSplittin.f90
             ${ENGINE_DIR}/coupled_em.f90
             ${ENGINE_DIR}/run_oneGRU.f90
             ${ENGINE_DIR}/run_oneHRU.f90)
+    set(SOLVER_SUNDIALS
+            ${ENGINE_DIR}/computJacobWithPrime.f90
+            ${ENGINE_DIR}/computResidWithPrime.f90
+            ${ENGINE_DIR}/eval8summaWithPrime.f90
+            ${ENGINE_DIR}/summaSolve4ida.f90
+            ${ENGINE_DIR}/summaSolve4kinsol.f90)
+
     # Define routines for SUMMA preliminaries
     SET(PRELIM
             ${ENGINE_DIR}/conv_funcs.f90
@@ -368,7 +409,13 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
             ${ENGINE_DIR}/layerMerge.f90
             ${ENGINE_DIR}/layerDivide.f90
             ${ENGINE_DIR}/volicePack.f90
+            ${ENGINE_DIR}/t2enthalpy.f90
             ${ENGINE_DIR}/qTimeDelay.f90)
+    set(MODRUN_SUNDIALS
+            ${ENGINE_DIR}/tol4ida.f90
+            ${ENGINE_DIR}/updateVarsWithPrime.f90)
+
+
     SET(NETCDF
             ${NETCDF_DIR}/netcdf_util.f90
             ${NETCDF_DIR}/def_output.f90
@@ -380,12 +427,21 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
             ${HOOKUP}
             ${DATAMS}
             ${UTILMS})
+
+    if (SOLVER_TYPE MATCHES Sundials)
+	   set(COMM_ALL ${COMM_ALL} ${DATAMS_SUNDIALS} ${UTILMS_SUNDIALS})
+    endif()
     # Stitch together SUMMA programs
     SET(SUMMA_ALL
             ${NETCDF}
             ${PRELIM}
             ${MODRUN}
             ${SOLVER})
+    if(SOLVER_TYPE MATCHES Sundials)
+            set(SUMMA_ALL ${SUMMA_ALL}
+		 	  ${MODRUN_SUNDIALS}
+                 	  ${SOLVER_SUNDIALS})
+    endif()
     # Define the driver routine
     SET(DRIVER
             ${DRIVER_DIR}/summa_type.f90
@@ -404,9 +460,9 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
 
             
     IF("${COMPILE_MODE}" STREQUAL "debug")
-        SET(CMAKE_Fortran_FLAGS "-p -g -Wall -ffree-line-length-none -fmax-errors=0 -fbacktrace -fcheck=bounds")
+        SET(CMAKE_Fortran_FLAGS "-p -g -Wall -ffree-line-length-none -fmax-errors=0 -fbacktrace -fcheck=bounds -cpp")
     ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
-        SET(CMAKE_Fortran_FLAGS "-O3 -ffree-line-length-none -fmax-errors=0 -lstdc++")
+        SET(CMAKE_Fortran_FLAGS "-O3 -ffree-line-length-none -fmax-errors=0 -lstdc++ -cpp")
     ENDIF()
 
 
@@ -463,7 +519,9 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
                     ${LAPACK_INCLUDES}
                     ${netCDF_INCLUDES}
                     "/usr/include/"
-                    "/code/")
+                    "/code/"
+		    ${INC_SUNDIALS}
+		    )
             TARGET_LINK_LIBRARIES(
                     ${exec_name} PUBLIC
                     ${NETCDF_LIB_PATH}
@@ -471,7 +529,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
                     ${netCDF_LIBRARIES}
                     SUMMA_COMM
                     SUMMA_NOAHMP
-                    openWQ)
+                    openWQ
+		    ${LIB_SUNDIALS})
 
 
 # ..................
