@@ -191,6 +191,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
     int iz_json;                                // iteractive iz info for sink-source row data
     double ss_data_json;                        // data (sink or source) from row data
     std::string ss_units_json;                  // units of row data
+    std::string ss_units_json_mass_base;             // units of row data (mass)
     std::vector<double> unit_multiplers;        // multiplers (numerator and denominator)
     arma::vec row_data_col;                     // new row data (initially as col data)
     std::string msg_string;                     // error/warning message string
@@ -258,7 +259,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
 
     // Get Units
     errorMsgIdentifier = inputType + " json block";
-    ss_units_json= OpenWQ_utils.RequestJsonKeyVal_str(
+    ss_units_json_mass_base= OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         EWF_SS_json_sub, "UNITS",
         errorMsgIdentifier,
@@ -919,6 +920,8 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
 
         elemName = "Load/Sink Scheme";
 
+        ss_units_json = ss_units_json_mass_base;
+        
         try{
 
             // try as string for the cases where entry is "all"
@@ -941,22 +944,22 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 // 1) discrete
                 // 2) continuous (needs time units)
                 if (loadScheme_str.compare("DISCRETE") == 0) loadScheme_id = 0;
-                else if (loadScheme_str.compare("CONTINUOUS") == 0 && MM_json != -1){ 
-                    // continuous option needs MIN = 'all' to allow a minimum continuous period
+                else if (loadScheme_str.compare("CONTINUOUS") == 0 && SEC_json != -1){ 
+                    // continuous option needs SEC = 'all' to allow a minimum continuous period
                     loadScheme_id = 0;
                     // Create Warning Message
                     msg_string = 
                             "<OpenWQ> WARNING: SS/EWF '" 
                             + elemName 
-                            + "' was defaulted to 'discrete'. The 'continuous' option is only valid with MIN set as 'all' for a minimum continuous period: File=" 
+                            + "' was defaulted to 'discrete'. The 'continuous' option is only valid with SEC set as 'ALL' to allow a minimum continuous load period (otherwise, it becomes a discrete load): File=" 
                             + std::to_string(ssf+1)
                             + ", Sub_structure=" + std::to_string(ssi+1)
                             + ", Data_row=" + std::to_string(di + 1);  
                     // Print it (Console and/or Log file)
                     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
-                }else if (loadScheme_str.compare("CONTINUOUS") == 0 && MM_json == -1){
-                    // continuous option needs MIN = 'all' (otherwise it's discrete input)
+                }else if (loadScheme_str.compare("CONTINUOUS") == 0 && SEC_json == -1){
+                    // continuous option needs SEC = 'all' (otherwise it's discrete input)
                     loadScheme_id = 1;
                     // get time units
                     try{
@@ -972,7 +975,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
 
                         contDt_str = entryVal;
 
-                        // Concatenate the time units to the load
+                        // Concatenate the time units to the load       
                         ss_units_json += "/";
                         ss_units_json += contDt_str;
 
