@@ -237,7 +237,7 @@ void OpenWQ_watertransp::BoundMix(
     xyz_source.push_back(iy_s);
     xyz_source.push_back(iz_s);         // get x,y,z from source comparment in vector
 
-    // Dummy/interactive variables
+    // Dummy/iterative variables
     unsigned int input_direction_index;
     int input_upper_compartment_index;
     int input_lower_compartment_index;
@@ -246,9 +246,8 @@ void OpenWQ_watertransp::BoundMix(
     std::vector<int> xyz_upper_compartment;
 
     // Return if flux across compartments
-    // This lateral mixing only occurs when fluxes occur when fluxes along the 
-    // interface of compartments
-    if (source != recipient)
+    // This lateral mixing only occurs when fluxes occur when fluxes along the interface of compartments or if leaving the system
+    if (source != recipient & recipient != -1)
         return;
 
     // Return if no flux: wflux_s2r == 0
