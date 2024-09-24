@@ -223,7 +223,7 @@ void OpenWQ_solver::Numerical_Solver(
     unsigned int ix, iy, iz;    // interactive compartment domain cell indexes
     double dm_dt_chem;          // ineractive final derivative (mass) - chemistry transformations
     double dm_dt_trans;         // ineractive final derivative (mass) - transport
-    double dm_ic;               // interactive dynamic change to state-variable at start of simulations
+    double ic;               // interactive dynamic change to state-variable at start of simulations
     double dm_ss;               // interactive ss load/ink (mass)
     double dm_ewf;              // interactive ewf load/ink (mass)
     unsigned int system_size = 0;
@@ -259,14 +259,24 @@ void OpenWQ_solver::Numerical_Solver(
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
                 for (iy=0;iy<ny;iy++){
-                    for (iz=0;iz<nz;iz++){   
-                        udata[idx] = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz);
+                    for (iz=0;iz<nz;iz++){  
+                        if (user_data.hostModelconfig.is_first_interaction_step()){
+
+                            ic = 
+                                (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix,iy,iz);
+
+                        } else {
+                            ic = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz);
+                        } 
+                        udata[idx] = ic;
                         idx++;
+
                     }
                 }
             }
         }
     }
+    printf("%f %f\n", udata[0], (*OpenWQ_vars.d_chemass_ic)(4)(0)(0,0,0));
     cvode_mem = CVodeCreate(CV_ADAMS, sunctx);
     CVodeInit(cvode_mem, totalFlux, 0, u);
 
@@ -277,7 +287,10 @@ void OpenWQ_solver::Numerical_Solver(
     CVodeSetLinearSolver(cvode_mem, LS, NULL); 
    CVodeSStolerances(cvode_mem, 1e-4, 1e-8);
 
-   CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
+    if (OpenWQ_hostModelconfig.get_time_step() > 0) {
+        retval = CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
+        printf("%f %d\n", OpenWQ_hostModelconfig.get_time_step(), retval);
+    }
    idx=0;
        for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
 
@@ -295,10 +308,12 @@ void OpenWQ_solver::Numerical_Solver(
                     for (iz=0;iz<nz;iz++){                        
                         (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz) = udata[idx];
                         idx++;
+
                     }
                 }
             }
         }
     }
+    printf("%f %f\n", (*OpenWQ_vars.chemass)(4)(0)(0,0,0), udata[idx]);
 
 }
