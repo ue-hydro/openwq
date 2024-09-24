@@ -276,7 +276,6 @@ void OpenWQ_solver::Numerical_Solver(
             }
         }
     }
-    printf("%f %f\n", udata[0], (*OpenWQ_vars.d_chemass_ic)(4)(0)(0,0,0));
     cvode_mem = CVodeCreate(CV_ADAMS, sunctx);
     CVodeInit(cvode_mem, totalFlux, 0, u);
 
@@ -289,7 +288,6 @@ void OpenWQ_solver::Numerical_Solver(
 
     if (OpenWQ_hostModelconfig.get_time_step() > 0) {
         retval = CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
-        printf("%f %d\n", OpenWQ_hostModelconfig.get_time_step(), retval);
     }
    idx=0;
        for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
@@ -314,6 +312,5 @@ void OpenWQ_solver::Numerical_Solver(
             }
         }
     }
-    printf("%f %f\n", (*OpenWQ_vars.chemass)(4)(0)(0,0,0), udata[idx]);
 
 }
