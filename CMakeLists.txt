@@ -39,7 +39,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
 # optA5) fluxos_openwq -> compile with fluxos using hydrolink
 set(VALID_COMPILE_TARGETS "openwq" "crhm_openwq" "summa_openwq" 
                           "mizuroute_openwq" "fluxos_openwq")
-set(COMPILE_TARGET "default" CACHE STRING "Set the compilation target")
+set(COMPILE_TARGET "summa_openwq" CACHE STRING "Set the compilation target")
 list(FIND VALID_COMPILE_TARGETS ${COMPILE_TARGET} INDEX)
 if(${INDEX} EQUAL -1)
     set(VALID_COMPILE_TARGETS_PRINT "")
@@ -261,8 +261,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
     endif()
     MESSAGE(STATUS "SOLVER_TYPE ${SOLVER_TYPE}")
 
-    if (SOLVER_TYPE MATCHES Sundials)
-        add_compile_definitions(SUNDIALS_ACTIVE)
+    #if (SOLVER_TYPE MATCHES Sundials)
+    #    add_compile_definitions(SUNDIALS_ACTIVE)
         set(DIR_SUNDIALS "")
         if(EXISTS $ENV{SUNDIALS_PATH})
               set(DIR_SUNDIALS $ENV{SUNDIALS_PATH})
@@ -274,9 +274,9 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
 	set(CMAKE_BUILD_RPATH "${DIR_SUNDIALS}/lib")
         set(INC_SUNDIALS ${DIR_SUNDIALS}/include ${DIR_SUNDIALS}/fortran)
 
-	set(LIB_SUNDIALS -lsundials_fida_mod -lsundials_fnvecmanyvector_mod -lsundials_fnvecserial_mod -lsundials_fsunlinsoldense_mod -lsundials_fsunmatrixdense_mod -lsundials_fkinsol_mod -lsundials_fsunnonlinsolnewton_mod)
+	set(LIB_SUNDIALS -lsundials_fida_mod -lsundials_cvode -lsundials_fnvecmanyvector_mod -lsundials_fnvecserial_mod -lsundials_fsunlinsoldense_mod -lsundials_fsunmatrixdense_mod -lsundials_fkinsol_mod -lsundials_fsunnonlinsolnewton_mod)
 
-    endif()
+    #endif()
     
     PROJECT(openwq_summa LANGUAGES CXX Fortran)
     # Declare use of multiple Languages
@@ -471,9 +471,11 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
     TARGET_INCLUDE_DIRECTORIES(openWQ PRIVATE
         ${ARMADILLO_INCLUDE_DIR}
         ${HDF5_INCLUDE_DIRS}
+        ${INC_SUNDIALS}
         ${OPENWQ_INCLUDES})
     TARGET_LINK_LIBRARIES(openWQ PUBLIC
         ${ARMADILLO_LIBRARIES}
+        ${LIB_SUNDIALS}
         ${HDF5_C_LIBRARY_hdf5})
     IF(OpenMP_CXX_FOUND)
         MESSAGE("** OpenWQ **: OpenMP enabled!")
@@ -488,18 +490,18 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
             ${NOAHMP_DIR}/module_sf_noahmplsm.F
             ${NRUTIL})
     IF("${COMPILE_MODE}" STREQUAL "debug")
-            target_compile_options(SUMMA_NOAHMP PRIVATE -p -g -ffree-form -ffree-line-length-none -fmax-errors=0 -fbacktrace -Wno-unused -Wno-unused-dummy-argument)
+            target_compile_options(SUMMA_NOAHMP PRIVATE -cpp -p -g -ffree-form -ffree-line-length-none -fmax-errors=0 -fbacktrace -Wno-unused -Wno-unused-dummy-argument)
     ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
-            target_compile_options(SUMMA_NOAHMP PRIVATE -O3 -ffree-form -ffree-line-length-none -fmax-errors=0 -lstdc++ -fopenmp)
+            target_compile_options(SUMMA_NOAHMP PRIVATE -cpp -O3 -ffree-form -ffree-line-length-none -fmax-errors=0 -lstdc++ -fopenmp)
     ENDIF()
 
 
     # Compile Summa_Comm into object/.mod files
     ADD_LIBRARY(SUMMA_COMM OBJECT ${COMM_ALL})
     IF("${COMPILE_MODE}" STREQUAL "debug")
-            target_compile_options(SUMMA_COMM PRIVATE -p -g -Wall -ffree-line-length-none -fmax-errors=0 -fbacktrace -fcheck=bounds)
+            target_compile_options(SUMMA_COMM PRIVATE -p -cpp -g -Wall -ffree-line-length-none -fmax-errors=0 -fbacktrace -fcheck=bounds)
     ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
-            target_compile_options(SUMMA_COMM PRIVATE -O3 -ffree-line-length-none -fmax-errors=0 -lstdc++ -fopenmp)
+            target_compile_options(SUMMA_COMM PRIVATE -O3 -cpp -ffree-line-length-none -fmax-errors=0 -lstdc++ -fopenmp)
     ENDIF() 
 
     TARGET_INCLUDE_DIRECTORIES(SUMMA_COMM PRIVATE

@@ -41,7 +41,8 @@ class OpenWQ_vars
             d_chemass_dt_transp_out,    // cumulative derivative for output in debug model
             d_chemass_ss_out,           // cumulative derivative for output in debug model
             d_chemass_ewf_out,          // cumulative derivative for output in debug model
-            ewf_conc;                   // concentration of external water fluxes
+            ewf_conc,
+            d_chemass;                   // concentration of external water fluxes
 
         // Constructor
         OpenWQ_vars(size_t num_HydroComp, size_t num_EWF);

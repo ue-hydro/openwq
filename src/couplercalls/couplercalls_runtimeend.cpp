@@ -48,7 +48,10 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
     OpenWQ_solver.Numerical_Solver(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,
-        OpenWQ_vars);
+        OpenWQ_vars, 
+        OpenWQ_json,
+        OpenWQ_output,
+        OpenWQ_chem);
 
     // ########################################
     // Output Results
