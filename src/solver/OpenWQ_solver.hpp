@@ -22,6 +22,9 @@
 #include "global/OpenWQ_vars.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
 #include "global/OpenWQ_hostModelconfig.hpp"
+#include "global/OpenWQ_json.hpp"
+class OpenWQ_output;
+class OpenWQ_chem;
 
 class OpenWQ_solver{
 
@@ -31,7 +34,10 @@ class OpenWQ_solver{
     void Numerical_Solver(
         OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
         OpenWQ_wqconfig& OpenWQ_wqconfig,
-        OpenWQ_vars& OpenWQ_vars);
+        OpenWQ_vars& OpenWQ_vars,
+        OpenWQ_json& OpenWQ_json,
+        OpenWQ_output& OpenWQ_output,
+        OpenWQ_chem& OpenWQ_chem);
 
     // Reset derivatives (before each time iteraction)
     void Reset_Deriv(
