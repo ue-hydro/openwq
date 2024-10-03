@@ -52,7 +52,8 @@ int main(int argc, char* argv[])
     OpenWQ_units OpenWQ_units;                  // functions for unit conversion
     OpenWQ_readjson OpenWQ_readjson;            // read json files
     int num_HydroComp = 8; // number of compartments to link openWQ (see details in OpenWQ_hydrolink.cpp) 
-    OpenWQ_vars OpenWQ_vars(num_HydroComp);
+    int num_ExtFlux = 0;
+    OpenWQ_vars OpenWQ_vars(num_HydroComp, num_ExtFlux);
     OpenWQ_initiate OpenWQ_initiate;            // initiate modules
     OpenWQ_watertransp OpenWQ_watertransp;      // transport modules
     OpenWQ_chem OpenWQ_chem;                    // biochemistry modules
@@ -71,8 +72,8 @@ int main(int argc, char* argv[])
     // #######################################
     // 1.1) Pass Location of Masterfile
     // #######################################
-    OpenWQ_wqconfig.OpenWQ_masterjson = "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/6_Projects/1_GWF/2_WIP/code/code_crhm/build/Case_Studies/big_creek_openwq/openWQ_master.json";
-
+    // OpenWQ_wqconfig.OpenWQ_masterjson = "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/6_Projects/1_GWF/2_WIP/code/code_crhm/build/Case_Studies/big_creek_openwq/openWQ_master.json";
+    OpenWQ_wqconfig.set_OpenWQ_masterjson("/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/6_Projects/1_GWF/2_WIP/code/code_crhm/build/Case_Studies/big_creek_openwq/openWQ_master.json");
     // #######################################
     // 1.2) COUPLER CODE 
     // Characterize the host model domains
@@ -91,15 +92,15 @@ int main(int argc, char* argv[])
     unsigned int nx_num = 40;
     unsigned int ny_num = 1;
     unsigned int nz_num = 1; 
-    if (OpenWQ_hostModelconfig.HydroComp.size()==0){
-        OpenWQ_hostModelconfig.HydroComp.push_back(OpenWQ_hostModelconfig::hydroTuple(0,"SWE",nx_num,ny_num,nz_num));
-        OpenWQ_hostModelconfig.HydroComp.push_back(OpenWQ_hostModelconfig::hydroTuple(1,"RUNOFF",nx_num,ny_num,nz_num));
-        OpenWQ_hostModelconfig.HydroComp.push_back(OpenWQ_hostModelconfig::hydroTuple(2,"SSR",nx_num,ny_num,nz_num));
-        OpenWQ_hostModelconfig.HydroComp.push_back(OpenWQ_hostModelconfig::hydroTuple(3,"SD",nx_num,ny_num,nz_num));
-        OpenWQ_hostModelconfig.HydroComp.push_back(OpenWQ_hostModelconfig::hydroTuple(4,"SOIL_RECHR",nx_num,ny_num,nz_num));
-        OpenWQ_hostModelconfig.HydroComp.push_back(OpenWQ_hostModelconfig::hydroTuple(5,"SOIL_LOWER",nx_num,ny_num,nz_num));
-        OpenWQ_hostModelconfig.HydroComp.push_back(OpenWQ_hostModelconfig::hydroTuple(6,"SURFSOIL",nx_num,ny_num,nz_num));
-        OpenWQ_hostModelconfig.HydroComp.push_back(OpenWQ_hostModelconfig::hydroTuple(7,"GW",nx_num,ny_num,nz_num));
+    if (OpenWQ_hostModelconfig.get_num_HydroComp()==0){
+        OpenWQ_hostModelconfig.add_HydroComp(0,"SWE",nx_num,ny_num,nz_num);
+        OpenWQ_hostModelconfig.add_HydroComp(1,"RUNOFF",nx_num,ny_num,nz_num);
+        OpenWQ_hostModelconfig.add_HydroComp(2,"SSR",nx_num,ny_num,nz_num);
+        OpenWQ_hostModelconfig.add_HydroComp(3,"SD",nx_num,ny_num,nz_num);
+        OpenWQ_hostModelconfig.add_HydroComp(4,"SOIL_RECHR",nx_num,ny_num,nz_num);
+        OpenWQ_hostModelconfig.add_HydroComp(5,"SOIL_LOWER",nx_num,ny_num,nz_num);
+        OpenWQ_hostModelconfig.add_HydroComp(6,"SURFSOIL",nx_num,ny_num,nz_num);
+        OpenWQ_hostModelconfig.add_HydroComp(7,"GW",nx_num,ny_num,nz_num);
     // (add other compartments as needed)...
     }
 
@@ -165,14 +166,14 @@ int main(int argc, char* argv[])
             for (unsigned int ny=0;ny<ny_num;ny++){
                 for (unsigned int nz=0;nz<nz_num;nz++){
 
-                    (*OpenWQ_hostModelconfig.waterVol_hydromodel)[0](nx,ny,nz) = 2;
-                    (*OpenWQ_hostModelconfig.waterVol_hydromodel)[1](nx,ny,nz) = 2;
-                    (*OpenWQ_hostModelconfig.waterVol_hydromodel)[2](nx,ny,nz) = 2;
-                    (*OpenWQ_hostModelconfig.waterVol_hydromodel)[3](nx,ny,nz) = 2;
-                    (*OpenWQ_hostModelconfig.waterVol_hydromodel)[4](nx,ny,nz) = 2;
-                    (*OpenWQ_hostModelconfig.waterVol_hydromodel)[5](nx,ny,nz) = 2;
-                    (*OpenWQ_hostModelconfig.waterVol_hydromodel)[6](nx,ny,nz) = 2;
-                    (*OpenWQ_hostModelconfig.waterVol_hydromodel)[7](nx,ny,nz) = 2;
+                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(0,nx,ny,nz,2);
+                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(1,nx,ny,nz,2);
+                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(2,nx,ny,nz,2);
+                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(3,nx,ny,nz,2);
+                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(4,nx,ny,nz,2);
+                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(5,nx,ny,nz,2);
+                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(6,nx,ny,nz,2);
+                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(7,nx,ny,nz,2);
 
                 }
             }
@@ -233,8 +234,8 @@ int main(int argc, char* argv[])
                     ix_r = std::min(nx,nx_num-1);
                     iy_r = std::min(ny,ny_num-1);
                     iz_r = std::min(nz,nz_num-1);
-                    wflux_s2r = 0.1 * (*OpenWQ_hostModelconfig.waterVol_hydromodel)[source](ix_s,iy_s,iz_s);
-                    wmass_source = (*OpenWQ_hostModelconfig.waterVol_hydromodel)[source](ix_s,iy_s,iz_s);
+                    wflux_s2r = 0.1 * OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(source,ix_s,iy_s,iz_s);
+                    wmass_source = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(source,ix_s,iy_s,iz_s);
                     // END ---------------
 
                     OpenWQ_couplercalls.RunSpaceStep(

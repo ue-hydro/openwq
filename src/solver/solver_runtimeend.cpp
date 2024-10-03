@@ -19,12 +19,12 @@
 #include "OpenWQ_solver.hpp"
 #include "chem/OpenWQ_chem.hpp"
 
+#include <sundials/sundials_core.hpp>
 #include <sundials/sundials_types.h>
 #include <sundials/sundials_nvector.h>
 #include <cvode/cvode.h>
 #include <nvector/nvector_serial.h>
 #include <sunlinsol/sunlinsol_spgmr.h>
-
 
 /* #################################################
 // General numerical solver
@@ -38,8 +38,7 @@ struct UserData {
     OpenWQ_chem& chem;
 };
 
-int totalFlux(   sunrealtype t, N_Vector u, N_Vector f,
-    void* udata){
+int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
 
     auto user_data = *(static_cast<UserData*>(udata));
 

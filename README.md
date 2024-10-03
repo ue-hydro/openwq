@@ -1,12 +1,22 @@
 # OpenWQ 
 ## Table of Contents
-* [Introduction](#introduction)
-* [Branches](#branches)
-* [Compiling](#compiling)
-* [Execution](#execution)
-* [Visualization](#visualization)
-* [Supporting Scripts](#supporting-scripts)
-* [Working Example](#working-example)
+- [OpenWQ](#openwq)
+	- [Table of Contents](#table-of-contents)
+	- [Introduction](#introduction)
+	- [Branches](#branches)
+		- [Active](#active)
+		- [Notes](#notes)
+	- [Compiling](#compiling)
+		- [Summa-OpenWQ](#summa-openwq)
+			- [Common Steps](#common-steps)
+			- [macOS](#macos)
+			- [Linux](#linux)
+			- [Docker](#docker)
+			- [Apptainer](#apptainer)
+	- [Execution](#execution)
+	- [Visualization](#visualization)
+	- [Supporting Scripts](#supporting-scripts)
+	- [Working Example](#working-example)
 
 ## Introduction
 * Soure code for the multi-chemistry, multi-scale OpenWQ modelling framework.
@@ -47,6 +57,28 @@ $ git branch -u origin/main main
 * CMake: [CMakeLists.txt](CMakeLists.txt) is provided
 * Library dependencies: Armadillo, VTK, OpenMP 
 * CMake minimum version: 3.10
+
+### Summa-OpenWQ
+Below are the steps to compile SUMMA with OpenWQ integration.
+
+#### Common Steps
+ 1. Clone SUMMA: `git clone -b develop https://github.com/ashleymedin/summa.git`
+ 2. `cd summa/build/source/openwq`
+ 3. Clone OpenWQ: `git clone -b develop git@github.com:ue-hydro/openwq.git`
+   
+#### macOS
+Native macOS compilation is currently not supported. Please use Docker.
+
+#### Linux
+
+#### Docker
+There is a dockerfile provided in OpenWQ repository. 
+ 1. cd into the OpenWQ repository (if following the common steps, this would be `summa/build/source/openwq/openwq`)
+ 2. run `docker build -t openwq .`
+ 3. cd back up to the summa directory
+ 4. run `docker run -itd -v $(pwd):/code openwq`
+
+#### Apptainer
 
 ## Execution
 * Coming soon!
