@@ -84,6 +84,9 @@ There is a dockerfile provided in OpenWQ repository.
  9. Edit the `CMakeLists.txt`:
     - Ensure that `COMPILE_TARGET` is set to `summa_openwq`
     - To use sundials ensure `SOLVER_TYPE` is set to `sundials`, otherwise use `None`
+ 10. mkdir build && cd build
+ 11. cmake ..
+ 12. make -j 2
 
 #### Apptainer
 
