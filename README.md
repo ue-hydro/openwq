@@ -77,6 +77,13 @@ There is a dockerfile provided in OpenWQ repository.
  2. run `docker build -t openwq .`
  3. cd back up to the summa directory
  4. run `docker run -itd -v $(pwd):/code openwq`
+ 5. Connect to the container with `docker attach <container_id>` or VSCode's Remote-Containers extension
+ 6. cd into `/code/build/cmake` and adjust the `build.pc.cmake` file to include the OpenWQ library with `-DUSE_OPENWQ=ON`
+ 7. run `./build.pc.cmake` to compile SUMMA with OpenWQ
+ 8. Alternatively, you can `cd /code/build/source/openwq/openwq`
+ 9. Edit the `CMakeLists.txt`:
+    - Ensure that `COMPILE_TARGET` is set to `summa_openwq`
+    - To use sundials ensure `SOLVER_TYPE` is set to `sundials`, otherwise use `None`
 
 #### Apptainer
 
