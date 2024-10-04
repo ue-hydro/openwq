@@ -70,6 +70,22 @@ Below are the steps to compile SUMMA with OpenWQ integration.
 Native macOS compilation is currently not supported. Please use Docker.
 
 #### Linux
+  1. Install or Load (Cluster) Dependencies
+    - NetCDF
+    - HDF5
+    - OpenBLAS or LAPACK
+    - Armadillo
+      - Included install script in `summa/build/source/openwq/openwq/utils/install_armadillo.sh`
+      - Running the script will install Armadillo in the `summa/build/source/openwq/openwq/utils/armadillo-VERSION` directory
+    - C++ Compiler (e.g., g++)
+    - Fortran Compiler (e.g., gfortran)
+    - CMake
+  2. Method 1: `cd summa/build/source/openwq/openwq/build/`
+  3. `cmake ..`
+  4. `make -j 2`
+  5. Method 2: `cd summa/build/cmake/`
+  6. Edit the `build.pc.cmake` file to include the OpenWQ library with `-DUSE_OPENWQ=ON`
+  7. `./build.pc.cmake`
 
 #### Docker
 There is a dockerfile provided in OpenWQ repository. 

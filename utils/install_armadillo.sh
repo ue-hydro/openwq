@@ -31,8 +31,10 @@ wget http://sourceforge.net/projects/arma/files/armadillo-${ARMADILLO_VERSION}.t
 tar -xf armadillo-${ARMADILLO_VERSION}.tar.xz
 cd armadillo-${ARMADILLO_VERSION}
 cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR -DDETECT_HDF5=ON \
-    -DCMAKE_C_FLAGS="-DH5_USE_110_API" -DCMAKE_CXX_FLAGS="-" .
+    -DCMAKE_C_FLAGS="-DH5_USE_110_API" .
 make install
+
+sed -i '121s/^\/\/ #define ARMA_USE_HDF5/#define ARMA_USE_HDF5/' $INSTALL_DIR/include/armadillo_bits/config.hpp
 
 
 
