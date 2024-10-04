@@ -1,2 +1,4 @@
-_build
+*build*
 utils/armadillo*
+openwq.sif
+bin/summa_openwq*

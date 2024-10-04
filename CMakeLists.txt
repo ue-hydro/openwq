@@ -435,10 +435,10 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
 
             
     IF("${COMPILE_MODE}" STREQUAL "debug")
-        SET(CMAKE_Fortran_FLAGS "-p -g -Wall -ffree-line-length-none 
+        SET(CMAKE_Fortran_FLAGS "-p -g -Wall -ffree-line-length-none \
             -fmax-errors=0 -fbacktrace -fcheck=bounds -cpp")
     ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
-        SET(CMAKE_Fortran_FLAGS "-O3 -ffree-line-length-none -fmax-errors=0 
+        SET(CMAKE_Fortran_FLAGS "-O3 -ffree-line-length-none -fmax-errors=0 \
             -lstdc++ -cpp")
     ENDIF()
 
@@ -468,7 +468,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
             ${NOAHMP_DIR}/module_sf_noahmplsm.F
             ${NRUTIL})
     IF("${COMPILE_MODE}" STREQUAL "debug")
-        target_compile_options(SUMMA_NOAHMP PRIVATE -cpp -p -g -ffree-form
+        target_compile_options(SUMMA_NOAHMP PRIVATE -cpp -p -g -ffree-form 
             -ffree-line-length-none -fmax-errors=0 -fbacktrace -Wno-unused 
             -Wno-unused-dummy-argument)
     ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
@@ -480,7 +480,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
     # Compile Summa_Comm into object/.mod files
     ADD_LIBRARY(SUMMA_COMM OBJECT ${COMM_ALL})
     IF("${COMPILE_MODE}" STREQUAL "debug")
-        target_compile_options(SUMMA_COMM PRIVATE -p -cpp -g -Wall
+        target_compile_options(SUMMA_COMM PRIVATE -p -cpp -g -Wall 
             -ffree-line-length-none -fmax-errors=0 -fbacktrace -fcheck=bounds)
     ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
         target_compile_options(SUMMA_COMM PRIVATE -O3 -cpp 

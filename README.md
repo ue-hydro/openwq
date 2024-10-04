@@ -89,6 +89,28 @@ There is a dockerfile provided in OpenWQ repository.
  12. make -j 2
 
 #### Apptainer
+Inside the repository is an Apptainer definition file `Apptainerfile.def`. This file can be used to build an Apptainer (Singularity) container. NOTE: You will need sudo access to build the container. Once the container is built you can transfer the container to a system with Apptainer to run the container. Running the container does not require sudo access.
+
+TO BUILD THE CONTAINER:
+ 1. Follow the common steps above to obtain the source code
+ 2. `cd summa/build/source/openwq/openwq`
+ 3. `sudo apptainer build openwq.sif Apptainerfile.def`
+
+COMPILE SUMMA-OPENWQ WITH THE CONTAINER:
+ 1. There is a script in `utils/` called `compile_summa_apptainer.sh` that will compile SUMMA-OpenWQ using the container.
+ 2. `cd utils`
+ 3. `./compile_summa_apptainer.sh`
+		- This script will launch the container and compile SUMMA-OpenWQ
+		- This will create a summa-openwq that can then be run within the container.
+
+RUNNING SUMMA-OPENWQ WITH THE CONTAINER:
+ 1. There is an example script in `utils/` called `run_summa_apptainer.sh` that will run SUMMA-OpenWQ using the container.
+ 2. `cd utils`
+ 3. `./run_summa_apptainer.sh`
+	  - This script will launch the container and run the summa-openwq executable
+	  - This will run the summa-openwq executable within the container.
+	  - This script depends on the synthetic_tests: https://github.com/KyleKlenk/synthetic_tests, which will need to be cloned into `summa`
+ 
 
 ## Execution
 * Coming soon!
