@@ -259,7 +259,9 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
     # Find required Module
     FIND_PACKAGE(netCDF REQUIRED)
     FIND_PACKAGE(LAPACK REQUIRED)
-
+    
+    # TURN ON OpenWQ in SUMMA source code
+    add_compile_definitions(OPENWQ_ACTIVE)
 
     SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
     SET(SUMMA_DIR ${PARENT_DIR}../../../../../../)
