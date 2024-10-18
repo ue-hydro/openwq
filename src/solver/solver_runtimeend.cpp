@@ -282,7 +282,7 @@ void OpenWQ_solver::Numerical_Solver(
         }
     }
 
-    // SUNDIALS implementation (Victoria Guenter)
+    // SUNDIALS/CVode implementation (Victoria Guenter)
     cvode_mem = CVodeCreate(CV_ADAMS, sunctx);
     CVodeInit(cvode_mem, totalFlux, 0, u);
 
@@ -313,7 +313,7 @@ void OpenWQ_solver::Numerical_Solver(
             for (ix=0;ix<nx;ix++){
                 for (iy=0;iy<ny;iy++){
                     for (iz=0;iz<nz;iz++){     
-                                           
+
                         (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz) = udata[idx];
                         idx++;
 
