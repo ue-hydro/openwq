@@ -23,6 +23,9 @@
 # 7) Inside the contained, go to the openwq folder that contains CMakeLists.txt, Dockerfile, and docker-compose.yml
 # 8) Compile with e.g.: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DCOMPILE_MODE=debug .; make -j 2; rm *.mod
 
+###############
+# Running it
+# 1) Example for SUMMA-OpenWQ: ./summa_openwq_fast -m SUMMA_input/fileManager.txt
 # That's all !!!
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
