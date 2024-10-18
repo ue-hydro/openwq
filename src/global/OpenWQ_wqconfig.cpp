@@ -60,7 +60,12 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
 }
 
 // Destructor
-OpenWQ_wqconfig::~OpenWQ_wqconfig() {}
+OpenWQ_wqconfig::~OpenWQ_wqconfig() {
+
+    for (auto x: files) {
+        H5Fclose(x.second);
+    }
+}
 
 //###############################################
 // Methods 

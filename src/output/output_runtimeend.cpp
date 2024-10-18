@@ -419,6 +419,29 @@ int OpenWQ_output::writeCSV(
 
 }
 
+bool save_to_file(
+    hid_t file,
+    arma::mat& data,
+    std::string name){
+    
+    hsize_t dims[2];
+    dims[1] = data.n_rows;
+    dims[0] = data.n_cols;
+
+
+    hid_t dataspace = H5Screate_simple(2, dims, NULL);
+    hid_t datatype = H5Tcopy(H5T_NATIVE_DOUBLE);
+
+    hid_t dataset = H5Dcreate(file, name.c_str(), datatype, dataspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    if (dataset < 0) {
+        return false;
+    }
+    int err = H5Dwrite(dataset, datatype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.mem);
+    H5Dclose(dataset);
+    H5Sclose(dataspace);
+    return true;
+
+}
 
 /* ########################################
 // HDF5 format
@@ -527,6 +550,7 @@ int OpenWQ_output::writeHDF5(
                     filename,
                     internal_database_name,
                     arma::hdf5_opts::append));                  // no append (to clean old file if existant)
+            OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
 
         }
     }
@@ -606,11 +630,8 @@ int OpenWQ_output::writeHDF5(
         }
         
         // Save results
-        data2print
-            .save(arma::hdf5_name(
-                filename,                           // file name
-                timestr,                            // database name: chem name + time
-                arma::hdf5_opts::append));          // options
+        hid_t file = OpenWQ_wqconfig.files[filename];
+        save_to_file(file, data2print, timestr);
 
     }
 

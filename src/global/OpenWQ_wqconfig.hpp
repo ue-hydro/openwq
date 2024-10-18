@@ -107,6 +107,7 @@ class OpenWQ_wqconfig
                 > output_units;             // Tuple with info about output units
 
 
+
     public:
         // Constructor
         OpenWQ_wqconfig();
@@ -200,6 +201,8 @@ class OpenWQ_wqconfig
         // which is 2,208,988,800, is added 
         // (which is saved in OpenWQ_vars.secSinceUnixTimeEpoch).
         const unsigned long long secFrom1900toUnixTimeEpoch1970 = 2208988800;
+
+        std::unordered_map<std::string, hid_t> files;
 
 
         // TODO: Below needs to be moved to private
