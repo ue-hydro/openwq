@@ -247,11 +247,17 @@ void OpenWQ_solver::Numerical_Solver(
     //retval = SUNContext_Create(NULL, &sunctx);
     u = N_VNew_Serial(system_size, sunctx);
     udata = N_VGetArrayPointer(u);
+
+    // Loop  over compartments
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
+
         // Dimensions for compartment icmp
         nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // num of x elements
+
         ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // num of y elements
+
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
+
         // Chemical loop
         for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.BGC_general_num_chem);chemi++){
 
@@ -275,6 +281,8 @@ void OpenWQ_solver::Numerical_Solver(
             }
         }
     }
+
+    // SUNDIALS implementation (Victoria Guenter)
     cvode_mem = CVodeCreate(CV_ADAMS, sunctx);
     CVodeInit(cvode_mem, totalFlux, 0, u);
 
@@ -283,13 +291,15 @@ void OpenWQ_solver::Numerical_Solver(
     LS = SUNLinSol_SPGMR(u, SUN_PREC_NONE, 0, sunctx);
 
     CVodeSetLinearSolver(cvode_mem, LS, NULL); 
-   CVodeSStolerances(cvode_mem, 1e-4, 1e-8);
+    CVodeSStolerances(cvode_mem, 1e-4, 1e-8);
 
     if (OpenWQ_hostModelconfig.get_time_step() > 0) {
         retval = CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
     }
-   idx=0;
-       for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
+
+    idx=0;
+
+    for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
 
         // Dimensions for compartment icmp
         nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // num of x elements
@@ -302,7 +312,8 @@ void OpenWQ_solver::Numerical_Solver(
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
                 for (iy=0;iy<ny;iy++){
-                    for (iz=0;iz<nz;iz++){                        
+                    for (iz=0;iz<nz;iz++){     
+                                           
                         (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz) = udata[idx];
                         idx++;
 
