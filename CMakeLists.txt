@@ -5,7 +5,7 @@
 # 0) Start Docker
 # 1) Go to the folder that contains: docker-compose.yml
 # 2) clear all images and containers: docker system prune -a
-# 3) check IF docker-compose.yml file is good: docker-compose config
+# 3) check IF docker-compose.yml file is good: docker compose config
 # 4) running container: docker compose up -d 
 # 5) stop container: docker compose down
 # 6) see the containers running: docker ps
