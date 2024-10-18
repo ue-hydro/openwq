@@ -1124,6 +1124,10 @@ void OpenWQ_readjson::SetConfigInfo_TEModule(
 
             // 2) upper compartment AND lower compartment index
             // Loop through native compartment names
+            
+            input_upper_compartment_index_exist = false; // reset to false
+            input_lower_compartment_index_exist = false; // reset to false
+
             for (unsigned int icmp_i = 0; icmp_i < OpenWQ_hostModelconfig.get_num_HydroComp(); icmp_i++)
             {
                 // Upper compartment: index
@@ -1140,7 +1144,7 @@ void OpenWQ_readjson::SetConfigInfo_TEModule(
 
             // Create Message (Warning Message) if compartments provided don't exist
             if (input_upper_compartment_index_exist == false 
-                && input_lower_compartment_index_exist == false){
+                || input_lower_compartment_index_exist == false){
                  
                 msg_string = 
                     "<OpenWQ> WARNING: BOUNDMIX module - unkown 'DIRECTION' = " 
