@@ -287,7 +287,7 @@ double OpenWQ_wqconfig::get_output_units_denominator()
     return std::get<2>(this->output_units);
 }
 
-bool OpenWQ_wqconfig::is_conentration_requested()
+bool OpenWQ_wqconfig::is_concentration_requested()
 {
     return std::get<3>(this->output_units);
 }

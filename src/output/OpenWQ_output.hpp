@@ -64,7 +64,11 @@ class OpenWQ_output{
             std::string timestr,            // time step (in seconds)
             int icmp);
 
-
+    // append data to HDF5 file 
+        bool appendData_to_HDF5_file(
+            hid_t file,
+            arma::mat& data,
+            std::string name);
 
 };
 

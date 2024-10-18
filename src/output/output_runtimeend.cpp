@@ -373,7 +373,7 @@ int OpenWQ_output::writeCSV(
             // Get cell volume
             // only if concentration is asked as output
             // otherwise set it to 1 for no effect
-            if (OpenWQ_wqconfig.is_conentration_requested()){
+            if (OpenWQ_wqconfig.is_concentration_requested()){
                 water_vol_i = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp,ix,iy,iz);
             }else{
                 water_vol_i = 1.0f;
@@ -419,29 +419,6 @@ int OpenWQ_output::writeCSV(
 
 }
 
-bool save_to_file(
-    hid_t file,
-    arma::mat& data,
-    std::string name){
-    
-    hsize_t dims[2];
-    dims[1] = data.n_rows;
-    dims[0] = data.n_cols;
-
-
-    hid_t dataspace = H5Screate_simple(2, dims, NULL);
-    hid_t datatype = H5Tcopy(H5T_NATIVE_DOUBLE);
-
-    hid_t dataset = H5Dcreate(file, name.c_str(), datatype, dataspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    if (dataset < 0) {
-        return false;
-    }
-    int err = H5Dwrite(dataset, datatype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.mem);
-    H5Dclose(dataset);
-    H5Sclose(dataspace);
-    return true;
-
-}
 
 /* ########################################
 // HDF5 format
@@ -513,7 +490,7 @@ int OpenWQ_output::writeHDF5(
         // Get x,y,z to print, which will be +1 to local 
         // indexes of OpenWQ_wqconfig.cells2print_vec[icmp] 
         cells2print_xyzElements = OpenWQ_wqconfig.cells2print_vec[icmp];      
-        cells2print_xyzElements.for_each( [](arma::mat::elem_type& val) { val += 1.0; } );
+        cells2print_xyzElements.for_each([](arma::mat::elem_type& val) { val += 1.0; } );
 
 
         for (unsigned int ichem=0;ichem<num_chem2print;ichem++){
@@ -596,7 +573,7 @@ int OpenWQ_output::writeHDF5(
             // Get cell volume
             // only if concentration is asked as output
             // otherwise set it to 1 for no effect
-            if (OpenWQ_wqconfig.is_conentration_requested()){
+            if (OpenWQ_wqconfig.is_concentration_requested()){
                 water_vol_i = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp,ix,iy,iz);
             }else{
                 water_vol_i = 1.0f;
@@ -606,9 +583,9 @@ int OpenWQ_output::writeHDF5(
             // Set to zero if volume of water is smaller 
             // than OpenWQ_hostModelconfig.watervol_minlim (only if requesting conc)
             if (
-                (OpenWQ_wqconfig.is_conentration_requested() &&
+                (OpenWQ_wqconfig.is_concentration_requested() &&
                 water_vol_i > OpenWQ_hostModelconfig.get_watervol_minlim()) 
-                || OpenWQ_wqconfig.is_conentration_requested() == false){
+                || OpenWQ_wqconfig.is_concentration_requested() == false){
              
                 data2print(celli,0) = 
                     (*OpenWQ_var2print)
@@ -631,9 +608,37 @@ int OpenWQ_output::writeHDF5(
         
         // Save results
         hid_t file = OpenWQ_wqconfig.files[filename];
-        save_to_file(file, data2print, timestr);
+        OpenWQ_output::appendData_to_HDF5_file(file, data2print, timestr);
 
     }
 
     return EXIT_SUCCESS;
+}
+
+// ########################################
+// append data to HDF5 file 
+
+bool OpenWQ_output::appendData_to_HDF5_file(
+    hid_t file,
+    arma::mat& data,
+    std::string name){
+    
+    hsize_t dims[2];
+    dims[1] = data.n_rows;
+    dims[0] = data.n_cols;
+
+    hid_t dataspace = H5Screate_simple(2, dims, NULL);
+    hid_t datatype = H5Tcopy(H5T_NATIVE_DOUBLE);
+
+    hid_t dataset = H5Dcreate(file, name.c_str(), datatype, dataspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    if (dataset < 0) {
+        return false;
+    }
+    int err = H5Dwrite(dataset, datatype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.mem);
+
+    H5Dclose(dataset);
+    H5Sclose(dataspace);
+
+    return true;
+
 }

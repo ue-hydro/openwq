@@ -185,7 +185,7 @@ class OpenWQ_wqconfig
         std::string get_output_units();
         double get_output_units_numerator();
         double get_output_units_denominator();
-        bool is_conentration_requested();
+        bool is_concentration_requested();
         void set_output_units(std::string output_units_name);
         void set_output_units_numerator(double numerator);
         void set_output_units_denominator(double denominator);
