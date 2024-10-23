@@ -112,6 +112,13 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
+        void SetConfigInfo_solver(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+
         void SetConfigInfo_TEModule(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,

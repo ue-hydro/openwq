@@ -157,12 +157,12 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
     // NATIVE Bioogeochemical model
     if ((OpenWQ_wqconfig.BGC_module).compare("OPENWQ_NATIVE_BGC") == 0){
 
-        /*OpenWQ_chem.Run(
+        OpenWQ_chem.Run(
             OpenWQ_json,
             OpenWQ_vars,
             OpenWQ_wqconfig,
             OpenWQ_hostModelconfig,
-            OpenWQ_output);*/
+            OpenWQ_output);
 
     }else{
 

@@ -59,6 +59,8 @@ void OpenWQ_readjson::read_all(
         errorMsgIdentifier,
         true);
 
+    input_filepath = OpenWQ_utils.RequestJsonKeyVal_str(OpenWQ_wqconfig, OpenWQ_output, OpenWQ_json.Master, "SOLVER", errorMsgIdentifier, true);
+
     // ########################
     // Main confirguration json (read)
     errorMsgIdentifier = "Master file inside OPENWQ_INPUT";
@@ -700,6 +702,11 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     SetConfigInfo_compute(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
+    // Set solver settings
+    SetConfigInfo_solver(
+        OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
+
+
     // Set chem module settings
     SetConfigInfo_chemModule(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
@@ -864,6 +871,30 @@ void OpenWQ_readjson::SetConfigInfo_compute(
 
 }
 
+// Set solver info
+void OpenWQ_readjson::SetConfigInfo_solver(
+        OpenWQ_json &OpenWQ_json,
+    OpenWQ_wqconfig &OpenWQ_wqconfig,
+    OpenWQ_utils& OpenWQ_utils,
+    OpenWQ_output& OpenWQ_output){
+
+    // Local variables
+    std::string Solver_method_local;
+    std::string errorMsgIdentifier;
+
+
+    // Chem method
+    errorMsgIdentifier = "Master file";
+    Solver_method_local = OpenWQ_utils.RequestJsonKeyVal_str(
+        OpenWQ_wqconfig, OpenWQ_output,
+        OpenWQ_json.Master, "SOLVER",
+        errorMsgIdentifier,
+        true);    
+
+    (OpenWQ_wqconfig.SOLVER_module).append(Solver_method_local);
+
+
+}
 
 // Set chem info
 void OpenWQ_readjson::SetConfigInfo_chemModule(
