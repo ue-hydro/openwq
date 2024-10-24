@@ -315,5 +315,15 @@ class OpenWQ_wqconfig
         >openWQ_BGCnative_BGCexpressions_eq;            // BGC kinetic formulas for all biogeochemical cycles
     
     std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
+
+    // ##########################
+    // 1) Solver
+    // ##########################
+
+    // ##########################
+    // General info 
+    // (needed for all Solver choices, native and not native)
+    std::string SOLVER_module;  // Get module name
+
     
 };

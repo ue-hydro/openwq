@@ -28,6 +28,26 @@ class OpenWQ_chem;
 
 class OpenWQ_solver{
 
+    private:
+    
+    // Solver using Sundials
+    void Solve_with_CVode(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_vars& OpenWQ_vars,
+        OpenWQ_json& OpenWQ_json,
+        OpenWQ_output& OpenWQ_output,
+        OpenWQ_chem& OpenWQ_chem);
+
+    // Solver using Euler method
+    void Solve_with_BE(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_vars& OpenWQ_vars,
+        OpenWQ_json& OpenWQ_json,
+        OpenWQ_output& OpenWQ_output,
+        OpenWQ_chem& OpenWQ_chem);
+
     public:
 
     // Generic Numerical Solver
