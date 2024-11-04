@@ -199,18 +199,18 @@ void OpenWQ_readjson::read_all(
     // ########################
     // TE_module cycling json (read)
 
-    // check if field TRANSPORT_EROSION exist
+    // check if field TRANSPORT_DISSOLVED exist
     errorMsgIdentifier = "Master file inside OPENWQ_INPUT > MODULES";
     OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
-        jsonMaster_SubStruct, "TRANSPORT_EROSION",
+        jsonMaster_SubStruct, "TRANSPORT_DISSOLVED",
         errorMsgIdentifier,
         true);
 
-    errorMsgIdentifier = "Master file inside OPENWQ_INPUT > MODULES > TRANSPORT_EROSION";
+    errorMsgIdentifier = "Master file inside OPENWQ_INPUT > MODULES > TRANSPORT_DISSOLVED";
     input_filepath = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
-        jsonMaster_SubStruct["TRANSPORT_EROSION"],"MODULE_CONFIG_FILEPATH",
+        jsonMaster_SubStruct["TRANSPORT_DISSOLVED"],"MODULE_CONFIG_FILEPATH",
         errorMsgIdentifier,
         true);
 
@@ -1023,19 +1023,19 @@ void OpenWQ_readjson::SetConfigInfo_TEModule(
         errorMsgIdentifier,
         true);
 
-    // check if field MODULES > TRANSPORT_EROSION exist
+    // check if field MODULES > TRANSPORT_DISSOLVED exist
     errorMsgIdentifier = "Master file in MODULES";
     OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
-        OpenWQ_json.Master["MODULES"], "TRANSPORT_EROSION",
+        OpenWQ_json.Master["MODULES"], "TRANSPORT_DISSOLVED",
         errorMsgIdentifier,
         true);
 
-    // Get TRANSPORT_EROSION module name
-    errorMsgIdentifier = "Master file in MODULES > TRANSPORT_EROSION";
+    // Get TRANSPORT_DISSOLVED module name
+    errorMsgIdentifier = "Master file in MODULES > TRANSPORT_DISSOLVED";
     TE_method_local = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        OpenWQ_json.Master["MODULES"]["TRANSPORT_EROSION"], "MODULE_NAME",
+        OpenWQ_json.Master["MODULES"]["TRANSPORT_DISSOLVED"], "MODULE_NAME",
         errorMsgIdentifier,
         true);
     (OpenWQ_wqconfig.TE_module).append(TE_method_local);
