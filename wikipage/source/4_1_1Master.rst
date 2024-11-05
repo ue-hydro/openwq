@@ -122,7 +122,7 @@ Example:
         },
         "MODULES": {
             "BIOGEOCHEMISTRY": {
-                "MODULE_NAME": "OPENWQ_NATIVE_BGC",
+                "MODULE_NAME": "OPENWQ_NATIVE_BGC_FLEX",
                 "MODULE_CONFIG_FILEPATH": "openWQ_MODULE_BGC_cycling.json"
             },
             "TRANSPORT_EROSION": {

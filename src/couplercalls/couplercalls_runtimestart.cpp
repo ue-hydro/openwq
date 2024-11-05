@@ -1,4 +1,4 @@
-// Copyright 2020, Diogo Costa, diogo.pinhodacosta@canada.ca
+// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -155,7 +155,7 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
     // ########################################
     
     // NATIVE Bioogeochemical model
-    if ((OpenWQ_wqconfig.BGC_module).compare("OPENWQ_NATIVE_BGC") == 0){
+    if ((OpenWQ_wqconfig.BGC_module).compare("OPENWQ_NATIVE_BGC_FLEX") == 0){
 
         OpenWQ_chem.Run(
             OpenWQ_json,

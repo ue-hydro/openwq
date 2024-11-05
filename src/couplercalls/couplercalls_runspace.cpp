@@ -1,4 +1,4 @@
-// Copyright 2020, Diogo Costa, diogo.pinhodacosta@canada.ca
+// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -57,60 +57,65 @@ void OpenWQ_couplercalls::RunSpaceStep(
     // MODULES
 
     // #################################################
-    // TE module
+    // TD module
     // Mass transport with water (mobile material only)
     // #################################################
 
-    // NATIVE TE model
-    if ((OpenWQ_wqconfig.TE_module).compare("OPENWQ_NATIVE_TE_ADVDISP") == 0)
+    // if TD_module = OPENWQ_NATIVE_TD_ADVDISP
+    if ((OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") == 0)
     {
-
-        // Advection and dispersion
         OpenWQ_watertransp.AdvDisp(
             OpenWQ_vars, OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, wmass_source);
 
-
-        // Internal mobilization of immobile pools
-        // Erosion and weathering
-        OpenWQ_watertransp.IntMob(
-            OpenWQ_vars, OpenWQ_wqconfig,
-            source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
-   
-
-        // Boundary Mixing due to velocity gradients
-        // due to turbulence and cross-boarder eddies
-        // only apply if fluxe between cells in same compartment          
-        OpenWQ_watertransp.BoundMix(
-            OpenWQ_hostModelconfig, OpenWQ_vars, OpenWQ_wqconfig,
-            source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
-    
-    }else if ((OpenWQ_wqconfig.TE_module).compare("OPENWQ_NATIVE_TE_ADVP") == 0)
+    // if TD_module = OPENWQ_NATIVE_TD_ADV
+    }else if ((OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADV") == 0)
     {
-
-        // Advection and dispersion
         OpenWQ_watertransp.Adv(
             OpenWQ_vars, OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, wmass_source);
 
+    // if TD_module != NONE (and any of the others)
+    }else if ((OpenWQ_wqconfig.TD_module).compare("NONE")!= 0)
+    {
 
-        // Internal mobilization of immobile pools
-        // Erosion and weathering
-        OpenWQ_watertransp.IntMob(
-            OpenWQ_vars, OpenWQ_wqconfig,
-            source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
+        // Create Message
+        msg_string = 
+            "<OpenWQ> ERROR: No TD_module found or unkown";
+
+        // Print it (Console and/or Log file)
+        OpenWQ_output.ConsoleLog(
+            OpenWQ_wqconfig,    // for Log file name
+            msg_string,         // message
+            true,               // print in console
+            true);              // print in log file
+        
+        // Abort (Fatal error)
+        exit(EXIT_FAILURE);
+
+    }
+
+    /* IntMOB ----> maybe recover in the future
+    // Internal mobilization of immobile pools
+    // Erosion and weathering
+    OpenWQ_watertransp.IntMob(
+        OpenWQ_vars, OpenWQ_wqconfig,
+        source, ix_s, iy_s, iz_s,
+        recipient, ix_r, iy_r, iz_r,
+        wflux_s2r, wmass_source);
+    */
    
+    // #################################################
+    // LE module
+    // Lateral Exchange model (mobile material only)
+    // #################################################
 
+    if (OpenWQ_wqconfig.LE_module.compare("OPENWQ_NATIVE_BOUNDMIX") == 0)
+    {
         // Boundary Mixing due to velocity gradients
         // due to turbulence and cross-boarder eddies
         // only apply if fluxe between cells in same compartment          
@@ -120,31 +125,12 @@ void OpenWQ_couplercalls::RunSpaceStep(
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, wmass_source);
 
-
-    }else if ((OpenWQ_wqconfig.TE_module).compare("OPENWQ_NATIVE_TE_NO_ADVDISP") == 0)
+    // if TD_module != NONE (and any of the others)
+    }else if ((OpenWQ_wqconfig.LE_module).compare("NONE")!= 0)
     {
-        
-        // Internal mobilization of immobile pools
-        // Erosion and weathering
-        OpenWQ_watertransp.IntMob(
-            OpenWQ_vars, OpenWQ_wqconfig,
-            source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
-   
-        // Boundary Mixing due to velocity gradients
-        // due to turbulence and cross-boarder eddies
-        OpenWQ_watertransp.BoundMix(
-            OpenWQ_hostModelconfig, OpenWQ_vars, OpenWQ_wqconfig,
-            source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
-
-    }else{
-
         // Create Message
         msg_string = 
-            "<OpenWQ> ERROR: No TE_module found or unkown";
+            "<OpenWQ> ERROR: No LE_module found or unkown";
 
         // Print it (Console and/or Log file)
         OpenWQ_output.ConsoleLog(

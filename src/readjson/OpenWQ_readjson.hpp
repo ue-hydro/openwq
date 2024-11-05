@@ -1,5 +1,5 @@
 
-// Copyright 2020, Diogo Costa, diogo.pinhodacosta@canada.ca
+// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -47,7 +47,7 @@ class OpenWQ_readjson{
 
     public:
 
-        void read_all(
+        void read_all_JSON(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
@@ -106,20 +106,64 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_chemModule(
-            OpenWQ_json& OpenWQ_json,
-            OpenWQ_wqconfig& OpenWQ_wqconfig,
-            OpenWQ_utils& OpenWQ_utils,
-            OpenWQ_output& OpenWQ_output);
-
         void SetConfigInfo_solver(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
+        void SetConfigInfo_general(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_TEModule(
+        void SetConfigInfo_EF(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_SS(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_chemModule(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_chemModule_BGC_FLEX(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_TDModule(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_LEModule(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_STModule(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_SIModule(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,

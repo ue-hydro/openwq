@@ -1,4 +1,4 @@
-// Copyright 2020, Diogo Costa, diogo.pinhodacosta@canada.ca
+// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -43,7 +43,7 @@ void OpenWQ_couplercalls::InitialConfig(
     // Read JSON files
     // ################################
         
-    OpenWQ_readjson.read_all(
+    OpenWQ_readjson.read_all_JSON(
         OpenWQ_json,
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,
@@ -96,7 +96,7 @@ void OpenWQ_couplercalls::InitialConfig(
     
     // NATIVE Bigoeochemical model
     // Parse biogeochemical expressions (and save in global)
-    if ((OpenWQ_wqconfig.BGC_module).compare("OPENWQ_NATIVE_BGC") == 0)
+    if ((OpenWQ_wqconfig.BGC_module).compare("OPENWQ_NATIVE_BGC_FLEX") == 0)
     {
         
         OpenWQ_chem.setBGCexpressions(

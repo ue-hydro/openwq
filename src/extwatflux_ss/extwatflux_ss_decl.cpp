@@ -1,4 +1,4 @@
-// Copyright 2020, Diogo Costa, diogo.pinhodacosta@canada.ca
+// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -1113,7 +1113,6 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
     std::string ewf_h5_units;               // json input: units of EWF h5 files
     std::string ewf_h5_units_file;          // Same as above, but "\" replaced by "|" for file search
     double conc_h5_rowi;                    // iteractive concentration extracted for h5 files
-    bool volume_unit_flag;                  // flag to identify the existence of volume in units, i.e., concentration
     std::vector<std::string> units;         // Vector with units information
     std::string external_compartName;       // json input: External compartment name
     std::string external_waterFluxName;     // EWF name (needs to match name hard coded in hydrolink)
@@ -1142,6 +1141,7 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
     bool flag_newJSON_h5Request = true;      // flag for new json block for ewf-h5
     bool flag_newChem = true;               // flag for new chem from json ewf-h5 clock
     int h5EWF_request_index;                // Index of ewf-h5 index
+    bool volume_unit_flag;
 
     // Get request index
     h5EWF_request_index = (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_time).size();

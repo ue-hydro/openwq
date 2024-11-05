@@ -1,5 +1,5 @@
 
-// Copyright 2020, Diogo Costa (diogo.pinhodacosta@canada.ca)
+// Copyright 2020, Diogo Costa (diogo.costa@uevora.pt)
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -388,16 +388,11 @@ void OpenWQ_solver::Solve_with_CVode(
     // Local variables
     unsigned int nx, ny, nz;    // interactive compartment domain dimensions
     unsigned int ix, iy, iz;    // interactive compartment domain cell indexes
-    double dm_dt_chem;          // ineractive final derivative (mass) - chemistry transformations
-    double dm_dt_trans;         // ineractive final derivative (mass) - transport
     double ic;               // interactive dynamic change to state-variable at start of simulations
-    double dm_ss;               // interactive ss load/ink (mass)
-    double dm_ewf;              // interactive ewf load/ink (mass)
     unsigned int system_size = 0;
     sundials::Context sunctx;
     N_Vector u;
     SUNLinearSolver LS;
-    int retval;
     int idx=0;
     sunrealtype* udata;
     void* cvode_mem;
@@ -435,8 +430,7 @@ void OpenWQ_solver::Solve_with_CVode(
                     for (iz=0;iz<nz;iz++){  
                         if (user_data.hostModelconfig.is_first_interaction_step()){
 
-                            ic = 
-                                (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix,iy,iz);
+                            ic = (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix,iy,iz);
 
                         } else {
                             ic = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz);
@@ -462,7 +456,7 @@ void OpenWQ_solver::Solve_with_CVode(
     CVodeSStolerances(cvode_mem, 1e-4, 1e-8);
 
     if (OpenWQ_hostModelconfig.get_time_step() > 0) {
-        retval = CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
+        CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
     }
 
     idx=0;

@@ -1,6 +1,6 @@
 
 
-// Copyright 2020, Diogo Costa, diogo.pinhodacosta@canada.ca
+// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -161,6 +161,7 @@ void OpenWQ_watertransp::AdvDisp(
 // Internal mobilization of immobile pools
 // Erosion and weathering
 ################################################# */
+/*
 void OpenWQ_watertransp::IntMob(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
@@ -213,7 +214,7 @@ void OpenWQ_watertransp::IntMob(
     }
 
 }
-
+*/
 
 /* #################################################
 // Boundary Mixing due to velocity gradients
@@ -247,7 +248,7 @@ void OpenWQ_watertransp::BoundMix(
 
     // Return if flux across compartments
     // This lateral mixing only occurs when fluxes occur when fluxes along the interface of compartments or if leaving the system
-    if (source != recipient & recipient != -1)
+    if ((source != recipient) && (recipient != -1))
         return;
 
     // Return if no flux: wflux_s2r == 0

@@ -1,6 +1,6 @@
 
 
-// Copyright 2020, Diogo Costa, diogo.pinhodacosta@canada.ca
+// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -68,13 +68,13 @@ class OpenWQ_watertransp{
 
         // Internal mobilization of immobile pools
         // Erosion and weathering
-        void IntMob(
-            OpenWQ_vars& OpenWQ_vars,
-            OpenWQ_wqconfig& OpenWQ_wqconfig,
-            const int source, const int ix_s, const int iy_s, const int iz_s,
-            const int recipient, const int ix_r, const int iy_r, const int iz_r,
-            double wflux_s2r, 
-            double wmass_source);
+        //void IntMob(
+        //    OpenWQ_vars& OpenWQ_vars,
+        //    OpenWQ_wqconfig& OpenWQ_wqconfig,
+        //   const int source, const int ix_s, const int iy_s, const int iz_s,
+        //   const int recipient, const int ix_r, const int iy_r, const int iz_r,
+        //    double wflux_s2r, 
+        //    double wmass_source);
 
         // Boundary Mixing due to velocity gradients
         // due to turbulence and cross-boarder eddies

@@ -30,7 +30,10 @@ class OpenWQ_json
     json Config;
     json ExtWatFlux;
     json SinkSource;
-    json TE_module;     // Transport and Erosion
-    json BGC_module;    // Biogeochemistry
+    json TD_module;     // Transport Dissolved module
+    json BGC_module;    // Biogeochemistry module
+    json LE_module;     // Lateral Exchange module
+    json TS_module;     // Transport Sediments module
+    json SI_module;     // Sorption Isotherm module
 
 };

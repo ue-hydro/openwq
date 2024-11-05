@@ -1,13 +1,14 @@
-Transport and Erosion/Mobilization
-=====================================
+Transport of Dissolved Substances (TRANSPORT_DISSOLVED)
+=======================================================
 
-The Transport-Erosion file is a JSON file that defines both the transport and mobilization of species within hydrological compartments and at their interface.
+The Transportn file is a JSON file that defines both the transport and mobilization of species within hydrological compartments and at their interface.
 
 **Principal Key 1**: ``MODULE_NAME``
 
-+--------------------+-------------------------------------------------------+
-| ``MODULE_NAME``    | Select the module name desired                        |
-+--------------------+-------------------------------------------------------+
++--------------------+----------------------------------------------------------------------------------------------------------------------------+
+| ``MODULE_NAME``    | - Select the module name desired                                                                                           |
+|                    | - Options: ``OPENWQ_NATIVE_TRANSP_DISS_ADVDISP``, ``OPENWQ_NATIVE_TRANSP_DISS_ADV`` or ``OPENWQ_NATIVE_TRANSP_DISS_NONE``  |
++--------------------+----------------------------------------------------------------------------------------------------------------------------+
 
 **Principal Key 2**: ``INTMOB_CONFIGURATION`` (internal mobilization)
 

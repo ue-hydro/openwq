@@ -1,5 +1,5 @@
 
-// Copyright 2020, Diogo Costa, diogo.pinhodacosta@canada.ca
+// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -634,7 +634,9 @@ bool OpenWQ_output::appendData_to_HDF5_file(
     if (dataset < 0) {
         return false;
     }
-    int err = H5Dwrite(dataset, datatype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.mem);
+    
+    // Save dataset to HDF5
+    H5Dwrite(dataset, datatype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.mem);
 
     H5Dclose(dataset);
     H5Sclose(dataspace);

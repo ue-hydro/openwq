@@ -1,6 +1,6 @@
 
 
-% Copyright 2020, Diogo Costa, diogo.pinhodacosta@canada.ca
+% Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 % This file is part of OpenWQ model.
 
 % This program, openWQ, is free software: you can redistribute it and/or modify

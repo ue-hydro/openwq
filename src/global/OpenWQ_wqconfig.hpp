@@ -92,8 +92,6 @@ class OpenWQ_wqconfig
         int allSS_flag = -1;                // number to replace in SinkSource_FORC to denote "all"
         bool tstep1_flag = true;            // flag to note that it's the first time step, so need to exclude loads prior to that
 
-
-
         // output format
         unsigned long output_type;      // 1) CSV = 0, 2) HDF5 = 1
         // Output folder
@@ -105,8 +103,6 @@ class OpenWQ_wqconfig
                 double,                     // denominator multiplier (determined by Convert_Units)
                 bool                        // flag if requested concentration (needs to be divided by water volume)
                 > output_units;             // Tuple with info about output units
-
-
 
     public:
         // Constructor
@@ -160,8 +156,6 @@ class OpenWQ_wqconfig
         std::string get_timestep_out_unit();
         void convert_units_timestep_out(std::vector<double> unit_multiplers);
 
-
-        
         void set_h5EWF_interpMethod(std::string h5EWF_interpMethod);
         bool is_h5EWF_interpMethod(std::string h5EWF_interpMethod);
         std::string h5EWF_interp_warning_msg();
@@ -191,9 +185,6 @@ class OpenWQ_wqconfig
         void set_output_units_denominator(double denominator);
         void set_output_units_concentration(bool concentration_requested);
 
-
-
-    
         // Since the unix time epoch is 1970, which is used as a reference for timegm,
         // the seconds become negative for years below 1970, 
         // which will mess up time management.
@@ -203,7 +194,6 @@ class OpenWQ_wqconfig
         const unsigned long long secFrom1900toUnixTimeEpoch1970 = 2208988800;
 
         std::unordered_map<std::string, hid_t> files;
-
 
         // TODO: Below needs to be moved to private
 
@@ -254,22 +244,17 @@ class OpenWQ_wqconfig
         bool BGC_Transform_print_errmsg = true;
         bool invalid_bgc_entry_errmsg = true;
         
-
-
     // ########################################
     // MODULES
     // ########################################
 
-    // ##########################
+    // ########################################
     // 1) Transport / Erosion (TE)
-    // ##########################
 
-    // ##########################
     // General info 
     // (needed for all TE modules, native and not native)
-    std::string TE_module;  // Get module name
+    std::string TD_module;  // Get module name
 
-    // ##########################
     // OpenWQ native module: OPENWQ_NATIVE_TE
     std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
 
@@ -278,11 +263,9 @@ class OpenWQ_wqconfig
             <unsigned int,unsigned int,unsigned int,double>> 
             OpenWQ_TE_native_BoundMix_info;
 
-    // ##########################
-    // 1) Biogeochemistry
-    // ##########################
+    // ########################################
+    // 2) Biogeochemistry
     
-    // ##########################
     // General info 
     // (needed for all BGC modules, native and not native)
     std::string BGC_module;     // Get module name
@@ -293,8 +276,7 @@ class OpenWQ_wqconfig
     std::vector
         <unsigned int> BGC_general_mobile_species;      // index of mobile chem species
 
-    // ##########################
-    // OpenWQ native module: OPENWQ_NATIVE_BGC
+    // OpenWQ native module: OPENWQ_NATIVE_BGC_FLEX
     
     // BGC kinetic formulas (tuple with all the info needed)
     // It includes also the formulas parsed and ready to be used
@@ -317,13 +299,24 @@ class OpenWQ_wqconfig
     std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
 
     // ##########################
-    // 1) Solver
-    // ##########################
+    // 3) Solver
+    // General info 
+    // Native BE and not native SUNDIALS
+    std::string SOLVER_module;  // Get module name
 
     // ##########################
+    // 4) Lateral Exchange (LE)
     // General info 
-    // (needed for all Solver choices, native and not native)
-    std::string SOLVER_module;  // Get module name
+    std::string LE_module;  // Get module name
+
+    // ##########################
+    // 4) Transport Sediments (ST)
+    // General info 
+    std::string TS_module;  // Get module name
+
+    // ##########################
+    // 5) Sorption isotherm (SI)
+    std::string SI_module;  // Get module name
 
     
 };
