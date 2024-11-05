@@ -51,7 +51,8 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
         OpenWQ_vars, 
         OpenWQ_json,
         OpenWQ_output,
-        OpenWQ_chem);
+        OpenWQ_chem,
+        OpenWQ_watertransp);
 
     // ########################################
     // Output Results

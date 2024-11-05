@@ -18,6 +18,7 @@
 
 #include "OpenWQ_solver.hpp"
 #include "chem/OpenWQ_chem.hpp"
+#include "watertransp/OpenWQ_watertransp.hpp"
 
 #include <sundials/sundials_core.hpp>
 #include <sundials/sundials_types.h>
@@ -36,7 +37,8 @@ void OpenWQ_solver::Numerical_Solver(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_json& OpenWQ_json,
     OpenWQ_output& OpenWQ_output,
-    OpenWQ_chem& OpenWQ_chem){
+    OpenWQ_chem& OpenWQ_chem,
+    OpenWQ_watertransp& OpenWQ_watertransp){
     
     // Local variables
     std::string msg_string; // error/warning message
@@ -50,7 +52,8 @@ void OpenWQ_solver::Numerical_Solver(
             OpenWQ_vars,
             OpenWQ_json,
             OpenWQ_output,
-            OpenWQ_chem);
+            OpenWQ_chem,
+            OpenWQ_watertransp);
     } else if ((OpenWQ_wqconfig.SOLVER_module).compare("BE") == 0) {
         Solve_with_BE(
             OpenWQ_hostModelconfig,
@@ -75,6 +78,7 @@ void OpenWQ_solver::Numerical_Solver(
         exit(EXIT_FAILURE);
 
     }
+    run_space_register.clear();
 }
 
 /* #################################################
@@ -198,6 +202,8 @@ struct UserData {
     OpenWQ_json& json;
     OpenWQ_output& output;
     OpenWQ_chem& chem;
+    OpenWQ_watertransp& transp;
+    std::vector<std::tuple<int,int,int,int,int,int,int,int,double,double>> transport_register;
 };
 
 /* #################################################
@@ -236,6 +242,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
 
                 // Reset derivatives of state-variables to zero after each time interaction
                 (*user_data.vars.d_chemass_dt_chem)(icmp)(chemi).zeros();
+                (*user_data.vars.d_chemass_dt_transp)(icmp)(chemi).zeros();
 
             }
 
@@ -263,6 +270,87 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
     }
 
     user_data.chem.Run(user_data.json, user_data.vars, user_data.wqconfig, user_data.hostModelconfig, user_data.output);
+    for (auto [source, ix_s, iy_s, iz_s, recipient, ix_r, iy_r, iz_r, wflux_s2r, wmass_source] : user_data.transport_register) {
+        if ((user_data.wqconfig.TE_module).compare("OPENWQ_NATIVE_TE_ADVDISP") == 0)
+        {
+
+            // Advection and dispersion
+            user_data.transp.AdvDisp(
+                user_data.vars, user_data.wqconfig,
+                source, ix_s, iy_s, iz_s,
+                recipient, ix_r, iy_r, iz_r,
+                wflux_s2r, wmass_source);
+
+
+            // Internal mobilization of immobile pools
+            // Erosion and weathering
+            user_data.transp.IntMob(
+                user_data.vars, user_data.wqconfig,
+                source, ix_s, iy_s, iz_s,
+                recipient, ix_r, iy_r, iz_r,
+                wflux_s2r, wmass_source);
+   
+
+            // Boundary Mixing due to velocity gradients
+            // due to turbulence and cross-boarder eddies
+            // only apply if fluxe between cells in same compartment          
+            user_data.transp.BoundMix(
+                user_data.hostModelconfig, user_data.vars, user_data.wqconfig,
+                source, ix_s, iy_s, iz_s,
+                recipient, ix_r, iy_r, iz_r,
+                wflux_s2r, wmass_source);
+    
+        }else if ((user_data.wqconfig.TE_module).compare("OPENWQ_NATIVE_TE_ADVP") == 0)
+        {
+
+            // Advection and dispersion
+            user_data.transp.Adv(
+                user_data.vars, user_data.wqconfig,
+                source, ix_s, iy_s, iz_s,
+                recipient, ix_r, iy_r, iz_r,
+                wflux_s2r, wmass_source);
+
+
+            // Internal mobilization of immobile pools
+            // Erosion and weathering
+            user_data.transp.IntMob(
+                user_data.vars, user_data.wqconfig,
+                source, ix_s, iy_s, iz_s,
+                recipient, ix_r, iy_r, iz_r,
+                wflux_s2r, wmass_source);
+   
+
+            // Boundary Mixing due to velocity gradients
+            // due to turbulence and cross-boarder eddies
+            // only apply if fluxe between cells in same compartment          
+            user_data.transp.BoundMix(
+                user_data.hostModelconfig, user_data.vars, user_data.wqconfig,
+                source, ix_s, iy_s, iz_s,
+                recipient, ix_r, iy_r, iz_r,
+                wflux_s2r, wmass_source);
+
+
+        }else if ((user_data.wqconfig.TE_module).compare("OPENWQ_NATIVE_TE_NO_ADVDISP") == 0)
+        {
+        
+            // Internal mobilization of immobile pools
+            // Erosion and weathering
+            user_data.transp.IntMob(
+                user_data.vars, user_data.wqconfig,
+                source, ix_s, iy_s, iz_s,
+                recipient, ix_r, iy_r, iz_r,
+                wflux_s2r, wmass_source);
+   
+            // Boundary Mixing due to velocity gradients
+            // due to turbulence and cross-boarder eddies
+            user_data.transp.BoundMix(
+                user_data.hostModelconfig, user_data.vars, user_data.wqconfig,
+                source, ix_s, iy_s, iz_s,
+                recipient, ix_r, iy_r, iz_r,
+                wflux_s2r, wmass_source);
+
+        }
+    }
 
     #pragma omp parallel for private (nx, ny, nz, ix, iy, iz, dm_ic, dm_ss, dm_ewf, dm_dt_chem, dm_dt_trans) num_threads(user_data.wqconfig.get_num_threads_requested())
     for (unsigned int icmp=0;icmp<user_data.hostModelconfig.get_num_HydroComp();icmp++){
@@ -383,7 +471,8 @@ void OpenWQ_solver::Solve_with_CVode(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_json& OpenWQ_json,
     OpenWQ_output& OpenWQ_output,
-    OpenWQ_chem& OpenWQ_chem){
+    OpenWQ_chem& OpenWQ_chem,
+    OpenWQ_watertransp& OpenWQ_watertransp){
     
     // Local variables
     unsigned int nx, ny, nz;    // interactive compartment domain dimensions
@@ -399,11 +488,11 @@ void OpenWQ_solver::Solve_with_CVode(
     SUNLinearSolver LS;
     int retval;
     int idx=0;
-    sunrealtype* udata;
+    sunrealtype* udata, *fdata;
     void* cvode_mem;
     sunrealtype t;
 
-    UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_chem};
+    UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_chem, OpenWQ_watertransp, run_space_register};
 
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++) {
         nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
@@ -412,7 +501,7 @@ void OpenWQ_solver::Solve_with_CVode(
         system_size += nx*ny*nz*OpenWQ_wqconfig.BGC_general_num_chem;
     }
 
-    //retval = SUNContext_Create(NULL, &sunctx);
+
     u = N_VNew_Serial(system_size, sunctx);
     udata = N_VGetArrayPointer(u);
 
@@ -437,6 +526,7 @@ void OpenWQ_solver::Solve_with_CVode(
 
                             ic = 
                                 (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix,iy,iz);
+                            (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz) = ic;
 
                         } else {
                             ic = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz);
@@ -463,6 +553,7 @@ void OpenWQ_solver::Solve_with_CVode(
 
     if (OpenWQ_hostModelconfig.get_time_step() > 0) {
         retval = CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
+    
     }
 
     idx=0;
@@ -474,13 +565,14 @@ void OpenWQ_solver::Solve_with_CVode(
         ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // num of y elements
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
+
         // Chemical loop
         for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.BGC_general_num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
                 for (iy=0;iy<ny;iy++){
-                    for (iz=0;iz<nz;iz++){     
+                    for (iz=0;iz<nz;iz++){  
 
                         (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz) = udata[idx];
                         idx++;
@@ -490,5 +582,8 @@ void OpenWQ_solver::Solve_with_CVode(
             }
         }
     }
+    
+    
+
 
 }

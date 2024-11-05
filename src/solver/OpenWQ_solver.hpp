@@ -25,6 +25,7 @@
 #include "global/OpenWQ_json.hpp"
 class OpenWQ_output;
 class OpenWQ_chem;
+class OpenWQ_watertransp;
 
 class OpenWQ_solver{
 
@@ -37,7 +38,8 @@ class OpenWQ_solver{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_json& OpenWQ_json,
         OpenWQ_output& OpenWQ_output,
-        OpenWQ_chem& OpenWQ_chem);
+        OpenWQ_chem& OpenWQ_chem,
+        OpenWQ_watertransp& OpenWQ_watertransp);
 
     // Solver using Euler method
     void Solve_with_BE(
@@ -57,7 +59,8 @@ class OpenWQ_solver{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_json& OpenWQ_json,
         OpenWQ_output& OpenWQ_output,
-        OpenWQ_chem& OpenWQ_chem);
+        OpenWQ_chem& OpenWQ_chem,
+        OpenWQ_watertransp& OpenWQ_watertransp);
 
     // Reset derivatives (before each time iteraction)
     void Reset_Deriv(
@@ -72,6 +75,8 @@ class OpenWQ_solver{
         OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_vars& OpenWQ_vars);
+
+    std::vector<std::tuple<int,int,int,int,int,int,int,int,double,double>> run_space_register;
 
 };
 

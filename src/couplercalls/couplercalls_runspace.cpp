@@ -48,6 +48,9 @@ void OpenWQ_couplercalls::RunSpaceStep(
     // Local variables
     std::string msg_string;
 
+    OpenWQ_solver.run_space_register.push_back(
+        std::make_tuple(source,ix_s,iy_s,iz_s,recipient,ix_r,iy_r,iz_r,wflux_s2r,wmass_source));
+
     // Return if flux or source_volume is zero
     if (wflux_s2r <= OpenWQ_hostModelconfig.get_waterflux_minlim() || 
     wmass_source <= OpenWQ_hostModelconfig.get_watervol_minlim())
