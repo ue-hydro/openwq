@@ -112,19 +112,19 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_general(
+        void SetConfigInfo_INPUT_general(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_EF(
+        void SetConfigInfo_INPUT_EF(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_SS(
+        void SetConfigInfo_INPUT_SS(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,

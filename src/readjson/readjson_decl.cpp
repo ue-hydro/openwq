@@ -63,7 +63,7 @@ void OpenWQ_readjson::read_all_JSON(
 
 
     /* ################################################
-    // Load all info in Master file
+    // Load all info from Master file
     // Process all relevant config inputs
     // Data Preparation
     // including module-specific JSON files and other config info
@@ -528,6 +528,10 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     OpenWQ_units &OpenWQ_units,
     OpenWQ_output& OpenWQ_output){
     
+
+    // #############################
+    // Set General info
+
     // Set logFile
     // First thing because the log file needs to be initiated to 
     // log info about config
@@ -546,21 +550,25 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     SetConfigInfo_solver(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
+
+    // #############################
+    // Set OPENWQ_INPUT info
+
     // Set general config data
-    SetConfigInfo_general(
+    SetConfigInfo_INPUT_general(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
     // Set external fluxes
-    SetConfigInfo_EF(
+    SetConfigInfo_INPUT_EF(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
     // set sink and source
-    SetConfigInfo_SS(
+    SetConfigInfo_INPUT_SS(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
 
     // #############################
-    // SeT modules
+    // Set modules
 
     // Set chem module settings
     SetConfigInfo_chemModule(  
@@ -586,7 +594,9 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     //    OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
     //    OpenWQ_utils, OpenWQ_output);
 
+    // #############################
     // Set output options
+
     SetConfigInfo_output_driver(
         OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
         OpenWQ_utils, OpenWQ_units, OpenWQ_output);
@@ -783,7 +793,7 @@ void OpenWQ_readjson::SetConfigInfo_solver(
 }
 
 // Set general config info
-void OpenWQ_readjson::SetConfigInfo_general(
+void OpenWQ_readjson::SetConfigInfo_INPUT_general(
         OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
@@ -832,7 +842,7 @@ void OpenWQ_readjson::SetConfigInfo_general(
 }
 
 // Set EF info
-void OpenWQ_readjson::SetConfigInfo_EF(
+void OpenWQ_readjson::SetConfigInfo_INPUT_EF(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
@@ -900,7 +910,7 @@ void OpenWQ_readjson::SetConfigInfo_EF(
 }
 
 // Set SS info
-void OpenWQ_readjson::SetConfigInfo_SS(
+void OpenWQ_readjson::SetConfigInfo_INPUT_SS(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
@@ -1196,7 +1206,7 @@ void OpenWQ_readjson::SetConfigInfo_TDModule(
             input_filepath);
     }
 
-    // Check TD option not valid, through error
+    // Check if TD option not valid, through error
     if ((OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") != 0 
         && (OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADV") != 0 
         && (OpenWQ_wqconfig.TD_module).compare("NONE") != 0){
