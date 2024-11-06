@@ -550,7 +550,6 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     SetConfigInfo_solver(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
-
     // #############################
     // Set OPENWQ_INPUT info
 

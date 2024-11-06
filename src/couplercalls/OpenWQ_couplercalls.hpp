@@ -29,7 +29,7 @@
 #include "watertransp/OpenWQ_watertransp.hpp"
 #include "extwatflux_ss/OpenWQ_extwatflux_ss.hpp"
 #include "units/OpenWQ_units.hpp"
-#include "solver/OpenWQ_solver.hpp"
+#include "compute/OpenWQ_solver.hpp"
 #include "output/OpenWQ_output.hpp"
 #include "utils/OpenWQ_utils.hpp"
 
