@@ -113,7 +113,7 @@ FILE(GLOB OPENWQ_SOURCES
           ${OPENWQ_DIR}/src/global/*.cpp
           ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
           ${OPENWQ_DIR}/src/initiate/*.cpp
-          ${OPENWQ_DIR}/src/chem/*.cpp
+          ${OPENWQ_DIR}/src/chem/bgc_flex/*.cpp
           ${OPENWQ_DIR}/src/watertransp/*.cpp
           ${OPENWQ_DIR}/src/readjson/*.cpp
           ${OPENWQ_DIR}/src/couplercalls/*.cpp
@@ -553,7 +553,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         ${OPENWQ_DIR}/src/global/*.cpp
                         ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
                         ${OPENWQ_DIR}/src/initiate/*.cpp
-                        ${OPENWQ_DIR}/src/chem/*.cpp
+                        ${OPENWQ_DIR}/src/chem/bgc_flex/*.cpp
                         ${OPENWQ_DIR}/src/watertransp/*.cpp
                         ${OPENWQ_DIR}/src/readjson/*.cpp
                         ${OPENWQ_DIR}/src/couplercalls/*.cpp

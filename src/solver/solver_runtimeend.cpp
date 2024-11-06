@@ -17,7 +17,7 @@
 
 
 #include "OpenWQ_solver.hpp"
-#include "chem/OpenWQ_chem.hpp"
+#include "chem/bgc_flex/OpenWQ_chem.hpp"
 
 #include <sundials/sundials_core.hpp>
 #include <sundials/sundials_types.h>
