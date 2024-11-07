@@ -32,9 +32,9 @@
 #include "output/headerfile_output.hpp"
 #include "utils/headerfile_utils.hpp"
 
-#include "models_chem/headerfile_chem.hpp"
-#include "models_transp_dissolved/headerfile_td.hpp"
-#include "models_lateral_exchange/headerfile_le.hpp"
+#include "models_CH/headerfile_ch.hpp"
+#include "models_TD/headerfile_td.hpp"
+#include "models_LE/headerfile_le.hpp"
 
 class OpenWQ_couplercalls{
 

@@ -1,6 +1,6 @@
 
 #include "compute/headerfile_compute.hpp"
-#include "models_chem/headerfile_chem.hpp"
+#include "models_CH/headerfile_ch.hpp"
 
 #include <sundials/sundials_core.hpp>
 #include <sundials/sundials_types.h>
