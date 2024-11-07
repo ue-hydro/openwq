@@ -61,7 +61,7 @@ OpenWQ_hydrolink.h
     #include "OpenWQ_global.h"
     #include "OpenWQ_readjson.h"
     #include "OpenWQ_initiate.h"
-    #include "OpenWQ_chem.h"
+    #include "OpenWQ_models_CH.h"
     #include "OpenWQ_watertransp.h"
     #include "OpenWQ_sinksource.h"
     #include "OpenWQ_units.h"
@@ -118,7 +118,7 @@ OpenWQ_hydrolink.h
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_initiate& OpenWQ_initiate,            // initiate modules
             OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
-            OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
+            OpenWQ_models_CH& OpenWQ_models_CH,                   // biochemistry modules
             OpenWQ_sinksource& OpenWQ_sinksource,        // sink and source modules)
             OpenWQ_output& OpenWQ_output,                // output modules (needed for console/logfile)
             unsigned long num_hru);
@@ -133,7 +133,7 @@ OpenWQ_hydrolink.h
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_initiate& OpenWQ_initiate,            // initiate modules
             OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
-            OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
+            OpenWQ_models_CH& OpenWQ_models_CH,                   // biochemistry modules
             OpenWQ_sinksource& OpenWQ_sinksource,        // sink and source modules)
             OpenWQ_compute& OpenWQ_compute,                // solver module
             OpenWQ_output& OpenWQ_output);               // output modules
@@ -183,7 +183,7 @@ OpenWQ_hydrolink.cpp
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_initiate& OpenWQ_initiate,            // initiate modules
         OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
-        OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
+        OpenWQ_models_CH& OpenWQ_models_CH,                   // biochemistry modules
         OpenWQ_sinksource& OpenWQ_sinksource,        // sink and source modules)
         OpenWQ_output& OpenWQ_output,
         unsigned long nhru)
@@ -218,7 +218,7 @@ OpenWQ_hydrolink.cpp
                 OpenWQ_vars,
                 OpenWQ_initiate,            // initiate modules
                 OpenWQ_watertransp,      // transport modules
-                OpenWQ_chem,                   // biochemistry modules
+                OpenWQ_models_CH,                   // biochemistry modules
                 OpenWQ_sinksource,        // sink and source modules)
                 OpenWQ_output);
 
@@ -281,7 +281,7 @@ OpenWQ_hydrolink.cpp
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_initiate& OpenWQ_initiate,            // initiate modules
         OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
-        OpenWQ_chem& OpenWQ_chem,                    // biochemistry modules
+        OpenWQ_models_CH& OpenWQ_models_CH,                    // biochemistry modules
         OpenWQ_sinksource& OpenWQ_sinksource,        // sink and source modules)
         OpenWQ_compute& OpenWQ_compute,                // solver module
         OpenWQ_output& OpenWQ_output)                // output modules
@@ -351,7 +351,7 @@ OpenWQ_hydrolink.cpp
             OpenWQ_vars,
             OpenWQ_initiate,            // initiate modules
             OpenWQ_watertransp,      // transport modules
-            OpenWQ_chem,                   // biochemistry modules
+            OpenWQ_models_CH,                   // biochemistry modules
             OpenWQ_sinksource,        // sink and source modules)
             OpenWQ_compute,
             OpenWQ_output,
@@ -456,7 +456,7 @@ OpenWQ_hydrolink.cpp
                     OpenWQ_vars,
                     OpenWQ_initiate,            // initiate modules
                     OpenWQ_watertransp,      // transport modules
-                    OpenWQ_chem,                   // biochemistry modules
+                    OpenWQ_models_CH,                   // biochemistry modules
                     OpenWQ_sinksource,        // sink and source modules)
                     OpenWQ_compute,
                     OpenWQ_output,
@@ -483,7 +483,7 @@ OpenWQ_hydrolink.cpp
                     OpenWQ_vars,
                     OpenWQ_initiate,            // initiate modules
                     OpenWQ_watertransp,      // transport modules
-                    OpenWQ_chem,                   // biochemistry modules
+                    OpenWQ_models_CH,                   // biochemistry modules
                     OpenWQ_sinksource,        // sink and source modules)
                     OpenWQ_compute,
                     OpenWQ_output,
@@ -518,7 +518,7 @@ OpenWQ_hydrolink.cpp
                 OpenWQ_vars,
                 OpenWQ_initiate,            // initiate modules
                 OpenWQ_watertransp,      // transport modules
-                OpenWQ_chem,                   // biochemistry modules
+                OpenWQ_models_CH,                   // biochemistry modules
                 OpenWQ_sinksource,        // sink and source modules)
                 OpenWQ_compute,
                 OpenWQ_output,

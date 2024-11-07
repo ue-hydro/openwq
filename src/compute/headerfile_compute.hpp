@@ -25,7 +25,7 @@
 #include "global/openwq_json.hpp"
 
 class OpenWQ_output;
-class OpenWQ_chem;
+class OpenWQ_models_CH;
 
 class OpenWQ_compute{
 
@@ -38,7 +38,7 @@ class OpenWQ_compute{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_json& OpenWQ_json,
         OpenWQ_output& OpenWQ_output,
-        OpenWQ_chem& OpenWQ_chem);
+        OpenWQ_models_CH& OpenWQ_models_CH);
 
     // Solver using Euler method
     void Solve_with_BE(
@@ -47,7 +47,7 @@ class OpenWQ_compute{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_json& OpenWQ_json,
         OpenWQ_output& OpenWQ_output,
-        OpenWQ_chem& OpenWQ_chem);
+        OpenWQ_models_CH& OpenWQ_models_CH);
 
     public:
 
@@ -58,7 +58,7 @@ class OpenWQ_compute{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_json& OpenWQ_json,
         OpenWQ_output& OpenWQ_output,
-        OpenWQ_chem& OpenWQ_chem);
+        OpenWQ_models_CH& OpenWQ_models_CH);
 
     // Reset derivatives (before each time iteraction)
     void Reset_Deriv(

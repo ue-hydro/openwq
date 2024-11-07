@@ -40,7 +40,7 @@ using json = nlohmann::json;
 
 // Biogeochemistry
 
-class OpenWQ_chem{
+class OpenWQ_models_CH{
 
     public:
         // Parse biogeochemical expressions

@@ -21,7 +21,7 @@
 /* #################################################
 // Compute chemical transformations
 ################################################# */
-void OpenWQ_chem::Run(
+void OpenWQ_models_CH::Run(
     OpenWQ_json& OpenWQ_json,
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
@@ -50,7 +50,7 @@ void OpenWQ_chem::Run(
 /* #################################################
 // Compute each chemical transformation
 ################################################# */
-void OpenWQ_chem::BGC_Transform(
+void OpenWQ_models_CH::BGC_Transform(
     OpenWQ_json& OpenWQ_json,
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,

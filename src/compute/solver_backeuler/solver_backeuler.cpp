@@ -12,7 +12,7 @@ void OpenWQ_compute::Solve_with_BE(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_json& OpenWQ_json,
     OpenWQ_output& OpenWQ_output,
-    OpenWQ_chem& OpenWQ_chem){
+    OpenWQ_models_CH& OpenWQ_models_CH){
 
     // Local variables
     unsigned int nx, ny, nz;    // interactive compartment domain dimensions

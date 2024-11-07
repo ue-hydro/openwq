@@ -29,7 +29,7 @@ void OpenWQ_compute::Numerical_Solver(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_json& OpenWQ_json,
     OpenWQ_output& OpenWQ_output,
-    OpenWQ_chem& OpenWQ_chem){
+    OpenWQ_models_CH& OpenWQ_models_CH){
     
     // Local variables
     std::string msg_string; // error/warning message
@@ -43,7 +43,7 @@ void OpenWQ_compute::Numerical_Solver(
             OpenWQ_vars,
             OpenWQ_json,
             OpenWQ_output,
-            OpenWQ_chem);
+            OpenWQ_models_CH);
 
     } else if ((OpenWQ_wqconfig.SOLVER_module).compare("BE") == 0) {
         
@@ -53,7 +53,7 @@ void OpenWQ_compute::Numerical_Solver(
             OpenWQ_vars,
             OpenWQ_json,
             OpenWQ_output,
-            OpenWQ_chem);
+            OpenWQ_models_CH);
 
     } else {
         // Create Message

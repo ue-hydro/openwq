@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
     OpenWQ_vars OpenWQ_vars(num_HydroComp, num_ExtFlux);
     OpenWQ_initiate OpenWQ_initiate;            // initiate modules
     OpenWQ_TD_model OpenWQ_TD_model;      // transport modules
-    OpenWQ_chem OpenWQ_chem;                    // biochemistry modules
+    OpenWQ_models_CH OpenWQ_models_CH;                    // biochemistry modules
     OpenWQ_extwatflux_ss OpenWQ_extwatflux_ss;        // sink and source modules
     OpenWQ_compute OpenWQ_compute;                // solver module
     OpenWQ_output OpenWQ_output;                // output module
@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
             OpenWQ_initiate,            // initiate modules
             OpenWQ_TD_model,         // transport modules
             OpenWQ_LE_model,            // LE model
-            OpenWQ_chem,                   // biochemistry modules
+            OpenWQ_models_CH,                   // biochemistry modules
             OpenWQ_extwatflux_ss,        // sink and source modules)
             OpenWQ_output);
 
@@ -200,7 +200,7 @@ int main(int argc, char* argv[])
             OpenWQ_initiate,            // initiate modules
             OpenWQ_TD_model,      // transport modules
             OpenWQ_LE_model,
-            OpenWQ_chem,                   // biochemistry modules
+            OpenWQ_models_CH,                   // biochemistry modules
             OpenWQ_extwatflux_ss,        // sink and source modules)
             OpenWQ_compute,
             OpenWQ_output,
@@ -255,7 +255,7 @@ int main(int argc, char* argv[])
                         OpenWQ_initiate,            // initiate modules
                         OpenWQ_TD_model,      // transport modules
                         OpenWQ_LE_model,             // LE model
-                        OpenWQ_chem,                   // biochemistry modules
+                        OpenWQ_models_CH,                   // biochemistry modules
                         OpenWQ_extwatflux_ss,        // sink and source modules)
                         OpenWQ_compute,
                         OpenWQ_output,
@@ -284,7 +284,7 @@ int main(int argc, char* argv[])
             OpenWQ_vars,
             OpenWQ_initiate,            // initiate modules
             OpenWQ_TD_model,      // transport modules
-            OpenWQ_chem,                   // biochemistry modules
+            OpenWQ_models_CH,                   // biochemistry modules
             OpenWQ_extwatflux_ss,        // sink and source modules)
             OpenWQ_compute,
             OpenWQ_output,

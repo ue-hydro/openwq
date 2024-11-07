@@ -18,7 +18,7 @@ struct UserData {
     OpenWQ_vars& vars;
     OpenWQ_json& json;
     OpenWQ_output& output;
-    OpenWQ_chem& chem;
+    OpenWQ_models_CH& chem;
 };
 
 /* #################################################
@@ -204,7 +204,7 @@ void OpenWQ_compute::Solve_with_CVode(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_json& OpenWQ_json,
     OpenWQ_output& OpenWQ_output,
-    OpenWQ_chem& OpenWQ_chem){
+    OpenWQ_models_CH& OpenWQ_models_CH){
     
     // Local variables
     unsigned int nx, ny, nz;    // interactive compartment domain dimensions
@@ -219,7 +219,7 @@ void OpenWQ_compute::Solve_with_CVode(
     void* cvode_mem;
     sunrealtype t;
 
-    UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_chem};
+    UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_models_CH};
 
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++) {
         nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
