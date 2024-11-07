@@ -78,33 +78,6 @@ void OpenWQ_readjson::read_all_JSON(
 
 }
 
-
-// ########################################
-// Change JSON key
-// ########################################
-void OpenWQ_readjson::change_JSON_key_to_upper_case(
-    OpenWQ_utils &OpenWQ_utils,
-    json &object, 
-    const std::string& old_key,
-    std::string& new_key)
-{
-
-    try{
-
-        // Convert to upper case
-        new_key = OpenWQ_utils.ConvertStringToUpperCase(old_key);
-
-        // get iterator to old key; TODO: error handling if key is not present
-        json::iterator it = object.find(old_key);
-
-        // create null value for new key and swap value from old key
-        std::swap(object[new_key], it.value());
-
-    }catch(const std::exception &e){}
-
-}
-
-
 // ########################################
 // Extract model configuration info from JSON files
 // ########################################
