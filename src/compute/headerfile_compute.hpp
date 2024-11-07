@@ -27,7 +27,7 @@
 class OpenWQ_output;
 class OpenWQ_chem;
 
-class OpenWQ_solver{
+class OpenWQ_compute{
 
     private:
     

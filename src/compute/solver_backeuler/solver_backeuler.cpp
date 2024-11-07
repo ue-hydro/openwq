@@ -6,7 +6,7 @@
 // Euler solver
 ################################################# */
 
-void OpenWQ_solver::Solve_with_BE(
+void OpenWQ_compute::Solve_with_BE(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars,

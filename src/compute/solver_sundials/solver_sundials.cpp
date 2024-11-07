@@ -198,7 +198,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
 /* #################################################
 // Solving with CVode
 ################################################# */
-void OpenWQ_solver::Solve_with_CVode(
+void OpenWQ_compute::Solve_with_CVode(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars,

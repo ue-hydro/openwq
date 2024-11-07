@@ -34,7 +34,7 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
     OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
     OpenWQ_chem& OpenWQ_chem,                       // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
-    OpenWQ_solver& OpenWQ_solver,
+    OpenWQ_compute& OpenWQ_compute,
     OpenWQ_output& OpenWQ_output,
     time_t simtime){                                // simulation time in seconds since seconds 
                                                     // since 00:00 hours, Jan 1, 1970 UTC
@@ -47,7 +47,7 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
     // Reset Derivatives 
     // Needed before start of new time iteraction
     // ########################################
-    OpenWQ_solver.Reset_Deriv(
+    OpenWQ_compute.Reset_Deriv(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,
         OpenWQ_vars,
@@ -58,7 +58,7 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
     // Reset EWF conc 
     // Specially needed for discrete conc requests
     // ########################################
-    OpenWQ_solver.Reset_EWFconc(
+    OpenWQ_compute.Reset_EWFconc(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,
         OpenWQ_vars);

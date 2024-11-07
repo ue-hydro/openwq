@@ -35,7 +35,7 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
     OpenWQ_LE_model& OpenWQ_LE_model,           // LE model
     OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,        // sink and source modules)
-    OpenWQ_solver& OpenWQ_solver,
+    OpenWQ_compute& OpenWQ_compute,
     OpenWQ_output& OpenWQ_output,
     time_t simtime){
 
@@ -46,7 +46,7 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
     Only place where the state-variables are changed
     ######################################## */ 
 
-    OpenWQ_solver.Numerical_Solver(
+    OpenWQ_compute.Numerical_Solver(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,
         OpenWQ_vars, 
@@ -74,7 +74,7 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
             OpenWQ_vars,
             OpenWQ_hostModelconfig,
             OpenWQ_wqconfig,
-            OpenWQ_solver,
+            OpenWQ_compute,
             simtime);  // needs to be in seconds since 00:00 hours, Jan 1, 1970 UTC
 
     }

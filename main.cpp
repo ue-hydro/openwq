@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
     OpenWQ_TD_model OpenWQ_TD_model;      // transport modules
     OpenWQ_chem OpenWQ_chem;                    // biochemistry modules
     OpenWQ_extwatflux_ss OpenWQ_extwatflux_ss;        // sink and source modules
-    OpenWQ_solver OpenWQ_solver;                // solver module
+    OpenWQ_compute OpenWQ_compute;                // solver module
     OpenWQ_output OpenWQ_output;                // output module
     OpenWQ_utils OpenWQ_utils;
     
@@ -202,7 +202,7 @@ int main(int argc, char* argv[])
             OpenWQ_LE_model,
             OpenWQ_chem,                   // biochemistry modules
             OpenWQ_extwatflux_ss,        // sink and source modules)
-            OpenWQ_solver,
+            OpenWQ_compute,
             OpenWQ_output,
             simtime);
 
@@ -257,7 +257,7 @@ int main(int argc, char* argv[])
                         OpenWQ_LE_model,             // LE model
                         OpenWQ_chem,                   // biochemistry modules
                         OpenWQ_extwatflux_ss,        // sink and source modules)
-                        OpenWQ_solver,
+                        OpenWQ_compute,
                         OpenWQ_output,
                         simtime,                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
                         source, ix_s, iy_s, iz_s,
@@ -286,7 +286,7 @@ int main(int argc, char* argv[])
             OpenWQ_TD_model,      // transport modules
             OpenWQ_chem,                   // biochemistry modules
             OpenWQ_extwatflux_ss,        // sink and source modules)
-            OpenWQ_solver,
+            OpenWQ_compute,
             OpenWQ_output,
             simtime);
 

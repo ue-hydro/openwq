@@ -75,7 +75,7 @@ class OpenWQ_couplercalls{
         OpenWQ_LE_model& OpenWQ_LE_model,           // LE model
         OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,        // sink and source modules)
-        OpenWQ_solver& OpenWQ_solver,
+        OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,
         time_t simtime);                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
 
@@ -104,7 +104,7 @@ class OpenWQ_couplercalls{
         OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
         OpenWQ_chem& OpenWQ_chem,                       // biochemistry modules
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
-        OpenWQ_solver& OpenWQ_solver,
+        OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,
         time_t simtime, // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
         const int source, const int ix_s, const int iy_s, const int iz_s,
@@ -125,7 +125,7 @@ class OpenWQ_couplercalls{
         OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
         OpenWQ_chem& OpenWQ_chem,                       // biochemistry modules
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
-        OpenWQ_solver& OpenWQ_solver,
+        OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,
         time_t simtime, // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
         std::string source_EWF_name,                    // name defined in HydroExtFlux (in couplecalls)
@@ -149,7 +149,7 @@ class OpenWQ_couplercalls{
         OpenWQ_LE_model& OpenWQ_LE_model,           // LE model
         OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,        // sink and source modules)
-        OpenWQ_solver& OpenWQ_solver,
+        OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,
         time_t simtime);                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
 

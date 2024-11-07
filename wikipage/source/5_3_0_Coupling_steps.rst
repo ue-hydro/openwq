@@ -50,7 +50,7 @@ This is a critical step since these objects are input arguments of the different
     #include "<path>/OpenWQ_watertransp.h"
     #include "<path>/OpenWQ_sinksource.h"
     #include "<path>/OpenWQ_units.h"
-    #include "<path>/OpenWQ_solver.h"
+    #include "<path>/OpenWQ_compute.h"
     #include "<path>/OpenWQ_output.h"
 
     // Create OpenWQ Class Objects
@@ -66,7 +66,7 @@ This is a critical step since these objects are input arguments of the different
     OpenWQ_watertransp OpenWQ_watertransp;          // Class that contains water transport functions
     OpenWQ_chem OpenWQ_chem;                        // Cass that contains biogeochemical functions
     OpenWQ_sinksource OpenWQ_sinksource;            // Cass that contains functions related to sinks and sources
-    OpenWQ_solver OpenWQ_solver;                    // Class containing solvers
+    OpenWQ_compute OpenWQ_compute;                    // Class containing solvers
     OpenWQ_output OpenWQ_output;                    // Class containing printing functions
 
     // Include hydrolink header file
@@ -160,5 +160,5 @@ Now you need to adapt your ``MakeFile`` or '`CMakeLists` files to properly link 
         <path>/OpenWQ_watertransp.o \
         <path>/OpenWQ_sinksource.o \
         <path>/OpenWQ_units.o \
-        <path>/OpenWQ_solver.o \
+        <path>/OpenWQ_compute.o \
         <path>/OpenWQ_output.o \

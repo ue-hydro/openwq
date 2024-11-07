@@ -65,7 +65,7 @@ OpenWQ_hydrolink.h
     #include "OpenWQ_watertransp.h"
     #include "OpenWQ_sinksource.h"
     #include "OpenWQ_units.h"
-    #include "OpenWQ_solver.h"
+    #include "OpenWQ_compute.h"
     #include "OpenWQ_output.h"
 
 
@@ -135,7 +135,7 @@ OpenWQ_hydrolink.h
             OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
             OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
             OpenWQ_sinksource& OpenWQ_sinksource,        // sink and source modules)
-            OpenWQ_solver& OpenWQ_solver,                // solver module
+            OpenWQ_compute& OpenWQ_compute,                // solver module
             OpenWQ_output& OpenWQ_output);               // output modules
 
     };
@@ -283,7 +283,7 @@ OpenWQ_hydrolink.cpp
         OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
         OpenWQ_chem& OpenWQ_chem,                    // biochemistry modules
         OpenWQ_sinksource& OpenWQ_sinksource,        // sink and source modules)
-        OpenWQ_solver& OpenWQ_solver,                // solver module
+        OpenWQ_compute& OpenWQ_compute,                // solver module
         OpenWQ_output& OpenWQ_output)                // output modules
         {
 
@@ -353,7 +353,7 @@ OpenWQ_hydrolink.cpp
             OpenWQ_watertransp,      // transport modules
             OpenWQ_chem,                   // biochemistry modules
             OpenWQ_sinksource,        // sink and source modules)
-            OpenWQ_solver,
+            OpenWQ_compute,
             OpenWQ_output,
             simtime);
 
@@ -458,7 +458,7 @@ OpenWQ_hydrolink.cpp
                     OpenWQ_watertransp,      // transport modules
                     OpenWQ_chem,                   // biochemistry modules
                     OpenWQ_sinksource,        // sink and source modules)
-                    OpenWQ_solver,
+                    OpenWQ_compute,
                     OpenWQ_output,
                     simtime,                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
                     icmp,      // source: runoff
@@ -485,7 +485,7 @@ OpenWQ_hydrolink.cpp
                     OpenWQ_watertransp,      // transport modules
                     OpenWQ_chem,                   // biochemistry modules
                     OpenWQ_sinksource,        // sink and source modules)
-                    OpenWQ_solver,
+                    OpenWQ_compute,
                     OpenWQ_output,
                     simtime,                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
                     icmp,      // source: runoff
@@ -520,7 +520,7 @@ OpenWQ_hydrolink.cpp
                 OpenWQ_watertransp,      // transport modules
                 OpenWQ_chem,                   // biochemistry modules
                 OpenWQ_sinksource,        // sink and source modules)
-                OpenWQ_solver,
+                OpenWQ_compute,
                 OpenWQ_output,
                 simtime);
 

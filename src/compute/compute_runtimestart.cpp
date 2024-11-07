@@ -24,7 +24,7 @@
 // (needed a the start of each temporal iteraction)
 ################################################# */
 
-void OpenWQ_solver::Reset_Deriv(
+void OpenWQ_compute::Reset_Deriv(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars,
@@ -82,7 +82,7 @@ void OpenWQ_solver::Reset_Deriv(
 // Reset EWF conc 
 // // Specially needed for discrete conc requests
 // ########################################
-void OpenWQ_solver::Reset_EWFconc(
+void OpenWQ_compute::Reset_EWFconc(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars){

@@ -16,7 +16,7 @@ API 3 ``RunSpaceStep`` is inside Class ``OpenWQ_couplercalls``.
         OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
         OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
         OpenWQ_sinksource& OpenWQ_sinksource,        // sink and source modules)
-        OpenWQ_solver& OpenWQ_solver,
+        OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,
         time_t simtime,                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
         const int source,

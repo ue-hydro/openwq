@@ -24,7 +24,7 @@ int OpenWQ_output::writeResults(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
-    OpenWQ_solver& OpenWQ_solver,
+    OpenWQ_compute& OpenWQ_compute,
     time_t simtime){ // needs to be in seconds since 00:00 hours, Jan 1, 1900 UTC
     
 
@@ -276,7 +276,7 @@ int OpenWQ_output::writeResults(
 
     // Reset Derivatives 
     // Needed before start of new time iteraction
-    OpenWQ_solver.Reset_Deriv(
+    OpenWQ_compute.Reset_Deriv(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,
         OpenWQ_vars,

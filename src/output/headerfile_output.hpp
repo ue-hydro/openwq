@@ -34,7 +34,7 @@ class OpenWQ_output{
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
-            OpenWQ_solver& OpenWQ_solver,
+            OpenWQ_compute& OpenWQ_compute,
             time_t simtime);
         
         // Print in console and log file

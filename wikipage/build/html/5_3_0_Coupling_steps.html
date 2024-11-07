@@ -137,7 +137,7 @@ This is a critical step since these objects are input arguments of the different
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_watertransp.h&quot;</span>
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_sinksource.h&quot;</span>
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_units.h&quot;</span>
-<span class="c1">#include &quot;&lt;path&gt;/OpenWQ_solver.h&quot;</span>
+<span class="c1">#include &quot;&lt;path&gt;/OpenWQ_compute.h&quot;</span>
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_output.h&quot;</span>
 
 <span class="o">//</span><span class="w"> </span><span class="n">Create</span><span class="w"> </span><span class="n">OpenWQ</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">Objects</span>
@@ -153,7 +153,7 @@ This is a critical step since these objects are input arguments of the different
 <span class="n">OpenWQ_watertransp</span><span class="w"> </span><span class="n">OpenWQ_watertransp</span><span class="p">;</span><span class="w">          </span><span class="o">//</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="n">water</span><span class="w"> </span><span class="n">transport</span><span class="w"> </span><span class="n">functions</span>
 <span class="n">OpenWQ_chem</span><span class="w"> </span><span class="n">OpenWQ_chem</span><span class="p">;</span><span class="w">                        </span><span class="o">//</span><span class="w"> </span><span class="n">Cass</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="n">biogeochemical</span><span class="w"> </span><span class="n">functions</span>
 <span class="n">OpenWQ_sinksource</span><span class="w"> </span><span class="n">OpenWQ_sinksource</span><span class="p">;</span><span class="w">            </span><span class="o">//</span><span class="w"> </span><span class="n">Cass</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="n">functions</span><span class="w"> </span><span class="n">related</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">sinks</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">sources</span>
-<span class="n">OpenWQ_solver</span><span class="w"> </span><span class="n">OpenWQ_solver</span><span class="p">;</span><span class="w">                    </span><span class="o">//</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">containing</span><span class="w"> </span><span class="n">solvers</span>
+<span class="n">OpenWQ_compute</span><span class="w"> </span><span class="n">OpenWQ_compute</span><span class="p">;</span><span class="w">                    </span><span class="o">//</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">containing</span><span class="w"> </span><span class="n">solvers</span>
 <span class="n">OpenWQ_output</span><span class="w"> </span><span class="n">OpenWQ_output</span><span class="p">;</span><span class="w">                    </span><span class="o">//</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">containing</span><span class="w"> </span><span class="n">printing</span><span class="w"> </span><span class="n">functions</span>
 
 <span class="o">//</span><span class="w"> </span><span class="n">Include</span><span class="w"> </span><span class="n">hydrolink</span><span class="w"> </span><span class="n">header</span><span class="w"> </span><span class="n">file</span>
@@ -235,7 +235,7 @@ However, as previously said, each hydro-model is different and small adjustments
 &lt;path&gt;/OpenWQ_watertransp.o \
 &lt;path&gt;/OpenWQ_sinksource.o \
 &lt;path&gt;/OpenWQ_units.o \
-&lt;path&gt;/OpenWQ_solver.o \
+&lt;path&gt;/OpenWQ_compute.o \
 &lt;path&gt;/OpenWQ_output.o \
 </pre></div>
 </div>
