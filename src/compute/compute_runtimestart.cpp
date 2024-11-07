@@ -16,7 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#include "openwq_compute_headerfile.hpp"
+#include "compute/headerfile_compute.hpp"
 
 
 /* #################################################

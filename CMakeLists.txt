@@ -121,6 +121,8 @@ FILE(GLOB OPENWQ_SOURCES
           ${OPENWQ_DIR}/src/couplercalls/*.cpp
           ${OPENWQ_DIR}/src/output/*.cpp
           ${OPENWQ_DIR}/src/compute/*.cpp
+          ${OPENWQ_DIR}/src/compute/solver_backeuler/*.cpp
+          ${OPENWQ_DIR}/src/compute/solver_sundials/*.cpp
           ${OPENWQ_DIR}/src/units/*.cpp
           ${OPENWQ_DIR}/src/utils/*.cpp)
 SET(OPENWQ_INCLUDES ${OPENWQ_DIR}/src/)
@@ -563,6 +565,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         ${OPENWQ_DIR}/src/couplercalls/*.cpp
                         ${OPENWQ_DIR}/src/output/*.cpp
                         ${OPENWQ_DIR}/src/compute/*.cpp
+                        ${OPENWQ_DIR}/src/compute/solver_backeuler/*.cpp
+                        ${OPENWQ_DIR}/src/compute/solver_sundials/*.cpp
                         ${OPENWQ_DIR}/src/units/*.cpp
                         ${OPENWQ_DIR}/src/utils/*.cpp
                         ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp

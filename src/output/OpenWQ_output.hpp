@@ -22,7 +22,7 @@
 #include "global/OpenWQ_vars.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
 #include "global/OpenWQ_hostModelconfig.hpp"
-#include "compute/openwq_compute_headerfile.hpp"
+#include "compute/headerfile_compute.hpp"
 
 class OpenWQ_output{
 

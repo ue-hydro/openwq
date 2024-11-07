@@ -23,7 +23,7 @@
 
 #include "global/OpenWQ_json.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
-#include "compute/openwq_compute_headerfile.hpp"
+#include "compute/headerfile_compute.hpp"
 #include "output/OpenWQ_output.hpp"
 
 class OpenWQ_utils{

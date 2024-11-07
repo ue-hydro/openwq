@@ -24,7 +24,7 @@
 
 // ########################################################
 // openWQ
-#include "couplercalls/OpenWQ_couplercalls.hpp"
+#include "couplercalls/openwq_couplercalls_headerfile.hpp"
 #include "global/OpenWQ_hostModelconfig.hpp"
 #include "global/OpenWQ_json.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
@@ -35,7 +35,7 @@
 #include "models_transp_dissolved/openwq_td_headerfile.hpp"
 #include "extwatflux_ss/OpenWQ_extwatflux_ss.hpp"
 #include "units/OpenWQ_units.hpp"
-#include "compute/openwq_compute_headerfile.hpp"
+#include "compute/headerfile_compute.hpp"
 #include "output/OpenWQ_output.hpp"
 
 

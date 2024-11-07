@@ -29,7 +29,7 @@
 #include "models_transp_dissolved/openwq_td_headerfile.hpp"
 #include "extwatflux_ss/OpenWQ_extwatflux_ss.hpp"
 #include "units/OpenWQ_units.hpp"
-#include "compute/openwq_compute_headerfile.hpp"
+#include "compute/headerfile_compute.hpp"
 #include "output/OpenWQ_output.hpp"
 #include "utils/OpenWQ_utils.hpp"
 
