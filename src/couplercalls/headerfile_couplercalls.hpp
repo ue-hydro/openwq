@@ -23,16 +23,18 @@
 #include "global/openwq_vars.hpp"
 #include "global/openwq_wqconfig.hpp"
 #include "global/openwq_hostmodelconfig.hpp"
+
 #include "readjson/headerfile_readjson.hpp"
 #include "initiate/headerfile_initiate.hpp"
-#include "models_chem/headerfile_chem.hpp"
-#include "models_transp_dissolved/headerfile_td.hpp"
 #include "extwatflux_ss/headerfile_extwatflux_ss.hpp"
 #include "units/headerfile_units.hpp"
 #include "compute/headerfile_compute.hpp"
 #include "output/headerfile_output.hpp"
 #include "utils/headerfile_utils.hpp"
 
+#include "models_chem/headerfile_chem.hpp"
+#include "models_transp_dissolved/headerfile_td.hpp"
+#include "models_lateral_exchange/headerfile_le.hpp"
 
 class OpenWQ_couplercalls{
 
@@ -51,6 +53,7 @@ class OpenWQ_couplercalls{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_initiate& OpenWQ_initiate,            // initiate modules
         OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
+        OpenWQ_LE_model& OpenWQ_LE_model,            // LE model
         OpenWQ_chem& OpenWQ_chem,                    // biochemistry modules
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,  // sink and source modules)
         OpenWQ_output& OpenWQ_output);
@@ -69,6 +72,7 @@ class OpenWQ_couplercalls{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_initiate& OpenWQ_initiate,            // initiate modules
         OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
+        OpenWQ_LE_model& OpenWQ_LE_model,           // LE model
         OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,        // sink and source modules)
         OpenWQ_solver& OpenWQ_solver,
@@ -97,6 +101,7 @@ class OpenWQ_couplercalls{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
         OpenWQ_watertransp& OpenWQ_watertransp,         // transport modules
+        OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
         OpenWQ_chem& OpenWQ_chem,                       // biochemistry modules
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
         OpenWQ_solver& OpenWQ_solver,
@@ -117,6 +122,7 @@ class OpenWQ_couplercalls{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
         OpenWQ_watertransp& OpenWQ_watertransp,         // transport modules
+        OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
         OpenWQ_chem& OpenWQ_chem,                       // biochemistry modules
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
         OpenWQ_solver& OpenWQ_solver,
@@ -140,6 +146,7 @@ class OpenWQ_couplercalls{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_initiate& OpenWQ_initiate,            // initiate modules
         OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
+        OpenWQ_LE_model& OpenWQ_LE_model,           // LE model
         OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,        // sink and source modules)
         OpenWQ_solver& OpenWQ_solver,

@@ -35,6 +35,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
     OpenWQ_watertransp& OpenWQ_watertransp,         // transport modules
+    OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
     OpenWQ_chem& OpenWQ_chem,                       // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
     OpenWQ_solver& OpenWQ_solver,
@@ -119,7 +120,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
         // Boundary Mixing due to velocity gradients
         // due to turbulence and cross-boarder eddies
         // only apply if fluxe between cells in same compartment          
-        OpenWQ_watertransp.BoundMix(
+        OpenWQ_LE_model.native_BoundMix(
             OpenWQ_hostModelconfig, OpenWQ_vars, OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
@@ -162,6 +163,7 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
     OpenWQ_watertransp& OpenWQ_watertransp,         // transport modules
+    OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
     OpenWQ_chem& OpenWQ_chem,                       // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
     OpenWQ_solver& OpenWQ_solver,

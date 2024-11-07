@@ -32,6 +32,7 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_initiate& OpenWQ_initiate,            // initiate modules
     OpenWQ_watertransp& OpenWQ_watertransp,      // transport modules
+    OpenWQ_LE_model& OpenWQ_LE_model,           // LE model
     OpenWQ_chem& OpenWQ_chem,                   // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,        // sink and source modules)
     OpenWQ_solver& OpenWQ_solver,

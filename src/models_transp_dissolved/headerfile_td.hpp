@@ -66,27 +66,6 @@ class OpenWQ_watertransp{
             int chemi,                  // chemical id
             double ewf_conc);           // concentration of chemical
 
-        // Internal mobilization of immobile pools
-        // Erosion and weathering
-        //void IntMob(
-        //    OpenWQ_vars& OpenWQ_vars,
-        //    OpenWQ_wqconfig& OpenWQ_wqconfig,
-        //   const int source, const int ix_s, const int iy_s, const int iz_s,
-        //   const int recipient, const int ix_r, const int iy_r, const int iz_r,
-        //    double wflux_s2r, 
-        //    double wmass_source);
-
-        // Boundary Mixing due to velocity gradients
-        // due to turbulence and cross-boarder eddies
-        void BoundMix(
-            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
-            OpenWQ_vars& OpenWQ_vars,
-            OpenWQ_wqconfig& OpenWQ_wqconfig,
-            const int source, const int ix_s, const int iy_s, const int iz_s,
-            const int recipient, const int ix_r, const int iy_r, const int iz_r,
-            double wflux_s2r, 
-            double wmass_source);
-
 };
 
 #endif

@@ -117,6 +117,8 @@ FILE(GLOB OPENWQ_SOURCES
           ${OPENWQ_DIR}/src/models_chem/bgc_flex/*.cpp
           ${OPENWQ_DIR}/src/models_transp_dissolved/*.cpp
           ${OPENWQ_DIR}/src/models_transp_dissolved/native_advdisp/*.cpp
+          ${OPENWQ_DIR}/src/models_lateral_exchange/*.cpp
+          ${OPENWQ_DIR}/src/models_lateral_exchange/native_boundmix/*.cpp
           ${OPENWQ_DIR}/src/readjson/*.cpp
           ${OPENWQ_DIR}/src/couplercalls/*.cpp
           ${OPENWQ_DIR}/src/output/*.cpp
@@ -561,6 +563,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         ${OPENWQ_DIR}/src/models_chem/bgc_flex/*.cpp
                         ${OPENWQ_DIR}/src/models_transp_dissolved/*.cpp
                         ${OPENWQ_DIR}/src/models_transp_dissolved/native_advdisp/*.cpp
+                        ${OPENWQ_DIR}/src/models_lateral_exchange/*.cpp
+                        ${OPENWQ_DIR}/src/models_lateral_exchange/native_boundmix/*.cpp
                         ${OPENWQ_DIR}/src/readjson/*.cpp
                         ${OPENWQ_DIR}/src/couplercalls/*.cpp
                         ${OPENWQ_DIR}/src/output/*.cpp
