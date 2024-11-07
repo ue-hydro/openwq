@@ -34,7 +34,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
     OpenWQ_readjson& OpenWQ_readjson,               // read json files
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
-    OpenWQ_watertransp& OpenWQ_watertransp,         // transport modules
+    OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
     OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
     OpenWQ_chem& OpenWQ_chem,                       // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
@@ -65,7 +65,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
     // if TD_module = OPENWQ_NATIVE_TD_ADVDISP
     if ((OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") == 0)
     {
-        OpenWQ_watertransp.AdvDisp(
+        OpenWQ_TD_model.AdvDisp(
             OpenWQ_vars, OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
@@ -74,7 +74,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
     // if TD_module = OPENWQ_NATIVE_TD_ADV
     }else if ((OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADV") == 0)
     {
-        OpenWQ_watertransp.Adv(
+        OpenWQ_TD_model.Adv(
             OpenWQ_vars, OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
@@ -103,7 +103,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
     /* IntMOB ----> maybe recover in the future
     // Internal mobilization of immobile pools
     // Erosion and weathering
-    OpenWQ_watertransp.IntMob(
+    OpenWQ_TD_model.IntMob(
         OpenWQ_vars, OpenWQ_wqconfig,
         source, ix_s, iy_s, iz_s,
         recipient, ix_r, iy_r, iz_r,
@@ -162,7 +162,7 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
     OpenWQ_readjson& OpenWQ_readjson,               // read json files
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
-    OpenWQ_watertransp& OpenWQ_watertransp,         // transport modules
+    OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
     OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
     OpenWQ_chem& OpenWQ_chem,                       // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
@@ -198,7 +198,7 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
             (ix_r,iy_r,iz_r);
 
         // Advection and dispersion
-        OpenWQ_watertransp.Adv_IN(
+        OpenWQ_TD_model.Adv_IN(
             OpenWQ_vars, OpenWQ_wqconfig,
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r,                      // external water flux

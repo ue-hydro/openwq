@@ -25,7 +25,7 @@
 // Only Advection
 // General case (flux exchanges within the model domain)
 ################################################# */
-void OpenWQ_watertransp::Adv(
+void OpenWQ_TD_model::Adv(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     const int source, const int ix_s, const int iy_s, const int iz_s,
@@ -75,7 +75,7 @@ void OpenWQ_watertransp::Adv(
 // Only Advection
 // Special case (in-fluxes from external water flux sources)
 ################################################# */
-void OpenWQ_watertransp::Adv_IN(
+void OpenWQ_TD_model::Adv_IN(
     OpenWQ_vars& OpenWQ_vars, 
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
@@ -107,7 +107,7 @@ void OpenWQ_watertransp::Adv_IN(
 // Mass transport
 // Advection & Dispersion
 ################################################# */
-void OpenWQ_watertransp::AdvDisp(
+void OpenWQ_TD_model::AdvDisp(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     const int source, const int ix_s, const int iy_s, const int iz_s,

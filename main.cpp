@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
     int num_ExtFlux = 0;
     OpenWQ_vars OpenWQ_vars(num_HydroComp, num_ExtFlux);
     OpenWQ_initiate OpenWQ_initiate;            // initiate modules
-    OpenWQ_watertransp OpenWQ_watertransp;      // transport modules
+    OpenWQ_TD_model OpenWQ_TD_model;      // transport modules
     OpenWQ_chem OpenWQ_chem;                    // biochemistry modules
     OpenWQ_extwatflux_ss OpenWQ_extwatflux_ss;        // sink and source modules
     OpenWQ_solver OpenWQ_solver;                // solver module
@@ -122,7 +122,7 @@ int main(int argc, char* argv[])
             OpenWQ_readjson,            // read json files
             OpenWQ_vars,
             OpenWQ_initiate,            // initiate modules
-            OpenWQ_watertransp,         // transport modules
+            OpenWQ_TD_model,         // transport modules
             OpenWQ_LE_model,            // LE model
             OpenWQ_chem,                   // biochemistry modules
             OpenWQ_extwatflux_ss,        // sink and source modules)
@@ -198,7 +198,7 @@ int main(int argc, char* argv[])
             OpenWQ_readjson,            // read json files
             OpenWQ_vars,
             OpenWQ_initiate,            // initiate modules
-            OpenWQ_watertransp,      // transport modules
+            OpenWQ_TD_model,      // transport modules
             OpenWQ_LE_model,
             OpenWQ_chem,                   // biochemistry modules
             OpenWQ_extwatflux_ss,        // sink and source modules)
@@ -253,7 +253,7 @@ int main(int argc, char* argv[])
                         OpenWQ_readjson,            // read json files
                         OpenWQ_vars,
                         OpenWQ_initiate,            // initiate modules
-                        OpenWQ_watertransp,      // transport modules
+                        OpenWQ_TD_model,      // transport modules
                         OpenWQ_LE_model,             // LE model
                         OpenWQ_chem,                   // biochemistry modules
                         OpenWQ_extwatflux_ss,        // sink and source modules)
@@ -283,7 +283,7 @@ int main(int argc, char* argv[])
             OpenWQ_readjson,            // read json files
             OpenWQ_vars,
             OpenWQ_initiate,            // initiate modules
-            OpenWQ_watertransp,      // transport modules
+            OpenWQ_TD_model,      // transport modules
             OpenWQ_chem,                   // biochemistry modules
             OpenWQ_extwatflux_ss,        // sink and source modules)
             OpenWQ_solver,

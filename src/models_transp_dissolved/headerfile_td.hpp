@@ -34,7 +34,7 @@
 //#include "OpenWQ_initiate.h"
 //#include "OpenWQ_print.h"
 
-class OpenWQ_watertransp{
+class OpenWQ_TD_model{
 
     public:
 
