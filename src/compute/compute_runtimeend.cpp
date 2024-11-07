@@ -17,7 +17,7 @@
 
 
 #include "compute/headerfile_compute.hpp"
-#include "models_chem/openwq_chem_headerfile.hpp"
+#include "models_chem/headerfile_chem.hpp"
 
 /* #################################################
 // General numerical solver

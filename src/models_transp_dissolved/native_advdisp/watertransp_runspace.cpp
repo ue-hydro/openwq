@@ -17,7 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#include "models_transp_dissolved/openwq_td_headerfile.hpp"
+#include "models_transp_dissolved/headerfile_td.hpp"
 
 /* #################################################
 // Mass transport

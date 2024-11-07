@@ -29,14 +29,14 @@
 #include "global/openwq_json.hpp"
 #include "global/openwq_wqconfig.hpp"
 #include "global/openwq_vars.hpp"
-#include "readjson/OpenWQ_readjson.hpp"
+#include "readjson/headerfile_readjson.hpp"
 #include "initiate/headerfile_initiate.hpp"
-#include "models_chem/openwq_chem_headerfile.hpp"
-#include "models_transp_dissolved/openwq_td_headerfile.hpp"
+#include "models_chem/headerfile_chem.hpp"
+#include "models_transp_dissolved/headerfile_td.hpp"
 #include "extwatflux_ss/headerfile_extwatflux_ss.hpp"
-#include "units/OpenWQ_units.hpp"
+#include "units/headerfile_units.hpp"
 #include "compute/headerfile_compute.hpp"
-#include "output/OpenWQ_output.hpp"
+#include "output/headerfile_output.hpp"
 
 
 int main(int argc, char* argv[]) 

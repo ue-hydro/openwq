@@ -24,7 +24,7 @@
 #include "global/openwq_json.hpp"
 #include "global/openwq_wqconfig.hpp"
 #include "compute/headerfile_compute.hpp"
-#include "output/OpenWQ_output.hpp"
+#include "output/headerfile_output.hpp"
 
 class OpenWQ_utils{
 

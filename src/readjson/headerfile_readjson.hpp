@@ -39,9 +39,9 @@ using json = nlohmann::json;
 #include "global/openwq_json.hpp"
 #include "global/openwq_wqconfig.hpp"
 #include "global/openwq_hostmodelconfig.hpp"
-#include "units/OpenWQ_units.hpp"
-#include "output/OpenWQ_output.hpp"
-#include "utils/OpenWQ_utils.hpp"
+#include "units/headerfile_units.hpp"
+#include "output/headerfile_output.hpp"
+#include "utils/headerfile_utils.hpp"
 
 class OpenWQ_readjson{
 

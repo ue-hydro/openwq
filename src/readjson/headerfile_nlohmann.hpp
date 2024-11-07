@@ -2021,7 +2021,7 @@ JSON_HEDLEY_DIAGNOSTIC_POP
 
 
 // This file contains all internal macro definitions
-// You MUST include macro_unscope.hpp at the end of json_nlohmann.hpp to undef all of them
+// You MUST include macro_unscope.hpp at the end of headerfile_nlohmann.hpp to undef all of them
 
 // exclude unsupported compilers
 #if !defined(JSON_SKIP_UNSUPPORTED_COMPILER_CHECK)
