@@ -21,13 +21,13 @@
 
 #include <tuple>
 #include <vector>
-#include "jnlohmann/json.hpp"
+#include "global/openwq_json.hpp"
 using json = nlohmann::json;
 
-#include "global/OpenWQ_json.hpp"
-#include "global/OpenWQ_vars.hpp"
-#include "global/OpenWQ_wqconfig.hpp"
-#include "global/OpenWQ_hostModelconfig.hpp"
+#include "global/openwq_json.hpp"
+#include "global/openwq_vars.hpp"
+#include "global/openwq_wqconfig.hpp"
+#include "global/openwq_hostmodelconfig.hpp"
 #include "units/OpenWQ_units.hpp"
 #include "output/OpenWQ_output.hpp"
 #include "utils/OpenWQ_utils.hpp"

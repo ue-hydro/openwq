@@ -16,7 +16,9 @@
 
 #pragma once
 
-#include "jnlohmann/json.hpp"
+#include "global/openwq_json.hpp"
+#include "readjson/json_nlohmann.hpp"
+
 using json = nlohmann::json;
 
 /* #################################################

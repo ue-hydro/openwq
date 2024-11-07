@@ -15,7 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#include "OpenWQ_vars.hpp"
+#include "openwq_vars.hpp"
 
 
 OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){

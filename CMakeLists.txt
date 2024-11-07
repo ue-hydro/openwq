@@ -574,7 +574,6 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                 
                 SET(OPENWQ_INCLUDES
                         ${OPENWQ_DIR}/src/global/
-                        ${OPENWQ_DIR}/src/jnlohmann/
                         ${PARENT_DIR})
 
                 SET(MIZUROUTE_DIR ${PARENT_DIR}/src)

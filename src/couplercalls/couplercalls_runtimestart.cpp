@@ -15,7 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#include "openwq_couplercalls_headerfile.hpp"
+#include "headerfile_couplercalls.hpp"
 
 // ################################################################
 // Calls all functions required inside time loop

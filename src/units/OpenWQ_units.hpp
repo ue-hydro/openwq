@@ -21,10 +21,10 @@
 #include <tuple>
 #include <vector>
 #include <time.h>
-#include "jnlohmann/json.hpp"
+#include "global/openwq_json.hpp"
 using json = nlohmann::json;
 
-#include "global/OpenWQ_wqconfig.hpp"
+#include "global/openwq_wqconfig.hpp"
 #include "output/OpenWQ_output.hpp"
 
 /* #################################################
