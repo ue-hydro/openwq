@@ -120,6 +120,14 @@ FILE(GLOB OPENWQ_SOURCES
           ${OPENWQ_DIR}/src/models_LE/*.cpp
           ${OPENWQ_DIR}/src/models_LE/native_boundmix/*.cpp
           ${OPENWQ_DIR}/src/readjson/*.cpp
+          ${OPENWQ_DIR}/src/readjson/json_set_config_info/*.cpp
+          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_CH/*.cpp
+          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_TD/*.cpp
+          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_LE/*.cpp
+          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_SI/*.cpp
+          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_ST/*.cpp
+          ${OPENWQ_DIR}/src/readjson/json_set_config_info/output_toolbox/*.cpp
+          ${OPENWQ_DIR}/src/readjson/json_utils/*.cpp
           ${OPENWQ_DIR}/src/couplercalls/*.cpp
           ${OPENWQ_DIR}/src/output/*.cpp
           ${OPENWQ_DIR}/src/compute/*.cpp
@@ -566,6 +574,14 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         ${OPENWQ_DIR}/src/models_LE/*.cpp
                         ${OPENWQ_DIR}/src/models_LE/native_boundmix/*.cpp
                         ${OPENWQ_DIR}/src/readjson/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_CH/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_TD/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_LE/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_SI/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_ST/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/output_toolbox/*.cpp
+                        ${OPENWQ_DIR}/src/readjson/json_utils/*.cpp
                         ${OPENWQ_DIR}/src/couplercalls/*.cpp
                         ${OPENWQ_DIR}/src/output/*.cpp
                         ${OPENWQ_DIR}/src/compute/*.cpp
