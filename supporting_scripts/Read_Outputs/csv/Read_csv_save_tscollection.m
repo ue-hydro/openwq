@@ -186,7 +186,7 @@ function output_tscollect = Read_csv_save_tscollection(...
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Loop over files
         %
-        % Create a structure to save all chem/cell data for each
+        % Create a structure to save all models_chem/cell data for each
         % compartment for saving in output_tscollect after the loop is
         % finished
         data_compt_2save = struct;

@@ -17,8 +17,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#ifndef OpenWQ_WATERTRANSPH_INCLUDED
-#define OpenWQ_WATERTRANSPH_INCLUDED
+#ifndef OPENWQ_TD_HEADERH_INCLUDED
+#define OPENWQ_TD_HEADERH_INCLUDED
 
 #include <armadillo>
 #include <string>

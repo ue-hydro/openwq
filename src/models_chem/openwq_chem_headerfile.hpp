@@ -16,8 +16,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#ifndef OPENWQ_CHEMH_INCLUDED
-#define OPENWQ_CHEMH_INCLUDED
+#ifndef OPENWQ_CHEM_HEADERFILEH_INCLUDED
+#define OPENWQ_CHEM_HEADERFILEH_INCLUDED
 
 #include <armadillo>
 #include <string>

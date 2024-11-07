@@ -31,11 +31,11 @@
 #include "global/OpenWQ_vars.hpp"
 #include "readjson/OpenWQ_readjson.hpp"
 #include "initiate/OpenWQ_initiate.hpp"
-#include "chem/bgc_flex/OpenWQ_chem.hpp"
-#include "watertransp/OpenWQ_watertransp.hpp"
+#include "models_chem/openwq_chem_headerfile.hpp"
+#include "models_transp_dissolved/openwq_td_headerfile.hpp"
 #include "extwatflux_ss/OpenWQ_extwatflux_ss.hpp"
 #include "units/OpenWQ_units.hpp"
-#include "compute/OpenWQ_solver.hpp"
+#include "compute/openwq_compute_headerfile.hpp"
 #include "output/OpenWQ_output.hpp"
 
 
