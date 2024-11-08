@@ -69,24 +69,6 @@ void OpenWQ_readjson::SetConfigInfo_TDModule(
         true,               // print in console
         true);              // print in log file
 
-    // If MODULE_NAME not NONE, the get the MODULE_CONFIG_FILEPATH
-    if (input_module_name.compare("NONE") != 0){
-
-        input_filepath = OpenWQ_utils.RequestJsonKeyVal_json(
-            OpenWQ_wqconfig, OpenWQ_output,
-            jsonMaster_SubStruct["TRANSPORT_DISSOLVED"],"MODULE_CONFIG_FILEPATH",
-            errorMsgIdentifier,
-            true);
-
-        OpenWQ_readjson::read_JSON_2class(
-            OpenWQ_wqconfig,
-            OpenWQ_output,
-            OpenWQ_utils,
-            OpenWQ_json.TD_module,
-            false,
-            "",
-            input_filepath);
-    }
 
     // Check if TD option not valid, through error
     if ((OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") != 0 
@@ -103,6 +85,25 @@ void OpenWQ_readjson::SetConfigInfo_TDModule(
 
         // Abort program
         exit(EXIT_FAILURE);
+    }
 
+    // If MODULE_NAME not NONE, the get the MODULE_CONFIG_FILEPATH
+    if (input_module_name.compare("OPENWQ_NATIVE_TD_ADVDISP") == 0 || 
+        input_module_name.compare("NATIVE_TD_ADV") == 0){
+
+        input_filepath = OpenWQ_utils.RequestJsonKeyVal_json(
+            OpenWQ_wqconfig, OpenWQ_output,
+            jsonMaster_SubStruct["TRANSPORT_DISSOLVED"],"MODULE_CONFIG_FILEPATH",
+            errorMsgIdentifier,
+            true);
+
+        OpenWQ_readjson::read_JSON_2class(
+            OpenWQ_wqconfig,
+            OpenWQ_output,
+            OpenWQ_utils,
+            OpenWQ_json.TD_module,
+            false,
+            "",
+            input_filepath);
     }
 }

@@ -45,25 +45,6 @@ void OpenWQ_TD_model::TD_driver_run(
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, wmass_source);
-
-    // if TD_module != NONE (and any of the others)
-    }else if ((OpenWQ_wqconfig.TD_module).compare("NONE")!= 0)
-    {
-
-        // Create Message
-        msg_string = 
-            "<OpenWQ> ERROR: No TD_module found or unkown";
-
-        // Print it (Console and/or Log file)
-        OpenWQ_output.ConsoleLog(
-            OpenWQ_wqconfig,    // for Log file name
-            msg_string,         // message
-            true,               // print in console
-            true);              // print in log file
-        
-        // Abort (Fatal error)
-        exit(EXIT_FAILURE);
-
     }
 
 }

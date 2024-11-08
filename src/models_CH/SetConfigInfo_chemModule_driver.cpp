@@ -73,34 +73,10 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
         true,               // print in console
         true);              // print in log file
 
-    // If MODULE_NAME not NONE, the get the MODULE_CONFIG_FILEPATH
-    if (input_module_name.compare("NONE") != 0){
 
-        input_filepath = OpenWQ_utils.RequestJsonKeyVal_json(
-                OpenWQ_wqconfig, OpenWQ_output,
-                jsonMaster_SubStruct["BIOGEOCHEMISTRY"],"MODULE_CONFIG_FILEPATH",
-                errorMsgIdentifier,
-                true);
-
-        OpenWQ_readjson::read_JSON_2class(
-            OpenWQ_wqconfig,
-            OpenWQ_output,
-            OpenWQ_utils,
-            OpenWQ_json.BGC_module,
-            false,
-            "",
-            input_filepath);
-
-    }
-
-    // Load information fo the method
-    // Native module
-    if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") == 0){
-        
-        SetConfigInfo_CHModule_BGC_FLEX(  
-            OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
-
-    }else{
+    // Check if CH option not valid, through error
+    if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") != 0 
+        && (OpenWQ_wqconfig.BGC_module).compare("NONE") != 0){
 
         // Create Message (Warning Message)
         msg_string = 
@@ -112,6 +88,16 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
 
         // Abort program
         exit(EXIT_FAILURE);
+
+    }
+
+    // Load information fo the method
+    // Native module
+    if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") == 0){
+        
+        SetConfigInfo_CHModule_BGC_FLEX(  
+            OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
+
     }
 
 }

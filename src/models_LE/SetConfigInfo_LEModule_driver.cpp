@@ -75,42 +75,25 @@ void OpenWQ_readjson::SetConfigInfo_LEModule(
         
     (OpenWQ_wqconfig.LE_module).append(LE_method_local);
 
+    // Check if TD option not valid, through error
+    if ((OpenWQ_wqconfig.LE_module).compare("NATIVE_LE_BOUNDMIX") != 0 
+        && (OpenWQ_wqconfig.LE_module).compare("NONE") != 0){
+
+        // Create Message (Warning Message)
+        msg_string = 
+            "<OpenWQ> WARNING: BOUNDMIX module - unkown (entry = "
+            + OpenWQ_wqconfig.LE_module + ")";
+
+        // Print it (Console and/or Log file)
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true,true); 
+
+        // Abort program
+        exit(EXIT_FAILURE);
+    }
+
     // Load information for the method
     if ((OpenWQ_wqconfig.LE_module).compare("NATIVE_LE_BOUNDMIX") == 0){
         
-    //    // Get Erodibility coeficients for native IntMob function
-    //    errorMsgIdentifier = "TD file";
-    //    json_IntMov_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
-    //        OpenWQ_wqconfig, OpenWQ_output,
-    //        OpenWQ_json.TD_module, "INTMOB_CONFIGURATION",
-    //        errorMsgIdentifier,
-    //        true);
-
-    //    errorMsgIdentifier = "Master file in MODULES > INTMOB_CONFIGURATION";
-    //    json_K_Erodib_K = OpenWQ_utils.RequestJsonKeyVal_json(
-    //        OpenWQ_wqconfig, OpenWQ_output,
-    //        json_IntMov_subStruct, "K_VAL",
-    //        errorMsgIdentifier,
-    //        true);
-
-    //    for (unsigned int cmpi=0;cmpi<OpenWQ_hostModelconfig.get_num_HydroComp();cmpi++){
-    //        try{
-    //            OpenWQ_wqconfig.OpenWQ_TE_native_IntMob_Erodib_K.push_back( 
-    //                (double)json_K_Erodib_K.at(cmpi));
-    //        }catch(...){
-    //            msg_string = 
-    //                "<OpenWQ> ERROR: Problem with LEB json > BOUNDMIX module > INTMOB_CONFIGURATION "
-    //                " > K_val vector. It must have size "
-    //                + std::to_string(OpenWQ_hostModelconfig.get_num_HydroComp())
-    //                + " (number of compartments in host_model) and contain only"
-    //                " double or integer entries.";
-    //            // Print it (Console and/or Log file)
-    //            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true,true); 
-    //            // Abort program
-    //            exit(EXIT_FAILURE);
-    //        }
-    //    }
-
         // Get BOUNDMIX JSON file
         input_filepath = OpenWQ_utils.RequestJsonKeyVal_str(
             OpenWQ_wqconfig, OpenWQ_output,
@@ -255,3 +238,36 @@ void OpenWQ_readjson::SetConfigInfo_LEModule(
     }
     
 }
+
+   //    // Get Erodibility coeficients for native IntMob function
+    //    errorMsgIdentifier = "TD file";
+    //    json_IntMov_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
+    //        OpenWQ_wqconfig, OpenWQ_output,
+    //        OpenWQ_json.TD_module, "INTMOB_CONFIGURATION",
+    //        errorMsgIdentifier,
+    //        true);
+
+    //    errorMsgIdentifier = "Master file in MODULES > INTMOB_CONFIGURATION";
+    //    json_K_Erodib_K = OpenWQ_utils.RequestJsonKeyVal_json(
+    //        OpenWQ_wqconfig, OpenWQ_output,
+    //        json_IntMov_subStruct, "K_VAL",
+    //        errorMsgIdentifier,
+    //        true);
+
+    //    for (unsigned int cmpi=0;cmpi<OpenWQ_hostModelconfig.get_num_HydroComp();cmpi++){
+    //        try{
+    //            OpenWQ_wqconfig.OpenWQ_TE_native_IntMob_Erodib_K.push_back( 
+    //                (double)json_K_Erodib_K.at(cmpi));
+    //        }catch(...){
+    //            msg_string = 
+    //                "<OpenWQ> ERROR: Problem with LEB json > BOUNDMIX module > INTMOB_CONFIGURATION "
+    //                " > K_val vector. It must have size "
+    //                + std::to_string(OpenWQ_hostModelconfig.get_num_HydroComp())
+    //                + " (number of compartments in host_model) and contain only"
+    //                " double or integer entries.";
+    //            // Print it (Console and/or Log file)
+    //            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true,true); 
+    //            // Abort program
+    //            exit(EXIT_FAILURE);
+    //        }
+    //    }
