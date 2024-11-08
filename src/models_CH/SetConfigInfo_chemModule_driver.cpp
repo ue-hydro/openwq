@@ -73,6 +73,21 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
         true,               // print in console
         true);              // print in log file
 
+    // Check if CH option not valid, through error
+    if ((OpenWQ_wqconfig.BGC_module).compare("NONE") == 0){
+
+        // Create Message (Warning Message)
+        msg_string = 
+            "<OpenWQ> WARNING: The BIOGEOCHEMISTRY module was set to NONE. "
+            "That is NOT ALLOWED because chemical constitutes are not define, so not even the TRANSPORT routines could work.";
+
+        // Print it (Console and/or Log file)
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true,true); 
+
+        // Abort program
+        exit(EXIT_FAILURE);
+
+    }
 
     // Check if CH option not valid, through error
     if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") != 0 
