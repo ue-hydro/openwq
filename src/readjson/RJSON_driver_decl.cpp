@@ -98,7 +98,7 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     // Set logFile
     // First thing because the log file needs to be initiated to 
     // log info about config
-    SetConfigInfo_output_logFile(
+    SetConfigInfo_OUT_logFile(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
     // Set metadata
@@ -169,7 +169,7 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     // Set output options
     // #############################
 
-    SetConfigInfo_output_driver(
+    SetConfigInfo_OUT_driver(
         OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
         OpenWQ_utils, OpenWQ_units, OpenWQ_output);
 

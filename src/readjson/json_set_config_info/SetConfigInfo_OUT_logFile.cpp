@@ -20,7 +20,7 @@
 
 
 // Set up logFile
-void OpenWQ_readjson::SetConfigInfo_output_logFile(
+void OpenWQ_readjson::SetConfigInfo_OUT_logFile(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,

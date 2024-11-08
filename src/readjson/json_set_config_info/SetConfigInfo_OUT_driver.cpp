@@ -18,7 +18,7 @@
 #include "readjson/headerfile_RJSON.hpp"
 
 // Set output options
-void OpenWQ_readjson::SetConfigInfo_output_driver(
+void OpenWQ_readjson::SetConfigInfo_OUT_driver(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_hostModelconfig & OpenWQ_hostModelconfig,
     OpenWQ_wqconfig &OpenWQ_wqconfig,

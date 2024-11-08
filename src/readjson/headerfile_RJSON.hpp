@@ -89,7 +89,7 @@ class OpenWQ_readjson{
             OpenWQ_units& OpenWQ_units,
             OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_output_logFile(
+        void SetConfigInfo_OUT_logFile(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
@@ -170,7 +170,7 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_output_driver(
+        void SetConfigInfo_OUT_driver(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
