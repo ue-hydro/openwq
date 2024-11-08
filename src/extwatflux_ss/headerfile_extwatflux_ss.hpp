@@ -42,7 +42,7 @@ class OpenWQ_extwatflux_ss{
     public:
         // Save Sink and Source data to tuple (more efficient than allways calling jnlohmann)
         // Driver function called from decl coupler routine
-        void Set_EWFandSS_drive(
+        void Set_EWFandSS_driver(
             json &EWF_SS_json,
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
@@ -89,7 +89,7 @@ class OpenWQ_extwatflux_ss{
 
     private:
         // if DATA_FORMAT = JSON or ASCII
-        // Called by Set_EWFandSS_drive
+        // Called by Set_EWFandSS_driver
         void Set_EWFandSS_jsonAscii(
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
@@ -103,7 +103,7 @@ class OpenWQ_extwatflux_ss{
             bool foundflag);
         
         // if DATA_FORMAT = HDF5
-        // Called by Set_EWFandSS_drive
+        // Called by Set_EWFandSS_driver
         void Set_EWF_h5(
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,

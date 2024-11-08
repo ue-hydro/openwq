@@ -20,7 +20,7 @@
 /* #################################################
  // Prepare SS and EWF input data for use at running time: main driver
  ################################################# */
-void OpenWQ_extwatflux_ss::Set_EWFandSS_drive(
+void OpenWQ_extwatflux_ss::Set_EWFandSS_driver(
     json &EWF_SS_json,                                  // SS or EWF json    
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,

@@ -130,13 +130,13 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_chemModule(
+        void SetConfigInfo_CHModule(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_chemModule_BGC_FLEX(
+        void SetConfigInfo_CHModule_BGC_FLEX(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,

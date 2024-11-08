@@ -20,7 +20,7 @@
 
 
 // Set chemModule = BGC_FLEX
-void OpenWQ_readjson::SetConfigInfo_chemModule_BGC_FLEX(
+void OpenWQ_readjson::SetConfigInfo_CHModule_BGC_FLEX(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,

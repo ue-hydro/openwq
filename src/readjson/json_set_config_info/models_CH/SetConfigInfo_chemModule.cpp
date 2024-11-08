@@ -18,7 +18,7 @@
 #include "readjson/headerfile_readjson.hpp"
 
 // Set chem info
-void OpenWQ_readjson::SetConfigInfo_chemModule(
+void OpenWQ_readjson::SetConfigInfo_CHModule(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
@@ -97,7 +97,7 @@ void OpenWQ_readjson::SetConfigInfo_chemModule(
     // Native module
     if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") == 0){
         
-        SetConfigInfo_chemModule_BGC_FLEX(  
+        SetConfigInfo_CHModule_BGC_FLEX(  
             OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
     }else{

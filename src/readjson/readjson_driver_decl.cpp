@@ -42,7 +42,8 @@ void OpenWQ_readjson::read_all_JSON(
     ################################################ */
 
     /* ########################
-    // Read with Master file (read)
+    // MASTER FILE
+    // Read Master file (read)
     ######################## */
     OpenWQ_readjson::read_JSON_2class(
         OpenWQ_wqconfig,
@@ -92,6 +93,7 @@ void OpenWQ_readjson::SetConfigInfo_driver(
 
     // #############################
     // Set General info
+    // #############################
 
     // Set logFile
     // First thing because the log file needs to be initiated to 
@@ -103,6 +105,11 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     SetConfigInfo_meta(
         OpenWQ_json, OpenWQ_wqconfig,OpenWQ_output);
 
+
+    // #############################
+    // Set Computation and Solver info
+    // #############################
+
     // Set computation settings
     SetConfigInfo_compute(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
@@ -111,8 +118,10 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     SetConfigInfo_solver(
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
+
     // #############################
-    // Set OPENWQ_INPUT info
+    // Set OPENWQ_INPUT info (IC and forcings)
+    // #############################
 
     // Set general config data
     SetConfigInfo_INPUT_general(
@@ -128,10 +137,11 @@ void OpenWQ_readjson::SetConfigInfo_driver(
 
 
     // #############################
-    // Set modules
+    // Set MODELS
+    // #############################
 
-    // Set chem module settings
-    SetConfigInfo_chemModule(  
+    // Set CH module settings (chemistry)
+    SetConfigInfo_CHModule(  
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
     // Set TD module settings (transport dissolved)
@@ -154,8 +164,10 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     //    OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
     //    OpenWQ_utils, OpenWQ_output);
 
+
     // #############################
     // Set output options
+    // #############################
 
     SetConfigInfo_output_driver(
         OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
