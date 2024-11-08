@@ -109,33 +109,34 @@ SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXEC_DIR})
 # OpenWQ Files
 SET(OPENWQ_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 FILE(GLOB OPENWQ_SOURCES 
-          ${OPENWQ_DIR}/src/*.cpp 
-          ${OPENWQ_DIR}/src/global/*.cpp
-          ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
-          ${OPENWQ_DIR}/src/initiate/*.cpp
-          ${OPENWQ_DIR}/src/models_CH/*.cpp
-          ${OPENWQ_DIR}/src/models_CH/bgc_flex/*.cpp
-          ${OPENWQ_DIR}/src/models_TD/*.cpp
-          ${OPENWQ_DIR}/src/models_TD/native_adv/*.cpp
-          ${OPENWQ_DIR}/src/models_TD/native_advdisp/*.cpp
-          ${OPENWQ_DIR}/src/models_LE/*.cpp
-          ${OPENWQ_DIR}/src/models_LE/native_boundmix/*.cpp
-          ${OPENWQ_DIR}/src/readjson/*.cpp
-          ${OPENWQ_DIR}/src/readjson/json_set_config_info/*.cpp
-          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_CH/*.cpp
-          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_TD/*.cpp
-          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_LE/*.cpp
-          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_SI/*.cpp
-          ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_ST/*.cpp
-          ${OPENWQ_DIR}/src/readjson/json_set_config_info/output_toolbox/*.cpp
-          ${OPENWQ_DIR}/src/readjson/json_utils/*.cpp
-          ${OPENWQ_DIR}/src/couplercalls/*.cpp
-          ${OPENWQ_DIR}/src/output/*.cpp
-          ${OPENWQ_DIR}/src/compute/*.cpp
-          ${OPENWQ_DIR}/src/compute/solver_backeuler/*.cpp
-          ${OPENWQ_DIR}/src/compute/solver_sundials/*.cpp
-          ${OPENWQ_DIR}/src/units/*.cpp
-          ${OPENWQ_DIR}/src/utils/*.cpp)
+    ${OPENWQ_DIR}/src/*.cpp 
+    ${OPENWQ_DIR}/src/global/*.cpp
+    ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
+    ${OPENWQ_DIR}/src/extwatflux_ss/json_SetConfigInfo/*.cpp
+    ${OPENWQ_DIR}/src/initiate/*.cpp
+    ${OPENWQ_DIR}/src/readjson/*.cpp
+    ${OPENWQ_DIR}/src/readjson/json_utils/*.cpp
+    ${OPENWQ_DIR}/src/couplercalls/*.cpp
+    ${OPENWQ_DIR}/src/output/*.cpp
+    ${OPENWQ_DIR}/src/output/json_SetConfigInfo/*.cpp
+    ${OPENWQ_DIR}/src/compute/*.cpp
+    ${OPENWQ_DIR}/src/compute/json_SetConfigInfo/*.cpp
+    ${OPENWQ_DIR}/src/compute/solver_backeuler/*.cpp
+    ${OPENWQ_DIR}/src/compute/solver_sundials/*.cpp
+    ${OPENWQ_DIR}/src/units/*.cpp
+    ${OPENWQ_DIR}/src/utils/*.cpp
+    ${OPENWQ_DIR}/src/models_CH/*.cpp
+    ${OPENWQ_DIR}/src/models_CH/bgc_flex/*.cpp
+    ${OPENWQ_DIR}/src/models_TD/*.cpp
+    ${OPENWQ_DIR}/src/models_TD/native_adv/*.cpp
+    ${OPENWQ_DIR}/src/models_TD/native_advdisp/*.cpp
+    ${OPENWQ_DIR}/src/models_LE/*.cpp
+    ${OPENWQ_DIR}/src/models_LE/native_boundmix/*.cpp
+    ${OPENWQ_DIR}/src/models_SI/*.cpp
+    ${OPENWQ_DIR}/src/models_ST/*.cpp
+    ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
+    ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
+
 SET(OPENWQ_INCLUDES ${OPENWQ_DIR}/src/)
 MESSAGE(STATUS "OpenWQ source files: ${OPENWQ_DIR}")
 
@@ -564,114 +565,112 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
                 # File definitions for subcomponents - For OpenWQ
                 FILE(GLOB OPENWQ_SOURCES 
-                        ${OPENWQ_DIR}/src/*.cpp 
-                        ${OPENWQ_DIR}/src/global/*.cpp
-                        ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
-                        ${OPENWQ_DIR}/src/initiate/*.cpp
-                        ${OPENWQ_DIR}/src/models_CH/*.cpp
-                        ${OPENWQ_DIR}/src/models_CH/bgc_flex/*.cpp
-                        ${OPENWQ_DIR}/src/models_TD/*.cpp
-                        ${OPENWQ_DIR}/src/models_TD/native_adv/*.cpp
-                        ${OPENWQ_DIR}/src/models_TD/native_advdisp/*.cpp
-                        ${OPENWQ_DIR}/src/models_LE/*.cpp
-                        ${OPENWQ_DIR}/src/models_LE/native_boundmix/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_CH/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_TD/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_LE/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_SI/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/models_ST/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/json_set_config_info/output_toolbox/*.cpp
-                        ${OPENWQ_DIR}/src/readjson/json_utils/*.cpp
-                        ${OPENWQ_DIR}/src/couplercalls/*.cpp
-                        ${OPENWQ_DIR}/src/output/*.cpp
-                        ${OPENWQ_DIR}/src/compute/*.cpp
-                        ${OPENWQ_DIR}/src/compute/solver_backeuler/*.cpp
-                        ${OPENWQ_DIR}/src/compute/solver_sundials/*.cpp
-                        ${OPENWQ_DIR}/src/units/*.cpp
-                        ${OPENWQ_DIR}/src/utils/*.cpp
-                        ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
-                        ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
+                    ${OPENWQ_DIR}/src/*.cpp 
+                    ${OPENWQ_DIR}/src/global/*.cpp
+                    ${OPENWQ_DIR}/src/extwatflux_ss/*.cpp
+                    ${OPENWQ_DIR}/src/extwatflux_ss/json_SetConfigInfo/*.cpp
+                    ${OPENWQ_DIR}/src/initiate/*.cpp
+                    ${OPENWQ_DIR}/src/readjson/*.cpp
+                    ${OPENWQ_DIR}/src/readjson/json_utils/*.cpp
+                    ${OPENWQ_DIR}/src/couplercalls/*.cpp
+                    ${OPENWQ_DIR}/src/output/*.cpp
+                    ${OPENWQ_DIR}/src/output/json_SetConfigInfo/*.cpp
+                    ${OPENWQ_DIR}/src/compute/*.cpp
+                    ${OPENWQ_DIR}/src/compute/json_SetConfigInfo/*.cpp
+                    ${OPENWQ_DIR}/src/compute/solver_backeuler/*.cpp
+                    ${OPENWQ_DIR}/src/compute/solver_sundials/*.cpp
+                    ${OPENWQ_DIR}/src/units/*.cpp
+                    ${OPENWQ_DIR}/src/utils/*.cpp
+                    ${OPENWQ_DIR}/src/models_CH/*.cpp
+                    ${OPENWQ_DIR}/src/models_CH/bgc_flex/*.cpp
+                    ${OPENWQ_DIR}/src/models_TD/*.cpp
+                    ${OPENWQ_DIR}/src/models_TD/native_adv/*.cpp
+                    ${OPENWQ_DIR}/src/models_TD/native_advdisp/*.cpp
+                    ${OPENWQ_DIR}/src/models_LE/*.cpp
+                    ${OPENWQ_DIR}/src/models_LE/native_boundmix/*.cpp
+                    ${OPENWQ_DIR}/src/models_SI/*.cpp
+                    ${OPENWQ_DIR}/src/models_ST/*.cpp
+                    ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
+                    ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
                 
                 SET(OPENWQ_INCLUDES
-                        ${OPENWQ_DIR}/src/global/
-                        ${PARENT_DIR})
+                    ${OPENWQ_DIR}/src/global/
+                    ${PARENT_DIR})
 
                 SET(MIZUROUTE_DIR ${PARENT_DIR}/src)
                 
 
                 # Setting mizuroute
                 SET(MIZUROUTE_UTILS
-                        ${MIZUROUTE_DIR}/nrtype.f90
-                        ${MIZUROUTE_DIR}/nr_utility.f90
-                        ${MIZUROUTE_DIR}/ascii_util.f90
-                        ${MIZUROUTE_DIR}/ncio_utils.f90
-                        ${MIZUROUTE_DIR}/gamma_func.f90
+                    ${MIZUROUTE_DIR}/nrtype.f90
+                    ${MIZUROUTE_DIR}/nr_utility.f90
+                    ${MIZUROUTE_DIR}/ascii_util.f90
+                    ${MIZUROUTE_DIR}/ncio_utils.f90
+                    ${MIZUROUTE_DIR}/gamma_func.f90
                 )
                 SET(MIZUROUTE_DATATYPES
-                        ${OPENWQ_INTERFACE_DIR}/openWQ.f90 # needs to be compiled before globalData
-                        ${MIZUROUTE_DIR}/public_var.f90
-                        ${MIZUROUTE_DIR}/dataTypes.f90
-                        ${MIZUROUTE_DIR}/var_lookup.f90
-                        ${MIZUROUTE_DIR}/time_utils.f90
-                        ${MIZUROUTE_DIR}/datetime_data.f90
-                        ${MIZUROUTE_DIR}/globalData.f90
-                        ${MIZUROUTE_DIR}/popMetadat.f90
-                        ${MIZUROUTE_DIR}/allocation.f90
+                    ${OPENWQ_INTERFACE_DIR}/openWQ.f90 # needs to be compiled before globalData
+                    ${MIZUROUTE_DIR}/public_var.f90
+                    ${MIZUROUTE_DIR}/dataTypes.f90
+                    ${MIZUROUTE_DIR}/var_lookup.f90
+                    ${MIZUROUTE_DIR}/time_utils.f90
+                    ${MIZUROUTE_DIR}/datetime_data.f90
+                    ${MIZUROUTE_DIR}/globalData.f90
+                    ${MIZUROUTE_DIR}/popMetadat.f90
+                    ${MIZUROUTE_DIR}/allocation.f90
                 )
                 SET(MIZUROUTE_INIT
-                        ${MIZUROUTE_DIR}/network_topo.f90
-                        ${MIZUROUTE_DIR}/process_param.f90
-                        ${MIZUROUTE_DIR}/process_ntopo.f90
-                        ${MIZUROUTE_DIR}/pfafstetter.f90
-                        ${MIZUROUTE_DIR}/domain_decomposition.f90
+                    ${MIZUROUTE_DIR}/network_topo.f90
+                    ${MIZUROUTE_DIR}/process_param.f90
+                    ${MIZUROUTE_DIR}/process_ntopo.f90
+                    ${MIZUROUTE_DIR}/pfafstetter.f90
+                    ${MIZUROUTE_DIR}/domain_decomposition.f90
                 )
                 SET(MIZUROUTE_IO
-                        ${MIZUROUTE_DIR}/remap.f90
-                        ${MIZUROUTE_DIR}/read_control.f90
-                        ${MIZUROUTE_DIR}/read_param.f90
-                        ${MIZUROUTE_DIR}/read_streamSeg.f90
-                        ${MIZUROUTE_DIR}/write_streamSeg.f90
-                        ${MIZUROUTE_DIR}/read_runoff.f90
-                        ${MIZUROUTE_DIR}/get_basin_runoff.f90
-                        ${MIZUROUTE_DIR}/read_remap.f90
-                        ${MIZUROUTE_DIR}/read_restart.f90
-                        ${MIZUROUTE_DIR}/write_restart.f90
-                        ${MIZUROUTE_DIR}/write_simoutput.f90
+                    ${MIZUROUTE_DIR}/remap.f90
+                    ${MIZUROUTE_DIR}/read_control.f90
+                    ${MIZUROUTE_DIR}/read_param.f90
+                    ${MIZUROUTE_DIR}/read_streamSeg.f90
+                    ${MIZUROUTE_DIR}/write_streamSeg.f90
+                    ${MIZUROUTE_DIR}/read_runoff.f90
+                    ${MIZUROUTE_DIR}/get_basin_runoff.f90
+                    ${MIZUROUTE_DIR}/read_remap.f90
+                    ${MIZUROUTE_DIR}/read_restart.f90
+                    ${MIZUROUTE_DIR}/write_restart.f90
+                    ${MIZUROUTE_DIR}/write_simoutput.f90
                 )
                 SET(MIZUROUTE_CORE
-                        ${MIZUROUTE_DIR}/model_finalize.f90
-                        ${MIZUROUTE_DIR}/accum_runoff.f90
-                        ${MIZUROUTE_DIR}/basinUH.f90
-                        ${MIZUROUTE_DIR}/irf_route.f90
-                        ${MIZUROUTE_DIR}/kwt_route.f90
-                        ${MIZUROUTE_DIR}/dfw_route.f90
-                        ${MIZUROUTE_DIR}/kw_route.f90
-                        ${MIZUROUTE_DIR}/mc_route.f90
-                        ${MIZUROUTE_DIR}/main_route.f90
-                        ${MIZUROUTE_DIR}/model_setup.f90
-                        ${OPENWQ_INTERFACE_DIR}/mizuroute_openwq.f90
+                    ${MIZUROUTE_DIR}/model_finalize.f90
+                    ${MIZUROUTE_DIR}/accum_runoff.f90
+                    ${MIZUROUTE_DIR}/basinUH.f90
+                    ${MIZUROUTE_DIR}/irf_route.f90
+                    ${MIZUROUTE_DIR}/kwt_route.f90
+                    ${MIZUROUTE_DIR}/dfw_route.f90
+                    ${MIZUROUTE_DIR}/kw_route.f90
+                    ${MIZUROUTE_DIR}/mc_route.f90
+                    ${MIZUROUTE_DIR}/main_route.f90
+                    ${MIZUROUTE_DIR}/model_setup.f90
+                    ${OPENWQ_INTERFACE_DIR}/mizuroute_openwq.f90
                 )
                 SET(MIZUROUTE_DRIVER 
-                        ${MIZUROUTE_DIR}/route_runoff.f90
+                    ${MIZUROUTE_DIR}/route_runoff.f90
                 )
                 # Stitch together MIZUROUTE programs
                 SET(MIZUROUTE_MOD_ALL
-                        ${MIZUROUTE_UTILS}
-                        ${MIZUROUTE_DATATYPES}
-                        ${MIZUROUTE_INIT}
-                        ${MIZUROUTE_IO}
-                        ${MIZUROUTE_CORE})
+                    ${MIZUROUTE_UTILS}
+                    ${MIZUROUTE_DATATYPES}
+                    ${MIZUROUTE_INIT}
+                    ${MIZUROUTE_IO}
+                    ${MIZUROUTE_CORE})
 
 
                 IF("${COMPILE_MODE}" STREQUAL "debug")
-                        SET(CMAKE_Fortran_FLAGS "-g3 -Wall -fmax-errors=0 -fbacktrace -fcheck=all -ffpe-trap=zero -ffree-line-length-none -lstdc++")
-                        SET(CMAKE_CXX_FLAGS "-g3 -O0 -Wall -pedantic")
+                    SET(CMAKE_Fortran_FLAGS "-g3 -Wall -fmax-errors=0 -fbacktrace -fcheck=all -ffpe-trap=zero -ffree-line-length-none -lstdc++")
+                    SET(CMAKE_CXX_FLAGS "-g3 -O0 -Wall -pedantic")
                 ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
-                        SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp")
-                        SET(CMAKE_CXX_FLAGS "-O3 ${OpenMP_CXX_FLAGS}")
-                        FIND_PACKAGE(OpenMP)
+                    SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp")
+                    SET(CMAKE_CXX_FLAGS "-O3 ${OpenMP_CXX_FLAGS}")
+                    FIND_PACKAGE(OpenMP)
                 ENDIF()
 
                 FIND_PACKAGE(Armadillo REQUIRED) # don't forget to activate HDF5 support when installing Armadillo
@@ -683,40 +682,40 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
                 # compile openWQ into an object file
                 ADD_LIBRARY(OPENWQ_OBJ OBJECT 
-                        ${OPENWQ_SOURCES})
+                    ${OPENWQ_SOURCES})
                 TARGET_INCLUDE_DIRECTORIES(OPENWQ_OBJ PRIVATE
-                        ${ARMADILLO_INCLUDE_DIR}
-                        ${HDF5_INCLUDE_DIRS}
-                        ${OpenMP_INCLUDE_DIR}
-                        ${OPENWQ_DIR}/src/)
+                    ${ARMADILLO_INCLUDE_DIR}
+                    ${HDF5_INCLUDE_DIRS}
+                    ${OpenMP_INCLUDE_DIR}
+                    ${OPENWQ_DIR}/src/)
                 TARGET_LINK_LIBRARIES(OPENWQ_OBJ PUBLIC
-                        ${ARMADILLO_LIBRARIES}
-                        ${HDF5_C_LIBRARY_hdf5})
+                    ${ARMADILLO_LIBRARIES}
+                    ${HDF5_C_LIBRARY_hdf5})
 
                 IF(OpenMP_CXX_FOUND)
-                        MESSAGE("** OpenWQ **: OpenMP enabled!")
-                        TARGET_LINK_LIBRARIES(
-                                OPENWQ_OBJ PUBLIC 
-                                OpenMP::OpenMP_CXX)
+                    MESSAGE("** OpenWQ **: OpenMP enabled!")
+                    TARGET_LINK_LIBRARIES(
+                            OPENWQ_OBJ PUBLIC 
+                            OpenMP::OpenMP_CXX)
                 ENDIF()
 
                 # Create the executable with openWQ coupled to Mizuroute                 
                 ADD_EXECUTABLE(${exec_name}
-                        ${MIZUROUTE_MOD_ALL}
-                        ${MIZUROUTE_DRIVER})
+                    ${MIZUROUTE_MOD_ALL}
+                    ${MIZUROUTE_DRIVER})
                 SET_PROPERTY(TARGET ${exec_name} PROPERTY LINKER_LANGUAGE Fortran)
                 TARGET_INCLUDE_DIRECTORIES(
-                        ${exec_name} PUBLIC
-                        ${LAPACK_INCLUDES}
-                        ${netCDF_INCLUDES}
-                        "/usr/include/"
-                        "/code/")
+                    ${exec_name} PUBLIC
+                    ${LAPACK_INCLUDES}
+                    ${netCDF_INCLUDES}
+                    "/usr/include/"
+                    "/code/")
                 TARGET_LINK_LIBRARIES(
-                        ${exec_name} PUBLIC
-                        ${NETCDF_LIB_PATH}
-                        ${LAPACK_LIBRARIES}
-                        ${netCDF_LIBRARIES}
-                        OPENWQ_OBJ)
+                    ${exec_name} PUBLIC
+                    ${NETCDF_LIB_PATH}
+                    ${LAPACK_LIBRARIES}
+                    ${netCDF_LIBRARIES}
+                    OPENWQ_OBJ)
 
         ELSE()
 
