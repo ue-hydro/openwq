@@ -15,7 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#include "headerfile_couplercalls.hpp"
+#include "headerfile_CC.hpp"
 
 // ################################################################
 // Calls all functions required inside time loop

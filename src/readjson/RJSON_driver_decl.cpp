@@ -15,13 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "readjson/headerfile_readjson.hpp"
+#include "readjson/headerfile_RJSON.hpp"
 
 
 /* #################################################
  // Real all configuration files
  ################################################# */
-void OpenWQ_readjson::read_all_JSON(
+void OpenWQ_readjson::JSON_driver(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig &OpenWQ_wqconfig,

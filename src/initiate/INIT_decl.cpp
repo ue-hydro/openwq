@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "headerfile_initiate.hpp"
+#include "headerfile_INIT.hpp"
 
 /* #################################################
 // Initialize memory of major variables: arma::field

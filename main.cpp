@@ -24,19 +24,19 @@
 
 // ########################################################
 // openWQ
-#include "couplercalls/headerfile_couplercalls.hpp"
+#include "couplercalls/headerfile_CC.hpp"
 
 #include "global/openwq_hostmodelconfig.hpp"
 #include "global/openwq_json.hpp"
 #include "global/openwq_wqconfig.hpp"
 #include "global/openwq_vars.hpp"
-#include "readjson/headerfile_readjson.hpp"
-#include "initiate/headerfile_initiate.hpp"
+#include "readjson/headerfile_RJSON.hpp"
+#include "initiate/headerfile_INIT.hpp"
 
-#include "extwatflux_ss/headerfile_extwatflux_ss.hpp"
-#include "units/headerfile_units.hpp"
+#include "extwatflux_ss/headerfile_EWF_SS.hpp"
+#include "units/headerfile_UNITS.hpp"
 #include "compute/headerfile_compute.hpp"
-#include "output/headerfile_output.hpp"
+#include "output/headerfile_OUT.hpp"
 
 #include "models_CH/headerfile_ch.hpp"
 #include "models_TD/headerfile_td.hpp"

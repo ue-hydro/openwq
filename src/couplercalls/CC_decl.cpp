@@ -15,7 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#include "headerfile_couplercalls.hpp"
+#include "headerfile_CC.hpp"
 
 // ################################################################
 // Initial Configuration of OpenWQ
@@ -44,7 +44,7 @@ void OpenWQ_couplercalls::InitialConfig(
     // Read JSON files
     // ################################
         
-    OpenWQ_readjson.read_all_JSON(
+    OpenWQ_readjson.JSON_driver(
         OpenWQ_json,
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,

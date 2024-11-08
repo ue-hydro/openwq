@@ -15,7 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#include "headerfile_couplercalls.hpp"
+#include "headerfile_CC.hpp"
 
 
 // ################################################################
@@ -46,7 +46,7 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
     Only place where the state-variables are changed
     ######################################## */ 
 
-    OpenWQ_compute.Numerical_Solver(
+    OpenWQ_compute.SOLVER_driver(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,
         OpenWQ_vars, 

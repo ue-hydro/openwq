@@ -23,7 +23,7 @@
 // General numerical solver
 ################################################# */
 
-void OpenWQ_compute::Numerical_Solver(
+void OpenWQ_compute::SOLVER_driver(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars,

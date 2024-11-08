@@ -52,7 +52,7 @@ class OpenWQ_compute{
     public:
 
     // Generic Numerical Solver
-    void Numerical_Solver(
+    void SOLVER_driver(
         OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_vars& OpenWQ_vars,

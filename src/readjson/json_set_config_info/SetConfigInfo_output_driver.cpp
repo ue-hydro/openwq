@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "readjson/headerfile_readjson.hpp"
+#include "readjson/headerfile_RJSON.hpp"
 
 // Set output options
 void OpenWQ_readjson::SetConfigInfo_output_driver(
