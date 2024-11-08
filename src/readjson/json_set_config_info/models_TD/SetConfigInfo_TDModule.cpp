@@ -90,7 +90,7 @@ void OpenWQ_readjson::SetConfigInfo_TDModule(
 
     // Check if TD option not valid, through error
     if ((OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") != 0 
-        && (OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADV") != 0 
+        && (OpenWQ_wqconfig.TD_module).compare("NATIVE_TD_ADV") != 0 
         && (OpenWQ_wqconfig.TD_module).compare("NONE") != 0){
 
         // Create Message (Warning Message)

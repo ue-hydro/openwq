@@ -36,7 +36,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
     OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
     OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
     OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
-    OpenWQ_models_CH& OpenWQ_models_CH,                       // biochemistry modules
+    OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
     OpenWQ_compute& OpenWQ_compute,
     OpenWQ_output& OpenWQ_output,
@@ -71,8 +71,8 @@ void OpenWQ_couplercalls::RunSpaceStep(
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, wmass_source);
 
-    // if TD_module = OPENWQ_NATIVE_TD_ADV
-    }else if ((OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADV") == 0)
+    // if TD_module = NATIVE_TD_ADV
+    }else if ((OpenWQ_wqconfig.TD_module).compare("NATIVE_TD_ADV") == 0)
     {
         OpenWQ_TD_model.Adv(
             OpenWQ_vars, OpenWQ_wqconfig,
@@ -100,50 +100,26 @@ void OpenWQ_couplercalls::RunSpaceStep(
 
     }
 
-    /* IntMOB ----> maybe recover in the future
-    // Internal mobilization of immobile pools
-    // Erosion and weathering
-    OpenWQ_TD_model.IntMob(
-        OpenWQ_vars, OpenWQ_wqconfig,
+    // Run LE model
+    OpenWQ_LE_model.LE_driver_run(
+        OpenWQ_hostModelconfig,
+        OpenWQ_json,                       // create OpenWQ_json object
+        OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
+        OpenWQ_units,                     // functions for unit conversion
+        OpenWQ_utils,                       // utility methods/functions
+        OpenWQ_readjson,               // read json files
+        OpenWQ_vars,
+        OpenWQ_initiate,               // initiate modules
+        OpenWQ_TD_model,         // transport modules
+        OpenWQ_LE_model,               // LE model
+        OpenWQ_CH_model,                       // biochemistry modules
+        OpenWQ_extwatflux_ss,     // sink and source modules)
+        OpenWQ_compute,
+        OpenWQ_output,
+        simtime,                                 // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
         source, ix_s, iy_s, iz_s,
         recipient, ix_r, iy_r, iz_r,
         wflux_s2r, wmass_source);
-    */
-   
-    // #################################################
-    // LE module
-    // Lateral Exchange model (mobile material only)
-    // #################################################
-
-    if (OpenWQ_wqconfig.LE_module.compare("OPENWQ_NATIVE_BOUNDMIX") == 0)
-    {
-        // Boundary Mixing due to velocity gradients
-        // due to turbulence and cross-boarder eddies
-        // only apply if fluxe between cells in same compartment          
-        OpenWQ_LE_model.native_BoundMix(
-            OpenWQ_hostModelconfig, OpenWQ_vars, OpenWQ_wqconfig,
-            source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
-
-    // if TD_module != NONE (and any of the others)
-    }else if ((OpenWQ_wqconfig.LE_module).compare("NONE")!= 0)
-    {
-        // Create Message
-        msg_string = 
-            "<OpenWQ> ERROR: No LE_module found or unkown";
-
-        // Print it (Console and/or Log file)
-        OpenWQ_output.ConsoleLog(
-            OpenWQ_wqconfig,    // for Log file name
-            msg_string,         // message
-            true,               // print in console
-            true);              // print in log file
-        
-        // Abort (Fatal error)
-        exit(EXIT_FAILURE);
-
-    }
 
 }
 
@@ -164,7 +140,7 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
     OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
     OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
     OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
-    OpenWQ_models_CH& OpenWQ_models_CH,                       // biochemistry modules
+    OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
     OpenWQ_compute& OpenWQ_compute,
     OpenWQ_output& OpenWQ_output,

@@ -76,7 +76,7 @@ void OpenWQ_readjson::SetConfigInfo_LEModule(
     (OpenWQ_wqconfig.LE_module).append(LE_method_local);
 
     // Load information for the method
-    if ((OpenWQ_wqconfig.LE_module).compare("OPENWQ_NATIVE_BOUNDMIX") == 0){
+    if ((OpenWQ_wqconfig.LE_module).compare("NATIVE_LE_BOUNDMIX") == 0){
         
     //    // Get Erodibility coeficients for native IntMob function
     //    errorMsgIdentifier = "TD file";

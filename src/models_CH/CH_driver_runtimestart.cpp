@@ -1,5 +1,5 @@
 
-// Copyright 2020, Diogo Costa (diogo.costa@uevora.pt)
+// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -15,50 +15,47 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-#include "compute/headerfile_compute.hpp"
 #include "models_CH/headerfile_ch.hpp"
 
-/* #################################################
-// General numerical solver
-################################################# */
 
-void OpenWQ_compute::Numerical_Solver(
-    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
-    OpenWQ_wqconfig& OpenWQ_wqconfig,
-    OpenWQ_vars& OpenWQ_vars,
+/* #################################################
+// Compute chemical transformations
+################################################# */
+void OpenWQ_CH_model::CH_driver_run(
     OpenWQ_json& OpenWQ_json,
-    OpenWQ_output& OpenWQ_output,
-    OpenWQ_CH_model& OpenWQ_CH_model){
-    
+    OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_output& OpenWQ_output){
+
     // Local variables
     std::string msg_string; // error/warning message
     
+     // NATIVE Bioogeochemical model
+    if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") == 0){
 
-    if ((OpenWQ_wqconfig.SOLVER_module).compare("SUNDIALS") == 0){
-
-        Solve_with_CVode(
-            OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig,
-            OpenWQ_vars,
-            OpenWQ_json,
-            OpenWQ_output,
-            OpenWQ_CH_model);
-
-    } else if ((OpenWQ_wqconfig.SOLVER_module).compare("BE") == 0) {
+        // Loop over number of compartments
+        for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
         
-        Solve_with_BE(
-            OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig,
-            OpenWQ_vars,
-            OpenWQ_json,
-            OpenWQ_output,
-            OpenWQ_CH_model);
+            bgc_flex_transform( // calls exprtk: parsing expression
+                OpenWQ_json,
+                OpenWQ_vars,
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output,
+                icmp);
 
-    } else {
+        }
+
+        // Turn off printing of exception err message (only print on first step)
+        OpenWQ_wqconfig.BGC_Transform_print_errmsg = false;
+        OpenWQ_wqconfig.invalid_bgc_entry_errmsg = false;
+
+    }else{
+
         // Create Message
         msg_string = 
-            "<OpenWQ> ERROR: Unknown Solver choice";
+            "<OpenWQ> ERROR: No BGC_module found or unkown";
 
         // Print it (Console and/or Log file)
         OpenWQ_output.ConsoleLog(
@@ -71,4 +68,7 @@ void OpenWQ_compute::Numerical_Solver(
         exit(EXIT_FAILURE);
 
     }
+
+
+    
 }

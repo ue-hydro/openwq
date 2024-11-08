@@ -32,7 +32,7 @@ void OpenWQ_couplercalls::InitialConfig(
     OpenWQ_initiate& OpenWQ_initiate,            // initiate modules
     OpenWQ_TD_model& OpenWQ_TD_model,      // transport modules
     OpenWQ_LE_model& OpenWQ_LE_model,            // LE model
-    OpenWQ_models_CH& OpenWQ_models_CH,                    // biochemistry modules
+    OpenWQ_CH_model& OpenWQ_CH_model,                    // biochemistry modules
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,  // sink and source modules)
     OpenWQ_output& OpenWQ_output){
 
@@ -95,35 +95,12 @@ void OpenWQ_couplercalls::InitialConfig(
     // ##################################
     // BIOGEOCHEMISTRY
     
-    // NATIVE Bigoeochemical model
-    // Parse biogeochemical expressions (and save in global)
-    if ((OpenWQ_wqconfig.BGC_module).compare("OPENWQ_NATIVE_BGC_FLEX") == 0)
-    {
-        
-        OpenWQ_models_CH.setBGCexpressions(
-            OpenWQ_json,
-            OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig,
-            OpenWQ_vars,
-            OpenWQ_units,
-            OpenWQ_output);
-
-    }else{
-
-        // Create Message
-        msg_string = 
-            "<OpenWQ> ERROR: No BGC_module found or unkown";
-
-        // Print it (Console and/or Log file)
-        OpenWQ_output.ConsoleLog(
-            OpenWQ_wqconfig,    // for Log file name
-            msg_string,         // message
-            true,               // print in console
-            true);              // print in log file
-        
-        // Abort (Fatal error)
-        exit(EXIT_FAILURE);
-
-    }
+    OpenWQ_CH_model.CH_driver_config(
+        OpenWQ_json,
+        OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig,
+        OpenWQ_vars,
+        OpenWQ_units,
+        OpenWQ_output);
 
 }

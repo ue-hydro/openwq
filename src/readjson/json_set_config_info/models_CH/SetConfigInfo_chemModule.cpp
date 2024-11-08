@@ -95,7 +95,7 @@ void OpenWQ_readjson::SetConfigInfo_chemModule(
 
     // Load information fo the method
     // Native module
-    if ((OpenWQ_wqconfig.BGC_module).compare("OPENWQ_NATIVE_BGC_FLEX") == 0){
+    if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") == 0){
         
         SetConfigInfo_chemModule_BGC_FLEX(  
             OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);

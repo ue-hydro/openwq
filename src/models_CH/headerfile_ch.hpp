@@ -40,12 +40,12 @@ using json = nlohmann::json;
 
 // Biogeochemistry
 
-class OpenWQ_models_CH{
+class OpenWQ_CH_model{
 
     public:
-        // Parse biogeochemical expressions
-        // chem_decl.cpp
-        void setBGCexpressions(
+
+        // Run Chemistry configuration
+        void CH_driver_config(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
@@ -55,23 +55,54 @@ class OpenWQ_models_CH{
 
         // Run Chemistry (main call)
         // chem_runtimestart.cpp
-        void Run(
+        void CH_driver_run(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_output& OpenWQ_output);
-    
+
+        // ##################
+        // BGC_FLEX model
+        // ##################
+
+        // Parse biogeochemical expressions
+        // chem_decl.cpp
+        void bgc_flex_setBGCexpressions(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_vars& OpenWQ_vars,
+            OpenWQ_units& OpenWQ_units,
+            OpenWQ_output& OpenWQ_output);
+
+        // ##################
+        // PHREEQC model
+        // ##################
+
+        // add here
+
     private:
+
+        // ##################
+        // BGC_FLEX model
+        // ##################
+
         // Perform transformations
         // chem_runtimestart.cpp
-        void BGC_Transform(
+        void bgc_flex_transform(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_output& OpenWQ_output,
             unsigned int icmp);
+
+        // ##################
+        // PHREEQC model
+        // ##################
+
+        // add here
 
 };
 

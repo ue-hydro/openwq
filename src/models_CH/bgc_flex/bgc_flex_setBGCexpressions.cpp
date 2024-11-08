@@ -21,7 +21,7 @@
 /* #################################################
 // Parse biogeochemical expressions
 ################################################# */
-void OpenWQ_models_CH::setBGCexpressions(
+void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
     OpenWQ_json& OpenWQ_json,
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,

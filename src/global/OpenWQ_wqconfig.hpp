@@ -276,7 +276,7 @@ class OpenWQ_wqconfig
     std::vector
         <unsigned int> BGC_general_mobile_species;      // index of mobile chem species
 
-    // OpenWQ native module: OPENWQ_NATIVE_BGC_FLEX
+    // OpenWQ native module: NATIVE_BGC_FLEX
     
     // BGC kinetic formulas (tuple with all the info needed)
     // It includes also the formulas parsed and ready to be used

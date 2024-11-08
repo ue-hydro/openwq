@@ -154,7 +154,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;OpenWQ_global.h&quot;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;OpenWQ_readjson.h&quot;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;OpenWQ_initiate.h&quot;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;OpenWQ_models_CH.h&quot;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;OpenWQ_CH_model.h&quot;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;OpenWQ_watertransp.h&quot;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;OpenWQ_sinksource.h&quot;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;OpenWQ_units.h&quot;</span>
@@ -211,7 +211,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">        </span><span class="n">OpenWQ_vars</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_vars</span><span class="p">,</span>
 <span class="w">        </span><span class="n">OpenWQ_initiate</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_initiate</span><span class="p">,</span><span class="w">            </span><span class="c1">// initiate modules</span>
 <span class="w">        </span><span class="n">OpenWQ_watertransp</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_watertransp</span><span class="p">,</span><span class="w">      </span><span class="c1">// transport modules</span>
-<span class="w">        </span><span class="n">OpenWQ_models_CH</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_models_CH</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
+<span class="w">        </span><span class="n">OpenWQ_CH_model</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_CH_model</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
 <span class="w">        </span><span class="n">OpenWQ_sinksource</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_sinksource</span><span class="p">,</span><span class="w">        </span><span class="c1">// sink and source modules)</span>
 <span class="w">        </span><span class="n">OpenWQ_output</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_output</span><span class="p">,</span><span class="w">                </span><span class="c1">// output modules (needed for console/logfile)</span>
 <span class="w">        </span><span class="kr">unsigned</span><span class="w"> </span><span class="kr">long</span><span class="w"> </span><span class="n">num_hru</span><span class="p">);</span>
@@ -226,7 +226,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">        </span><span class="n">OpenWQ_vars</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_vars</span><span class="p">,</span>
 <span class="w">        </span><span class="n">OpenWQ_initiate</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_initiate</span><span class="p">,</span><span class="w">            </span><span class="c1">// initiate modules</span>
 <span class="w">        </span><span class="n">OpenWQ_watertransp</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_watertransp</span><span class="p">,</span><span class="w">      </span><span class="c1">// transport modules</span>
-<span class="w">        </span><span class="n">OpenWQ_models_CH</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_models_CH</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
+<span class="w">        </span><span class="n">OpenWQ_CH_model</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_CH_model</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
 <span class="w">        </span><span class="n">OpenWQ_sinksource</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_sinksource</span><span class="p">,</span><span class="w">        </span><span class="c1">// sink and source modules)</span>
 <span class="w">        </span><span class="n">OpenWQ_compute</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_compute</span><span class="p">,</span><span class="w">                </span><span class="c1">// solver module</span>
 <span class="w">        </span><span class="n">OpenWQ_output</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_output</span><span class="p">);</span><span class="w">               </span><span class="c1">// output modules</span>
@@ -274,7 +274,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">    </span><span class="n">OpenWQ_vars</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_vars</span><span class="p">,</span>
 <span class="w">    </span><span class="n">OpenWQ_initiate</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_initiate</span><span class="p">,</span><span class="w">            </span><span class="c1">// initiate modules</span>
 <span class="w">    </span><span class="n">OpenWQ_watertransp</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_watertransp</span><span class="p">,</span><span class="w">      </span><span class="c1">// transport modules</span>
-<span class="w">    </span><span class="n">OpenWQ_models_CH</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_models_CH</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
+<span class="w">    </span><span class="n">OpenWQ_CH_model</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_CH_model</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
 <span class="w">    </span><span class="n">OpenWQ_sinksource</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_sinksource</span><span class="p">,</span><span class="w">        </span><span class="o">//</span><span class="w"> </span><span class="n">sink</span><span class="w"> </span><span class="n">and</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="n">modules</span><span class="p">)</span>
 <span class="w">    </span><span class="n">OpenWQ_output</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_output</span><span class="p">,</span>
 <span class="w">    </span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">nhru</span><span class="p">)</span>
@@ -309,7 +309,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">            </span><span class="n">OpenWQ_vars</span><span class="p">,</span>
 <span class="w">            </span><span class="n">OpenWQ_initiate</span><span class="p">,</span><span class="w">            </span><span class="c1">// initiate modules</span>
 <span class="w">            </span><span class="n">OpenWQ_watertransp</span><span class="p">,</span><span class="w">      </span><span class="c1">// transport modules</span>
-<span class="w">            </span><span class="n">OpenWQ_models_CH</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
+<span class="w">            </span><span class="n">OpenWQ_CH_model</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
 <span class="w">            </span><span class="n">OpenWQ_sinksource</span><span class="p">,</span><span class="w">        </span><span class="c1">// sink and source modules)</span>
 <span class="w">            </span><span class="n">OpenWQ_output</span><span class="p">);</span>
 
@@ -372,7 +372,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">    </span><span class="n">OpenWQ_vars</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_vars</span><span class="p">,</span>
 <span class="w">    </span><span class="n">OpenWQ_initiate</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_initiate</span><span class="p">,</span><span class="w">            </span><span class="c1">// initiate modules</span>
 <span class="w">    </span><span class="n">OpenWQ_watertransp</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_watertransp</span><span class="p">,</span><span class="w">      </span><span class="c1">// transport modules</span>
-<span class="w">    </span><span class="n">OpenWQ_models_CH</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_models_CH</span><span class="p">,</span><span class="w">                    </span><span class="c1">// biochemistry modules</span>
+<span class="w">    </span><span class="n">OpenWQ_CH_model</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_CH_model</span><span class="p">,</span><span class="w">                    </span><span class="c1">// biochemistry modules</span>
 <span class="w">    </span><span class="n">OpenWQ_sinksource</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_sinksource</span><span class="p">,</span><span class="w">        </span><span class="c1">// sink and source modules)</span>
 <span class="w">    </span><span class="n">OpenWQ_compute</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_compute</span><span class="p">,</span><span class="w">                </span><span class="c1">// solver module</span>
 <span class="w">    </span><span class="n">OpenWQ_output</span><span class="o">&amp;</span><span class="w"> </span><span class="n">OpenWQ_output</span><span class="p">)</span><span class="w">                </span><span class="c1">// output modules</span>
@@ -442,7 +442,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">        </span><span class="n">OpenWQ_vars</span><span class="p">,</span>
 <span class="w">        </span><span class="n">OpenWQ_initiate</span><span class="p">,</span><span class="w">            </span><span class="c1">// initiate modules</span>
 <span class="w">        </span><span class="n">OpenWQ_watertransp</span><span class="p">,</span><span class="w">      </span><span class="c1">// transport modules</span>
-<span class="w">        </span><span class="n">OpenWQ_models_CH</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
+<span class="w">        </span><span class="n">OpenWQ_CH_model</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
 <span class="w">        </span><span class="n">OpenWQ_sinksource</span><span class="p">,</span><span class="w">        </span><span class="c1">// sink and source modules)</span>
 <span class="w">        </span><span class="n">OpenWQ_compute</span><span class="p">,</span>
 <span class="w">        </span><span class="n">OpenWQ_output</span><span class="p">,</span>
@@ -547,7 +547,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">                </span><span class="n">OpenWQ_vars</span><span class="p">,</span>
 <span class="w">                </span><span class="n">OpenWQ_initiate</span><span class="p">,</span><span class="w">            </span><span class="c1">// initiate modules</span>
 <span class="w">                </span><span class="n">OpenWQ_watertransp</span><span class="p">,</span><span class="w">      </span><span class="c1">// transport modules</span>
-<span class="w">                </span><span class="n">OpenWQ_models_CH</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
+<span class="w">                </span><span class="n">OpenWQ_CH_model</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
 <span class="w">                </span><span class="n">OpenWQ_sinksource</span><span class="p">,</span><span class="w">        </span><span class="c1">// sink and source modules)</span>
 <span class="w">                </span><span class="n">OpenWQ_compute</span><span class="p">,</span>
 <span class="w">                </span><span class="n">OpenWQ_output</span><span class="p">,</span>
@@ -574,7 +574,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">                </span><span class="n">OpenWQ_vars</span><span class="p">,</span>
 <span class="w">                </span><span class="n">OpenWQ_initiate</span><span class="p">,</span><span class="w">            </span><span class="c1">// initiate modules</span>
 <span class="w">                </span><span class="n">OpenWQ_watertransp</span><span class="p">,</span><span class="w">      </span><span class="c1">// transport modules</span>
-<span class="w">                </span><span class="n">OpenWQ_models_CH</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
+<span class="w">                </span><span class="n">OpenWQ_CH_model</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
 <span class="w">                </span><span class="n">OpenWQ_sinksource</span><span class="p">,</span><span class="w">        </span><span class="c1">// sink and source modules)</span>
 <span class="w">                </span><span class="n">OpenWQ_compute</span><span class="p">,</span>
 <span class="w">                </span><span class="n">OpenWQ_output</span><span class="p">,</span>
@@ -609,7 +609,7 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">            </span><span class="n">OpenWQ_vars</span><span class="p">,</span>
 <span class="w">            </span><span class="n">OpenWQ_initiate</span><span class="p">,</span><span class="w">            </span><span class="c1">// initiate modules</span>
 <span class="w">            </span><span class="n">OpenWQ_watertransp</span><span class="p">,</span><span class="w">      </span><span class="c1">// transport modules</span>
-<span class="w">            </span><span class="n">OpenWQ_models_CH</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
+<span class="w">            </span><span class="n">OpenWQ_CH_model</span><span class="p">,</span><span class="w">                   </span><span class="c1">// biochemistry modules</span>
 <span class="w">            </span><span class="n">OpenWQ_sinksource</span><span class="p">,</span><span class="w">        </span><span class="c1">// sink and source modules)</span>
 <span class="w">            </span><span class="n">OpenWQ_compute</span><span class="p">,</span>
 <span class="w">            </span><span class="n">OpenWQ_output</span><span class="p">,</span>

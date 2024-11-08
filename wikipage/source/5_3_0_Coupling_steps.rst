@@ -46,7 +46,7 @@ This is a critical step since these objects are input arguments of the different
     #include "<path>/OpenWQ_global.h"
     #include "<path>/OpenWQ_readjson.h"
     #include "<path>/OpenWQ_initiate.h"
-    #include "<path>/OpenWQ_models_CH.h"
+    #include "<path>/OpenWQ_CH_model.h"
     #include "<path>/OpenWQ_watertransp.h"
     #include "<path>/OpenWQ_sinksource.h"
     #include "<path>/OpenWQ_units.h"
@@ -64,7 +64,7 @@ This is a critical step since these objects are input arguments of the different
     OpenWQ_vars OpenWQ_vars(num_HydroComp);         // Class that stores global variables
     OpenWQ_initiate OpenWQ_initiate;                // Class tht contains pre-processing and initiation functions
     OpenWQ_watertransp OpenWQ_watertransp;          // Class that contains water transport functions
-    OpenWQ_models_CH OpenWQ_models_CH;                        // Cass that contains biogeochemical functions
+    OpenWQ_CH_model OpenWQ_CH_model;                        // Cass that contains biogeochemical functions
     OpenWQ_sinksource OpenWQ_sinksource;            // Cass that contains functions related to sinks and sources
     OpenWQ_compute OpenWQ_compute;                    // Class containing solvers
     OpenWQ_output OpenWQ_output;                    // Class containing printing functions
@@ -156,7 +156,7 @@ Now you need to adapt your ``MakeFile`` or '`CMakeLists` files to properly link 
         <path>/OpenWQ_hydrolink.o \
         <path>/OpenWQ_readjson.o \
         <path>/OpenWQ_initiate.o \
-        <path>/OpenWQ_models_CH.o \
+        <path>/OpenWQ_CH_model.o \
         <path>/OpenWQ_watertransp.o \
         <path>/OpenWQ_sinksource.o \
         <path>/OpenWQ_units.o \

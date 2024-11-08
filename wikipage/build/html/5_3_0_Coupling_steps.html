@@ -133,7 +133,7 @@ This is a critical step since these objects are input arguments of the different
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_global.h&quot;</span>
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_readjson.h&quot;</span>
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_initiate.h&quot;</span>
-<span class="c1">#include &quot;&lt;path&gt;/OpenWQ_models_CH.h&quot;</span>
+<span class="c1">#include &quot;&lt;path&gt;/OpenWQ_CH_model.h&quot;</span>
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_watertransp.h&quot;</span>
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_sinksource.h&quot;</span>
 <span class="c1">#include &quot;&lt;path&gt;/OpenWQ_units.h&quot;</span>
@@ -151,7 +151,7 @@ This is a critical step since these objects are input arguments of the different
 <span class="n">OpenWQ_vars</span><span class="w"> </span><span class="n">OpenWQ_vars</span><span class="p">(</span><span class="n">num_HydroComp</span><span class="p">);</span><span class="w">         </span><span class="o">//</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">stores</span><span class="w"> </span><span class="n">global</span><span class="w"> </span><span class="n">variables</span>
 <span class="n">OpenWQ_initiate</span><span class="w"> </span><span class="n">OpenWQ_initiate</span><span class="p">;</span><span class="w">                </span><span class="o">//</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">tht</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="n">pre</span><span class="o">-</span><span class="n">processing</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">initiation</span><span class="w"> </span><span class="n">functions</span>
 <span class="n">OpenWQ_watertransp</span><span class="w"> </span><span class="n">OpenWQ_watertransp</span><span class="p">;</span><span class="w">          </span><span class="o">//</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="n">water</span><span class="w"> </span><span class="n">transport</span><span class="w"> </span><span class="n">functions</span>
-<span class="n">OpenWQ_models_CH</span><span class="w"> </span><span class="n">OpenWQ_models_CH</span><span class="p">;</span><span class="w">                        </span><span class="o">//</span><span class="w"> </span><span class="n">Cass</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="n">biogeochemical</span><span class="w"> </span><span class="n">functions</span>
+<span class="n">OpenWQ_CH_model</span><span class="w"> </span><span class="n">OpenWQ_CH_model</span><span class="p">;</span><span class="w">                        </span><span class="o">//</span><span class="w"> </span><span class="n">Cass</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="n">biogeochemical</span><span class="w"> </span><span class="n">functions</span>
 <span class="n">OpenWQ_sinksource</span><span class="w"> </span><span class="n">OpenWQ_sinksource</span><span class="p">;</span><span class="w">            </span><span class="o">//</span><span class="w"> </span><span class="n">Cass</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="n">functions</span><span class="w"> </span><span class="n">related</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">sinks</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">sources</span>
 <span class="n">OpenWQ_compute</span><span class="w"> </span><span class="n">OpenWQ_compute</span><span class="p">;</span><span class="w">                    </span><span class="o">//</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">containing</span><span class="w"> </span><span class="n">solvers</span>
 <span class="n">OpenWQ_output</span><span class="w"> </span><span class="n">OpenWQ_output</span><span class="p">;</span><span class="w">                    </span><span class="o">//</span><span class="w"> </span><span class="n">Class</span><span class="w"> </span><span class="n">containing</span><span class="w"> </span><span class="n">printing</span><span class="w"> </span><span class="n">functions</span>
@@ -231,7 +231,7 @@ However, as previously said, each hydro-model is different and small adjustments
 &lt;path&gt;/OpenWQ_hydrolink.o \
 &lt;path&gt;/OpenWQ_readjson.o \
 &lt;path&gt;/OpenWQ_initiate.o \
-&lt;path&gt;/OpenWQ_models_CH.o \
+&lt;path&gt;/OpenWQ_CH_model.o \
 &lt;path&gt;/OpenWQ_watertransp.o \
 &lt;path&gt;/OpenWQ_sinksource.o \
 &lt;path&gt;/OpenWQ_units.o \

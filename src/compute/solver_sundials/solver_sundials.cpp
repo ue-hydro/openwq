@@ -18,7 +18,7 @@ struct UserData {
     OpenWQ_vars& vars;
     OpenWQ_json& json;
     OpenWQ_output& output;
-    OpenWQ_models_CH& chem;
+    OpenWQ_CH_model& chem;
 };
 
 /* #################################################
@@ -83,7 +83,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         }
     }
 
-    user_data.chem.Run(user_data.json, user_data.vars, user_data.wqconfig, user_data.hostModelconfig, user_data.output);
+    user_data.chem.CH_driver_run(user_data.json, user_data.vars, user_data.wqconfig, user_data.hostModelconfig, user_data.output);
 
     #pragma omp parallel for private (nx, ny, nz, ix, iy, iz, dm_ic, dm_ss, dm_ewf, dm_dt_chem, dm_dt_trans) num_threads(user_data.wqconfig.get_num_threads_requested())
     for (unsigned int icmp=0;icmp<user_data.hostModelconfig.get_num_HydroComp();icmp++){
@@ -204,7 +204,7 @@ void OpenWQ_compute::Solve_with_CVode(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_json& OpenWQ_json,
     OpenWQ_output& OpenWQ_output,
-    OpenWQ_models_CH& OpenWQ_models_CH){
+    OpenWQ_CH_model& OpenWQ_CH_model){
     
     // Local variables
     unsigned int nx, ny, nz;    // interactive compartment domain dimensions
@@ -219,7 +219,7 @@ void OpenWQ_compute::Solve_with_CVode(
     void* cvode_mem;
     sunrealtype t;
 
-    UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_models_CH};
+    UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_CH_model};
 
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++) {
         nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);

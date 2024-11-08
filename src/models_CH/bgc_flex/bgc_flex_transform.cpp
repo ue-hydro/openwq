@@ -17,40 +17,10 @@
 
 #include "models_CH/headerfile_ch.hpp"
 
-
-/* #################################################
-// Compute chemical transformations
-################################################# */
-void OpenWQ_models_CH::Run(
-    OpenWQ_json& OpenWQ_json,
-    OpenWQ_vars& OpenWQ_vars,
-    OpenWQ_wqconfig& OpenWQ_wqconfig,
-    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
-    OpenWQ_output& OpenWQ_output){
-    
-
-    // Loop over number of compartments
-    for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
-    
-        BGC_Transform( // calls exprtk: parsing expression
-            OpenWQ_json,
-            OpenWQ_vars,
-            OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig,
-            OpenWQ_output,
-            icmp);
-
-    }
-
-    // Turn off printing of exception err message (only print on first step)
-    OpenWQ_wqconfig.BGC_Transform_print_errmsg = false;
-    OpenWQ_wqconfig.invalid_bgc_entry_errmsg = false;
-}
-
 /* #################################################
 // Compute each chemical transformation
 ################################################# */
-void OpenWQ_models_CH::BGC_Transform(
+void OpenWQ_CH_model::bgc_flex_transform(
     OpenWQ_json& OpenWQ_json,
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
