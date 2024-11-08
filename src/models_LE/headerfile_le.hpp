@@ -38,8 +38,8 @@
 #include "output/headerfile_OUT.hpp"
 #include "compute/headerfile_compute.hpp"
 
-#include "models_CH/headerfile_ch.hpp"
-#include "models_TD/headerfile_td.hpp"
+#include "models_CH/headerfile_CH.hpp"
+#include "models_TD/headerfile_TD.hpp"
 
 
 class OpenWQ_LE_model{

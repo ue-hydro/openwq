@@ -1,6 +1,6 @@
 
 
-#include "models_CH/headerfile_ch.hpp"
+#include "models_CH/headerfile_CH.hpp"
 
 void OpenWQ_CH_model::CH_driver_config(
         OpenWQ_json& OpenWQ_json,

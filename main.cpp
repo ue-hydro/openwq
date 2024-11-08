@@ -38,9 +38,9 @@
 #include "compute/headerfile_compute.hpp"
 #include "output/headerfile_OUT.hpp"
 
-#include "models_CH/headerfile_ch.hpp"
-#include "models_TD/headerfile_td.hpp"
-#include "models_LE/headerfile_le.hpp"
+#include "models_CH/headerfile_CH.hpp"
+#include "models_TD/headerfile_TD.hpp"
+#include "models_LE/headerfile_LE.hpp"
 
 
 int main(int argc, char* argv[]) 
