@@ -62,43 +62,14 @@ void OpenWQ_couplercalls::RunSpaceStep(
     // Mass transport with water (mobile material only)
     // #################################################
 
-    // if TD_module = OPENWQ_NATIVE_TD_ADVDISP
-    if ((OpenWQ_wqconfig.TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") == 0)
-    {
-        OpenWQ_TD_model.AdvDisp(
-            OpenWQ_vars, OpenWQ_wqconfig,
-            source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
-
-    // if TD_module = NATIVE_TD_ADV
-    }else if ((OpenWQ_wqconfig.TD_module).compare("NATIVE_TD_ADV") == 0)
-    {
-        OpenWQ_TD_model.Adv(
-            OpenWQ_vars, OpenWQ_wqconfig,
-            source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
-
-    // if TD_module != NONE (and any of the others)
-    }else if ((OpenWQ_wqconfig.TD_module).compare("NONE")!= 0)
-    {
-
-        // Create Message
-        msg_string = 
-            "<OpenWQ> ERROR: No TD_module found or unkown";
-
-        // Print it (Console and/or Log file)
-        OpenWQ_output.ConsoleLog(
-            OpenWQ_wqconfig,    // for Log file name
-            msg_string,         // message
-            true,               // print in console
-            true);              // print in log file
-        
-        // Abort (Fatal error)
-        exit(EXIT_FAILURE);
-
-    }
+    // Run TD model
+    OpenWQ_TD_model.TD_driver_run(
+        OpenWQ_wqconfig,
+        OpenWQ_vars,
+        OpenWQ_output,
+        source, ix_s, iy_s, iz_s,
+        recipient, ix_r, iy_r, iz_r,
+        wflux_s2r, wmass_source);
 
     // Run LE model
     OpenWQ_LE_model.LE_driver_run(
@@ -174,7 +145,7 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
             (ix_r,iy_r,iz_r);
 
         // Advection and dispersion
-        OpenWQ_TD_model.Adv_IN(
+        OpenWQ_TD_model.EWF_flux_IN(
             OpenWQ_vars, OpenWQ_wqconfig,
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r,                      // external water flux

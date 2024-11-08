@@ -46,7 +46,11 @@ class OpenWQ_LE_model{
 
     public:
 
-        // Main LE model driver
+        // ##########################
+        // MAIN DRIVER 
+        // => Run LE model
+        // ##########################
+        
         void LE_driver_run(
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_json& OpenWQ_json,                       // create OpenWQ_json object
@@ -66,6 +70,11 @@ class OpenWQ_LE_model{
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
             const double wflux_s2r, const double wmass_source);
+
+
+        // ##########################
+        // MODEL OPTIONS 
+        // ##########################
 
         // Boundary Mixing due to velocity gradients
         // due to turbulence and cross-boarder eddies
