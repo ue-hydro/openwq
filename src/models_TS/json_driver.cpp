@@ -88,8 +88,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
             input_filepath);
     }
 
-    // Load information fo the method
-    // Native module
+    // Load information fo the TS model selected
     if ((OpenWQ_wqconfig.TS_module).compare("HYPE_HBVSED") == 0){
         
         SetConfigInfo_TSModule_HBVsed_hype(  

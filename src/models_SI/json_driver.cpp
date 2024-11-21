@@ -89,4 +89,23 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
             input_filepath);
     }
 
+    // Load information fo the TS model selected
+    if ((OpenWQ_wqconfig.SI_module).compare("FREUNDLICH") == 0){
+        
+        SetConfigInfo_SIModule_freundlich(  
+            OpenWQ_json, 
+            OpenWQ_wqconfig, 
+            OpenWQ_utils, 
+            OpenWQ_output);    
+
+    }else if ((OpenWQ_wqconfig.SI_module).compare("LANGMUIR") == 0){
+        
+        SetConfigInfo_TSModule_langmuir(  
+            OpenWQ_json, 
+            OpenWQ_wqconfig, 
+            OpenWQ_utils, 
+            OpenWQ_output);
+
+    }
+
 }

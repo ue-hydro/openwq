@@ -245,7 +245,17 @@ class OpenWQ_readjson{
             OpenWQ_output& OpenWQ_output);
 
         // options
-        // ????  TODO: need to separate
+        void SetConfigInfo_SIModule_freundlich(
+            OpenWQ_json &OpenWQ_json,
+            OpenWQ_wqconfig &OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_TSModule_langmuir(
+            OpenWQ_json &OpenWQ_json,
+            OpenWQ_wqconfig &OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
 
 };
 
