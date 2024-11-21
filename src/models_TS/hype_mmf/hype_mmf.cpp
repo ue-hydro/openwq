@@ -15,8 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include <cmath>
-#include <algorithm>
+#include "models_TS/headerfile_TS.hpp"
 
 
  // Calculate eroded particles from soil with a method based on the Morgan-Morgan-Finney erosion model. (from HYPE)
@@ -27,66 +26,81 @@
 // 
 
 
-// Function to calculate current crop and ground cover (stub, needs actual implementation)
-void get_current_crop_and_ground_cover(int i, int j, double& common_cropcover, double& common_groundcover) {
-    // Placeholder: Set default values for testing
-    common_cropcover = 0.5;
-    common_groundcover = 0.3;
-}
+void OpenWQ_TS_model::mmf_hype_erosion(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    const int source, const int ix_s, const int iy_s, const int iz_s,
+    const int recipient, const int ix_r, const int iy_r, const int iz_r,
+    double wflux_s2r, 
+    double wmass_source){
+    
+    /*
+    USE MODVAR, ONLY : basin, &
+                       pi                              
 
-void hype_mmf(int i, int j, int pdayno, double prec, double surfacerunoff, double cohesion, 
-                           double erodibility, double snow, double sreroexp, double flow, double& erodedsed) {
+    !Argument declarations
+    INTEGER, INTENT(IN) :: i             !<index of current subbasin
+    INTEGER, INTENT(IN) :: j             !<index of current class
+    INTEGER, INTENT(IN) :: pdayno        !<current pseudo day number of the year
+    REAL, INTENT(IN)    :: prec          !<precipitation (rainfall only)    
+    REAL, INTENT(IN)    :: surfacerunoff !<saturated overland flow and excess infiltration (mm)
+    REAL, INTENT(IN)    :: cohesion      !<(kPa)
+    REAL, INTENT(IN)    :: erodibility   !<(g/J)
+    REAL, INTENT(IN)    :: snow          !<snow water (mm)
+    REAL, INTENT(IN)    :: sreroexp      !<surface runoff erosion exponent 
+    REAL, INTENT(IN)    :: flow          !<fast flow
+    REAL, INTENT(OUT)   :: erodedsed     !<eroded (transported) sediment (kg/km2)
 
-    // Local variables
-    double Rainfall_energy = 0.0;
-    double intensity = 1.0;
-    double common_cropcover = 0.0;
-    double common_groundcover = 0.0;
-    double transportfactor = 1.0;
-    double mobilisedsed = 0.0;
+    !Local variables
+    REAL Rainfall_energy
+    REAL intensity
+    REAL common_cropcover, common_groundcover
+    REAL transportfactor
+    REAL mobilisedsed         !mobilised suspended sediment from rainfall and surface runoff (g/m2)
+    
+    !Local parameters
+    REAL, PARAMETER :: trans1 = 4.0
+    REAL, PARAMETER :: trans2 = 1.3  
 
-    // Local parameters
-    const double trans1 = 4.0;
-    const double trans2 = 1.3;
+    !>\b Algorithm
+    erodedsed = 0.
+    IF(cohesion==0.OR.erodibility==0) RETURN      !no parameter values -> no erosion
 
-    // Initialize output variable
-    erodedsed = 0.0;
+    !>Calculate current cropcover and groundcover, will limit erosion
+    CALL get_current_crop_and_ground_cover(i,j,common_cropcover,common_groundcover)
 
-    // No erosion if cohesion or erodibility is zero
-    if (cohesion == 0.0 || erodibility == 0.0) return;
+    !Check for snow limiting erosion
+    intensity = 1. !intenspar
+    IF(snow>0.) intensity = 0.    !snow
 
-    // Get current crop and ground cover
-    get_current_crop_and_ground_cover(i, j, common_cropcover, common_groundcover);
+    !>Calculate particles that is eroded by rain splash detachment and by overland flow (mobilised sediment)
+    mobilisedsed = 0.
+    IF(prec > 0.) THEN
+      IF(intensity > 0.) THEN
+        IF(prec>5.0) THEN     !TODO: shorter timestep, other threshold?, holds for all over the world?, reference?
+          Rainfall_energy = 8.95+8.44*LOG10(prec*(0.257+sin(2*3.14*((pdayno-70.)/365.))*0.09)*2.)
+        ELSE
+          Rainfall_energy = 0.
+        ENDIF
+        Rainfall_energy = prec * Rainfall_energy        !J/m2
+        mobilisedsed = Rainfall_energy * (1. - common_cropcover) * erodibility  !g/m2
+      ENDIF
+    ENDIF
+    IF(surfacerunoff > 0.) THEN   
+      mobilisedsed = mobilisedsed + (((surfacerunoff * 365.) ** sreroexp) * (1. - common_groundcover) * (1./(0.5 * cohesion)) * SIN(basin(i)%slope / 100.)) / 365. !g/m2   
+    ENDIF
 
-    // Check for snow limiting erosion
-    if (snow > 0.0) intensity = 0.0;
+    !>Transport capacity of fast flowing water may limit transport of sediment
+    IF(flow>0.)THEN
+      transportfactor = MIN(1.,(flow / trans1)**trans2)   
+    ELSE
+      transportfactor = 1.
+    ENDIF
+      
+    !>Eroded sediment calculated from mobilised sediment, possibly limited by the transport capacity
+    erodedsed = 1000. * mobilisedsed * transportfactor  !kg/km2
 
-    // Calculate mobilised sediment
-    if (prec > 0.0) {
-        if (intensity > 0.0) {
-            if (prec > 5.0) {
-                // Calculate rainfall energy
-                Rainfall_energy = 8.95 + 8.44 * log10(prec * (0.257 + sin(2 * M_PI * ((pdayno - 70.0) / 365.0)) * 0.09) * 2.0);
-            } else {
-                Rainfall_energy = 0.0;
-            }
-            Rainfall_energy *= prec; // J/m2
-            mobilisedsed = Rainfall_energy * (1.0 - common_cropcover) * erodibility; // g/m2
-        }
-    }
-
-    if (surfacerunoff > 0.0) {
-        mobilisedsed += pow((surfacerunoff * 365.0), sreroexp) * (1.0 - common_groundcover) * 
-                        (1.0 / (0.5 * cohesion)) * sin(basin[i].slope / 100.0) / 365.0; // g/m2
-    }
-
-    // Calculate transport capacity
-    if (flow > 0.0) {
-        transportfactor = std::min(1.0, pow(flow / trans1, trans2));
-    } else {
-        transportfactor = 1.0;
-    }
-
-    // Calculate eroded sediment
-    erodedsed = 1000.0 * mobilisedsed * transportfactor; // kg/km2
+  END SUBROUTINE calculate_MMF_erosion
+  */
 }

@@ -197,6 +197,12 @@ class OpenWQ_wqconfig
 
         // TODO: Below needs to be moved to private
 
+         // ##########################
+        // 3) Solver
+        // General info 
+        // Native BE and not native SUNDIALS
+        std::string SOLVER_module;  // Get module name
+
         /***********************************************
         * Sink and Source AND External fluxes
         ************************************************/
@@ -256,12 +262,11 @@ class OpenWQ_wqconfig
     std::string TD_module;  // Get module name
 
     // OpenWQ native module: OPENWQ_NATIVE_TE
-    std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
+    // std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
 
     std::vector
-        <std::tuple
-            <unsigned int,unsigned int,unsigned int,double>> 
-            OpenWQ_TE_native_BoundMix_info;
+        <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
+            OpenWQ_LE_native_BoundMix_info;
 
     // ########################################
     // 2) Biogeochemistry
@@ -297,12 +302,6 @@ class OpenWQ_wqconfig
         >openWQ_BGCnative_BGCexpressions_eq;            // BGC kinetic formulas for all biogeochemical cycles
     
     std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
-
-    // ##########################
-    // 3) Solver
-    // General info 
-    // Native BE and not native SUNDIALS
-    std::string SOLVER_module;  // Get module name
 
     // ##########################
     // 4) Lateral Exchange (LE)

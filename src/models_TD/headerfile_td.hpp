@@ -46,7 +46,7 @@ class OpenWQ_TD_model{
         void TD_driver_run(
             OpenWQ_wqconfig& OpenWQ_wqconfig, 
             OpenWQ_vars& OpenWQ_vars,
-            OpenWQ_output&  OpenWQ_output,
+            OpenWQ_output& OpenWQ_output,
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
             const double wflux_s2r, 

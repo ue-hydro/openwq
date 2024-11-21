@@ -53,20 +53,9 @@ class OpenWQ_LE_model{
         
         void LE_driver_run(
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
-            OpenWQ_json& OpenWQ_json,                       // create OpenWQ_json object
             OpenWQ_wqconfig& OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
-            OpenWQ_units& OpenWQ_units,                     // functions for unit conversion
-            OpenWQ_utils& OpenWQ_utils,                       // utility methods/functions
-            OpenWQ_readjson& OpenWQ_readjson,               // read json files
             OpenWQ_vars& OpenWQ_vars,
-            OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
-            OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
-            OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
-            OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
-            OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
-            OpenWQ_compute& OpenWQ_compute,
-            OpenWQ_output& OpenWQ_output,
-            time_t simtime,                                 // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+            OpenWQ_output& OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
             const double wflux_s2r, const double wmass_source);

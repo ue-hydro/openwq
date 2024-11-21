@@ -156,24 +156,31 @@ class OpenWQ_readjson{
         void check_mkdir_openWQ(
             std::string& dirname);
 
-        // ############
-        // Model optiond
-        // ############
+        // ######################
+        // Model options
+        // ######################
 
-        // BGC options
+        // ######################
+        // BGC model
+
+        // driver
         void SetConfigInfo_CHModule(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
+        // options
         void SetConfigInfo_CHModule_BGC_FLEX(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        // TD options
+        // ######################
+        // TD model
+
+        // driver
         void SetConfigInfo_TDModule(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
@@ -181,7 +188,13 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        // LE options
+        // options
+        // ????  TODO: need to separate
+
+        // ######################
+        // LE model
+
+        // driver
         void SetConfigInfo_LEModule(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
@@ -189,6 +202,7 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
+        // options
         void SetConfigInfo_LEModule_BOUNDMIX(
             OpenWQ_json &OpenWQ_json,
             OpenWQ_hostModelconfig & OpenWQ_hostModelconfig,
@@ -196,7 +210,10 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        // ST options
+        // ######################
+        // ST model
+
+        // driver
         void SetConfigInfo_TSModule(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
@@ -204,13 +221,31 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        // SI options
+        // options
+        void SetConfigInfo_TSModule_HBVsed_hype(
+            OpenWQ_json &OpenWQ_json,
+            OpenWQ_wqconfig &OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+        
+        void SetConfigInfo_TSModule_MMF_hype(
+            OpenWQ_json &OpenWQ_json,
+            OpenWQ_wqconfig &OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        // SI model
+
+        // driver
         void SetConfigInfo_SIModule(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
+
+        // options
+        // ????  TODO: need to separate
 
 };
 
