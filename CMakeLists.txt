@@ -133,7 +133,7 @@ FILE(GLOB OPENWQ_SOURCES
     ${OPENWQ_DIR}/src/models_LE/*.cpp
     ${OPENWQ_DIR}/src/models_LE/native_boundmix/*.cpp
     ${OPENWQ_DIR}/src/models_SI/*.cpp
-    ${OPENWQ_DIR}/src/models_ST/*.cpp
+    ${OPENWQ_DIR}/src/models_TS/*.cpp
     ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
     ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
 
@@ -589,7 +589,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                     ${OPENWQ_DIR}/src/models_LE/*.cpp
                     ${OPENWQ_DIR}/src/models_LE/native_boundmix/*.cpp
                     ${OPENWQ_DIR}/src/models_SI/*.cpp
-                    ${OPENWQ_DIR}/src/models_ST/*.cpp
+                    ${OPENWQ_DIR}/src/models_TS/*.cpp
                     ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
                     ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
                 

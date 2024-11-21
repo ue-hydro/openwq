@@ -106,6 +106,23 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
 
     }
 
+    // Get BGC module and extract JSON to class
+    input_filepath = OpenWQ_utils.RequestJsonKeyVal_json(
+            OpenWQ_wqconfig, OpenWQ_output,
+            jsonMaster_SubStruct["BIOGEOCHEMISTRY"],"MODULE_CONFIG_FILEPATH",
+            errorMsgIdentifier,
+            true);
+
+    OpenWQ_readjson::read_JSON_2class(
+        OpenWQ_wqconfig,
+        OpenWQ_output,
+        OpenWQ_utils,
+        OpenWQ_json.BGC_module,
+        false,
+        "",
+        input_filepath);
+
+
     // Load information fo the method
     // Native module
     if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") == 0){

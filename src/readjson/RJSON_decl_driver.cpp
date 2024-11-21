@@ -155,9 +155,9 @@ void OpenWQ_readjson::SetConfigInfo_driver(
         OpenWQ_utils, OpenWQ_output);
 
     // Set ST module settings (sediment transport)
-    //SetConfigInfo_STModule(
-    //    OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
-    //    OpenWQ_utils, OpenWQ_output);
+    SetConfigInfo_TSModule(
+        OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
+        OpenWQ_utils, OpenWQ_output);
 
     // Set SI module settings (sorption isotherm)
     //SetConfigInfo_SIModule(
