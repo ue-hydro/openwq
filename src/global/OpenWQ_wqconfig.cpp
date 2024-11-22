@@ -67,6 +67,15 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
 
 }
 
+// Define InnerClass constructor and destructor
+OpenWQ_wqconfig::LE_::LE_() {
+    BoundMix = new BoundMix_();
+}
+
+OpenWQ_wqconfig::LE_::~LE_() {
+    delete BoundMix;
+}
+
 // Destructor
 OpenWQ_wqconfig::~OpenWQ_wqconfig() {
 

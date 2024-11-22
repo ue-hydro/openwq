@@ -278,20 +278,14 @@ class OpenWQ_wqconfig
 // ##############################
 
 class OpenWQ_wqconfig::TD_{
-
     public:
-        // General info 
-        // (needed for all TE modules, native and not native)
-        std::string TD_module;  // Get module name
-
+    std::string TD_module; 
 };
 
 class OpenWQ_wqconfig::CH_{
 
     public:
-        // General info 
-        // (needed for all BGC modules, native and not native)
-        std::string BGC_module;     // Get module name
+    std::string BGC_module;
 
         unsigned int BGC_general_num_chem;                  //Number of chemical species  
         std::vector
@@ -324,31 +318,36 @@ class OpenWQ_wqconfig::CH_{
 };
 
 class OpenWQ_wqconfig::LE_{
-
     public:
-    // General info 
-        std::string LE_module;  // Get module name
-
+    std::string LE_module;
     // OpenWQ native module: OPENWQ_NATIVE_TE
-        // std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
+    // std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
 
-        std::vector
-            <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
-                info_vector;
+    class BoundMix_;
+    BoundMix_* BoundMix;
+
+    LE_();
+    ~LE_();
 
 };
 
 class OpenWQ_wqconfig::TS_{
-
     public: 
-        std::string TS_module;  // Get module name
+    std::string TS_module;
+};
+
+class OpenWQ_wqconfig::SI_{
+    public:
+    std::string SI_module;
 
 };
 
-// Define SI class
-class OpenWQ_wqconfig::SI_{
+
+class OpenWQ_wqconfig::LE_::BoundMix_ {
 
     public:
-        std::string SI_module;
+        std::vector
+                <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
+                    info_vector;
 
 };
