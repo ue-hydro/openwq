@@ -57,13 +57,13 @@ void OpenWQ_initiate::initmemory(
         
         // Create arma for chemical species
         // Needs to be reset because each compartment can have a different number of compartments
-        arma_fieldcube domain_field(OpenWQ_wqconfig.BGC_general_num_chem); // all species are simulated for all compartments
+        arma_fieldcube domain_field(OpenWQ_wqconfig.CH->BGC_general_num_chem); // all species are simulated for all compartments
 
         /* ########################################
         // Loop over dimensions of compartment icmp
         // Push 3D arma::cube into the arma::field of each chemical species
         ######################################## */
-        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.BGC_general_num_chem;chemi++){
+        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH->BGC_general_num_chem;chemi++){
             domain_field(chemi) = domain_xyz;
         }
 
@@ -114,13 +114,13 @@ void OpenWQ_initiate::initmemory(
         
         // Create arma for chemical species
         // Needs to be reset because each compartment can have a different number of compartments
-        arma_fieldcube domain_field(OpenWQ_wqconfig.BGC_general_num_chem); // all species are simulated for all compartments
+        arma_fieldcube domain_field(OpenWQ_wqconfig.CH->BGC_general_num_chem); // all species are simulated for all compartments
 
         /* ########################################
         // Loop over dimensions of compartment ewfi
         // Push 3D arma::cube into the arma::field of each chemical species
         ######################################## */
-        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.BGC_general_num_chem;chemi++){
+        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH->BGC_general_num_chem;chemi++){
             domain_field(chemi) = domain_xyz;
         }
 

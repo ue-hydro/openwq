@@ -32,7 +32,7 @@ void OpenWQ_CH_model::CH_driver_run(
     std::string msg_string; // error/warning message
     
      // NATIVE Bioogeochemical model
-    if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") == 0){
+    if ((OpenWQ_wqconfig.CH->BGC_module).compare("NATIVE_BGC_FLEX") == 0){
 
         // Loop over number of compartments
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){

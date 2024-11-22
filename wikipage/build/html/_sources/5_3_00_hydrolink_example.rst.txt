@@ -378,14 +378,14 @@ OpenWQ_hydrolink.cpp
             #pragma omp parallel for private(Sub_mob) num_threads(OpenWQ_wqconfig.num_threads_requested)
             for(unsigned int hru = 0; hru < nhru; ++hru) {
 
-                for(unsigned int Sub_i = 0; Sub_i < OpenWQ_wqconfig.BGC_general_mobile_species.size(); ++Sub_i) {
+                for(unsigned int Sub_i = 0; Sub_i < OpenWQ_wqconfig.CH->BGC_general_mobile_species.size(); ++Sub_i) {
 
                     // ################################
                     // Adv-Disp directly from CRHM's modules
 
                     // Get mobile species indexes
                     // Only update mass/concentrations using CRHM's water for mobile species
-                    Sub_mob = OpenWQ_wqconfig.BGC_general_mobile_species[Sub_i];
+                    Sub_mob = OpenWQ_wqconfig.CH->BGC_general_mobile_species[Sub_i];
 
                     // SWE
                     (*OpenWQ_vars.d_chemass_dt_transp)(0)(Sub_mob)(hru,0,0) =
@@ -542,11 +542,11 @@ OpenWQ_hydrolink.cpp
         #pragma omp parallel for private(Sub_mob) collapse(2) num_threads(OpenWQ_wqconfig.num_threads_requested)
         for(unsigned int hru = 0; hru < nhru; ++hru) {
 
-            for(unsigned int Sub_i = 0; Sub_i < OpenWQ_wqconfig.BGC_general_mobile_species.size(); ++Sub_i) {
+            for(unsigned int Sub_i = 0; Sub_i < OpenWQ_wqconfig.CH->BGC_general_mobile_species.size(); ++Sub_i) {
 
                     // Get mobile species indexes
                     // Only update mass/concentrations using CRHM's water for mobile species
-                    Sub_mob = OpenWQ_wqconfig.BGC_general_mobile_species[Sub_i];
+                    Sub_mob = OpenWQ_wqconfig.CH->BGC_general_mobile_species[Sub_i];
 
                 // SWE
                 if ((*OpenWQ_hostModelconfig.waterVol_hydromodel)[0](hru,0,0)

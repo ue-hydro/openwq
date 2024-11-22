@@ -59,7 +59,12 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
         (new  std::vector<std::vector<std::vector<arma::cube>>>);
 
     // Modules
+    TD = new TD_();
+    TS = new TS_();
+    CH = new CH_();
+    LE = new LE_();
     SI = new SI_();
+
 }
 
 // Destructor
@@ -69,7 +74,12 @@ OpenWQ_wqconfig::~OpenWQ_wqconfig() {
         H5Fclose(x.second);
     }
 
+    delete TD;
+    delete TS;
+    delete CH;
+    delete LE;
     delete SI;
+
 }
 
 //###############################################

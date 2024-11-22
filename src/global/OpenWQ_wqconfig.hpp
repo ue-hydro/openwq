@@ -249,9 +249,42 @@ class OpenWQ_wqconfig
         // MODULES
         // ########################################
 
-        // ########################################
         // 1) Transport / Erosion (TE)
+        class TD_;
+        TD_* TD;
 
+        // 2) Biogeochemistry
+        class CH_;
+        CH_* CH;
+
+        // 4) Lateral Exchange (LE)
+        class LE_;
+        LE_* LE;
+
+        // 4) Transport Sediments (ST)
+        class TS_;
+        TS_* TS;
+        
+        // 5) Sorption isotherm (SI)
+        class SI_;
+        SI_* SI;
+
+        // Constructor
+        OpenWQ_wqconfig();
+
+        // Destructor
+        ~OpenWQ_wqconfig();
+
+
+};
+
+// ##############################
+// Define model variables
+// ##############################
+
+class OpenWQ_wqconfig::TD_{
+
+    public:
         // General info 
         // (needed for all TE modules, native and not native)
         std::string TD_module;  // Get module name
@@ -263,9 +296,11 @@ class OpenWQ_wqconfig
             <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
                 OpenWQ_LE_native_BoundMix_info;
 
-        // ########################################
-        // 2) Biogeochemistry
-        
+};
+
+class OpenWQ_wqconfig::CH_{
+
+    public:
         // General info 
         // (needed for all BGC modules, native and not native)
         std::string BGC_module;     // Get module name
@@ -298,40 +333,27 @@ class OpenWQ_wqconfig
         
         std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
 
-        // ##########################
-        // 4) Lateral Exchange (LE)
-        // General info 
+};
+
+class OpenWQ_wqconfig::LE_{
+
+    public:
+    // General info 
         std::string LE_module;  // Get module name
-
-        // ##########################
-        // 4) Transport Sediments (ST)
-        // General info 
-        std::string TS_module;  // Get module name
-
-        // ##########################
-        // 5) Sorption isotherm (SI)
-        //class SI{
-        //    public:
-        //        std::string SI_module;  // Get module name
-        //};
-
-        class SI_;
-        SI_* SI;
-
-        
-        // Constructor
-        OpenWQ_wqconfig();
-
-        // Destructor
-        ~OpenWQ_wqconfig();
-
 
 };
 
+class OpenWQ_wqconfig::TS_{
 
-// Define the InnerClass after forward declaration
+    public: 
+        std::string TS_module;  // Get module name
+
+};
+
+// Define SI class
 class OpenWQ_wqconfig::SI_{
-public:
-    std::string SI_module;
+
+    public:
+        std::string SI_module;
 
 };

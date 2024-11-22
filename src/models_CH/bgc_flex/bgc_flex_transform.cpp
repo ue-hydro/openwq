@@ -69,8 +69,8 @@ void OpenWQ_CH_model::bgc_flex_transform(
 
             // Get number transformations in biogeochemical cycle BGCcycles_name_icmp
             std::vector<unsigned int> transf_index;
-            for (unsigned int index_j=0;index_j<OpenWQ_wqconfig.openWQ_BGCnative_BGCexpressions_info.size();index_j++){
-                BGCcycles_name_list = std::get<0>(OpenWQ_wqconfig.openWQ_BGCnative_BGCexpressions_info.at(index_j)); // get BGC cycle from OpenWQ_wqconfig.openWQ_BGCnative_BGCexpressions_info
+            for (unsigned int index_j=0;index_j<OpenWQ_wqconfig.CH->openWQ_BGCnative_BGCexpressions_info.size();index_j++){
+                BGCcycles_name_list = std::get<0>(OpenWQ_wqconfig.CH->openWQ_BGCnative_BGCexpressions_info.at(index_j)); // get BGC cycle from OpenWQ_wqconfig.CH->openWQ_BGCnative_BGCexpressions_info
                 if(BGCcycles_name_list.compare(BGCcycles_name_icmp) == 0){
                     transf_index.push_back(index_j);
                 }
@@ -102,13 +102,13 @@ void OpenWQ_CH_model::bgc_flex_transform(
             
             for (unsigned int transi=0;transi<num_transf;transi++){
 
-                index_cons = std::get<3>(OpenWQ_wqconfig.openWQ_BGCnative_BGCexpressions_info.at(transf_index[transi]));
-                index_prod = std::get<4>(OpenWQ_wqconfig.openWQ_BGCnative_BGCexpressions_info.at(transf_index[transi]));
+                index_cons = std::get<3>(OpenWQ_wqconfig.CH->openWQ_BGCnative_BGCexpressions_info.at(transf_index[transi]));
+                index_prod = std::get<4>(OpenWQ_wqconfig.CH->openWQ_BGCnative_BGCexpressions_info.at(transf_index[transi]));
 
                 // Get indexes of chemicals in transformation equation (needs to be here for loop reset)
                 std::vector<unsigned int> index_chemtransf = 
                     std::get<5>(
-                        OpenWQ_wqconfig.openWQ_BGCnative_BGCexpressions_info.at(transf_index[transi]));
+                        OpenWQ_wqconfig.CH->openWQ_BGCnative_BGCexpressions_info.at(transf_index[transi]));
 
 
                 /* ########################################
@@ -119,10 +119,10 @@ void OpenWQ_CH_model::bgc_flex_transform(
                         for (unsigned int iz=0;iz<nz;iz++){                    
                             
                             //std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
-                            OpenWQ_wqconfig.openWQ_BGCnative_chemass_InTransfEq.clear();
+                            OpenWQ_wqconfig.CH->openWQ_BGCnative_chemass_InTransfEq.clear();
                             // loop to get all the variables inside the expression
                             for (unsigned int chem=0;chem<index_chemtransf.size();chem++){
-                                OpenWQ_wqconfig.openWQ_BGCnative_chemass_InTransfEq.push_back(
+                                OpenWQ_wqconfig.CH->openWQ_BGCnative_chemass_InTransfEq.push_back(
                                     (*OpenWQ_vars.chemass)
                                     (icmp)
                                     (index_chemtransf[chem])
@@ -136,7 +136,7 @@ void OpenWQ_CH_model::bgc_flex_transform(
                             // Mass transfered: Consumed -> Produced (using exprtk)
                             // Make sure that transf_mass is positive, otherwise ignore transformation
                             transf_mass = std::fmax(
-                                OpenWQ_wqconfig.openWQ_BGCnative_BGCexpressions_eq[transf_index[transi]].value(),
+                                OpenWQ_wqconfig.CH->openWQ_BGCnative_BGCexpressions_eq[transf_index[transi]].value(),
                                 0.0f); // Needs to be positive (from consumed to produced)
 
                             // Guarantee that removed mass is not larger than existing mass

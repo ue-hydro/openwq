@@ -59,10 +59,10 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
         true);
 
     // save TS module name
-    (OpenWQ_wqconfig.TS_module).append(input_module_name);
+    (OpenWQ_wqconfig.TS->TS_module).append(input_module_name);
 
     // Print it (Console and/or Log file)
-    msg_string = "<OPENWQ> MODULE LOADED: TRANSPORT_SEDIMENTS > " + OpenWQ_wqconfig.TS_module;
+    msg_string = "<OPENWQ> MODULE LOADED: TRANSPORT_SEDIMENTS > " + OpenWQ_wqconfig.TS->TS_module;
     OpenWQ_output.ConsoleLog(
         OpenWQ_wqconfig,    // for Log file name
         msg_string,         // message
@@ -70,7 +70,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
         true);              // print in log file
 
     // If MODULE_NAME not NONE, the get the MODULE_CONFIG_FILEPATH
-    if ((OpenWQ_wqconfig.TS_module).compare("NONE") != 0){
+    if ((OpenWQ_wqconfig.TS->TS_module).compare("NONE") != 0){
 
         input_filepath = OpenWQ_utils.RequestJsonKeyVal_json(
             OpenWQ_wqconfig, OpenWQ_output,
@@ -89,12 +89,12 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
     }
 
     // Load information fo the TS model selected
-    if ((OpenWQ_wqconfig.TS_module).compare("HYPE_HBVSED") == 0){
+    if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_HBVSED") == 0){
         
         SetConfigInfo_TSModule_HBVsed_hype(  
             OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
-    }else if ((OpenWQ_wqconfig.TS_module).compare("HYPE_MMF") == 0){
+    }else if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_MMF") == 0){
         
         SetConfigInfo_TSModule_MMF_hype(  
             OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);

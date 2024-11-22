@@ -73,16 +73,16 @@ void OpenWQ_readjson::SetConfigInfo_LEModule(
         errorMsgIdentifier,
         true);
         
-    (OpenWQ_wqconfig.LE_module).append(LE_method_local);
+    (OpenWQ_wqconfig.LE->LE_module).append(LE_method_local);
 
     // Check if TD option not valid, through error
-    if ((OpenWQ_wqconfig.LE_module).compare("NATIVE_LE_BOUNDMIX") != 0 
-        && (OpenWQ_wqconfig.LE_module).compare("NONE") != 0){
+    if ((OpenWQ_wqconfig.LE->LE_module).compare("NATIVE_LE_BOUNDMIX") != 0 
+        && (OpenWQ_wqconfig.LE->LE_module).compare("NONE") != 0){
 
         // Create Message (Warning Message)
         msg_string = 
             "<OpenWQ> WARNING: BOUNDMIX module - unkown (entry = "
-            + OpenWQ_wqconfig.LE_module + ")";
+            + OpenWQ_wqconfig.LE->LE_module + ")";
 
         // Print it (Console and/or Log file)
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true,true); 
@@ -109,7 +109,7 @@ void OpenWQ_readjson::SetConfigInfo_LEModule(
         input_filepath);
 
     // Load information for the method
-    if ((OpenWQ_wqconfig.LE_module).compare("NATIVE_LE_BOUNDMIX") == 0){
+    if ((OpenWQ_wqconfig.LE->LE_module).compare("NATIVE_LE_BOUNDMIX") == 0){
         
         SetConfigInfo_LEModule_BOUNDMIX(  
             OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);

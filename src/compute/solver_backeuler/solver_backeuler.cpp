@@ -37,7 +37,7 @@ void OpenWQ_compute::Solve_with_BE(
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.BGC_general_num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->BGC_general_num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){

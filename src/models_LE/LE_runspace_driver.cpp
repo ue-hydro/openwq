@@ -32,7 +32,7 @@ void OpenWQ_LE_model::LE_driver_run(
     // Lateral Exchange model (mobile material only)
     // #################################################
 
-    if (OpenWQ_wqconfig.LE_module.compare("NATIVE_LE_BOUNDMIX") == 0)
+    if (OpenWQ_wqconfig.LE->LE_module.compare("NATIVE_LE_BOUNDMIX") == 0)
     {
         // Boundary Mixing due to velocity gradients
         // due to turbulence and cross-boarder eddies
@@ -44,7 +44,7 @@ void OpenWQ_LE_model::LE_driver_run(
             wflux_s2r, wmass_source);
 
     // if TD_module != NONE (and any of the others)
-    }else if ((OpenWQ_wqconfig.LE_module).compare("NONE")!= 0)
+    }else if ((OpenWQ_wqconfig.LE->LE_module).compare("NONE")!= 0)
     {
         // Create Message
         msg_string = 

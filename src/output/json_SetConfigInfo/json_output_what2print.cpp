@@ -72,9 +72,9 @@ void OpenWQ_readjson::SetConfigInfo_output_what2print(
     // Get indexes for the list of chemicals requested
     for (unsigned int chemi = 0; chemi < num_chem2print; chemi++){
         // Chemical name (to print)
-        chem_name2print = OpenWQ_wqconfig.BGC_general_chem_species_list[chemi];
-        for (unsigned int chemlisti = 0; chemlisti < (OpenWQ_wqconfig.BGC_general_num_chem); chemlisti++){ 
-            chem_namelist = OpenWQ_wqconfig.BGC_general_chem_species_list[chemlisti];
+        chem_name2print = OpenWQ_wqconfig.CH->BGC_general_chem_species_list[chemi];
+        for (unsigned int chemlisti = 0; chemlisti < (OpenWQ_wqconfig.CH->BGC_general_num_chem); chemlisti++){ 
+            chem_namelist = OpenWQ_wqconfig.CH->BGC_general_chem_species_list[chemlisti];
             // Check if compartments listed match internal compartment names
             if (chem_namelist.compare(chem_name2print) == 0){                                    
                 OpenWQ_wqconfig.chem2print.push_back(chemlisti);

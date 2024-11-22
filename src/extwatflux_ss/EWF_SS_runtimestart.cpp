@@ -104,7 +104,7 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
     // First reset all values of ewf_conc to ZERO for new time step
     #pragma omp parallel for collapse(2) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
     for (unsigned int ewfi=0;ewfi<OpenWQ_hostModelconfig.get_num_HydroExtFlux();ewfi++){ // 
-        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.BGC_general_num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->BGC_general_num_chem);chemi++){
             (*OpenWQ_vars.ewf_conc)(ewfi)(chemi).zeros();}}
 
     /* ########################################
@@ -536,7 +536,7 @@ void OpenWQ_extwatflux_ss::Apply_Source(
             "<OpenWQ> WARNING: Sink/Source load out of boundaries."
             "Requested load ignored: "
             "Compartment=" + OpenWQ_hostModelconfig.get_HydroComp_name_at(cmpi)
-            + ", Chemical=" + OpenWQ_wqconfig.BGC_general_chem_species_list[chemi]
+            + ", Chemical=" + OpenWQ_wqconfig.CH->BGC_general_chem_species_list[chemi]
             + ", ix=" + std::to_string(ix)
             + ", iy=" + std::to_string(iy)
             + ", iz=" + std::to_string(iz)
@@ -604,7 +604,7 @@ void OpenWQ_extwatflux_ss::Apply_Sink(
             "<OpenWQ> WARNING: Sink/Source load out of boundaries."
             "Requested load ignored: "
             "Compartment=" + OpenWQ_hostModelconfig.get_HydroComp_name_at(cmpi)
-            + ", Chemical=" + OpenWQ_wqconfig.BGC_general_chem_species_list[chemi]
+            + ", Chemical=" + OpenWQ_wqconfig.CH->BGC_general_chem_species_list[chemi]
             + ", ix=" + std::to_string(ix)
             + ", iy=" + std::to_string(iy)
             + ", iz=" + std::to_string(iz);
@@ -675,7 +675,7 @@ void OpenWQ_extwatflux_ss::Update_EWFconc_jsonAscii(
             "<OpenWQ> WARNING: EWF conc out of boundaries."
             "Requested EWF concentration update using JSON/ASCII input ignored and set to zero: "
             "EWF=" + OpenWQ_hostModelconfig.get_HydroComp_name_at(ewfi)
-            + ", Chemical=" + OpenWQ_wqconfig.BGC_general_chem_species_list[chemi]
+            + ", Chemical=" + OpenWQ_wqconfig.CH->BGC_general_chem_species_list[chemi]
             + ", ix=" + std::to_string(ix)
             + ", iy=" + std::to_string(iy)
             + ", iz=" + std::to_string(iz);
@@ -738,7 +738,7 @@ void OpenWQ_extwatflux_ss::Update_EWFconc_h5(
             "<OpenWQ> WARNING: EWF conc out of boundaries."
             "Requested EWF concentration update using HDF5 input ignored and set to zero: "
             "EWF=" + OpenWQ_hostModelconfig.get_HydroComp_name_at(ewfi)
-            + ", Chemical=" + OpenWQ_wqconfig.BGC_general_chem_species_list[chemi];
+            + ", Chemical=" + OpenWQ_wqconfig.CH->BGC_general_chem_species_list[chemi];
 
         // Print it (Console and/or Log file)
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);

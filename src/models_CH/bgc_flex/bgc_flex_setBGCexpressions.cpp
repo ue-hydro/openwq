@@ -159,10 +159,10 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
             index_prod = -1; // indexed for consumed and produced chemical
             index_new_chemass_InTransfEq = 0;
 
-            for(unsigned int chemi=0;chemi<(OpenWQ_wqconfig.BGC_general_num_chem);chemi++){
+            for(unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->BGC_general_num_chem);chemi++){
                 
                 // Get chemical species name
-                chemname = (OpenWQ_wqconfig.BGC_general_chem_species_list)[chemi];
+                chemname = (OpenWQ_wqconfig.CH->BGC_general_chem_species_list)[chemi];
 
                 // Consumedchemass_consumed, chemass_produced;ty()) 
                 if(consumed_spec.compare(chemname) == 0 && !consumed_spec.empty()){
@@ -229,13 +229,13 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
             // Add variables to symbol_table
             symbol_table_t symbol_table;
             
-            OpenWQ_wqconfig.openWQ_BGCnative_chemass_InTransfEq.clear();
+            OpenWQ_wqconfig.CH->openWQ_BGCnative_chemass_InTransfEq.clear();
             for (unsigned int i=0;i<index_transf.size();i++){
-                OpenWQ_wqconfig.openWQ_BGCnative_chemass_InTransfEq.push_back(0); // creating the vector
+                OpenWQ_wqconfig.CH->openWQ_BGCnative_chemass_InTransfEq.push_back(0); // creating the vector
             }
 
             // Add vectors to table of symbols
-            symbol_table.add_vector("openWQ_BGCnative_chemass_InTransfEq",OpenWQ_wqconfig.openWQ_BGCnative_chemass_InTransfEq);
+            symbol_table.add_vector("openWQ_BGCnative_chemass_InTransfEq",OpenWQ_wqconfig.CH->openWQ_BGCnative_chemass_InTransfEq);
 
             // Add variable dependencies to table of symbols (in case they are used)
             for (unsigned int depi=0;depi<OpenWQ_hostModelconfig.get_num_HydroDepend();depi++){
@@ -258,7 +258,7 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
             parser.compile(expression_string_modif,expression);
 
             // Save expressions in openWQ_BGCnative_BGCexpressions_info and openWQ_BGCnative_BGCexpressions_eq
-            OpenWQ_wqconfig.openWQ_BGCnative_BGCexpressions_info.push_back(
+            OpenWQ_wqconfig.CH->openWQ_BGCnative_BGCexpressions_info.push_back(
                 BGCTransfTuple_info(
                     BGCcycles_name,
                     Transf_name,
@@ -267,7 +267,7 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
                     index_prod,
                     index_transf));
 
-            OpenWQ_wqconfig.openWQ_BGCnative_BGCexpressions_eq.push_back(expression);
+            OpenWQ_wqconfig.CH->openWQ_BGCnative_BGCexpressions_eq.push_back(expression);
 
         }
     }

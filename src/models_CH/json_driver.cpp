@@ -62,11 +62,11 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
         true);
 
     // save BGC module name
-    (OpenWQ_wqconfig.BGC_module).append(input_module_name);
+    (OpenWQ_wqconfig.CH->BGC_module).append(input_module_name);
 
     // Print it (Console and/or Log file)
     msg_string = "<OPENWQ> MODULE LOADED: BIOGEOCHEMISTRY > " 
-                + OpenWQ_wqconfig.BGC_module;
+                + OpenWQ_wqconfig.CH->BGC_module;
     OpenWQ_output.ConsoleLog(
         OpenWQ_wqconfig,    // for Log file name
         msg_string,         // message
@@ -74,7 +74,7 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
         true);              // print in log file
 
     // Check if CH option not valid, through error
-    if ((OpenWQ_wqconfig.BGC_module).compare("NONE") == 0){
+    if ((OpenWQ_wqconfig.CH->BGC_module).compare("NONE") == 0){
 
         // Create Message (Warning Message)
         msg_string = 
@@ -90,13 +90,13 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
     }
 
     // Check if CH option not valid, through error
-    if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") != 0 
-        && (OpenWQ_wqconfig.BGC_module).compare("NONE") != 0){
+    if ((OpenWQ_wqconfig.CH->BGC_module).compare("NATIVE_BGC_FLEX") != 0 
+        && (OpenWQ_wqconfig.CH->BGC_module).compare("NONE") != 0){
 
         // Create Message (Warning Message)
         msg_string = 
             "<OpenWQ> WARNING: BIOGEOCHEMISTRY module - unkown (entry = "
-            + OpenWQ_wqconfig.BGC_module + ")";
+            + OpenWQ_wqconfig.CH->BGC_module + ")";
 
         // Print it (Console and/or Log file)
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true,true); 
@@ -125,7 +125,7 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
 
     // Load information fo the method
     // Native module
-    if ((OpenWQ_wqconfig.BGC_module).compare("NATIVE_BGC_FLEX") == 0){
+    if ((OpenWQ_wqconfig.CH->BGC_module).compare("NATIVE_BGC_FLEX") == 0){
         
         SetConfigInfo_CHModule_BGC_FLEX(  
             OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
