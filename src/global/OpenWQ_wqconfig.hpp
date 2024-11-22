@@ -250,24 +250,19 @@ class OpenWQ_wqconfig
         // ########################################
 
         // 1) Transport / Erosion (TE)
-        class TD_;
-        TD_* TD;
+        class TD_; TD_* TD;
 
         // 2) Biogeochemistry
-        class CH_;
-        CH_* CH;
+        class CH_; CH_* CH;
 
         // 4) Lateral Exchange (LE)
-        class LE_;
-        LE_* LE;
+        class LE_; LE_* LE;
 
         // 4) Transport Sediments (ST)
-        class TS_;
-        TS_* TS;
+        class TS_; TS_* TS;
         
         // 5) Sorption isotherm (SI)
-        class SI_;
-        SI_* SI;
+        class SI_; SI_* SI;
 
         // Constructor
         OpenWQ_wqconfig();
@@ -288,13 +283,6 @@ class OpenWQ_wqconfig::TD_{
         // General info 
         // (needed for all TE modules, native and not native)
         std::string TD_module;  // Get module name
-
-        // OpenWQ native module: OPENWQ_NATIVE_TE
-        // std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
-
-        std::vector
-            <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
-                OpenWQ_LE_native_BoundMix_info;
 
 };
 
@@ -340,6 +328,13 @@ class OpenWQ_wqconfig::LE_{
     public:
     // General info 
         std::string LE_module;  // Get module name
+
+    // OpenWQ native module: OPENWQ_NATIVE_TE
+        // std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
+
+        std::vector
+            <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
+                info_vector;
 
 };
 
