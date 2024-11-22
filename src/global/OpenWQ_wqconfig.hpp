@@ -30,7 +30,6 @@
 class OpenWQ_wqconfig
 {
 
-
     // #################################################
     // Compiling and re-structuring of input data for quicker access during runtime
     // Source and source forcing (SinkSource_FORC)
@@ -105,11 +104,7 @@ class OpenWQ_wqconfig
                 > output_units;             // Tuple with info about output units
 
     public:
-        // Constructor
-        OpenWQ_wqconfig();
 
-        // Destructor
-        ~OpenWQ_wqconfig();
         //###############################################
         // Methods 
         //###############################################
@@ -250,72 +245,93 @@ class OpenWQ_wqconfig
         bool BGC_Transform_print_errmsg = true;
         bool invalid_bgc_entry_errmsg = true;
         
-    // ########################################
-    // MODULES
-    // ########################################
+        // ########################################
+        // MODULES
+        // ########################################
 
-    // ########################################
-    // 1) Transport / Erosion (TE)
+        // ########################################
+        // 1) Transport / Erosion (TE)
 
-    // General info 
-    // (needed for all TE modules, native and not native)
-    std::string TD_module;  // Get module name
+        // General info 
+        // (needed for all TE modules, native and not native)
+        std::string TD_module;  // Get module name
 
-    // OpenWQ native module: OPENWQ_NATIVE_TE
-    // std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
+        // OpenWQ native module: OPENWQ_NATIVE_TE
+        // std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
 
-    std::vector
-        <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
-            OpenWQ_LE_native_BoundMix_info;
+        std::vector
+            <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
+                OpenWQ_LE_native_BoundMix_info;
 
-    // ########################################
-    // 2) Biogeochemistry
-    
-    // General info 
-    // (needed for all BGC modules, native and not native)
-    std::string BGC_module;     // Get module name
+        // ########################################
+        // 2) Biogeochemistry
+        
+        // General info 
+        // (needed for all BGC modules, native and not native)
+        std::string BGC_module;     // Get module name
 
-    unsigned int BGC_general_num_chem;                  //Number of chemical species  
-    std::vector
-        <std::string> BGC_general_chem_species_list;    // Chemical species list
-    std::vector
-        <unsigned int> BGC_general_mobile_species;      // index of mobile chem species
+        unsigned int BGC_general_num_chem;                  //Number of chemical species  
+        std::vector
+            <std::string> BGC_general_chem_species_list;    // Chemical species list
+        std::vector
+            <unsigned int> BGC_general_mobile_species;      // index of mobile chem species
 
-    // OpenWQ native module: NATIVE_BGC_FLEX
-    
-    // BGC kinetic formulas (tuple with all the info needed)
-    // It includes also the formulas parsed and ready to be used
-    // for each BGC cyle provided by the user
-    typedef exprtk::expression<double> expression_t;
-    std::vector<
-        std::tuple<
-            std::string,                // Biogeochemical cycle name
-            std::string,                // Transformation name
-            std::string,                // kinetic equation provided
-            unsigned int,               // index of consumed species       
-            unsigned int,               // index of produced species
-            std::vector<unsigned int>   // index of chemical in transformation equation (needs to be here for loop reset)
-        >> openWQ_BGCnative_BGCexpressions_info;
-    
-    std::vector<
-        exprtk::expression<double>                      // Expression (exprtk) parsed
-        >openWQ_BGCnative_BGCexpressions_eq;            // BGC kinetic formulas for all biogeochemical cycles
-    
-    std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
+        // OpenWQ native module: NATIVE_BGC_FLEX
+        
+        // BGC kinetic formulas (tuple with all the info needed)
+        // It includes also the formulas parsed and ready to be used
+        // for each BGC cyle provided by the user
+        typedef exprtk::expression<double> expression_t;
+        std::vector<
+            std::tuple<
+                std::string,                // Biogeochemical cycle name
+                std::string,                // Transformation name
+                std::string,                // kinetic equation provided
+                unsigned int,               // index of consumed species       
+                unsigned int,               // index of produced species
+                std::vector<unsigned int>   // index of chemical in transformation equation (needs to be here for loop reset)
+            >> openWQ_BGCnative_BGCexpressions_info;
+        
+        std::vector<
+            exprtk::expression<double>                      // Expression (exprtk) parsed
+            >openWQ_BGCnative_BGCexpressions_eq;            // BGC kinetic formulas for all biogeochemical cycles
+        
+        std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
 
-    // ##########################
-    // 4) Lateral Exchange (LE)
-    // General info 
-    std::string LE_module;  // Get module name
+        // ##########################
+        // 4) Lateral Exchange (LE)
+        // General info 
+        std::string LE_module;  // Get module name
 
-    // ##########################
-    // 4) Transport Sediments (ST)
-    // General info 
-    std::string TS_module;  // Get module name
+        // ##########################
+        // 4) Transport Sediments (ST)
+        // General info 
+        std::string TS_module;  // Get module name
 
-    // ##########################
-    // 5) Sorption isotherm (SI)
-    std::string SI_module;  // Get module name
+        // ##########################
+        // 5) Sorption isotherm (SI)
+        //class SI{
+        //    public:
+        //        std::string SI_module;  // Get module name
+        //};
 
-    
+        class SI_;
+        SI_* SI;
+
+        
+        // Constructor
+        OpenWQ_wqconfig();
+
+        // Destructor
+        ~OpenWQ_wqconfig();
+
+
+};
+
+
+// Define the InnerClass after forward declaration
+class OpenWQ_wqconfig::SI_{
+public:
+    std::string SI_module;
+
 };

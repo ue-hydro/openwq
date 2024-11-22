@@ -57,6 +57,9 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
         std::vector<           // timestamps
         arma::Cube<double>>>>>
         (new  std::vector<std::vector<std::vector<arma::cube>>>);
+
+    // Modules
+    SI = new SI_();
 }
 
 // Destructor
@@ -65,6 +68,8 @@ OpenWQ_wqconfig::~OpenWQ_wqconfig() {
     for (auto x: files) {
         H5Fclose(x.second);
     }
+
+    delete SI;
 }
 
 //###############################################

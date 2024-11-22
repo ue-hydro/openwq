@@ -60,10 +60,10 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
         true);
 
      // save TS module name
-    (OpenWQ_wqconfig.SI_module).append(input_module_name);
+    (OpenWQ_wqconfig.SI->SI_module).append(input_module_name);
 
     // Print it (Console and/or Log file)
-    msg_string = "<OPENWQ> MODULE LOADED: SORPTION_ISOTHERM > " + OpenWQ_wqconfig.SI_module;
+    msg_string = "<OPENWQ> MODULE LOADED: SORPTION_ISOTHERM > " + OpenWQ_wqconfig.SI->SI_module;
     OpenWQ_output.ConsoleLog(
         OpenWQ_wqconfig,    // for Log file name
         msg_string,         // message
@@ -71,7 +71,7 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
         true);              // print in log file
 
     // If MODULE_NAME not NONE, the get the MODULE_CONFIG_FILEPATH
-    if (OpenWQ_wqconfig.SI_module.compare("NONE") != 0){
+    if (OpenWQ_wqconfig.SI->SI_module.compare("NONE") != 0){
 
         input_filepath = OpenWQ_utils.RequestJsonKeyVal_json(
             OpenWQ_wqconfig, OpenWQ_output,
@@ -90,7 +90,7 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
     }
 
     // Load information fo the TS model selected
-    if ((OpenWQ_wqconfig.SI_module).compare("FREUNDLICH") == 0){
+    if ((OpenWQ_wqconfig.SI->SI_module).compare("FREUNDLICH") == 0){
         
         SetConfigInfo_SIModule_freundlich(  
             OpenWQ_json, 
@@ -98,7 +98,7 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
             OpenWQ_utils, 
             OpenWQ_output);    
 
-    }else if ((OpenWQ_wqconfig.SI_module).compare("LANGMUIR") == 0){
+    }else if ((OpenWQ_wqconfig.SI->SI_module).compare("LANGMUIR") == 0){
         
         SetConfigInfo_TSModule_langmuir(  
             OpenWQ_json, 
