@@ -34,6 +34,10 @@ void OpenWQ_TS_model::mmf_hype_erosion(
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     double wflux_s2r, 
     double wmass_source){
+
+    // TO REMOVE -> only testing the cpassing of relevant variable lass-nested/nested/nested variable 
+    OpenWQ_wqconfig.TS->HypeMMF->test_parameter_hypeMMF_2_delete = 8;
+
     
     /*
     USE MODVAR, ONLY : basin, &

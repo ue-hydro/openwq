@@ -33,6 +33,8 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
     OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
     OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
     OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
+    OpenWQ_SI_model& OpenWQ_SI_model,
+    OpenWQ_TS_model& OpenWQ_TS_model,
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
     OpenWQ_compute& OpenWQ_compute,
     OpenWQ_output& OpenWQ_output,
@@ -158,5 +160,15 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
         OpenWQ_hostModelconfig,
         OpenWQ_output);
 
+    // ########################################
+    // Sorption (doesn't need space loop => it's inside the function)
+    // ########################################
+    
+    OpenWQ_SI_model.SI_driver_run(
+        OpenWQ_json,
+        OpenWQ_vars,
+        OpenWQ_wqconfig,
+        OpenWQ_hostModelconfig,
+        OpenWQ_output);
 
 }

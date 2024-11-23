@@ -49,10 +49,9 @@ class OpenWQ_SI_model{
 
         void SI_driver_run(
             OpenWQ_json& OpenWQ_json,
-            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_vars& OpenWQ_vars,
-            OpenWQ_units& OpenWQ_units,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_output& OpenWQ_output);
 
     private:

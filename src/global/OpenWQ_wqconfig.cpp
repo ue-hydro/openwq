@@ -68,10 +68,11 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
 }
 
 OpenWQ_wqconfig::TD_::TD_() {
-    // add here model options
+    NativeAdv = new NativeAdv_();
+    NativeAdvDisp = new NativeAdvDisp_();
 }
 OpenWQ_wqconfig::TD_::~TD_() {
-    // add here model options
+    delete NativeAdvDisp;
 }
 
 OpenWQ_wqconfig::LE_::LE_() {

@@ -291,8 +291,11 @@ class OpenWQ_wqconfig::TD_{
     // ######################
     // classes for each model
 
-    // currently no parameters defined for the modules available
-    // so, no need to create a class
+    class NativeAdv_;
+    NativeAdv_* NativeAdv;
+
+    class NativeAdvDisp_;
+    NativeAdvDisp_* NativeAdvDisp;
 
 };
 
@@ -381,6 +384,24 @@ class OpenWQ_wqconfig::SI_{
 // Inside are Model-specific variables  
 // e.g., Module LE -> BoundMix
 // #######################################
+
+class OpenWQ_wqconfig::TD_::NativeAdv_{
+
+    public:
+
+    // add variables here if needed
+    // current not passing any variables
+
+};
+
+class OpenWQ_wqconfig::TD_::NativeAdvDisp_{
+
+    public:
+
+    // add variables here if needed
+    // current not passing any variables
+
+};
 
 // Module LE -> BoundMix
 class OpenWQ_wqconfig::LE_::BoundMix_{

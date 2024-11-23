@@ -251,7 +251,7 @@ class OpenWQ_readjson{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
-        void SetConfigInfo_TSModule_langmuir(
+        void SetConfigInfo_SIModule_langmuir(
             OpenWQ_json &OpenWQ_json,
             OpenWQ_wqconfig &OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,

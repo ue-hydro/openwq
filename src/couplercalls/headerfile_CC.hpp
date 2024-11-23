@@ -35,6 +35,8 @@
 #include "models_CH/headerfile_CH.hpp"
 #include "models_TD/headerfile_TD.hpp"
 #include "models_LE/headerfile_LE.hpp"
+#include "models_SI/headerfile_SI.hpp"
+#include "models_TS/headerfile_TS.hpp"
 
 class OpenWQ_couplercalls{
 
@@ -55,6 +57,8 @@ class OpenWQ_couplercalls{
         OpenWQ_TD_model& OpenWQ_TD_model,      // transport modules
         OpenWQ_LE_model& OpenWQ_LE_model,            // LE model
         OpenWQ_CH_model& OpenWQ_CH_model,                    // biochemistry modules
+        OpenWQ_SI_model& OpenWQ_SI_model,
+        OpenWQ_TS_model& OpenWQ_TS_model,
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,  // sink and source modules)
         OpenWQ_output& OpenWQ_output);
 
@@ -74,6 +78,8 @@ class OpenWQ_couplercalls{
         OpenWQ_TD_model& OpenWQ_TD_model,      // transport modules
         OpenWQ_LE_model& OpenWQ_LE_model,           // LE model
         OpenWQ_CH_model& OpenWQ_CH_model,                   // biochemistry modules
+        OpenWQ_SI_model& OpenWQ_SI_model,
+        OpenWQ_TS_model& OpenWQ_TS_model,
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,        // sink and source modules)
         OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,
@@ -103,6 +109,8 @@ class OpenWQ_couplercalls{
         OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
         OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
         OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
+        OpenWQ_SI_model& OpenWQ_SI_model,
+        OpenWQ_TS_model& OpenWQ_TS_model,
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
         OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,
@@ -148,6 +156,8 @@ class OpenWQ_couplercalls{
         OpenWQ_TD_model& OpenWQ_TD_model,      // transport modules
         OpenWQ_LE_model& OpenWQ_LE_model,           // LE model
         OpenWQ_CH_model& OpenWQ_CH_model,                   // biochemistry modules
+        OpenWQ_SI_model& OpenWQ_SI_model,
+        OpenWQ_TS_model& OpenWQ_TS_model,
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,        // sink and source modules)
         OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,

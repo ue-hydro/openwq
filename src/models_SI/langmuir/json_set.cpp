@@ -20,7 +20,7 @@
 
 
 // Set chemModule = BGC_FLEX
-void OpenWQ_readjson::SetConfigInfo_TSModule_langmuir(
+void OpenWQ_readjson::SetConfigInfo_SIModule_langmuir(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
@@ -33,6 +33,9 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_langmuir(
     json BGCjson_mobileSpecies;
     std::string msg_string;           // error/warning message string
 
+    // Adapt the code below to this module
+    
+    /*
     // Check if BGQ json has CHEMICAL_SPECIES key
     errorMsgIdentifier = "BGQ file";
     BGCjson_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
@@ -74,5 +77,6 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_langmuir(
         (OpenWQ_wqconfig.CH->NativeFlex->chem_species_list).push_back(
             BGCjson_ChemList[std::to_string(chemi + 1)]);
     }
+    */
 
 }

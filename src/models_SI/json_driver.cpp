@@ -100,7 +100,7 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
 
     }else if ((OpenWQ_wqconfig.SI->SI_module).compare("LANGMUIR") == 0){
         
-        SetConfigInfo_TSModule_langmuir(  
+        SetConfigInfo_SIModule_langmuir(  
             OpenWQ_json, 
             OpenWQ_wqconfig, 
             OpenWQ_utils, 

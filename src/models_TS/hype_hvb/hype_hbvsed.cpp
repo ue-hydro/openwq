@@ -27,6 +27,9 @@ void OpenWQ_TS_model::hbvsed_hype_erosion(
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     double wflux_s2r, 
     double wmass_source){
+
+    // TO REMOVE -> only testing the cpassing of relevant variable lass-nested/nested/nested variable 
+    OpenWQ_wqconfig.TS->HypeHVB->test_parameter_hypeHVB_2_delete = 8;
     
     /*
     // Local Variables

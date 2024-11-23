@@ -33,6 +33,9 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_freundlich(
     json BGCjson_mobileSpecies;
     std::string msg_string;           // error/warning message string
 
+    // Adapt to this code 
+
+    /*
     // Check if BGQ json has CHEMICAL_SPECIES key
     errorMsgIdentifier = "BGQ file";
     BGCjson_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
@@ -74,5 +77,6 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_freundlich(
         (OpenWQ_wqconfig.CH->NativeFlex->chem_species_list).push_back(
             BGCjson_ChemList[std::to_string(chemi + 1)]);
     }
+    */
 
 }
