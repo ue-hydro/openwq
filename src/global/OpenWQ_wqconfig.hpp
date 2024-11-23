@@ -279,6 +279,16 @@ class OpenWQ_wqconfig::TD_{
     public:
     std::string TD_module;
 
+    // constructor/destructor
+    TD_(); 
+    ~TD_();
+
+    // ######################
+    // classes for each model
+
+     // add more classes for other models here
+
+
 };
 
 class OpenWQ_wqconfig::CH_{
@@ -311,7 +321,7 @@ class OpenWQ_wqconfig::LE_{
 
     // ######################
     // classes for each model
-    
+
     class BoundMix_;
     BoundMix_* BoundMix;
 
@@ -321,13 +331,34 @@ class OpenWQ_wqconfig::LE_{
 };
 
 class OpenWQ_wqconfig::TS_{
+
     public: 
     std::string TS_module;
+
+    // constructor/destructor
+    TS_(); 
+    ~TS_();
+
+    // ######################
+    // classes for each model
+
+     // add more classes for other models here
+
 };
 
 class OpenWQ_wqconfig::SI_{
+
     public:
     std::string SI_module;
+
+    // constructor/destructor
+    SI_(); 
+    ~SI_();
+
+    // ######################
+    // classes for each model
+
+     // add more classes for other models here
 
 };
 

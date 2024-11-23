@@ -67,6 +67,13 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
 
 }
 
+OpenWQ_wqconfig::TD_::TD_() {
+    // add here any sub-modules
+}
+OpenWQ_wqconfig::TD_::~TD_() {   
+    // deleve here any sub-modules
+}
+
 OpenWQ_wqconfig::LE_::LE_() {
     BoundMix = new BoundMix_();
 }
@@ -79,6 +86,20 @@ OpenWQ_wqconfig::CH_::CH_() {
 }
 OpenWQ_wqconfig::CH_::~CH_() {
     delete NativeFlex;
+}
+
+OpenWQ_wqconfig::SI_::SI_() {
+    // add here any sub-modules
+}
+OpenWQ_wqconfig::SI_::~SI_() {   
+    // deleve here any sub-modules
+}
+
+OpenWQ_wqconfig::TS_::TS_() {
+    // add here any sub-modules
+}
+OpenWQ_wqconfig::TS_::~TS_() {   
+    // deleve here any sub-modules
 }
 
 // Destructor
