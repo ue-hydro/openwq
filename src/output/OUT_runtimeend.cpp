@@ -380,7 +380,7 @@ int OpenWQ_output::writeCSV(
             }
 
             // Get chemical name
-            chem_name = OpenWQ_wqconfig.CH->BGC_general_chem_species_list[
+            chem_name = OpenWQ_wqconfig.CH->NativeFlex->chem_species_list[
                 OpenWQ_wqconfig.chem2print[ichem]];           // index of chemical to print
                 
             // Add chemical name to file header (add column)
@@ -496,7 +496,7 @@ int OpenWQ_output::writeHDF5(
         for (unsigned int ichem=0;ichem<num_chem2print;ichem++){
 
             // Get chemical name (convert to char for use in .save())
-            chem_name = OpenWQ_wqconfig.CH->BGC_general_chem_species_list[
+            chem_name = OpenWQ_wqconfig.CH->NativeFlex->chem_species_list[
             OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
 
             // Reset file name for each compartment
@@ -546,7 +546,7 @@ int OpenWQ_output::writeHDF5(
         arma::mat data2print(num_cells2print,1);
 
         // Get chemical name (convert to char for use in .save())
-        chem_name = OpenWQ_wqconfig.CH->BGC_general_chem_species_list[
+        chem_name = OpenWQ_wqconfig.CH->NativeFlex->chem_species_list[
             OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
 
         // Reset file name for each compartment

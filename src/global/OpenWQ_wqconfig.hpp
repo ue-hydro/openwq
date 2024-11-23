@@ -269,13 +269,16 @@ class OpenWQ_wqconfig
 
 };
 
+
 // ##############################
-// Define model variables
+// Define INNER MODEL CLASSES
 // ##############################
 
 class OpenWQ_wqconfig::TD_{
+
     public:
-    std::string TD_module; 
+    std::string TD_module;
+
 };
 
 class OpenWQ_wqconfig::CH_{
@@ -283,11 +286,17 @@ class OpenWQ_wqconfig::CH_{
     public:
     std::string BGC_module;
 
+    // constructor/destructor
+    CH_(); 
+    ~CH_();
+
+    // ######################
+    // classes for each model
+
     class NativeFlex_;
     NativeFlex_* NativeFlex;
 
-    CH_(); 
-    ~CH_();
+    // add more classes for other models here
 
 };
 
@@ -296,11 +305,18 @@ class OpenWQ_wqconfig::LE_{
     public:
     std::string LE_module;
 
+    // constructor/destructor
+    LE_(); 
+    ~LE_();
+
+    // ######################
+    // classes for each model
+    
     class BoundMix_;
     BoundMix_* BoundMix;
 
-    LE_(); 
-    ~LE_();
+    // add more classes for other models here
+
 
 };
 
@@ -315,17 +331,24 @@ class OpenWQ_wqconfig::SI_{
 
 };
 
+// #######################################
+// Create INNER-MOST class for each model
+// Inside are Model-specific variables  
+// e.g., Module LE -> BoundMix
+// #######################################
 
 class OpenWQ_wqconfig::LE_::BoundMix_{
 
     public:
 
+    // information vector-tuple for the boundary
     std::vector
         <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
             info_vector;
 
 };
 
+// Module CH -> NativeFlex
 class OpenWQ_wqconfig::CH_::NativeFlex_{
 
     public:
