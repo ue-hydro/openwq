@@ -50,7 +50,7 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_BGC_FLEX(
         true); 
 
     // Get number of chemical species from BGC_json
-    (OpenWQ_wqconfig.CH->BGC_general_num_chem) = BGCjson_ChemList.size();
+    (OpenWQ_wqconfig.CH->NativeFlex->num_chem) = BGCjson_ChemList.size();
 
     // Get mobile species 
     // reset index to start on zero
@@ -63,15 +63,15 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_BGC_FLEX(
 
     for (unsigned int chemi = 0; chemi < BGCjson_mobileSpecies.size(); chemi++){
     
-        OpenWQ_wqconfig.CH->BGC_general_mobile_species.push_back(
+        OpenWQ_wqconfig.CH->NativeFlex->mobile_species.push_back(
             (int)BGCjson_mobileSpecies.at(chemi) - 1);
 
     }
 
     // Get chemical species list from BGC_json
-    for (unsigned int chemi = 0; chemi < (OpenWQ_wqconfig.CH->BGC_general_num_chem); chemi++)
+    for (unsigned int chemi = 0; chemi < (OpenWQ_wqconfig.CH->NativeFlex->num_chem); chemi++)
     {
-        (OpenWQ_wqconfig.CH->BGC_general_chem_species_list).push_back(
+        (OpenWQ_wqconfig.CH->NativeFlex->chem_species_list).push_back(
             BGCjson_ChemList[std::to_string(chemi + 1)]);
     }
 

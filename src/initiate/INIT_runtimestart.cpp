@@ -117,10 +117,10 @@ void OpenWQ_initiate::setIC_driver(
     // Loop over chemical species
     ######################################## */
 
-    for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->BGC_general_num_chem);chemi++){
+    for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->NativeFlex->num_chem);chemi++){
 
         // Get chem name
-        chemname = (OpenWQ_wqconfig.CH->BGC_general_chem_species_list)[chemi]; // chemical name in BGC-json list
+        chemname = (OpenWQ_wqconfig.CH->NativeFlex->chem_species_list)[chemi]; // chemical name in BGC-json list
 
         // First default all IC chemical mass to zero, 
         // so that then we just need to change the ic entries requested
@@ -233,7 +233,7 @@ void OpenWQ_initiate::setIC_json(
     std::string CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
 
     // Get chem name
-    std::string chemname = (OpenWQ_wqconfig.CH->BGC_general_chem_species_list)[chemi]; // chemical name in BGC-json list
+    std::string chemname = (OpenWQ_wqconfig.CH->NativeFlex->chem_species_list)[chemi]; // chemical name in BGC-json list
 
     // Dimensions for compartment icmp
     nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // num of x elements
@@ -499,7 +499,7 @@ void OpenWQ_initiate::setIC_h5(
     nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
     // Get chem name
-    std::string chemname = (OpenWQ_wqconfig.CH->BGC_general_chem_species_list)[chemi]; // chemical name in BGC-json list
+    std::string chemname = (OpenWQ_wqconfig.CH->NativeFlex->chem_species_list)[chemi]; // chemical name in BGC-json list
 
     // Check BIOGEOCHEMISTRY_CONFIGURATION keys exists
     errorMsgIdentifier = "Config file";
@@ -646,7 +646,7 @@ void OpenWQ_initiate::setIC_h5(
                 "<OpenWQ> WARNING: IC h5-format data load out of boundaries."
                 "Requested load ignored: "
                 "Compartment=" + OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)
-                + ", Chemical=" + OpenWQ_wqconfig.CH->BGC_general_chem_species_list[chemi]
+                + ", Chemical=" + OpenWQ_wqconfig.CH->NativeFlex->chem_species_list[chemi]
                 + ", ix=" + std::to_string(ic_x)
                 + ", iy=" + std::to_string(ic_y)
                 + ", iz=" + std::to_string(ic_z);

@@ -264,12 +264,8 @@ class OpenWQ_wqconfig
         // 5) Sorption isotherm (SI)
         class SI_; SI_* SI;
 
-        // Constructor
         OpenWQ_wqconfig();
-
-        // Destructor
         ~OpenWQ_wqconfig();
-
 
 };
 
@@ -287,46 +283,23 @@ class OpenWQ_wqconfig::CH_{
     public:
     std::string BGC_module;
 
-        unsigned int BGC_general_num_chem;                  //Number of chemical species  
-        std::vector
-            <std::string> BGC_general_chem_species_list;    // Chemical species list
-        std::vector
-            <unsigned int> BGC_general_mobile_species;      // index of mobile chem species
+    class NativeFlex_;
+    NativeFlex_* NativeFlex;
 
-        // OpenWQ native module: NATIVE_BGC_FLEX
-        
-        // BGC kinetic formulas (tuple with all the info needed)
-        // It includes also the formulas parsed and ready to be used
-        // for each BGC cyle provided by the user
-        typedef exprtk::expression<double> expression_t;
-        std::vector<
-            std::tuple<
-                std::string,                // Biogeochemical cycle name
-                std::string,                // Transformation name
-                std::string,                // kinetic equation provided
-                unsigned int,               // index of consumed species       
-                unsigned int,               // index of produced species
-                std::vector<unsigned int>   // index of chemical in transformation equation (needs to be here for loop reset)
-            >> openWQ_BGCnative_BGCexpressions_info;
-        
-        std::vector<
-            exprtk::expression<double>                      // Expression (exprtk) parsed
-            >openWQ_BGCnative_BGCexpressions_eq;            // BGC kinetic formulas for all biogeochemical cycles
-        
-        std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
+    CH_(); 
+    ~CH_();
 
 };
 
 class OpenWQ_wqconfig::LE_{
+
     public:
     std::string LE_module;
-    // OpenWQ native module: OPENWQ_NATIVE_TE
-    // std::vector<double> OpenWQ_TE_native_IntMob_Erodib_K;
 
     class BoundMix_;
     BoundMix_* BoundMix;
 
-    LE_();
+    LE_(); 
     ~LE_();
 
 };
@@ -343,11 +316,47 @@ class OpenWQ_wqconfig::SI_{
 };
 
 
-class OpenWQ_wqconfig::LE_::BoundMix_ {
+class OpenWQ_wqconfig::LE_::BoundMix_{
 
     public:
-        std::vector
-                <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
-                    info_vector;
+
+    std::vector
+        <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
+            info_vector;
+
+};
+
+class OpenWQ_wqconfig::CH_::NativeFlex_{
+
+    public:
+
+    unsigned int num_chem;                  //Number of chemical species  
+
+    std::vector
+        <std::string> chem_species_list;    // Chemical species list
+    std::vector
+        <unsigned int> mobile_species;      // index of mobile chem species
+
+    // OpenWQ native module: NATIVE_BGC_FLEX
+    
+    // BGC kinetic formulas (tuple with all the info needed)
+    // It includes also the formulas parsed and ready to be used
+    // for each BGC cyle provided by the user
+    typedef exprtk::expression<double> expression_t;
+    std::vector<
+        std::tuple<
+            std::string,                // Biogeochemical cycle name
+            std::string,                // Transformation name
+            std::string,                // kinetic equation provided
+            unsigned int,               // index of consumed species       
+            unsigned int,               // index of produced species
+            std::vector<unsigned int>   // index of chemical in transformation equation (needs to be here for loop reset)
+        >> BGCexpressions_info;
+    
+    std::vector<
+        exprtk::expression<double>                      // Expression (exprtk) parsed
+        >BGCexpressions_eq;            // BGC kinetic formulas for all biogeochemical cycles
+    
+    std::vector<double> chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
 
 };

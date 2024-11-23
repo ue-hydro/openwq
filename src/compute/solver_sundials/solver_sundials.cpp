@@ -53,7 +53,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         for (unsigned int icmp=0;icmp<user_data.hostModelconfig.get_num_HydroComp();icmp++){
 
             // Chemical loop
-            for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH->BGC_general_num_chem);chemi++){
+            for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH->NativeFlex->num_chem);chemi++){
 
                 // Reset derivatives of state-variables to zero after each time interaction
                 (*user_data.vars.d_chemass_dt_chem)(icmp)(chemi).zeros();
@@ -69,7 +69,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         nz = user_data.hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH->BGC_general_num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH->NativeFlex->num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
@@ -94,7 +94,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         nz = user_data.hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH->BGC_general_num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH->NativeFlex->num_chem);chemi++){
             (*user_data.vars.d_chemass)(icmp)(chemi).zeros();
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
@@ -178,7 +178,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         nz = user_data.hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH->BGC_general_num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH->NativeFlex->num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
@@ -225,7 +225,7 @@ void OpenWQ_compute::Solve_with_CVode(
         nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
         ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
-        system_size += nx*ny*nz*OpenWQ_wqconfig.CH->BGC_general_num_chem;
+        system_size += nx*ny*nz*OpenWQ_wqconfig.CH->NativeFlex->num_chem;
     }
 
     //retval = SUNContext_Create(NULL, &sunctx);
@@ -243,7 +243,7 @@ void OpenWQ_compute::Solve_with_CVode(
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->BGC_general_num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->NativeFlex->num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
@@ -290,7 +290,7 @@ void OpenWQ_compute::Solve_with_CVode(
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->BGC_general_num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->NativeFlex->num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){

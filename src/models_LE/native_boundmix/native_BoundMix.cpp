@@ -85,10 +85,10 @@ void OpenWQ_LE_model::native_BoundMix(
 
 
         // Loop over mobile species
-        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH->BGC_general_mobile_species.size();chemi++){
+        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH->NativeFlex->mobile_species.size();chemi++){
    
             // Get index of mobile species
-            chemi_mob = OpenWQ_wqconfig.CH->BGC_general_mobile_species[chemi];
+            chemi_mob = OpenWQ_wqconfig.CH->NativeFlex->mobile_species[chemi];
             
             //##########################################
             // Chemical exxhange between upper and lower compartments
@@ -144,18 +144,18 @@ void OpenWQ_TD_model::IntMob(
     if(wflux_s2r == 0.0f){return;}
 
     // Loop for immobile chemical species
-    for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH->BGC_general_num_chem;chemi++){
+    for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH->NativeFlex->num_chem;chemi++){
 
         //##########################################
         // Check if the chem species is mobile
         // Skip if mobile (mobile species are moved by OpenWQ_TD_model::AdvDisp)
         std::vector<unsigned int>::iterator itr 
             = std::find(
-                OpenWQ_wqconfig.CH->BGC_general_mobile_species.begin(), 
-                OpenWQ_wqconfig.CH->BGC_general_mobile_species.end(), 
+                OpenWQ_wqconfig.CH->NativeFlex->mobile_species.begin(), 
+                OpenWQ_wqconfig.CH->NativeFlex->mobile_species.end(), 
                 chemi);
 
-        if (itr != end(OpenWQ_wqconfig.CH->BGC_general_mobile_species))
+        if (itr != end(OpenWQ_wqconfig.CH->NativeFlex->mobile_species))
             continue;
 
         //##########################################

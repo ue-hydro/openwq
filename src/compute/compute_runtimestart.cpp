@@ -40,7 +40,7 @@ void OpenWQ_compute::Reset_Deriv(
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
 
             // Chemical loop
-            for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->BGC_general_num_chem);chemi++){
+            for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->NativeFlex->num_chem);chemi++){
 
                 // Reset derivatives of state-variables to zero after each time interaction
                 (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi).zeros();
@@ -63,7 +63,7 @@ void OpenWQ_compute::Reset_Deriv(
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
 
             // Chemical loop
-            for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->BGC_general_num_chem);chemi++){
+            for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->NativeFlex->num_chem);chemi++){
 
                 // Reset derivatives of state-variables to zero after each time interaction
                 (*OpenWQ_vars.d_chemass_ss_out)(icmp)(chemi).zeros();
@@ -92,7 +92,7 @@ void OpenWQ_compute::Reset_EWFconc(
     for (unsigned int ewfi=0;ewfi<OpenWQ_hostModelconfig.get_num_HydroExtFlux();ewfi++){
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->BGC_general_num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH->NativeFlex->num_chem);chemi++){
 
             // Reset ewf_conc after each iteraction
             // Specially needed for discrete conc requests
