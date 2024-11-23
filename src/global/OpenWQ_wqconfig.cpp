@@ -68,10 +68,10 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
 }
 
 OpenWQ_wqconfig::TD_::TD_() {
-    // add here any sub-modules
+    // add here model options
 }
-OpenWQ_wqconfig::TD_::~TD_() {   
-    // deleve here any sub-modules
+OpenWQ_wqconfig::TD_::~TD_() {
+    // add here model options
 }
 
 OpenWQ_wqconfig::LE_::LE_() {
@@ -88,18 +88,22 @@ OpenWQ_wqconfig::CH_::~CH_() {
     delete NativeFlex;
 }
 
-OpenWQ_wqconfig::SI_::SI_() {
-    // add here any sub-modules
-}
-OpenWQ_wqconfig::SI_::~SI_() {   
-    // deleve here any sub-modules
-}
-
 OpenWQ_wqconfig::TS_::TS_() {
-    // add here any sub-modules
+    HypeHVB = new HypeHVB_();
+    HypeMMF = new HypeMMF_();
 }
 OpenWQ_wqconfig::TS_::~TS_() {   
-    // deleve here any sub-modules
+    delete HypeHVB;
+    delete HypeMMF;
+}
+
+OpenWQ_wqconfig::SI_::SI_() {
+    LANGMUIR = new LANGMUIR_();
+    FREUNDLICH = new FREUNDLICH_();
+}
+OpenWQ_wqconfig::SI_::~SI_() {   
+    delete LANGMUIR;
+    delete FREUNDLICH;
 }
 
 // Destructor
@@ -361,12 +365,6 @@ void OpenWQ_wqconfig::set_output_units_concentration(bool conentration_requested
 {
     std::get<3>(this->output_units) = conentration_requested;
 }
-
-/***********************************************
-Modules
-***********************************************/
-// Transport / Erosion
-
 
 
 

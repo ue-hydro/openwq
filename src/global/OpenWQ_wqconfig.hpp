@@ -250,19 +250,24 @@ class OpenWQ_wqconfig
         // ########################################
 
         // 1) Transport / Erosion (TE)
-        class TD_; TD_* TD;
+        class TD_; 
+        TD_* TD;
 
         // 2) Biogeochemistry
-        class CH_; CH_* CH;
+        class CH_; 
+        CH_* CH;
 
         // 4) Lateral Exchange (LE)
-        class LE_; LE_* LE;
+        class LE_; 
+        LE_* LE;
 
         // 4) Transport Sediments (ST)
-        class TS_; TS_* TS;
+        class TS_; 
+        TS_* TS;
         
         // 5) Sorption isotherm (SI)
-        class SI_; SI_* SI;
+        class SI_; 
+        SI_* SI;
 
         OpenWQ_wqconfig();
         ~OpenWQ_wqconfig();
@@ -286,8 +291,8 @@ class OpenWQ_wqconfig::TD_{
     // ######################
     // classes for each model
 
-     // add more classes for other models here
-
+    // currently no parameters defined for the modules available
+    // so, no need to create a class
 
 };
 
@@ -307,6 +312,7 @@ class OpenWQ_wqconfig::CH_{
     NativeFlex_* NativeFlex;
 
     // add more classes for other models here
+    // e.g., PHREEQC
 
 };
 
@@ -342,8 +348,12 @@ class OpenWQ_wqconfig::TS_{
     // ######################
     // classes for each model
 
-     // add more classes for other models here
+    class HypeHVB_;
+    HypeHVB_* HypeHVB;
 
+    class HypeMMF_;
+    HypeMMF_* HypeMMF;
+    
 };
 
 class OpenWQ_wqconfig::SI_{
@@ -355,10 +365,14 @@ class OpenWQ_wqconfig::SI_{
     SI_(); 
     ~SI_();
 
-    // ######################
+     // ######################
     // classes for each model
 
-     // add more classes for other models here
+    class LANGMUIR_;
+    LANGMUIR_* LANGMUIR;
+
+    class FREUNDLICH_;
+    FREUNDLICH_* FREUNDLICH;
 
 };
 
@@ -368,6 +382,7 @@ class OpenWQ_wqconfig::SI_{
 // e.g., Module LE -> BoundMix
 // #######################################
 
+// Module LE -> BoundMix
 class OpenWQ_wqconfig::LE_::BoundMix_{
 
     public:
@@ -412,5 +427,41 @@ class OpenWQ_wqconfig::CH_::NativeFlex_{
         >BGCexpressions_eq;            // BGC kinetic formulas for all biogeochemical cycles
     
     std::vector<double> chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
+
+};
+
+// Module TS -> HypeHVB
+class OpenWQ_wqconfig::TS_::HypeHVB_{
+
+    public: 
+
+    int test_parameter_hypeHVB_2_delete;
+
+};
+
+// Module TS -> HypeMMF
+class OpenWQ_wqconfig::TS_::HypeMMF_{
+
+    public: 
+
+    int test_parameter_hypeMMF_2_delete;
+
+};
+
+// Module SI -> Langmuir Isotherm
+class OpenWQ_wqconfig::SI_::LANGMUIR_{
+
+    public: 
+
+    int test_parameter_langmuir_2_delete;
+
+};
+
+// Module SI -> Langmuir Isotherm
+class OpenWQ_wqconfig::SI_::FREUNDLICH_{
+
+    public: 
+
+    int test_parameter_freundlich_2_delete;
 
 };
