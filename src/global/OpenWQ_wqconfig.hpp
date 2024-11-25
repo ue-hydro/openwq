@@ -465,7 +465,6 @@ class OpenWQ_wqconfig::TS_::HypeMMF_{
 
     public: 
 
-    int test_parameter_hypeMMF_2_delete;
 
 };
 

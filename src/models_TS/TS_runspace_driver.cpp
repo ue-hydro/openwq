@@ -16,7 +16,7 @@
 
 
 void OpenWQ_TS_model::TS_driver_run(
-     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_output& OpenWQ_output,                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC

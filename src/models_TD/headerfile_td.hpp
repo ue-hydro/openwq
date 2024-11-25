@@ -1,4 +1,4 @@
-
+ 
 
 // Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
@@ -29,10 +29,12 @@
 #include "global/openwq_vars.hpp"
 #include "global/openwq_wqconfig.hpp"
 #include "global/openwq_hostmodelconfig.hpp"
+#include "utils/headerfile_UTILS.hpp"
 #include "output/headerfile_OUT.hpp"
 
 #include "models_CH/headerfile_CH.hpp"
 #include "models_TD/headerfile_TD.hpp"
+
 
 class OpenWQ_TD_model{
 
@@ -82,14 +84,23 @@ class OpenWQ_TD_model{
         // ##########################
 
         // INPUT FROM EXTERNAL FORCES
-        void EWF_flux_IN(// Special case (in-fluxes from external water flux sources)
+        void EWF_flux_driver_run(
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig, 
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_vars& OpenWQ_vars,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output,
+            std::string source_EWF_name,
+            const int recipient, const int ix_r, const int iy_r, const int iz_r,
+            const double wflux_s2r);
+
+        void EWF_flux_IN(
             OpenWQ_vars& OpenWQ_vars, 
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
-            const double wflux_s2r,     // water flux (m3/s)
-            int chemi,                  // chemical id
-            double ewf_conc);           // concentration of chemical
-        
+            const double wflux_s2r, // water flux (m3/s)
+            int chemi,              // chemical id
+            double ewf_conc);
 };
 
 #endif

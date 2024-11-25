@@ -38,7 +38,6 @@ void OpenWQ_couplercalls::RunSpaceStep(
     OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
     OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
     OpenWQ_SI_model& OpenWQ_SI_model,
-    OpenWQ_TS_model& OpenWQ_TS_model,
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
     OpenWQ_compute& OpenWQ_compute,
     OpenWQ_output& OpenWQ_output,
@@ -83,16 +82,6 @@ void OpenWQ_couplercalls::RunSpaceStep(
         recipient, ix_r, iy_r, iz_r,
         wflux_s2r, wmass_source);
 
-    // Run TD model
-    OpenWQ_TS_model.TS_driver_run(
-        OpenWQ_hostModelconfig,
-        OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
-        OpenWQ_vars,
-        OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
-        source, ix_s, iy_s, iz_s,
-        recipient, ix_r, iy_r, iz_r,
-        wflux_s2r, wmass_source);
-
 }
 
 // ################################################################
@@ -110,9 +99,9 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
     OpenWQ_readjson& OpenWQ_readjson,               // read json files
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
-    OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
-    OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
-    OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
+    OpenWQ_TD_model& OpenWQ_TD_model,
+    OpenWQ_CH_model& OpenWQ_CH_model,
+    OpenWQ_TS_model& OpenWQ_TS_model,
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
     OpenWQ_compute& OpenWQ_compute,
     OpenWQ_output& OpenWQ_output,
@@ -120,39 +109,28 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
     std::string source_EWF_name,                    // name defined in HydroExtFlux (in couplecalls)
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     const double wflux_s2r){
+    
+    // Add external loading from precipitation
+    OpenWQ_TD_model.EWF_flux_driver_run(
+        OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
+        OpenWQ_vars,
+        OpenWQ_utils,
+        OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+        source_EWF_name,
+        recipient, ix_r, iy_r, iz_r,
+        wflux_s2r);
 
-    // Dummy variable
-    double ewf_conc_chemi;  // concentraton of chemical at EWF at current time step
-    unsigned int iewf;      // index of EWF
-    unsigned int ichem_mob; // iterative dummy var for mobile chemical species
-
-    // Find specific EWF index in EWF names
-    iewf = OpenWQ_utils.FindStrIndexInVectStr(
-        OpenWQ_hostModelconfig.get_HydroExtFlux_names(),
-        source_EWF_name);
-
-    unsigned int numspec = OpenWQ_wqconfig.CH->NativeFlex->mobile_species.size();
-
-    // Loop over mobile chemical species
-    for (unsigned int chemi=0;chemi<numspec;chemi++){
-
-        // mobile chemical species index
-        ichem_mob = OpenWQ_wqconfig.CH->NativeFlex->mobile_species[chemi];
-
-        // Get appropriate chemi concentraton for this ewf and domain ix, iy, iz
-        ewf_conc_chemi = (*OpenWQ_vars.ewf_conc)
-            (iewf)
-            (ichem_mob)
-            (ix_r,iy_r,iz_r);
-
-        // Advection and dispersion
-        OpenWQ_TD_model.EWF_flux_IN(
-            OpenWQ_vars, OpenWQ_wqconfig,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r,                      // external water flux
-            ichem_mob,                          // chemical id (from BGQ file and used in state-varibble data structures)
-            ewf_conc_chemi);                // concentration taken from EWF json file
-
-    }
+    // Run TS model
+    /*
+    OpenWQ_TS_model.TS_driver_run(
+        OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
+        OpenWQ_vars,
+        OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+        source, ix_s, iy_s, iz_s,
+        recipient, ix_r, iy_r, iz_r,
+        wflux_s2r, wmass_source);
+        */
 
 }

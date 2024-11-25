@@ -110,7 +110,6 @@ class OpenWQ_couplercalls{
         OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
         OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
         OpenWQ_SI_model& OpenWQ_SI_model,
-        OpenWQ_TS_model& OpenWQ_TS_model,
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
         OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,
@@ -129,9 +128,9 @@ class OpenWQ_couplercalls{
         OpenWQ_readjson& OpenWQ_readjson,               // read json files
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
-        OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
-        OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
-        OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
+        OpenWQ_TD_model& OpenWQ_TD_model,
+        OpenWQ_CH_model& OpenWQ_CH_model,
+        OpenWQ_TS_model& OpenWQ_TS_model,
         OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
         OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,

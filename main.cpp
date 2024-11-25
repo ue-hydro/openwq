@@ -257,6 +257,7 @@ int main(int argc, char* argv[])
                         OpenWQ_TD_model,      // transport modules
                         OpenWQ_LE_model,             // LE model
                         OpenWQ_CH_model,                   // biochemistry modules
+                        OpenWQ_SI_model,
                         OpenWQ_extwatflux_ss,        // sink and source modules)
                         OpenWQ_compute,
                         OpenWQ_output,
