@@ -21,62 +21,151 @@
 
 // Set chemModule = BGC_FLEX
 void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output){
 
     // Local variables
+    json json_subStruct;
     std::string errorMsgIdentifier;
-    json BGCjson_subStruct;
-    json BGCjson_ChemList;
-    json BGCjson_mobileSpecies;
-    std::string msg_string;           // error/warning message string
+    std::string msg_string;
+    std::string LE_method_local;    // module name
+    std::string input_filepath;
+    unsigned int num_entries;
+    // Strings for inputs
+    std::string input_direction;    // user input
+    std::string input_upper_compartment;    // user input
+    std::string input_lower_compartment;    // user input
+    std::string data_format;
+    // iteractive variables
+    std::string icmp_i_name;
+    unsigned int input_direction_index;
+    unsigned int input_upper_compartment_index;
+    unsigned int input_lower_compartment_index;
+    bool input_upper_compartment_index_exist;
+    bool input_lower_compartment_index_exist;
+    // Other local variables
+    typedef std::tuple<
+        unsigned int, 
+        unsigned int,
+        unsigned int,      
+        std::string       // index of chemical in transformation equation (needs to be here for loop reset)
+        > HypeMMF_infoVect;          // Tuple with info and expression for BGC cyling
 
-    // CODE BELOW to ADAPT TO NEW MODULE
+    // Get LATERAL_EXCHANGE module name
+    errorMsgIdentifier = "Master file in MODULES > TRANSPORT_SEDIMENTS";
 
-    /*
-    // Check if BGQ json has CHEMICAL_SPECIES key
-    errorMsgIdentifier = "BGQ file";
-    BGCjson_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
+    // Get info for BoundMix function
+    // Get number of entries
+    errorMsgIdentifier = "TS file";
+    json_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
-        OpenWQ_json.BGC_module, "CHEMICAL_SPECIES",
+        OpenWQ_json.TS_module, "CONFIGURATION",
+        errorMsgIdentifier,
+        true);
+
+    errorMsgIdentifier = "TS file > DIRECTION";
+    input_direction = OpenWQ_utils.RequestJsonKeyVal_str(
+        OpenWQ_wqconfig, OpenWQ_output,
+        json_subStruct, "DIRECTION",
         errorMsgIdentifier,
         true); 
 
-    // Check if BGQ json has CHEMICAL_SPECIES key
-    errorMsgIdentifier = "BGQ file in CHEMICAL_SPECIES";
-    BGCjson_ChemList = OpenWQ_utils.RequestJsonKeyVal_json(
+    errorMsgIdentifier = "TS file > UPPER_COMPARTMENT";
+    input_upper_compartment = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        BGCjson_subStruct, "LIST",
+        json_subStruct, "UPPER_COMPARTMENT",
         errorMsgIdentifier,
         true); 
 
-    // Get number of chemical species from BGC_json
-    (OpenWQ_wqconfig.CH->NativeFlex->num_chem) = BGCjson_ChemList.size();
-
-    // Get mobile species 
-    // reset index to start on zero
-    errorMsgIdentifier = "BGQ file in CHEMICAL_SPECIES";
-    BGCjson_mobileSpecies = OpenWQ_utils.RequestJsonKeyVal_json(
+    errorMsgIdentifier = "TS file > LOWER_COMPARTMENT";
+    input_lower_compartment = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        BGCjson_subStruct, "BGC_GENERAL_MOBILE_SPECIES",
+        json_subStruct, "LOWER_COMPARTMENT",
         errorMsgIdentifier,
-        false);  // no abort
+        true); 
 
-    for (unsigned int chemi = 0; chemi < BGCjson_mobileSpecies.size(); chemi++){
+    errorMsgIdentifier = "TS file > DATA_FORMAT";
+    data_format = OpenWQ_utils.RequestJsonKeyVal_str(
+        OpenWQ_wqconfig, OpenWQ_output,
+        json_subStruct, "DATA_FORMAT",
+        errorMsgIdentifier,
+        true); 
+
+    // #########################
+    // Get corresponding indexes for all input values
     
-        OpenWQ_wqconfig.CH->NativeFlex->mobile_species.push_back(
-            (int)BGCjson_mobileSpecies.at(chemi) - 1);
+    // 1) input_direction
+    if (input_direction.compare("X") == 0){
+        input_direction_index = 0;
+    }else if (input_direction.compare("Y") == 0){
+        input_direction_index = 1;
+    }else if (input_direction.compare("Z") == 0){
+        input_direction_index = 2;
+    }else{
+
+        // Create Message (Warning Message)
+        msg_string = 
+            "<OpenWQ> WARNING: TSModule_MMF_hype - unkown 'DIRECTION' =>" + input_direction;
+
+        // Print it (Console and/or Log file)
+        OpenWQ_output.ConsoleLog(
+            OpenWQ_wqconfig,    // for Log file name
+            msg_string,         // message
+            true,               // print in console
+            true);              // print in log file
+
+        // Ignore entry
+        return;
 
     }
 
-    // Get chemical species list from BGC_json
-    for (unsigned int chemi = 0; chemi < (OpenWQ_wqconfig.CH->NativeFlex->num_chem); chemi++)
+    // 2) upper compartment AND lower compartment index
+    // Loop through native compartment names
+    
+    input_upper_compartment_index_exist = false; // reset to false
+    input_lower_compartment_index_exist = false; // reset to false
+
+    for (unsigned int icmp_i = 0; icmp_i < OpenWQ_hostModelconfig.get_num_HydroComp(); icmp_i++)
     {
-        (OpenWQ_wqconfig.CH->NativeFlex->chem_species_list).push_back(
-            BGCjson_ChemList[std::to_string(chemi + 1)]);
+        // Upper compartment: index
+        if (input_upper_compartment.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp_i)) == 0){
+            input_upper_compartment_index = icmp_i;
+            input_upper_compartment_index_exist = true;
+        }
+        // Lower compartment: index
+        if (input_lower_compartment.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp_i)) == 0){
+            input_lower_compartment_index = icmp_i;
+            input_lower_compartment_index_exist = true;
+        }
     }
-    */
+
+    // Create Message (Warning Message) if compartments provided don't exist
+    if (input_upper_compartment_index_exist == false 
+        || input_lower_compartment_index_exist == false){
+            
+        msg_string = 
+            "<OpenWQ> WARNING: TSModule_MMF_hype module - unkown 'COMPARTMET NAMES'";
+
+        // Print it (Console and/or Log file)
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig,msg_string,true,true);              // print in log file
+
+        // Ignore entry
+        return;
+
+    }
+        
+    // Add values to tuple
+    OpenWQ_wqconfig.TS->HypeMMF->info_vector = 
+        HypeMMF_infoVect(
+            input_direction_index,
+            input_upper_compartment_index,
+            input_lower_compartment_index,
+            data_format);
+
+    // The actual cohesion,  erodibility and sreroexp values will be processed in 
+    // the function => OpenWQ_TS_model.TS_HYPE_MMF_config()
 
 }

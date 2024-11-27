@@ -255,6 +255,7 @@ int main(int argc, char* argv[])
                         OpenWQ_vars,
                         OpenWQ_initiate,            // initiate modules
                         OpenWQ_TD_model,      // transport modules
+                        OpenWQ_TS_model,
                         OpenWQ_LE_model,             // LE model
                         OpenWQ_CH_model,                   // biochemistry modules
                         OpenWQ_SI_model,

@@ -227,12 +227,15 @@ class OpenWQ_readjson{
             OpenWQ_wqconfig &OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
-        
+             
         void SetConfigInfo_TSModule_MMF_hype(
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_json &OpenWQ_json,
             OpenWQ_wqconfig &OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
+
+            
 
         // SI model
 

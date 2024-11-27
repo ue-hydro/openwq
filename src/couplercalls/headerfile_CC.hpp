@@ -107,6 +107,7 @@ class OpenWQ_couplercalls{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
         OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
+        OpenWQ_TS_model& OpenWQ_TS_model,
         OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
         OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
         OpenWQ_SI_model& OpenWQ_SI_model,

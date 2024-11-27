@@ -17,8 +17,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#ifndef OPENWQ_HEADERFILE_STH_INCLUDED
-#define OPENWQ_HEADERFILE_STH_INCLUDED
+#ifndef OPENWQ_HEADERFILE_TSH_INCLUDED
+#define OPENWQ_HEADERFILE_TSH_INCLUDED
 
 #include <armadillo>
 #include <string>
@@ -44,10 +44,23 @@ class OpenWQ_TS_model{
     public:
 
         // ##########################
-        // MAIN DRIVER 
-        // => Run ST model
+        // MAIN DRIVERS
         // ##########################
-        
+
+         // ###########################     
+        // => Run Config method
+
+        void TS_driver_config(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_vars& OpenWQ_vars,
+            OpenWQ_units& OpenWQ_units,
+            OpenWQ_output& OpenWQ_output);
+
+        // ###########################     
+        // => Run ST model
+       
         void TS_driver_run(
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
@@ -55,7 +68,8 @@ class OpenWQ_TS_model{
             OpenWQ_output& OpenWQ_output,                                   // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
-            const double wflux_s2r, const double wmass_source);
+            const double wflux_s2r, const double wmass_source,
+            std::string TS_type);
 
     private:
     
@@ -63,6 +77,30 @@ class OpenWQ_TS_model{
         // MODEL OPTIONS 
         // ##########################
 
+        // ##########################
+        // CONFIG
+
+        // HYPE_MMF
+        void TS_HYPE_MMF_config(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_vars& OpenWQ_vars,
+            OpenWQ_units& OpenWQ_units,
+            OpenWQ_output& OpenWQ_output);
+
+        // HYPE_HBVSED
+        void TS_HYPE_HBVSED_config(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_vars& OpenWQ_vars,
+            OpenWQ_units& OpenWQ_units,
+            OpenWQ_output& OpenWQ_output);
+
+        // ##########################
+        // RUN
+        
         // HBV sediments as implemented in HYPE
         void hbvsed_hype_erosion(
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
@@ -71,7 +109,8 @@ class OpenWQ_TS_model{
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
             double wflux_s2r, 
-            double wmass_source);
+            double wmass_source,
+            std::string TS_type);
 
          // Based on the Morgan-Morgan-Finney erosion model implemented in HYPE
         void mmf_hype_erosion(
@@ -81,7 +120,8 @@ class OpenWQ_TS_model{
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
             double wflux_s2r, 
-            double wmass_source);
+            double wmass_source,
+            std::string TS_type);
 
         
 

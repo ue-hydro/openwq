@@ -26,11 +26,22 @@ void OpenWQ_TS_model::hbvsed_hype_erosion(
     const int source, const int ix_s, const int iy_s, const int iz_s,
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     double wflux_s2r, 
-    double wmass_source){
+    double wmass_source,
+    std::string TS_type){
 
-    // TO REMOVE -> only testing the cpassing of relevant variable lass-nested/nested/nested variable 
-    OpenWQ_wqconfig.TS->HypeHVB->test_parameter_hypeHVB_2_delete = 8;
-    
+    // If erosion driven by EWF (e.g., precipitation)
+    if (TS_type.compare("TS_type_EWF")){
+
+        // write code here
+
+    }else 
+    // If erosion driven by LE (e.g., runoff)
+    if (TS_type.compare("TS_type_LE")){
+
+        // write code here
+
+    }
+
     /*
     // Local Variables
     double sedmass_exchange_upper_comprt;

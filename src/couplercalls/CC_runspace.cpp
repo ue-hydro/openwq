@@ -35,6 +35,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
     OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
+    OpenWQ_TS_model& OpenWQ_TS_model,
     OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
     OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
     OpenWQ_SI_model& OpenWQ_SI_model,
@@ -82,6 +83,16 @@ void OpenWQ_couplercalls::RunSpaceStep(
         recipient, ix_r, iy_r, iz_r,
         wflux_s2r, wmass_source);
 
+    OpenWQ_TS_model.TS_driver_run(
+        OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
+        OpenWQ_vars,
+        OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+        source, ix_s, iy_s, iz_s,
+        recipient, ix_r, iy_r, iz_r,
+        wflux_s2r, wmass_source,
+        "TS_type_LE");
+
 }
 
 // ################################################################
@@ -122,15 +133,14 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
         wflux_s2r);
 
     // Run TS model
-    /*
     OpenWQ_TS_model.TS_driver_run(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
         OpenWQ_vars,
         OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
-        source, ix_s, iy_s, iz_s,
+        0, 0, 0, 0,
         recipient, ix_r, iy_r, iz_r,
-        wflux_s2r, wmass_source);
-        */
+        wflux_s2r, 0,
+        "TS_type_EWF");
 
 }

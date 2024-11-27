@@ -25,7 +25,10 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output){
+    
+    // CODE BELOW to ADAPT TO NEW MODULE
 
+    /*
     // Local variables
     std::string errorMsgIdentifier;
     json BGCjson_subStruct;
@@ -33,9 +36,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
     json BGCjson_mobileSpecies;
     std::string msg_string;           // error/warning message string
 
-    // CODE BELOW to ADAPT TO NEW MODULE
-
-    /*
+    
     // Check if BGQ json has CHEMICAL_SPECIES key
     errorMsgIdentifier = "BGQ file";
     BGCjson_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(

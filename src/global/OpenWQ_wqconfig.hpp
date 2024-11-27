@@ -456,14 +456,31 @@ class OpenWQ_wqconfig::TS_::HypeHVB_{
 
     public: 
 
-    int test_parameter_hypeHVB_2_delete;
-
 };
 
 // Module TS -> HypeMMF
 class OpenWQ_wqconfig::TS_::HypeMMF_{
 
     public: 
+
+    // General configuration (compartments, direction)
+    std::tuple<unsigned int,unsigned int,unsigned int, std::string>
+            info_vector;
+
+    // Soil coheson (kPa)
+    std::unique_ptr<            
+        arma::Mat<double>
+        > cohesion;  
+
+    // Soil erodibility (g/J)
+    std::unique_ptr<            
+        arma::Mat<double>
+        > erodibility;  
+
+    // Surface runoff erosion exponent 
+    std::unique_ptr<            
+        arma::Mat<double>
+        > sreroexp;  
 
 
 };

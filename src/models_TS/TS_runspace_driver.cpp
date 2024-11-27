@@ -22,7 +22,9 @@ void OpenWQ_TS_model::TS_driver_run(
     OpenWQ_output& OpenWQ_output,                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
     const int source, const int ix_s, const int iy_s, const int iz_s,
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
-    const double wflux_s2r, const double wmass_source){
+    const double wflux_s2r, const double wmass_source,
+    std::string TS_type // EWF (erosion due to prec), LE (erosion due to runoff)
+    ){ 
     
     // Local variables
     std::string msg_string;
@@ -41,7 +43,8 @@ void OpenWQ_TS_model::TS_driver_run(
             OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
+            wflux_s2r, wmass_source,
+            TS_type);
 
     // if TD_module != NONE (and any of the others)
     }else if (OpenWQ_wqconfig.TS->TS_module.compare("HYPE_MMF") == 0)
@@ -52,7 +55,9 @@ void OpenWQ_TS_model::TS_driver_run(
             OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
+            wflux_s2r, wmass_source,
+            TS_type);
+            
     }
     
 }

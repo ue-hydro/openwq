@@ -89,15 +89,22 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
     }
 
     // Load information fo the TS model selected
-    if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_HBVSED") == 0){
+    if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_MMF") == 0){
+        
+        SetConfigInfo_TSModule_MMF_hype( 
+            OpenWQ_hostModelconfig,
+            OpenWQ_json, 
+            OpenWQ_wqconfig, 
+            OpenWQ_utils, 
+            OpenWQ_output);
+
+    }else if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_HBVSED") == 0){
         
         SetConfigInfo_TSModule_HBVsed_hype(  
-            OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
-
-    }else if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_MMF") == 0){
-        
-        SetConfigInfo_TSModule_MMF_hype(  
-            OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
+            OpenWQ_json, 
+            OpenWQ_wqconfig, 
+            OpenWQ_utils, 
+            OpenWQ_output);
 
     }
 

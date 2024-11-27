@@ -1,5 +1,3 @@
-
-
 // Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
@@ -16,25 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "models_CH/headerfile_CH.hpp"
+#include "models_TS/headerfile_TS.hpp"
 
-void OpenWQ_CH_model::CH_driver_config(
-        OpenWQ_json& OpenWQ_json,
-        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
-        OpenWQ_wqconfig& OpenWQ_wqconfig,
-        OpenWQ_vars& OpenWQ_vars,
-        OpenWQ_units& OpenWQ_units,
-        OpenWQ_output& OpenWQ_output){
-    
+
+void OpenWQ_TS_model::TS_driver_config(
+    OpenWQ_json& OpenWQ_json,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_units& OpenWQ_units,
+    OpenWQ_output& OpenWQ_output){
+
+
     // Local variable
     std::string msg_string;
 
     // NATIVE Bigoeochemical model
     // Parse biogeochemical expressions (and save in global)
-    if ((OpenWQ_wqconfig.CH->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+    if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_MMF") == 0)
     {
         
-        bgc_flex_setBGCexpressions(
+        TS_HYPE_MMF_config(
             OpenWQ_json,
             OpenWQ_hostModelconfig,
             OpenWQ_wqconfig,
@@ -42,11 +42,23 @@ void OpenWQ_CH_model::CH_driver_config(
             OpenWQ_units,
             OpenWQ_output);
 
+    }else if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_HBVSED") == 0)
+    {
+        /*
+        TS_HYPE_HBVSED_config(
+            OpenWQ_json,
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,
+            OpenWQ_vars,
+            OpenWQ_units,
+            OpenWQ_output);
+        */
+       
     }else{
 
         // Create Message
         msg_string = 
-            "<OpenWQ> ERROR: No BGC_module found or unkown";
+            "<OpenWQ> ERROR: No TS_module found or unkown";
 
         // Print it (Console and/or Log file)
         OpenWQ_output.ConsoleLog(
