@@ -63,6 +63,8 @@ class OpenWQ_utils{
 
     // Get number of lines in file
     unsigned int getNumLinesfromASCIIFile(
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_output& OpenWQ_output,
         std::string ascii_FilePath); // path to file
 
     // Split string into vector of strings based on string-delimiter

@@ -56,6 +56,7 @@ class OpenWQ_TS_model{
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_units& OpenWQ_units,
+            OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
         // ###########################     
@@ -87,6 +88,7 @@ class OpenWQ_TS_model{
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_units& OpenWQ_units,
+            OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
         // HYPE_HBVSED

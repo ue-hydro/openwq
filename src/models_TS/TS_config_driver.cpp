@@ -23,6 +23,7 @@ void OpenWQ_TS_model::TS_driver_config(
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_units& OpenWQ_units,
+    OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output){
 
 
@@ -40,6 +41,7 @@ void OpenWQ_TS_model::TS_driver_config(
             OpenWQ_wqconfig,
             OpenWQ_vars,
             OpenWQ_units,
+            OpenWQ_utils,
             OpenWQ_output);
 
     }else if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_HBVSED") == 0)

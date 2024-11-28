@@ -27,11 +27,32 @@
 // Get number of lines in file
 // ########################################                                                          
 unsigned int OpenWQ_utils::getNumLinesfromASCIIFile(
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_output& OpenWQ_output,
     std::string ascii_FilePath){ // path to file
 
-    std::ifstream aFile (ascii_FilePath);   
+    std::ifstream aFile(ascii_FilePath);   
     std::size_t lines_count=0;
     std::string line;
+    std::string msg_string;
+
+    // Check if file exists
+    // Abort if not 
+    if(!aFile){
+
+        msg_string = "File not found: " + ascii_FilePath;
+
+        // Print it (Console and/or Log file)
+        OpenWQ_output.ConsoleLog(
+            OpenWQ_wqconfig,    // for Log file name
+            msg_string,         // message
+            true,               // print in console
+            true);              // print in log file
+        
+        // Abort (Fatal error)
+        exit(EXIT_FAILURE);
+
+    }
 
     // loop to get number of lines
     while (std::getline(aFile , line))

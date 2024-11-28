@@ -337,7 +337,10 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
             true);  
 
             // Get number of rows in ASCII file
-            num_rowdata = OpenWQ_utils.getNumLinesfromASCIIFile(ascii_FilePath)
+            num_rowdata = OpenWQ_utils.getNumLinesfromASCIIFile(
+                OpenWQ_wqconfig,
+                OpenWQ_output,
+                ascii_FilePath)
                 - ascii_numHeaderRows;
 
             // Open ASCII file (read mode only)

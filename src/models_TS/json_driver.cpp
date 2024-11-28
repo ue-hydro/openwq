@@ -78,7 +78,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
             errorMsgIdentifier,
             true);
 
-        OpenWQ_readjson::read_JSON_2class(
+        read_JSON_2class(
             OpenWQ_wqconfig,
             OpenWQ_output,
             OpenWQ_utils,
@@ -86,6 +86,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
             false,
             "",
             input_filepath);
+            
     }
 
     // Load information fo the TS_model model selected

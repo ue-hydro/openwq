@@ -57,7 +57,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     // Get LATERAL_EXCHANGE module name
     errorMsgIdentifier = "Master file in MODULES > TRANSPORT_SEDIMENTS";
 
-    // Get info for BoundMix function
+    // Get info for TSModule_MMF_hype function
     // Get number of entries
     errorMsgIdentifier = "TS_model file";
     json_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
