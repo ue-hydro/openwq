@@ -63,7 +63,7 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
     TS_model = new TS_model_();
     CH_model = new CH_model_();
     LE_model = new LE_model_();
-    SI = new SI_();
+    SI_model = new SI_model_();
 
 }
 
@@ -98,11 +98,11 @@ OpenWQ_wqconfig::TS_model_::~TS_model_() {
     delete HypeMMF;
 }
 
-OpenWQ_wqconfig::SI_::SI_() {
+OpenWQ_wqconfig::SI_model_::SI_model_() {
     LANGMUIR = new LANGMUIR_();
     FREUNDLICH = new FREUNDLICH_();
 }
-OpenWQ_wqconfig::SI_::~SI_() {   
+OpenWQ_wqconfig::SI_model_::~SI_model_() {   
     delete LANGMUIR;
     delete FREUNDLICH;
 }
@@ -118,7 +118,7 @@ OpenWQ_wqconfig::~OpenWQ_wqconfig() {
     delete TS_model;
     delete CH_model;
     delete LE_model;
-    delete SI;
+    delete SI_model;
 
 }
 

@@ -26,7 +26,7 @@ void OpenWQ_SI_model::langmuir(
     OpenWQ_output& OpenWQ_output){
 
     // TO REMOVE -> only testing the cpassing of relevant variable lass-nested/nested/nested variable 
-    OpenWQ_wqconfig.SI->FREUNDLICH->test_parameter_freundlich_2_delete = 8;
+    OpenWQ_wqconfig.SI_model->FREUNDLICH->test_parameter_freundlich_2_delete = 8;
 
     /*
 

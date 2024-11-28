@@ -6383,7 +6383,7 @@ class lexer : public lexer_base<BasicJsonType>
 
                 case 0x0F:
                 {
-                    error_message = "invalid string: control character U+000F (SI) must be escaped to \\u000F";
+                    error_message = "invalid string: control character U+000F (SI_model) must be escaped to \\u000F";
                     return token_type::parse_error;
                 }
 

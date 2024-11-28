@@ -30,7 +30,7 @@ void OpenWQ_SI_model::SI_driver_run(
     // Sediment Transport
     // #################################################
 
-    if (OpenWQ_wqconfig.SI->SI_module.compare("LANGMUIR") == 0)
+    if (OpenWQ_wqconfig.SI_model->SI_module.compare("LANGMUIR") == 0)
     {
         
         langmuir(
@@ -41,7 +41,7 @@ void OpenWQ_SI_model::SI_driver_run(
             OpenWQ_output);
 
     // if TD_module != NONE (and any of the others)
-    }else if (OpenWQ_wqconfig.SI->SI_module.compare("FREUNDLICH") == 0)
+    }else if (OpenWQ_wqconfig.SI_model->SI_module.compare("FREUNDLICH") == 0)
     {
         freundlich(
             OpenWQ_json,

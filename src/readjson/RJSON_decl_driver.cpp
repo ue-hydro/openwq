@@ -159,7 +159,7 @@ void OpenWQ_readjson::SetConfigInfo_driver(
         OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
         OpenWQ_utils, OpenWQ_output);
 
-    // Set SI module settings (sorption isotherm)
+    // Set SI_model module settings (sorption isotherm)
     SetConfigInfo_SIModule(
         OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
         OpenWQ_utils, OpenWQ_output);

@@ -265,9 +265,9 @@ class OpenWQ_wqconfig
         class TS_model_; 
         TS_model_* TS_model;
         
-        // 5) Sorption isotherm (SI)
-        class SI_; 
-        SI_* SI;
+        // 5) Sorption isotherm (SI_model)
+        class SI_model_; 
+        SI_model_* SI_model;
 
         OpenWQ_wqconfig();
         ~OpenWQ_wqconfig();
@@ -359,14 +359,14 @@ class OpenWQ_wqconfig::TS_model_{
     
 };
 
-class OpenWQ_wqconfig::SI_{
+class OpenWQ_wqconfig::SI_model_{
 
     public:
     std::string SI_module;
 
     // constructor/destructor
-    SI_(); 
-    ~SI_();
+    SI_model_(); 
+    ~SI_model_();
 
      // ######################
     // classes for each model
@@ -485,8 +485,8 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
 
 };
 
-// Module SI -> Langmuir Isotherm
-class OpenWQ_wqconfig::SI_::LANGMUIR_{
+// Module SI_model -> Langmuir Isotherm
+class OpenWQ_wqconfig::SI_model_::LANGMUIR_{
 
     public: 
 
@@ -494,8 +494,8 @@ class OpenWQ_wqconfig::SI_::LANGMUIR_{
 
 };
 
-// Module SI -> Langmuir Isotherm
-class OpenWQ_wqconfig::SI_::FREUNDLICH_{
+// Module SI_model -> Langmuir Isotherm
+class OpenWQ_wqconfig::SI_model_::FREUNDLICH_{
 
     public: 
 

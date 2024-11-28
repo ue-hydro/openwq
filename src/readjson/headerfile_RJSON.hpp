@@ -237,7 +237,7 @@ class OpenWQ_readjson{
 
             
 
-        // SI model
+        // SI_model model
 
         // driver
         void SetConfigInfo_SIModule(
