@@ -144,7 +144,7 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     SetConfigInfo_CHModule(  
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 
-    // Set TD module settings (transport dissolved)
+    // Set TD_model module settings (transport dissolved)
     SetConfigInfo_TDModule(
         OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
         OpenWQ_utils, OpenWQ_output);

@@ -75,7 +75,7 @@ void OpenWQ_readjson::SetConfigInfo_LEModule(
         
     (OpenWQ_wqconfig.LE->LE_module).append(LE_method_local);
 
-    // Check if TD option not valid, through error
+    // Check if TD_model option not valid, through error
     if ((OpenWQ_wqconfig.LE->LE_module).compare("NATIVE_LE_BOUNDMIX") != 0 
         && (OpenWQ_wqconfig.LE->LE_module).compare("NONE") != 0){
 

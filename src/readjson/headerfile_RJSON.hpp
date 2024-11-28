@@ -178,7 +178,7 @@ class OpenWQ_readjson{
             OpenWQ_output& OpenWQ_output);
 
         // ######################
-        // TD model
+        // TD_model model
 
         // driver
         void SetConfigInfo_TDModule(

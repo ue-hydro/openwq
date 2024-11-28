@@ -18,7 +18,7 @@
 #include "readjson/headerfile_RJSON.hpp"
 
 
-// Set TD module options
+// Set TD_model module options
 void OpenWQ_readjson::SetConfigInfo_TDModule(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_hostModelconfig & OpenWQ_hostModelconfig,
@@ -58,11 +58,11 @@ void OpenWQ_readjson::SetConfigInfo_TDModule(
         errorMsgIdentifier,
         true);
 
-    // save TD module name
-    (OpenWQ_wqconfig.TD->TD_module).append(input_module_name);
+    // save TD_model module name
+    (OpenWQ_wqconfig.TD_model->TD_module).append(input_module_name);
 
     // Print it (Console and/or Log file)
-    msg_string = "<OPENWQ> MODULE LOADED: TRANSPORT_DISSOLVED > " + OpenWQ_wqconfig.TD->TD_module;
+    msg_string = "<OPENWQ> MODULE LOADED: TRANSPORT_DISSOLVED > " + OpenWQ_wqconfig.TD_model->TD_module;
     OpenWQ_output.ConsoleLog(
         OpenWQ_wqconfig,    // for Log file name
         msg_string,         // message
@@ -70,15 +70,15 @@ void OpenWQ_readjson::SetConfigInfo_TDModule(
         true);              // print in log file
 
 
-    // Check if TD option not valid, through error
-    if ((OpenWQ_wqconfig.TD->TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") != 0 
-        && (OpenWQ_wqconfig.TD->TD_module).compare("NATIVE_TD_ADV") != 0 
-        && (OpenWQ_wqconfig.TD->TD_module).compare("NONE") != 0){
+    // Check if TD_model option not valid, through error
+    if ((OpenWQ_wqconfig.TD_model->TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") != 0 
+        && (OpenWQ_wqconfig.TD_model->TD_module).compare("NATIVE_TD_ADV") != 0 
+        && (OpenWQ_wqconfig.TD_model->TD_module).compare("NONE") != 0){
 
         // Create Message (Warning Message)
         msg_string = 
             "<OpenWQ> WARNING: TRANSPORT_DISSOLVED module - unkown (entry = "
-            + OpenWQ_wqconfig.TD->TD_module + ")";
+            + OpenWQ_wqconfig.TD_model->TD_module + ")";
 
         // Print it (Console and/or Log file)
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true,true); 

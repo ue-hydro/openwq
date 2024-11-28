@@ -60,11 +60,11 @@ void OpenWQ_couplercalls::RunSpaceStep(
     // MODULES
 
     // #################################################
-    // TD module
+    // TD_model module
     // Mass transport with water (mobile material only)
     // #################################################
 
-    // Run TD model
+    // Run TD_model model
     OpenWQ_TD_model.TD_driver_run(
         OpenWQ_wqconfig,
         OpenWQ_vars,

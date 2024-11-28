@@ -250,8 +250,8 @@ class OpenWQ_wqconfig
         // ########################################
 
         // 1) Transport / Erosion (TE)
-        class TD_; 
-        TD_* TD;
+        class TD_model_; 
+        TD_model_* TD_model;
 
         // 2) Biogeochemistry
         class CH_; 
@@ -279,14 +279,14 @@ class OpenWQ_wqconfig
 // Define INNER MODEL CLASSES
 // ##############################
 
-class OpenWQ_wqconfig::TD_{
+class OpenWQ_wqconfig::TD_model_{
 
     public:
     std::string TD_module;
 
     // constructor/destructor
-    TD_(); 
-    ~TD_();
+    TD_model_(); 
+    ~TD_model_();
 
     // ######################
     // classes for each model
@@ -385,7 +385,7 @@ class OpenWQ_wqconfig::SI_{
 // e.g., Module LE -> BoundMix
 // #######################################
 
-class OpenWQ_wqconfig::TD_::NativeAdv_{
+class OpenWQ_wqconfig::TD_model_::NativeAdv_{
 
     public:
 
@@ -394,7 +394,7 @@ class OpenWQ_wqconfig::TD_::NativeAdv_{
 
 };
 
-class OpenWQ_wqconfig::TD_::NativeAdvDisp_{
+class OpenWQ_wqconfig::TD_model_::NativeAdvDisp_{
 
     public:
 

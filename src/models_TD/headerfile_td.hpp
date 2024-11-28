@@ -42,7 +42,7 @@ class OpenWQ_TD_model{
 
         // ##########################
         // MAIN DRIVER 
-        // => Run TD model
+        // => Run TD_model model
         // ##########################
 
         void TD_driver_run(

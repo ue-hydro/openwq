@@ -59,7 +59,7 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
         (new  std::vector<std::vector<std::vector<arma::cube>>>);
 
     // Modules
-    TD = new TD_();
+    TD_model = new TD_model_();
     TS = new TS_();
     CH = new CH_();
     LE = new LE_();
@@ -67,11 +67,11 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
 
 }
 
-OpenWQ_wqconfig::TD_::TD_() {
+OpenWQ_wqconfig::TD_model_::TD_model_() {
     NativeAdv = new NativeAdv_();
     NativeAdvDisp = new NativeAdvDisp_();
 }
-OpenWQ_wqconfig::TD_::~TD_() {
+OpenWQ_wqconfig::TD_model_::~TD_model_() {
     delete NativeAdvDisp;
 }
 
@@ -114,7 +114,7 @@ OpenWQ_wqconfig::~OpenWQ_wqconfig() {
         H5Fclose(x.second);
     }
 
-    delete TD;
+    delete TD_model;
     delete TS;
     delete CH;
     delete LE;

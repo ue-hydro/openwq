@@ -29,7 +29,7 @@ void OpenWQ_TD_model::TD_driver_run(
     std::string msg_string;
 
     // if TD_module = OPENWQ_NATIVE_TD_ADVDISP
-    if ((OpenWQ_wqconfig.TD->TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") == 0)
+    if ((OpenWQ_wqconfig.TD_model->TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") == 0)
     {
         AdvDisp(
             OpenWQ_vars, OpenWQ_wqconfig,
@@ -38,7 +38,7 @@ void OpenWQ_TD_model::TD_driver_run(
             wflux_s2r, wmass_source);
 
     // if TD_module = NATIVE_TD_ADV
-    }else if ((OpenWQ_wqconfig.TD->TD_module).compare("NATIVE_TD_ADV") == 0)
+    }else if ((OpenWQ_wqconfig.TD_model->TD_module).compare("NATIVE_TD_ADV") == 0)
     {
         Adv(
             OpenWQ_vars, OpenWQ_wqconfig,
