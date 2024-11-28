@@ -34,7 +34,7 @@ void OpenWQ_TS_model::TS_driver_run(
     // Sediment Transport
     // #################################################
 
-    if (OpenWQ_wqconfig.TS->TS_module.compare("HYPE_HBVSED") == 0)
+    if (OpenWQ_wqconfig.TS_model->TS_module.compare("HYPE_HBVSED") == 0)
     {
         
         hbvsed_hype_erosion(
@@ -47,7 +47,7 @@ void OpenWQ_TS_model::TS_driver_run(
             TS_type);
 
     // if TD_module != NONE (and any of the others)
-    }else if (OpenWQ_wqconfig.TS->TS_module.compare("HYPE_MMF") == 0)
+    }else if (OpenWQ_wqconfig.TS_model->TS_module.compare("HYPE_MMF") == 0)
     {
         mmf_hype_erosion(
             OpenWQ_hostModelconfig, 

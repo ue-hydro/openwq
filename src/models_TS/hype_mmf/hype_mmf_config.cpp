@@ -75,7 +75,7 @@
 
     std::string DataFormat;
 
-    DataFormat = std::get<3>(OpenWQ_wqconfig.TS->HypeMMF->info_vector);
+    DataFormat = std::get<3>(OpenWQ_wqconfig.TS_model->HypeMMF->info_vector);
 
     /* ########
     // Check if DATA_FORMAT=ASCII

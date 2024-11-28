@@ -106,7 +106,7 @@ void OpenWQ_couplercalls::InitialConfig(
         OpenWQ_units,
         OpenWQ_output);
 
-    // TS
+    // TS_model
     OpenWQ_TS_model.TS_driver_config(
         OpenWQ_json,
         OpenWQ_hostModelconfig,

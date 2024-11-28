@@ -59,35 +59,35 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
 
     // Get info for BoundMix function
     // Get number of entries
-    errorMsgIdentifier = "TS file";
+    errorMsgIdentifier = "TS_model file";
     json_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
         OpenWQ_json.TS_module, "CONFIGURATION",
         errorMsgIdentifier,
         true);
 
-    errorMsgIdentifier = "TS file > DIRECTION";
+    errorMsgIdentifier = "TS_model file > DIRECTION";
     input_direction = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, "DIRECTION",
         errorMsgIdentifier,
         true); 
 
-    errorMsgIdentifier = "TS file > UPPER_COMPARTMENT";
+    errorMsgIdentifier = "TS_model file > UPPER_COMPARTMENT";
     input_upper_compartment = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, "UPPER_COMPARTMENT",
         errorMsgIdentifier,
         true); 
 
-    errorMsgIdentifier = "TS file > LOWER_COMPARTMENT";
+    errorMsgIdentifier = "TS_model file > LOWER_COMPARTMENT";
     input_lower_compartment = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, "LOWER_COMPARTMENT",
         errorMsgIdentifier,
         true); 
 
-    errorMsgIdentifier = "TS file > DATA_FORMAT";
+    errorMsgIdentifier = "TS_model file > DATA_FORMAT";
     data_format = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, "DATA_FORMAT",
@@ -158,7 +158,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     }
         
     // Add values to tuple
-    OpenWQ_wqconfig.TS->HypeMMF->info_vector = 
+    OpenWQ_wqconfig.TS_model->HypeMMF->info_vector = 
         HypeMMF_infoVect(
             input_direction_index,
             input_upper_compartment_index,

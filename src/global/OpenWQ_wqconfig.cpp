@@ -60,7 +60,7 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
 
     // Modules
     TD_model = new TD_model_();
-    TS = new TS_();
+    TS_model = new TS_model_();
     CH = new CH_();
     LE = new LE_();
     SI = new SI_();
@@ -89,11 +89,11 @@ OpenWQ_wqconfig::CH_::~CH_() {
     delete NativeFlex;
 }
 
-OpenWQ_wqconfig::TS_::TS_() {
+OpenWQ_wqconfig::TS_model_::TS_model_() {
     HypeHVB = new HypeHVB_();
     HypeMMF = new HypeMMF_();
 }
-OpenWQ_wqconfig::TS_::~TS_() {   
+OpenWQ_wqconfig::TS_model_::~TS_model_() {   
     delete HypeHVB;
     delete HypeMMF;
 }
@@ -115,7 +115,7 @@ OpenWQ_wqconfig::~OpenWQ_wqconfig() {
     }
 
     delete TD_model;
-    delete TS;
+    delete TS_model;
     delete CH;
     delete LE;
     delete SI;

@@ -132,7 +132,7 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
         recipient, ix_r, iy_r, iz_r,
         wflux_s2r);
 
-    // Run TS model
+    // Run TS_model model
     OpenWQ_TS_model.TS_driver_run(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,               // create OpenWQ_wqconfig object

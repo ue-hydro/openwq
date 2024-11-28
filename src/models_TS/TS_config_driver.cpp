@@ -31,7 +31,7 @@ void OpenWQ_TS_model::TS_driver_config(
 
     // NATIVE Bigoeochemical model
     // Parse biogeochemical expressions (and save in global)
-    if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_MMF") == 0)
+    if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_MMF") == 0)
     {
         
         TS_HYPE_MMF_config(
@@ -42,7 +42,7 @@ void OpenWQ_TS_model::TS_driver_config(
             OpenWQ_units,
             OpenWQ_output);
 
-    }else if ((OpenWQ_wqconfig.TS->TS_module).compare("HYPE_HBVSED") == 0)
+    }else if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_HBVSED") == 0)
     {
         /*
         TS_HYPE_HBVSED_config(

@@ -262,8 +262,8 @@ class OpenWQ_wqconfig
         LE_* LE;
 
         // 4) Transport Sediments (ST)
-        class TS_; 
-        TS_* TS;
+        class TS_model_; 
+        TS_model_* TS_model;
         
         // 5) Sorption isotherm (SI)
         class SI_; 
@@ -339,14 +339,14 @@ class OpenWQ_wqconfig::LE_{
 
 };
 
-class OpenWQ_wqconfig::TS_{
+class OpenWQ_wqconfig::TS_model_{
 
     public: 
     std::string TS_module;
 
     // constructor/destructor
-    TS_(); 
-    ~TS_();
+    TS_model_(); 
+    ~TS_model_();
 
     // ######################
     // classes for each model
@@ -451,15 +451,15 @@ class OpenWQ_wqconfig::CH_::NativeFlex_{
 
 };
 
-// Module TS -> HypeHVB
-class OpenWQ_wqconfig::TS_::HypeHVB_{
+// Module TS_model -> HypeHVB
+class OpenWQ_wqconfig::TS_model_::HypeHVB_{
 
     public: 
 
 };
 
-// Module TS -> HypeMMF
-class OpenWQ_wqconfig::TS_::HypeMMF_{
+// Module TS_model -> HypeMMF
+class OpenWQ_wqconfig::TS_model_::HypeMMF_{
 
     public: 
 

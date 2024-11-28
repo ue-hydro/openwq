@@ -59,7 +59,7 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
         errorMsgIdentifier,
         true);
 
-     // save TS module name
+     // save TS_model module name
     (OpenWQ_wqconfig.SI->SI_module).append(input_module_name);
 
     // Print it (Console and/or Log file)
@@ -89,7 +89,7 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
             input_filepath);
     }
 
-    // Load information fo the TS model selected
+    // Load information fo the TS_model model selected
     if ((OpenWQ_wqconfig.SI->SI_module).compare("FREUNDLICH") == 0){
         
         SetConfigInfo_SIModule_freundlich(  

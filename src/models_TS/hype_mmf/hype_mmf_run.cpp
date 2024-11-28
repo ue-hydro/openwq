@@ -56,9 +56,9 @@ void OpenWQ_TS_model::mmf_hype_erosion(
     pdayno 
 
     // generate variables JSON (matrix)
-    OpenWQ_wqconfig->TS->cohesion    // kPa
-    OpenWQ_wqconfig->TS->erodibility // g/J
-    OpenWQ_wqconfig->TS->sreroexp // surface runoff erosion exponent 
+    OpenWQ_wqconfig->TS_model->cohesion    // kPa
+    OpenWQ_wqconfig->TS_model->erodibility // g/J
+    OpenWQ_wqconfig->TS_model->sreroexp // surface runoff erosion exponent 
 
     // Local variables
     double prec_erosion_threshold;
