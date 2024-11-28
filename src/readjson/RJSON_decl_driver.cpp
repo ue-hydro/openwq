@@ -140,7 +140,7 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     // Set MODELS
     // #############################
 
-    // Set CH module settings (chemistry)
+    // Set CH_model module settings (chemistry)
     SetConfigInfo_CHModule(  
         OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
 

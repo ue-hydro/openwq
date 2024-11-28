@@ -61,7 +61,7 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
     // Modules
     TD_model = new TD_model_();
     TS_model = new TS_model_();
-    CH = new CH_();
+    CH_model = new CH_model_();
     LE = new LE_();
     SI = new SI_();
 
@@ -82,10 +82,10 @@ OpenWQ_wqconfig::LE_::~LE_() {
     delete BoundMix;
 }
 
-OpenWQ_wqconfig::CH_::CH_() {
+OpenWQ_wqconfig::CH_model_::CH_model_() {
     NativeFlex = new NativeFlex_();
 }
-OpenWQ_wqconfig::CH_::~CH_() {
+OpenWQ_wqconfig::CH_model_::~CH_model_() {
     delete NativeFlex;
 }
 
@@ -116,7 +116,7 @@ OpenWQ_wqconfig::~OpenWQ_wqconfig() {
 
     delete TD_model;
     delete TS_model;
-    delete CH;
+    delete CH_model;
     delete LE;
     delete SI;
 

@@ -31,7 +31,7 @@ void OpenWQ_CH_model::CH_driver_config(
 
     // NATIVE Bigoeochemical model
     // Parse biogeochemical expressions (and save in global)
-    if ((OpenWQ_wqconfig.CH->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
     {
         
         bgc_flex_setBGCexpressions(

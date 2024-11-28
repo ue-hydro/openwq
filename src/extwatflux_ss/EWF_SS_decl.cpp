@@ -252,7 +252,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
     foundflag = getModIndex(
         OpenWQ_wqconfig,
         OpenWQ_output,
-        OpenWQ_wqconfig.CH->NativeFlex->chem_species_list,
+        OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list,
         Chemical_name,
         err_text,
         chem_ssi);
@@ -1265,7 +1265,7 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
     // Loop over EWF h5 files
     // ################################
     // Each chemical species is in different files
-    for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH->NativeFlex->num_chem;chemi++){
+    for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;chemi++){
 
         // Set new chem flag true
         flag_newChem = true;
@@ -1274,7 +1274,7 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
         // Get and process interface H5 data 
 
         // Get chem name
-        chemname = (OpenWQ_wqconfig.CH->NativeFlex->chem_species_list)[chemi];
+        chemname = (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi];
 
         // Throw consolde update
         msg_string = "         " + external_waterFluxName + " => " + chemname + " .";

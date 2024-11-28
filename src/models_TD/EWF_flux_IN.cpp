@@ -45,13 +45,13 @@ void OpenWQ_TD_model::EWF_flux_driver_run(
         OpenWQ_hostModelconfig.get_HydroExtFlux_names(),
         source_EWF_name);
 
-    unsigned int numspec = OpenWQ_wqconfig.CH->NativeFlex->mobile_species.size();
+    unsigned int numspec = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.size();
 
     // Loop over mobile chemical species
     for (unsigned int chemi=0;chemi<numspec;chemi++){
 
         // mobile chemical species index
-        ichem_mob = OpenWQ_wqconfig.CH->NativeFlex->mobile_species[chemi];
+        ichem_mob = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species[chemi];
 
         // Get appropriate chemi concentraton for this ewf and domain ix, iy, iz
         ewf_conc_chemi = (*OpenWQ_vars.ewf_conc)

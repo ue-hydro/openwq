@@ -97,7 +97,7 @@ void OpenWQ_couplercalls::InitialConfig(
     // ##################################
     // BIOGEOCHEMISTRY
     
-    // CH
+    // CH_model
     OpenWQ_CH_model.CH_driver_config(
         OpenWQ_json,
         OpenWQ_hostModelconfig,

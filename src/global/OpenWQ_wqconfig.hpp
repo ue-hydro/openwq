@@ -254,8 +254,8 @@ class OpenWQ_wqconfig
         TD_model_* TD_model;
 
         // 2) Biogeochemistry
-        class CH_; 
-        CH_* CH;
+        class CH_model_; 
+        CH_model_* CH_model;
 
         // 4) Lateral Exchange (LE)
         class LE_; 
@@ -299,14 +299,14 @@ class OpenWQ_wqconfig::TD_model_{
 
 };
 
-class OpenWQ_wqconfig::CH_{
+class OpenWQ_wqconfig::CH_model_{
 
     public:
     std::string BGC_module;
 
     // constructor/destructor
-    CH_(); 
-    ~CH_();
+    CH_model_(); 
+    ~CH_model_();
 
     // ######################
     // classes for each model
@@ -415,8 +415,8 @@ class OpenWQ_wqconfig::LE_::BoundMix_{
 
 };
 
-// Module CH -> NativeFlex
-class OpenWQ_wqconfig::CH_::NativeFlex_{
+// Module CH_model -> NativeFlex
+class OpenWQ_wqconfig::CH_model_::NativeFlex_{
 
     public:
 

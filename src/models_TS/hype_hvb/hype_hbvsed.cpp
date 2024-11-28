@@ -94,10 +94,10 @@ void OpenWQ_TS_model::hbvsed_hype_erosion(
 
 
         // Loop over mobile species
-        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH->NativeFlex->mobile_species.size();chemi++){
+        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.size();chemi++){
    
             // Get index of mobile species
-            chemi_mob = OpenWQ_wqconfig.CH->NativeFlex->mobile_species[chemi];
+            chemi_mob = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species[chemi];
             
             //##########################################
             // Chemical exxhange between upper and lower compartments
