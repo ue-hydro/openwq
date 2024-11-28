@@ -36,7 +36,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
     OpenWQ_initiate& OpenWQ_initiate,               // initiate modules
     OpenWQ_TD_model& OpenWQ_TD_model,         // transport modules
     OpenWQ_TS_model& OpenWQ_TS_model,
-    OpenWQ_LE_model& OpenWQ_LE_model,               // LE model
+    OpenWQ_LE_model& OpenWQ_LE_model,               // LE_model model
     OpenWQ_CH_model& OpenWQ_CH_model,                       // biochemistry modules
     OpenWQ_SI_model& OpenWQ_SI_model,
     OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss,     // sink and source modules)
@@ -73,7 +73,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
         recipient, ix_r, iy_r, iz_r,
         wflux_s2r, wmass_source);
 
-    // Run LE model
+    // Run LE_model model
     OpenWQ_LE_model.LE_driver_run(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,               // create OpenWQ_wqconfig object

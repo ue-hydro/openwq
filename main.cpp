@@ -123,7 +123,7 @@ int main(int argc, char* argv[])
             OpenWQ_vars,
             OpenWQ_initiate,            // initiate modules
             OpenWQ_TD_model,         // transport modules
-            OpenWQ_LE_model,            // LE model
+            OpenWQ_LE_model,            // LE_model model
             OpenWQ_CH_model,                   // biochemistry modules
             OpenWQ_extwatflux_ss,        // sink and source modules)
             OpenWQ_output);
@@ -256,7 +256,7 @@ int main(int argc, char* argv[])
                         OpenWQ_initiate,            // initiate modules
                         OpenWQ_TD_model,      // transport modules
                         OpenWQ_TS_model,
-                        OpenWQ_LE_model,             // LE model
+                        OpenWQ_LE_model,             // LE_model model
                         OpenWQ_CH_model,                   // biochemistry modules
                         OpenWQ_SI_model,
                         OpenWQ_extwatflux_ss,        // sink and source modules)

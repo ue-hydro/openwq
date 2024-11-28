@@ -17,7 +17,7 @@
 
 #include "readjson/headerfile_RJSON.hpp"
 
-// Set LE module options
+// Set LE_model module options
 void OpenWQ_readjson::SetConfigInfo_TSModule(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_hostModelconfig & OpenWQ_hostModelconfig,

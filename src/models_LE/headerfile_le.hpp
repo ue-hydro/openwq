@@ -48,7 +48,7 @@ class OpenWQ_LE_model{
 
         // ##########################
         // MAIN DRIVER 
-        // => Run LE model
+        // => Run LE_model model
         // ##########################
         
         void LE_driver_run(

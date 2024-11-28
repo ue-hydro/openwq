@@ -35,7 +35,7 @@ void OpenWQ_TS_model::hbvsed_hype_erosion(
         // write code here
 
     }else 
-    // If erosion driven by LE (e.g., runoff)
+    // If erosion driven by LE_model (e.g., runoff)
     if (TS_type.compare("TS_type_LE")){
 
         // write code here
@@ -67,14 +67,14 @@ void OpenWQ_TS_model::hbvsed_hype_erosion(
     // Return if no flux: wflux_s2r == 0
     if(wflux_s2r == 0.0f){return;}
 
-    for (unsigned int entry_i = 0; entry_i < OpenWQ_wqconfig.LE->BoundMix->info_vector.size(); entry_i++){
+    for (unsigned int entry_i = 0; entry_i < OpenWQ_wqconfig.LE_model->BoundMix->info_vector.size(); entry_i++){
 
         xyz_upper_compartment.clear();
 
         // Get inputs of entry
-        input_direction_index = std::get<0>(OpenWQ_wqconfig.LE->BoundMix->info_vector[entry_i]);
-        input_upper_compartment_index = std::get<1>(OpenWQ_wqconfig.LE->BoundMix->info_vector[entry_i]);
-        input_lower_compartment_index = std::get<2>(OpenWQ_wqconfig.LE->BoundMix->info_vector[entry_i]);
+        input_direction_index = std::get<0>(OpenWQ_wqconfig.LE_model->BoundMix->info_vector[entry_i]);
+        input_upper_compartment_index = std::get<1>(OpenWQ_wqconfig.LE_model->BoundMix->info_vector[entry_i]);
+        input_lower_compartment_index = std::get<2>(OpenWQ_wqconfig.LE_model->BoundMix->info_vector[entry_i]);
 
         // Num of cells in upper_compartment
         xyz_upper_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(input_upper_compartment_index));

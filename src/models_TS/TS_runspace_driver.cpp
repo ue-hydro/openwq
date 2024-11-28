@@ -23,7 +23,7 @@ void OpenWQ_TS_model::TS_driver_run(
     const int source, const int ix_s, const int iy_s, const int iz_s,
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     const double wflux_s2r, const double wmass_source,
-    std::string TS_type // EWF (erosion due to prec), LE (erosion due to runoff)
+    std::string TS_type // EWF (erosion due to prec), LE_model (erosion due to runoff)
     ){ 
     
     // Local variables

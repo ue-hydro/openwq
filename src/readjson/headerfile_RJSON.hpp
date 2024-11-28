@@ -192,7 +192,7 @@ class OpenWQ_readjson{
         // ????  TODO: need to separate
 
         // ######################
-        // LE model
+        // LE_model model
 
         // driver
         void SetConfigInfo_LEModule(

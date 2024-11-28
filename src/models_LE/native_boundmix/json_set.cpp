@@ -18,7 +18,7 @@
 
 #include "readjson/headerfile_RJSON.hpp"
 
-// Set LE module options
+// Set LE_model module options
 void OpenWQ_readjson::SetConfigInfo_LEModule_BOUNDMIX(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_hostModelconfig & OpenWQ_hostModelconfig,
@@ -54,7 +54,7 @@ void OpenWQ_readjson::SetConfigInfo_LEModule_BOUNDMIX(
 
     // Get info for BoundMix function
     // Get number of entries
-    errorMsgIdentifier = "LE file";
+    errorMsgIdentifier = "LE_model file";
     json_BoundMix_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
         OpenWQ_json.LE_module, "CONFIGURATION",
@@ -66,7 +66,7 @@ void OpenWQ_readjson::SetConfigInfo_LEModule_BOUNDMIX(
     for (unsigned int entry_i = 0; entry_i < num_entries; entry_i++){
 
         // Check if sub-structure exists
-        errorMsgIdentifier = "LE file";
+        errorMsgIdentifier = "LE_model file";
         json_BoundMix_subStruct_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
             OpenWQ_wqconfig, OpenWQ_output,
             json_BoundMix_subStruct, std::to_string(entry_i + 1),
@@ -74,7 +74,7 @@ void OpenWQ_readjson::SetConfigInfo_LEModule_BOUNDMIX(
             true);
 
         // Get entries
-        errorMsgIdentifier = "LE file > " + std::to_string(entry_i + 1);
+        errorMsgIdentifier = "LE_model file > " + std::to_string(entry_i + 1);
         input_direction = OpenWQ_utils.RequestJsonKeyVal_str(
             OpenWQ_wqconfig, OpenWQ_output,
             json_BoundMix_subStruct_subStruct, "DIRECTION",
@@ -166,7 +166,7 @@ void OpenWQ_readjson::SetConfigInfo_LEModule_BOUNDMIX(
         }
             
         // Add values to tuple
-        OpenWQ_wqconfig.LE->BoundMix->info_vector.push_back(
+        OpenWQ_wqconfig.LE_model->BoundMix->info_vector.push_back(
             std::tuple<unsigned int,unsigned int,unsigned int,double>(
                 input_direction_index,
                 input_upper_compartment_index,

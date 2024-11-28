@@ -62,7 +62,7 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
     TD_model = new TD_model_();
     TS_model = new TS_model_();
     CH_model = new CH_model_();
-    LE = new LE_();
+    LE_model = new LE_model_();
     SI = new SI_();
 
 }
@@ -75,10 +75,10 @@ OpenWQ_wqconfig::TD_model_::~TD_model_() {
     delete NativeAdvDisp;
 }
 
-OpenWQ_wqconfig::LE_::LE_() {
+OpenWQ_wqconfig::LE_model_::LE_model_() {
     BoundMix = new BoundMix_();
 }
-OpenWQ_wqconfig::LE_::~LE_() {
+OpenWQ_wqconfig::LE_model_::~LE_model_() {
     delete BoundMix;
 }
 
@@ -117,7 +117,7 @@ OpenWQ_wqconfig::~OpenWQ_wqconfig() {
     delete TD_model;
     delete TS_model;
     delete CH_model;
-    delete LE;
+    delete LE_model;
     delete SI;
 
 }

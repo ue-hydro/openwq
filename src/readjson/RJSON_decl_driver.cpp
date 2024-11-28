@@ -149,7 +149,7 @@ void OpenWQ_readjson::SetConfigInfo_driver(
         OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
         OpenWQ_utils, OpenWQ_output);
 
-    // Set LE module settings (lateral exchange)
+    // Set LE_model module settings (lateral exchange)
     SetConfigInfo_LEModule(
         OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
         OpenWQ_utils, OpenWQ_output);

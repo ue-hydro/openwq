@@ -257,9 +257,9 @@ class OpenWQ_wqconfig
         class CH_model_; 
         CH_model_* CH_model;
 
-        // 4) Lateral Exchange (LE)
-        class LE_; 
-        LE_* LE;
+        // 4) Lateral Exchange (LE_model)
+        class LE_model_; 
+        LE_model_* LE_model;
 
         // 4) Transport Sediments (ST)
         class TS_model_; 
@@ -319,14 +319,14 @@ class OpenWQ_wqconfig::CH_model_{
 
 };
 
-class OpenWQ_wqconfig::LE_{
+class OpenWQ_wqconfig::LE_model_{
 
     public:
     std::string LE_module;
 
     // constructor/destructor
-    LE_(); 
-    ~LE_();
+    LE_model_(); 
+    ~LE_model_();
 
     // ######################
     // classes for each model
@@ -382,7 +382,7 @@ class OpenWQ_wqconfig::SI_{
 // #######################################
 // Create INNER-MOST class for each model
 // Inside are Model-specific variables  
-// e.g., Module LE -> BoundMix
+// e.g., Module LE_model -> BoundMix
 // #######################################
 
 class OpenWQ_wqconfig::TD_model_::NativeAdv_{
@@ -403,8 +403,8 @@ class OpenWQ_wqconfig::TD_model_::NativeAdvDisp_{
 
 };
 
-// Module LE -> BoundMix
-class OpenWQ_wqconfig::LE_::BoundMix_{
+// Module LE_model -> BoundMix
+class OpenWQ_wqconfig::LE_model_::BoundMix_{
 
     public:
 

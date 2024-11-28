@@ -119,7 +119,7 @@ void OpenWQ_TS_model::mmf_hype_erosion(
       
       }
 
-    // If erosion driven by LE (e.g., runoff)
+    // If erosion driven by LE_model (e.g., runoff)
     } else if (TS_type.compare("TS_type_LE")
                && wflux_s2r > 0.0f){
 
