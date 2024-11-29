@@ -50,14 +50,11 @@ class OpenWQ_hostModelconfig
         std::unique_ptr<std::vector<arma::Cube<double>>> dependVar; // global data
         std::unique_ptr<std::vector<double>> dependVar_scalar;      // data updated for use with exprtk
 
-
         // Host model iteraction step (dynamic value)
         long interaction_step = 0;
 
-     
         // Time
         double time_step = 0.0f;    // Host model time step (in seconds)
-
             
         // Water volume minimum limit (critical for concentration calculations)
         // to avoid concentration instabilities and numerical blowup
