@@ -31,19 +31,12 @@ void OpenWQ_readjson::SetConfigInfo_LEModule(
     std::string msg_string;
     std::string LE_method_local;    // module name
     std::string input_filepath;
-    unsigned int num_entries;
     // Strings for inputs
     std::string input_direction;    // user input
     std::string input_upper_compartment;    // user input
     std::string input_lower_compartment;    // user input
-    double input_k_val;                     // user input
     // iteractive variables
     std::string icmp_i_name;
-    unsigned int input_direction_index;
-    unsigned int input_upper_compartment_index;
-    unsigned int input_lower_compartment_index;
-    bool input_upper_compartment_index_exist;
-    bool input_lower_compartment_index_exist;
     json json_K_Erodib_K;
     json json_IntMov_subStruct;
     json json_BoundMix_subStruct;

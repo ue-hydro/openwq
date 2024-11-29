@@ -33,7 +33,6 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     std::string msg_string;
     std::string LE_method_local;    // module name
     std::string input_filepath;
-    unsigned int num_entries;
     // Strings for inputs
     std::string input_direction;    // user input
     std::string input_upper_compartment;    // user input

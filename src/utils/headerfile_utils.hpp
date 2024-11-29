@@ -142,10 +142,22 @@ class OpenWQ_utils{
         std::__cxx11::basic_string<char> elemEntry,
         int& elemVal);
 
+    // #########################
+    // Models Toolbox
+    // #########################
+
+    // Load parameter values as ASCII or JSON entries
+    std::tuple<
+        std::vector<std::string>,        // header 
+        std::vector<std::vector<double>>> // matrix of parameters
+    LoadModelParameters_asTable_JSONorASCII(
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_output& OpenWQ_output,
+        std::string DataFormat,
+        std::string model_parameter,
+        json json_PARAMETER_subStruct,
+        std::string errorMsgIdentifier);
     
-
-
-
 };
 
 #endif

@@ -467,21 +467,20 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
     std::tuple<unsigned int,unsigned int,unsigned int, std::string>
             info_vector;
 
-    // Soil coheson (kPa)
-    std::unique_ptr<            
-        arma::Mat<double>
-        > cohesion;  
+    // Parameter datatype (tuple)
+    typedef std::tuple<
+        std::vector<std::string>,           // header 
+        std::vector<std::vector<double>>    // matrix of parameters
+        > ParameterEntryTuple; 
 
-    // Soil erodibility (g/J)
-    std::unique_ptr<            
-        arma::Mat<double>
-        > erodibility;  
+    // Soil coheson (kPa)           
+    ParameterEntryTuple cohesion_entryTuple;  
 
-    // Surface runoff erosion exponent 
-    std::unique_ptr<            
-        arma::Mat<double>
-        > sreroexp;  
+    // Soil erodibility (g/J)          
+    ParameterEntryTuple erodibility_entryTuple;  
 
+    // Surface runoff erosion exponent           
+    ParameterEntryTuple sreroexp_entryTuple;  
 
 };
 

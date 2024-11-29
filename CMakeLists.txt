@@ -125,6 +125,7 @@ FILE(GLOB OPENWQ_SOURCES
     ${OPENWQ_DIR}/src/compute/solver_sundials/*.cpp
     ${OPENWQ_DIR}/src/units/*.cpp
     ${OPENWQ_DIR}/src/utils/*.cpp
+    ${OPENWQ_DIR}/src/utils/models_toolbox/*.cpp
     ${OPENWQ_DIR}/src/models_CH/*.cpp
     ${OPENWQ_DIR}/src/models_CH/bgc_flex/*.cpp
     ${OPENWQ_DIR}/src/models_TD/*.cpp
@@ -585,6 +586,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                     ${OPENWQ_DIR}/src/compute/solver_sundials/*.cpp
                     ${OPENWQ_DIR}/src/units/*.cpp
                     ${OPENWQ_DIR}/src/utils/*.cpp
+                    ${OPENWQ_DIR}/src/utils/models_toolbox/*.cpp
                     ${OPENWQ_DIR}/src/models_CH/*.cpp
                     ${OPENWQ_DIR}/src/models_CH/bgc_flex/*.cpp
                     ${OPENWQ_DIR}/src/models_TD/*.cpp
