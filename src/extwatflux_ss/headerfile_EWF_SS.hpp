@@ -184,7 +184,7 @@ class OpenWQ_extwatflux_ss{
         std::string &obj_text,
         unsigned long &vec_obj_index);
 
-    bool getArrayElem( // elemEntry as string "all"
+    bool getArrayElem_SS( // elemEntry as string "all"
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_output& OpenWQ_output,
         std::string elemName,

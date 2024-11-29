@@ -135,6 +135,15 @@ class OpenWQ_utils{
         std::string msgIndetifier,
         bool abort_flag);
 
+    bool getArrayElem(
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_output& OpenWQ_output,
+        std::string elemName,
+        std::__cxx11::basic_string<char> elemEntry,
+        int& elemVal);
+
+    
+
 
 
 };

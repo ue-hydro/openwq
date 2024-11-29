@@ -400,3 +400,44 @@ std::string OpenWQ_utils::RemoveStrLeadTrailWhiteSpaces(
     return String2RemWhiteSpace;
 
 }
+
+
+/* #################################################
+ // Get SS vector element
+ // CASE IF: elemEntry as string "all"
+ ################################################# */
+ bool OpenWQ_utils::getArrayElem(
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_output& OpenWQ_output,
+    std::string elemName,
+    std::__cxx11::basic_string<char> elemEntry,
+    int& elemVal){
+
+    // Local Variable
+    bool validEntryFlag = true;
+    std::string msg_string;
+    
+    
+    if(elemEntry.compare("ALL") == 0){
+        
+        elemVal = OpenWQ_wqconfig.get_allSS_flag();
+
+    }else{ 
+        
+        // Through a warning invalid entry           
+        msg_string = 
+            "<OpenWQ> WARNING: " 
+                + elemName 
+                + "' cannot only be a positive integer or 'ALL' (entry ignored)";   
+
+        OpenWQ_output.ConsoleLog(
+            OpenWQ_wqconfig, 
+            msg_string, 
+            true, true);
+
+        validEntryFlag = false;
+    }
+
+    return validEntryFlag;
+
+}

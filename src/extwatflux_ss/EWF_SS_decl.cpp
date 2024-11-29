@@ -465,7 +465,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"YYYY")];}
 
             // Check if "all" and return flag validEntryFlag
-            validEntryFlag = getArrayElem(
+            validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,OpenWQ_output,
                 elemName,
                 (std::string) entryVal,
@@ -506,7 +506,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = ASCIIRowElemEntry[ 
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"MM")];}
 
-            validEntryFlag = getArrayElem(
+            validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
                 OpenWQ_output,
                 elemName,
@@ -549,7 +549,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = ASCIIRowElemEntry[ 
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"DD")];}
 
-            validEntryFlag = getArrayElem(
+            validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
                 OpenWQ_output,
                 elemName,
@@ -592,7 +592,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = ASCIIRowElemEntry[ 
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"HH")];}
 
-            validEntryFlag = getArrayElem(
+            validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
                 OpenWQ_output,
                 elemName,
@@ -635,7 +635,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = ASCIIRowElemEntry[ 
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"MIN")];}
 
-            validEntryFlag = getArrayElem(
+            validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
                 OpenWQ_output,
                 elemName,
@@ -678,7 +678,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = ASCIIRowElemEntry[ 
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"SEC")];}
 
-            validEntryFlag = getArrayElem(
+            validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
                 OpenWQ_output,
                 elemName,
@@ -744,7 +744,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = ASCIIRowElemEntry[ 
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IX")];}
 
-            validEntryFlag = getArrayElem(
+            validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
                 OpenWQ_output,
                 elemName,
@@ -808,7 +808,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = ASCIIRowElemEntry[ 
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IY")];}
 
-            validEntryFlag = getArrayElem(
+            validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
                 OpenWQ_output,
                 elemName,
@@ -872,7 +872,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = ASCIIRowElemEntry[ 
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IZ")];}
 
-            validEntryFlag = getArrayElem(
+            validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
                 OpenWQ_output,
                 elemName,
@@ -1571,7 +1571,7 @@ bool OpenWQ_extwatflux_ss::getModIndex(
  // Get SS vector element
  // CASE IF: elemEntry as string "all"
  ################################################# */
- bool OpenWQ_extwatflux_ss::getArrayElem(
+ bool OpenWQ_extwatflux_ss::getArrayElem_SS(
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_output& OpenWQ_output,
     std::string elemName,
