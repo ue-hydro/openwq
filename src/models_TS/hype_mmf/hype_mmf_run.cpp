@@ -25,11 +25,11 @@
 // of Agricultural Engineering Research, vol. 30, pp. 245�253
 // 
 
-
-void OpenWQ_TS_model::mmf_hype_erosion(
+void OpenWQ_TS_model::mmf_hype_erosion_run(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_utils& OpenWQ_utils,
     const int source, const int ix_s, const int iy_s, const int iz_s,
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     double wflux_s2r, 
@@ -50,15 +50,10 @@ void OpenWQ_TS_model::mmf_hype_erosion(
     OK  => REAL, INTENT(IN)    :: flow          !<fast flow
     */
 
-    /*
+   /*
     // need info about 
     snow // exists?
     pdayno 
-
-    // generate variables JSON (matrix)
-    OpenWQ_wqconfig->TS_model->cohesion    // kPa
-    OpenWQ_wqconfig->TS_model->erodibility // g/J
-    OpenWQ_wqconfig->TS_model->sreroexp // surface runoff erosion exponent 
 
     // Local variables
     double prec_erosion_threshold;
@@ -66,7 +61,29 @@ void OpenWQ_TS_model::mmf_hype_erosion(
     double intensity;
     double cell_cropcover, cell_groundcover;
     double transportfactor;
+    */
     
+    // #################################
+    // Get relevant parameter vals at ix, iy, iz
+    // #################################
+
+    // cohesion [kPa]
+    double cohesion = OpenWQ_utils.GetParamVal_ixiyiz(
+      OpenWQ_wqconfig.TS_model->HypeMMF->cohesion_entryTuple,
+      ix_r, iy_r, iz_r
+    );
+    // erodibility [g/J]
+    double erodibility = OpenWQ_utils.GetParamVal_ixiyiz(
+      OpenWQ_wqconfig.TS_model->HypeMMF->erodibility_entryTuple,
+      ix_r, iy_r, iz_r
+    );
+    // sreroexp [-]
+    double sreroexp = OpenWQ_utils.GetParamVal_ixiyiz(
+      OpenWQ_wqconfig.TS_model->HypeMMF->sreroexp_entryTuple,
+      ix_r, iy_r, iz_r
+    );
+
+    /*
     // variables calculated
     double mobilisedsed_EWF = 0.0f;        // mobilised suspended sediment from rainfall (g/m2)
     double mobilisedsed_LE = 0.0f;         // mobilised suspended sediment from surface runoff (g/m2)
@@ -141,8 +158,7 @@ void OpenWQ_TS_model::mmf_hype_erosion(
       
     // Eroded sediment calculated from mobilised sediment, possibly limited by the transport capacity
     erodedsed = 1000.0f * mobilisedsed * transportfactor;  // kg/km2
-
-    */
+*/
 
 }
 

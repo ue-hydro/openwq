@@ -19,7 +19,7 @@
 /* ########################################
 // Calculate eroded particles from soil by HBV-sed based model
 #########################################*/
-void OpenWQ_TS_model::hbvsed_hype_erosion(
+void OpenWQ_TS_model::hbvsed_hype_erosion_run(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
@@ -135,7 +135,7 @@ void OpenWQ_TS_model::hbvsed_hype_erosion(
 }
 
 /*
-void hbvsed_hype_erosion(i,prec,lusepar,soilpar,slopepar, &
+void hbvsed_hype_erosion_run(i,prec,lusepar,soilpar,slopepar, &
                     precexppar,eroindexpar,snow,frostdepth,erodedsed){
 
     USE HYPEVARIABLES, ONLY : m_erodmon

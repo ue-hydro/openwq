@@ -66,6 +66,7 @@ class OpenWQ_TS_model{
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
             OpenWQ_vars& OpenWQ_vars,
+            OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output,                                   // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
@@ -104,7 +105,7 @@ class OpenWQ_TS_model{
         // RUN
         
         // HBV sediments as implemented in HYPE
-        void hbvsed_hype_erosion(
+        void hbvsed_hype_erosion_run(
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
@@ -113,12 +114,13 @@ class OpenWQ_TS_model{
             double wflux_s2r, 
             double wmass_source,
             std::string TS_type);
-
+            
          // Based on the Morgan-Morgan-Finney erosion model implemented in HYPE
-        void mmf_hype_erosion(
+        void mmf_hype_erosion_run(
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
             double wflux_s2r, 

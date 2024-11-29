@@ -28,6 +28,11 @@
 
 class OpenWQ_utils{
 
+    typedef std::tuple<
+        std::vector<std::string>,           // header
+        std::vector<std::vector<double>>    // matrix data
+        > TupleParameterData;                
+
     private:
          // General JSON key null error
         const std::string jsonKeyNull_msg_start_abort = "<OpenWQ> Execution ABORTED!\nExpected json value for key=";
@@ -147,16 +152,20 @@ class OpenWQ_utils{
     // #########################
 
     // Load parameter values as ASCII or JSON entries
-    std::tuple<
-        std::vector<std::string>,        // header 
-        std::vector<std::vector<double>>> // matrix of parameters
-    LoadModelParameters_asTable_JSONorASCII(
+    TupleParameterData LoadModelParameters_asTable_JSONorASCII(
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_output& OpenWQ_output,
         std::string DataFormat,
         std::string model_parameter,
         json json_PARAMETER_subStruct,
         std::string errorMsgIdentifier);
+
+    // Get parameter value
+    double GetParamVal_ixiyiz(
+      TupleParameterData Param_entryTuple,
+      unsigned int ix, 
+      unsigned int iy, 
+      unsigned int iz);
     
 };
 

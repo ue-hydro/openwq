@@ -87,6 +87,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
         OpenWQ_vars,
+        OpenWQ_utils,
         OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
         source, ix_s, iy_s, iz_s,
         recipient, ix_r, iy_r, iz_r,
@@ -137,6 +138,7 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
         OpenWQ_vars,
+        OpenWQ_utils,
         OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
         0, 0, 0, 0,
         recipient, ix_r, iy_r, iz_r,

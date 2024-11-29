@@ -19,6 +19,7 @@ void OpenWQ_TS_model::TS_driver_run(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
     OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output,                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
     const int source, const int ix_s, const int iy_s, const int iz_s,
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
@@ -37,7 +38,7 @@ void OpenWQ_TS_model::TS_driver_run(
     if (OpenWQ_wqconfig.TS_model->TS_module.compare("HYPE_HBVSED") == 0)
     {
         
-        hbvsed_hype_erosion(
+        hbvsed_hype_erosion_run(
             OpenWQ_hostModelconfig, 
             OpenWQ_vars, 
             OpenWQ_wqconfig,
@@ -49,10 +50,11 @@ void OpenWQ_TS_model::TS_driver_run(
     // if TD_module != NONE (and any of the others)
     }else if (OpenWQ_wqconfig.TS_model->TS_module.compare("HYPE_MMF") == 0)
     {
-        mmf_hype_erosion(
+        mmf_hype_erosion_run(
             OpenWQ_hostModelconfig, 
             OpenWQ_vars, 
             OpenWQ_wqconfig,
+            OpenWQ_utils,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, wmass_source,

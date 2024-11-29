@@ -70,7 +70,7 @@
 
     // 1) COHESION
     
-    model_parameter = "COHESION";
+    model_parameter = "COHESION"; // kPa
 
     OpenWQ_wqconfig.TS_model->HypeMMF
         ->cohesion_entryTuple
@@ -84,7 +84,7 @@
 
     // 2) ERODIBILITY
     
-    model_parameter = "ERODIBILITY";
+    model_parameter = "ERODIBILITY"; // g/J
 
     OpenWQ_wqconfig.TS_model->HypeMMF
         ->erodibility_entryTuple
@@ -98,7 +98,7 @@
 
     // 3) SREROEXP
     
-    model_parameter = "SREROEXP";
+    model_parameter = "SREROEXP"; // surface runoff erosion exponent [-]
 
     OpenWQ_wqconfig.TS_model->HypeMMF
         ->sreroexp_entryTuple
