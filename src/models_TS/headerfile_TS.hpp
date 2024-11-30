@@ -87,8 +87,6 @@ class OpenWQ_TS_model{
             OpenWQ_json& OpenWQ_json,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
-            OpenWQ_vars& OpenWQ_vars,
-            OpenWQ_units& OpenWQ_units,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 

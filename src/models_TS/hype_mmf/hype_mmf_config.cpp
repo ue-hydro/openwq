@@ -21,42 +21,31 @@
     OpenWQ_json& OpenWQ_json,
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
-    OpenWQ_vars& OpenWQ_vars,
-    OpenWQ_units& OpenWQ_units,
     OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output){
             
     
-    // Local variables
-    std::string main_keyName;
-    std::string Element_name;
-    std::string Chemical_name;                  // chemical name
-    std::vector<std::string> elm_list;          // model compartment list
-    std::string err_text;                       // iteractive string for text to pass to error messages
-    std::string Type;                           // from JSON filec (only used in SS)
-    std::string ascii_FilePath;                 // additional information for ASCII data input
-   
-
-    std::vector<std::string> headerKeys;        // vector with header keys
-    std::string headerWord;                     // interactive header words
-    std::string elemName;                       // temporary element name
-    json EWF_SS_json_sub_rowi;                  // json row of json-substructure json_subStruct 
-    std::string ss_units_json_mass_base;             // units of row data (mass)
-    std::vector<double> unit_multiplers;        // multiplers (numerator and denominator)
-    
+    // Local variables    
     std::string errorMsgIdentifier;             // error message section identifier
     std::string model_parameter;
-
-
-    // Local variables
     std::string DataFormat;
+    unsigned int icmp;
     json json_PARAMETER_subStruct;
+    json json_PARAMETER_DEFAULTS_subStruct;
 
-    // Data format
+    // Data format & affected compartment (lower compartment)
     DataFormat = std::get<3>(OpenWQ_wqconfig.TS_model->HypeMMF->info_vector);
+    // Get compartment index of lower compartment
+    icmp = std::get<2>(OpenWQ_wqconfig.TS_model->HypeMMF->info_vector);
 
     // Get PARAMETERS JSON data
     errorMsgIdentifier = "TS_model file";
+
+    json_PARAMETER_DEFAULTS_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
+        OpenWQ_wqconfig, OpenWQ_output,
+        OpenWQ_json.TS_module, "PARAMETER_DEFAULTS",
+        errorMsgIdentifier,
+        true);
 
     json_PARAMETER_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
@@ -73,41 +62,53 @@
     model_parameter = "COHESION"; // kPa
 
     OpenWQ_wqconfig.TS_model->HypeMMF
-        ->cohesion_entryTuple
-            = OpenWQ_utils.LoadModelParameters_asTable_JSONorASCII(
-            OpenWQ_wqconfig,
-            OpenWQ_output,
-            DataFormat,
-            model_parameter,
-            json_PARAMETER_subStruct,
-            errorMsgIdentifier + " > " + model_parameter);
+        ->cohesion_entryArmaCube
+            = OpenWQ_utils.
+            LoadCubeComprtModelParameters_asARMACUBE_JSONorASCII(
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output,
+                DataFormat,
+                model_parameter,
+                icmp,
+                json_PARAMETER_subStruct,
+                json_PARAMETER_DEFAULTS_subStruct,
+                errorMsgIdentifier + " > " + model_parameter);
 
     // 2) ERODIBILITY
     
     model_parameter = "ERODIBILITY"; // g/J
 
     OpenWQ_wqconfig.TS_model->HypeMMF
-        ->erodibility_entryTuple
-            = OpenWQ_utils.LoadModelParameters_asTable_JSONorASCII(
-            OpenWQ_wqconfig,
-            OpenWQ_output,
-            DataFormat,
-            model_parameter,
-            json_PARAMETER_subStruct,
-            errorMsgIdentifier + " > " + model_parameter);
+        ->erodibility_entryArmaCube
+            = OpenWQ_utils.
+            LoadCubeComprtModelParameters_asARMACUBE_JSONorASCII(
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output,
+                DataFormat,
+                model_parameter,
+                icmp,
+                json_PARAMETER_subStruct,
+                json_PARAMETER_DEFAULTS_subStruct,
+                errorMsgIdentifier + " > " + model_parameter);
 
     // 3) SREROEXP
     
-    model_parameter = "SREROEXP"; // surface runoff erosion exponent [-]
+    model_parameter = "SREROEXP"; // [-]
 
     OpenWQ_wqconfig.TS_model->HypeMMF
-        ->sreroexp_entryTuple
-            = OpenWQ_utils.LoadModelParameters_asTable_JSONorASCII(
-            OpenWQ_wqconfig,
-            OpenWQ_output,
-            DataFormat,
-            model_parameter,
-            json_PARAMETER_subStruct,
-            errorMsgIdentifier + " > " + model_parameter);
+        ->sreroexp_entryArmaCube
+            = OpenWQ_utils.
+            LoadCubeComprtModelParameters_asARMACUBE_JSONorASCII(
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output,
+                DataFormat,
+                model_parameter,
+                icmp,
+                json_PARAMETER_subStruct,
+                json_PARAMETER_DEFAULTS_subStruct,
+                errorMsgIdentifier + " > " + model_parameter);
                 
 }

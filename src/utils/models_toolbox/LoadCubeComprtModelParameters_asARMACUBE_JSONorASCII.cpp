@@ -19,22 +19,21 @@
 
 // Get Model Parameter data as tuple<vector>
 // Parameter data can be provided as JSON or ASCII
-
-typedef std::tuple<
-        std::vector<std::string>,
-        std::vector<std::vector<double>>
-        > TupleParameterData;                           // define data type: vector with header keys
-        
-TupleParameterData OpenWQ_utils::LoadModelParameters_asTable_JSONorASCII(
-        OpenWQ_wqconfig& OpenWQ_wqconfig,
-        OpenWQ_output& OpenWQ_output,
-        std::string DataFormat,
-        std::string model_parameter,
-        json json_PARAMETER_subStruct,
-        std::string errorMsgIdentifier){
+       
+arma::Cube<double>  OpenWQ_utils::LoadCubeComprtModelParameters_asARMACUBE_JSONorASCII(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_output& OpenWQ_output,
+    std::string DataFormat,
+    std::string model_parameter,
+    unsigned int icmp,
+    json json_PARAMETER_subStruct,
+    json json_PARAMETER_DEFAULTS_subStruct,
+    std::string errorMsgIdentifier){
 
     // Local variables
     std::string errorMsgIdentifier_local;               // error message composition
+    double default_parameter_val;                       // default parameter value taken from JSON
     json json_paramData;                                // entire json entry for parameter
     json json_paramData_row;                            // sub-json struture with parameter entry row
     unsigned int num_rowdata;                           // number of json or ASCII-file rows
@@ -53,26 +52,48 @@ TupleParameterData OpenWQ_utils::LoadModelParameters_asTable_JSONorASCII(
     arma::vec row_data_col;                             // new row data (initially as col data)
     std::vector<std::string> row_data_entry_string;     // full row entry casted as vector of strings
     std::vector<double> row_data_entry;                 // vector with header keys
-    std::vector<std::vector<double>> table_data_entry;  // vector with header keys
-    std::tuple<
-        std::vector<std::string>,
-        std::vector<std::vector<double>>
-        > tuple_data_entry;                             // vector with header keys
+    std::vector<std::vector<double>> table_data_entry;  // parameter values as vector<vector>         
     typedef std::tuple<
         std::vector<std::string>,
-        std::vector<std::vector<double>>
+        arma::Cube<double>
         > TupleParameterData;                           // define data type: vector with header keys
+    TupleParameterData tuple_data_entry;
+    unsigned int ix_loc, iy_loc, iz_loc, val_loc;       // indexes of locations in JSON or ASCII file
+    int ix_num_str, iy_num_str, iz_num_str;    // iterative ix, iy, and iz indexes
+    int ix_num_end, iy_num_end, iz_num_end;    // iterative ix, iy, and iz indexes
+    double value_num;                                   // iterative parameter value number for arma::cube
+    unsigned int icmp_x_num, icmp_y_num, icmp_z_num;
 
+    // get num of cells
+    icmp_x_num = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
+    icmp_y_num = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
+    icmp_z_num = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
+
+    // generate armaCube_data_entry for relevant icmp
+    arma::Cube<double> armaCube_data_entry(icmp_x_num, icmp_y_num, icmp_z_num);
+
+    /* ########################################
+    //  Get default parameter value 
+    ######################################## */
+    errorMsgIdentifier_local = errorMsgIdentifier + " > Default parmeter value";
+
+    default_parameter_val = RequestJsonKeyVal_double(
+        OpenWQ_wqconfig, OpenWQ_output,
+        json_PARAMETER_DEFAULTS_subStruct, model_parameter,
+        errorMsgIdentifier_local,
+        true);
 
     /* ########################################
     //  Get entire JSON entry to parameter 
     ######################################## */
+    errorMsgIdentifier_local = errorMsgIdentifier + " > Parmeter entires (JSON or ASCII)";
 
     // Get Parameter Data as JSON structure
+    errorMsgIdentifier_local = errorMsgIdentifier_local;
     json_paramData = RequestJsonKeyVal_json(
             OpenWQ_wqconfig, OpenWQ_output,
             json_PARAMETER_subStruct, model_parameter,
-            errorMsgIdentifier,
+            errorMsgIdentifier_local,
             true);
 
     /* ########################################
@@ -189,9 +210,9 @@ TupleParameterData OpenWQ_utils::LoadModelParameters_asTable_JSONorASCII(
             // If there is an issue with the ASCII input data
             // through a warning message and skip entry
             msg_string = 
-                "<OpenWQ> WARNING:'" + errorMsgIdentifier_local 
-                " ASCII format has an issue with json-keys or data structure (entry skipped): File="
-                + asciiFile;
+                "<OpenWQ> WARNING:'" + errorMsgIdentifier_local
+                + " ASCII format has an issue with json-keys or data structure (entry skipped): File="
+                + ascii_FilePath;
             // Print it (Console and/or Log file)
 
             OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
@@ -283,15 +304,65 @@ TupleParameterData OpenWQ_utils::LoadModelParameters_asTable_JSONorASCII(
     }
 
     /* ########################################
-    // Create the tuple with
-    // 1) header keys
-    // 2) data as vector<vector<double>> 
+    // Convert 
+    // IN) table_data_entry (as vector<vector<double>>)
+    // OUT) armaCube_data_entry
     ######################################## */
 
-    tuple_data_entry = TupleParameterData(
-        headerKeys,
-        table_data_entry);
+    // set all ix,iy,iz parameter values in arma::cube 
+    // to default parameter values
+    armaCube_data_entry.fill(default_parameter_val);
 
-    return tuple_data_entry;
+    // get ix, iy, iz and vals indexes
+    auto ix_loc_itrc = std::find( begin(headerKeys), end(headerKeys), "IX" );
+    auto iy_loc_itrc = std::find( begin(headerKeys), end(headerKeys), "IY" );
+    auto iz_loc_itrc = std::find( begin(headerKeys), end(headerKeys), "IZ" );
+    auto val_loc_itrc = std::find( begin(headerKeys), end(headerKeys), "VALUE" );
+
+    ix_loc = std::distance(headerKeys.begin(), ix_loc_itrc);
+    iy_loc = std::distance(headerKeys.begin(), iy_loc_itrc);
+    iz_loc = std::distance(headerKeys.begin(), iz_loc_itrc);
+    val_loc = std::distance(headerKeys.begin(), val_loc_itrc);
+
+    // loop over entires
+
+    for (int row_i = 0; row_i < table_data_entry.size(); row_i++){
+
+        // get values in row
+        // need to do "-1" because c++ starts at zero, but
+        // json entries start at 1
+        ix_num_str = table_data_entry.at(row_i).at(ix_loc) - 1;
+        ix_num_end = ix_num_str;
+        iy_num_str = table_data_entry.at(row_i).at(iy_loc) - 1;
+        iy_num_end = iy_num_str;
+        iz_num_str = table_data_entry.at(row_i).at(iz_loc) - 1;
+        iz_num_end = iz_num_str;
+        value_num = table_data_entry.at(row_i).at(val_loc);
+
+        // check if values = -1
+        // this is the case of "ALL"
+        // below it sayd "-2" because the variables are subtracted "-1" above
+        if (ix_num_str == -2){
+            ix_num_str = 0;
+            ix_num_end = icmp_x_num - 1;
+        }
+        if (iy_num_str == -2){
+            iy_num_str = 0;
+            iy_num_end =  icmp_y_num - 1;
+        }
+        if (iz_num_str == -2){
+            iz_num_str = 0;
+            iz_num_end =  icmp_z_num - 1; 
+        }
+
+        armaCube_data_entry(
+            arma::span(ix_num_str, ix_num_end), 
+            arma::span(iy_num_str, iy_num_end), 
+            arma::span(iz_num_str, iz_num_end))
+            .fill(value_num);
+
+    }
+
+    return armaCube_data_entry;
 
 }

@@ -20,18 +20,16 @@
 #define OPENWQ_UTILS_INCLUDED
 
 #include <sys/stat.h>
+#include <armadillo>
 
+#include "global/openwq_hostmodelconfig.hpp"
 #include "global/openwq_json.hpp"
 #include "global/openwq_wqconfig.hpp"
 #include "compute/headerfile_compute.hpp"
 #include "output/headerfile_OUT.hpp"
 
-class OpenWQ_utils{
 
-    typedef std::tuple<
-        std::vector<std::string>,           // header
-        std::vector<std::vector<double>>    // matrix data
-        > TupleParameterData;                
+class OpenWQ_utils{
 
     private:
          // General JSON key null error
@@ -39,7 +37,6 @@ class OpenWQ_utils{
         const std::string jsonKeyNull_msg_end_abort = " but not found! Revise the JSON files.";
         const std::string jsonKeyNull_msg_start_NOabort = "<OpenWQ> WARNING: Expected json value for key=";
         const std::string jsonKeyNull_msg_end_NOabort = " but not found! The entry has been zeroed. Make sure this was intended!";
-        
         
         
         // Methods only needed by this class
@@ -152,20 +149,16 @@ class OpenWQ_utils{
     // #########################
 
     // Load parameter values as ASCII or JSON entries
-    TupleParameterData LoadModelParameters_asTable_JSONorASCII(
+    arma::Cube<double>  LoadCubeComprtModelParameters_asARMACUBE_JSONorASCII(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_output& OpenWQ_output,
         std::string DataFormat,
         std::string model_parameter,
+        unsigned int icmp,
         json json_PARAMETER_subStruct,
+        json json_PARAMETER_DEFAULTS_subStruct,
         std::string errorMsgIdentifier);
-
-    // Get parameter value
-    double GetParamVal_ixiyiz(
-      TupleParameterData Param_entryTuple,
-      unsigned int ix, 
-      unsigned int iy, 
-      unsigned int iz);
     
 };
 

@@ -67,21 +67,7 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
     // Get relevant parameter vals at ix, iy, iz
     // #################################
 
-    // cohesion [kPa]
-    double cohesion = OpenWQ_utils.GetParamVal_ixiyiz(
-      OpenWQ_wqconfig.TS_model->HypeMMF->cohesion_entryTuple,
-      ix_r, iy_r, iz_r
-    );
-    // erodibility [g/J]
-    double erodibility = OpenWQ_utils.GetParamVal_ixiyiz(
-      OpenWQ_wqconfig.TS_model->HypeMMF->erodibility_entryTuple,
-      ix_r, iy_r, iz_r
-    );
-    // sreroexp [-]
-    double sreroexp = OpenWQ_utils.GetParamVal_ixiyiz(
-      OpenWQ_wqconfig.TS_model->HypeMMF->sreroexp_entryTuple,
-      ix_r, iy_r, iz_r
-    );
+    
 
     /*
     // variables calculated

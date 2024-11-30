@@ -120,7 +120,7 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
 
-d_chemass = std::unique_ptr<
+        d_chemass = std::unique_ptr<
             arma::field< // Compartments
             arma::field< // Chemical Species
             arma::Cube<  // Dimensions: nx, ny, nz

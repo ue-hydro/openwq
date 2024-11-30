@@ -39,8 +39,6 @@ void OpenWQ_TS_model::TS_driver_config(
             OpenWQ_json,
             OpenWQ_hostModelconfig,
             OpenWQ_wqconfig,
-            OpenWQ_vars,
-            OpenWQ_units,
             OpenWQ_utils,
             OpenWQ_output);
 

@@ -367,7 +367,9 @@ void OpenWQ_wqconfig::set_output_units_concentration(bool conentration_requested
     std::get<3>(this->output_units) = conentration_requested;
 }
 
-
+/***********************************************
+ * LogFile
+************************************************/
 
 
 
