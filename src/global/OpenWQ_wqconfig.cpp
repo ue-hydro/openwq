@@ -368,7 +368,7 @@ void OpenWQ_wqconfig::set_output_units_concentration(bool conentration_requested
 }
 
 /***********************************************
- * LogFile
+ * Modules
 ************************************************/
 
 

@@ -464,8 +464,14 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
     public: 
 
     // General configuration (compartments, direction)
-    std::tuple<unsigned int,unsigned int,unsigned int, std::string>
+    std::tuple<unsigned int,unsigned int,unsigned int, unsigned int, std::string>
             info_vector;
+
+    unsigned pdayno;
+
+    // #################
+    // PARAMETERS
+    // #################
 
     // Soil coheson (kPa)  
     arma::Cube<double> cohesion_entryArmaCube;  
@@ -475,6 +481,33 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
 
     // Surface runoff erosion exponent           
     arma::Cube<double> sreroexp_entryArmaCube;  
+
+     // Crop cover           
+    arma::Cube<double> cropcover_entryArmaCube;  
+
+    // Ground cover           
+    arma::Cube<double> groundcover_entryArmaCube;  
+
+    // Slope           
+    arma::Cube<double> slope_entryArmaCube; 
+
+    // transport factor 1      
+    arma::Cube<double> trans_1_entryArmaCube;  
+
+    // transport factor 2     
+    arma::Cube<double> trans_2_entryArmaCube;  
+
+    // #################
+    // INTERMEDIATE VARIABLE
+    // #################
+
+    // Snow exists?    
+    // true = 1; false = 0;       
+    arma::Cube<double> snow_entryArmaCube;  
+
+    // Potential mobilization of sediments by rainfall
+    // but it can only be mobilized if there is runoff
+    arma::Cube<double> mobilisedsed_rain_potential;
 
 };
 

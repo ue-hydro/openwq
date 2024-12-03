@@ -31,7 +31,7 @@ class OpenWQ_vars
         size_t num_EWF;
 
         std::unique_ptr<arma::field<arma::field<arma::Cube<double>>>> 
-            chemass,                    // state-variable
+            chemass,                    // state-variable (chemistry)
             d_chemass_dt_chem,          // derivative (chemistry)
             d_chemass_dt_transp,        // derivative (transport)
             d_chemass_ss,               // derivative (isolated) SS
@@ -44,6 +44,10 @@ class OpenWQ_vars
             ewf_conc,
             d_chemass;                   // concentration of external water fluxes
 
+        std::unique_ptr<arma::Cube<double>> 
+            sedmass,                        // sediment mass in erodible compartment
+            d_sedmass_dt;                   // derivative 
+        
         // Constructor
         OpenWQ_vars(size_t num_HydroComp, size_t num_EWF);
 

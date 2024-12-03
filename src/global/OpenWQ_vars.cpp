@@ -135,9 +135,20 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>>>(new arma::field<arma::field<arma::cube>>(num_EWF));
 
+        // ############################################
+        // Sediment transport
+        // ############################################
+        sedmass = std::unique_ptr<
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>(new arma::cube);
+        
+        d_sedmass_dt = std::unique_ptr<
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>(new arma::cube);
+
     }catch(const std::exception& e){
 
-        // Write Error in Console only (the program hasn't started yet)
+        // Write Error in Console only (the simulation hasn't started yet)
         std::cout << 
             "ERROR: An exception occured during memory allocation (openWQ_vars.hpp)" 
             << std::endl;

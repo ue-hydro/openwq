@@ -29,28 +29,33 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
 
     // Local variables
     json json_subStruct;
+    std::string jsonKey;
     std::string errorMsgIdentifier;
     std::string msg_string;
     std::string LE_method_local;    // module name
     std::string input_filepath;
     // Strings for inputs
     std::string input_direction;    // user input
-    std::string input_upper_compartment;    // user input
-    std::string input_lower_compartment;    // user input
+    std::string input_upper_compartment;            // user input
+    std::string input_lower_compartment;            // user input
+    std::string input_compartment_inhibitErosion;   // user input
     std::string data_format;
     // iteractive variables
     std::string icmp_i_name;
     unsigned int input_direction_index;
     unsigned int input_upper_compartment_index;
     unsigned int input_lower_compartment_index;
+    unsigned int input_compartment_inhibitErosion_index;
     bool input_upper_compartment_index_exist;
     bool input_lower_compartment_index_exist;
+    bool input_compartment_inhibitErosion_index_exist;
     // Other local variables
     typedef std::tuple<
-        unsigned int, 
-        unsigned int,
-        unsigned int,      
-        std::string       // index of chemical in transformation equation (needs to be here for loop reset)
+        unsigned int,   // input_direction_index
+        unsigned int,   // input_upper_compartment_index
+        unsigned int,   // input_lower_compartment_index
+        unsigned int,   // input_compartment_inhibitErosion_index  
+        std::string     // data format
         > HypeMMF_infoVect;          // Tuple with info and expression for BGC cyling
 
     // Get LATERAL_EXCHANGE module name
@@ -65,31 +70,43 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
         errorMsgIdentifier,
         true);
 
-    errorMsgIdentifier = "TS_model file > DIRECTION";
+    jsonKey = "DIRECTION";
+    errorMsgIdentifier = "TS_model file >" + jsonKey;
     input_direction = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        json_subStruct, "DIRECTION",
+        json_subStruct, "jsonKey",
         errorMsgIdentifier,
         true); 
 
-    errorMsgIdentifier = "TS_model file > UPPER_COMPARTMENT";
+    jsonKey = "UPPER_COMPARTMENT";
+    errorMsgIdentifier = "TS_model file >" + jsonKey;
     input_upper_compartment = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        json_subStruct, "UPPER_COMPARTMENT",
+        json_subStruct, jsonKey,
         errorMsgIdentifier,
         true); 
 
-    errorMsgIdentifier = "TS_model file > LOWER_COMPARTMENT";
+    jsonKey = "LOWER_COMPARTMENT";
+    errorMsgIdentifier = "TS_model file >" + jsonKey;
     input_lower_compartment = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        json_subStruct, "LOWER_COMPARTMENT",
+        json_subStruct, jsonKey,
         errorMsgIdentifier,
         true); 
 
-    errorMsgIdentifier = "TS_model file > DATA_FORMAT";
+    jsonKey = "COMPARTMENT_EROSION_INHIBIT";
+    errorMsgIdentifier = "TS_model file >" + jsonKey;
+    input_compartment_inhibitErosion = OpenWQ_utils.RequestJsonKeyVal_str(
+        OpenWQ_wqconfig, OpenWQ_output,
+        json_subStruct, jsonKey,
+        errorMsgIdentifier,
+        true); 
+
+    jsonKey = "COMPARTMENT_EROSION_INHIBIT";
+    errorMsgIdentifier = "TS_model file >" + jsonKey;
     data_format = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        json_subStruct, "DATA_FORMAT",
+        json_subStruct, jsonKey,
         errorMsgIdentifier,
         true); 
 
@@ -124,8 +141,9 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     // 2) upper compartment AND lower compartment index
     // Loop through native compartment names
     
-    input_upper_compartment_index_exist = false; // reset to false
-    input_lower_compartment_index_exist = false; // reset to false
+    input_upper_compartment_index_exist = false;    // initialise to false
+    input_lower_compartment_index_exist = false;    // initialise to false
+    input_compartment_inhibitErosion_index = false; // initialise to false
 
     for (unsigned int icmp_i = 0; icmp_i < OpenWQ_hostModelconfig.get_num_HydroComp(); icmp_i++)
     {
@@ -139,14 +157,24 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
             input_lower_compartment_index = icmp_i;
             input_lower_compartment_index_exist = true;
         }
+        // Inhibit erosion compartment: index
+        if (input_compartment_inhibitErosion.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp_i)) == 0){
+            input_compartment_inhibitErosion_index = icmp_i;
+            input_compartment_inhibitErosion_index_exist = true;
+        }else if (input_compartment_inhibitErosion.compare("NONE")){
+            input_compartment_inhibitErosion_index = -1;
+            input_compartment_inhibitErosion_index_exist = true;
+        }
     }
 
     // Create Message (Warning Message) if compartments provided don't exist
     if (input_upper_compartment_index_exist == false 
-        || input_lower_compartment_index_exist == false){
+        || input_lower_compartment_index_exist == false
+        || input_compartment_inhibitErosion_index_exist == false){
             
         msg_string = 
-            "<OpenWQ> WARNING: TSModule_MMF_hype module - unkown 'COMPARTMET NAMES'";
+            "<OpenWQ> WARNING: TSModule_MMF_hype module - problem with one or more 'COMPARTMET NAMES': "
+            + input_upper_compartment + ", " + input_lower_compartment + ", " + input_compartment_inhibitErosion;
 
         // Print it (Console and/or Log file)
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig,msg_string,true,true);              // print in log file
@@ -162,6 +190,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
             input_direction_index,
             input_upper_compartment_index,
             input_lower_compartment_index,
+            input_compartment_inhibitErosion_index,
             data_format);
 
     // The actual cohesion,  erodibility and sreroexp values will be processed in 

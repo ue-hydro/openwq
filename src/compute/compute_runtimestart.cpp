@@ -34,7 +34,9 @@ void OpenWQ_compute::Reset_Deriv(
 
     // Reset Instant Derivative
     if (inst_deriv_flag == true)
-    {
+    {   
+        // Chemistry variables
+
         // Compartment loop
         #pragma omp parallel for collapse(2) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
@@ -52,6 +54,11 @@ void OpenWQ_compute::Reset_Deriv(
             }
 
         }
+
+        // Sediment transport variables
+        (*OpenWQ_vars.sedmass).zeros();
+        (*OpenWQ_vars.d_sedmass_dt).zeros();
+
     }
 
     // Reset Cumulative Derivative
