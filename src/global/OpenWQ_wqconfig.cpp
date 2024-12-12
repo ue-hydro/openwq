@@ -328,49 +328,63 @@ void OpenWQ_wqconfig::check_mkdir()
 
 // Output Units
 std::string OpenWQ_wqconfig::get_output_units() 
-{
-    return std::get<0>(this->output_units);
-}
+{return std::get<0>(this->output_units);}
 
 double OpenWQ_wqconfig::get_output_units_numerator() 
-{
-    return std::get<1>(this->output_units);
-}
+{return std::get<1>(this->output_units);}
 
 double OpenWQ_wqconfig::get_output_units_denominator() 
-{
-    return std::get<2>(this->output_units);
-}
+{return std::get<2>(this->output_units);}
 
 bool OpenWQ_wqconfig::is_concentration_requested()
-{
-    return std::get<3>(this->output_units);
-}
+{return std::get<3>(this->output_units);}
 
 void OpenWQ_wqconfig::set_output_units(std::string output_units)
-{
-    std::get<0>(this->output_units) = output_units;
-}
+{std::get<0>(this->output_units) = output_units;}
 
 void OpenWQ_wqconfig::set_output_units_numerator(double output_units_numerator)
-{
-    std::get<1>(this->output_units) = output_units_numerator;
-}
+{std::get<1>(this->output_units) = output_units_numerator;}
 
 void OpenWQ_wqconfig::set_output_units_denominator(double output_units_denominator)
-{
-    std::get<2>(this->output_units) = output_units_denominator;
-}
+{std::get<2>(this->output_units) = output_units_denominator;}
 
 void OpenWQ_wqconfig::set_output_units_concentration(bool conentration_requested)
-{
-    std::get<3>(this->output_units) = conentration_requested;
-}
+{std::get<3>(this->output_units) = conentration_requested;}
 
 /***********************************************
- * Modules
+ * Module-specific methods 
 ************************************************/
 
+// #################
+// LE_model -> Boundmix
+int OpenWQ_wqconfig::LE_model_::BoundMix_::get_exchange_direction(unsigned entry_i)
+{return std::get<0>(this->info_vector[entry_i]);}
+
+int OpenWQ_wqconfig::LE_model_::BoundMix_::get_upper_compartment(unsigned entry_i)
+{return std::get<1>(this->info_vector[entry_i]);}
+
+int OpenWQ_wqconfig::LE_model_::BoundMix_::get_lower_compartment(unsigned entry_i)
+{return std::get<2>(this->info_vector[entry_i]);}
+
+int OpenWQ_wqconfig::LE_model_::BoundMix_::get_k_value(unsigned entry_i)
+{return std::get<3>(this->info_vector[entry_i]);}
+
+// #################
+// TS_mdoel -> Hype MMF Erosion 
+int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_exchange_direction()
+{return std::get<0>(this->info_vector);}
+
+int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_upper_compartment()
+{return std::get<1>(this->info_vector);}
+
+int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_lower_compartment()
+{return std::get<2>(this->info_vector);}
+
+int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_erosion_inhibit_compartment()
+{return std::get<3>(this->info_vector);}
+
+std::string OpenWQ_wqconfig::TS_model_::HypeMMF_::get_data_format()
+{return std::get<4>(this->info_vector);}
 
 
         

@@ -72,7 +72,7 @@ class OpenWQ_LE_model{
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             const int source, const int ix_s, const int iy_s, const int iz_s,
-            const int recipient, const int ix_r, const int iy_r, const int iz_r,
+            const int recipient, // no need for ix_r, iy_r, iz_r (because mobilization occurs at the adjacent cell of the upper compartment)
             double wflux_s2r, 
             double wmass_source);
 

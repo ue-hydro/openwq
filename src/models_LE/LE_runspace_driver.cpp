@@ -40,7 +40,7 @@ void OpenWQ_LE_model::LE_driver_run(
         native_BoundMix(
             OpenWQ_hostModelconfig, OpenWQ_vars, OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
+            recipient, // no need for ix_r, iy_r, iz_r (because mobilization occurs at the adjacent cell of the upper compartment)
             wflux_s2r, wmass_source);
 
     // if TD_module != NONE (and any of the others)

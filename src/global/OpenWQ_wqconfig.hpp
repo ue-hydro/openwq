@@ -410,8 +410,20 @@ class OpenWQ_wqconfig::LE_model_::BoundMix_{
 
     // information vector-tuple for the boundary
     std::vector
-        <std::tuple<unsigned int,unsigned int,unsigned int,double>> 
-            info_vector;
+        <std::tuple<
+            unsigned int,   // input_direction_index
+            unsigned int,   // input_upper_compartment_index
+            unsigned int,   // input_lower_compartment_index
+            double          // data_format
+            >> info_vector;
+
+        
+
+    // METHODS
+    int get_exchange_direction(unsigned int entry_i);
+    int get_upper_compartment(unsigned int entry_i);
+    int get_lower_compartment(unsigned int entry_i);
+    int get_k_value(unsigned int entry_i);
 
 };
 
@@ -464,7 +476,12 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
     public: 
 
     // General configuration (compartments, direction)
-    std::tuple<unsigned int,unsigned int,unsigned int, unsigned int, std::string>
+    std::tuple<
+        unsigned int,   // input_direction_index
+        unsigned int,   // input_upper_compartment_index
+        unsigned int,   // input_lower_compartment_index
+        unsigned int,   // input_compartment_inhibitErosion_index
+        std::string>    // data_format
             info_vector;
 
     unsigned pdayno;
@@ -508,6 +525,13 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
     // Potential mobilization of sediments by rainfall
     // but it can only be mobilized if there is runoff
     arma::Cube<double> mobilisedsed_rain_potential;
+
+    // METHODS
+    int get_exchange_direction();
+    int get_upper_compartment();
+    int get_lower_compartment();
+    int get_erosion_inhibit_compartment();
+    std::string get_data_format();
 
 };
 

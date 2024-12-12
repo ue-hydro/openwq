@@ -29,31 +29,16 @@
     std::string errorMsgIdentifier;             // error message section identifier
     std::string model_parameter;
     std::string DataFormat;
-    unsigned int icmp;
+    unsigned int icmp_lower;
     json json_PARAMETER_subStruct;
     json json_PARAMETER_DEFAULTS_subStruct;
 
-    /*
-    TODO: 
-    1) change get<i> to method to avoid mistakes for "OpenWQ_wqconfig.TS_model->HypeMMF->info_vector"
-    2) make if statement where this function only runs if flow parallel to soil (see LE appraoch)
-    3) update snow status for every timestep (if statement for if upper comparment = icmp_inhibit_erosion): 
-        if input_compartment_inhibitErosion_index = -1 (it mean no inhibiting compartment)
-        // Get compartment that inhibits erosion
-        icmp_inhibit_erosion = std::get<3>(OpenWQ_wqconfig.TS_model->HypeMMF->info_vector);
-
-        // Reset to zero
-        OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(ix, iy, iz).zeros();
-
-        // Loop over SUMMA results to save snow status
-        OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(ix, iy, iz) = snow data from summa
-    4) inhibit erosion if snow in icmp_inhibit_erosion > 0
-    */
 
     // Get compartment index of lower compartment
-    icmp = std::get<2>(OpenWQ_wqconfig.TS_model->HypeMMF->info_vector);    
+    icmp_lower = OpenWQ_wqconfig.TS_model->HypeMMF->get_lower_compartment(); 
+       
     // Data format & affected compartment (lower compartment)
-    DataFormat = std::get<4>(OpenWQ_wqconfig.TS_model->HypeMMF->info_vector);
+    DataFormat = OpenWQ_wqconfig.TS_model->HypeMMF->get_data_format();    
 
     // Get PARAMETERS JSON data
     errorMsgIdentifier = "TS_model file";
@@ -87,7 +72,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp,
+                icmp_lower,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -105,7 +90,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp,
+                icmp_lower,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -123,7 +108,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp,
+                icmp_lower,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -141,7 +126,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp,
+                icmp_lower,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -159,7 +144,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp,
+                icmp_lower,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -177,7 +162,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp,
+                icmp_lower,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);

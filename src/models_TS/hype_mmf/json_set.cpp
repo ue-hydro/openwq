@@ -74,7 +74,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     errorMsgIdentifier = "TS_model file >" + jsonKey;
     input_direction = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        json_subStruct, "jsonKey",
+        json_subStruct, jsonKey,
         errorMsgIdentifier,
         true); 
 
@@ -102,7 +102,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
         errorMsgIdentifier,
         true); 
 
-    jsonKey = "COMPARTMENT_EROSION_INHIBIT";
+    jsonKey = "DATA_FORMAT";
     errorMsgIdentifier = "TS_model file >" + jsonKey;
     data_format = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
@@ -143,7 +143,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     
     input_upper_compartment_index_exist = false;    // initialise to false
     input_lower_compartment_index_exist = false;    // initialise to false
-    input_compartment_inhibitErosion_index = false; // initialise to false
+    input_compartment_inhibitErosion_index = -1;    // initialise to false
 
     for (unsigned int icmp_i = 0; icmp_i < OpenWQ_hostModelconfig.get_num_HydroComp(); icmp_i++)
     {

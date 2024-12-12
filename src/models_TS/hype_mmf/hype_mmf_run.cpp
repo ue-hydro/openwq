@@ -25,19 +25,82 @@
 // of Agricultural Engineering Research, vol. 30, pp. 245�253
 // 
 
+/*
+TODO: 
+1) make if statement where this function only runs if flow parallel to soil (see LE appraoch)
+3) update snow status for every timestep (if statement for if upper comparment = icmp_inhibit_erosion): 
+    if input_compartment_inhibitErosion_index = -1 (it mean no inhibiting compartment)
+    // Get compartment that inhibits erosion
+    icmp_inhibit_erosion = std::get<3>(OpenWQ_wqconfig.TS_model->HypeMMF->info_vector);
+
+    // Reset to zero
+    OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(ix, iy, iz).zeros();
+
+    // Loop over SUMMA results to save snow status
+    OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(ix, iy, iz) = snow data from summa
+
+4) inhibit erosion if snow in icmp_inhibit_erosion > 0
+*/
+
+
 void OpenWQ_TS_model::mmf_hype_erosion_run(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
     const int source, const int ix_s, const int iy_s, const int iz_s,
-    const int recipient, const int ix_r, const int iy_r, const int iz_r,
+    const int recipient, // / no need for ix_r, iy_r, iz_r (because mobilization occurs at the adjacent cell of the upper compartment)
     double wflux_s2r, 
     double wmass_source,
     std::string TS_type){
     
+    // ###################
+    // CHECK IF RUN APPLICABLE
+
+    // Return if no flux: wflux_s2r == 0
+    if(wflux_s2r == 0.0f){return;}
+
+    // Return if flux across compartments
+    // This lateral mixing only occurs when fluxes occur when fluxes along the interface of compartments or if leaving the system
+    if (source != recipient && recipient != -1)
+        return;
+    
+    // Return if upper compartment not that defined in HypeMMF
+    int exchange_direction = OpenWQ_wqconfig.TS_model->HypeMMF->get_exchange_direction();
+    int icmp_upper = OpenWQ_wqconfig.TS_model->HypeMMF->get_upper_compartment(); 
+    int icmp_lower = OpenWQ_wqconfig.TS_model->HypeMMF->get_lower_compartment();
+
+
+    if (source != icmp_upper)
+        return;
+
+    std::vector<int> xyz_upper_compartment;
+    
+    // Num of cells in upper_compartment
+    xyz_upper_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp_upper));
+    xyz_upper_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp_upper));
+    xyz_upper_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp_upper));
+
+    // Get number of cells in input_direction_index
+     unsigned int index_lower_cell = xyz_upper_compartment[exchange_direction] - 1;
+
+    std::vector<unsigned int> xyz_source;
+    xyz_source.push_back(ix_s);
+    xyz_source.push_back(iy_s);
+    xyz_source.push_back(iz_s);         // get x,y,z from source comparment in vector
+
+    // Ignore if current source cell is not the lower adjacent cell where mixing may occur
+    if (xyz_source[exchange_direction] != index_lower_cell)
+        return;
+
+
+    // ##################
+    // CODE
+
     // Local variables
-    // IN  
+    
+    /*
+    // PARAMETERS IN
     double cohesion = OpenWQ_wqconfig.TS_model->HypeMMF->cohesion_entryArmaCube(ix_r, iy_r, iz_r);
     double erodibility = OpenWQ_wqconfig.TS_model->HypeMMF->erodibility_entryArmaCube(ix_r, iy_r, iz_r);
     double sreroexp = OpenWQ_wqconfig.TS_model->HypeMMF->sreroexp_entryArmaCube(ix_r, iy_r, iz_r);
@@ -47,13 +110,11 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
     double snow = OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(ix_r, iy_r, iz_r);
     double trans1 = OpenWQ_wqconfig.TS_model->HypeMMF->trans_1_entryArmaCube(ix_r, iy_r, iz_r);
     double trans2 = OpenWQ_wqconfig.TS_model->HypeMMF->trans_2_entryArmaCube(ix_r, iy_r, iz_r);
-
     // DUMMY
     double prec_erosion_threshold;
     double rainfall_energy;
     double intensity;
     double transportfactor;
-
     // OUT
     double mobilisedsed_EWF = 0.0; // mobilised suspended sediment from rainfall (g/m2)
     double mobilisedsed_LE = 0.0;  // mobilised suspended sediment from surface runoff (g/m2)
@@ -143,6 +204,8 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
         }
 
     }
+
+    */
 
 }
 
