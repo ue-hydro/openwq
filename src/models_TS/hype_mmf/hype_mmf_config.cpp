@@ -59,6 +59,7 @@
     // Get parameters
     // #############################
 
+    // #############################
     // 1) COHESION
     
     model_parameter = "COHESION"; // kPa
@@ -77,6 +78,7 @@
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
 
+    // #############################
     // 2) ERODIBILITY
     
     model_parameter = "ERODIBILITY"; // g/J
@@ -95,6 +97,7 @@
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
 
+    // #############################
     // 3) SREROEXP
     
     model_parameter = "SREROEXP"; // [-]
@@ -113,6 +116,7 @@
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
 
+    // #############################
     // 4) Crop coer
     
     model_parameter = "CROPCOVER"; // kPa
@@ -131,7 +135,8 @@
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
 
-    // 4) Crop coer
+    // #############################
+    // 4) Ground cover
     
     model_parameter = "GROUNDCOVER"; // kPa
 
@@ -149,6 +154,7 @@
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
 
+    // #############################
     // 5) Slope
     
     model_parameter = "SLOPE"; // kPa
@@ -166,5 +172,44 @@
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
+
+    // #############################
+    // 5) TRANSPORT_FACTOR_1
+    
+    model_parameter = "TRANSPORT_FACTOR_1";
+
+    OpenWQ_wqconfig.TS_model->HypeMMF
+        ->trans_1_entryArmaCube
+            = OpenWQ_utils.
+            LoadCubeComprtModelParameters_asARMACUBE_JSONorASCII(
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output,
+                DataFormat,
+                model_parameter,
+                icmp_lower,
+                json_PARAMETER_subStruct,
+                json_PARAMETER_DEFAULTS_subStruct,
+                errorMsgIdentifier + " > " + model_parameter);
+
+    // #############################
+    // 5) TRANSPORT_FACTOR_1
+    
+    model_parameter = "TRANSPORT_FACTOR_2";
+
+    OpenWQ_wqconfig.TS_model->HypeMMF
+        ->trans_2_entryArmaCube
+            = OpenWQ_utils.
+            LoadCubeComprtModelParameters_asARMACUBE_JSONorASCII(
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output,
+                DataFormat,
+                model_parameter,
+                icmp_lower,
+                json_PARAMETER_subStruct,
+                json_PARAMETER_DEFAULTS_subStruct,
+                errorMsgIdentifier + " > " + model_parameter);
+        
                 
 }

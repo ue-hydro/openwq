@@ -55,6 +55,7 @@ void OpenWQ_TS_model::TS_driver_run(
             OpenWQ_vars, 
             OpenWQ_wqconfig,
             OpenWQ_utils,
+            OpenWQ_output,
             source, ix_s, iy_s, iz_s,
             recipient,  // / no need for ix_r, iy_r, iz_r (because mobilization occurs at the adjacent cell of the upper compartment)
             wflux_s2r, wmass_source,
