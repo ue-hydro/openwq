@@ -85,6 +85,7 @@ class OpenWQ_TS_model{
         // HYPE_MMF
         void TS_HYPE_MMF_config(
             OpenWQ_json& OpenWQ_json,
+            OpenWQ_vars& OpenWQ_vars,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,

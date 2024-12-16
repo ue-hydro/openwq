@@ -36,30 +36,35 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     std::string input_filepath;
     // Strings for inputs
     std::string input_direction;    // user input
-    std::string input_upper_compartment;            // user input
-    std::string input_lower_compartment;            // user input
-    std::string input_compartment_inhibitErosion;   // user input
+    std::string erodingFlux_cmpt;            // user input
+    std::string erodingInhibit_cmpt;   // user input
     std::string data_format;
     // iteractive variables
     std::string icmp_i_name;
-    unsigned int input_direction_index;
-    unsigned int input_upper_compartment_index;
-    unsigned int input_lower_compartment_index;
-    unsigned int input_compartment_inhibitErosion_index;
-    bool input_upper_compartment_index_exist;
-    bool input_lower_compartment_index_exist;
-    bool input_compartment_inhibitErosion_index_exist;
+    int input_direction_index;
+    int erodingFlux_cmpt_index;
+    int sedCmp_index;
+    int erodingInhibit_cmpt_index;
+    bool erodingFlux_cmpt_index_exist;
+    bool erodingInhibit_cmpt_index_exist;
     // Other local variables
     typedef std::tuple<
         unsigned int,   // input_direction_index
-        unsigned int,   // input_upper_compartment_index
-        unsigned int,   // input_lower_compartment_index
-        unsigned int,   // input_compartment_inhibitErosion_index  
+        unsigned int,   // erodingFlux_cmpt_index
+        unsigned int,   // sedCmp_index
+        unsigned int,   // erodingInhibit_cmpt_index  
         std::string     // data format
         > HypeMMF_infoVect;          // Tuple with info and expression for BGC cyling
 
     // Get LATERAL_EXCHANGE module name
     errorMsgIdentifier = "Master file in MODULES > TRANSPORT_SEDIMENTS";
+
+    // Getting eroding (sediment) compartment name
+    sedCmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+        OpenWQ_output,
+        OpenWQ_wqconfig.TS_model->SedCmpt,
+        errorMsgIdentifier,
+        true);
 
     // Get info for TSModule_MMF_hype function
     // Get number of entries
@@ -77,26 +82,18 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
         json_subStruct, jsonKey,
         errorMsgIdentifier,
         true); 
-
-    jsonKey = "UPPER_COMPARTMENT";
+    
+    jsonKey = "ERODING_FLUX_COMPARTMENT";
     errorMsgIdentifier = "TS_model file >" + jsonKey;
-    input_upper_compartment = OpenWQ_utils.RequestJsonKeyVal_str(
+    erodingFlux_cmpt = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, jsonKey,
         errorMsgIdentifier,
         true); 
 
-    jsonKey = "LOWER_COMPARTMENT";
+    jsonKey = "EROSION_INHIBIT_COMPARTMENT";
     errorMsgIdentifier = "TS_model file >" + jsonKey;
-    input_lower_compartment = OpenWQ_utils.RequestJsonKeyVal_str(
-        OpenWQ_wqconfig, OpenWQ_output,
-        json_subStruct, jsonKey,
-        errorMsgIdentifier,
-        true); 
-
-    jsonKey = "COMPARTMENT_EROSION_INHIBIT";
-    errorMsgIdentifier = "TS_model file >" + jsonKey;
-    input_compartment_inhibitErosion = OpenWQ_utils.RequestJsonKeyVal_str(
+    erodingInhibit_cmpt = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, jsonKey,
         errorMsgIdentifier,
@@ -138,59 +135,27 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
 
     }
 
-    // 2) upper compartment AND lower compartment index
-    // Loop through native compartment names
-    
-    input_upper_compartment_index_exist = false;    // initialise to false
-    input_lower_compartment_index_exist = false;    // initialise to false
-    input_compartment_inhibitErosion_index = -1;    // initialise to false
+    // Get upper and inhibiting compartments
+    // Abort if not found
+    erodingFlux_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+        OpenWQ_output,
+        erodingFlux_cmpt,
+        errorMsgIdentifier,
+        true);
 
-    for (unsigned int icmp_i = 0; icmp_i < OpenWQ_hostModelconfig.get_num_HydroComp(); icmp_i++)
-    {
-        // Upper compartment: index
-        if (input_upper_compartment.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp_i)) == 0){
-            input_upper_compartment_index = icmp_i;
-            input_upper_compartment_index_exist = true;
-        }
-        // Lower compartment: index
-        if (input_lower_compartment.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp_i)) == 0){
-            input_lower_compartment_index = icmp_i;
-            input_lower_compartment_index_exist = true;
-        }
-        // Inhibit erosion compartment: index
-        if (input_compartment_inhibitErosion.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp_i)) == 0){
-            input_compartment_inhibitErosion_index = icmp_i;
-            input_compartment_inhibitErosion_index_exist = true;
-        }else if (input_compartment_inhibitErosion.compare("NONE")){
-            input_compartment_inhibitErosion_index = -1;
-            input_compartment_inhibitErosion_index_exist = true;
-        }
-    }
-
-    // Create Message (Warning Message) if compartments provided don't exist
-    if (input_upper_compartment_index_exist == false 
-        || input_lower_compartment_index_exist == false
-        || input_compartment_inhibitErosion_index_exist == false){
-            
-        msg_string = 
-            "<OpenWQ> WARNING: TSModule_MMF_hype module - problem with one or more 'COMPARTMET NAMES': "
-            + input_upper_compartment + ", " + input_lower_compartment + ", " + input_compartment_inhibitErosion;
-
-        // Print it (Console and/or Log file)
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig,msg_string,true,true);              // print in log file
-
-        // Ignore entry
-        return;
-
-    }
-        
+    erodingInhibit_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+        OpenWQ_output,
+        erodingInhibit_cmpt,
+        errorMsgIdentifier,
+        true);
+     
     // Add values to tuple
     OpenWQ_wqconfig.TS_model->HypeMMF->info_vector = 
         HypeMMF_infoVect(
             input_direction_index,
-            input_upper_compartment_index,
-            input_lower_compartment_index,
-            input_compartment_inhibitErosion_index,
+            erodingFlux_cmpt_index,
+            sedCmp_index,
+            erodingInhibit_cmpt_index,
             data_format);
 
     // The actual cohesion,  erodibility and sreroexp values will be processed in 

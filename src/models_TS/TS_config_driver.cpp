@@ -37,6 +37,7 @@ void OpenWQ_TS_model::TS_driver_config(
         
         TS_HYPE_MMF_config(
             OpenWQ_json,
+            OpenWQ_vars,
             OpenWQ_hostModelconfig,
             OpenWQ_wqconfig,
             OpenWQ_utils,

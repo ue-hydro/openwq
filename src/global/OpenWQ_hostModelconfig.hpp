@@ -93,6 +93,13 @@ class OpenWQ_hostModelconfig
         std::string get_HydroComp_name_at(int index);
         std::string get_HydroDepend_name_at(int index);
 
+        // get index of compartment name
+        int get_HydroComp_index(
+            std::string cmp_name,
+            OpenWQ_output& OpenWQ_output,
+            std::string msg_string,
+            bool abort_if_noexist);
+
         // Get vector of compartment names and external fluxes names
         std::vector<std::string> get_HydroComp_names();
         std::vector<std::string> get_HydroExtFlux_names();

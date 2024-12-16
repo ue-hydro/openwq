@@ -19,6 +19,7 @@
 
  void OpenWQ_TS_model::TS_HYPE_MMF_config(
     OpenWQ_json& OpenWQ_json,
+    OpenWQ_vars& OpenWQ_vars,
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
@@ -29,13 +30,13 @@
     std::string errorMsgIdentifier;             // error message section identifier
     std::string model_parameter;
     std::string DataFormat;
-    unsigned int icmp_lower;
+    unsigned int icmp_erodFluxCmpt;
     json json_PARAMETER_subStruct;
     json json_PARAMETER_DEFAULTS_subStruct;
 
 
     // Get compartment index of lower compartment
-    icmp_lower = OpenWQ_wqconfig.TS_model->HypeMMF->get_lower_compartment(); 
+    icmp_erodFluxCmpt = OpenWQ_wqconfig.TS_model->HypeMMF->get_eroding_flux_compartment(); 
        
     // Data format & affected compartment (lower compartment)
     DataFormat = OpenWQ_wqconfig.TS_model->HypeMMF->get_data_format();    
@@ -73,7 +74,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_lower,
+                icmp_erodFluxCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -92,7 +93,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_lower,
+                icmp_erodFluxCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -111,7 +112,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_lower,
+                icmp_erodFluxCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -130,7 +131,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_lower,
+                icmp_erodFluxCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -149,7 +150,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_lower,
+                icmp_erodFluxCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -168,7 +169,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_lower,
+                icmp_erodFluxCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -187,7 +188,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_lower,
+                icmp_erodFluxCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -206,10 +207,9 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_lower,
+                icmp_erodFluxCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
-        
-                
+
 }

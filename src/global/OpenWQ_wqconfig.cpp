@@ -374,10 +374,9 @@ int OpenWQ_wqconfig::LE_model_::BoundMix_::get_k_value(unsigned entry_i)
 int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_exchange_direction()
 {return std::get<0>(this->info_vector);}
 
-int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_upper_compartment()
-{return std::get<1>(this->info_vector);}
+// std::get<1>(this->info_vector) => refers to sediment compartment
 
-int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_lower_compartment()
+int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_eroding_flux_compartment()
 {return std::get<2>(this->info_vector);}
 
 int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_erosion_inhibit_compartment()

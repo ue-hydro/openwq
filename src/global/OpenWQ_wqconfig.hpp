@@ -343,6 +343,7 @@ class OpenWQ_wqconfig::TS_model_{
 
     public: 
     std::string TS_module;
+    std::string SedCmpt;
 
     // constructor/destructor
     TS_model_(); 
@@ -528,8 +529,7 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
 
     // METHODS
     int get_exchange_direction();
-    int get_upper_compartment();
-    int get_lower_compartment();
+    int get_eroding_flux_compartment();
     int get_erosion_inhibit_compartment();
     std::string get_data_format();
 

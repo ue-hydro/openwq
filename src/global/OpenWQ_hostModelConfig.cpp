@@ -99,6 +99,47 @@ std::string OpenWQ_hostModelconfig::get_HydroDepend_name_at(int index)
     return std::get<1>(this->HydroDepend[index]);
 }
 
+// get index of compartment name
+int OpenWQ_hostModelconfig::get_HydroComp_index(
+    OpenWQ_output& OpenWQ_output,
+    std::string cmp_name,
+    std::string msg_string,
+    bool abort_if_noexist){
+
+    int icmp = 0;
+
+    for (auto &i : this->HydroComp)
+    {
+        if (cmp_name.compare(std::get<1>(i))==0)
+            break;
+        icmp += 1;
+    }
+
+    // if not found, set to -1
+    if (icmp == get_num_HydroComp()){
+        icmp = -1;
+    }
+
+    // abort if compartment not found
+    if (icmp == -1 && abort_if_noexist){
+
+        msg_string += "> Could not find compartment: " + cmp_name;
+
+        // Print it (Console and/or Log file)
+        OpenWQ_output.ConsoleLog(
+            OpenWQ_wqconfig,    // for Log file name
+            msg_string,         // message
+            true,               // print in console
+            true);              // print in log file
+
+        // Abort
+        exit(EXIT_FAILURE);
+    }
+
+    return icmp;
+
+}
+
 // Get vector of compartment names and external fluxes names
 std::vector<std::string> OpenWQ_hostModelconfig::get_HydroComp_names()
 {

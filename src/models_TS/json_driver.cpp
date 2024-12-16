@@ -30,33 +30,54 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
     std::string errorMsgIdentifier;
     std::string msg_string;
     std::string input_module_name;
+    std::string sediment_cmp;
     std::string input_filepath;
+    std::string jsonKey;
+    int sediment_cmp_index;
+
+    errorMsgIdentifier = "Master file inside OPENWQ_INPUT";
 
     // check if field MODULES exist
     // this field needs to exist
-    errorMsgIdentifier = "Master file inside OPENWQ_INPUT";
+    jsonKey = "MODULES";
     jsonMaster_SubStruct = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
-        OpenWQ_json.Master, "MODULES",
+        OpenWQ_json.Master, jsonKey,
         errorMsgIdentifier,
         true);     
 
     // check if field TRANSPORT_SEDIMENTS exist
-    errorMsgIdentifier = "Master file inside OPENWQ_INPUT > MODULES";
+    jsonKey = "TRANSPORT_SEDIMENTS";
+    errorMsgIdentifier += ">" + jsonKey;
     OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
-        jsonMaster_SubStruct, "TRANSPORT_SEDIMENTS",
+        jsonMaster_SubStruct, jsonKey,
         errorMsgIdentifier,
         true);
-
-    errorMsgIdentifier = "Master file inside OPENWQ_INPUT > MODULES > TRANSPORT_SEDIMENTS";
 
     // check if field MODULE_NAME exist (compulsary)
+    jsonKey = "MODULE_NAME";
     input_module_name = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
-        jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"],"MODULE_NAME",
-        errorMsgIdentifier,
+        jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"],jsonKey,
+        errorMsgIdentifier + ">" + jsonKey,
         true);
+
+    // Get sediment compartment name
+    jsonKey = "SEDIMENT_COMPARTMENT";
+    sediment_cmp = OpenWQ_utils.RequestJsonKeyVal_str(
+        OpenWQ_wqconfig, OpenWQ_output,
+        jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"], jsonKey,
+        errorMsgIdentifier + ">" + jsonKey,
+        true); 
+
+    // Check if sediment_cmp is valid
+    (OpenWQ_wqconfig.TS_model->SedCmpt).append(sediment_cmp);
+    sediment_cmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+        OpenWQ_output,
+        OpenWQ_wqconfig.TS_model->SedCmpt,
+        error_msg,
+        true); // abort if not found
 
     // save TS_model module name
     (OpenWQ_wqconfig.TS_model->TS_module).append(input_module_name);

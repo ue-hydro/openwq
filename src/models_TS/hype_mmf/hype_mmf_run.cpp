@@ -58,6 +58,16 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// ###################
 	// CHECK IF RUN APPLICABLE
 
+	// if compartment = inhibit_compartment (snow)
+	// then save the snow status and return
+	if(source == OpenWQ_wqconfig.TS_model->HypeMMF->get_erosion_inhibit_compartment()){
+
+		OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(ix_s, iy_s, iz_s)
+			= OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(source,ix_s,iy_s,iz_s);
+
+		return;
+	}
+
 	// Return if no flux: wflux_s2r == 0
 	if(wflux_s2r == 0.0f){return;}
 
@@ -67,23 +77,24 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 		return;
 	
 	// Return if upper compartment not that defined in HypeMMF
-	int icmp_upper = OpenWQ_wqconfig.TS_model->HypeMMF->get_upper_compartment(); 
-	if (source != icmp_upper)
+	int erodFlux_icmp = OpenWQ_wqconfig.TS_model->HypeMMF->get_eroding_flux_compartment();
+	if (source != erodFlux_icmp)
 		return;
+
+	//OpenWQ_hostModelconfig.get_HydroComp_index(erodFlux_icmp)
 
 	// Local variables
 	int exchange_direction = OpenWQ_wqconfig.TS_model->HypeMMF->get_exchange_direction();
-	int icmp_lower = OpenWQ_wqconfig.TS_model->HypeMMF->get_lower_compartment();
-	std::vector<int> xyz_upper_compartment;
+	std::vector<int> xyz_erodingFlux_compartment;
 	std::vector<unsigned int> xyz_lowerComp;
 
 	// Num of cells in upper_compartment
-	xyz_upper_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp_upper));
-	xyz_upper_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp_upper));
-	xyz_upper_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp_upper));
+	xyz_erodingFlux_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(erodFlux_icmp));
+	xyz_erodingFlux_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(erodFlux_icmp));
+	xyz_erodingFlux_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(erodFlux_icmp));
 	
 	// Get number of cells in input_direction_index
-	unsigned int index_lower_cell = xyz_upper_compartment[exchange_direction] - 1;
+	unsigned int index_lower_cell = xyz_erodingFlux_compartment[exchange_direction] - 1;
 	std::vector<unsigned int> xyz_source;
 	xyz_source.push_back(ix_s);
 	xyz_source.push_back(iy_s);
@@ -104,14 +115,13 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// Local variables
 	
 	// PARAMETERS IN
+	double snow = OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(xyz_source[0], xyz_source[1], xyz_source[2]);
 	double cohesion = OpenWQ_wqconfig.TS_model->HypeMMF->cohesion_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
 	double erodibility = OpenWQ_wqconfig.TS_model->HypeMMF->erodibility_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
 	double sreroexp = OpenWQ_wqconfig.TS_model->HypeMMF->sreroexp_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
 	double cropcover = OpenWQ_wqconfig.TS_model->HypeMMF->cropcover_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
 	double groundcover = OpenWQ_wqconfig.TS_model->HypeMMF->groundcover_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
 	double slope = OpenWQ_wqconfig.TS_model->HypeMMF->slope_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
-	// double snow = OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
-	double snow = 0.0;
 	double trans1 = OpenWQ_wqconfig.TS_model->HypeMMF->trans_1_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
 	double trans2 = OpenWQ_wqconfig.TS_model->HypeMMF->trans_2_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
 	// DUMMY
@@ -131,7 +141,7 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 		// Create Message (Warning Message)
 		msg_string = 
 			"<OpenWQ> WARNING: TS_model -> MMF_HYPE - \"CROPCOVER + GROUNDCOVER\" needs to be equal to 1 (entry skiped): \\
-			COMPARTMENT: " + OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp_upper) 
+			COMPARTMENT: " + OpenWQ_wqconfig.TS_model->SedCmpt 
 			+ "(" + std::to_string(xyz_lowerComp[0]) + " ," 
 			+ std::to_string(xyz_lowerComp[1]) + " ," 
 			+ std::to_string(xyz_lowerComp[2]) + ")";
@@ -181,7 +191,10 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 		rainfall_energy = wflux_s2r * rainfall_energy;        // J/m2
 		mobilisedsed_EWF = rainfall_energy * (1.0 - cropcover) * erodibility;  //g/m2
 
-		OpenWQ_wqconfig.TS_model->HypeMMF->mobilisedsed_rain_potential = mobilisedsed_EWF;
+		// Adding rain mobilization to potential
+		OpenWQ_wqconfig.TS_model->HypeMMF
+			->mobilisedsed_rain_potential(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]) 
+			= mobilisedsed_EWF;
 
 	
 	} else if (TS_type.compare("TS_type_LE") == 0){

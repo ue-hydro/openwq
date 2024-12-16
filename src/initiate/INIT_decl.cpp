@@ -93,6 +93,18 @@ void OpenWQ_initiate::initmemory(
         // In such cases, the output will multiply by one (so it's fine)
         OpenWQ_hostModelconfig.add_waterVol_hydromodel(domain_xyz);
 
+        // Initiate sediment compartment state-variable
+        std::string sedCmpt_name = OpenWQ_wqconfig.TS_model->SedCmpt;
+        if (sedCmpt_name.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))){
+
+            // initiate state variable
+            (*OpenWQ_vars.d_sedmass_dt) = domain_xyz;
+
+            // initiate mobilisedsed_rain_potential
+            OpenWQ_wqconfig.TS_model->HypeMMF->mobilisedsed_rain_potential = domain_xyz;
+        
+        }
+
     }
 
     /* ########################################
