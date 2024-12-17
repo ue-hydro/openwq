@@ -96,7 +96,6 @@ class OpenWQ_hostModelconfig
         // get index of compartment name
         int get_HydroComp_index(
             std::string cmp_name,
-            OpenWQ_output& OpenWQ_output,
             std::string msg_string,
             bool abort_if_noexist);
 

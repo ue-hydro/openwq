@@ -101,7 +101,6 @@ std::string OpenWQ_hostModelconfig::get_HydroDepend_name_at(int index)
 
 // get index of compartment name
 int OpenWQ_hostModelconfig::get_HydroComp_index(
-    OpenWQ_output& OpenWQ_output,
     std::string cmp_name,
     std::string msg_string,
     bool abort_if_noexist){
@@ -125,12 +124,8 @@ int OpenWQ_hostModelconfig::get_HydroComp_index(
 
         msg_string += "> Could not find compartment: " + cmp_name;
 
-        // Print it (Console and/or Log file)
-        OpenWQ_output.ConsoleLog(
-            OpenWQ_wqconfig,    // for Log file name
-            msg_string,         // message
-            true,               // print in console
-            true);              // print in log file
+        // Print in console 
+        std::cout << msg_string << std::endl;
 
         // Abort
         exit(EXIT_FAILURE);

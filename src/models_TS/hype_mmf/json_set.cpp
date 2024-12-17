@@ -61,7 +61,6 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
 
     // Getting eroding (sediment) compartment name
     sedCmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        OpenWQ_output,
         OpenWQ_wqconfig.TS_model->SedCmpt,
         errorMsgIdentifier,
         true);
@@ -84,7 +83,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
         true); 
     
     jsonKey = "ERODING_FLUX_COMPARTMENT";
-    errorMsgIdentifier = "TS_model file >" + jsonKey;
+    errorMsgIdentifier = "TS_model file > " + jsonKey;
     erodingFlux_cmpt = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, jsonKey,
@@ -92,7 +91,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
         true); 
 
     jsonKey = "EROSION_INHIBIT_COMPARTMENT";
-    errorMsgIdentifier = "TS_model file >" + jsonKey;
+    errorMsgIdentifier = "TS_model file > " + jsonKey;
     erodingInhibit_cmpt = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, jsonKey,
@@ -138,13 +137,11 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     // Get upper and inhibiting compartments
     // Abort if not found
     erodingFlux_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        OpenWQ_output,
         erodingFlux_cmpt,
         errorMsgIdentifier,
         true);
 
     erodingInhibit_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        OpenWQ_output,
         erodingInhibit_cmpt,
         errorMsgIdentifier,
         true);

@@ -74,9 +74,8 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
     // Check if sediment_cmp is valid
     (OpenWQ_wqconfig.TS_model->SedCmpt).append(sediment_cmp);
     sediment_cmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        OpenWQ_output,
         OpenWQ_wqconfig.TS_model->SedCmpt,
-        error_msg,
+        errorMsgIdentifier + ">" + jsonKey,
         true); // abort if not found
 
     // save TS_model module name
