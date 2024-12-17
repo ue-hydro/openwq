@@ -13,5 +13,7 @@
 
 SUMMA_DIR=$(realpath $(pwd)/../../../../../)
 OPENWQ_DIR="/code/build/source/openwq/openwq"
-apptainer exec --bind $SUMMA_DIR:/code --pwd $OPENWQ_DIR ../openwq.sif \
-    /bin/bash -c "mkdir build && cd build && cmake .. && make"
+apptainer exec --bind $SUMMA_DIR:/code \
+    --pwd $OPENWQ_DIR --env PhreeqcRM_DIR=/opt/phreeqcrm/phreeqcrm ../openwq.sif \
+     \
+    /bin/bash -c "mkdir -p build && cd build && cmake .. && make -j4"

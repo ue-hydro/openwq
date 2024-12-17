@@ -9,6 +9,7 @@ From: ubuntu:24.04
   DEBIAN_FRONTEND="noninteractive" \
   apt-get -y install g++ \
   gdb \
+  git \
   gdbserver \
   cmake \
   wget \
@@ -24,6 +25,12 @@ From: ubuntu:24.04
   liblapack-dev \
   gfortran
 
+  # Install PHREEQC-RM
+  cd /opt
+  git clone https://github.com/usgs-coupled/phreeqcrm_use_cmake.git phreeqcrm -b modern
+  cd phreeqcrm
+  cmake . -P build_phreeqcrm.cmake -DCMAKE_INSTALL_PREFIX=/usr/local/phreeqcrm
+  
   # Install Sundials
   cd /opt
   wget https://github.com/LLNL/sundials/archive/refs/tags/v7.1.1.tar.gz
@@ -45,3 +52,5 @@ From: ubuntu:24.04
   cmake . -D DETECT_HDF5=true -DCMAKE_C_FLAGS="-DH5_USE_110_API"
   make install
   sed -i '121s/^\/\/ #define ARMA_USE_HDF5/#define ARMA_USE_HDF5/' /usr/include/armadillo_bits/config.hpp
+  
+  
