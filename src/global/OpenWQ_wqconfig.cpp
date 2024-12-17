@@ -377,7 +377,7 @@ int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_exchange_direction()
 // std::get<1>(this->info_vector) => refers to sediment compartment
 
 int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_eroding_flux_compartment()
-{return std::get<2>(this->info_vector);}
+{return std::get<1>(this->info_vector);}
 
 int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_erosion_inhibit_compartment()
 {return std::get<3>(this->info_vector);}

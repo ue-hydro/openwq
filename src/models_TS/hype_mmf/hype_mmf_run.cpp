@@ -58,16 +58,6 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// ###################
 	// CHECK IF RUN APPLICABLE
 
-	// if compartment = inhibit_compartment (snow)
-	// then save the snow status and return
-	if(source == OpenWQ_wqconfig.TS_model->HypeMMF->get_erosion_inhibit_compartment()){
-
-		OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(ix_s, iy_s, iz_s)
-			= OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(source,ix_s,iy_s,iz_s);
-
-		return;
-	}
-
 	// Return if no flux: wflux_s2r == 0
 	if(wflux_s2r == 0.0f){return;}
 
@@ -104,6 +94,13 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	if (xyz_source[exchange_direction] != index_lower_cell)
 		return;
 
+	// Return if there is snow
+	double snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+				OpenWQ_wqconfig.TS_model->HypeMMF->get_erosion_inhibit_compartment(),
+				ix_s,iy_s,iz_s);
+	if (snow != 0.0)
+		return;
+
 	// Now get the coordenates of the lower compartment from which the mass exchange will take place
 	// which will be the boundary cell: x or y or z = 0
 	xyz_lowerComp = xyz_source;
@@ -115,7 +112,6 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// Local variables
 	
 	// PARAMETERS IN
-	double snow = OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(xyz_source[0], xyz_source[1], xyz_source[2]);
 	double cohesion = OpenWQ_wqconfig.TS_model->HypeMMF->cohesion_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
 	double erodibility = OpenWQ_wqconfig.TS_model->HypeMMF->erodibility_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
 	double sreroexp = OpenWQ_wqconfig.TS_model->HypeMMF->sreroexp_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
@@ -160,7 +156,7 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// #################################
 
 	// There is no erosion if any of the following conditions are met
-	if(cohesion == 0.0 || erodibility == 0.0 || snow > 0.0){
+	if(cohesion == 0.0 || erodibility == 0.0){
 		return;
 	};       
 

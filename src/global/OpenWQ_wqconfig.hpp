@@ -519,10 +519,6 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
     // INTERMEDIATE VARIABLE
     // #################
 
-    // Snow exists?    
-    // true = 1; false = 0;       
-    arma::Cube<double> snow_entryArmaCube;  
-
     // Potential mobilization of sediments by rainfall
     // but it can only be mobilized if there is runoff
     arma::Cube<double> mobilisedsed_rain_potential;
