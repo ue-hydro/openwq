@@ -51,7 +51,15 @@ void OpenWQ_CH_model::CH_driver_run(
         OpenWQ_wqconfig.BGC_Transform_print_errmsg = false;
         OpenWQ_wqconfig.invalid_bgc_entry_errmsg = false;
 
-    }else{
+    } else if ((OpenWQ_wqconfig.BGC_module).compare("PHREEQC") == 0){
+            phreeqc_run( // calls PHREEQC-RM functions
+                OpenWQ_json,
+                OpenWQ_vars,
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output);
+
+    } else{
 
         // Create Message
         msg_string = 

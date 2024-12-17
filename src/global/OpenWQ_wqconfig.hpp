@@ -21,6 +21,7 @@
 #include "exprtk.hpp"
 #include <string>
 #include <sys/stat.h>
+#include "PhreeqcRM.h"
 
 
 
@@ -297,6 +298,9 @@ class OpenWQ_wqconfig
         >openWQ_BGCnative_BGCexpressions_eq;            // BGC kinetic formulas for all biogeochemical cycles
     
     std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
+
+    // PHREEQC
+    std::unique_ptr<PhreeqcRM> phreeqcrm;
 
     // ##########################
     // 3) Solver

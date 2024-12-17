@@ -31,14 +31,14 @@
 
 #include <cstdio>
 
-#include "global/openwq_json.hpp"
+#include "global/OpenWQ_json.hpp"
 using json = nlohmann::json;
 
 //#include "utility.h"
 
-#include "global/openwq_json.hpp"
-#include "global/openwq_wqconfig.hpp"
-#include "global/openwq_hostmodelconfig.hpp"
+#include "global/OpenWQ_json.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
 #include "units/headerfile_UNITS.hpp"
 #include "output/headerfile_OUT.hpp"
 #include "utils/headerfile_UTILS.hpp"
@@ -137,6 +137,12 @@ class OpenWQ_readjson{
             OpenWQ_output& OpenWQ_output);
 
         void SetConfigInfo_CHModule_BGC_FLEX(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_CHModule_PHREEQC(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,

@@ -33,6 +33,7 @@ void OpenWQ_readjson::change_JSON_value_to_upper_case(
     std::vector<std::string> exclude_vales;
     exclude_vales.push_back("FILEPATH");
     exclude_vales.push_back("FOLDERPATH");
+    exclude_vales.push_back("DATABASE");
     exclude_vales.push_back("MODULE_CONFIG_FILEPATH");
     unsigned int num_exclude_vales = exclude_vales.size();
 

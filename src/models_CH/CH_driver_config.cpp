@@ -26,7 +26,15 @@ void OpenWQ_CH_model::CH_driver_config(
             OpenWQ_units,
             OpenWQ_output);
 
-    }else{
+    }else if ((OpenWQ_wqconfig.BGC_module).compare("PHREEQC") == 0){
+        phreeqc_setup(
+            OpenWQ_json,
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,
+            OpenWQ_vars,
+            OpenWQ_units,
+            OpenWQ_output);
+    } else{
 
         // Create Message
         msg_string = 

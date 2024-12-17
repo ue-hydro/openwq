@@ -18,10 +18,10 @@
 #ifndef OPENWQ_OUTPUT_INCLUDED
 #define OPENWQ_OUTPUT_INCLUDED
 
-#include "global/openwq_json.hpp"
-#include "global/openwq_vars.hpp"
-#include "global/openwq_wqconfig.hpp"
-#include "global/openwq_hostmodelconfig.hpp"
+#include "global/OpenWQ_json.hpp"
+#include "global/OpenWQ_vars.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
 #include "compute/headerfile_compute.hpp"
 
 class OpenWQ_output{

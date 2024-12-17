@@ -21,8 +21,8 @@
 
 #include <sys/stat.h>
 
-#include "global/openwq_json.hpp"
-#include "global/openwq_wqconfig.hpp"
+#include "global/OpenWQ_json.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
 #include "compute/headerfile_compute.hpp"
 #include "output/headerfile_OUT.hpp"
 

@@ -19,10 +19,10 @@
 #ifndef OPENWQ_COUPLERCALLSH_INCLUDED
 #define OPENWQ_COUPLERCALLSH_INCLUDED
 
-#include "global/openwq_json.hpp"
-#include "global/openwq_vars.hpp"
-#include "global/openwq_wqconfig.hpp"
-#include "global/openwq_hostmodelconfig.hpp"
+#include "global/OpenWQ_json.hpp"
+#include "global/OpenWQ_vars.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
 
 #include "readjson/headerfile_RJSON.hpp"
 #include "initiate/headerfile_INIT.hpp"
