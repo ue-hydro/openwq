@@ -223,6 +223,7 @@ class OpenWQ_readjson{
 
         // options
         void SetConfigInfo_TSModule_HBVsed_hype(
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_json &OpenWQ_json,
             OpenWQ_wqconfig &OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,

@@ -1,4 +1,3 @@
-
 // Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
@@ -16,73 +15,37 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "models_TS/headerfile_TS.hpp"
-#include<cmath>
 
-// Calculate eroded particles from soil with a method based on the Morgan-Morgan-Finney erosion model. (from HYPE)
-//
-// Reference: R. P. C. Morgan, D. D. V. Morgan, and H. J. Finney, 1984. 
-// A predictive model for the assessment of soil erosion risk, Journal 
-// of Agricultural Engineering Research, vol. 30, pp. 245�253
-// 
+/* ########################################
+// Calculate eroded particles from soil by HBV-sed based model
+#########################################*/
+void OpenWQ_TS_model::hbvsed_hype_erosion_run(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    const int source, const int ix_s, const int iy_s, const int iz_s,
+    const int recipient,  // no need for ix_r, iy_r, iz_r (because mobilization occurs at the adjacent cell of the upper compartment)
+    double wflux_s2r, 
+    double wmass_source,
+    std::string TS_type){
 
-/*
-TODO: 
-1) make if statement where this function only runs if flow parallel to soil (see LE appraoch)
-3) update snow status for every timestep (if statement for if upper comparment = icmp_inhibit_erosion): 
-		if input_compartment_inhibitErosion_index = -1 (it mean no inhibiting compartment)
-		// Get compartment that inhibits erosion
-		icmp_inhibit_erosion = std::get<3>(OpenWQ_wqconfig.TS_model->HypeMMF->info_vector);
-
-		// Reset to zero
-		OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(ix, iy, iz).zeros();
-
-		// Loop over SUMMA results to save snow status
-		OpenWQ_wqconfig.TS_model->HypeMMF->snow_entryArmaCube(ix, iy, iz) = snow data from summa
-
-4) inhibit erosion if snow in icmp_inhibit_erosion > 0
-*/
-
-
-void OpenWQ_TS_model::mmf_hype_erosion_run(
-	OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
-	OpenWQ_vars& OpenWQ_vars,
-	OpenWQ_wqconfig& OpenWQ_wqconfig,
-	OpenWQ_utils& OpenWQ_utils,
-	OpenWQ_output& OpenWQ_output,
-	const int source, const int ix_s, const int iy_s, const int iz_s,
-	const int recipient, // / no need for ix_r, iy_r, iz_r (because mobilization occurs at the adjacent cell of the upper compartment)
-	double wflux_s2r, 
-	double wmass_source,
-	std::string TS_type){
-	
-	// TODO
-	// pdayno is not being used but it's in the original code
-
+  /*
 	// ###################
 	// CHECK IF RUN APPLICABLE
 
 	// Return if no flux: wflux_s2r == 0
 	if(wflux_s2r == 0.0f){return;}
 
-	// Get eroding compartment
-	int erodFlux_icmp = OpenWQ_wqconfig.TS_model->HypeMMF->get_eroding_flux_compartment();
-
 	// Return if flux across compartments
 	// This lateral mixing only occurs when fluxes occur when fluxes along the interface of compartments or if leaving the system
-	// Only applicable for runoff erosion but not to precipitation monilization
-
-
-	if (TS_type.compare("TS_type_LE") == 0){
-		
-		if (source != recipient && recipient != -1)
-			return;
-
-		// Return if upper compartment not that defined in HypeMMF
-		if (source != erodFlux_icmp)
-			return;
-
-	}
+	if (source != recipient && recipient != -1)
+		return;
 	
+	// Return if upper compartment not that defined in HypeMMF
+	int erodFlux_icmp = OpenWQ_wqconfig.TS_model->HypeMMF->get_eroding_flux_compartment();
+	if (source != erodFlux_icmp)
+		return;
+
 	//OpenWQ_hostModelconfig.get_HydroComp_index(erodFlux_icmp)
 
 	// Local variables
@@ -107,6 +70,7 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 		return;
 
 	// Return if there is snow
+  // TODO: if (frostdepth<0. .AND. frostdepth>-9999.) then return
 	double snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
 				OpenWQ_wqconfig.TS_model->HypeMMF->get_erosion_inhibit_compartment(),
 				ix_s,iy_s,iz_s);
@@ -236,73 +200,49 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 
 	}
 
+  */
+   
+ 
 }
 
 /*
-	USE MODVAR, ONLY : basin, &
-											pi                              
+void hbvsed_hype_erosion_run(i,prec,lusepar,soilpar,slopepar, &
+                    precexppar,eroindexpar,snow,frostdepth,erodedsed){
 
-	!Argument declarations
-	INTEGER, INTENT(IN) :: i             !<index of current subbasin
-	INTEGER, INTENT(IN) :: j             !<index of current class
-	INTEGER, INTENT(IN) :: pdayno        !<current pseudo day number of the year
-	REAL, INTENT(IN)    :: prec          !<precipitation (rainfall only)    
-	REAL, INTENT(IN)    :: surfacerunoff !<saturated overland flow and excess infiltration (mm)
-	REAL, INTENT(IN)    :: cohesion      !<(kPa)
-	REAL, INTENT(IN)    :: erodibility   !<(g/J)
-	REAL, INTENT(IN)    :: snow          !<snow water (mm)
-	REAL, INTENT(IN)    :: sreroexp      !<surface runoff erosion exponent 
-	REAL, INTENT(IN)    :: flow          !<fast flow
-	REAL, INTENT(OUT)   :: erodedsed     !<eroded (transported) sediment (kg/km2)
+    USE HYPEVARIABLES, ONLY : m_erodmon
+    USE MODVAR, ONLY : basin,monthpar,current_time
 
-	!Local variables
-	REAL Rainfall_energy
-	REAL intensity
-	REAL common_cropcover, common_groundcover
-	REAL transportfactor
-	REAL mobilisedsed         !mobilised suspended sediment from rainfall and surface runoff (g/m2)
-	
-	!Local parameters
-	REAL, PARAMETER :: trans1 = 4.0
-	REAL, PARAMETER :: trans2 = 1.3  
+    // Argument declarations
+    int i             // index of current subbasin
+    double prec          // precipitation (rainfall only)    
+    double lusepar       // soil erosion factor (land use dependence)
+    double soilpar       // soil erosion factor (soil dependence)
+    double slopepar      // slope erosion factor (exponent) 
+    double precexppar    // erosion precipitation dependence factor (exponent)
+    double eroindexpar   // model parameter for scaling of erosion index
+    double snow          // snow water (mm)
+    double frostdepth    // frost depth (cm)
+    double erodedsed     // eroded (transported) sediment (kg/km2)
 
-	!>\b Algorithm
-	erodedsed = 0.
-	IF(cohesion==0.OR.erodibility==0) RETURN      !no parameter values -> no erosion
+    // Local variables
+    double erosionindex;
+    double mobilisedsed;   //mobilised suspended sediment from rainfall (g/m2)
+    double erodmonth;      // monthly erosion factor (-)
+    
+    // Algorithm
+    // now and soil frost turn off particle mobilization
+    IF(snow>0. .OR. (frostdepth<0. .AND. frostdepth>-9999.))THEN
+      erodedsed = 0.
+      RETURN
+    ENDIF
 
-	!>Calculate current cropcover and groundcover, will limit erosion
-	CALL get_current_crop_and_ground_cover(i,j,common_cropcover,common_groundcover)
+    // Calculate mobilised sediments from erosion index, slope and rainfall
+    erosionindex = basin(i)%eroindex / eroindexpar    
+    mobilisedsed = (basin(i)%slope / 5.)**slopepar * lusepar * soilpar * erosionindex * prec**precexppar       !tonnes/km2 = g/m2
+      
+    // Eroded sediment calculated from mobilised sediment with a monthly factor
+    erodmonth = 1. + monthpar(m_erodmon,current_time%date%month)
+    erodedsed = 1000. * mobilisedsed * erodmonth  // kg/km2
 
-	!Check for snow limiting erosion
-	intensity = 1. !intenspar
-	IF(snow>0.) intensity = 0.    !snow
-
-	!>Calculate particles that is eroded by rain splash detachment and by overland flow (mobilised sediment)
-	mobilisedsed = 0.
-	IF(prec > 0.) THEN
-		IF(intensity > 0.) THEN
-			IF(prec>5.0) THEN     !TODO: shorter timestep, other threshold?, holds for all over the world?, reference?
-				Rainfall_energy = 8.95+8.44*LOG10(prec*(0.257+sin(2*3.14*((pdayno-70.)/365.))*0.09)*2.)
-			ELSE
-				Rainfall_energy = 0.
-			ENDIF
-			Rainfall_energy = prec * Rainfall_energy        !J/m2
-			mobilisedsed = Rainfall_energy * (1. - common_cropcover) * erodibility  !g/m2
-		ENDIF
-	ENDIF
-	IF(surfacerunoff > 0.) THEN   
-		mobilisedsed = mobilisedsed + (((surfacerunoff * 365.) ** sreroexp) * (1. - common_groundcover) * (1./(0.5 * cohesion)) * SIN(basin(i)%slope / 100.)) / 365. !g/m2   
-	ENDIF
-
-	!>Transport capacity of fast flowing water may limit transport of sediment
-	IF(flow>0.)THEN
-		transportfactor = MIN(1.,(flow / trans1)**trans2)   
-	ELSE
-		transportfactor = 1.
-	ENDIF
-		
-	!>Eroded sediment calculated from mobilised sediment, possibly limited by the transport capacity
-	erodedsed = 1000. * mobilisedsed * transportfactor  !kg/km2
-
-END SUBROUTINE calculate_MMF_erosion
+}
 */

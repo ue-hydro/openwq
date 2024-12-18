@@ -469,6 +469,41 @@ class OpenWQ_wqconfig::TS_model_::HypeHVB_{
 
     public: 
 
+    // General configuration (compartments, direction)
+    std::tuple<
+        unsigned int,   // input_direction_index
+        unsigned int,   // input_upper_compartment_index
+        unsigned int,   // input_lower_compartment_index
+        unsigned int,   // input_compartment_inhibitErosion_index
+        std::string>    // data_format
+            info_vector;
+
+    // #################
+    // PARAMETERS
+    // #################
+
+    // lusepar       ! soil erosion factor (land use dependence) 
+    arma::Cube<double> lusepar_entryArmaCube;  
+
+    // soilpar       ! soil erosion factor (soil dependence)
+    arma::Cube<double> soilpar_entryArmaCube;  
+
+    // slopepar      ! slope erosion factor (exponent)         
+    arma::Cube<double> slopepar_entryArmaCube;  
+
+    // precexppar    ! erosion precipitation dependence factor (exponent)        
+    arma::Cube<double> precexppar_entryArmaCube;  
+
+    // eroindexpar   ! model parameter for scaling of erosion index          
+    arma::Cube<double> eroindexpar_entryArmaCube;  
+
+
+    // METHODS
+    int get_exchange_direction();
+    int get_eroding_flux_compartment();
+    int get_erosion_inhibit_compartment();
+    std::string get_data_format();
+
 };
 
 // Module TS_model -> HypeMMF

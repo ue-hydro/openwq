@@ -385,6 +385,22 @@ int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_erosion_inhibit_compartment()
 std::string OpenWQ_wqconfig::TS_model_::HypeMMF_::get_data_format()
 {return std::get<4>(this->info_vector);}
 
+// #################
+// TS_mdoel -> Hype HypeHVB Erosion 
+int OpenWQ_wqconfig::TS_model_::HypeHVB_::get_exchange_direction()
+{return std::get<0>(this->info_vector);}
+
+// std::get<1>(this->info_vector) => refers to sediment compartment
+
+int OpenWQ_wqconfig::TS_model_::HypeHVB_::get_eroding_flux_compartment()
+{return std::get<1>(this->info_vector);}
+
+int OpenWQ_wqconfig::TS_model_::HypeHVB_::get_erosion_inhibit_compartment()
+{return std::get<3>(this->info_vector);}
+
+std::string OpenWQ_wqconfig::TS_model_::HypeHVB_::get_data_format()
+{return std::get<4>(this->info_vector);}
+
 
         
 

@@ -122,6 +122,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
     }else if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_HBVSED") == 0){
         
         SetConfigInfo_TSModule_HBVsed_hype(  
+            OpenWQ_hostModelconfig,
             OpenWQ_json, 
             OpenWQ_wqconfig, 
             OpenWQ_utils, 

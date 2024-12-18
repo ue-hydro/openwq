@@ -45,15 +45,14 @@ void OpenWQ_TS_model::TS_driver_config(
 
     }else if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_HBVSED") == 0)
     {
-        /*
+        
         TS_HYPE_HBVSED_config(
             OpenWQ_json,
+            OpenWQ_vars,
             OpenWQ_hostModelconfig,
             OpenWQ_wqconfig,
-            OpenWQ_vars,
-            OpenWQ_units,
+            OpenWQ_utils,
             OpenWQ_output);
-        */
        
     }else{
 

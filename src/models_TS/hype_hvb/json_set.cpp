@@ -21,63 +21,138 @@
 
 // Set chemModule = BGC_FLEX
 void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output){
     
-    // CODE BELOW to ADAPT TO NEW MODULE
-
-    /*
-    // Local variables
+   // Local variables
+    json json_subStruct;
+    std::string jsonKey;
     std::string errorMsgIdentifier;
-    json BGCjson_subStruct;
-    json BGCjson_ChemList;
-    json BGCjson_mobileSpecies;
-    std::string msg_string;           // error/warning message string
+    std::string msg_string;
+    std::string LE_method_local;    // module name
+    std::string input_filepath;
+    // Strings for inputs
+    std::string input_direction;    // user input
+    std::string erodingFlux_cmpt;            // user input
+    std::string erodingInhibit_cmpt;   // user input
+    std::string data_format;
+    // iteractive variables
+    std::string icmp_i_name;
+    int input_direction_index;
+    int erodingFlux_cmpt_index;
+    int sedCmp_index;
+    int erodingInhibit_cmpt_index;
+    bool erodingFlux_cmpt_index_exist;
+    bool erodingInhibit_cmpt_index_exist;
+    // Other local variables
+    typedef std::tuple<
+        unsigned int,   // input_direction_index
+        unsigned int,   // erodingFlux_cmpt_index
+        unsigned int,   // sedCmp_index
+        unsigned int,   // erodingInhibit_cmpt_index  
+        std::string     // data format
+        > HypeMMF_infoVect;          // Tuple with info and expression for BGC cyling
 
-    
-    // Check if BGQ json has CHEMICAL_SPECIES key
-    errorMsgIdentifier = "BGQ file";
-    BGCjson_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
+    // Get LATERAL_EXCHANGE module name
+    errorMsgIdentifier = "Master file in MODULES > TRANSPORT_SEDIMENTS";
+
+    // Getting eroding (sediment) compartment name
+    sedCmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+        OpenWQ_wqconfig.TS_model->SedCmpt,
+        errorMsgIdentifier,
+        true);
+
+    // Get info for TSModule_MMF_hype function
+    // Get number of entries
+    errorMsgIdentifier = "TS_model file";
+    json_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
-        OpenWQ_json.BGC_module, "CHEMICAL_SPECIES",
+        OpenWQ_json.TS_module, "CONFIGURATION",
+        errorMsgIdentifier,
+        true);
+
+    jsonKey = "DIRECTION";
+    errorMsgIdentifier = "TS_model file >" + jsonKey;
+    input_direction = OpenWQ_utils.RequestJsonKeyVal_str(
+        OpenWQ_wqconfig, OpenWQ_output,
+        json_subStruct, jsonKey,
+        errorMsgIdentifier,
+        true); 
+    
+    jsonKey = "ERODING_FLUX_COMPARTMENT";
+    errorMsgIdentifier = "TS_model file > " + jsonKey;
+    erodingFlux_cmpt = OpenWQ_utils.RequestJsonKeyVal_str(
+        OpenWQ_wqconfig, OpenWQ_output,
+        json_subStruct, jsonKey,
         errorMsgIdentifier,
         true); 
 
-    // Check if BGQ json has CHEMICAL_SPECIES key
-    errorMsgIdentifier = "BGQ file in CHEMICAL_SPECIES";
-    BGCjson_ChemList = OpenWQ_utils.RequestJsonKeyVal_json(
+    jsonKey = "EROSION_INHIBIT_COMPARTMENT";
+    errorMsgIdentifier = "TS_model file > " + jsonKey;
+    erodingInhibit_cmpt = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        BGCjson_subStruct, "LIST",
+        json_subStruct, jsonKey,
         errorMsgIdentifier,
         true); 
 
-    // Get number of chemical species from BGC_json
-    (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem) = BGCjson_ChemList.size();
-
-    // Get mobile species 
-    // reset index to start on zero
-    errorMsgIdentifier = "BGQ file in CHEMICAL_SPECIES";
-    BGCjson_mobileSpecies = OpenWQ_utils.RequestJsonKeyVal_json(
+    jsonKey = "DATA_FORMAT";
+    errorMsgIdentifier = "TS_model file >" + jsonKey;
+    data_format = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        BGCjson_subStruct, "BGC_GENERAL_MOBILE_SPECIES",
+        json_subStruct, jsonKey,
         errorMsgIdentifier,
-        false);  // no abort
+        true); 
 
-    for (unsigned int chemi = 0; chemi < BGCjson_mobileSpecies.size(); chemi++){
+    // #########################
+    // Get corresponding indexes for all input values
     
-        OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.push_back(
-            (int)BGCjson_mobileSpecies.at(chemi) - 1);
+    // 1) input_direction
+    if (input_direction.compare("X") == 0){
+        input_direction_index = 0;
+    }else if (input_direction.compare("Y") == 0){
+        input_direction_index = 1;
+    }else if (input_direction.compare("Z") == 0){
+        input_direction_index = 2;
+    }else{
+
+        // Create Message (Warning Message)
+        msg_string = 
+            "<OpenWQ> WARNING: TSModule_MMF_hype - unkown 'DIRECTION' =>" + input_direction;
+
+        // Print it (Console and/or Log file)
+        OpenWQ_output.ConsoleLog(
+            OpenWQ_wqconfig,    // for Log file name
+            msg_string,         // message
+            true,               // print in console
+            true);              // print in log file
+
+        // Ignore entry
+        return;
 
     }
 
-    // Get chemical species list from BGC_json
-    for (unsigned int chemi = 0; chemi < (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem); chemi++)
-    {
-        (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list).push_back(
-            BGCjson_ChemList[std::to_string(chemi + 1)]);
-    }
-    */
+    // Get upper and inhibiting compartments
+    // Abort if not found
+    erodingFlux_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+        erodingFlux_cmpt,
+        errorMsgIdentifier,
+        true);
+
+    erodingInhibit_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+        erodingInhibit_cmpt,
+        errorMsgIdentifier,
+        true);
+     
+    // Add values to tuple
+    OpenWQ_wqconfig.TS_model->HypeHVB->info_vector = 
+        HypeMMF_infoVect(
+            input_direction_index,
+            erodingFlux_cmpt_index,
+            sedCmp_index,
+            erodingInhibit_cmpt_index,
+            data_format);
 
 }
