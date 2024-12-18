@@ -50,11 +50,10 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
     // Other local variables
     typedef std::tuple<
         unsigned int,   // input_direction_index
-        unsigned int,   // erodingFlux_cmpt_index
         unsigned int,   // sedCmp_index
         unsigned int,   // erodingInhibit_cmpt_index  
         std::string     // data format
-        > HypeMMF_infoVect;          // Tuple with info and expression for BGC cyling
+        > HypeHVB_infoVect;          // Tuple with info and expression for BGC cyling
 
     // Get LATERAL_EXCHANGE module name
     errorMsgIdentifier = "Master file in MODULES > TRANSPORT_SEDIMENTS";
@@ -77,14 +76,6 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
     jsonKey = "DIRECTION";
     errorMsgIdentifier = "TS_model file >" + jsonKey;
     input_direction = OpenWQ_utils.RequestJsonKeyVal_str(
-        OpenWQ_wqconfig, OpenWQ_output,
-        json_subStruct, jsonKey,
-        errorMsgIdentifier,
-        true); 
-    
-    jsonKey = "ERODING_FLUX_COMPARTMENT";
-    errorMsgIdentifier = "TS_model file > " + jsonKey;
-    erodingFlux_cmpt = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, jsonKey,
         errorMsgIdentifier,
@@ -136,10 +127,6 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
 
     // Get upper and inhibiting compartments
     // Abort if not found
-    erodingFlux_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        erodingFlux_cmpt,
-        errorMsgIdentifier,
-        true);
 
     erodingInhibit_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
         erodingInhibit_cmpt,
@@ -148,9 +135,8 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
      
     // Add values to tuple
     OpenWQ_wqconfig.TS_model->HypeHVB->info_vector = 
-        HypeMMF_infoVect(
+        HypeHVB_infoVect(
             input_direction_index,
-            erodingFlux_cmpt_index,
             sedCmp_index,
             erodingInhibit_cmpt_index,
             data_format);

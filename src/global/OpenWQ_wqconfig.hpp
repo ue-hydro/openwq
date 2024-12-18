@@ -472,8 +472,7 @@ class OpenWQ_wqconfig::TS_model_::HypeHVB_{
     // General configuration (compartments, direction)
     std::tuple<
         unsigned int,   // input_direction_index
-        unsigned int,   // input_upper_compartment_index
-        unsigned int,   // input_lower_compartment_index
+        unsigned int,   // input_sediment_compartment_index
         unsigned int,   // input_compartment_inhibitErosion_index
         std::string>    // data_format
             info_vector;
@@ -481,7 +480,7 @@ class OpenWQ_wqconfig::TS_model_::HypeHVB_{
     // #################
     // PARAMETERS
     // #################
-
+    
     // lusepar       ! soil erosion factor (land use dependence) 
     arma::Cube<double> lusepar_entryArmaCube;  
 
@@ -497,10 +496,14 @@ class OpenWQ_wqconfig::TS_model_::HypeHVB_{
     // eroindexpar   ! model parameter for scaling of erosion index          
     arma::Cube<double> eroindexpar_entryArmaCube;  
 
+     // slope       ! basin slope
+    arma::Cube<double> slope_entryArmaCube;  
+
+    // erosion index 
+    arma::Cube<double> eroindex_entryArmaCube;  
 
     // METHODS
     int get_exchange_direction();
-    int get_eroding_flux_compartment();
     int get_erosion_inhibit_compartment();
     std::string get_data_format();
 
@@ -513,9 +516,9 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
 
     // General configuration (compartments, direction)
     std::tuple<
-        unsigned int,   // input_direction_index
-        unsigned int,   // input_upper_compartment_index
-        unsigned int,   // input_lower_compartment_index
+        unsigned int,   // direction_index
+        unsigned int,   // eroding compartment index
+        unsigned int,   // sediment comparment index
         unsigned int,   // input_compartment_inhibitErosion_index
         std::string>    // data_format
             info_vector;

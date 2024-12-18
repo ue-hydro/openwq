@@ -30,13 +30,17 @@
     std::string errorMsgIdentifier;             // error message section identifier
     std::string model_parameter;
     std::string DataFormat;
-    unsigned int icmp_erodFluxCmpt;
+    unsigned int icmp_SedCmpt;
     json json_PARAMETER_subStruct;
     json json_PARAMETER_DEFAULTS_subStruct;
 
 
     // Get compartment index of lower compartment
-    icmp_erodFluxCmpt = OpenWQ_wqconfig.TS_model->HypeHVB->get_eroding_flux_compartment(); 
+    icmp_SedCmpt = OpenWQ_hostModelconfig.get_HydroComp_index(
+        OpenWQ_wqconfig.TS_model->SedCmpt,
+        "<OPENWQ> ERROR: TS_model > Unkown sediment compartment name: " 
+        + OpenWQ_wqconfig.TS_model->SedCmpt,
+        true); 
        
     // Data format & affected compartment (lower compartment)
     DataFormat = OpenWQ_wqconfig.TS_model->HypeHVB->get_data_format();    
@@ -74,7 +78,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_erodFluxCmpt,
+                icmp_SedCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -93,7 +97,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_erodFluxCmpt,
+                icmp_SedCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -112,7 +116,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_erodFluxCmpt,
+                icmp_SedCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -131,7 +135,7 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_erodFluxCmpt,
+                icmp_SedCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
@@ -150,7 +154,45 @@
                 OpenWQ_output,
                 DataFormat,
                 model_parameter,
-                icmp_erodFluxCmpt,
+                icmp_SedCmpt,
+                json_PARAMETER_subStruct,
+                json_PARAMETER_DEFAULTS_subStruct,
+                errorMsgIdentifier + " > " + model_parameter);
+    
+    // #############################
+    // 6) SLOPE
+    
+    model_parameter = "SLOPE"; // basin slope 
+
+    OpenWQ_wqconfig.TS_model->HypeHVB
+        ->slope_entryArmaCube
+            = OpenWQ_utils.
+            LoadCubeComprtModelParameters_asARMACUBE_JSONorASCII(
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output,
+                DataFormat,
+                model_parameter,
+                icmp_SedCmpt,
+                json_PARAMETER_subStruct,
+                json_PARAMETER_DEFAULTS_subStruct,
+                errorMsgIdentifier + " > " + model_parameter);
+    
+    // #############################
+    // 7) EROSION_INDEX
+    
+    model_parameter = "EROSION_INDEX"; // erosion index
+
+    OpenWQ_wqconfig.TS_model->HypeHVB
+        ->eroindex_entryArmaCube
+            = OpenWQ_utils.
+            LoadCubeComprtModelParameters_asARMACUBE_JSONorASCII(
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output,
+                DataFormat,
+                model_parameter,
+                icmp_SedCmpt,
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);

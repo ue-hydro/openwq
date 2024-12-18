@@ -109,9 +109,8 @@ class OpenWQ_TS_model{
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             const int source, const int ix_s, const int iy_s, const int iz_s,
-            const int recipient, // / no need for ix_r, iy_r, iz_r (because mobilization occurs at the adjacent cell of the upper compartment)
+            const int recipient, const int ix_r, const int iy_r, const int iz_r,
             double wflux_s2r, 
-            double wmass_source,
             std::string TS_type);
             
          // Based on the Morgan-Morgan-Finney erosion model implemented in HYPE
@@ -122,13 +121,10 @@ class OpenWQ_TS_model{
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output,
             const int source, const int ix_s, const int iy_s, const int iz_s,
-            const int recipient, // / no need for ix_r, iy_r, iz_r (because mobilization occurs at the adjacent cell of the upper compartment)
+            const int recipient, const int ix_r, const int iy_r, const int iz_r,
             double wflux_s2r, 
-            double wmass_source,
             std::string TS_type);
-
         
-
 };
 
 #endif

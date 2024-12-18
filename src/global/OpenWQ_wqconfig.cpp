@@ -374,10 +374,10 @@ int OpenWQ_wqconfig::LE_model_::BoundMix_::get_k_value(unsigned entry_i)
 int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_exchange_direction()
 {return std::get<0>(this->info_vector);}
 
-// std::get<1>(this->info_vector) => refers to sediment compartment
-
 int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_eroding_flux_compartment()
 {return std::get<1>(this->info_vector);}
+
+// std::get<2>(this->info_vector) => refers to sediment compartment
 
 int OpenWQ_wqconfig::TS_model_::HypeMMF_::get_erosion_inhibit_compartment()
 {return std::get<3>(this->info_vector);}
@@ -392,14 +392,11 @@ int OpenWQ_wqconfig::TS_model_::HypeHVB_::get_exchange_direction()
 
 // std::get<1>(this->info_vector) => refers to sediment compartment
 
-int OpenWQ_wqconfig::TS_model_::HypeHVB_::get_eroding_flux_compartment()
-{return std::get<1>(this->info_vector);}
-
 int OpenWQ_wqconfig::TS_model_::HypeHVB_::get_erosion_inhibit_compartment()
-{return std::get<3>(this->info_vector);}
+{return std::get<2>(this->info_vector);}
 
 std::string OpenWQ_wqconfig::TS_model_::HypeHVB_::get_data_format()
-{return std::get<4>(this->info_vector);}
+{return std::get<3>(this->info_vector);}
 
 
         
