@@ -31,9 +31,11 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
     std::string msg_string;
     std::string input_module_name;
     std::string sediment_cmp;
+    std::string transport_cmp;
     std::string input_filepath;
     std::string jsonKey;
     int sediment_cmp_index;
+    int transport_cmp_index;
 
     errorMsgIdentifier = "Master file inside OPENWQ_INPUT";
 
@@ -63,6 +65,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
         errorMsgIdentifier + ">" + jsonKey,
         true);
 
+    // #############################
     // Get sediment compartment name
     jsonKey = "SEDIMENT_COMPARTMENT";
     sediment_cmp = OpenWQ_utils.RequestJsonKeyVal_str(
@@ -78,6 +81,23 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
         errorMsgIdentifier + ">" + jsonKey,
         true); // abort if not found
 
+    // #############################
+    // Get transport compartment name
+    jsonKey = "TRANSPORT_COMPARTMENT";
+    transport_cmp = OpenWQ_utils.RequestJsonKeyVal_str(
+        OpenWQ_wqconfig, OpenWQ_output,
+        jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"], jsonKey,
+        errorMsgIdentifier + ">" + jsonKey,
+        true); 
+
+    // Check if transport_cmp is valid
+    (OpenWQ_wqconfig.TS_model->ErodTranspCmpt).append(transport_cmp);
+    transport_cmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+        OpenWQ_wqconfig.TS_model->ErodTranspCmpt,
+        errorMsgIdentifier + ">" + jsonKey,
+        true); // abort if not found
+
+    // #############################
     // save TS_model module name
     (OpenWQ_wqconfig.TS_model->TS_module).append(input_module_name);
 
@@ -117,7 +137,9 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
             OpenWQ_json, 
             OpenWQ_wqconfig, 
             OpenWQ_utils, 
-            OpenWQ_output);
+            OpenWQ_output,
+            sediment_cmp_index,
+            transport_cmp_index);
 
     }else if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_HBVSED") == 0){
         
@@ -126,7 +148,9 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
             OpenWQ_json, 
             OpenWQ_wqconfig, 
             OpenWQ_utils, 
-            OpenWQ_output);
+            OpenWQ_output,
+            sediment_cmp_index,
+            transport_cmp_index);
 
     }
 

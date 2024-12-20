@@ -54,8 +54,6 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	double wflux_s2r, 
 	std::string TS_type){
 	
-	// TODO
-	// pdayno is not being used but it's in the original code
 
 	// ###################
 	// CHECK IF RUN APPLICABLE
@@ -63,16 +61,27 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// Return if no flux: wflux_s2r == 0
 	if(wflux_s2r == 0.0f){return;}
 
-	// Get eroding compartment
-	int erodFlux_icmp = OpenWQ_wqconfig.TS_model->HypeMMF->get_eroding_flux_compartment();
 
-	// Return if flux across compartments
-	// This lateral mixing only occurs when fluxes occur when fluxes along the interface of compartments or if leaving the system
-	// Only applicable for runoff erosion but not to precipitation monilization
+	// Get TS model elements
+	int exchange_direction = OpenWQ_wqconfig.TS_model->HypeHVB->get_exchange_direction();
+  int erodFlux_icmp = OpenWQ_wqconfig.TS_model->HypeHVB->get_eroding_transp_compartment();
+  int erodInhibut_icmp = OpenWQ_wqconfig.TS_model->HypeHVB->get_erosion_inhibit_compartment();
+	int sediment_icmp = OpenWQ_wqconfig.TS_model->HypeHVB->get_sediment_compartment();
 
+	// Return if there is snow
+	double snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+				erodInhibut_icmp,
+				ix_s,iy_s,iz_s);
+	if (snow != 0.0)
+		return;
 
+	// ######################
+	// If runoff mobilization: TS_type_LE
 	if (TS_type.compare("TS_type_LE") == 0){
 		
+		// Return if flux across compartments
+		// This lateral mixing only occurs when fluxes occur when fluxes along the interface of compartments or if leaving the system
+		// Only applicable for runoff erosion but not to precipitation monilization
 		if (source != recipient && recipient != -1)
 			return;
 
@@ -82,40 +91,36 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 
 	}
 	
-	//OpenWQ_hostModelconfig.get_HydroComp_index(erodFlux_icmp)
-
-	// Local variables
-	int exchange_direction = OpenWQ_wqconfig.TS_model->HypeMMF->get_exchange_direction();
-	std::vector<int> xyz_erodingFlux_compartment;
-	std::vector<unsigned int> xyz_lowerComp;
-
-	// Num of cells in upper_compartment
-	xyz_erodingFlux_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(erodFlux_icmp));
-	xyz_erodingFlux_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(erodFlux_icmp));
-	xyz_erodingFlux_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(erodFlux_icmp));
+	// ################################
+	// Eroding / Transport compartment (upper compartment)
 	
+	// info for eroding/transport compartment 
+	std::vector<int> n_xyz_erodingTransp_compartment;
+
+	n_xyz_erodingTransp_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(erodFlux_icmp));
+	n_xyz_erodingTransp_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(erodFlux_icmp));
+	n_xyz_erodingTransp_compartment.push_back(OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(erodFlux_icmp));
+	
+	unsigned int index_erodTranp_interface = n_xyz_erodingTransp_compartment[exchange_direction] - 1;
+
 	// Get number of cells in input_direction_index
-	unsigned int index_lower_cell = xyz_erodingFlux_compartment[exchange_direction] - 1;
 	std::vector<unsigned int> xyz_source;
 	xyz_source.push_back(ix_s);
 	xyz_source.push_back(iy_s);
 	xyz_source.push_back(iz_s);         // get x,y,z from source comparment in vector
 
 	// Ignore if current source cell is not the lower adjacent cell where mixing may occur
-	if (xyz_source[exchange_direction] != index_lower_cell)
+	if (xyz_source[exchange_direction] != index_erodTranp_interface)
 		return;
 
-	// Return if there is snow
-	double snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
-				OpenWQ_wqconfig.TS_model->HypeMMF->get_erosion_inhibit_compartment(),
-				ix_s,iy_s,iz_s);
-	if (snow != 0.0)
-		return;
+	// ################################
+	// Sediment compartment (lower compartment)
 
 	// Now get the coordenates of the lower compartment from which the mass exchange will take place
 	// which will be the boundary cell: x or y or z = 0
-	xyz_lowerComp = xyz_source;
-	xyz_lowerComp[exchange_direction] = 0; 
+	std::vector<unsigned int> xyz_SedCmpt_interface;
+	xyz_SedCmpt_interface = xyz_source;
+	xyz_SedCmpt_interface[exchange_direction] = 0; 
 
 	// ##################
 	// CODE
@@ -123,14 +128,14 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// Local variables
 	
 	// PARAMETERS IN
-	double cohesion = OpenWQ_wqconfig.TS_model->HypeMMF->cohesion_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
-	double erodibility = OpenWQ_wqconfig.TS_model->HypeMMF->erodibility_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
-	double sreroexp = OpenWQ_wqconfig.TS_model->HypeMMF->sreroexp_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
-	double cropcover = OpenWQ_wqconfig.TS_model->HypeMMF->cropcover_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
-	double groundcover = OpenWQ_wqconfig.TS_model->HypeMMF->groundcover_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
-	double slope = OpenWQ_wqconfig.TS_model->HypeMMF->slope_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
-	double trans1 = OpenWQ_wqconfig.TS_model->HypeMMF->trans_1_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
-	double trans2 = OpenWQ_wqconfig.TS_model->HypeMMF->trans_2_entryArmaCube(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
+	double cohesion = OpenWQ_wqconfig.TS_model->HypeMMF->cohesion_entryArmaCube(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
+	double erodibility = OpenWQ_wqconfig.TS_model->HypeMMF->erodibility_entryArmaCube(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
+	double sreroexp = OpenWQ_wqconfig.TS_model->HypeMMF->sreroexp_entryArmaCube(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
+	double cropcover = OpenWQ_wqconfig.TS_model->HypeMMF->cropcover_entryArmaCube(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
+	double groundcover = OpenWQ_wqconfig.TS_model->HypeMMF->groundcover_entryArmaCube(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
+	double slope = OpenWQ_wqconfig.TS_model->HypeMMF->slope_entryArmaCube(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
+	double trans1 = OpenWQ_wqconfig.TS_model->HypeMMF->trans_1_entryArmaCube(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
+	double trans2 = OpenWQ_wqconfig.TS_model->HypeMMF->trans_2_entryArmaCube(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
 	// DUMMY
 	double prec_erosion_threshold;
 	double rainfall_energy;
@@ -148,10 +153,10 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 		// Create Message (Warning Message)
 		msg_string = 
 			"<OpenWQ> WARNING: TS_model -> MMF_HYPE - \"CROPCOVER + GROUNDCOVER\" needs to be equal to 1 (entry skiped): \\
-			COMPARTMENT: " + OpenWQ_wqconfig.TS_model->SedCmpt 
-			+ "(" + std::to_string(xyz_lowerComp[0]) + " ," 
-			+ std::to_string(xyz_lowerComp[1]) + " ," 
-			+ std::to_string(xyz_lowerComp[2]) + ")";
+			COMPARTMENT: " + OpenWQ_hostModelconfig.get_HydroComp_name_at(sediment_icmp) 
+			+ "(" + std::to_string(xyz_SedCmpt_interface[0]) + " ," 
+			+ std::to_string(xyz_SedCmpt_interface[1]) + " ," 
+			+ std::to_string(xyz_SedCmpt_interface[2]) + ")";
 
 		// Print it (Console and/or Log file)
 		OpenWQ_output.ConsoleLog(
@@ -207,32 +212,47 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	} else if (TS_type.compare("TS_type_LE") == 0){
 	// ###############################################
 	// If erosion driven by LE_model (e.g., runoff)
+
+	// 1)
+	// Mobilization from SedCompt (sediment compartment)
 	
-		// TODO 
-		// wflux_s2r needs to be in mm
-		// (((surfacerunoff * 365.) ** sreroexp) * (1. - common_groundcover) * (1./(0.5 * cohesion)) * SIN(basin(i)%slope / 100.)) / 365. !g/m2 
-		mobilisedsed_LE = ( pow(wflux_s2r * 365, sreroexp) 
-			* (1.0 - groundcover) * (1.0/(0.5f * cohesion)) * 
-			sin(slope / 100.0)) / 365; // g/m2   
+	// TODO 
+	// wflux_s2r needs to be in mm
+	// (((surfacerunoff * 365.) ** sreroexp) * (1. - common_groundcover) * (1./(0.5 * cohesion)) * SIN(basin(i)%slope / 100.)) / 365. !g/m2 
+	mobilisedsed_LE = ( pow(wflux_s2r * 365, sreroexp) 
+		* (1.0 - groundcover) * (1.0/(0.5f * cohesion)) * 
+		sin(slope / 100.0)) / 365; // g/m2   
 
-		mobilisedsed_LE = std::max(mobilisedsed_LE, 0.0);
+	mobilisedsed_LE = std::max(mobilisedsed_LE, 0.0);
 
-		// Transport capacity of fast flowing water may limit transport of sediment
-		// transportfactor = MIN(1.,(flow / trans1)**trans2) 
-		transportfactor = std::min(1.0d, pow(wflux_s2r / trans1, trans2));
+	// Transport capacity of fast flowing water may limit transport of sediment
+	// transportfactor = MIN(1.,(flow / trans1)**trans2) 
+	transportfactor = std::min(1.0d, pow(wflux_s2r / trans1, trans2));
 
-		// #####################################
-		// Eroded sediment calculated from mobilised sediment, possibly limited by the transport capacity
-		
-		// Mobilization by rainfall if transport/flow exists
-		mobilisedsed_EWF = OpenWQ_wqconfig.TS_model->HypeMMF->mobilisedsed_rain_potential(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
+	// #####################################
+	// Eroded sediment calculated from mobilised sediment, possibly limited by the transport capacity
+	
+	// Mobilization by rainfall if transport/flow exists
+	mobilisedsed_EWF = OpenWQ_wqconfig.TS_model->HypeMMF->mobilisedsed_rain_potential(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
 
-		(*OpenWQ_vars.d_sedmass_dt)(xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]) 
-			= 1000.0 * (
-				mobilisedsed_EWF    // mobilization by rainfall
-				+ mobilisedsed_LE   // mobilization by runoff/flow
-				) * transportfactor;  // kg/km2
+	(*OpenWQ_vars.d_sedmass_mobilized_dt)(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]) 
+		= 1000.0 * (
+			mobilisedsed_EWF    // mobilization by rainfall
+			+ mobilisedsed_LE   // mobilization by runoff/flow
+			) * transportfactor;  // kg/km2
 
+	}
+
+	// 2)
+	// Mobilization with flow
+	// Assuming here that, since d_sedmass_mobilized_dt is the mobilized sediment,
+	// then it will all move with flow regardless of the flow/runoff intensity
+	if(ix_r!=-1 && iy_r!=-1 && iz_r!=-1){
+
+		(*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) 
+			+= (*OpenWQ_vars.d_sedmass_mobilized_dt)(
+					xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
+	
 	}
 
 }

@@ -42,6 +42,11 @@ void OpenWQ_initiate::initmemory(
     // Loop over compartments
     // Assign and  allocate memory to openWQ variables
     ######################################## */
+
+    // Get sediment and eroding compartments
+    std::string sedCmpt_name = OpenWQ_wqconfig.TS_model->SedCmpt;
+    std::string erosTransCmpt_name = OpenWQ_wqconfig.TS_model->ErodTranspCmpt;
+
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
             
         // Dimensions for compartment icmp
@@ -93,15 +98,27 @@ void OpenWQ_initiate::initmemory(
         // In such cases, the output will multiply by one (so it's fine)
         OpenWQ_hostModelconfig.add_waterVol_hydromodel(domain_xyz);
 
+        // ##########################################
         // Initiate sediment compartment state-variable
-        std::string sedCmpt_name = OpenWQ_wqconfig.TS_model->SedCmpt;
-        if (sedCmpt_name.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))){
+        // linked to d_sedmass_mobilized_dt
+       
+        if (sedCmpt_name.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))==0){
 
             // initiate state variable
-            (*OpenWQ_vars.d_sedmass_dt) = domain_xyz;
+            (*OpenWQ_vars.d_sedmass_mobilized_dt) = domain_xyz;
 
             // initiate mobilisedsed_rain_potential
             OpenWQ_wqconfig.TS_model->HypeMMF->mobilisedsed_rain_potential = domain_xyz;
+        
+        }
+
+        // ##########################################
+        // Add size to sedmax (eroding compartment, e.g. runoff)
+        if (erosTransCmpt_name.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))==0){
+
+            // initiate state variable
+            (*OpenWQ_vars.sedmass) = domain_xyz;
+            (*OpenWQ_vars.d_sedmass_dt) = domain_xyz;
         
         }
 

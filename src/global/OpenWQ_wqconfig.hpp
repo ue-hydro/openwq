@@ -343,6 +343,7 @@ class OpenWQ_wqconfig::TS_model_{
 
     public: 
     std::string TS_module;
+    std::string ErodTranspCmpt;
     std::string SedCmpt;
 
     // constructor/destructor
@@ -471,8 +472,9 @@ class OpenWQ_wqconfig::TS_model_::HypeHVB_{
 
     // General configuration (compartments, direction)
     std::tuple<
-        unsigned int,   // input_direction_index
-        unsigned int,   // input_sediment_compartment_index
+        unsigned int,   // direction_index
+        unsigned int,   // ErodTranspCmpt index
+        unsigned int,   // Sdiment comparment index
         unsigned int,   // input_compartment_inhibitErosion_index
         std::string>    // data_format
             info_vector;
@@ -504,7 +506,9 @@ class OpenWQ_wqconfig::TS_model_::HypeHVB_{
 
     // METHODS
     int get_exchange_direction();
+    int get_eroding_transp_compartment();
     int get_erosion_inhibit_compartment();
+    int get_sediment_compartment();
     std::string get_data_format();
 
 };
@@ -517,13 +521,15 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
     // General configuration (compartments, direction)
     std::tuple<
         unsigned int,   // direction_index
-        unsigned int,   // eroding compartment index
-        unsigned int,   // sediment comparment index
+        unsigned int,   // ErodTranspCmpt index
+        unsigned int,   // Sdiment comparment index
         unsigned int,   // input_compartment_inhibitErosion_index
         std::string>    // data_format
             info_vector;
 
-    unsigned pdayno;
+    // TODO
+    // this is fixed now but should vary with the month (hype)
+    unsigned pdayno = 1;
 
     // #################
     // PARAMETERS
@@ -563,8 +569,9 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
 
     // METHODS
     int get_exchange_direction();
-    int get_eroding_flux_compartment();
+    int get_eroding_transp_compartment();
     int get_erosion_inhibit_compartment();
+    int get_sediment_compartment();
     std::string get_data_format();
 
 };

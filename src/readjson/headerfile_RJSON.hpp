@@ -227,17 +227,20 @@ class OpenWQ_readjson{
             OpenWQ_json &OpenWQ_json,
             OpenWQ_wqconfig &OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
-            OpenWQ_output& OpenWQ_output);
+            OpenWQ_output& OpenWQ_output,
+            int sediment_cmp_index,
+            int transport_cmp_index);
              
         void SetConfigInfo_TSModule_MMF_hype(
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_json &OpenWQ_json,
             OpenWQ_wqconfig &OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
-            OpenWQ_output& OpenWQ_output);
+            OpenWQ_output& OpenWQ_output,
+            int sediment_cmp_index,
+            int transport_cmp_index);
 
             
-
         // SI_model model
 
         // driver

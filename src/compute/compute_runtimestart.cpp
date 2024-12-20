@@ -57,6 +57,7 @@ void OpenWQ_compute::Reset_Deriv(
 
         // Sediment transport variables
         (*OpenWQ_vars.sedmass).zeros();
+        (*OpenWQ_vars.d_sedmass_mobilized_dt).zeros();
         (*OpenWQ_vars.d_sedmass_dt).zeros();
 
     }

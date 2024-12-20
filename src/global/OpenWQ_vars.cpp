@@ -146,6 +146,10 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>(new arma::cube);
 
+        d_sedmass_mobilized_dt = std::unique_ptr<
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>(new arma::cube);
+
     }catch(const std::exception& e){
 
         // Write Error in Console only (the simulation hasn't started yet)

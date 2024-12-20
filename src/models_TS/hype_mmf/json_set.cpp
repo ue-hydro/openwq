@@ -25,7 +25,9 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
-    OpenWQ_output& OpenWQ_output){
+    OpenWQ_output& OpenWQ_output,
+    int sediment_cmp_index,
+    int transport_cmp_index){
 
     // Local variables
     json json_subStruct;
@@ -82,14 +84,6 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
         errorMsgIdentifier,
         true); 
     
-    jsonKey = "ERODING_FLUX_COMPARTMENT";
-    errorMsgIdentifier = "TS_model file > " + jsonKey;
-    erodingFlux_cmpt = OpenWQ_utils.RequestJsonKeyVal_str(
-        OpenWQ_wqconfig, OpenWQ_output,
-        json_subStruct, jsonKey,
-        errorMsgIdentifier,
-        true); 
-
     jsonKey = "EROSION_INHIBIT_COMPARTMENT";
     errorMsgIdentifier = "TS_model file > " + jsonKey;
     erodingInhibit_cmpt = OpenWQ_utils.RequestJsonKeyVal_str(
@@ -135,24 +129,18 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     }
 
     // Get upper and inhibiting compartments
-    // Abort if not found
-    erodingFlux_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        erodingFlux_cmpt,
-        errorMsgIdentifier,
-        true);
-
     erodingInhibit_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
         erodingInhibit_cmpt,
         errorMsgIdentifier,
         true);
-     
+
     // Add values to tuple
     OpenWQ_wqconfig.TS_model->HypeMMF->info_vector = 
         HypeMMF_infoVect(
             input_direction_index,
-            erodingFlux_cmpt_index,
-            sedCmp_index,
+            transport_cmp_index,
             erodingInhibit_cmpt_index,
+            sediment_cmp_index,
             data_format);
 
     // The actual cohesion,  erodibility and sreroexp values will be processed in 

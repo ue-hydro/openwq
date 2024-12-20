@@ -45,9 +45,10 @@ class OpenWQ_vars
             d_chemass;                   // concentration of external water fluxes
 
         std::unique_ptr<arma::Cube<double>> 
-            sedmass,                        // sediment mass in erodible compartment
-            d_sedmass_dt;                   // derivative 
-        
+            sedmass,                        // sediment mass in flow-transport compartment (e.g, runoff)
+            d_sedmass_dt,                   // derivative of sediments in flow-transport compartment (e.g. runoff)
+            d_sedmass_mobilized_dt;         // sediments mobilized in sediment comparment (e.g., soil)
+
         // Constructor
         OpenWQ_vars(size_t num_HydroComp, size_t num_EWF);
 

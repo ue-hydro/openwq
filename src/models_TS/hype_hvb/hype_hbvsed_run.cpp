@@ -29,72 +29,92 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
     std::string TS_type){
 
 
+   // Local variables
+  int exchange_direction = OpenWQ_wqconfig.TS_model->HypeHVB->get_exchange_direction();
+  int erodFlux_icmp = OpenWQ_wqconfig.TS_model->HypeHVB->get_eroding_transp_compartment();
+  int erodInhibut_icmp = OpenWQ_wqconfig.TS_model->HypeHVB->get_erosion_inhibit_compartment();
+  int sediment_icmp = OpenWQ_wqconfig.TS_model->HypeHVB->get_sediment_compartment();
+
+
 	// ###################
 	// CHECK IF RUN APPLICABLE
 
   // only applicable with precipitation input
-  if (TS_type.compare("TS_type_LE") != 0)
-    return;
+  if (TS_type.compare("TS_type_EWF") == 0 && recipient == sediment_icmp){
 
-	// Return if no flux: wflux_s2r == 0
-	if(wflux_s2r == 0.0f){return;}
+    // Return if no flux: wflux_s2r == 0
+    if(wflux_s2r == 0.0f){return;}
 
-	// Local variables
-	int exchange_direction = OpenWQ_wqconfig.TS_model->HypeHVB->get_exchange_direction();
-	std::vector<unsigned int> xyz_lowerComp;
+    std::vector<unsigned int> xyz_lowerComp;
 
-	// Get number of cells in input_direction_index
-	std::vector<unsigned int> xyz_SedCompt;
-	xyz_SedCompt.push_back(ix_r);
-	xyz_SedCompt.push_back(iy_r);
-	xyz_SedCompt.push_back(iz_r);         // get x,y,z from source comparment in vector
+    // Get number of cells in input_direction_index
+    std::vector<unsigned int> xyz_SedCompt;
+    xyz_SedCompt.push_back(ix_r);
+    xyz_SedCompt.push_back(iy_r);
+    xyz_SedCompt.push_back(iz_r);         // get x,y,z from source comparment in vector
 
-	// Ignore if current sediment source cell is not the top one
-	if (xyz_SedCompt[exchange_direction] != 0)
-		return;
+    // Ignore if current sediment source cell is not the top one
+    if (xyz_SedCompt[exchange_direction] != 0)
+      return;
 
-	// Return if there is snow
-  // TODO: if (frostdepth<0. .AND. frostdepth>-9999.) then return
-	double snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
-				OpenWQ_wqconfig.TS_model->HypeHVB->get_erosion_inhibit_compartment(),
-				ix_s,iy_s,iz_s);
-	if (snow != 0.0)
-		return;
+    // Return if there is snow
+    // TODO: if (frostdepth<0. .AND. frostdepth>-9999.) then return
+    double snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+          erodInhibut_icmp,
+          ix_s,iy_s,iz_s);
+    if (snow != 0.0)
+      return;
 
-	// ##################
-	// CODE
+    // ##################
+    // CODE
 
-	// Local variables
-	
-	// PARAMETERS IN
-	double lusepar = OpenWQ_wqconfig.TS_model->HypeHVB->lusepar_entryArmaCube(ix_r, iy_r, iz_r);
-	double soilpar = OpenWQ_wqconfig.TS_model->HypeHVB->soilpar_entryArmaCube(ix_r, iy_r, iz_r);
-  double slopepar = OpenWQ_wqconfig.TS_model->HypeHVB->slopepar_entryArmaCube(ix_r, iy_r, iz_r);
-  double precexppar = OpenWQ_wqconfig.TS_model->HypeHVB->precexppar_entryArmaCube(ix_r, iy_r, iz_r);
-  double eroindexpar = OpenWQ_wqconfig.TS_model->HypeHVB->eroindexpar_entryArmaCube(ix_r, iy_r, iz_r);
-  double slope = OpenWQ_wqconfig.TS_model->HypeHVB->slope_entryArmaCube(ix_r, iy_r, iz_r);
-  double eroindex = OpenWQ_wqconfig.TS_model->HypeHVB->eroindex_entryArmaCube(ix_r, iy_r, iz_r);
-
-	// DUMMY
-	double erosionindex;
-  double erodmonth;     // erodmonth
-	double mobilisedsed;  // mobilised suspended sediment from rainfall (g/m2)
-
-	// ###############################################
-	// Calculate particles that are eroded by rain splash detachment and by overland flow (mobilised sediment)
-	// ###############################################
-
-  // Calculate mobilised sediments from erosion index, slope and rainfall
-  erosionindex = eroindex / eroindexpar;
-  mobilisedsed = pow((slope / 5.),slopepar)
-                 * lusepar * soilpar * erosionindex 
-                 * pow(wflux_s2r,precexppar); // !tonnes/km2 = g/m2
+    // Local variables
     
-  // Eroded sediment calculated from mobilised sediment with a monthly factor
-  // TODO (from hype): erodmonth = 1. + monthpar(m_erodmon,current_time%date%month)
-  erodmonth = 1.0;
-	(*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) = 1000. * mobilisedsed * erodmonth;  // kg/km2
-	
+    // PARAMETERS IN
+    double lusepar = OpenWQ_wqconfig.TS_model->HypeHVB->lusepar_entryArmaCube(ix_r, iy_r, iz_r);
+    double soilpar = OpenWQ_wqconfig.TS_model->HypeHVB->soilpar_entryArmaCube(ix_r, iy_r, iz_r);
+    double slopepar = OpenWQ_wqconfig.TS_model->HypeHVB->slopepar_entryArmaCube(ix_r, iy_r, iz_r);
+    double precexppar = OpenWQ_wqconfig.TS_model->HypeHVB->precexppar_entryArmaCube(ix_r, iy_r, iz_r);
+    double eroindexpar = OpenWQ_wqconfig.TS_model->HypeHVB->eroindexpar_entryArmaCube(ix_r, iy_r, iz_r);
+    double slope = OpenWQ_wqconfig.TS_model->HypeHVB->slope_entryArmaCube(ix_r, iy_r, iz_r);
+    double eroindex = OpenWQ_wqconfig.TS_model->HypeHVB->eroindex_entryArmaCube(ix_r, iy_r, iz_r);
+
+    // DUMMY
+    double erosionindex;
+    double erodmonth;     // erodmonth
+    double mobilisedsed;  // mobilised suspended sediment from rainfall (g/m2)
+
+    // ###############################################
+    // Calculate particles that are eroded by rain splash detachment and by overland flow (mobilised sediment)
+    // ###############################################
+
+    // Calculate mobilised sediments from erosion index, slope and rainfall
+    erosionindex = eroindex / eroindexpar;
+    mobilisedsed = pow((slope / 5.),slopepar)
+                  * lusepar * soilpar * erosionindex 
+                  * pow(wflux_s2r,precexppar); // !tonnes/km2 = g/m2
+    
+    // Eroded sediment calculated from mobilised sediment with a monthly factor
+    // TODO (from hype): erodmonth = 1. + monthpar(m_erodmon,current_time%date%month)
+    erodmonth = 1.0;
+    (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_r, iy_r, iz_r) = 1000. * mobilisedsed * erodmonth;  // kg/km2
+  
+  // #######################
+  // Mobind with runoff if flow exists
+  } if (TS_type.compare("TS_type_LE") == 0 
+      && source == erodFlux_icmp
+      && source == recipient
+      && ix_r!=-1 
+      && iy_r!=-1 
+      && iz_r!=-1){
+
+    /// 2)
+	  // Mobilization with flow
+	  // Assuming here that, since d_sedmass_mobilized_dt is the mobilized sediment,
+	  // then it will all move with flow regardless of the flow/runoff intensity
+    (*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_s, iy_s, iz_s);
+
+  }
 }
 
 /*

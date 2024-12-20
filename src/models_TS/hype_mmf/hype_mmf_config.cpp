@@ -36,7 +36,7 @@
 
 
     // Get compartment index of lower compartment
-    icmp_erodFluxCmpt = OpenWQ_wqconfig.TS_model->HypeMMF->get_eroding_flux_compartment(); 
+    icmp_erodFluxCmpt = OpenWQ_wqconfig.TS_model->HypeMMF->get_eroding_transp_compartment(); 
        
     // Data format & affected compartment (lower compartment)
     DataFormat = OpenWQ_wqconfig.TS_model->HypeMMF->get_data_format();    

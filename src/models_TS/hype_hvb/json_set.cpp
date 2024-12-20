@@ -25,7 +25,9 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
-    OpenWQ_output& OpenWQ_output){
+    OpenWQ_output& OpenWQ_output,
+    int sediment_cmp_index,
+    int transport_cmp_index){
     
    // Local variables
     json json_subStruct;
@@ -36,20 +38,17 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
     std::string input_filepath;
     // Strings for inputs
     std::string input_direction;    // user input
-    std::string erodingFlux_cmpt;            // user input
     std::string erodingInhibit_cmpt;   // user input
     std::string data_format;
     // iteractive variables
     std::string icmp_i_name;
     int input_direction_index;
-    int erodingFlux_cmpt_index;
-    int sedCmp_index;
     int erodingInhibit_cmpt_index;
-    bool erodingFlux_cmpt_index_exist;
     bool erodingInhibit_cmpt_index_exist;
     // Other local variables
     typedef std::tuple<
         unsigned int,   // input_direction_index
+        unsigned int,   // Eroding transport compartment index
         unsigned int,   // sedCmp_index
         unsigned int,   // erodingInhibit_cmpt_index  
         std::string     // data format
@@ -57,12 +56,6 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
 
     // Get LATERAL_EXCHANGE module name
     errorMsgIdentifier = "Master file in MODULES > TRANSPORT_SEDIMENTS";
-
-    // Getting eroding (sediment) compartment name
-    sedCmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        OpenWQ_wqconfig.TS_model->SedCmpt,
-        errorMsgIdentifier,
-        true);
 
     // Get info for TSModule_MMF_hype function
     // Get number of entries
@@ -128,17 +121,13 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
     // Get upper and inhibiting compartments
     // Abort if not found
 
-    erodingInhibit_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        erodingInhibit_cmpt,
-        errorMsgIdentifier,
-        true);
-     
     // Add values to tuple
     OpenWQ_wqconfig.TS_model->HypeHVB->info_vector = 
         HypeHVB_infoVect(
             input_direction_index,
-            sedCmp_index,
+            transport_cmp_index,
             erodingInhibit_cmpt_index,
+            sediment_cmp_index,
             data_format);
 
 }

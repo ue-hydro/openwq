@@ -68,10 +68,6 @@ void OpenWQ_hostModelconfig::add_HydroDepend(int index, std::string name, int nu
         index, name, num_cells_x, num_cells_y, num_cells_z));
 }
 
-
-
-
-
 /**
  * HydroTuple methods
 */
