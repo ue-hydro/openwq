@@ -30,6 +30,8 @@
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
 
+Project(OpenWQ)
+
 #####
 # USER SECTION: Select the compilation options
 # That's all that needs to be changed

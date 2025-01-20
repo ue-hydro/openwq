@@ -252,6 +252,13 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 		(*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) 
 			+= (*OpenWQ_vars.d_sedmass_mobilized_dt)(
 					xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
+
+	// Move sediments with flow: from source to sink
+	// removing from sink 
+	(*OpenWQ_vars.d_sedmass_dt)(ix_s, iy_s, iz_s) = -(*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
+
+	// adding to source
+	(*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
 	
 	}
 

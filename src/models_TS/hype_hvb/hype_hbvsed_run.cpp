@@ -114,6 +114,13 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
 	  // then it will all move with flow regardless of the flow/runoff intensity
     (*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_s, iy_s, iz_s);
 
+    // Move sediments with flow: from source to sink
+    // removing from sink 
+    (*OpenWQ_vars.d_sedmass_dt)(ix_s, iy_s, iz_s) = - (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
+
+    // adding to source
+    (*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
+
   }
 }
 
