@@ -30,57 +30,83 @@ void OpenWQ_SI_model::freundlich(
     OpenWQ_wqconfig.SI_model->FREUNDLICH->test_parameter_freundlich_2_delete = 8;
 
     /*
+      const double Limit = 0.00001; // Threshold for breaking iterations
 
-    #include <iostream>
-    #include <cmath>
-    #include <vector>
-    #include <iomanip>
+    // Local variables
+    double totalP, PPequi_conc;
+    double conc_sol, adsdes;
+    double x0, xn, xn_1, fxn, fprimxn, dx;
+    double coeff;
+    double nfrloc;
+    double help;
 
-    using namespace std;
+    if (Vol == 0) return;
 
-    // Function to calculate sorption based on the Freundlich model
-    double calculateSorption(double Kf, double n, double concentration) {
-        return Kf * pow(concentration, n);
+    if (Kfr == 0 || Nfr == 0 || Kadsdes == 0) {
+        std::cerr << "ERROR: Values for freundlich parameters missing" << std::endl;
+        exit(1);
     }
 
-    // Function to calculate desorption
-    // (Inverse calculation if required; for illustration, assumes desorption is the same process)
-    double calculateDesorption(double Kf, double n, double sorbedAmount) {
-        return pow(sorbedAmount / Kf, 1.0 / n);
+    nfrloc = Nfr;
+    totalP = poolPP + SRP_Conc * Vol; // Total amount of P (kg/km2)
+    if (totalP == 0.0) return;
+
+    conc_sol = (poolPP / bulkdensity) / LayerThick; // mg P / kg soil
+    if (conc_sol <= 0.0) {
+        nfrloc = 1.0;
+        if (conductwarning) {
+            std::cerr << "Warning: soil partP <= 0. Freundlich will give error, take shortcut." << std::endl;
+        }
     }
 
-    int main() {
-        // Freundlich parameters
-        double Kf, n;
-        cout << "Enter Freundlich constant Kf: ";
-        cin >> Kf;
-        cout << "Enter Freundlich constant n: ";
-        cin >> n;
+    coeff = Kfr * bulkdensity * LayerThick;
 
-        // Input equilibrium concentrations
-        vector<double> concentrations;
-        cout << "Enter equilibrium concentrations (space-separated, end with -1): ";
-        double concentration;
-        while (cin >> concentration && concentration != -1) {
-            concentrations.push_back(concentration);
+    if (nfrloc == 1.0) {
+        xn_1 = totalP / (Vol + coeff);
+        PPequi_conc = Kfr * xn_1;
+    } else {
+        // Newton-Raphson method to calculate equilibrium concentration
+        x0 = exp((log(conc_sol) - log(Kfr)) / Nfr); // Initial guess of equilibrium liquid concentration
+        fxn = x0 * Vol + coeff * pow(x0, Nfr) - totalP;
+        xn = x0;
+        xn_1 = xn;
+        int i = 0;
+
+        while (fabs(fxn) > Limit && i < 20) {
+            fxn = xn * Vol + coeff * pow(xn, Nfr) - totalP;
+            fprimxn = Vol + Nfr * coeff * pow(xn, Nfr - 1);
+            dx = fxn / fprimxn;
+            if (fabs(dx) < 0.000001 * xn) break;
+            xn_1 = xn - dx;
+            if (xn_1 <= 0.0) {
+                xn_1 = 1.0E-10;
+            }
+            xn = xn_1;
+            ++i;
         }
+        PPequi_conc = Kfr * pow(xn_1, Nfr);
+    }
 
-        // Calculate sorption for each concentration
-        cout << "\nSorption Results:\n";
-        cout << setw(15) << "Concentration" << setw(15) << "Sorption" << endl;
-        for (double C : concentrations) {
-            double sorbedAmount = calculateSorption(Kf, n, C);
-            cout << setw(15) << C << setw(15) << sorbedAmount << endl;
+    // Calculate new pool and concentration, depends on the equilibrium concentration
+    if (fabs(PPequi_conc - conc_sol) > 1.0E-6) {
+        adsdes = (PPequi_conc - conc_sol) * (1 - exp(-Kadsdes)); // Kinetic adsorption/desorption
+        help = adsdes * bulkdensity * LayerThick;
+        if (-help > poolPP || SRP_Conc < (help / Vol)) {
+            if (-help > poolPP) help = -poolPP;
+            if (SRP_Conc < (help / Vol)) help = SRP_Conc * Vol;
+            if (conductwarning) {
+                std::cerr << "Warning: freundlich flow adjusted, was larger than pool" << std::endl;
+            }
         }
+        poolPP += help;       // New Pool PP
+        SRP_Conc -= (help / Vol); // New liquid concentration
+    }
 
-        // Example for desorption (optional)
-        cout << "\nEnter sorbed amount to calculate desorption: ";
-        double sorbedAmount;
-        cin >> sorbedAmount;
-        double desorbedConcentration = calculateDesorption(Kf, n, sorbedAmount);
-        cout << "Desorbed concentration: " << desorbedConcentration << endl;
-
-        return 0;
+    // Safety check for negative SRP_Conc
+    if (SRP_Conc < 0.0) {
+        std::cerr << "ERROR: SRP_Conc in freundlich negative! " << SRP_Conc << std::endl;
+        std::cerr << iin << " " << jin << " " << lin << std::endl;
+        exit(1);
     }
 
     */
