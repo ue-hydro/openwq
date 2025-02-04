@@ -19,10 +19,10 @@
 #ifndef OPENWQ_SOLVERH_INCLUDED
 #define OPENWQ_SOLVERH_INCLUDED
 
-#include "global/openwq_vars.hpp"
-#include "global/openwq_wqconfig.hpp"
-#include "global/openwq_hostmodelconfig.hpp"
-#include "global/openwq_json.hpp"
+#include "global/OpenWQ_vars.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
+#include "global/OpenWQ_hostModelconfig.hpp"
+#include "global/OpenWQ_json.hpp"
 
 class OpenWQ_output;
 class OpenWQ_CH_model;

@@ -31,17 +31,17 @@
 
 #include <cstdio>
 
-#include "global/openwq_json.hpp"
+#include "global/OpenWQ_json.hpp"
 using json = nlohmann::json;
 
 //#include "utility.h"
 
-#include "global/openwq_json.hpp"
-#include "global/openwq_wqconfig.hpp"
-#include "global/openwq_hostmodelconfig.hpp"
+#include "global/OpenWQ_json.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
+#include "global/OpenWQ_hostModelconfig.hpp"
 #include "units/headerfile_UNITS.hpp"
 #include "output/headerfile_OUT.hpp"
-#include "utils/headerfile_UTILS.hpp"
+#include "utils/headerfile_utils.hpp"
 
 class OpenWQ_readjson{
 

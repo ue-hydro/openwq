@@ -17,7 +17,7 @@
 
 
 #include "compute/headerfile_compute.hpp"
-#include "models_CH/headerfile_CH.hpp"
+#include "models_CH/headerfile_ch.hpp"
 
 /* #################################################
 // General numerical solver

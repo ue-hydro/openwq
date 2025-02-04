@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "models_CH/headerfile_CH.hpp"
+#include "models_CH/headerfile_ch.hpp"
 
 /* #################################################
 // Compute each chemical transformation

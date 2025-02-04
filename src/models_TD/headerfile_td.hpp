@@ -26,14 +26,14 @@
 #include "global/exprtk.hpp"
 #include <cstdio>
 
-#include "global/openwq_vars.hpp"
-#include "global/openwq_wqconfig.hpp"
-#include "global/openwq_hostmodelconfig.hpp"
-#include "utils/headerfile_UTILS.hpp"
+#include "global/OpenWQ_vars.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
+#include "global/OpenWQ_hostModelconfig.hpp"
+#include "utils/headerfile_utils.hpp"
 #include "output/headerfile_OUT.hpp"
 
-#include "models_CH/headerfile_CH.hpp"
-#include "models_TD/headerfile_TD.hpp"
+#include "models_CH/headerfile_ch.hpp"
+#include "models_TD/headerfile_td.hpp"
 
 
 class OpenWQ_TD_model{

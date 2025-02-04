@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "models_CH/headerfile_CH.hpp"
+#include "models_CH/headerfile_ch.hpp"
 
 void OpenWQ_CH_model::CH_driver_config(
         OpenWQ_json& OpenWQ_json,

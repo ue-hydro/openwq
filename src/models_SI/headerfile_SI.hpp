@@ -27,12 +27,12 @@
 #include <vector>
 
 // #include "utility.h"
-#include "global/openwq_json.hpp"
+#include "global/OpenWQ_json.hpp"
 
-#include "global/openwq_json.hpp"
-#include "global/openwq_vars.hpp"
-#include "global/openwq_wqconfig.hpp"
-#include "global/openwq_hostmodelconfig.hpp"
+#include "global/OpenWQ_json.hpp"
+#include "global/OpenWQ_vars.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
+#include "global/OpenWQ_hostModelconfig.hpp"
 #include "output/headerfile_OUT.hpp"
 #include "units/headerfile_UNITS.hpp"
 

@@ -26,10 +26,10 @@
 // openWQ
 #include "couplercalls/headerfile_CC.hpp"
 
-#include "global/openwq_hostmodelconfig.hpp"
-#include "global/openwq_json.hpp"
-#include "global/openwq_wqconfig.hpp"
-#include "global/openwq_vars.hpp"
+#include "global/OpenWQ_hostModelconfig.hpp"
+#include "global/OpenWQ_json.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
+#include "global/OpenWQ_vars.hpp"
 #include "readjson/headerfile_RJSON.hpp"
 #include "initiate/headerfile_INIT.hpp"
 
@@ -38,9 +38,9 @@
 #include "compute/headerfile_compute.hpp"
 #include "output/headerfile_OUT.hpp"
 
-#include "models_CH/headerfile_CH.hpp"
-#include "models_TD/headerfile_TD.hpp"
-#include "models_LE/headerfile_LE.hpp"
+#include "models_CH/headerfile_ch.hpp"
+#include "models_TD/headerfile_td.hpp"
+#include "models_LE/headerfile_le.hpp"
 
 
 int main(int argc, char* argv[]) 

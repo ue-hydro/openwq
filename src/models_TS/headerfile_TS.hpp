@@ -26,13 +26,13 @@
 #include "global/exprtk.hpp"
 #include <cstdio>
 
-#include "global/openwq_json.hpp"
-#include "global/openwq_vars.hpp"
+#include "global/OpenWQ_json.hpp"
+#include "global/OpenWQ_vars.hpp"
 #include "readjson/headerfile_RJSON.hpp"
 #include "extwatflux_ss/headerfile_EWF_SS.hpp"
-#include "global/openwq_wqconfig.hpp"
-#include "global/openwq_hostmodelconfig.hpp"
-#include "utils/headerfile_UTILS.hpp"
+#include "global/OpenWQ_wqconfig.hpp"
+#include "global/OpenWQ_hostModelconfig.hpp"
+#include "utils/headerfile_utils.hpp"
 #include "units/headerfile_UNITS.hpp"
 #include "initiate/headerfile_INIT.hpp"
 #include "output/headerfile_OUT.hpp"

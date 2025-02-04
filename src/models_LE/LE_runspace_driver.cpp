@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "models_LE/headerfile_LE.hpp"
+#include "models_LE/headerfile_le.hpp"
 
 
 void OpenWQ_LE_model::LE_driver_run(
