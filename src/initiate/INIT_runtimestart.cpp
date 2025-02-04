@@ -66,21 +66,160 @@ void OpenWQ_initiate::readSet(
     // Read and set IC conditions
     ################################################# */
    
-    for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX")==0) {
+        for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
 
-        setIC_driver(
-            OpenWQ_json,
-            OpenWQ_vars,
-            OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig,
-            OpenWQ_utils,
-            OpenWQ_units,
-            OpenWQ_output,
-            icmp); 
+            setIC_driver(
+                OpenWQ_json,
+                OpenWQ_vars,
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_utils,
+                OpenWQ_units,
+                OpenWQ_output,
+                icmp); 
 
+        }
+    } else {
+        // ICs for PHREEQC come from PHREEQC
+        setIC_phreeqc(
+                OpenWQ_json,
+                OpenWQ_vars,
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_utils,
+                OpenWQ_units,
+                OpenWQ_output);
     }
 
 }
+
+void OpenWQ_initiate::setIC_phreeqc(
+    OpenWQ_json& OpenWQ_json,
+    OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_utils& OpenWQ_utils,
+    OpenWQ_units& OpenWQ_units,
+    OpenWQ_output& OpenWQ_output){
+    std::vector<double> c;
+    std::vector<int> ic1;
+    double den;
+    int nxyz, nc;
+    int nx, ny, nz;
+    int indx;
+    int SOLUTIONS_id, EQUILIBRIUM_PHASES_id, EXCHANGE_id, SURFACE_id, GAS_PHASE_id, SOLID_SOLUTIONS_id, KINETICS_id;
+    IRM_RESULT result;
+    std::string errorMsgIdentifier;
+    std::string msg_string;
+
+    errorMsgIdentifier = " Config file";
+    OpenWQ_utils.RequestJsonKeyVal_json(
+        OpenWQ_wqconfig, OpenWQ_output,
+        OpenWQ_json.Config, "BIOGEOCHEMISTRY_CONFIGURATION",
+        errorMsgIdentifier,
+        true);
+
+
+    nxyz = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetGridCellCount();
+    nc = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetComponentCount();
+
+    c.resize(nxyz * (OpenWQ_wqconfig.CH_model->PHREEQC->num_chem));
+
+    ic1.resize(nxyz*7, -1);
+    indx = 0;
+    for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
+        // Find compartment icmp name from code (host hydrological model)
+        std::string CompName_icmp = 
+        OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp); // Compartment icomp name
+        SOLUTIONS_id=-1;
+        EQUILIBRIUM_PHASES_id=-1;
+        EXCHANGE_id=-1;
+        SURFACE_id=-1;
+        GAS_PHASE_id=-1;
+        SOLID_SOLUTIONS_id=-1;
+        KINETICS_id=-1;
+        if (OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"].contains(CompName_icmp)){
+            if (OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp].contains("SOLUTIONS")) {
+                SOLUTIONS_id = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["SOLUTIONS"];
+            }
+            if (OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp].contains("EQUILIBRIUM_PHASES")) {
+                EQUILIBRIUM_PHASES_id = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["EQUILIBRIUM_PHASES"];
+            }
+            if (OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp].contains("EXCHANGE")) {
+                EXCHANGE_id = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["EXCHANGE"];
+            }
+            if (OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp].contains("SURFACE")) {
+                SURFACE_id = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["SURFACE"];
+            }
+            if (OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp].contains("GAS_PHASE")) {
+                GAS_PHASE_id = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["GAS_PHASE"];
+            }
+            if (OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp].contains("SOLID_SOLUTIONS")) {
+                SOLID_SOLUTIONS_id = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["SOLID_SOLUTIONS"];
+            }
+            if (OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp].contains("KINETICS")) {
+                SOLUTIONS_id = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["KINETICS"];
+            }
+        }else{
+            // Create Message
+            msg_string = 
+                "<OpenWQ> PHREEQC conditions not defined for compartment:" 
+                + CompName_icmp + " (set to undefined)";
+
+            // Print it (Console and/or Log file)
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        }  
+
+
+        nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // num of x elements
+        ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // num of y elements
+        nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
+
+        for (int ix=0; ix<nx; ix++) {
+            for (int iy = 0; iy<ny;iy++) {
+                for (int iz=0; iz<nz; iz++) {
+                    ic1[indx] = SOLUTIONS_id;
+                    ic1[nxyz+indx] = EQUILIBRIUM_PHASES_id;
+                    ic1[2*nxyz+indx] = EXCHANGE_id;
+                    ic1[3*nxyz+indx] = SURFACE_id;
+                    ic1[4*nxyz+indx] = GAS_PHASE_id;
+                    ic1[5*nxyz+indx] = SOLID_SOLUTIONS_id;
+                    ic1[6*nxyz+indx] = KINETICS_id;
+                    indx++;
+                }
+            }
+        }
+    }
+
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->InitialPhreeqc2Module(ic1);
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTime(0.0);
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTimeStep(0);
+    result = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->RunCells();
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetConcentrations(c);
+    for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->PHREEQC->num_chem);chemi++){
+        indx = 0;
+        for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
+           
+
+            nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // num of x elements
+            ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // num of y elements
+            nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
+            for (int ix=0; ix<nx; ix++) {
+                for (int iy = 0; iy<ny;iy++) {
+                    for (int iz=0; iz<nz; iz++) {
+                        den = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp,ix,iy,iz);
+                        if (den == 0) den = 1;
+                        (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix,iy,iz) = c[chemi*nxyz+indx] * den;
+                        indx++;
+
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 /* #################################################
 // Read and set IC conditions

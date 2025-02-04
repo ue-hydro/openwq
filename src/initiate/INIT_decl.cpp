@@ -43,6 +43,14 @@ void OpenWQ_initiate::initmemory(
     // Assign and  allocate memory to openWQ variables
     ######################################## */
 
+    unsigned int num_chem;
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+        num_chem = OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;
+    } else {
+        num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
+    }
+
+
     // Get sediment and eroding compartments
     std::string sedCmpt_name = OpenWQ_wqconfig.TS_model->SedCmpt;
     std::string erosTransCmpt_name = OpenWQ_wqconfig.TS_model->ErodTranspCmpt;
@@ -60,15 +68,17 @@ void OpenWQ_initiate::initmemory(
         // Set to zero
         domain_xyz.zeros();
         
+
         // Create arma for chemical species
+
         // Needs to be reset because each compartment can have a different number of compartments
-        arma_fieldcube domain_field(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem); // all species are simulated for all compartments
+        arma_fieldcube domain_field(num_chem); // all species are simulated for all compartments
 
         /* ########################################
         // Loop over dimensions of compartment icmp
         // Push 3D arma::cube into the arma::field of each chemical species
         ######################################## */
-        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;chemi++){
+        for (unsigned int chemi=0;chemi<num_chem;chemi++){
             domain_field(chemi) = domain_xyz;
         }
 
@@ -143,13 +153,13 @@ void OpenWQ_initiate::initmemory(
         
         // Create arma for chemical species
         // Needs to be reset because each compartment can have a different number of compartments
-        arma_fieldcube domain_field(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem); // all species are simulated for all compartments
+        arma_fieldcube domain_field(num_chem); // all species are simulated for all compartments
 
         /* ########################################
         // Loop over dimensions of compartment ewfi
         // Push 3D arma::cube into the arma::field of each chemical species
         ######################################## */
-        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;chemi++){
+        for (unsigned int chemi=0;chemi<num_chem;chemi++){
             domain_field(chemi) = domain_xyz;
         }
 

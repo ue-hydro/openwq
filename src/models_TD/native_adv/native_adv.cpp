@@ -40,13 +40,21 @@ void OpenWQ_TD_model::Adv(
     if(wflux_s2r == 0.0f){return;}
 
     // CHANGE THE LINE BELOW: see my notes -> there should be no icmp because all compartments should have the same number of mobile species
-    unsigned int numspec = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.size();
-
+    unsigned int numspec;
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+        numspec = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.size();
+    } else {
+        numspec = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.size();
+    }
     // Loop for mobile chemical species
     for (unsigned int chemi=0;chemi<numspec;chemi++){
 
         // mobile chemical species index
-        ichem_mob = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species[chemi];
+        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+            ichem_mob = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species[chemi];
+        } else {
+            ichem_mob = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species[chemi];
+        }
 
         // Chemical mass flux between source and recipient (Advection)
         chemass_flux_adv = 

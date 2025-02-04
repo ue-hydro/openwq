@@ -34,9 +34,9 @@ using json = nlohmann::json;
 #include "global/OpenWQ_json.hpp"
 #include "global/OpenWQ_vars.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
-#include "global/OpenWQ_hostModelconfig.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
 #include "output/headerfile_OUT.hpp"
-#include "units/headerfile_UNITS.hpp"
+#include "units/headerfile_units.hpp"
 
 // Biogeochemistry
 
@@ -80,7 +80,13 @@ class OpenWQ_CH_model{
         // PHREEQC model
         // ##################
 
-        // add here
+        void phreeqc_setup(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_vars& OpenWQ_vars,
+            OpenWQ_units& OpenWQ_units,
+            OpenWQ_output& OpenWQ_output);
 
     private:
 
@@ -102,7 +108,12 @@ class OpenWQ_CH_model{
         // PHREEQC model
         // ##################
 
-        // add here
+        void phreeqc_run(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_vars& OpenWQ_vars,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_output& OpenWQ_output);
 
 };
 

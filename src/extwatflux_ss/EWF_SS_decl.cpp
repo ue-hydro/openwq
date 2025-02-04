@@ -249,13 +249,23 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
 
     // Get chemical index
     err_text.assign("Chemical name");
-    foundflag = getModIndex(
-        OpenWQ_wqconfig,
-        OpenWQ_output,
-        OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list,
-        Chemical_name,
-        err_text,
-        chem_ssi);
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+        foundflag = getModIndex(
+            OpenWQ_wqconfig,
+            OpenWQ_output,
+            OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list,
+            Chemical_name,
+            err_text,
+            chem_ssi);
+    } else {
+        foundflag = getModIndex(
+            OpenWQ_wqconfig,
+            OpenWQ_output,
+            OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list,
+            Chemical_name,
+            err_text,
+            chem_ssi);
+    }
 
     // Get Units
     errorMsgIdentifier = inputType + " json block";
@@ -1268,7 +1278,14 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
     // Loop over EWF h5 files
     // ################################
     // Each chemical species is in different files
-    for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;chemi++){
+
+    unsigned int num_chem;
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+        num_chem = OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;
+    } else {
+        num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
+    }
+    for (unsigned int chemi=0;chemi<num_chem;chemi++){
 
         // Set new chem flag true
         flag_newChem = true;
@@ -1277,7 +1294,11 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
         // Get and process interface H5 data 
 
         // Get chem name
-        chemname = (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi];
+        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+            chemname = (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi];
+        } else {
+            chemname = (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list)[chemi];
+        }
 
         // Throw consolde update
         msg_string = "         " + external_waterFluxName + " => " + chemname + " .";

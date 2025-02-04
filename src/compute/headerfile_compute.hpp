@@ -21,7 +21,7 @@
 
 #include "global/OpenWQ_vars.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
-#include "global/OpenWQ_hostModelconfig.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
 #include "global/OpenWQ_json.hpp"
 
 class OpenWQ_output;

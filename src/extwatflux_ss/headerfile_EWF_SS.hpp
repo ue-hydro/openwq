@@ -32,10 +32,10 @@ using json = nlohmann::json;
 #include "global/OpenWQ_json.hpp"
 #include "global/OpenWQ_vars.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
-#include "global/OpenWQ_hostModelconfig.hpp"
-#include "units/headerfile_UNITS.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
+#include "units/headerfile_units.hpp"
 #include "output/headerfile_OUT.hpp"
-#include "utils/headerfile_utils.hpp"
+#include "utils/headerfile_UTILS.hpp"
 
 class OpenWQ_extwatflux_ss{
 

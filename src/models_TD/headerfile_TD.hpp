@@ -1,4 +1,4 @@
- 
+
 
 // Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
@@ -29,12 +29,10 @@
 #include "global/OpenWQ_vars.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
 #include "global/OpenWQ_hostModelConfig.hpp"
-#include "utils/headerfile_UTILS.hpp"
 #include "output/headerfile_OUT.hpp"
 
 #include "models_CH/headerfile_CH.hpp"
-#include "models_TD/headerfile_td.hpp"
-
+#include "models_TD/headerfile_TD.hpp"
 
 class OpenWQ_TD_model{
 
@@ -42,13 +40,13 @@ class OpenWQ_TD_model{
 
         // ##########################
         // MAIN DRIVER 
-        // => Run TD_model model
+        // => Run TD model
         // ##########################
 
         void TD_driver_run(
             OpenWQ_wqconfig& OpenWQ_wqconfig, 
             OpenWQ_vars& OpenWQ_vars,
-            OpenWQ_output& OpenWQ_output,
+            OpenWQ_output&  OpenWQ_output,
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
             const double wflux_s2r, 
@@ -84,23 +82,14 @@ class OpenWQ_TD_model{
         // ##########################
 
         // INPUT FROM EXTERNAL FORCES
-        void EWF_flux_driver_run(
-            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig, 
-            OpenWQ_wqconfig& OpenWQ_wqconfig,
-            OpenWQ_vars& OpenWQ_vars,
-            OpenWQ_utils& OpenWQ_utils,
-            OpenWQ_output& OpenWQ_output,
-            std::string source_EWF_name,
-            const int recipient, const int ix_r, const int iy_r, const int iz_r,
-            const double wflux_s2r);
-
-        void EWF_flux_IN(
+        void EWF_flux_IN(// Special case (in-fluxes from external water flux sources)
             OpenWQ_vars& OpenWQ_vars, 
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
-            const double wflux_s2r, // water flux (m3/s)
-            int chemi,              // chemical id
-            double ewf_conc);
+            const double wflux_s2r,     // water flux (m3/s)
+            int chemi,                  // chemical id
+            double ewf_conc);           // concentration of chemical
+        
 };
 
 #endif

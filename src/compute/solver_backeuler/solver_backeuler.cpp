@@ -23,6 +23,14 @@ void OpenWQ_compute::Solve_with_BE(
     double dm_ss;               // interactive ss load/ink (mass)
     double dm_ewf;              // interactive ewf load/ink (mass)
 
+    unsigned int num_chem;
+
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+        num_chem = OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;
+    } else {
+        num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
+    }
+
 
     /* #####################################################
     // Compartment loop
@@ -37,7 +45,7 @@ void OpenWQ_compute::Solve_with_BE(
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){

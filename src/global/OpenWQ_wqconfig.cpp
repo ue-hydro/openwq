@@ -84,9 +84,11 @@ OpenWQ_wqconfig::LE_model_::~LE_model_() {
 
 OpenWQ_wqconfig::CH_model_::CH_model_() {
     NativeFlex = new NativeFlex_();
+    PHREEQC = new PHREEQC_();
 }
 OpenWQ_wqconfig::CH_model_::~CH_model_() {
     delete NativeFlex;
+    delete PHREEQC;
 }
 
 OpenWQ_wqconfig::TS_model_::TS_model_() {

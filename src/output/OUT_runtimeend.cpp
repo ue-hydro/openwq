@@ -380,8 +380,14 @@ int OpenWQ_output::writeCSV(
             }
 
             // Get chemical name
-            chem_name = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[
-                OpenWQ_wqconfig.chem2print[ichem]];           // index of chemical to print
+            if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+
+                chem_name = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[
+                    OpenWQ_wqconfig.chem2print[ichem]];           // index of chemical to print
+            } else {
+                chem_name = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[
+                    OpenWQ_wqconfig.chem2print[ichem]];
+            }
                 
             // Add chemical name to file header (add column)
             // Include the output units
@@ -496,8 +502,13 @@ int OpenWQ_output::writeHDF5(
         for (unsigned int ichem=0;ichem<num_chem2print;ichem++){
 
             // Get chemical name (convert to char for use in .save())
-            chem_name = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[
-            OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
+            if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+                chem_name = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[
+                OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
+            } else {
+                chem_name = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[
+                OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
+            }
 
             // Reset file name for each compartment
             filename = OpenWQ_wqconfig.get_output_dir();
@@ -546,8 +557,14 @@ int OpenWQ_output::writeHDF5(
         arma::mat data2print(num_cells2print,1);
 
         // Get chemical name (convert to char for use in .save())
-        chem_name = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[
-            OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
+        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+
+            chem_name = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[
+                OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
+        } else {
+            chem_name = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[
+                OpenWQ_wqconfig.chem2print[ichem]].c_str();
+        }
 
         // Reset file name for each compartment
         filename = OpenWQ_wqconfig.get_output_dir();

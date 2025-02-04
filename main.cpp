@@ -26,7 +26,7 @@
 // openWQ
 #include "couplercalls/headerfile_CC.hpp"
 
-#include "global/OpenWQ_hostModelconfig.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
 #include "global/OpenWQ_json.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
 #include "global/OpenWQ_vars.hpp"
@@ -34,11 +34,11 @@
 #include "initiate/headerfile_INIT.hpp"
 
 #include "extwatflux_ss/headerfile_EWF_SS.hpp"
-#include "units/headerfile_UNITS.hpp"
+#include "units/headerfile_units.hpp"
 #include "compute/headerfile_compute.hpp"
 #include "output/headerfile_OUT.hpp"
 
-#include "models_CH/headerfile_ch.hpp"
+#include "models_CH/headerfile_CH.hpp"
 #include "models_TD/headerfile_td.hpp"
 #include "models_LE/headerfile_le.hpp"
 

@@ -22,7 +22,6 @@
 #include <sys/stat.h>
 #include <armadillo>
 
-#include "global/OpenWQ_hostModelconfig.hpp"
 #include "global/OpenWQ_json.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
 #include "compute/headerfile_compute.hpp"

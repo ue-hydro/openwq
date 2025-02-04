@@ -15,8 +15,8 @@
 SUMMA_DIR=$(realpath $(pwd)/../../../../../)
 OPENWQ_DIR="/code/build/source/openwq/openwq"
 
-FILE_MANAGER="/code/synthetic_tests/2_nrTrans_instS_PorMedia/summa/summa/SUMMA/summa_fileManager_OpenWQ_systheticTests_BGQ.txt"
-MASTER_JSON="/code/synthetic_tests/2_nrTrans_instS_PorMedia/summa/openWQ_master.json"
+FILE_MANAGER="/code/synthetic_tests/8_nrTrans_contS_PorMedia_linDecay/summa/summa/SUMMA/summa_fileManager_OpenWQ_systheticTests_BGQ.txt"
+MASTER_JSON="/code/synthetic_tests/8_nrTrans_constS_PorMedia_linDecay/summa/openWQ_master.json"
 
 apptainer exec --bind $SUMMA_DIR:/code --pwd $OPENWQ_DIR/bin \
     --env master_json=$MASTER_JSON ../openwq.sif \

@@ -130,6 +130,7 @@ FILE(GLOB OPENWQ_SOURCES
     ${OPENWQ_DIR}/src/utils/models_toolbox/*.cpp
     ${OPENWQ_DIR}/src/models_CH/*.cpp
     ${OPENWQ_DIR}/src/models_CH/bgc_flex/*.cpp
+    ${OPENWQ_DIR}/src/models_CH/PHREEQC/*.cpp
     ${OPENWQ_DIR}/src/models_TD/*.cpp
     ${OPENWQ_DIR}/src/models_TD/native_adv/*.cpp
     ${OPENWQ_DIR}/src/models_TD/native_advdisp/*.cpp
@@ -475,13 +476,19 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
     # compile openWQ into an object file
     ADD_LIBRARY(openWQ OBJECT ${OPENWQ_SOURCES} ${HYDROLINK_SOURCES})
     FIND_PACKAGE(SUNDIALS REQUIRED)
+    FIND_PACKAGE(PhreeqcRM REQUIRED)
+    MESSAGE(STATUS "ARMADILLO: ${ARMADILLO_INCLUDE_DIR}")
+    MESSAGE(STATUS "PHREEQC: ${PhreeqcRM_INCLUDE_DIR}")
+    
     TARGET_INCLUDE_DIRECTORIES(openWQ PRIVATE
         ${ARMADILLO_INCLUDE_DIR}
         ${HDF5_INCLUDE_DIRS}
+        ${PHREEQCRM_INCLUDE_DIR}
         ${OPENWQ_INCLUDES})
     TARGET_LINK_LIBRARIES(openWQ PUBLIC
         ${ARMADILLO_LIBRARIES}
         SUNDIALS::cvode
+        PhreeqcRM::PhreeqcRM
         ${HDF5_C_LIBRARY_hdf5})
     IF(OpenMP_CXX_FOUND)
         MESSAGE("** OpenWQ **: OpenMP enabled!")

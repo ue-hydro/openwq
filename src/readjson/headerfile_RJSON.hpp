@@ -38,10 +38,10 @@ using json = nlohmann::json;
 
 #include "global/OpenWQ_json.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
-#include "global/OpenWQ_hostModelconfig.hpp"
-#include "units/headerfile_UNITS.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
+#include "units/headerfile_units.hpp"
 #include "output/headerfile_OUT.hpp"
-#include "utils/headerfile_utils.hpp"
+#include "utils/headerfile_UTILS.hpp"
 
 class OpenWQ_readjson{
 
@@ -176,6 +176,13 @@ class OpenWQ_readjson{
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
+
+        void SetConfigInfo_CHModule_PHREEQC(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_utils& OpenWQ_utils,
+            OpenWQ_output& OpenWQ_output);
+
 
         // ######################
         // TD_model model

@@ -32,9 +32,9 @@
 #include "global/OpenWQ_json.hpp"
 #include "global/OpenWQ_vars.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
-#include "global/OpenWQ_hostModelconfig.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
 #include "output/headerfile_OUT.hpp"
-#include "units/headerfile_UNITS.hpp"
+#include "units/headerfile_units.hpp"
 
 // Biogeochemistry
 

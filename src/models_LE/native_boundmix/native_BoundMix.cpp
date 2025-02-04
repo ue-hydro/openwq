@@ -92,11 +92,22 @@ void OpenWQ_LE_model::native_BoundMix(
         xyz_lowerComp = xyz_source;
         xyz_lowerComp[input_direction_index] = 0; 
 
+        unsigned int num_mobile_species;
+        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+            num_mobile_species = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.size();
+        } else {
+            num_mobile_species = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.size();
+        }
+
         // Loop over mobile species
-        for (unsigned int chemi=0;chemi<OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.size();chemi++){
+        for (unsigned int chemi=0;chemi<num_mobile_species;chemi++){
    
             // Get index of mobile species
-            chemi_mob = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species[chemi];
+            if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+                chemi_mob = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species[chemi];
+            } else {
+                chemi_mob = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species[chemi];
+            }
             
             //##########################################
             // Chemical exxhange between upper and lower compartments

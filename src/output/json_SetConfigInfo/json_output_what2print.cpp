@@ -72,13 +72,27 @@ void OpenWQ_readjson::SetConfigInfo_output_what2print(
     // Get indexes for the list of chemicals requested
     for (unsigned int chemi = 0; chemi < num_chem2print; chemi++){
         // Chemical name (to print)
-        chem_name2print = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[chemi];
-        for (unsigned int chemlisti = 0; chemlisti < (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem); chemlisti++){ 
-            chem_namelist = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[chemlisti];
-            // Check if compartments listed match internal compartment names
-            if (chem_namelist.compare(chem_name2print) == 0){                                    
-                OpenWQ_wqconfig.chem2print.push_back(chemlisti);
-                break;
+        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+            chem_name2print = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[chemi];
+            for (unsigned int chemlisti = 0; chemlisti < (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem); chemlisti++){ 
+                chem_namelist = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[chemlisti];
+                // Check if compartments listed match internal compartment names
+                if (chem_namelist.compare(chem_name2print) == 0){                                    
+                    OpenWQ_wqconfig.chem2print.push_back(chemlisti);
+                    break;
+                }
+            }
+
+        } else {
+
+            chem_name2print = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[chemi];
+            for (unsigned int chemlisti = 0; chemlisti < (OpenWQ_wqconfig.CH_model->PHREEQC->num_chem); chemlisti++){ 
+                chem_namelist = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[chemlisti];
+                // Check if compartments listed match internal compartment names
+                if (chem_namelist.compare(chem_name2print) == 0){                                    
+                    OpenWQ_wqconfig.chem2print.push_back(chemlisti);
+                    break;
+                }
             }
         }
     }

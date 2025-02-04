@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "models_CH/headerfile_ch.hpp"
+#include "models_CH/headerfile_CH.hpp"
 
 
 /* #################################################
@@ -51,7 +51,15 @@ void OpenWQ_CH_model::CH_driver_run(
         OpenWQ_wqconfig.BGC_Transform_print_errmsg = false;
         OpenWQ_wqconfig.invalid_bgc_entry_errmsg = false;
 
-    }else{
+    } else if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("PHREEQC") == 0){
+            phreeqc_run( // calls PHREEQC-RM functions
+                OpenWQ_json,
+                OpenWQ_vars,
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_output);
+
+    } else{
 
         // Create Message
         msg_string = 

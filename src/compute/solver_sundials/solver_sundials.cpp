@@ -1,6 +1,6 @@
 
 #include "compute/headerfile_compute.hpp"
-#include "models_CH/headerfile_ch.hpp"
+#include "models_CH/headerfile_CH.hpp"
 
 #include <sundials/sundials_core.hpp>
 #include <sundials/sundials_types.h>
@@ -40,6 +40,13 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
     sunrealtype* uvec_data;
     sunrealtype* fvec_data;
 
+    unsigned int num_chem;
+    if ((user_data.wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+        num_chem = user_data.wqconfig.CH_model->NativeFlex->num_chem;
+    } else {
+        num_chem = user_data.wqconfig.CH_model->PHREEQC->num_chem;
+    }
+
 
     /* #####################################################
     // Compartment loop
@@ -53,7 +60,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         for (unsigned int icmp=0;icmp<user_data.hostModelconfig.get_num_HydroComp();icmp++){
 
             // Chemical loop
-            for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+            for (unsigned int chemi=0;chemi<(num_chem);chemi++){
 
                 // Reset derivatives of state-variables to zero after each time interaction
                 (*user_data.vars.d_chemass_dt_chem)(icmp)(chemi).zeros();
@@ -69,7 +76,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         nz = user_data.hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
@@ -94,7 +101,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         nz = user_data.hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(num_chem);chemi++){
             (*user_data.vars.d_chemass)(icmp)(chemi).zeros();
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
@@ -178,7 +185,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         nz = user_data.hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(user_data.wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
@@ -219,13 +226,20 @@ void OpenWQ_compute::Solve_with_CVode(
     void* cvode_mem;
     sunrealtype t;
 
+    unsigned int num_chem;
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+        num_chem = OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;
+    } else {
+        num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
+    }
+
     UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_CH_model};
 
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++) {
         nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
         ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
-        system_size += nx*ny*nz*OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;
+        system_size += nx*ny*nz*num_chem;
     }
 
     //retval = SUNContext_Create(NULL, &sunctx);
@@ -243,7 +257,7 @@ void OpenWQ_compute::Solve_with_CVode(
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){
@@ -290,7 +304,7 @@ void OpenWQ_compute::Solve_with_CVode(
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(num_chem);chemi++){
 
             // X, Y, Z loops
             for (ix=0;ix<nx;ix++){

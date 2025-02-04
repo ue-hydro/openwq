@@ -31,6 +31,13 @@ void OpenWQ_compute::Reset_Deriv(
     bool inst_deriv_flag,
     bool cum_deriv_flag){
 
+    unsigned int num_chem;
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+        num_chem = OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;
+    } else {
+        num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
+    }
+
 
     // Reset Instant Derivative
     if (inst_deriv_flag == true)
@@ -42,7 +49,7 @@ void OpenWQ_compute::Reset_Deriv(
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
 
             // Chemical loop
-            for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+            for (unsigned int chemi=0;chemi<(num_chem);chemi++){
 
                 // Reset derivatives of state-variables to zero after each time interaction
                 (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi).zeros();
@@ -71,7 +78,7 @@ void OpenWQ_compute::Reset_Deriv(
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
 
             // Chemical loop
-            for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+            for (unsigned int chemi=0;chemi<(num_chem);chemi++){
 
                 // Reset derivatives of state-variables to zero after each time interaction
                 (*OpenWQ_vars.d_chemass_ss_out)(icmp)(chemi).zeros();
@@ -95,12 +102,19 @@ void OpenWQ_compute::Reset_EWFconc(
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars){
 
+    unsigned int num_chem;
+    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+        num_chem = OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;
+    } else {
+        num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
+    }
+
     // Compartment loop
     #pragma omp parallel for collapse(2) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
     for (unsigned int ewfi=0;ewfi<OpenWQ_hostModelconfig.get_num_HydroExtFlux();ewfi++){
 
         // Chemical loop
-        for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem);chemi++){
+        for (unsigned int chemi=0;chemi<(num_chem);chemi++){
 
             // Reset ewf_conc after each iteraction
             // Specially needed for discrete conc requests

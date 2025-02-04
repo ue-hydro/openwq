@@ -21,6 +21,7 @@
 #include "exprtk.hpp"
 #include <string>
 #include <sys/stat.h>
+#include "PhreeqcRM.h"
 
 
 
@@ -314,6 +315,9 @@ class OpenWQ_wqconfig::CH_model_{
     class NativeFlex_;
     NativeFlex_* NativeFlex;
 
+    class PHREEQC_;
+    PHREEQC_* PHREEQC;
+
     // add more classes for other models here
     // e.g., PHREEQC
 
@@ -463,6 +467,23 @@ class OpenWQ_wqconfig::CH_model_::NativeFlex_{
     
     std::vector<double> chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
 
+};
+// Module CH_model -> PHREEQC
+
+class OpenWQ_wqconfig::CH_model_::PHREEQC_{
+
+    public:
+
+    unsigned int num_chem;                  //Number of chemical species  
+
+    std::vector
+        <std::string> chem_species_list;    // Chemical species list
+    std::vector
+        <unsigned int> mobile_species;      // index of mobile chem species
+
+
+    // PHREEQC
+    std::unique_ptr<PhreeqcRM> phreeqcrm;
 };
 
 // Module TS_model -> HypeHVB
