@@ -49,7 +49,6 @@ void OpenWQ_CH_model::phreeqc_setup(
         component_h2o = true;
     }
 
-    printf("component h20: %b\n", component_h2o);
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetComponentH2O(component_h2o);
 
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetFilePrefix("phreeqc");

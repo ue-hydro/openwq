@@ -113,6 +113,14 @@ void OpenWQ_readjson::SetConfigInfo_output_options(
     }
     // OpenWQ_utils.check_mkdir(OpenWQ_wqconfig.output_dir); // Called in set_output_type and set_output_dir
 
+    OpenWQ_output.export_sediment = OpenWQ_utils.RequestJsonKeyVal_int(
+        OpenWQ_wqconfig, 
+        OpenWQ_output, 
+        json_output_subStruct, 
+        "EXPORT_SEDIMENT", 
+        errorMsgIdentifier, 
+        false);
+
     // ########################################
     // Time ######
     // Get print/output timestep AND convert to seconds

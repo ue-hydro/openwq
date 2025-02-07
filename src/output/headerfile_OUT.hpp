@@ -43,6 +43,8 @@ class OpenWQ_output{
             std::string& msg_string,
             bool print_console,
             bool print_logFile);
+            int export_sediment;
+
     private:
         // Print output in CSV
         int writeCSV(
@@ -64,12 +66,24 @@ class OpenWQ_output{
             std::string timestr,            // time step (in seconds)
             int icmp);
 
+        int writeHDF5_Sediment(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            std::unique_ptr<arma::cube>& OpenWQ_var2print,
+            std::string& output_file_label,
+            std::string timestr,            // time step (in seconds)
+            int icmp);
+    
+
     // append data to HDF5 file 
         bool appendData_to_HDF5_file(
             hid_t file,
             arma::mat& data,
             std::string name);
 
+
 };
+
 
 #endif
