@@ -29,7 +29,9 @@ void OpenWQ_compute::SOLVER_driver(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_json& OpenWQ_json,
     OpenWQ_output& OpenWQ_output,
-    OpenWQ_CH_model& OpenWQ_CH_model){
+    OpenWQ_CH_model& OpenWQ_CH_model,
+    OpenWQ_TS_model& OpenWQ_TS_model,
+    OpenWQ_utils& OpenWQ_utils){
     
     // Local variables
     std::string msg_string; // error/warning message
@@ -43,7 +45,19 @@ void OpenWQ_compute::SOLVER_driver(
             OpenWQ_vars,
             OpenWQ_json,
             OpenWQ_output,
-            OpenWQ_CH_model);
+            OpenWQ_CH_model,
+            OpenWQ_TS_model,
+            OpenWQ_utils);
+        
+        Solve_with_CVode_Sediment(
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,
+            OpenWQ_vars,
+            OpenWQ_json,
+            OpenWQ_output,
+            OpenWQ_CH_model,
+            OpenWQ_TS_model,
+            OpenWQ_utils);
 
     } else if ((OpenWQ_wqconfig.SOLVER_module).compare("BE") == 0) {
         
@@ -54,6 +68,13 @@ void OpenWQ_compute::SOLVER_driver(
             OpenWQ_json,
             OpenWQ_output,
             OpenWQ_CH_model);
+
+        Solve_with_BE_Sediment(
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,
+            OpenWQ_vars,
+            OpenWQ_json,
+            OpenWQ_output);
 
     } else {
         // Create Message
@@ -71,4 +92,5 @@ void OpenWQ_compute::SOLVER_driver(
         exit(EXIT_FAILURE);
 
     }
+    sediment_calls.clear();
 }

@@ -54,7 +54,9 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
         OpenWQ_vars, 
         OpenWQ_json,
         OpenWQ_output,
-        OpenWQ_CH_model);
+        OpenWQ_CH_model,
+        OpenWQ_TS_model,
+        OpenWQ_utils);
 
     // ########################################
     // Output Results

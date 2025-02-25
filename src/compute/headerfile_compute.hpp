@@ -26,6 +26,8 @@
 
 class OpenWQ_output;
 class OpenWQ_CH_model;
+class OpenWQ_TS_model;
+class OpenWQ_utils;
 
 class OpenWQ_compute{
 
@@ -38,7 +40,20 @@ class OpenWQ_compute{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_json& OpenWQ_json,
         OpenWQ_output& OpenWQ_output,
-        OpenWQ_CH_model& OpenWQ_CH_model);
+        OpenWQ_CH_model& OpenWQ_CH_model,
+        OpenWQ_TS_model& OpenWQ_TS_model,
+        OpenWQ_utils& OpenWQ_utils);
+
+    void Solve_with_CVode_Sediment(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_vars& OpenWQ_vars,
+        OpenWQ_json& OpenWQ_json,
+        OpenWQ_output& OpenWQ_output,
+        OpenWQ_CH_model& OpenWQ_CH_model,
+        OpenWQ_TS_model& OpenWQ_TS_model,
+        OpenWQ_utils& OpenWQ_utils);
+    
 
     // Solver using Euler method
     void Solve_with_BE(
@@ -49,7 +64,16 @@ class OpenWQ_compute{
         OpenWQ_output& OpenWQ_output,
         OpenWQ_CH_model& OpenWQ_CH_model);
 
+    void Solve_with_BE_Sediment(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_vars& OpenWQ_vars,
+        OpenWQ_json& OpenWQ_json,
+        OpenWQ_output& OpenWQ_output);
+
     public:
+
+    std::vector<std::tuple<int,int,int,int,int,int,int,int,double,double,std::string>> sediment_calls;
 
     // Generic Numerical Solver
     void SOLVER_driver(
@@ -58,7 +82,9 @@ class OpenWQ_compute{
         OpenWQ_vars& OpenWQ_vars,
         OpenWQ_json& OpenWQ_json,
         OpenWQ_output& OpenWQ_output,
-        OpenWQ_CH_model& OpenWQ_CH_model);
+        OpenWQ_CH_model& OpenWQ_CH_model,
+        OpenWQ_TS_model& OpenWQ_TS_model,
+        OpenWQ_utils& OpenWQ_utils);
 
     // Reset derivatives (before each time iteraction)
     void Reset_Deriv(

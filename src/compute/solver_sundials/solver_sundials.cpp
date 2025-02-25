@@ -1,6 +1,8 @@
 
 #include "compute/headerfile_compute.hpp"
 #include "models_CH/headerfile_CH.hpp"
+#include "models_TS/headerfile_TS.hpp"
+#include "utils/headerfile_UTILS.hpp"
 
 #include <sundials/sundials_core.hpp>
 #include <sundials/sundials_types.h>
@@ -19,6 +21,9 @@ struct UserData {
     OpenWQ_json& json;
     OpenWQ_output& output;
     OpenWQ_CH_model& chem;
+    std::vector<std::tuple<int,int,int,int,int,int,int,int,double,double,std::string>> sediment_calls;
+    OpenWQ_TS_model& TS_model;
+    OpenWQ_utils& utils;
 };
 
 /* #################################################
@@ -202,6 +207,80 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
 
 }
 
+int sedimentFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
+
+    auto user_data = *(static_cast<UserData*>(udata));
+
+    // Local variables
+    unsigned int nx, ny, nz;    // interactive compartment domain dimensions
+    unsigned int ix, iy, iz;    // interactive compartment domain cell indexes
+    double dm_dt;
+    int idx=0;
+    unsigned int sed_icmp;
+    sunrealtype* uvec_data;
+    sunrealtype* fvec_data;
+
+    /* #####################################################
+    // Compartment loop
+    ##################################################### */
+
+    uvec_data = N_VGetArrayPointer(u);
+    fvec_data = N_VGetArrayPointer(f);
+
+    // Reset derivatives to zero
+    (*user_data.vars.d_sedmass_mobilized_dt).zeros();
+    (*user_data.vars.d_sedmass_dt).zeros();
+    
+    for (unsigned int icmp=0;icmp<user_data.hostModelconfig.get_num_HydroComp();icmp++){
+        if ((user_data.wqconfig.TS_model->ErodTranspCmpt).compare(user_data.hostModelconfig.get_HydroComp_name_at(icmp))) {
+            sed_icmp = icmp;
+        }
+    }
+    // Dimensions for compartment icmp
+    nx = user_data.hostModelconfig.get_HydroComp_num_cells_x_at(sed_icmp); // num of x elements
+    ny = user_data.hostModelconfig.get_HydroComp_num_cells_y_at(sed_icmp); // num of y elements
+    nz = user_data.hostModelconfig.get_HydroComp_num_cells_z_at(sed_icmp); // num of z elements
+
+
+    // X, Y, Z loops
+    for (ix=0;ix<nx;ix++){
+        for (iy=0;iy<ny;iy++){
+            for (iz=0;iz<nz;iz++){                        
+                (*user_data.vars.sedmass)(ix,iy,iz) = uvec_data[idx];
+                idx++;
+            }
+        }
+    }
+
+    for (auto [source, ix_s, iy_s, iz_s, recipient, ix_r, iy_r, iz_r, wflux_s2r, wmass_source, TS_type] : user_data.sediment_calls) {
+        user_data.TS_model.TS_driver_run(user_data.hostModelconfig,
+                        user_data.wqconfig,
+                        user_data.vars,
+                        user_data.utils,
+                        user_data.output,
+                        source, ix_s, iy_s, iz_s,
+                        recipient, ix_r, iy_r, iz_r,
+                        wflux_s2r, wmass_source, TS_type);
+    }
+    
+    idx = 0;
+
+    // X, Y, Z loops
+    for (ix=0;ix<nx;ix++){
+        for (iy=0;iy<ny;iy++){
+            for (iz=0;iz<nz;iz++){
+
+                fvec_data[idx] = (*user_data.vars.d_sedmass_dt)(ix,iy,iz) + (*user_data.vars.d_sedmass_mobilized_dt)(ix,iy,iz);
+                idx++;
+            }
+        }
+    }
+        
+    return 0;
+
+}
+
+
 /* #################################################
 // Solving with CVode
 ################################################# */
@@ -211,7 +290,9 @@ void OpenWQ_compute::Solve_with_CVode(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_json& OpenWQ_json,
     OpenWQ_output& OpenWQ_output,
-    OpenWQ_CH_model& OpenWQ_CH_model){
+    OpenWQ_CH_model& OpenWQ_CH_model,
+    OpenWQ_TS_model& OpenWQ_TS_model,
+    OpenWQ_utils& OpenWQ_utils){
     
     // Local variables
     unsigned int nx, ny, nz;    // interactive compartment domain dimensions
@@ -233,7 +314,7 @@ void OpenWQ_compute::Solve_with_CVode(
         num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
     }
 
-    UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_CH_model};
+    UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_CH_model, sediment_calls, OpenWQ_TS_model, OpenWQ_utils};
 
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++) {
         nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
@@ -316,6 +397,96 @@ void OpenWQ_compute::Solve_with_CVode(
 
                     }
                 }
+            }
+        }
+    }
+
+}
+
+
+/* #################################################
+// Solving Sediment with CVode
+################################################# */
+void OpenWQ_compute::Solve_with_CVode_Sediment(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_json& OpenWQ_json,
+    OpenWQ_output& OpenWQ_output,
+    OpenWQ_CH_model& OpenWQ_CH_model,
+    OpenWQ_TS_model& OpenWQ_TS_model,
+    OpenWQ_utils& OpenWQ_utils){
+    
+    // Local variables
+    unsigned int nx, ny, nz;    // interactive compartment domain dimensions
+    unsigned int ix, iy, iz;    // interactive compartment domain cell indexes
+    double ic;               // interactive dynamic change to state-variable at start of simulations
+    unsigned int system_size = 0;
+    sundials::Context sunctx;
+    N_Vector u;
+    SUNLinearSolver LS;
+    int idx=0;
+    sunrealtype* udata;
+    void* cvode_mem;
+    sunrealtype t;
+
+    unsigned int sed_icmp;
+
+    for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
+        if ((OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))) {
+            sed_icmp = icmp;
+        }
+    }
+    // Dimensions for compartment icmp
+    nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(sed_icmp); // num of x elements
+    ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(sed_icmp); // num of y elements
+    nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(sed_icmp); // num of z elements
+
+
+    UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_CH_model, sediment_calls, OpenWQ_TS_model, OpenWQ_utils};
+
+    system_size += nx*ny*nz;
+    
+    //retval = SUNContext_Create(NULL, &sunctx);
+    u = N_VNew_Serial(system_size, sunctx);
+    udata = N_VGetArrayPointer(u);
+
+    // X, Y, Z loops
+    for (ix=0;ix<nx;ix++){
+        for (iy=0;iy<ny;iy++){
+            for (iz=0;iz<nz;iz++){  
+                ic = (*OpenWQ_vars.sedmass)(ix,iy,iz);
+                udata[idx] = ic;
+                idx++;
+
+            }
+        }
+    }
+
+    // SUNDIALS/CVode implementation (Victoria Guenter)
+    cvode_mem = CVodeCreate(CV_ADAMS, sunctx);
+    CVodeInit(cvode_mem, sedimentFlux, 0, u);
+
+    CVodeSetUserData(cvode_mem, (void*) &user_data);
+
+    LS = SUNLinSol_SPGMR(u, SUN_PREC_NONE, 0, sunctx);
+
+    CVodeSetLinearSolver(cvode_mem, LS, NULL); 
+    CVodeSStolerances(cvode_mem, 1e-4, 1e-8);
+
+    if (OpenWQ_hostModelconfig.get_time_step() > 0) {
+        CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
+    }
+
+    idx=0;
+
+    // X, Y, Z loops
+    for (ix=0;ix<nx;ix++){
+        for (iy=0;iy<ny;iy++){
+            for (iz=0;iz<nz;iz++){     
+
+                (*OpenWQ_vars.sedmass)(ix,iy,iz) = udata[idx];
+                idx++;
             }
         }
     }

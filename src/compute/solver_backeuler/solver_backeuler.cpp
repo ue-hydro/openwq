@@ -120,3 +120,53 @@ void OpenWQ_compute::Solve_with_BE(
         }
     }
 }
+
+void OpenWQ_compute::Solve_with_BE_Sediment(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_json& OpenWQ_json,
+    OpenWQ_output& OpenWQ_output){
+
+    // Local variables
+    unsigned int nx, ny, nz;    // interactive compartment domain dimensions
+    unsigned int ix, iy, iz;    // interactive compartment domain cell indexes
+    double dm_dt;          // ineractive final derivative (mass)
+    unsigned int sed_icmp;
+
+    /* #####################################################
+    // Compartment loop
+    ##################################################### */
+
+    for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
+        if ((OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))) {
+            sed_icmp = icmp;
+        }
+    }
+    // Dimensions for compartment icmp
+    nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(sed_icmp); // num of x elements
+    ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(sed_icmp); // num of y elements
+    nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(sed_icmp); // num of z elements
+
+    #pragma omp parallel for private (ix, iy, iz, dm_dt) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
+    // X, Y, Z loops
+    for (ix=0;ix<nx;ix++){
+        for (iy=0;iy<ny;iy++){
+            for (iz=0;iz<nz;iz++){
+
+                dm_dt = (*OpenWQ_vars.d_sedmass_dt)(ix,iy,iz) + (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix,iy,iz);
+
+                // Change state-variable
+                (*OpenWQ_vars.sedmass)(ix,iy,iz) += 
+                        (   dm_dt               
+                            );
+
+                if((*OpenWQ_vars.sedmass)(ix,iy,iz) < 0){
+                    (*OpenWQ_vars.sedmass)(ix,iy,iz) = 0;
+                }
+
+            
+            }
+        }
+    }
+}
