@@ -20,7 +20,16 @@ RUN apt-get -y update && apt-get upgrade -y && \
     libnetcdf-dev \
     libnetcdff-dev \
     liblapack-dev \
-    gfortran
+    gfortran \
+    git \
+    nano
+
+# Install PHREEQC-RM
+WORKDIR /opt
+RUN git clone https://github.com/usgs-coupled/phreeqcrm_use_cmake.git phreeqcrm -b modern
+WORKDIR /opt/phreeqcrm
+RUN cmake . -P build_phreeqcrm.cmake -DCMAKE_INSTALL_PREFIX=/usr/local/phreeqcrm
+
 
 # Install Sundials
 WORKDIR /opt
