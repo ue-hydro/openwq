@@ -3,7 +3,7 @@ From: ubuntu:24.04
 
 %post
   apt-get update
-  apt-get install locales
+  apt-get -y install locales
   locale-gen en_CA.UTF-8
   apt-get upgrade -y
   DEBIAN_FRONTEND="noninteractive" \

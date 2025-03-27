@@ -16,4 +16,4 @@ OPENWQ_DIR="/code/build/source/openwq/openwq"
 apptainer exec --bind $SUMMA_DIR:/code \
     --pwd $OPENWQ_DIR --env PhreeqcRM_DIR=/opt/phreeqcrm/phreeqcrm ../openwq.sif \
      \
-    /bin/bash -c "mkdir -p build && cd build && cmake .. && make"
+    /bin/bash -c "mkdir -p build && cd build && cmake -B ../build -S ../ && make"
