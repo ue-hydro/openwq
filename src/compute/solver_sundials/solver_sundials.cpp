@@ -401,6 +401,10 @@ void OpenWQ_compute::Solve_with_CVode(
         }
     }
 
+    N_VDestroy(u);
+    CVodeFree(&cvode_mem);
+    SUNLinSolFree(LS);
+
 }
 
 
@@ -490,5 +494,9 @@ void OpenWQ_compute::Solve_with_CVode_Sediment(
             }
         }
     }
+
+    N_VDestroy(u);
+    CVodeFree(&cvode_mem);
+    SUNLinSolFree(LS);
 
 }
