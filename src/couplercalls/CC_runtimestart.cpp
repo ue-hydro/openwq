@@ -94,7 +94,7 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
     // (doesn't need to be inside the space loop 
     // because space is dealt with inside the function)
     // ########################################         
-    struct tm *tm_simtime = localtime(&simtime);
+    struct tm *tm_simtime = gmtime(&simtime);
 
     // Get Year, Month, Day, Hour and Min of simulation time
     int year_sim_now = tm_simtime->tm_year;

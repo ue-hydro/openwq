@@ -437,12 +437,14 @@ time_t OpenWQ_units::convertTime_ints2time_t(
     int MIN,
     int SEC) {
 
+
+    
     // Local variables
     std::time_t sim_time;
     std::time_t sim_time_since1900;
     std::tm tm;
     
-    tm.tm_year = YYYY - 1970; // number of years since unix-epoch 1970
+    tm.tm_year = YYYY - 1900; // number of years since unix-epoch 1970
     tm.tm_mon = MM - 1;
     tm.tm_hour = HH;
     tm.tm_mday = DD;
@@ -457,7 +459,7 @@ time_t OpenWQ_units::convertTime_ints2time_t(
     // which is 2,208,988,800, is added.
     // This value is saved in OpenWQ_wqconfig.secSinceUnixTimeEpoch).
     
-    sim_time_since1900 = sim_time + OpenWQ_wqconfig.secFrom1900toUnixTimeEpoch1970;
+    sim_time_since1900 = sim_time;
 
     return sim_time_since1900;
 }

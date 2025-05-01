@@ -35,7 +35,7 @@ int OpenWQ_output::writeResults(
     std::string outputfile_type;            // interactive name for output file
 
     // Create time string to print
-    struct tm *tm_simtime = localtime(&simtime);
+    struct tm *tm_simtime = gmtime(&simtime);
 
     // Converting to string
     char timechar [30];
