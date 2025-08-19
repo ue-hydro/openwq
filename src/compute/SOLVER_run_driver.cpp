@@ -49,6 +49,7 @@ void OpenWQ_compute::SOLVER_driver(
             OpenWQ_TS_model,
             OpenWQ_utils);
         
+        if (sediment_calls.size() > 0) {
         Solve_with_CVode_Sediment(
             OpenWQ_hostModelconfig,
             OpenWQ_wqconfig,
@@ -58,6 +59,7 @@ void OpenWQ_compute::SOLVER_driver(
             OpenWQ_CH_model,
             OpenWQ_TS_model,
             OpenWQ_utils);
+        }
 
     } else if ((OpenWQ_wqconfig.SOLVER_module).compare("BE") == 0) {
         
