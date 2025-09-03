@@ -45,8 +45,9 @@ Project(OpenWQ)
 # optA5) fluxos_openwq -> compile with fluxos using hydrolink
 set(VALID_COMPILE_TARGETS "openwq" "crhm_openwq" "summa_openwq" 
                           "mizuroute_openwq" "fluxos_openwq")
-set(COMPILE_TARGET "summa_openwq" CACHE STRING "Set the compilation target")
+set(COMPILE_TARGET "mizuroute_openwq" CACHE STRING "Set the compilation target")
 list(FIND VALID_COMPILE_TARGETS ${COMPILE_TARGET} INDEX)
+list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_SOURCE_DIR}")
 if(${INDEX} EQUAL -1)
     set(VALID_COMPILE_TARGETS_PRINT "")
     foreach(target ${VALID_COMPILE_TARGETS})
@@ -150,6 +151,8 @@ MESSAGE(STATUS "OpenWQ source files: ${OPENWQ_DIR}")
 
 FIND_PACKAGE(Armadillo REQUIRED) 
 FIND_PACKAGE(HDF5 REQUIRED)
+FIND_PACKAGE(PhreeqcRM REQUIRED)
+FIND_PACKAGE(SUNDIALS REQUIRED)
 
 # Set up the C++ flags
 IF("${COMPILE_MODE}" STREQUAL "debug")
@@ -167,11 +170,13 @@ IF("${COMPILE_TARGET}" STREQUAL "openwq")
     TARGET_INCLUDE_DIRECTORIES(${exec_name} PUBLIC 
                                ${OPENWQ_INCLUDES}
                                ${HDF5_INCLUDE_DIRS}
+                               ${PHREEQRM_INCLUDE_DIR}
                                ${ARMADILLO_INCLUDE_DIR})
     TARGET_LINK_LIBRARIES(${exec_name} PUBLIC
                           ${HDF5_C_LIBRARY_hdf5}
                           ${ARMADILLO_LIBRARIES}
-                          SUNDIALS::cvode)
+                          SUNDIALS::cvode
+                          PhreeqcRM::PhreeqcRM)
 # ..................
 # IF TARGET = crhm_openwq
 # Only supports compilation in linux
@@ -598,6 +603,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                     ${OPENWQ_DIR}/src/utils/models_toolbox/*.cpp
                     ${OPENWQ_DIR}/src/models_CH/*.cpp
                     ${OPENWQ_DIR}/src/models_CH/bgc_flex/*.cpp
+		${OPENWQ_DIR}/src/models_CH/PHREEQC/*.cpp
                     ${OPENWQ_DIR}/src/models_TD/*.cpp
                     ${OPENWQ_DIR}/src/models_TD/native_adv/*.cpp
                     ${OPENWQ_DIR}/src/models_TD/native_advdisp/*.cpp
@@ -621,58 +627,77 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
                 # Setting mizuroute
                 SET(MIZUROUTE_UTILS
-                    ${MIZUROUTE_DIR}/nrtype.f90
-                    ${MIZUROUTE_DIR}/nr_utility.f90
-                    ${MIZUROUTE_DIR}/ascii_util.f90
-                    ${MIZUROUTE_DIR}/ncio_utils.f90
+		    ${MIZUROUTE_DIR}/hydraulic.f90
+		${MIZUROUTE_DIR}/mpi_utils.f90
+		${MIZUROUTE_DIR}/model_utils.f90
                     ${MIZUROUTE_DIR}/gamma_func.f90
+		${MIZUROUTE_DIR}/nrtype.f90
                 )
                 SET(MIZUROUTE_DATATYPES
                     ${OPENWQ_INTERFACE_DIR}/openWQ.f90 # needs to be compiled before globalData
+		${MIZUROUTE_DIR}/nrtype.f90
                     ${MIZUROUTE_DIR}/public_var.f90
+		${MIZUROUTE_DIR}/nr_utils.f90
+		${MIZUROUTE_DIR}/ncio_utils.f90
+		${MIZUROUTE_DIR}/pio_utils.f90
+		${MIZUROUTE_DIR}/ascii_utils.f90
+                    ${MIZUROUTE_DIR}/datetime_data.f90
                     ${MIZUROUTE_DIR}/dataTypes.f90
                     ${MIZUROUTE_DIR}/var_lookup.f90
-                    ${MIZUROUTE_DIR}/time_utils.f90
-                    ${MIZUROUTE_DIR}/datetime_data.f90
+		${MIZUROUTE_DIR}/base_route.f90
+		${MIZUROUTE_DIR}/csv_data.f90
+		${MIZUROUTE_DIR}/gageMeta_data.f90
+		${MIZUROUTE_DIR}/obs_data.f90
                     ${MIZUROUTE_DIR}/globalData.f90
                     ${MIZUROUTE_DIR}/popMetadat.f90
+		${MIZUROUTE_DIR}/histVars_data.f90
+		${MIZUROUTE_DIR}/historyFile.f90
                     ${MIZUROUTE_DIR}/allocation.f90
                 )
                 SET(MIZUROUTE_INIT
                     ${MIZUROUTE_DIR}/network_topo.f90
                     ${MIZUROUTE_DIR}/process_param.f90
+		${MIZUROUTE_DIR}/process_gage_meta.f90
                     ${MIZUROUTE_DIR}/process_ntopo.f90
                     ${MIZUROUTE_DIR}/pfafstetter.f90
                     ${MIZUROUTE_DIR}/domain_decomposition.f90
                 )
                 SET(MIZUROUTE_IO
-                    ${MIZUROUTE_DIR}/remap.f90
+                    ${MIZUROUTE_DIR}/process_remap.f90
                     ${MIZUROUTE_DIR}/read_control.f90
                     ${MIZUROUTE_DIR}/read_param.f90
                     ${MIZUROUTE_DIR}/read_streamSeg.f90
                     ${MIZUROUTE_DIR}/write_streamSeg.f90
-                    ${MIZUROUTE_DIR}/read_runoff.f90
-                    ${MIZUROUTE_DIR}/get_basin_runoff.f90
-                    ${MIZUROUTE_DIR}/read_remap.f90
+                    ${MIZUROUTE_DIR}/standalone/read_runoff.f90
+                    ${MIZUROUTE_DIR}/standalone/get_basin_runoff.f90
+                    ${MIZUROUTE_DIR}/standalone/read_remap.f90
+		${MIZUROUTE_DIR}/io_rpointfile.f90
                     ${MIZUROUTE_DIR}/read_restart.f90
-                    ${MIZUROUTE_DIR}/write_restart.f90
-                    ${MIZUROUTE_DIR}/write_simoutput.f90
+		${MIZUROUTE_DIR}/pio_decomp_data.f90
+                    ${MIZUROUTE_DIR}/write_restart_pio.f90
+                    ${MIZUROUTE_DIR}/write_simoutput_pio.f90
                 )
                 SET(MIZUROUTE_CORE
-                    ${MIZUROUTE_DIR}/model_finalize.f90
+		${MIZUROUTE_DIR}/advection_diffusion.f90
+		${MIZUROUTE_DIR}/data_assimilation.f90
                     ${MIZUROUTE_DIR}/accum_runoff.f90
                     ${MIZUROUTE_DIR}/basinUH.f90
+		${MIZUROUTE_DIR}/water_balance.f90
+		${MIZUROUTE_DIR}/lake_route.f90
                     ${MIZUROUTE_DIR}/irf_route.f90
                     ${MIZUROUTE_DIR}/kwt_route.f90
-                    ${MIZUROUTE_DIR}/dfw_route.f90
-                    ${MIZUROUTE_DIR}/kw_route.f90
+                    ${MIZUROUTE_DIR}/kwe_route.f90
                     ${MIZUROUTE_DIR}/mc_route.f90
+                    ${MIZUROUTE_DIR}/dfw_route.f90
                     ${MIZUROUTE_DIR}/main_route.f90
-                    ${MIZUROUTE_DIR}/model_setup.f90
+		${MIZUROUTE_DIR}/tracer.f90
+		${MIZUROUTE_DIR}/mpi_process.f90
+                    ${MIZUROUTE_DIR}/init_model_data.f90
+		${MIZUROUTE_DIR}/standalone/model_setup.f90
                     ${OPENWQ_INTERFACE_DIR}/mizuroute_openwq.f90
                 )
                 SET(MIZUROUTE_DRIVER 
-                    ${MIZUROUTE_DIR}/route_runoff.f90
+                    ${MIZUROUTE_DIR}/standalone/route_runoff.f90
                 )
                 # Stitch together MIZUROUTE programs
                 SET(MIZUROUTE_MOD_ALL
@@ -694,8 +719,10 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
                 FIND_PACKAGE(Armadillo REQUIRED) # don't forget to activate HDF5 support when installing Armadillo
                 FIND_PACKAGE(HDF5 REQUIRED)
-                FIND_PACKAGE(netCDF REQUIRED)
+                FIND_PACKAGE(NetCDF REQUIRED)
                 FIND_PACKAGE(LAPACK REQUIRED)
+		FIND_PACKAGE(ParallelIO REQUIRED)
+		FIND_PACKAGE(PNetCDF REQUIRED)
 
                 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXEC_DIR})
 
@@ -706,9 +733,12 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                     ${ARMADILLO_INCLUDE_DIR}
                     ${HDF5_INCLUDE_DIRS}
                     ${OpenMP_INCLUDE_DIR}
+			${PhreeqcRM_INCLUDE_DIR}
                     ${OPENWQ_DIR}/src/)
                 TARGET_LINK_LIBRARIES(OPENWQ_OBJ PUBLIC
                     ${ARMADILLO_LIBRARIES}
+			SUNDIALS::cvode
+			PhreeqcRM::PhreeqcRM
                     ${HDF5_C_LIBRARY_hdf5})
 
                 IF(OpenMP_CXX_FOUND)
@@ -718,6 +748,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                             OpenMP::OpenMP_CXX)
                 ENDIF()
 
+
+
                 # Create the executable with openWQ coupled to Mizuroute                 
                 ADD_EXECUTABLE(${exec_name}
                     ${MIZUROUTE_MOD_ALL}
@@ -726,14 +758,18 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                 TARGET_INCLUDE_DIRECTORIES(
                     ${exec_name} PUBLIC
                     ${LAPACK_INCLUDES}
-                    ${netCDF_INCLUDES}
+                    ${NetCDF_INCLUDE_DIRS}
+			${ParallelIO_INCLUDE_DIR}
                     "/usr/include/"
                     "/code/")
                 TARGET_LINK_LIBRARIES(
                     ${exec_name} PUBLIC
-                    ${NETCDF_LIB_PATH}
+			${NetCDF_LIBRARIES}
+                    # ${NETCDF_LIB_PATH}
+		${ParallelIO_LIBRARY}
+		${PNetCDF_LIBRARY}
                     ${LAPACK_LIBRARIES}
-                    ${netCDF_LIBRARIES}
+                    ${NetCDF_LIBRARIES}
                     OPENWQ_OBJ)
 
         ELSE()
