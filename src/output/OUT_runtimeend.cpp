@@ -370,7 +370,7 @@ int OpenWQ_output::writeCSV(
     header(2) = "iz [-]";
 
     // Parallel I/O section (writting to files)
-    #pragma omp parallel for private(chem_name,ix,iy,iz,water_vol_i) collapse(2) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
+    // #pragma omp parallel for private(chem_name,ix,iy,iz,water_vol_i) collapse(2) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
     for (unsigned int ixyz=0;ixyz<num_cells2print;ixyz++){   
         
         for (unsigned int ichem=0;ichem<OpenWQ_wqconfig.chem2print.size();ichem++){
@@ -553,6 +553,7 @@ int OpenWQ_output::writeHDF5(
                     internal_database_name,
                     arma::hdf5_opts::append));                  // no append (to clean old file if existant)
             OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
+            std::cout << "opening " << filename << " " << OpenWQ_wqconfig.files[filename] << std::endl;
 
         }
     }
@@ -564,7 +565,7 @@ int OpenWQ_output::writeHDF5(
     num_cells2print = OpenWQ_wqconfig.cells2print_vec[icmp].n_rows;
 
     // Parallel I/O section (writting to files)
-    #pragma omp parallel for private(chem_name,filename,ix,iy,iz,water_vol_i) collapse(1) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
+    // #pragma omp parallel for private(chem_name,filename,ix,iy,iz,water_vol_i) collapse(1) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
     for (unsigned int ichem=0;ichem<num_chem2print;ichem++){
 
         // Initiate arma::mat to print data
@@ -823,7 +824,6 @@ bool OpenWQ_output::appendData_to_HDF5_file(
 
     hid_t dataspace = H5Screate_simple(2, dims, NULL);
     hid_t datatype = H5Tcopy(H5T_NATIVE_DOUBLE);
-
     hid_t dataset = H5Dcreate(file, name.c_str(), datatype, dataspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     if (dataset < 0) {
         return false;
