@@ -437,7 +437,7 @@ void OpenWQ_compute::Solve_with_CVode_Sediment(
     unsigned int sed_icmp;
 
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
-        if ((OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))) {
+        if ((OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)) == 0) {
             sed_icmp = icmp;
         }
     }
@@ -449,7 +449,7 @@ void OpenWQ_compute::Solve_with_CVode_Sediment(
 
     UserData user_data = {OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, OpenWQ_output, OpenWQ_CH_model, sediment_calls, OpenWQ_TS_model, OpenWQ_utils};
 
-    system_size += nx*ny*nz;
+    system_size = nx*ny*nz;
     
     //retval = SUNContext_Create(NULL, &sunctx);
     u = N_VNew_Serial(system_size, sunctx);
