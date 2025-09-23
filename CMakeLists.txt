@@ -45,7 +45,7 @@ Project(OpenWQ)
 # optA5) fluxos_openwq -> compile with fluxos using hydrolink
 set(VALID_COMPILE_TARGETS "openwq" "crhm_openwq" "summa_openwq" 
                           "mizuroute_openwq" "fluxos_openwq")
-set(COMPILE_TARGET "mizuroute_openwq" CACHE STRING "Set the compilation target")
+set(COMPILE_TARGET "summa_openwq" CACHE STRING "Set the compilation target")
 list(FIND VALID_COMPILE_TARGETS ${COMPILE_TARGET} INDEX)
 list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_SOURCE_DIR}")
 if(${INDEX} EQUAL -1)

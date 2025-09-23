@@ -28,8 +28,13 @@ RUN apt-get -y update && apt-get upgrade -y && \
 WORKDIR /opt
 RUN git clone https://github.com/usgs-coupled/phreeqcrm_use_cmake.git phreeqcrm -b modern
 WORKDIR /opt/phreeqcrm
-RUN cmake . -P build_phreeqcrm.cmake -DCMAKE_INSTALL_PREFIX=/usr/local/phreeqcrm
-
+RUN wget https://github.com/usgs-coupled/phreeqcrm/archive/master.tar.gz
+RUN tar xvzf master.tar.gz
+RUN cmake -S phreeqcrm-master -B phreeqcrm-master/build -DCMAKE_INSTALL_PREFIX=/usr/local/phreeqcrm
+WORKDIR /opt/phreeqcrm/phreeqcrm-master/build
+RUN make -j4
+RUN make install
+ENV PhreeqcRM_DIR=/usr/local/phreeqcrm
 
 # Install Sundials
 WORKDIR /opt
