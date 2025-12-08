@@ -21,7 +21,7 @@
 # 5) Open a shell inside that container: docker exec -it <container id> /bin/bash
 # 6) Armadillo now disables default hdf5 support for save/load, so inside the container you need to go to “/usr/include/armadillo_bits/config.hpp” and uncomment #define ARMA_USE_HDF5
 # 7) Inside the contained, go to the openwq folder that contains CMakeLists.txt, Dockerfile, and docker-compose.yml
-# 8) Compile with e.g.: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DCOMPILE_MODE=debug .; make -j 2; rm *.mod
+# 8) Compile with e.g.: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=summa_openwq -DCMAKE_BUILD_TYPE=debug .; make -j 2; rm *.mod
 
 ###############
 # Running it
@@ -45,7 +45,12 @@ Project(OpenWQ)
 # optA5) fluxos_openwq -> compile with fluxos using hydrolink
 set(VALID_COMPILE_TARGETS "openwq" "crhm_openwq" "summa_openwq" 
                           "mizuroute_openwq" "fluxos_openwq")
-set(COMPILE_TARGET "summa_openwq" CACHE STRING "Set the compilation target")
+if(NOT HOST_MODEL_TARGET)
+   message(FATAL_ERROR "Need to set -DHOST_MODEL_TARGET. Options are ${VALID_COMPILE_TARGETS}")
+else()
+    SET(COMPILE_TARGET ${HOST_MODEL_TARGET})
+endif()
+
 list(FIND VALID_COMPILE_TARGETS ${COMPILE_TARGET} INDEX)
 list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_SOURCE_DIR}")
 if(${INDEX} EQUAL -1)
@@ -66,7 +71,7 @@ SET(SOLVER_TYPE Sundials)
 # optB1) debug -> set the necessary flags for debugging
 # optB2) fast -> set optimization flags
 if(NOT CMAKE_BUILD_TYPE)
-    set(COMPILE_MODE debug)
+    message(FATAL_ERROR "Need to set -DCMAKE_BUILD_TYPE. Options are fast or debug")
 else()
     SET(COMPILE_MODE ${CMAKE_BUILD_TYPE})
 endif()
