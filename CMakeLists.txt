@@ -192,11 +192,12 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "crhm_openwq")
         MESSAGE(STATUS "** OpenWQ **: current platform is Linux")
         # Choose where to create the executable
         SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-        SET(EXEC_DIR ${PARENT_DIR}/../case_studies)
 
         SET(CRHM_DIR ${PARENT_DIR}/crhm)
         SET(OPENWQ_DIR ${PARENT_DIR}/openwq/openwq)
         SET(HYDROLINK_DIR ${PARENT_DIR}/openwq)
+
+        SET(EXEC_DIR ${OPENWQ_DIR}/bin)
 
         FILE(GLOB SOURCES
             ${CRHM_DIR}/vcl.cpp
@@ -302,6 +303,9 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
 
     SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
     SET(SUMMA_DIR ${PARENT_DIR}../../../../../../)
+    
+    SET(OPENWQ_DIR ${PARENT_DIR}/openwq/openwq)
+    SET(EXEC_DIR ${OPENWQ_DIR}/bin)
 
     FILE(GLOB HYDROLINK_SOURCES 
         ${PARENT_DIR}/OpenWQ_hydrolink.cpp
@@ -539,6 +543,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
             ${NETCDF_LIB_PATH}
             SUMMA_NOAHMP)
 
+    SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXEC_DIR})
+
     # Create the executable with openWQ coupled to Summa                 
     ADD_EXECUTABLE(
         ${exec_name}
@@ -570,7 +576,6 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
 
         # Choose where to create the executable
         SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-        SET(EXEC_DIR ${PARENT_DIR}/../../../case_studies/testCase_cameo_v1.2/bin)
 
         IF(UNIX AND NOT APPLE)
 
@@ -590,6 +595,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                 SET(MIZUROUTE_DIR ${PARENT_DIR}/src)
                 SET(OPENWQ_DIR ${PARENT_DIR}/openwq/openwq)
                 SET(OPENWQ_INTERFACE_DIR ${OPENWQ_DIR}/..)
+                SET(EXEC_DIR ${OPENWQ_DIR}/bin)
 
                 # Setting OpenWQ sources
                 SET(MIZUROUTE_UTILS
@@ -740,7 +746,6 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_openwq")
 
         # Choose where to create the executable
         SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-        SET(EXEC_DIR ${PARENT_DIR}/../../../case_studies/testCase_cameo_v1.2/bin)
 
         IF(UNIX AND NOT APPLE)
 
@@ -759,6 +764,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_openwq")
                 # Get paths to source code
                 SET(OPENWQ_DIR ${PARENT_DIR}/openwq/openwq)
                 SET(OPENWQ_INTERFACE_DIR ${OPENWQ_DIR}/..)
+                SET(EXEC_DIR ${OPENWQ_DIR}/bin)
 
                 # File definitions for subcomponents - For OpenWQ
                 FILE(GLOB OPENWQ_SOURCES 
