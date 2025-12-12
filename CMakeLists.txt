@@ -716,8 +716,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         "/code/")
                 TARGET_LINK_LIBRARIES(
                         ${exec_name} PUBLIC
-                        #"/usr/lib/x86_64-linux-gnu/libnetcdff.a"
-                        "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        ${NETCDF_LIB_PATH}
                         ${LAPACK_LIBRARIES}
                         ${netCDF_LIBRARIES}
                         OPENWQ_OBJ)
@@ -964,8 +963,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_openwq")
                         "/code/")
                 TARGET_LINK_LIBRARIES(
                         ${exec_name} PUBLIC
-                        #"/usr/lib/x86_64-linux-gnu/libnetcdff.a"
-                        "/usr/lib/aarch64-linux-gnu/libnetcdff.a"
+                        ${NETCDF_LIB_PATH}
                         ${PIO_ROOT}/lib/libgptl.a
                         ${PIO_ROOT}/lib/libpiof.a
                         ${PIO_ROOT}/lib/libpioc.a 
