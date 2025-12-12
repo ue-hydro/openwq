@@ -940,7 +940,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_openwq")
                 ENDIF()
 
                 # Path to PIO installation
-                set(PIO_ROOT ${PARENT_DIR}/lib/piolib/piolib)
+                #set(PIO_ROOT ${PARENT_DIR}/lib/piolib/piolib)
+                set(PIO_ROOT /opt/piolib)
 
                 # Create the executable with openWQ coupled to Mizuroute                 
                 ADD_EXECUTABLE(${exec_name}

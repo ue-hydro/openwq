@@ -60,3 +60,28 @@ RUN make install
 RUN sed -i '121s/^\/\/ #define ARMA_USE_HDF5/#define ARMA_USE_HDF5/' /usr/include/armadillo_bits/config.hpp
 # Set Entry Point
 WORKDIR /code
+
+# Install piolib (ParallelIO) (needed for MizuRoute_lakes)
+WORKDIR /opt
+RUN git clone https://github.com/NCAR/ParallelIO.git
+WORKDIR /opt/ParallelIO
+RUN git clone https://github.com/PARALLELIO/genf90.git bin
+WORKDIR /opt/ParallelIO/bin
+RUN git clone https://github.com/CESM-Development/CMake_Fortran_utils.git cmake
+WORKDIR /opt
+RUN mkdir pio-build
+RUN mkdir piolib
+WORKDIR pio-build
+RUN cmake ../ParallelIO \
+  -DPIO_ENABLE_FORTRAN=ON \
+  -DPIO_ENABLE_TIMING=ON \
+  -DNetCDF_C_INCLUDE_DIR=$(nc-config --includedir) \
+  -DNetCDF_C_LIBRARY=$(nc-config --libdir)/libnetcdf.so \
+  -DPnetCDF_C_INCLUDE_DIR=$(pnetcdf-config --includedir) \
+  -DPnetCDF_C_LIBRARY=$(pnetcdf-config --libdir)/libpnetcdf.so \
+  -DCMAKE_C_COMPILER=mpicc \
+  -DCMAKE_Fortran_COMPILER=mpifort \
+  -DCMAKE_CXX_COMPILER=mpicxx \
+  -DCMAKE_INSTALL_PREFIX=../piolib
+RUN make -j4
+RUN make install
