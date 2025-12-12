@@ -53,4 +53,27 @@ From: ubuntu:24.04
   make install
   sed -i '121s/^\/\/ #define ARMA_USE_HDF5/#define ARMA_USE_HDF5/' /usr/include/armadillo_bits/config.hpp
   
-  
+  # Install piolib (ParallelIO) (needed for MizuRoute_lakes)
+  cd /opt
+  git clone https://github.com/NCAR/ParallelIO.git
+  cd /opt/ParallelIO
+  git clone https://github.com/PARALLELIO/genf90.git bin
+  cd /opt/ParallelIO/bin
+  git clone https://github.com/CESM-Development/CMake_Fortran_utils.git cmake
+  cd /opt
+  mkdir pio-build
+  mkdir piolib
+  cd pio-build
+  cmake ../ParallelIO \
+    -DPIO_ENABLE_FORTRAN=ON \
+    -DPIO_ENABLE_TIMING=ON \
+    -DNetCDF_C_INCLUDE_DIR=$(nc-config --includedir) \
+    -DNetCDF_C_LIBRARY=$(nc-config --libdir)/libnetcdf.so \
+    -DPnetCDF_C_INCLUDE_DIR=$(pnetcdf-config --includedir) \
+    -DPnetCDF_C_LIBRARY=$(pnetcdf-config --libdir)/libpnetcdf.so \
+    -DCMAKE_C_COMPILER=mpicc \
+    -DCMAKE_Fortran_COMPILER=mpifort \
+    -DCMAKE_CXX_COMPILER=mpicxx \
+    -DCMAKE_INSTALL_PREFIX=../piolib
+  make -j4
+  make install
