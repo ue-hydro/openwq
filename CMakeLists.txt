@@ -920,7 +920,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_openwq")
                 MESSAGE(STATUS "ARMADILLO: ${ARMADILLO_INCLUDE_DIR}")
                 MESSAGE(STATUS "PHREEQC: ${PhreeqcRM_INCLUDE_DIR}")
 
-                set(CMAKE_Fortran_COMPILER mpifort)
+                set(CMAKE_Fortran_COMPILER mpif90)
 
                 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXEC_DIR})
 
@@ -1195,7 +1195,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
                 MESSAGE(STATUS "ARMADILLO: ${ARMADILLO_INCLUDE_DIR}")
                 MESSAGE(STATUS "PHREEQC: ${PhreeqcRM_INCLUDE_DIR}")
 
-                set(CMAKE_Fortran_COMPILER mpifort)
+                set(CMAKE_Fortran_COMPILER mpif90)
 
                 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXEC_DIR})
 

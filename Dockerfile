@@ -80,7 +80,7 @@ RUN cmake ../ParallelIO \
   -DPnetCDF_C_INCLUDE_DIR=$(pnetcdf-config --includedir) \
   -DPnetCDF_C_LIBRARY=$(pnetcdf-config --libdir)/libpnetcdf.so \
   -DCMAKE_C_COMPILER=mpicc \
-  -DCMAKE_Fortran_COMPILER=mpifort \
+  -DCMAKE_Fortran_COMPILER=mpif90\
   -DCMAKE_CXX_COMPILER=mpicxx \
   -DCMAKE_INSTALL_PREFIX=../piolib
 RUN make -j4
