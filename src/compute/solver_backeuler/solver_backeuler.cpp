@@ -139,7 +139,7 @@ void OpenWQ_compute::Solve_with_BE_Sediment(
     ##################################################### */
 
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
-        if ((OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))) {
+        if ((OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)) == 0) {
             sed_icmp = icmp;
         }
     }
