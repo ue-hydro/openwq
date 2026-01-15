@@ -1130,6 +1130,11 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
                      ${MIZUROUTE_DIR}/standalone/model_setup.f90
                     ${OPENWQ_INTERFACE_DIR}/mizuroute_openwq.f90
                 )
+
+                SET(MIZUROUTE_CSLM_WRAPPER
+                    ${MIZUROUTE_DIR}/cslm_wrapper.f90    
+                )
+
                 SET(MIZUROUTE_DRIVER 
                     ${MIZUROUTE_DIR}/standalone/route_runoff.f90
                 )
@@ -1139,6 +1144,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
                     ${MIZUROUTE_DATATYPES}
                     ${MIZUROUTE_INIT}
                     ${MIZUROUTE_IO}
+                    ${MIZUROUTE_CSLM_WRAPPER}
                     ${MIZUROUTE_CORE})
 
                 # Adding CSLM
@@ -1168,12 +1174,6 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
                     ${CSLM_DIR}/TMELT.f		
                     ${CSLM_DIR}/XIT.f)
 
-                # Setting MizuRoute sources
-                #FILE(GLOB OPENWQ_SOURCES 
-                #        ${OPENWQ_DIR}/src/*.cpp
-                #        ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
-                 #       ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
-
                 SET(CMAKE_CXX_STANDARD 17)
 
                 IF("${COMPILE_MODE}" STREQUAL "debug")
@@ -1199,6 +1199,15 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
 
                 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXEC_DIR})
 
+                # Compile CSLM into an object file FIRST (Fortran 77 fixed format)
+                ADD_LIBRARY(CSLM_OBJ OBJECT 
+                        ${CSLM_ALL})
+                SET_TARGET_PROPERTIES(CSLM_OBJ PROPERTIES
+                        COMPILE_FLAGS "-ffixed-form -std=legacy"
+                        )
+                TARGET_LINK_LIBRARIES(CSLM_OBJ PUBLIC
+                        ${LAPACK_LIBRARIES})
+
                 # compile openWQ into an object file
                 ADD_LIBRARY(OPENWQ_OBJ OBJECT 
                         ${OPENWQ_SOURCES})
@@ -1222,14 +1231,14 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
                 ENDIF()
 
                 # Path to PIO installation
-                #set(PIO_ROOT ${PARENT_DIR}/lib/piolib/piolib)
                 set(PIO_ROOT /opt/piolib)
 
-                # Create the executable with openWQ coupled to Mizuroute                 
+                # Create the executable with openWQ coupled to Mizuroute
+                # CSLM_ALL removed - now using CSLM_OBJ instead
                 ADD_EXECUTABLE(${exec_name}
                         ${MIZUROUTE_MOD_ALL}
-                        ${MIZUROUTE_DRIVER}
-                        ${CSLM_ALL})
+                        ${MIZUROUTE_DRIVER})
+                        
                 SET_PROPERTY(TARGET ${exec_name} PROPERTY LINKER_LANGUAGE Fortran)
                 TARGET_INCLUDE_DIRECTORIES(
                         ${exec_name} PUBLIC
@@ -1247,6 +1256,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
                         ${PIO_ROOT}/lib/libpioc.a 
                         ${LAPACK_LIBRARIES}
                         ${netCDF_LIBRARIES}
+                        CSLM_OBJ
                         OPENWQ_OBJ)
 
         ELSE()
