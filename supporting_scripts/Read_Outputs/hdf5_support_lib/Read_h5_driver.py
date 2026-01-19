@@ -84,7 +84,7 @@ def _find_matching_cells(xyz_elements_source, xyz_elements_requested):
     return indices_validated, np.array(coordinates_validated)
 
 
-def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial):
+def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,noDataFlag):
     """
     Read HDF5 data and save to timeseries collection (OPTIMIZED).
 
@@ -98,6 +98,7 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial)
         Name of the file to read
     Cells_spatial : array-like or str
         Spatial cell coordinates or 'all'
+    noDataFlag: number
 
     Returns
     -------
@@ -163,6 +164,10 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial)
 
                 # Read data for this timestep
                 data_i = hf[dataset_path][:]
+
+                # Replace noDataFlag with NaN
+                data_i[data_i==noDataFlag] = np.nan
+
                 data_all[tstep, :] = data_i[0, indices_validated]
                 time_all.append(timestamp)
 
@@ -205,7 +210,8 @@ def Read_h5_driver(folderpath,
                    Compartments,
                    Cells_spatial,
                    Chemical_species,
-                   Concentration_units):
+                   Concentration_units,
+                   noDataFlag):
     """
     Read and plot OpenWQ output data (HDF5 and CSV) - OPTIMIZED VERSION.
 
@@ -286,7 +292,8 @@ def Read_h5_driver(folderpath,
                         fullpath_outputs,
                         file_extensions_i,
                         file_name,
-                        Cells_spatial
+                        Cells_spatial,
+                        noDataFlag
                     )
 
                     # Save results

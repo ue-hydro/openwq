@@ -39,7 +39,8 @@ openwq_results = h5_rlib.Read_h5_driver(
             Compartments,
             Cells_spatial,
             Chemical_species,
-            Concentration_units)
+            Concentration_units,
+            noDataFlag=-9999)
 
 ######
 # Plot results
@@ -60,9 +61,10 @@ figs1 = h5_plib.Plot_h5_driver(
 figs4 = h5_plib.Plot_h5_driver(
         openwq_results,
         plot_type='spatial',
-        time_slice=0,
+        time_slice='2017-07-27 12:15:00',
+        # time_slice=15
         spatial_axis='x',
         fixed_coords={'y': 0, 'z': 0},
         output_dir=plots_save_dir,
-        debug_mode=True
+        debug_mode=False
     )
