@@ -41,12 +41,28 @@ openwq_results = h5_rlib.Read_h5_driver(
             Chemical_species,
             Concentration_units)
 
+######
 # Plot results
-fig = h5_plib.Plot_h5_driver(
-    openwq_results,
-    output_dir=plots_save_dir,
-    debug_mode=OpenWQ_output_debugmode,  # Only plot these
-    cells_to_plot=[10,11,12],  # [array]
-    # colors=['red', 'blue', 'green']
-    )
+#####
 
+# Example 1: Temporal plot using coordinates
+"""
+figs1 = h5_plib.Plot_h5_driver(
+        openwq_results,
+        plot_type='temporal',
+        cells_to_plot=[(0, 0, 0), (100, 0, 0), (200, 0, 0)],
+        output_dir=plots_save_dir,
+        debug_mode=False
+    )
+"""
+
+# Example 2: Spatial plot - snapshot at specific date
+figs4 = h5_plib.Plot_h5_driver(
+        openwq_results,
+        plot_type='spatial',
+        time_slice=0,
+        spatial_axis='x',
+        fixed_coords={'y': 0, 'z': 0},
+        output_dir=plots_save_dir,
+        debug_mode=True
+    )
