@@ -12,7 +12,7 @@ sys.path.insert(0, 'hdf5_support_lib')
 ##############
 
 # Openwq output folder
-openwq_resDir = '/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/Output_OpenWQ'
+openwq_resDir = '/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/8_nrTrans_contS_PorMedia_linDecay/mizuroute/Output_OpenWQ'
 
 # Output specs
 OpenWQ_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
@@ -103,9 +103,9 @@ import Map_h5_driver as h5_mplib
 
 shpfile_fullpath = "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/mizuroute_in/shapefile/shapefiles/Flowline_CO_14_cameo.shp"
 hydromodel_out_fullpath =  "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/mizuroute_out/v1.2_case1.h.2017-07-28-44100.nc"
-output_html_path = "/Users/diogocosta/Downloads/diogo_test.gif"
-#timestep = "all"
-timestep = [0, 50]
+output_html_path = "/Users/diogocosta/Downloads/results_animation.html"
+timestep = "all"
+#timestep = [0, 500]
 
 h5_mplib.Map_h5_driver(
     shpfile_fullpath=shpfile_fullpath,
