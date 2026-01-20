@@ -65,36 +65,48 @@ void OpenWQ_couplercalls::RunSpaceStep(
     // #################################################
 
     // Run TD_model model
-    OpenWQ_TD_model.TD_driver_run(
-        OpenWQ_wqconfig,
-        OpenWQ_vars,
-        OpenWQ_output,
-        source, ix_s, iy_s, iz_s,
-        recipient, ix_r, iy_r, iz_r,
-        wflux_s2r, wmass_source);
+    if ((OpenWQ_wqconfig.TD_model->TD_module).compare("NONE") != 0) {
+
+        OpenWQ_TD_model.TD_driver_run(
+            OpenWQ_wqconfig,
+            OpenWQ_vars,
+            OpenWQ_output,
+            source, ix_s, iy_s, iz_s,
+            recipient, ix_r, iy_r, iz_r,
+            wflux_s2r, wmass_source);
+    
+    }
 
     // Run LE_model model
-    OpenWQ_LE_model.LE_driver_run(
-        OpenWQ_hostModelconfig,
-        OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
-        OpenWQ_vars,
-        OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
-        source, ix_s, iy_s, iz_s,
-        recipient, ix_r, iy_r, iz_r,
-        wflux_s2r, wmass_source);
+    if ((OpenWQ_wqconfig.LE_model->LE_module).compare("NONE") != 0) {
 
-    OpenWQ_compute.sediment_calls.push_back(std::make_tuple(source, ix_s, iy_s, iz_s, recipient, ix_r, iy_r, iz_r, wflux_s2r, wmass_source, "TS_type_LE"));
+        OpenWQ_LE_model.LE_driver_run(
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
+            OpenWQ_vars,
+            OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+            source, ix_s, iy_s, iz_s,
+            recipient, ix_r, iy_r, iz_r,
+            wflux_s2r, wmass_source);
 
-    OpenWQ_TS_model.TS_driver_run(
-        OpenWQ_hostModelconfig,
-        OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
-        OpenWQ_vars,
-        OpenWQ_utils,
-        OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
-        source, ix_s, iy_s, iz_s,
-        recipient, ix_r, iy_r, iz_r,
-        wflux_s2r, wmass_source,
-        "TS_type_LE");
+    }
+
+    // Run TS_model model  
+    if ((OpenWQ_wqconfig.TS_model->TS_module).compare("NONE") != 0) {
+        
+        OpenWQ_compute.sediment_calls.push_back(std::make_tuple(source, ix_s, iy_s, iz_s, recipient, ix_r, iy_r, iz_r, wflux_s2r, wmass_source, "TS_type_LE"));
+
+        OpenWQ_TS_model.TS_driver_run(
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
+            OpenWQ_vars,
+            OpenWQ_utils,
+            OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+            source, ix_s, iy_s, iz_s,
+            recipient, ix_r, iy_r, iz_r,
+            wflux_s2r, wmass_source,
+            "TS_type_LE");
+    }
 
 }
 
@@ -135,18 +147,22 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
         recipient, ix_r, iy_r, iz_r,
         wflux_s2r);
 
-    OpenWQ_compute.sediment_calls.push_back(std::make_tuple(0, 0, 0, 0, recipient, ix_r, iy_r, iz_r, wflux_s2r, 0, "TS_type_EWF"));
+    // Run TS_model model  
+    if ((OpenWQ_wqconfig.TS_model->TS_module).compare("NONE") != 0) {
 
-    // Run TS_model model
-    OpenWQ_TS_model.TS_driver_run(
-        OpenWQ_hostModelconfig,
-        OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
-        OpenWQ_vars,
-        OpenWQ_utils,
-        OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
-        0, 0, 0, 0,
-        recipient, ix_r, iy_r, iz_r,
-        wflux_s2r, 0,
-        "TS_type_EWF");
+        OpenWQ_compute.sediment_calls.push_back(std::make_tuple(0, 0, 0, 0, recipient, ix_r, iy_r, iz_r, wflux_s2r, 0, "TS_type_EWF"));
+
+        // Run TS_model model
+        OpenWQ_TS_model.TS_driver_run(
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
+            OpenWQ_vars,
+            OpenWQ_utils,
+            OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+            0, 0, 0, 0,
+            recipient, ix_r, iy_r, iz_r,
+            wflux_s2r, 0,
+            "TS_type_EWF");
+    }
 
 }

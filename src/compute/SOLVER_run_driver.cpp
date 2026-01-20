@@ -49,16 +49,18 @@ void OpenWQ_compute::SOLVER_driver(
             OpenWQ_TS_model,
             OpenWQ_utils);
         
-        if (sediment_calls.size() > 0) {
-        Solve_with_CVode_Sediment(
-            OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig,
-            OpenWQ_vars,
-            OpenWQ_json,
-            OpenWQ_output,
-            OpenWQ_CH_model,
-            OpenWQ_TS_model,
-            OpenWQ_utils);
+        if ((OpenWQ_wqconfig.TS_model->TS_module).compare("NONE") != 0) {
+
+            Solve_with_CVode_Sediment(
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_vars,
+                OpenWQ_json,
+                OpenWQ_output,
+                OpenWQ_CH_model,
+                OpenWQ_TS_model,
+                OpenWQ_utils);
+
         }
 
     } else if ((OpenWQ_wqconfig.SOLVER_module).compare("BE") == 0) {
@@ -70,13 +72,17 @@ void OpenWQ_compute::SOLVER_driver(
             OpenWQ_json,
             OpenWQ_output,
             OpenWQ_CH_model);
+        
+        if ((OpenWQ_wqconfig.TS_model->TS_module).compare("NONE") != 0) {
 
-        Solve_with_BE_Sediment(
-            OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig,
-            OpenWQ_vars,
-            OpenWQ_json,
-            OpenWQ_output);
+            Solve_with_BE_Sediment(
+                OpenWQ_hostModelconfig,
+                OpenWQ_wqconfig,
+                OpenWQ_vars,
+                OpenWQ_json,
+                OpenWQ_output);
+
+        }
 
     } else {
         // Create Message

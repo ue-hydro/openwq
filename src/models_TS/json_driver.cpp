@@ -66,38 +66,6 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
         true);
 
     // #############################
-    // Get sediment compartment name
-    jsonKey = "SEDIMENT_COMPARTMENT";
-    sediment_cmp = OpenWQ_utils.RequestJsonKeyVal_str(
-        OpenWQ_wqconfig, OpenWQ_output,
-        jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"], jsonKey,
-        errorMsgIdentifier + ">" + jsonKey,
-        true); 
-
-    // Check if sediment_cmp is valid
-    (OpenWQ_wqconfig.TS_model->SedCmpt).append(sediment_cmp);
-    sediment_cmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        OpenWQ_wqconfig.TS_model->SedCmpt,
-        errorMsgIdentifier + ">" + jsonKey,
-        true); // abort if not found
-
-    // #############################
-    // Get transport compartment name
-    jsonKey = "TRANSPORT_COMPARTMENT";
-    transport_cmp = OpenWQ_utils.RequestJsonKeyVal_str(
-        OpenWQ_wqconfig, OpenWQ_output,
-        jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"], jsonKey,
-        errorMsgIdentifier + ">" + jsonKey,
-        true); 
-
-    // Check if transport_cmp is valid
-    (OpenWQ_wqconfig.TS_model->ErodTranspCmpt).append(transport_cmp);
-    transport_cmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
-        OpenWQ_wqconfig.TS_model->ErodTranspCmpt,
-        errorMsgIdentifier + ">" + jsonKey,
-        true); // abort if not found
-
-    // #############################
     // save TS_model module name
     (OpenWQ_wqconfig.TS_model->TS_module).append(input_module_name);
 
@@ -109,50 +77,74 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
         true,               // print in console
         true);              // print in log file
 
-    // If MODULE_NAME not NONE, the get the MODULE_CONFIG_FILEPATH
-    if ((OpenWQ_wqconfig.TS_model->TS_module).compare("NONE") != 0){
+    // Get TS model configuration if not NONE
+    if(input_module_name.compare("NONE") == 0){
 
-        input_filepath = OpenWQ_utils.RequestJsonKeyVal_json(
+        // If NONE, set export_sediment to false
+        OpenWQ_output.export_sediment = false;
+
+    }else{
+
+        // Otherwise, set export_sediment to true
+        OpenWQ_output.export_sediment = true;   
+
+        // And proceed with getting the rest of the information
+
+        // #############################
+        // Get sediment compartment name
+        jsonKey = "SEDIMENT_COMPARTMENT";
+        sediment_cmp = OpenWQ_utils.RequestJsonKeyVal_str(
             OpenWQ_wqconfig, OpenWQ_output,
-            jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"],"MODULE_CONFIG_FILEPATH",
-            errorMsgIdentifier,
-            true);
+            jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"], jsonKey,
+            errorMsgIdentifier + ">" + jsonKey,
+            true); 
 
-        read_JSON_2class(
-            OpenWQ_wqconfig,
-            OpenWQ_output,
-            OpenWQ_utils,
-            OpenWQ_json.TS_module,
-            false,
-            "",
-            input_filepath);
+        // Check if sediment_cmp is valid
+        (OpenWQ_wqconfig.TS_model->SedCmpt).append(sediment_cmp);
+        sediment_cmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+            OpenWQ_wqconfig.TS_model->SedCmpt,
+            errorMsgIdentifier + ">" + jsonKey,
+            true); // abort if not found
+
+        // #############################
+        // Get transport compartment name
+        jsonKey = "TRANSPORT_COMPARTMENT";
+        transport_cmp = OpenWQ_utils.RequestJsonKeyVal_str(
+            OpenWQ_wqconfig, OpenWQ_output,
+            jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"], jsonKey,
+            errorMsgIdentifier + ">" + jsonKey,
+            true); 
+
+        // Check if transport_cmp is valid
+        (OpenWQ_wqconfig.TS_model->ErodTranspCmpt).append(transport_cmp);
+        transport_cmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+            OpenWQ_wqconfig.TS_model->ErodTranspCmpt,
+            errorMsgIdentifier + ">" + jsonKey,
+            true); // abort if not found
+
+        // Load information fo the TS_model model selected
+        if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_MMF") == 0){
             
+            SetConfigInfo_TSModule_MMF_hype( 
+                OpenWQ_hostModelconfig,
+                OpenWQ_json, 
+                OpenWQ_wqconfig, 
+                OpenWQ_utils, 
+                OpenWQ_output,
+                sediment_cmp_index,
+                transport_cmp_index);
+
+        }else if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_HBVSED") == 0){
+            
+            SetConfigInfo_TSModule_HBVsed_hype(  
+                OpenWQ_hostModelconfig,
+                OpenWQ_json, 
+                OpenWQ_wqconfig, 
+                OpenWQ_utils, 
+                OpenWQ_output,
+                sediment_cmp_index,
+                transport_cmp_index);
+
+        }
     }
-
-    // Load information fo the TS_model model selected
-    if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_MMF") == 0){
-        
-        SetConfigInfo_TSModule_MMF_hype( 
-            OpenWQ_hostModelconfig,
-            OpenWQ_json, 
-            OpenWQ_wqconfig, 
-            OpenWQ_utils, 
-            OpenWQ_output,
-            sediment_cmp_index,
-            transport_cmp_index);
-
-    }else if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_HBVSED") == 0){
-        
-        SetConfigInfo_TSModule_HBVsed_hype(  
-            OpenWQ_hostModelconfig,
-            OpenWQ_json, 
-            OpenWQ_wqconfig, 
-            OpenWQ_utils, 
-            OpenWQ_output,
-            sediment_cmp_index,
-            transport_cmp_index);
-
-    }
-
-
 }

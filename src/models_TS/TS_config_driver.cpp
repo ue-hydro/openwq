@@ -53,8 +53,9 @@ void OpenWQ_TS_model::TS_driver_config(
             OpenWQ_wqconfig,
             OpenWQ_utils,
             OpenWQ_output);
-       
-    }else{
+
+    }else if ((OpenWQ_wqconfig. TS_model->TS_module).compare("NONE") != 0)
+    {
 
         // Create Message
         msg_string = 

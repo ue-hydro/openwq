@@ -84,30 +84,34 @@ void OpenWQ_readjson::SetConfigInfo_LEModule(
         exit(EXIT_FAILURE);
     }
 
-    // Get configuration file JSON file
-    input_filepath = OpenWQ_utils.RequestJsonKeyVal_str(
-        OpenWQ_wqconfig, OpenWQ_output,
-        OpenWQ_json.Master["MODULES"]["LATERAL_EXCHANGE"], "MODULE_CONFIG_FILEPATH",
-        errorMsgIdentifier,
-        true);
+    // if not NONE, load module configuration file
+    if ((OpenWQ_wqconfig.LE_model->LE_module).compare("NONE") != 0){
 
-    // Save configuration file for OpenWQ_json.LE_module
-    OpenWQ_readjson::read_JSON_2class(
-        OpenWQ_wqconfig,
-        OpenWQ_output,
-        OpenWQ_utils,
-        OpenWQ_json.LE_module,
-        false,
-        "",
-        input_filepath);
+        // Get configuration file JSON file
+        input_filepath = OpenWQ_utils.RequestJsonKeyVal_str(
+            OpenWQ_wqconfig, OpenWQ_output,
+            OpenWQ_json.Master["MODULES"]["LATERAL_EXCHANGE"], "MODULE_CONFIG_FILEPATH",
+            errorMsgIdentifier,
+            true);
 
-    // Load information for the method
-    if ((OpenWQ_wqconfig.LE_model->LE_module).compare("NATIVE_LE_BOUNDMIX") == 0){
-        
-        SetConfigInfo_LEModule_BOUNDMIX(  
-            OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
-        
-    };
+        // Save configuration file for OpenWQ_json.LE_module
+        OpenWQ_readjson::read_JSON_2class(
+            OpenWQ_wqconfig,
+            OpenWQ_output,
+            OpenWQ_utils,
+            OpenWQ_json.LE_module,
+            false,
+            "",
+            input_filepath);
+
+        // Load information for the method
+        if ((OpenWQ_wqconfig.LE_model->LE_module).compare("NATIVE_LE_BOUNDMIX") == 0){
+            
+            SetConfigInfo_LEModule_BOUNDMIX(  
+                OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
+            
+        };
+    }
     
 }
 

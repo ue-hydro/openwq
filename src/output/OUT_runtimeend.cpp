@@ -186,7 +186,7 @@ int OpenWQ_output::writeResults(
                 timestr,
                 icmp);
 
-            if (export_sediment == 1 && (OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))==0){
+            if (OpenWQ_output::export_sediment == true && (OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))==0){
                 OpenWQ_output::writeHDF5_Sediment(
                     OpenWQ_json,
                     OpenWQ_hostModelconfig,
@@ -469,6 +469,7 @@ int OpenWQ_output::writeHDF5(
     std::size_t it;                         // Iterator used to locate "/" symbol in units
     double water_vol_i;                    // interactive water volume for calc of concentrationsdouble water_vol_i;                 
     bool printflag;                         // flag for printing
+    std::string msg_string;                 // interactive message to print
 
 
     // Get number of cells to print for compartment icmp
@@ -552,8 +553,16 @@ int OpenWQ_output::writeHDF5(
                     filename,
                     internal_database_name,
                     arma::hdf5_opts::append));                  // no append (to clean old file if existant)
+
             OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
-            std::cout << "opening " << filename << " " << OpenWQ_wqconfig.files[filename] << std::endl;
+
+            msg_string = "<OPENWQ> Openning output file " + filename + " " + std::to_string(OpenWQ_wqconfig.files[filename]);
+
+            ConsoleLog(
+                OpenWQ_wqconfig, 
+                msg_string, 
+                true,
+                true); 
 
         }
     }
