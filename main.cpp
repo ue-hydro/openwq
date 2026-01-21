@@ -1,4 +1,4 @@
-// Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
+// Copyright 2026, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
 // This program, openWQ, is free software: you can redistribute it and/or modify
@@ -166,19 +166,17 @@ int main(int argc, char* argv[])
         // Update compartment/Control Volume Water Volume
         // #######################################
 
-        #pragma omp parallel for num_threads(OpenWQ_wqconfig.num_threads_requested)
-        for (unsigned int nx=0;nx<nx_num;nx++){
-            for (unsigned int ny=0;ny<ny_num;ny++){
-                for (unsigned int nz=0;nz<nz_num;nz++){
+        auto& cfg = OpenWQ_hostModelconfig;
 
-                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(0,nx,ny,nz,2);
-                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(1,nx,ny,nz,2);
-                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(2,nx,ny,nz,2);
-                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(3,nx,ny,nz,2);
-                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(4,nx,ny,nz,2);
-                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(5,nx,ny,nz,2);
-                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(6,nx,ny,nz,2);
-                    OpenWQ_hostModelconfig.set_waterVol_hydromodel_at(7,nx,ny,nz,2);
+        #pragma omp parallel for collapse(3) schedule(static) \
+            num_threads(OpenWQ_wqconfig.num_threads_requested)
+        for (unsigned int nx = 0; nx < nx_num; nx++) {
+            for (unsigned int ny = 0; ny < ny_num; ny++) {
+                for (unsigned int nz = 0; nz < nz_num; nz++) {
+
+                    for (int i = 0; i < 8; ++i) {
+                        cfg.set_waterVol_hydromodel_at(i, nx, ny, nz, 2);
+                    }
 
                 }
             }
