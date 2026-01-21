@@ -12,7 +12,7 @@ sys.path.insert(0, 'hdf5_support_lib')
 ##############
 
 # Openwq output folder
-openwq_resDir = '/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/8_nrTrans_contS_PorMedia_linDecay/mizuroute/Output_OpenWQ'
+openwq_resDir = '/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/4_nrTrans_contS_PorMedia/mizuroute/Output_OpenWQ'
 
 # Output specs
 OpenWQ_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
@@ -69,11 +69,11 @@ openwq_results = h5_rlib.Read_h5_driver(
 # Plot results
 #####
 
-"""
+
 import Plot_h5_driver as h5_plib
 
 # Example 1: Temporal plot using coordinates
-
+"""
 figs1 = h5_plib.Plot_h5_driver(
         openwq_results,
         plot_type='temporal',
@@ -81,13 +81,13 @@ figs1 = h5_plib.Plot_h5_driver(
         output_dir=plots_save_dir,
         debug_mode=False
     )
-
-
+"""
+"""
 # Example 2: Spatial plot - snapshot at specific date
 figs4 = h5_plib.Plot_h5_driver(
         openwq_results,
         plot_type='spatial',
-        time_slice='2017-07-27 12:15:00',
+        time_slice=50,
         # time_slice=15
         spatial_axis='x',
         fixed_coords={'y': 0, 'z': 0},
@@ -98,14 +98,13 @@ figs4 = h5_plib.Plot_h5_driver(
 
 # mapping results
 
-
 import Map_h5_driver as h5_mplib
 
 shpfile_fullpath = "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/mizuroute_in/shapefile/shapefiles/Flowline_CO_14_cameo.shp"
 hydromodel_out_fullpath =  "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/mizuroute_out/v1.2_case1.h.2017-07-28-44100.nc"
 output_html_path = "/Users/diogocosta/Downloads/results_animation.html"
-timestep = "all"
-#timestep = [0, 500]
+#timestep = "all"
+timestep = [0, 100]
 
 h5_mplib.Map_h5_driver(
     shpfile_fullpath=shpfile_fullpath,

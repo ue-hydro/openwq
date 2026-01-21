@@ -15,16 +15,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-OPTIMIZED Interactive Plotly-based mapping for OpenWQ model results
+FIXED: OPTIMIZED Interactive Plotly-based mapping for OpenWQ model results
 Uses the results dictionary from Read_h5_driver
 Creates LIGHTWEIGHT interactive animated maps that can be viewed in browser
 
-OPTIMIZATIONS:
-- Geometry stored once, not duplicated per frame
-- Data precision reduced to 4 significant figures
-- Coordinate precision reduced to 6 decimal places
-- Efficient frame updates (data only, not geometry)
-- Proper use of plotly's animation features
+KEY FIX: Proper data-to-geometry mapping using featureidkey
 """
 
 import netCDF4
@@ -132,26 +127,26 @@ def extract_line_coordinates(geodf):
 
 
 def Map_h5_driver(shpfile_fullpath,
-                                   openwq_results,
-                                   hydromodel_out_fullpath,
-                                   output_html_path,
-                                   species_name=None,
-                                   file_extension='main',
-                                   timestep='all',
-                                   vmin=None,
-                                   vmax=None,
-                                   colorscale='RdYlGn_r',
-                                   animation_frame_duration=500,
-                                   mapbox_style='open-street-map',
-                                   zoom=6,
-                                   center=None,
-                                   simplify_tolerance=0.0001,
-                                   data_precision=4,
-                                   coord_precision=6,
-                                   show_river_network=True,
-                                   river_network_color='blue',
-                                   river_network_width=1,
-                                   model='mizuroute'):
+                  openwq_results,
+                  hydromodel_out_fullpath,
+                  output_html_path,
+                  species_name=None,
+                  file_extension='main',
+                  timestep='all',
+                  vmin=None,
+                  vmax=None,
+                  colorscale='RdYlGn_r',
+                  animation_frame_duration=500,
+                  mapbox_style='open-street-map',
+                  zoom=6,
+                  center=None,
+                  simplify_tolerance=0.0001,
+                  data_precision=4,
+                  coord_precision=6,
+                  show_river_network=True,
+                  river_network_color='blue',
+                  river_network_width=1,
+                  model='mizuroute'):
     """
     Create OPTIMIZED interactive Plotly map from OpenWQ results dictionary.
 
@@ -191,33 +186,6 @@ def Map_h5_driver(shpfile_fullpath,
     -------
     str
         Path to created HTML file
-
-    Examples
-    --------
-    # Default optimized settings (recommended)
-    >>> Map_h5_driver(
-    ...     shpfile_fullpath='/path/to/river.shp',
-    ...     openwq_results=results,
-    ...     hydromodel_out_fullpath='/path/to/mizuroute.nc',
-    ...     output_html_path='optimized_map.html',
-    ...     timestep='all'
-    ... )
-
-    # Maximum optimization (smallest file, less detail)
-    >>> Map_h5_driver(
-    ...     ...,
-    ...     simplify_tolerance=0.001,  # More simplification
-    ...     data_precision=3,           # Less precision
-    ...     coord_precision=5           # Fewer decimal places
-    ... )
-
-    # Minimal optimization (larger file, full detail)
-    >>> Map_h5_driver(
-    ...     ...,
-    ...     simplify_tolerance=None,    # No simplification
-    ...     data_precision=6,            # More precision
-    ...     coord_precision=8            # More decimal places
-    ... )
     """
 
     if model != "mizuroute":
@@ -225,10 +193,9 @@ def Map_h5_driver(shpfile_fullpath,
         return None
 
     print("=" * 70)
-    print("OPTIMIZED Interactive Plotly Map Generator")
+    print("FIXED: OPTIMIZED Interactive Plotly Map Generator")
     print("=" * 70)
 
-    # [Previous Step 1-3: Same as before - extracting data, loading shapefile, loading mizuRoute]
     # Step 1: Get data from results dictionary
     print("\nStep 1: Extracting data from results dictionary...")
 
@@ -282,6 +249,9 @@ def Map_h5_driver(shpfile_fullpath,
 
     comid = np.array(geodf['ComID'])
 
+    # FIX: Add an index column to geodf for proper mapping
+    geodf['feature_id'] = range(len(geodf))
+
     # Calculate center and zoom from bounds
     bounds = geodf.total_bounds  # minx, miny, maxx, maxy
 
@@ -325,7 +295,6 @@ def Map_h5_driver(shpfile_fullpath,
     mizuroute_out_file = netCDF4.Dataset(hydromodel_out_fullpath, 'r')
     mizuroute_out_idFeature = np.array(mizuroute_out_file.variables['reachID'])
 
-    # [Previous Step 4: Same timestep determination logic]
     print("\nStep 4: Determining timesteps...")
 
     if timestep == 'all':
@@ -472,7 +441,7 @@ def Map_h5_driver(shpfile_fullpath,
     file_size = os.path.getsize(output_html_path) / 1024 / 1024
 
     print("=" * 70)
-    print("✓ OPTIMIZED interactive map created successfully!")
+    print("✓ FIXED: OPTIMIZED interactive map created successfully!")
     print("=" * 70)
     print(f"  Output file: {output_html_path}")
     print(f"  File size: {file_size:.2f} MB")
@@ -481,7 +450,14 @@ def Map_h5_driver(shpfile_fullpath,
         print(f"\n  Interactive controls:")
         print(f"    - Play/Pause: Control animation")
         print(f"    - Basemap toggle: Turn basemap ON/OFF")
+        if show_river_network:
+            print(f"    - River network toggle: Turn river lines ON/OFF")
         print(f"    - Frame skip: Play every 1st, 2nd, 5th, 10th, or 20th frame")
+    else:
+        print(f"\n  Interactive controls:")
+        print(f"    - Basemap toggle: Turn basemap ON/OFF")
+        if show_river_network:
+            print(f"    - River network toggle: Turn river lines ON/OFF")
     print(f"\n  Optimizations applied:")
     print(f"    - Geometry simplified: {simplify_tolerance if simplify_tolerance else 'disabled'}")
     print(f"    - Data precision: {data_precision} sig figs")
@@ -501,11 +477,7 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
     """
     Create OPTIMIZED animated Plotly map
 
-    KEY OPTIMIZATIONS:
-    1. Geometry stored once, not duplicated per frame
-    2. Frames only update data values (z), not geometry
-    3. Data precision reduced
-    4. Coordinates rounded
+    KEY FIX: Use feature_id for proper data-to-geometry mapping
     """
 
     # Convert geodataframe to GeoJSON with rounded coordinates
@@ -527,6 +499,12 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
 
         if (i + 1) % 50 == 0:
             print(f"    Processed {i + 1}/{len(timesteps_to_plot)} frames...")
+
+    # DEBUG: Print data statistics
+    print(f"  Data stats for first frame:")
+    print(f"    Min: {np.nanmin(all_data[0]):.3e}")
+    print(f"    Max: {np.nanmax(all_data[0]):.3e}")
+    print(f"    Non-NaN count: {np.sum(~np.isnan(all_data[0]))}/{len(all_data[0])}")
 
     # Create frames - ONLY updating data, not geometry
     print("  Creating animation frames...")
@@ -567,27 +545,29 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
             )
         )
 
-    # Add concentration data layer (main layer - rendered on top)
+    # FIX: Add concentration data layer with proper featureidkey
     traces.append(
         go.Choroplethmapbox(
             geojson=geojson,  # Geometry stored once
-            locations=geodf.index,
+            locations=geodf['feature_id'],  # Use the feature_id we created
             z=all_data[0],
+            featureidkey="properties.feature_id",  # FIX: Tell Plotly where to find the IDs
             colorscale=colorscale,
             zmin=vmin,
             zmax=vmax,
-            marker_opacity=0.85,  # Increased opacity for better visibility
-            marker_line_width=0.2,  # Thinner lines
-            marker_line_color='rgba(255,255,255,0.3)',  # Semi-transparent white
+            marker_opacity=0.85,
+            marker_line_width=0.2,
+            marker_line_color='rgba(255,255,255,0.3)',
             colorbar=dict(
                 title=f"{units}",
                 thickness=15,
                 len=0.7,
                 x=1.02
             ),
-            hovertemplate='<b>Reach</b>: %{location}<br>' +
+            hovertemplate='<b>ComID</b>: %{customdata}<br>' +
                           f'<b>{chemical}</b>: ' + '%{z:.3e}<br>' +
-                          '<extra></extra>'
+                          '<extra></extra>',
+            customdata=geodf['ComID']  # Show ComID on hover
         )
     )
 
@@ -597,7 +577,6 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
         frames=frames
     )
 
-    # Add slider
     # Add slider - positioned BELOW the map
     sliders = [dict(
         active=0,
@@ -618,9 +597,9 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
                 args=[
                     [frame.name],
                     dict(
-                        frame=dict(duration=animation_frame_duration, redraw=False),  # redraw=False for speed
+                        frame=dict(duration=animation_frame_duration, redraw=False),
                         mode="immediate",
-                        transition=dict(duration=0)  # No transition for speed
+                        transition=dict(duration=0)
                     )
                 ],
                 method="animate",
@@ -630,14 +609,14 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
         ]
     )]
 
-    # Add play/pause buttons - positioned BELOW the map, left of slider
+    # Add control buttons - organized in two rows for better layout
     updatemenus = [
-        # Play/Pause buttons
+        # Row 1: Play/Pause buttons
         dict(
             type="buttons",
             direction="left",
             x=0.05,
-            y=-0.25,  # Below the slider
+            y=-0.20,  # First row
             xanchor="left",
             yanchor="bottom",
             showactive=False,
@@ -667,12 +646,12 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
                 )
             ]
         ),
-        # Basemap toggle button
+        # Row 1: Basemap toggle button
         dict(
             type="buttons",
             direction="left",
-            x=0.25,
-            y=-0.25,
+            x=0.35,
+            y=-0.20,  # First row
             xanchor="left",
             yanchor="bottom",
             showactive=True,
@@ -689,21 +668,50 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
                     args=[{"mapbox.style": "white-bg"}]
                 )
             ]
-        ),
-        # Frame skip control - creates frame lists for different skip values
+        )
+    ]
+
+    # Add river network toggle button if river network is shown
+    if show_river_network:
+        updatemenus.append(
+            dict(
+                type="buttons",
+                direction="left",
+                x=0.65,
+                y=-0.20,  # First row
+                xanchor="left",
+                yanchor="bottom",
+                showactive=True,
+                active=0,
+                buttons=[
+                    dict(
+                        label="🌊 Rivers ON",
+                        method="update",
+                        args=[{"visible": [True, True]}]  # Both traces visible
+                    ),
+                    dict(
+                        label="🌊 Rivers OFF",
+                        method="update",
+                        args=[{"visible": [False, True]}]  # Only concentration visible
+                    )
+                ]
+            )
+        )
+
+    # Row 2: Frame skip control
+    updatemenus.append(
         dict(
             type="buttons",
             direction="left",
-            x=0.48,
-            y=-0.25,
+            x=0.05,
+            y=-0.28,  # Second row - below other buttons
             xanchor="left",
             yanchor="bottom",
             showactive=True,
             active=0,
             buttons=[
-                # Play all frames (skip 1)
                 dict(
-                    label="▶ Every frame",
+                    label="⏩ Every frame",
                     method="animate",
                     args=[
                         [frames[i].name for i in range(len(frames))],
@@ -715,9 +723,8 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
                         )
                     ]
                 ),
-                # Skip 2 frames
                 dict(
-                    label="▶ Every 2nd",
+                    label="⏩ Every 2nd",
                     method="animate",
                     args=[
                         [frames[i].name for i in range(0, len(frames), 2)],
@@ -729,9 +736,8 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
                         )
                     ]
                 ),
-                # Skip 5 frames
                 dict(
-                    label="▶ Every 5th",
+                    label="⏩ Every 5th",
                     method="animate",
                     args=[
                         [frames[i].name for i in range(0, len(frames), 5)],
@@ -743,9 +749,8 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
                         )
                     ]
                 ),
-                # Skip 10 frames
                 dict(
-                    label="▶ Every 10th",
+                    label="⏩ Every 10th",
                     method="animate",
                     args=[
                         [frames[i].name for i in range(0, len(frames), 10)],
@@ -757,9 +762,8 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
                         )
                     ]
                 ),
-                # Skip 20 frames
                 dict(
-                    label="▶ Every 20th",
+                    label="⏩ Every 20th",
                     method="animate",
                     args=[
                         [frames[i].name for i in range(0, len(frames), 20)],
@@ -773,7 +777,7 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
                 )
             ]
         )
-    ]
+    )
 
     # Update layout
     fig.update_layout(
@@ -789,7 +793,7 @@ def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_o
             'font': {'size': 20}
         },
         height=800,
-        margin={"r": 50, "t": 120, "l": 50, "b": 180},  # Increased bottom margin for slider
+        margin={"r": 50, "t": 120, "l": 50, "b": 180},
         sliders=sliders,
         updatemenus=updatemenus
     )
@@ -812,6 +816,12 @@ def _create_static_plotly_map(ttdata, xyz_coords, geodf, comid, mizuroute_out_id
 
     # Round data
     geodf_openwq_wq = np.round(geodf_openwq_wq, data_precision)
+
+    # DEBUG: Print data statistics
+    print(f"  Data stats:")
+    print(f"    Min: {np.nanmin(geodf_openwq_wq):.3e}")
+    print(f"    Max: {np.nanmax(geodf_openwq_wq):.3e}")
+    print(f"    Non-NaN count: {np.sum(~np.isnan(geodf_openwq_wq))}/{len(geodf_openwq_wq)}")
 
     # Convert to GeoJSON with rounded coordinates
     geojson = json.loads(geodf.to_json())
@@ -838,31 +848,87 @@ def _create_static_plotly_map(ttdata, xyz_coords, geodf, comid, mizuroute_out_id
             )
         )
 
-    # Add concentration data layer (rendered on top)
+    # FIX: Add concentration data layer with proper featureidkey
     traces.append(
         go.Choroplethmapbox(
             geojson=geojson,
-            locations=geodf.index,
+            locations=geodf['feature_id'],  # Use the feature_id we created
             z=geodf_openwq_wq,
+            featureidkey="properties.feature_id",  # FIX: Tell Plotly where to find the IDs
             colorscale=colorscale,
             zmin=vmin,
             zmax=vmax,
-            marker_opacity=0.85,  # Increased opacity for better visibility
-            marker_line_width=0.2,  # Thinner lines
-            marker_line_color='rgba(255,255,255,0.3)',  # Semi-transparent white
+            marker_opacity=0.85,
+            marker_line_width=0.2,
+            marker_line_color='rgba(255,255,255,0.3)',
             colorbar=dict(
                 title=f"{units}",
                 thickness=15,
                 len=0.7,
                 x=1.02
             ),
-            hovertemplate='<b>Reach</b>: %{location}<br>' +
+            hovertemplate='<b>ComID</b>: %{customdata}<br>' +
                           f'<b>{chemical}</b>: ' + '%{z:.3e}<br>' +
-                          '<extra></extra>'
+                          '<extra></extra>',
+            customdata=geodf['ComID']  # Show ComID on hover
         )
     )
 
     fig = go.Figure(data=traces)
+
+    # Create updatemenus for toggle buttons - better organized
+    updatemenus = [
+        # Basemap toggle button
+        dict(
+            type="buttons",
+            direction="left",
+            x=0.05,
+            y=0.02,
+            xanchor="left",
+            yanchor="bottom",
+            showactive=True,
+            active=0,
+            buttons=[
+                dict(
+                    label="🗺️ Basemap ON",
+                    method="relayout",
+                    args=[{"mapbox.style": mapbox_style}]
+                ),
+                dict(
+                    label="🗺️ Basemap OFF",
+                    method="relayout",
+                    args=[{"mapbox.style": "white-bg"}]
+                )
+            ]
+        )
+    ]
+
+    # Add river network toggle button if river network is shown
+    if show_river_network:
+        updatemenus.append(
+            dict(
+                type="buttons",
+                direction="left",
+                x=0.30,  # More spacing from basemap button
+                y=0.02,
+                xanchor="left",
+                yanchor="bottom",
+                showactive=True,
+                active=0,
+                buttons=[
+                    dict(
+                        label="🌊 Rivers ON",
+                        method="update",
+                        args=[{"visible": [True, True]}]  # Both traces visible
+                    ),
+                    dict(
+                        label="🌊 Rivers OFF",
+                        method="update",
+                        args=[{"visible": [False, True]}]  # Only concentration visible
+                    )
+                ]
+            )
+        )
 
     fig.update_layout(
         mapbox_style=mapbox_style,
@@ -877,7 +943,8 @@ def _create_static_plotly_map(ttdata, xyz_coords, geodf, comid, mizuroute_out_id
             'font': {'size': 20}
         },
         height=800,
-        margin={"r": 50, "t": 100, "l": 50, "b": 50}
+        margin={"r": 50, "t": 100, "l": 50, "b": 50},
+        updatemenus=updatemenus
     )
 
     return fig
@@ -905,12 +972,14 @@ def _map_data_to_geodf(data_values, xyz_coords, geodf, comid, mizuroute_out_idFe
 
 if __name__ == "__main__":
     print("=" * 70)
-    print("OpenWQ OPTIMIZED Plotly Interactive Mapping")
+    print("OpenWQ FIXED: OPTIMIZED Plotly Interactive Mapping")
     print("=" * 70)
+    print("\nKey Fix:")
+    print("  ✓ Proper data-to-geometry mapping using featureidkey")
+    print("  ✓ Better organized button layout (no overlapping!)")
     print("\nFeatures:")
     print("  ✓ 5-10x smaller file sizes")
     print("  ✓ Faster browser loading")
     print("  ✓ Geometry stored once, not duplicated")
     print("  ✓ Reduced data precision")
     print("  ✓ Optimized animation performance")
-    print("\nExample usage - see GUIDE_OPTIMIZED_Plotly.md")
