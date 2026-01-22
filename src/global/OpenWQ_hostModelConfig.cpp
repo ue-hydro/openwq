@@ -20,6 +20,13 @@
 // Constructor
 OpenWQ_hostModelconfig::OpenWQ_hostModelconfig() 
 {
+
+    // Water volumes from hostmodel
+    this->cellid_to_wq = std::unique_ptr<
+        std::vector<                            // compartments
+        arma::Cube<                             // ix, iy, iz
+        double>>>(new std::vector<arma::cube>); 
+
     // Water volumes from hostmodel
     this->waterVol_hydromodel = std::unique_ptr<
         std::vector<                            // compartments
@@ -46,6 +53,39 @@ OpenWQ_hostModelconfig::~OpenWQ_hostModelconfig()
 /******** 
  * Methods 
  * *********/
+
+// cellid_to_wq methods to map OpenWQ elements in the outputs
+// set cellid_to_wq label
+void OpenWQ_hostModelconfig::set_cellid_to_wqlabel(const std::string& label) {
+    cellid_to_wqlabel = label;
+}
+
+// Const version - returns const reference to unique_ptr
+std::string OpenWQ_hostModelconfig::get_cellid_to_wqlabel() const {
+    return cellid_to_wqlabel;
+}
+
+void OpenWQ_hostModelconfig::set_cellid_to_wq_size(arma::Cube<double> domain_xyz) 
+{
+    (*this->cellid_to_wq).push_back(domain_xyz);
+}
+
+const std::unique_ptr<std::vector<arma::Cube<double>>>& OpenWQ_hostModelconfig::get_cellid_to_wq() const {
+    return cellid_to_wq;
+}
+
+// Non-const version - returns non-const reference to unique_ptr
+std::unique_ptr<std::vector<arma::Cube<double>>>& OpenWQ_hostModelconfig::get_cellid_to_wq() {
+    return cellid_to_wq;
+}
+
+// set cellid_to_wq - ids fron hostmodel to map OpenWQ elements in the outputs
+void OpenWQ_hostModelconfig::set_cellid_to_wq_at(int index, int ix, int iy, int iz, double value) 
+{
+    (*this->cellid_to_wq)[index](ix,iy,iz) =    value;
+}
+
+
 // Add a compartment to the vector of compartments
 void OpenWQ_hostModelconfig::add_HydroComp(int index, std::string name, int num_cells_x, 
                     int num_cells_y, int num_cells_z) 

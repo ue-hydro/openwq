@@ -126,7 +126,7 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,
             if '/xyz_elements' not in hf:
                 print(f"<main_hdf5> Warning: '/xyz_elements' not found in {filename_fix}.h5")
                 return []
-
+            print(all_keys)
             xyz_elements_source = hf['/xyz_elements'][:]
 
             # Skip if no data

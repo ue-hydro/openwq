@@ -86,6 +86,9 @@ void OpenWQ_initiate::initmemory(
         // Allocate Memory
         ######################################## */
         
+        // Set 
+        OpenWQ_hostModelconfig.set_cellid_to_wq_size(domain_xyz);
+
         // OpenWQ state variable
         (*OpenWQ_vars.chemass)(icmp) = domain_field;
 

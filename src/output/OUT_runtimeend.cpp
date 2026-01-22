@@ -554,6 +554,19 @@ int OpenWQ_output::writeHDF5(
                     internal_database_name,
                     arma::hdf5_opts::append));                  // no append (to clean old file if existant)
 
+            // add cellid_to_wq methods to allow mapping OpenWQ elements with the hostmodel outputs
+            internal_database_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel(); 
+            // Save the matrix/data -> Get reference to the unique_ptr
+            auto& cellid_ptr = OpenWQ_hostModelconfig.get_cellid_to_wq();
+            // Check if pointer is valid and vector is not empty
+            if (cellid_ptr && !cellid_ptr->empty()) {
+                // Access the first Cube in the vector and save it
+                (*cellid_ptr)[0].save(arma::hdf5_name(
+                    filename,
+                    internal_database_name,
+                    arma::hdf5_opts::append));
+            }
+
             OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
 
             msg_string = "<OPENWQ> Openning output file " + filename + " " + std::to_string(OpenWQ_wqconfig.files[filename]);
@@ -741,6 +754,20 @@ int OpenWQ_output::writeHDF5_Sediment(
                 filename,
                 internal_database_name,
                 arma::hdf5_opts::append));                  // no append (to clean old file if existant)
+
+        // add cellid_to_wq methods to allow mapping OpenWQ elements with the hostmodel outputs
+            internal_database_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel(); 
+            // Save the matrix/data -> Get reference to the unique_ptr
+            auto& cellid_ptr = OpenWQ_hostModelconfig.get_cellid_to_wq();
+            // Check if pointer is valid and vector is not empty
+            if (cellid_ptr && !cellid_ptr->empty()) {
+                // Access the first Cube in the vector and save it
+                (*cellid_ptr)[0].save(arma::hdf5_name(
+                    filename,
+                    internal_database_name,
+                    arma::hdf5_opts::append));
+            }
+            
         OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
     
     }

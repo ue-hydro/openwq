@@ -11,6 +11,7 @@ sys.path.insert(0, 'hdf5_support_lib')
 # CONFIGURATION
 ##############
 
+"""
 # Openwq output folder
 openwq_resDir = '/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/4_nrTrans_contS_PorMedia/mizuroute/Output_OpenWQ'
 
@@ -26,9 +27,9 @@ Cells_spatial = 'all'
 
 # Where to save plots?
 plots_save_dir = '/Users/diogocosta/Downloads/'
-
-
 """
+
+
 # Openwq output folder
 openwq_resDir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
 
@@ -44,7 +45,7 @@ Cells_spatial = 'all'
 
 # Where to save plots?
 plots_save_dir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
-"""
+
 
 ###############
 # CALLING THE NECESSARY SUPPORTING SCRIPS
@@ -114,3 +115,23 @@ h5_mplib.Map_h5_driver(
     timestep = timestep,
     model="mizuroute"
 )
+
+
+"""
+# test
+import read_ncdf as read_ncdf
+
+shpfile_fullpath = "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/mizuroute_in/shapefile/shapefiles/Flowline_CO_14_cameo.shp"
+mizuroute_out_fullpath = '/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/4_nrTrans_contS_PorMedia/mizuroute/mizuroute_out/v1.2_case1.h.1950-01-02-43200.nc'
+folderSaveFigs_fullpath = "/Users/diogocosta/Downloads/"
+gif_name_fullpath = 'results_animation.html'
+print_step = 10
+
+read_ncdf.MapGeoPandas(shpfile_fullpath,
+                openwq_results,
+                mizuroute_out_fullpath,
+                folderSaveFigs_fullpath,
+                gif_name_fullpath,
+                print_step)
+
+"""
