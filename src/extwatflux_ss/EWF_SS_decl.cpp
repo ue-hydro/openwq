@@ -1339,7 +1339,7 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
         domain_EWF_h5
             .load(arma::hdf5_name(
                 ewf_filenamePath,          // file name
-                "xyz_elements_total"));          // options
+                "xyz_elements_size"));          // options
 
         // Check if entries of INTERACTION_INTERFACE are valid
         // Returns if not a valid interface
