@@ -90,6 +90,7 @@ class OpenWQ_hostModelconfig
         // get cellid_to_wq element ids
         void set_cellid_to_wq_size(arma::Cube<double> waterVol);
         void set_cellid_to_wq_at(int index, int ix, int iy, int iz, double value);
+        double get_cellid_to_wq_at(int index, int ix, int iy, int iz);
 
         /********************
          * HydroTuple methods

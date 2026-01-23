@@ -84,6 +84,10 @@ void OpenWQ_hostModelconfig::set_cellid_to_wq_at(int index, int ix, int iy, int 
 {
     (*this->cellid_to_wq)[index](ix,iy,iz) =    value;
 }
+double OpenWQ_hostModelconfig::get_cellid_to_wq_at(int index, int ix, int iy, int iz) 
+{
+    return (*this->cellid_to_wq)[index](ix,iy,iz);
+}
 
 
 // Add a compartment to the vector of compartments

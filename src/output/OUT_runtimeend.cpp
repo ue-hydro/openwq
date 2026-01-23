@@ -463,7 +463,7 @@ int OpenWQ_output::writeHDF5(
     unsigned int num_cells2print;           // iteractive number of cells to print
     arma::mat cells2print_xyzElements;          // matrix with the x,y,z combinations for printing
                                             // it will be equatl to OpenWQ_wqconfig.cells2print_vec[icmp] + 1;
-    arma::mat cells2print_xyzElements_total(1,3); // nx, ny and nz (entire domain)
+    arma::mat cells2print_xyzElements_size(1,3); // nx, ny and nz (entire domain)
     std::vector<double> unit_multiplers;    // multipliers to convert units
     std::string units_string;               // units of output
     std::size_t it;                         // Iterator used to locate "/" symbol in units
@@ -485,9 +485,9 @@ int OpenWQ_output::writeHDF5(
     CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
     
     // Get compartment nx, ny, nz
-    cells2print_xyzElements_total(0,0) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
-    cells2print_xyzElements_total(0,1) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
-    cells2print_xyzElements_total(0,2) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
+    cells2print_xyzElements_size(0,0) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
+    cells2print_xyzElements_size(0,1) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
+    cells2print_xyzElements_size(0,2) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
 
     // num of chemicals to print
     num_chem2print = OpenWQ_wqconfig.chem2print.size();
@@ -547,25 +547,36 @@ int OpenWQ_output::writeHDF5(
 
             // nx, ny, nz
             // x,y,z elements
-            internal_database_name = "xyz_elements_total"; 
-            cells2print_xyzElements_total
+            internal_database_name = "xyz_elements_size"; 
+            cells2print_xyzElements_size
                 .save(arma::hdf5_name(
                     filename,
                     internal_database_name,
                     arma::hdf5_opts::append));                  // no append (to clean old file if existant)
-
-            // add cellid_to_wq methods to allow mapping OpenWQ elements with the hostmodel outputs
+            
+            // ----------------------------------------
+            // Getting the mapping between hostmodel and openwq
+            // ----------------------------------------
+            // Get name of the hostmodel ID variable: add cellid_to_wq methods to allow mapping OpenWQ elements with the hostmodel outputs
             internal_database_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel(); 
-            // Save the matrix/data -> Get reference to the unique_ptr
-            auto& cellid_ptr = OpenWQ_hostModelconfig.get_cellid_to_wq();
-            // Check if pointer is valid and vector is not empty
-            if (cellid_ptr && !cellid_ptr->empty()) {
-                // Access the first Cube in the vector and save it
-                (*cellid_ptr)[0].save(arma::hdf5_name(
-                    filename,
-                    internal_database_name,
-                    arma::hdf5_opts::append));
+
+            // Identifying only the requested cells to print
+            arma::mat cells2print_cmpt = OpenWQ_wqconfig.cells2print_vec[icmp];
+
+            // Use arma::vec directly (no std::vector intermediate)
+            arma::vec cells2print_cmpt_hostmodel_ids(cells2print_cmpt.n_rows);
+
+            for (arma::uword rcnt = 0; rcnt < cells2print_cmpt.n_rows; ++rcnt){
+                int ix_tmp = static_cast<int>(cells2print_cmpt(rcnt, 0));
+                int iy_tmp = static_cast<int>(cells2print_cmpt(rcnt, 1));
+                int iz_tmp = static_cast<int>(cells2print_cmpt(rcnt, 2));
+                cells2print_cmpt_hostmodel_ids(rcnt) = 
+                    OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp);
             }
+            cells2print_cmpt_hostmodel_ids.save(arma::hdf5_name(
+                filename, 
+                internal_database_name, 
+                arma::hdf5_opts::append));
 
             OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
 
@@ -688,7 +699,7 @@ int OpenWQ_output::writeHDF5_Sediment(
     unsigned int num_cells2print;           // iteractive number of cells to print
     arma::mat cells2print_xyzElements;          // matrix with the x,y,z combinations for printing
                                             // it will be equatl to OpenWQ_wqconfig.cells2print_vec[icmp] + 1;
-    arma::mat cells2print_xyzElements_total(1,3); // nx, ny and nz (entire domain)
+    arma::mat cells2print_xyzElements_size(1,3); // nx, ny and nz (entire domain)
     std::vector<double> unit_multiplers;    // multipliers to convert units
     std::string units_string;               // units of output
     std::size_t it;                         // Iterator used to locate "/" symbol in units
@@ -714,9 +725,9 @@ int OpenWQ_output::writeHDF5_Sediment(
     CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
     
     // Get compartment nx, ny, nz
-    cells2print_xyzElements_total(0,0) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
-    cells2print_xyzElements_total(0,1) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
-    cells2print_xyzElements_total(0,2) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
+    cells2print_xyzElements_size(0,0) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
+    cells2print_xyzElements_size(0,1) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
+    cells2print_xyzElements_size(0,2) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
 
     // ########################################
     // Save ix, iy and iz in dataset (the first time)
@@ -748,26 +759,38 @@ int OpenWQ_output::writeHDF5_Sediment(
 
         // nx, ny, nz
         // x,y,z elements
-        internal_database_name = "xyz_elements_total"; 
-        cells2print_xyzElements_total
+        internal_database_name = "xyz_elements_size"; 
+        cells2print_xyzElements_size
             .save(arma::hdf5_name(
                 filename,
                 internal_database_name,
                 arma::hdf5_opts::append));                  // no append (to clean old file if existant)
 
-        // add cellid_to_wq methods to allow mapping OpenWQ elements with the hostmodel outputs
-            internal_database_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel(); 
-            // Save the matrix/data -> Get reference to the unique_ptr
-            auto& cellid_ptr = OpenWQ_hostModelconfig.get_cellid_to_wq();
-            // Check if pointer is valid and vector is not empty
-            if (cellid_ptr && !cellid_ptr->empty()) {
-                // Access the first Cube in the vector and save it
-                (*cellid_ptr)[0].save(arma::hdf5_name(
-                    filename,
-                    internal_database_name,
-                    arma::hdf5_opts::append));
-            }
-            
+        // ----------------------------------------
+        // Getting the mapping between hostmodel and openwq
+        // ----------------------------------------
+        // Get name of the hostmodel ID variable: add cellid_to_wq methods to allow mapping OpenWQ elements with the hostmodel outputs
+        internal_database_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel(); 
+
+        // Identifying only the requested cells to print
+        arma::mat cells2print_cmpt = OpenWQ_wqconfig.cells2print_vec[icmp];
+
+        // Use arma::vec directly (no std::vector intermediate)
+        arma::vec cells2print_cmpt_hostmodel_ids(cells2print_cmpt.n_rows);
+
+        for (arma::uword rcnt = 0; rcnt < cells2print_cmpt.n_rows; ++rcnt){
+            int ix_tmp = static_cast<int>(cells2print_cmpt(rcnt, 0));
+            int iy_tmp = static_cast<int>(cells2print_cmpt(rcnt, 1));
+            int iz_tmp = static_cast<int>(cells2print_cmpt(rcnt, 2));
+            cells2print_cmpt_hostmodel_ids(rcnt) = 
+                OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp);
+        }
+        cells2print_cmpt_hostmodel_ids.save(arma::hdf5_name(
+            filename, 
+            internal_database_name, 
+            arma::hdf5_opts::append));
+
+
         OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
     
     }

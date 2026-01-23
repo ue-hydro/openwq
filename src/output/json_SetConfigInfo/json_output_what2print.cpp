@@ -352,7 +352,7 @@ void OpenWQ_readjson::SetConfigInfo_output_what2print(
 
         // Add the complete list of cells to print
         OpenWQ_wqconfig.cells2print_vec.push_back(cells2print_cmpt);
-        
+
          // all went well in "try", so set print to true
          // and noValPrintRequest_flag to true
         if(cells2print_cmpt.is_empty() == false){
