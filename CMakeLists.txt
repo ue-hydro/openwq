@@ -21,7 +21,7 @@
 # 5) Open a shell inside that container: docker exec -it <container id> /bin/bash
 # 6) Armadillo now disables default hdf5 support for save/load, so inside the container you need to go to “/usr/include/armadillo_bits/config.hpp” and uncomment #define ARMA_USE_HDF5
 # 7) Inside the contained, go to the openwq folder that contains CMakeLists.txt, Dockerfile, and docker-compose.yml
-# 8) Compile with e.g.: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=mizuroute_lakes_openwq -DCMAKE_BUILD_TYPE=debug .; make -j 2; rm *.mod
+# 8) Compile with e.g.: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=summa_openwq -DCMAKE_BUILD_TYPE=debug .; make -j 2; rm *.mod
 
 ###############
 # Running it
@@ -302,8 +302,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
     # TURN ON OpenWQ in SUMMA source code
     add_compile_definitions(OPENWQ_ACTIVE)
 
-    SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    SET(SUMMA_DIR ${PARENT_DIR}../../../../../../)
+    SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+    SET(SUMMA_DIR ${PARENT_DIR}../../../../../)
     
     SET(OPENWQ_DIR ${PARENT_DIR}/openwq/openwq)
     SET(EXEC_DIR ${OPENWQ_DIR}/bin)
