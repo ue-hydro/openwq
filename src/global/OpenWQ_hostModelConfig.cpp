@@ -94,15 +94,9 @@ void OpenWQ_hostModelconfig::set_cellid_to_wq_at(int index, int ix, int iy, int 
 {
     (*this->cellid_to_wq)[index][ix][iy][iz] = value;
 }
-long long OpenWQ_hostModelconfig::get_cellid_to_wq_at(int index, int ix, int iy, int iz) 
+std::string OpenWQ_hostModelconfig::get_cellid_to_wq_at(int index, int ix, int iy, int iz) 
 {
-    const std::string &s = (*this->cellid_to_wq)[index][ix][iy][iz];
-    if (s.empty()) return 0;
-    try {
-        return std::stoll(s);
-    } catch (...) {
-        return 0;
-    }
+    return (*this->cellid_to_wq)[index][ix][iy][iz];
 }
 
 

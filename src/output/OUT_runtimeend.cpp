@@ -563,20 +563,36 @@ int OpenWQ_output::writeHDF5(
             // Identifying only the requested cells to print
             arma::mat cells2print_cmpt = OpenWQ_wqconfig.cells2print_vec[icmp];
 
-            // Use arma::vec directly (no std::vector intermediate)
-            arma::vec cells2print_cmpt_hostmodel_ids(cells2print_cmpt.n_rows);
-
+            // Preserve string IDs and write to HDF5 as variable-length strings
+            std::vector<std::string> host_ids;
+            host_ids.reserve(cells2print_cmpt.n_rows);
             for (arma::uword rcnt = 0; rcnt < cells2print_cmpt.n_rows; ++rcnt){
                 int ix_tmp = static_cast<int>(cells2print_cmpt(rcnt, 0));
                 int iy_tmp = static_cast<int>(cells2print_cmpt(rcnt, 1));
                 int iz_tmp = static_cast<int>(cells2print_cmpt(rcnt, 2));
-                cells2print_cmpt_hostmodel_ids(rcnt) = 
-                    static_cast<double>(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp));
+                host_ids.push_back(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp));
             }
-            cells2print_cmpt_hostmodel_ids.save(arma::hdf5_name(
-                filename, 
-                internal_database_name, 
-                arma::hdf5_opts::append));
+
+            // Prepare C string pointers
+            std::vector<const char*> cstrs(host_ids.size());
+            for (size_t i = 0; i < host_ids.size(); ++i) cstrs[i] = host_ids[i].c_str();
+
+            // Open file, create variable-length string dataset and write
+            hid_t file_h = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
+            if (file_h >= 0 && !host_ids.empty()){
+                hsize_t dims[1]; dims[0] = host_ids.size();
+                hid_t space = H5Screate_simple(1, dims, NULL);
+                hid_t dtype = H5Tcopy(H5T_C_S1);
+                H5Tset_size(dtype, H5T_VARIABLE);
+                hid_t dset = H5Dcreate(file_h, internal_database_name.c_str(), dtype, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (dset >= 0) {
+                    H5Dwrite(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, cstrs.data());
+                    H5Dclose(dset);
+                }
+                H5Tclose(dtype);
+                H5Sclose(space);
+                H5Fclose(file_h);
+            }
 
             OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
 
@@ -775,20 +791,34 @@ int OpenWQ_output::writeHDF5_Sediment(
         // Identifying only the requested cells to print
         arma::mat cells2print_cmpt = OpenWQ_wqconfig.cells2print_vec[icmp];
 
-        // Use arma::vec directly (no std::vector intermediate)
-        arma::vec cells2print_cmpt_hostmodel_ids(cells2print_cmpt.n_rows);
-
+        // Preserve string IDs and write to HDF5 as variable-length strings
+        std::vector<std::string> host_ids;
+        host_ids.reserve(cells2print_cmpt.n_rows);
         for (arma::uword rcnt = 0; rcnt < cells2print_cmpt.n_rows; ++rcnt){
             int ix_tmp = static_cast<int>(cells2print_cmpt(rcnt, 0));
             int iy_tmp = static_cast<int>(cells2print_cmpt(rcnt, 1));
             int iz_tmp = static_cast<int>(cells2print_cmpt(rcnt, 2));
-            cells2print_cmpt_hostmodel_ids(rcnt) = 
-                static_cast<double>(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp));
+            host_ids.push_back(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp));
         }
-        cells2print_cmpt_hostmodel_ids.save(arma::hdf5_name(
-            filename, 
-            internal_database_name, 
-            arma::hdf5_opts::append));
+
+        std::vector<const char*> cstrs(host_ids.size());
+        for (size_t i = 0; i < host_ids.size(); ++i) cstrs[i] = host_ids[i].c_str();
+
+        hid_t file_h = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
+        if (file_h >= 0 && !host_ids.empty()){
+            hsize_t dims[1]; dims[0] = host_ids.size();
+            hid_t space = H5Screate_simple(1, dims, NULL);
+            hid_t dtype = H5Tcopy(H5T_C_S1);
+            H5Tset_size(dtype, H5T_VARIABLE);
+            hid_t dset = H5Dcreate(file_h, internal_database_name.c_str(), dtype, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+            if (dset >= 0) {
+                H5Dwrite(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, cstrs.data());
+                H5Dclose(dset);
+            }
+            H5Tclose(dtype);
+            H5Sclose(space);
+            H5Fclose(file_h);
+        }
 
 
         OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
