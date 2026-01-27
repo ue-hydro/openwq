@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "models_TD/headerfile_td.hpp"
+#include "models_TD/headerfile_TD.hpp"
 
 
 void OpenWQ_TD_model::TD_driver_run(
