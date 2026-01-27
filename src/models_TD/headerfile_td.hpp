@@ -17,8 +17,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#ifndef OPENWQ_TD_HEADERH_INCLUDED
-#define OPENWQ_TD_HEADERH_INCLUDED
+#ifndef OPENWQ_TD_HEADERFILE_H_INCLUDED
+#define OPENWQ_TD_HEADERFILE_H_INCLUDED
 
 #include <armadillo>
 #include <string>
@@ -33,7 +33,7 @@
 #include "output/headerfile_OUT.hpp"
 
 #include "models_CH/headerfile_CH.hpp"
-#include "models_TD/headerfile_td.hpp"
+#include "models_TD/headerfile_TD.hpp"
 
 
 class OpenWQ_TD_model{
