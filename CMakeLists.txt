@@ -305,12 +305,13 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
     SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
     SET(SUMMA_DIR ${PARENT_DIR}../../../../../)
     
-    SET(OPENWQ_DIR ${PARENT_DIR}/openwq/openwq)
+    SET(OPENWQ_INTERFACE_DIR ${PARENT_DIR}/openwq)
+    SET(OPENWQ_DIR ${PARENT_DIR}/openwq/openwq) 
     SET(EXEC_DIR ${OPENWQ_DIR}/bin)
 
     FILE(GLOB HYDROLINK_SOURCES 
-        ${PARENT_DIR}/OpenWQ_hydrolink.cpp
-        ${PARENT_DIR}/OpenWQ_interface.cpp)
+        ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp
+        ${OPENWQ_INTERFACE_DIR}/OpenWQ_interface.cpp)
 
     # File definitions for subcomponents - For Summa
     SET(DRIVER_DIR ${SUMMA_DIR}/build/source/driver)
@@ -319,7 +320,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
     SET(DSHARE_DIR ${SUMMA_DIR}/build/source/dshare)
     SET(NOAHMP_DIR ${SUMMA_DIR}/build/source/noah-mp)
     SET(ENGINE_DIR ${SUMMA_DIR}/build/source/engine)
-    SET(OPENWQ_INTERFACE_DIR ${SUMMA_DIR}/build/source/openwq)
+    
     #  utilities
     SET(NRUTIL
         ${ENGINE_DIR}/nrtype.f90
@@ -474,7 +475,7 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa_openwq")
         ${DRIVER_DIR}/summa_forcing.f90
         ${DRIVER_DIR}/summa_modelRun.f90
         ${DRIVER_DIR}/summa_writeOutput.f90
-        ${PARENT_DIR}/summa_openWQ.f90
+        ${OPENWQ_INTERFACE_DIR}/summa_openWQ.f90
         ${DRIVER_DIR}/summa_driver.f90)
 
             
