@@ -13,7 +13,7 @@ sys.path.insert(0, 'hdf5_support_lib')
 
 """
 # Openwq output folder
-openwq_resDir = '/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/4_nrTrans_contS_PorMedia/mizuroute/Output_OpenWQ'
+openwq_resDir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
 
 # Output specs
 OpenWQ_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
@@ -29,7 +29,24 @@ Cells_spatial = 'all'
 plots_save_dir = '/Users/diogocosta/Downloads/'
 """
 
+# Openwq output folder
+openwq_resDir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
 
+# Output specs
+OpenWQ_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
+OpenWQ_output_debugmode = False
+
+# What to print?
+Chemical_species = ["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"]
+Concentration_units = "MG/L"
+Compartments = ['RIVER_NETWORK_REACHES']
+Cells_spatial = 'all'
+
+# Where to save plots?
+plots_save_dir = '/Users/diogocosta/Downloads/'
+
+"""
+# SUMMA
 # Openwq output folder
 openwq_resDir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
 
@@ -45,7 +62,7 @@ Cells_spatial = 'all'
 
 # Where to save plots?
 plots_save_dir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
-
+"""
 
 ###############
 # CALLING THE NECESSARY SUPPORTING SCRIPS
