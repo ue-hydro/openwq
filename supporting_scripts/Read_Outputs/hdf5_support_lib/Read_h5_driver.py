@@ -178,7 +178,7 @@ def Read_h5_save_engine(
 
                 # Replace noDataFlag with NaN
                 data_i[data_i==noDataFlag] = np.nan
-                data_i[data_i != noDataFlag] = 0.1 * tstep # TO REMOVE AFTER DEBUGGING
+                #data_i[data_i != noDataFlag] = 0.1 * tstep # TO REMOVE AFTER DEBUGGING
 
                 data_all[tstep, :] = data_i[0, indices_validated]
                 time_all.append(timestamp)
