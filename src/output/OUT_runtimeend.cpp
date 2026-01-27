@@ -571,7 +571,7 @@ int OpenWQ_output::writeHDF5(
                 int iy_tmp = static_cast<int>(cells2print_cmpt(rcnt, 1));
                 int iz_tmp = static_cast<int>(cells2print_cmpt(rcnt, 2));
                 cells2print_cmpt_hostmodel_ids(rcnt) = 
-                    OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp);
+                    static_cast<double>(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp));
             }
             cells2print_cmpt_hostmodel_ids.save(arma::hdf5_name(
                 filename, 
@@ -783,7 +783,7 @@ int OpenWQ_output::writeHDF5_Sediment(
             int iy_tmp = static_cast<int>(cells2print_cmpt(rcnt, 1));
             int iz_tmp = static_cast<int>(cells2print_cmpt(rcnt, 2));
             cells2print_cmpt_hostmodel_ids(rcnt) = 
-                OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp);
+                static_cast<double>(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp));
         }
         cells2print_cmpt_hostmodel_ids.save(arma::hdf5_name(
             filename, 

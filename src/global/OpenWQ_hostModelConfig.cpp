@@ -23,9 +23,8 @@ OpenWQ_hostModelconfig::OpenWQ_hostModelconfig()
 
     // Water volumes from hostmodel
     this->cellid_to_wq = std::unique_ptr<
-        std::vector<                            // compartments
-        arma::Cube<                             // ix, iy, iz
-        double>>>(new std::vector<arma::cube>); 
+        std::vector<std::vector<std::vector<std::vector<std::string>>>>>(
+            new std::vector<std::vector<std::vector<std::vector<std::string>>>>);
 
     // Water volumes from hostmodel
     this->waterVol_hydromodel = std::unique_ptr<
@@ -67,26 +66,43 @@ std::string OpenWQ_hostModelconfig::get_cellid_to_wqlabel() const {
 
 void OpenWQ_hostModelconfig::set_cellid_to_wq_size(arma::Cube<double> domain_xyz) 
 {
-    (*this->cellid_to_wq).push_back(domain_xyz);
+    std::vector<std::vector<std::vector<std::string>>> cube;
+    cube.resize(domain_xyz.n_rows);
+    for (arma::uword i = 0; i < domain_xyz.n_rows; ++i) {
+        cube[i].resize(domain_xyz.n_cols);
+        for (arma::uword j = 0; j < domain_xyz.n_cols; ++j) {
+            cube[i][j].resize(domain_xyz.n_slices);
+            for (arma::uword k = 0; k < domain_xyz.n_slices; ++k) {
+                cube[i][j][k] = std::string();
+            }
+        }
+    }
+    (*this->cellid_to_wq).push_back(std::move(cube));
 }
 
-const std::unique_ptr<std::vector<arma::Cube<double>>>& OpenWQ_hostModelconfig::get_cellid_to_wq() const {
+const std::unique_ptr<std::vector<std::vector<std::vector<std::vector<std::string>>>>>& OpenWQ_hostModelconfig::get_cellid_to_wq() const {
     return cellid_to_wq;
 }
 
 // Non-const version - returns non-const reference to unique_ptr
-std::unique_ptr<std::vector<arma::Cube<double>>>& OpenWQ_hostModelconfig::get_cellid_to_wq() {
+std::unique_ptr<std::vector<std::vector<std::vector<std::vector<std::string>>>>>& OpenWQ_hostModelconfig::get_cellid_to_wq() {
     return cellid_to_wq;
 }
 
 // set cellid_to_wq - ids fron hostmodel to map OpenWQ elements in the outputs
-void OpenWQ_hostModelconfig::set_cellid_to_wq_at(int index, int ix, int iy, int iz, double value) 
+void OpenWQ_hostModelconfig::set_cellid_to_wq_at(int index, int ix, int iy, int iz, const std::string& value) 
 {
-    (*this->cellid_to_wq)[index](ix,iy,iz) =    value;
+    (*this->cellid_to_wq)[index][ix][iy][iz] = value;
 }
-double OpenWQ_hostModelconfig::get_cellid_to_wq_at(int index, int ix, int iy, int iz) 
+long long OpenWQ_hostModelconfig::get_cellid_to_wq_at(int index, int ix, int iy, int iz) 
 {
-    return (*this->cellid_to_wq)[index](ix,iy,iz);
+    const std::string &s = (*this->cellid_to_wq)[index][ix][iy][iz];
+    if (s.empty()) return 0;
+    try {
+        return std::stoll(s);
+    } catch (...) {
+        return 0;
+    }
 }
 
 

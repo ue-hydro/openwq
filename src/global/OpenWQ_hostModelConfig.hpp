@@ -19,6 +19,7 @@
 #include <armadillo>
 #include <memory> 
 #include <vector>
+#include <string>
 
 /* #################################################
  Link: openWQ to Host Hydrological Model
@@ -45,7 +46,7 @@ class OpenWQ_hostModelconfig
         // Stores the host hydromodel element identification id for mapping openwq results. It is used to store the ids of the elements (e.g., HRU, reaches, etc) from the host hydrological model, which are printed in the openwq output files along with the water quality results.
         std::string cellid_to_wqlabel;
 
-        std::unique_ptr<std::vector<arma::Cube<double>>> 
+        std::unique_ptr<std::vector<std::vector<std::vector<std::vector<std::string>>>>> 
         cellid_to_wq;
 
         // Stores water fluxes when concentration are requested for outputs
@@ -84,13 +85,13 @@ class OpenWQ_hostModelconfig
         // set cellid_to_wq label
         void set_cellid_to_wqlabel(const        std::string& label);
         std::string get_cellid_to_wqlabel() const;
-        const std::unique_ptr<std::vector<arma::Cube<double>>>& get_cellid_to_wq() const;
-        std::unique_ptr<std::vector<arma::Cube<double>>>& get_cellid_to_wq();
+        const std::unique_ptr<std::vector<std::vector<std::vector<std::vector<std::string>>>>>& get_cellid_to_wq() const;
+        std::unique_ptr<std::vector<std::vector<std::vector<std::vector<std::string>>>>>& get_cellid_to_wq();
 
         // get cellid_to_wq element ids
         void set_cellid_to_wq_size(arma::Cube<double> waterVol);
-        void set_cellid_to_wq_at(int index, int ix, int iy, int iz, double value);
-        double get_cellid_to_wq_at(int index, int ix, int iy, int iz);
+        void set_cellid_to_wq_at(int index, int ix, int iy, int iz, const std::string& value);
+        long long get_cellid_to_wq_at(int index, int ix, int iy, int iz);
 
         /********************
          * HydroTuple methods
