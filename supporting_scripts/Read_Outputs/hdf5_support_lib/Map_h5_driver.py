@@ -1,963 +1,27 @@
-# Copyright 2020, Diogo Costa, diogo.costa@uevora.pt
-# This file is part of OpenWQ model.
-
-# This program, openWQ, is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 """
-FIXED: OPTIMIZED Interactive Plotly-based mapping for OpenWQ model results
-Uses the results dictionary from Read_h5_driver
-Creates LIGHTWEIGHT interactive animated maps that can be viewed in browser
-
-KEY FIX: Proper data-to-geometry mapping using featureidkey
+OpenWQ Simple Static Maps with Automatic GIF Creation
+Creates individual static maps for each timestep AND automatically creates GIF
+No special installs needed - tries multiple methods to create GIF
 """
 
-import netCDF4
-import h5py
-import geopandas as gpd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime
-import os
-import json
 import pandas as pd
-
-
-def simplify_geometry(geodf, tolerance=0.0001):
-    """
-    Simplify geometry to reduce file size
-
-    Parameters
-    ----------
-    geodf : gpd.GeoDataFrame
-        Input geodataframe
-    tolerance : float
-        Simplification tolerance (default: 0.0001)
-        Smaller = more detail, larger = smaller file
-
-    Returns
-    -------
-    gpd.GeoDataFrame
-        Simplified geodataframe
-    """
-    print(f"  Simplifying geometry (tolerance={tolerance})...")
-    geodf_simplified = geodf.copy()
-    geodf_simplified['geometry'] = geodf_simplified.geometry.simplify(tolerance, preserve_topology=True)
-    return geodf_simplified
-
-
-def round_coordinates(geojson, precision=6):
-    """
-    Round coordinates in GeoJSON to reduce precision and file size
-
-    Parameters
-    ----------
-    geojson : dict
-        GeoJSON dictionary
-    precision : int
-        Number of decimal places (default: 6, ~10cm precision)
-
-    Returns
-    -------
-    dict
-        GeoJSON with rounded coordinates
-    """
-
-    def round_coords(coords):
-        if isinstance(coords[0], (list, tuple)):
-            return [round_coords(c) for c in coords]
-        else:
-            return [round(c, precision) for c in coords]
-
-    for feature in geojson['features']:
-        if 'geometry' in feature and 'coordinates' in feature['geometry']:
-            feature['geometry']['coordinates'] = round_coords(
-                feature['geometry']['coordinates']
-            )
-
-    return geojson
-
-
-def extract_line_coordinates(geodf):
-    """
-    Extract line coordinates from geodataframe for Scattermapbox
-
-    Parameters
-    ----------
-    geodf : gpd.GeoDataFrame
-        GeoDataFrame with LineString geometries
-
-    Returns
-    -------
-    tuple
-        (lats, lons) - Lists of latitude and longitude coordinates
-        Uses None to separate line segments
-    """
-    lons = []
-    lats = []
-
-    for geometry in geodf.geometry:
-        if geometry.geom_type == 'LineString':
-            coords = list(geometry.coords)
-            lons.extend([c[0] for c in coords])
-            lats.extend([c[1] for c in coords])
-            # Add None to create a break between lines
-            lons.append(None)
-            lats.append(None)
-        elif geometry.geom_type == 'MultiLineString':
-            for linestring in geometry.geoms:
-                coords = list(linestring.coords)
-                lons.extend([c[0] for c in coords])
-                lats.extend([c[1] for c in coords])
-                lons.append(None)
-                lats.append(None)
-
-    return lats, lons
-
-
-def Map_h5_driver(shpfile_fullpath,
-                  openwq_results,
-                  hydromodel_out_fullpath,
-                  output_html_path,
-                  species_name=None,
-                  file_extension='main',
-                  timestep='all',
-                  vmin=None,
-                  vmax=None,
-                  colorscale='RdYlGn_r',
-                  animation_frame_duration=500,
-                  mapbox_style='open-street-map',
-                  zoom=6,
-                  center=None,
-                  simplify_tolerance=0.0001,
-                  data_precision=4,
-                  coord_precision=6,
-                  show_river_network=True,
-                  river_network_color='blue',
-                  river_network_width=1,
-                  model='mizuroute'):
-    """
-    Create OPTIMIZED interactive Plotly map from OpenWQ results dictionary.
-
-    OPTIMIZATIONS vs original version:
-    - 5-10x smaller file sizes
-    - Faster loading in browser
-    - Reduced memory usage
-    - Geometry simplified and stored once
-    - Data precision reduced
-    - Efficient frame updates
-
-    Parameters
-    ----------
-    [Previous parameters same as before...]
-
-    simplify_tolerance : float, optional
-        Geometry simplification tolerance (default: 0.0001)
-        Larger values = smaller files but less detail
-        Set to None to disable simplification
-        Recommended: 0.0001 (good balance)
-    data_precision : int, optional
-        Number of significant figures for data values (default: 4)
-        Reduces from scientific notation like 1.234567e-3 to 1.235e-3
-    coord_precision : int, optional
-        Decimal places for coordinates (default: 6 = ~10cm precision)
-    show_river_network : bool, optional
-        Whether to show river network as basemap layer (default: True)
-        Displays the actual river geometry as lines on the map
-    river_network_color : str, optional
-        Color for river network basemap (default: 'blue')
-        Options: 'blue', 'gray', 'black', 'darkblue', 'lightblue', etc.
-    river_network_width : float, optional
-        Line width for river network (default: 1)
-        Increase for more visible rivers (e.g., 2, 3)
-
-    Returns
-    -------
-    str
-        Path to created HTML file
-    """
-
-    if model != "mizuroute":
-        print("Only Mizuroute is supported for now!")
-        return None
-
-    print("=" * 70)
-    print("FIXED: OPTIMIZED Interactive Plotly Map Generator")
-    print("=" * 70)
-
-    # Step 1: Get data from results dictionary
-    print("\nStep 1: Extracting data from results dictionary...")
-
-    if species_name is None:
-        species_key = list(openwq_results.keys())[0]
-        print(f"  No species specified, using: {species_key}")
-    else:
-        species_key = None
-        for key in openwq_results.keys():
-            if species_name in key:
-                species_key = key
-                break
-
-        if species_key is None:
-            print(f"✗ Error: Species '{species_name}' not found in results!")
-            print(f"  Available species: {list(openwq_results.keys())}")
-            return None
-
-        print(f"  Using species: {species_key}")
-
-    parts = species_key.split('@')
-    compartment = parts[0]
-    chem_unit = parts[1].split('#')
-    chemical = chem_unit[0]
-    units = chem_unit[1]
-
-    data_found = False
-    for ext, data_list in openwq_results[species_key]:
-        if ext == file_extension:
-            if data_list and len(data_list) > 0:
-                filename, ttdata, xyz_coords = data_list[0]
-                data_found = True
-                print(f"  File extension: {file_extension}")
-                print(f"  Data shape: {ttdata.shape}")
-                print(f"  Time range: {ttdata.index[0]} to {ttdata.index[-1]}")
-                break
-
-    if not data_found:
-        print(f"✗ Error: No data found for file extension '{file_extension}'!")
-        available_exts = [ext for ext, _ in openwq_results[species_key]]
-        print(f"  Available extensions: {available_exts}")
-        return None
-
-    print("\nStep 2: Loading and optimizing shapefile...")
-    geodf = gpd.read_file(shpfile_fullpath, engine='fiona')
-    geodf = geodf.to_crs("EPSG:4326")
-
-    # Simplify geometry to reduce file size
-    if simplify_tolerance is not None:
-        geodf = simplify_geometry(geodf, tolerance=simplify_tolerance)
-
-    comid = np.array(geodf['ComID'])
-
-    # FIX: Add an index column to geodf for proper mapping
-    geodf['feature_id'] = range(len(geodf))
-
-    # Calculate center and zoom from bounds
-    bounds = geodf.total_bounds  # minx, miny, maxx, maxy
-
-    if center is None:
-        center = {
-            'lat': round((bounds[1] + bounds[3]) / 2, coord_precision),
-            'lon': round((bounds[0] + bounds[2]) / 2, coord_precision)
-        }
-        print(f"  Auto-centered at: lat={center['lat']:.4f}, lon={center['lon']:.4f}")
-
-    # Auto-calculate zoom if not provided or if using default value
-    if zoom == 6:  # Default zoom value
-        # Calculate zoom based on bounds
-        lat_diff = bounds[3] - bounds[1]
-        lon_diff = bounds[2] - bounds[0]
-
-        # Use the larger dimension to calculate zoom
-        max_diff = max(lat_diff, lon_diff)
-
-        # Approximate zoom levels (tighter fit, +1-2 from previous)
-        if max_diff > 10:
-            zoom = 6
-        elif max_diff > 5:
-            zoom = 7
-        elif max_diff > 2:
-            zoom = 8
-        elif max_diff > 1:
-            zoom = 9
-        elif max_diff > 0.5:
-            zoom = 10
-        elif max_diff > 0.2:
-            zoom = 11
-        elif max_diff > 0.1:
-            zoom = 12
-        else:
-            zoom = 13
-
-        print(f"  Auto-zoom level: {zoom} (bounds span: {max_diff:.4f}°)")
-
-    print("\nStep 3: Loading mizuRoute output...")
-    mizuroute_out_file = netCDF4.Dataset(hydromodel_out_fullpath, 'r')
-    mizuroute_out_idFeature = np.array(mizuroute_out_file.variables['reachID'])
-
-    print("\nStep 4: Determining timesteps...")
-
-    if timestep == 'all':
-        print(f"  Creating animated map with {len(ttdata)} timesteps")
-        is_animated = True
-        timesteps_to_plot = list(range(len(ttdata)))
-
-    elif isinstance(timestep, list):
-        if len(timestep) != 2:
-            print(f"✗ Error: timestep range must have exactly 2 elements [min, max]")
-            mizuroute_out_file.close()
-            return None
-
-        is_animated = True
-        min_val, max_val = timestep[0], timestep[1]
-
-        if isinstance(min_val, int) and isinstance(max_val, int):
-            if min_val < 0 or max_val >= len(ttdata) or min_val > max_val:
-                print(f"✗ Error: Invalid index range [{min_val}, {max_val}]")
-                mizuroute_out_file.close()
-                return None
-
-            timesteps_to_plot = list(range(min_val, max_val + 1))
-            print(f"  Creating animated map for timesteps {min_val} to {max_val}")
-            print(f"  Total frames: {len(timesteps_to_plot)}")
-
-        else:
-            try:
-                def parse_openwq_date(date_str):
-                    try:
-                        return pd.to_datetime(date_str)
-                    except:
-                        try:
-                            from datetime import datetime
-                            return datetime.strptime(date_str, '%Y%b%d-%H:%M:%S')
-                        except:
-                            raise ValueError(f"Could not parse date: {date_str}")
-
-                min_date = parse_openwq_date(str(min_val))
-                max_date = parse_openwq_date(str(max_val))
-
-                timesteps_to_plot = []
-                for i, ts in enumerate(ttdata.index):
-                    ts_datetime = pd.to_datetime(ts)
-                    if min_date <= ts_datetime <= max_date:
-                        timesteps_to_plot.append(i)
-
-                if len(timesteps_to_plot) == 0:
-                    print(f"✗ Error: No timesteps found in date range")
-                    mizuroute_out_file.close()
-                    return None
-
-                print(f"  Creating animated map for date range:")
-                print(f"    From: {min_val}")
-                print(f"    To: {max_val}")
-                print(f"  Total frames: {len(timesteps_to_plot)}")
-
-            except Exception as e:
-                print(f"✗ Error parsing date range: {e}")
-                mizuroute_out_file.close()
-                return None
-
-    else:
-        is_animated = False
-
-        if isinstance(timestep, int):
-            if timestep < 0 or timestep >= len(ttdata):
-                print(f"✗ Error: timestep {timestep} out of range [0, {len(ttdata) - 1}]")
-                mizuroute_out_file.close()
-                return None
-            timestep_idx = timestep
-            timestep_label = str(ttdata.index[timestep_idx])
-            print(f"  Creating static map for timestep {timestep_idx}: {timestep_label}")
-        else:
-            try:
-                timestep_idx = ttdata.index.get_loc(timestep)
-                timestep_label = timestep
-                print(f"  Creating static map for date: {timestep}")
-            except KeyError:
-                try:
-                    target_date = pd.to_datetime(timestep)
-                    nearest_idx = ttdata.index.get_indexer([target_date], method='nearest')[0]
-                    timestep_idx = nearest_idx
-                    timestep_label = str(ttdata.index[timestep_idx])
-                    print(f"  Date '{timestep}' not found. Using nearest: {timestep_label}")
-                except:
-                    print(f"✗ Error: Could not parse timestep '{timestep}'")
-                    mizuroute_out_file.close()
-                    return None
-
-        timesteps_to_plot = [timestep_idx]
-
-    # Step 5: Process data with optimizations
-    print("\nStep 5: Processing and optimizing data...")
-    print(f"  Data precision: {data_precision} significant figures")
-    print(f"  Coordinate precision: {coord_precision} decimal places")
-
-    if vmin is None or vmax is None:
-        sample_values = []
-        for idx in timesteps_to_plot[::max(1, len(timesteps_to_plot) // 10)]:
-            sample_values.extend(ttdata.iloc[idx, :].values)
-
-        if vmin is None:
-            vmin = np.nanmin(sample_values)
-        if vmax is None:
-            vmax = np.nanmax(sample_values)
-
-        print(f"  Auto color range: {vmin:.3e} to {vmax:.3e}")
-
-    if is_animated:
-        print("\nStep 6: Creating OPTIMIZED animated map...")
-        fig = _create_optimized_animated_map(
-            ttdata, xyz_coords, geodf, comid, mizuroute_out_idFeature,
-            compartment, chemical, units, file_extension,
-            vmin, vmax, colorscale, mapbox_style, zoom, center,
-            animation_frame_duration, timesteps_to_plot,
-            data_precision, coord_precision,
-            show_river_network, river_network_color, river_network_width
-        )
-    else:
-        print("\nStep 6: Creating static map...")
-        fig = _create_static_plotly_map(
-            ttdata, xyz_coords, geodf, comid, mizuroute_out_idFeature,
-            timestep_idx, timestep_label,
-            compartment, chemical, units, file_extension,
-            vmin, vmax, colorscale, mapbox_style, zoom, center,
-            data_precision, coord_precision,
-            show_river_network, river_network_color, river_network_width
-        )
-
-    mizuroute_out_file.close()
-
-    print(f"\nStep 7: Saving optimized HTML...")
-    fig.write_html(
-        output_html_path,
-        include_plotlyjs='cdn',  # Use CDN instead of embedding (saves ~3MB)
-        config={
-            'displayModeBar': True,
-            'displaylogo': False,
-            'modeBarButtonsToRemove': ['lasso2d', 'select2d']
-        }
-    )
-
-    file_size = os.path.getsize(output_html_path) / 1024 / 1024
-
-    print("=" * 70)
-    print("✓ FIXED: OPTIMIZED interactive map created successfully!")
-    print("=" * 70)
-    print(f"  Output file: {output_html_path}")
-    print(f"  File size: {file_size:.2f} MB")
-    if is_animated:
-        print(f"  Frames: {len(timesteps_to_plot)}")
-        print(f"\n  Interactive controls:")
-        print(f"    - Play/Pause: Control animation")
-        print(f"    - Basemap toggle: Turn basemap ON/OFF")
-        if show_river_network:
-            print(f"    - River network toggle: Turn river lines ON/OFF")
-        print(f"    - Frame skip: Play every 1st, 2nd, 5th, 10th, or 20th frame")
-    else:
-        print(f"\n  Interactive controls:")
-        print(f"    - Basemap toggle: Turn basemap ON/OFF")
-        if show_river_network:
-            print(f"    - River network toggle: Turn river lines ON/OFF")
-    print(f"\n  Optimizations applied:")
-    print(f"    - Geometry simplified: {simplify_tolerance if simplify_tolerance else 'disabled'}")
-    print(f"    - Data precision: {data_precision} sig figs")
-    print(f"    - Coordinate precision: {coord_precision} decimals")
-    print(f"    - PlotlyJS: from CDN (not embedded)")
-    print("=" * 70)
-
-    return output_html_path
-
-
-def _create_optimized_animated_map(ttdata, xyz_coords, geodf, comid, mizuroute_out_idFeature,
-                                   compartment, chemical, units, file_extension,
-                                   vmin, vmax, colorscale, mapbox_style, zoom, center,
-                                   animation_frame_duration, timesteps_to_plot,
-                                   data_precision, coord_precision,
-                                   show_river_network, river_network_color, river_network_width):
-    """
-    Create OPTIMIZED animated Plotly map
-
-    KEY FIX: Use feature_id for proper data-to-geometry mapping
-    """
-
-    # Convert geodataframe to GeoJSON with rounded coordinates
-    print("  Converting geometry (this may take a moment)...")
-    geojson = json.loads(geodf.to_json())
-    geojson = round_coordinates(geojson, coord_precision)
-
-    # Pre-compute all data values with reduced precision
-    print("  Pre-computing data for all frames...")
-    all_data = []
-    for i, idx in enumerate(timesteps_to_plot):
-        data_values = ttdata.iloc[idx, :].values
-        geodf_openwq_wq = _map_data_to_geodf(
-            data_values, xyz_coords, geodf, comid, mizuroute_out_idFeature
-        )
-        # Round to specified precision
-        geodf_openwq_wq = np.round(geodf_openwq_wq, data_precision)
-        all_data.append(geodf_openwq_wq)
-
-        if (i + 1) % 50 == 0:
-            print(f"    Processed {i + 1}/{len(timesteps_to_plot)} frames...")
-
-    # DEBUG: Print data statistics
-    print(f"  Data stats for first frame:")
-    print(f"    Min: {np.nanmin(all_data[0]):.3e}")
-    print(f"    Max: {np.nanmax(all_data[0]):.3e}")
-    print(f"    Non-NaN count: {np.sum(~np.isnan(all_data[0]))}/{len(all_data[0])}")
-
-    # Create frames - ONLY updating data, not geometry
-    print("  Creating animation frames...")
-    # Determine which trace index the concentration data is at
-    # If river network is shown, it's trace 1, otherwise trace 0
-    conc_trace_idx = 1 if show_river_network else 0
-
-    frames = []
-    for i, idx in enumerate(timesteps_to_plot):
-        frame = go.Frame(
-            data=[go.Choroplethmapbox(
-                z=all_data[i],  # Only the data changes!
-            )],
-            name=str(ttdata.index[idx]),
-            traces=[conc_trace_idx]  # Update the concentration trace
-        )
-        frames.append(frame)
-
-    # Prepare data traces for figure
-    traces = []
-
-    # Add river network basemap layer (if enabled)
-    if show_river_network:
-        print("  Adding river network basemap layer...")
-        lats, lons = extract_line_coordinates(geodf)
-        traces.append(
-            go.Scattermapbox(
-                lat=lats,
-                lon=lons,
-                mode='lines',
-                line=dict(
-                    width=river_network_width,
-                    color=river_network_color
-                ),
-                hoverinfo='skip',
-                showlegend=False,
-                name='River Network'
-            )
-        )
-
-    # FIX: Add concentration data layer with proper featureidkey
-    traces.append(
-        go.Choroplethmapbox(
-            geojson=geojson,  # Geometry stored once
-            locations=geodf['feature_id'],  # Use the feature_id we created
-            z=all_data[0],
-            featureidkey="properties.feature_id",  # FIX: Tell Plotly where to find the IDs
-            colorscale=colorscale,
-            zmin=vmin,
-            zmax=vmax,
-            marker_opacity=0.85,
-            marker_line_width=0.2,
-            marker_line_color='rgba(255,255,255,0.3)',
-            colorbar=dict(
-                title=f"{units}",
-                thickness=15,
-                len=0.7,
-                x=1.02
-            ),
-            hovertemplate='<b>ComID</b>: %{customdata}<br>' +
-                          f'<b>{chemical}</b>: ' + '%{z:.3e}<br>' +
-                          '<extra></extra>',
-            customdata=geodf['ComID']  # Show ComID on hover
-        )
-    )
-
-    # Create initial figure
-    fig = go.Figure(
-        data=traces,
-        frames=frames
-    )
-
-    # Add slider - positioned BELOW the map
-    sliders = [dict(
-        active=0,
-        yanchor="bottom",
-        y=-0.15,  # Below the map
-        xanchor="left",
-        x=0.05,
-        currentvalue=dict(
-            prefix="Time: ",
-            visible=True,
-            xanchor="left",
-            font=dict(size=14)
-        ),
-        pad=dict(b=10, t=10),
-        len=0.85,  # Slightly shorter to fit
-        steps=[
-            dict(
-                args=[
-                    [frame.name],
-                    dict(
-                        frame=dict(duration=animation_frame_duration, redraw=False),
-                        mode="immediate",
-                        transition=dict(duration=0)
-                    )
-                ],
-                method="animate",
-                label=frame.name
-            )
-            for frame in frames
-        ]
-    )]
-
-    # Add control buttons - organized in two rows for better layout
-    updatemenus = [
-        # Row 1: Play/Pause buttons
-        dict(
-            type="buttons",
-            direction="left",
-            x=0.05,
-            y=-0.20,  # First row
-            xanchor="left",
-            yanchor="bottom",
-            showactive=False,
-            buttons=[
-                dict(
-                    label="▶ Play",
-                    method="animate",
-                    args=[
-                        None,
-                        dict(
-                            frame=dict(duration=animation_frame_duration, redraw=False),
-                            fromcurrent=True,
-                            transition=dict(duration=0)
-                        )
-                    ]
-                ),
-                dict(
-                    label="⏸ Pause",
-                    method="animate",
-                    args=[
-                        [None],
-                        dict(
-                            frame=dict(duration=0, redraw=False),
-                            mode="immediate"
-                        )
-                    ]
-                )
-            ]
-        ),
-        # Row 1: Basemap toggle button
-        dict(
-            type="buttons",
-            direction="left",
-            x=0.35,
-            y=-0.20,  # First row
-            xanchor="left",
-            yanchor="bottom",
-            showactive=True,
-            active=0,
-            buttons=[
-                dict(
-                    label="🗺️ Basemap ON",
-                    method="relayout",
-                    args=[{"mapbox.style": mapbox_style}]
-                ),
-                dict(
-                    label="🗺️ Basemap OFF",
-                    method="relayout",
-                    args=[{"mapbox.style": "white-bg"}]
-                )
-            ]
-        )
-    ]
-
-    # Add river network toggle button if river network is shown
-    if show_river_network:
-        updatemenus.append(
-            dict(
-                type="buttons",
-                direction="left",
-                x=0.65,
-                y=-0.20,  # First row
-                xanchor="left",
-                yanchor="bottom",
-                showactive=True,
-                active=0,
-                buttons=[
-                    dict(
-                        label="🌊 Rivers ON",
-                        method="update",
-                        args=[{"visible": [True, True]}]  # Both traces visible
-                    ),
-                    dict(
-                        label="🌊 Rivers OFF",
-                        method="update",
-                        args=[{"visible": [False, True]}]  # Only concentration visible
-                    )
-                ]
-            )
-        )
-
-    # Row 2: Frame skip control
-    updatemenus.append(
-        dict(
-            type="buttons",
-            direction="left",
-            x=0.05,
-            y=-0.28,  # Second row - below other buttons
-            xanchor="left",
-            yanchor="bottom",
-            showactive=True,
-            active=0,
-            buttons=[
-                dict(
-                    label="⏩ Every frame",
-                    method="animate",
-                    args=[
-                        [frames[i].name for i in range(len(frames))],
-                        dict(
-                            frame=dict(duration=animation_frame_duration, redraw=False),
-                            fromcurrent=False,
-                            transition=dict(duration=0),
-                            mode="immediate"
-                        )
-                    ]
-                ),
-                dict(
-                    label="⏩ Every 2nd",
-                    method="animate",
-                    args=[
-                        [frames[i].name for i in range(0, len(frames), 2)],
-                        dict(
-                            frame=dict(duration=animation_frame_duration, redraw=False),
-                            fromcurrent=False,
-                            transition=dict(duration=0),
-                            mode="immediate"
-                        )
-                    ]
-                ),
-                dict(
-                    label="⏩ Every 5th",
-                    method="animate",
-                    args=[
-                        [frames[i].name for i in range(0, len(frames), 5)],
-                        dict(
-                            frame=dict(duration=animation_frame_duration, redraw=False),
-                            fromcurrent=False,
-                            transition=dict(duration=0),
-                            mode="immediate"
-                        )
-                    ]
-                ),
-                dict(
-                    label="⏩ Every 10th",
-                    method="animate",
-                    args=[
-                        [frames[i].name for i in range(0, len(frames), 10)],
-                        dict(
-                            frame=dict(duration=animation_frame_duration, redraw=False),
-                            fromcurrent=False,
-                            transition=dict(duration=0),
-                            mode="immediate"
-                        )
-                    ]
-                ),
-                dict(
-                    label="⏩ Every 20th",
-                    method="animate",
-                    args=[
-                        [frames[i].name for i in range(0, len(frames), 20)],
-                        dict(
-                            frame=dict(duration=animation_frame_duration, redraw=False),
-                            fromcurrent=False,
-                            transition=dict(duration=0),
-                            mode="immediate"
-                        )
-                    ]
-                )
-            ]
-        )
-    )
-
-    # Update layout
-    fig.update_layout(
-        mapbox_style=mapbox_style,
-        mapbox=dict(
-            center=center,
-            zoom=zoom
-        ),
-        title={
-            'text': f'{chemical} in {compartment} - {file_extension}<br>Time: {ttdata.index[timesteps_to_plot[0]]}',
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 20}
-        },
-        height=800,
-        margin={"r": 50, "t": 120, "l": 50, "b": 180},
-        sliders=sliders,
-        updatemenus=updatemenus
-    )
-
-    return fig
-
-
-def _create_static_plotly_map(ttdata, xyz_coords, geodf, comid, mizuroute_out_idFeature,
-                              timestep_idx, timestep_label,
-                              compartment, chemical, units, file_extension,
-                              vmin, vmax, colorscale, mapbox_style, zoom, center,
-                              data_precision, coord_precision,
-                              show_river_network, river_network_color, river_network_width):
-    """Create optimized static Plotly map for single timestep"""
-
-    data_values = ttdata.iloc[timestep_idx, :].values
-    geodf_openwq_wq = _map_data_to_geodf(
-        data_values, xyz_coords, geodf, comid, mizuroute_out_idFeature
-    )
-
-    # Round data
-    geodf_openwq_wq = np.round(geodf_openwq_wq, data_precision)
-
-    # DEBUG: Print data statistics
-    print(f"  Data stats:")
-    print(f"    Min: {np.nanmin(geodf_openwq_wq):.3e}")
-    print(f"    Max: {np.nanmax(geodf_openwq_wq):.3e}")
-    print(f"    Non-NaN count: {np.sum(~np.isnan(geodf_openwq_wq))}/{len(geodf_openwq_wq)}")
-
-    # Convert to GeoJSON with rounded coordinates
-    geojson = json.loads(geodf.to_json())
-    geojson = round_coordinates(geojson, coord_precision)
-
-    # Prepare data traces
-    traces = []
-
-    # Add river network basemap layer (if enabled)
-    if show_river_network:
-        lats, lons = extract_line_coordinates(geodf)
-        traces.append(
-            go.Scattermapbox(
-                lat=lats,
-                lon=lons,
-                mode='lines',
-                line=dict(
-                    width=river_network_width,
-                    color=river_network_color
-                ),
-                hoverinfo='skip',
-                showlegend=False,
-                name='River Network'
-            )
-        )
-
-    # FIX: Add concentration data layer with proper featureidkey
-    traces.append(
-        go.Choroplethmapbox(
-            geojson=geojson,
-            locations=geodf['feature_id'],  # Use the feature_id we created
-            z=geodf_openwq_wq,
-            featureidkey="properties.feature_id",  # FIX: Tell Plotly where to find the IDs
-            colorscale=colorscale,
-            zmin=vmin,
-            zmax=vmax,
-            marker_opacity=0.85,
-            marker_line_width=0.2,
-            marker_line_color='rgba(255,255,255,0.3)',
-            colorbar=dict(
-                title=f"{units}",
-                thickness=15,
-                len=0.7,
-                x=1.02
-            ),
-            hovertemplate='<b>ComID</b>: %{customdata}<br>' +
-                          f'<b>{chemical}</b>: ' + '%{z:.3e}<br>' +
-                          '<extra></extra>',
-            customdata=geodf['ComID']  # Show ComID on hover
-        )
-    )
-
-    fig = go.Figure(data=traces)
-
-    # Create updatemenus for toggle buttons - better organized
-    updatemenus = [
-        # Basemap toggle button
-        dict(
-            type="buttons",
-            direction="left",
-            x=0.05,
-            y=0.02,
-            xanchor="left",
-            yanchor="bottom",
-            showactive=True,
-            active=0,
-            buttons=[
-                dict(
-                    label="🗺️ Basemap ON",
-                    method="relayout",
-                    args=[{"mapbox.style": mapbox_style}]
-                ),
-                dict(
-                    label="🗺️ Basemap OFF",
-                    method="relayout",
-                    args=[{"mapbox.style": "white-bg"}]
-                )
-            ]
-        )
-    ]
-
-    # Add river network toggle button if river network is shown
-    if show_river_network:
-        updatemenus.append(
-            dict(
-                type="buttons",
-                direction="left",
-                x=0.30,  # More spacing from basemap button
-                y=0.02,
-                xanchor="left",
-                yanchor="bottom",
-                showactive=True,
-                active=0,
-                buttons=[
-                    dict(
-                        label="🌊 Rivers ON",
-                        method="update",
-                        args=[{"visible": [True, True]}]  # Both traces visible
-                    ),
-                    dict(
-                        label="🌊 Rivers OFF",
-                        method="update",
-                        args=[{"visible": [False, True]}]  # Only concentration visible
-                    )
-                ]
-            )
-        )
-
-    fig.update_layout(
-        mapbox_style=mapbox_style,
-        mapbox=dict(
-            center=center,
-            zoom=zoom
-        ),
-        title={
-            'text': f'{chemical} in {compartment}<br>{file_extension} - {timestep_label}',
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 20}
-        },
-        height=800,
-        margin={"r": 50, "t": 100, "l": 50, "b": 50},
-        updatemenus=updatemenus
-    )
-
-    return fig
-
-
-def _map_data_to_geodf(data_values, xyz_coords, geodf, comid, mizuroute_out_idFeature):
-    """Map OpenWQ data to geodataframe based on coordinates"""
-
-    geodf_openwq_wq = np.zeros(len(comid))
-
-    for j in range(len(comid)):
-        comid_j = comid[j]
-        index_j = np.where(mizuroute_out_idFeature == comid_j)[0]
+import geopandas as gpd
+import netCDF4
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import os
+import subprocess
+
+
+def _map_data_to_geodf(data_values, xyz_coords, geodf, shpf_mapKey, data_hostmdlKeys):
+    """Map OpenWQ data to geodataframe - SAME AS WORKING VERSION"""
+    geodf_openwq_wq = np.zeros(len(shpf_mapKey))
+    data_hostmdlKeys_mainInfo = [item.split('_')[1] for item in data_hostmdlKeys]
+
+    for j in range(len(shpf_mapKey)):
+        mapKey_j = shpf_mapKey[j]
+        index_j = np.where(np.array(data_hostmdlKeys_mainInfo) == str(mapKey_j))[0]
 
         if len(index_j) > 0:
             try:
@@ -970,16 +34,426 @@ def _map_data_to_geodf(data_values, xyz_coords, geodf, comid, mizuroute_out_idFe
     return geodf_openwq_wq
 
 
-if __name__ == "__main__":
+def _create_gif_from_pngs(image_dir, output_gif, duration_ms=500):
+    """
+    Try multiple methods to create GIF from PNG files
+    Returns True if successful, False otherwise
+    """
+
+    print(f"\n  Attempting to create GIF: {output_gif}")
+    print(f"  Frame duration: {duration_ms}ms")
+
+    # Get all PNG files
+    png_files = sorted([f for f in os.listdir(image_dir) if f.endswith('.png')])
+
+    if len(png_files) == 0:
+        print("  ✗ No PNG files found")
+        return False
+
+    print(f"  Found {len(png_files)} PNG files")
+
+    # Method 1: Try imageio (most reliable Python method)
+    try:
+        import imageio.v2 as imageio
+        print("  → Trying imageio...")
+
+        images = []
+        for filename in png_files:
+            filepath = os.path.join(image_dir, filename)
+            images.append(imageio.imread(filepath))
+
+        # Duration in seconds for imageio
+        imageio.mimsave(output_gif, images, duration=duration_ms/1000.0, loop=0)
+
+        size_mb = os.path.getsize(output_gif) / (1024 * 1024)
+        print(f"  ✓ SUCCESS with imageio!")
+        print(f"    File: {output_gif}")
+        print(f"    Size: {size_mb:.1f} MB")
+        return True
+
+    except ImportError:
+        print("  ✗ imageio not available")
+    except Exception as e:
+        print(f"  ✗ imageio failed: {e}")
+
+    # Method 2: Try Pillow/PIL
+    try:
+        from PIL import Image
+        print("  → Trying Pillow/PIL...")
+
+        image_files = [os.path.join(image_dir, f) for f in png_files]
+        images = [Image.open(f) for f in image_files]
+
+        images[0].save(
+            output_gif,
+            save_all=True,
+            append_images=images[1:],
+            duration=duration_ms,
+            loop=0
+        )
+
+        size_mb = os.path.getsize(output_gif) / (1024 * 1024)
+        print(f"  ✓ SUCCESS with Pillow!")
+        print(f"    File: {output_gif}")
+        print(f"    Size: {size_mb:.1f} MB")
+        return True
+
+    except ImportError:
+        print("  ✗ Pillow not available")
+    except Exception as e:
+        print(f"  ✗ Pillow failed: {e}")
+
+    # Method 3: Try ImageMagick (command line)
+    try:
+        print("  → Trying ImageMagick (convert)...")
+
+        # Calculate delay (ImageMagick uses hundredths of a second)
+        delay = int(duration_ms / 10)
+
+        cmd = [
+            'convert',
+            '-delay', str(delay),
+            '-loop', '0',
+            os.path.join(image_dir, 'map_*.png'),
+            output_gif
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+        size_mb = os.path.getsize(output_gif) / (1024 * 1024)
+        print(f"  ✓ SUCCESS with ImageMagick!")
+        print(f"    File: {output_gif}")
+        print(f"    Size: {size_mb:.1f} MB")
+        return True
+
+    except FileNotFoundError:
+        print("  ✗ ImageMagick not installed")
+    except subprocess.CalledProcessError as e:
+        print(f"  ✗ ImageMagick failed: {e}")
+    except Exception as e:
+        print(f"  ✗ ImageMagick error: {e}")
+
+    # All methods failed
+    print("\n  ✗ Could not create GIF - no suitable tool found")
+    print("  Install one of:")
+    print("    - imageio:      pip install imageio --break-system-packages")
+    print("    - Pillow:       pip install Pillow --break-system-packages")
+    print("    - ImageMagick:  brew install imagemagick (Mac)")
+
+    return False
+
+
+def Map_h5_driver(shpfile_fullpath_mapKey=None,
+                  openwq_results=None,
+                  hydromodel_out_fullpath=None,
+                  output_html_path=None,
+                  chemical_species=None,
+                  file_extension='main',
+                  timestep='all',
+                  hostmodel='mizuroute',
+                  max_timesteps=20,
+                  create_gif=True,
+                  gif_duration=None):
+    """
+    Create static PNG maps AND animated GIF automatically
+
+    Parameters:
+    -----------
+    shpfile_fullpath_mapKey : dict
+        Dictionary with 'path_to_shp' and 'mapping_key' keys
+    openwq_results : dict
+        Results dictionary from Read_h5_driver
+    hydromodel_out_fullpath : str
+        Path to hydromodel NetCDF output file
+    output_html_path : str
+        Base path for output (will be used for folder name)
+    chemical_species : list or None
+        List of chemical species to map
+    file_extension : str
+        File extension identifier (default: 'main')
+    timestep : str, int, or list
+        Timestep(s) to plot (default: 'all')
+    max_timesteps : int, optional
+        Maximum number of timesteps (default: 20)
+    create_gif : bool, optional
+        Whether to create GIF automatically (default: True)
+    gif_duration : int, optional
+        Duration per frame in milliseconds (default: 500)
+
+    Returns:
+    --------
+    dict : {'image_dirs': [...], 'gifs': [...]}
+    """
+
     print("=" * 70)
-    print("OpenWQ FIXED: OPTIMIZED Plotly Interactive Mapping")
+    print("STATIC PNG MAPS + AUTOMATIC GIF CREATION")
     print("=" * 70)
-    print("\nKey Fix:")
-    print("  ✓ Proper data-to-geometry mapping using featureidkey")
-    print("  ✓ Better organized button layout (no overlapping!)")
-    print("\nFeatures:")
-    print("  ✓ 5-10x smaller file sizes")
-    print("  ✓ Faster browser loading")
-    print("  ✓ Geometry stored once, not duplicated")
-    print("  ✓ Reduced data precision")
-    print("  ✓ Optimized animation performance")
+
+    # Determine which species to process
+    if chemical_species is None:
+        species_list = list(openwq_results.keys())
+        print(f"\nProcessing ALL {len(species_list)} species")
+    elif isinstance(chemical_species, list):
+        species_list = []
+        for chem in chemical_species:
+            found = False
+            for key in openwq_results.keys():
+                if chem in key:
+                    species_list.append(key)
+                    found = True
+                    break
+            if not found:
+                print(f"⚠ Warning: '{chem}' not found, skipping...")
+
+        if len(species_list) == 0:
+            print(f"✗ Error: No matching species!")
+            return None
+
+        print(f"\nProcessing {len(species_list)} species:")
+        for sp in species_list:
+            print(f"  - {sp}")
+    else:
+        species_list = []
+        for key in openwq_results.keys():
+            if chemical_species in key:
+                species_list.append(key)
+                break
+
+        if len(species_list) == 0:
+            print(f"✗ Error: '{chemical_species}' not found!")
+            return None
+
+    # Load shapefile ONCE
+    print("\n" + "=" * 70)
+    print("STEP 1: Loading shapefile...")
+    print("=" * 70)
+
+    shpfile_fullpath = shpfile_fullpath_mapKey["path_to_shp"]
+    geodf = gpd.read_file(shpfile_fullpath, engine='fiona')
+    geodf = geodf.to_crs("EPSG:4326")
+
+    shapefile_mappingKey = shpfile_fullpath_mapKey["mapping_key"]
+    shpf_mapKey = np.array(geodf[shapefile_mappingKey])
+
+    print(f"  Loaded {len(geodf)} features")
+
+    # Load mizuRoute output ONCE
+    print("\nSTEP 2: Loading mizuRoute output...")
+    mizuroute_out_file = netCDF4.Dataset(hydromodel_out_fullpath, 'r')
+
+    # Prepare output directory
+    output_dir = os.path.dirname(output_html_path) if output_html_path else '.'
+
+    created_dirs = []
+    created_gifs = []
+
+    # Process each species
+    for idx, species_key in enumerate(species_list):
+        print("\n" + "=" * 70)
+        print(f"SPECIES {idx + 1}/{len(species_list)}: {species_key}")
+        print("=" * 70)
+
+        # Parse species key
+        parts = species_key.split('@')
+        compartment = parts[0]
+        chem_unit = parts[1].split('#')
+        chemical = chem_unit[0]
+        units = chem_unit[1]
+
+        # Create output directory for this species
+        species_output_dir = os.path.join(output_dir, f'maps_{chemical}')
+        os.makedirs(species_output_dir, exist_ok=True)
+
+        # Get data from results dictionary
+        print(f"\nExtracting data for {chemical}...")
+        data_found = False
+        for ext, data_list in openwq_results[species_key]:
+            if ext == file_extension:
+                if data_list and len(data_list) > 0:
+                    filename, ttdata, xyz_coords = data_list[0]
+                    data_found = True
+                    print(f"  Data shape: {ttdata.shape}")
+                    print(f"  Time: {ttdata.index[0]} to {ttdata.index[-1]}")
+                    break
+
+        if not data_found:
+            print(f"✗ No data for extension '{file_extension}', skipping...")
+            continue
+
+        # Determine timesteps
+        print("\nDetermining timesteps...")
+
+        if timestep == 'all':
+            total_timesteps = len(ttdata)
+
+            if max_timesteps and max_timesteps < total_timesteps:
+                timesteps_to_plot = list(range(0, total_timesteps, max(1, total_timesteps // max_timesteps)))
+                timesteps_to_plot = timesteps_to_plot[:max_timesteps]
+                print(f"  Using {len(timesteps_to_plot)}/{total_timesteps} timesteps")
+            else:
+                timesteps_to_plot = list(range(total_timesteps))
+                print(f"  Using all {total_timesteps} timesteps")
+        elif isinstance(timestep, list):
+            min_val, max_val = timestep[0], timestep[1]
+
+            if isinstance(min_val, int) and isinstance(max_val, int):
+                timesteps_to_plot = list(range(min_val, max_val + 1))
+            else:
+                try:
+                    min_date = pd.to_datetime(str(min_val))
+                    max_date = pd.to_datetime(str(max_val))
+
+                    timesteps_to_plot = []
+                    for i, ts in enumerate(ttdata.index):
+                        ts_datetime = pd.to_datetime(ts)
+                        if min_date <= ts_datetime <= max_date:
+                            timesteps_to_plot.append(i)
+
+                    if len(timesteps_to_plot) == 0:
+                        print(f"✗ No timesteps in range, skipping...")
+                        continue
+                except Exception as e:
+                    print(f"✗ Error parsing dates: {e}, skipping...")
+                    continue
+
+            print(f"  Using {len(timesteps_to_plot)} timesteps")
+        else:
+            timestep_idx = timestep if isinstance(timestep, int) else ttdata.index.get_loc(timestep)
+            timesteps_to_plot = [timestep_idx]
+            print(f"  Using timestep {timestep_idx}")
+
+        # Calculate global color scale
+        print("\nCalculating color scale...")
+        all_values = []
+        for t_idx in timesteps_to_plot[::max(1, len(timesteps_to_plot)//10)]:
+            data_values = ttdata.iloc[t_idx, :].values
+            all_values.extend([v for v in data_values if not np.isnan(v)])
+
+        vmin = np.percentile(all_values, 1)
+        vmax = np.percentile(all_values, 99)
+        print(f"  Color range: [{vmin:.3e}, {vmax:.3e}]")
+
+        # Create colormap
+        cmap = plt.cm.RdYlGn_r
+        norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+
+        # CREATE INDIVIDUAL MAPS
+        print(f"\nCreating {len(timesteps_to_plot)} static maps...")
+
+        for i, t_idx in enumerate(timesteps_to_plot):
+            # Get data for this timestep
+            data_values = ttdata.iloc[t_idx, :].values
+            data_hostmdlKeys = list(ttdata.iloc[t_idx, :].index)
+
+            # Map to geodataframe
+            geodf_openwq_wq = _map_data_to_geodf(
+                data_values, xyz_coords, geodf, shpf_mapKey, data_hostmdlKeys
+            )
+
+            # Create figure
+            fig, ax = plt.subplots(figsize=(12, 10))
+
+            # Plot each feature with color based on concentration
+            for j, geom in enumerate(geodf.geometry):
+                value = geodf_openwq_wq[j]
+
+                if np.isnan(value):
+                    color = 'gray'
+                    alpha = 0.3
+                else:
+                    color = cmap(norm(value))
+                    alpha = 0.8
+
+                if geom.geom_type == 'LineString':
+                    coords = list(geom.coords)
+                    xs, ys = zip(*coords)
+                    ax.plot(xs, ys, color=color, linewidth=2, alpha=alpha)
+                elif geom.geom_type == 'MultiLineString':
+                    for line in geom.geoms:
+                        coords = list(line.coords)
+                        xs, ys = zip(*coords)
+                        ax.plot(xs, ys, color=color, linewidth=2, alpha=alpha)
+
+            # Add colorbar
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm.set_array([])
+            cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+            cbar.set_label(f'{chemical} ({units})', rotation=270, labelpad=20)
+
+            # Set title and labels
+            timestamp = str(ttdata.index[t_idx])
+            ax.set_title(f'{chemical} Concentrations - {timestamp}', fontsize=14, pad=20)
+            ax.set_xlabel('Longitude', fontsize=12)
+            ax.set_ylabel('Latitude', fontsize=12)
+            ax.set_aspect('equal')
+            ax.grid(True, alpha=0.3)
+
+            # Save figure
+            output_file = os.path.join(species_output_dir, f'map_{i:04d}.png')
+            plt.savefig(output_file, dpi=150, bbox_inches='tight')
+            plt.close()
+
+            if (i + 1) % 10 == 0 or (i + 1) == len(timesteps_to_plot):
+                print(f"    Created {i + 1}/{len(timesteps_to_plot)} maps...")
+
+        created_dirs.append(species_output_dir)
+
+        print("=" * 70)
+        print(f"✓ PNG maps complete for {chemical}!")
+        print(f"  Directory: {species_output_dir}")
+        print(f"  Maps: {len(timesteps_to_plot)} PNG files")
+        print("=" * 70)
+
+        # CREATE GIF
+        if create_gif and len(timesteps_to_plot) > 1:
+            print("\n" + "=" * 70)
+            print(f"Creating animated GIF for {chemical}...")
+            print("=" * 70)
+
+            gif_path = os.path.join(output_dir, f'{chemical}_animation.gif')
+
+            if _create_gif_from_pngs(species_output_dir, gif_path, gif_duration):
+                created_gifs.append(gif_path)
+            else:
+                print("\n  Manual GIF creation commands:")
+                print(f"  imageio:      python create_gif.py {species_output_dir}")
+                print(f"  ImageMagick:  cd {species_output_dir} && convert -delay 50 -loop 0 *.png animation.gif")
+
+    # Close mizuRoute file
+    mizuroute_out_file.close()
+
+    # SUMMARY
+    print("\n" + "=" * 70)
+    print("✓ ALL COMPLETE!")
+    print("=" * 70)
+    print(f"\nPNG Maps:")
+    print(f"  Species: {len(created_dirs)}")
+    for d in created_dirs:
+        png_count = len([f for f in os.listdir(d) if f.endswith('.png')])
+        print(f"    - {d} ({png_count} images)")
+
+    if len(created_gifs) > 0:
+        print(f"\nAnimated GIFs:")
+        print(f"  Created: {len(created_gifs)}")
+        for g in created_gifs:
+            size_mb = os.path.getsize(g) / (1024 * 1024)
+            print(f"    - {g} ({size_mb:.1f} MB)")
+    else:
+        print(f"\nAnimated GIFs: None created")
+        print("  Install imageio, Pillow, or ImageMagick to enable")
+
+    print("=" * 70)
+
+    return {
+        'image_dirs': created_dirs,
+        'gifs': created_gifs
+    }
+
+
+if __name__ == '__main__':
+    print("\nOpenWQ Static PNG Maps with Automatic GIF Creation")
+    print("\nAdvantages:")
+    print("  ✓ Always creates PNG maps")
+    print("  ✓ Automatically creates GIF if possible")
+    print("  ✓ Tries multiple GIF creation methods")
+    print("  ✓ Works even if GIF creation fails")

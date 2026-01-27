@@ -11,39 +11,23 @@ sys.path.insert(0, 'hdf5_support_lib')
 # CONFIGURATION
 ##############
 
-"""
 # Openwq output folder
-openwq_resDir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
+openwq_resDir_mapKey = {
+    "path_to_results": '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out',
+    "mapping_key": "reachID"}
 
 # Output specs
-OpenWQ_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
-OpenWQ_output_debugmode = False
+openwq_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
+openwq_output_debugmode = False
 
 # What to print?
-Chemical_species = ["SPECIES_A","SPECIES_B"]
-Concentration_units = "MG/L"
-Compartments = ['RIVER_NETWORK_REACHES']
-Cells_spatial = 'all'
+chemical_species = ["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"]
+concentration_units = "MG/L"
+compartments = ['RIVER_NETWORK_REACHES']
+cells_spatial = 'all'
 
 # Where to save plots?
-plots_save_dir = '/Users/diogocosta/Downloads/'
-"""
-
-# Openwq output folder
-openwq_resDir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
-
-# Output specs
-OpenWQ_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
-OpenWQ_output_debugmode = False
-
-# What to print?
-Chemical_species = ["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"]
-Concentration_units = "MG/L"
-Compartments = ['RIVER_NETWORK_REACHES']
-Cells_spatial = 'all'
-
-# Where to save plots?
-plots_save_dir = '/Users/diogocosta/Downloads/'
+plots_save_dir = openwq_resDir_mapKey["path_to_results"]
 
 """
 # SUMMA
@@ -51,14 +35,14 @@ plots_save_dir = '/Users/diogocosta/Downloads/'
 openwq_resDir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
 
 # Output specs
-OpenWQ_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
-OpenWQ_output_debugmode = False
+openwq_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
+openwq_output_debugmode = False
 
 # What to print?
-Chemical_species = ["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"]
-Concentration_units = "MG/L"
-Compartments = ['RIVER_NETWORK_REACHES']
-Cells_spatial = 'all'
+chemical_species = ["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"]
+concentration_units = "MG/L"
+compartments = ['RIVER_NETWORK_REACHES']
+cells_spatial = 'all'
 
 # Where to save plots?
 plots_save_dir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
@@ -74,13 +58,13 @@ import Read_h5_driver as h5_rlib
 
 # Read requested data: Read_h5_driver
 openwq_results = h5_rlib.Read_h5_driver(
-            openwq_resDir,
-            OpenWQ_output_format,
-            OpenWQ_output_debugmode,
-            Compartments,
-            Cells_spatial,
-            Chemical_species,
-            Concentration_units,
+            resDir_mapKey_dic=openwq_resDir_mapKey,
+            output_format=openwq_output_format,
+            debugmode=openwq_output_debugmode,
+            cmp=compartments,
+            space_elem=cells_spatial,
+            chemSpec=chemical_species,
+            chemUnits=concentration_units,
             noDataFlag=-9999)
 
 ######
@@ -118,19 +102,25 @@ figs4 = h5_plib.Plot_h5_driver(
 
 import Map_h5_driver as h5_mplib
 
-shpfile_fullpath = "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/mizuroute_in/shapefile/shapefiles/Flowline_CO_14_cameo.shp"
+shpfile_fullpath_mapKey = {
+    "path_to_shp": "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp",
+    "mapping_key": "SegId"}
 hydromodel_out_fullpath =  "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/mizuroute_out/v1.2_case1.h.2017-07-28-44100.nc"
-output_html_path = "/Users/diogocosta/Downloads/results_animation.html"
+output_html_path = plots_save_dir + "/mapResults.gif"
+hostmodel="mizuroute"
 #timestep = "all"
 timestep = [0, 100]
 
 h5_mplib.Map_h5_driver(
-    shpfile_fullpath=shpfile_fullpath,
-    openwq_results = openwq_results,
-    hydromodel_out_fullpath = hydromodel_out_fullpath,
-    output_html_path = output_html_path,
-    timestep = timestep,
-    model="mizuroute"
+    shpfile_fullpath_mapKey=shpfile_fullpath_mapKey,
+    openwq_results=openwq_results,
+    hydromodel_out_fullpath=hydromodel_out_fullpath,
+    output_html_path=output_html_path,
+    chemical_species=chemical_species[0],
+    file_extension='main',
+    timestep=timestep,
+    hostmodel=hostmodel,
+    gif_duration=50
 )
 
 

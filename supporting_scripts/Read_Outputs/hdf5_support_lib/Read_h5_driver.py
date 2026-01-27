@@ -84,7 +84,12 @@ def _find_matching_cells(xyz_elements_source, xyz_elements_requested):
     return indices_validated, np.array(coordinates_validated)
 
 
-def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,noDataFlag):
+def Read_h5_save_engine(
+        resDir_mapKey_dic,
+        file_extensions_i,
+        file_name,
+        space_elem,
+        noDataFlag):
     """
     Read HDF5 data and save to timeseries collection (OPTIMIZED).
 
@@ -96,7 +101,7 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,
         File extension identifier
     file_name : str
         Name of the file to read
-    Cells_spatial : array-like or str
+    space_elem : array-like or str
         Spatial cell coordinates or 'all'
     noDataFlag: number
 
@@ -105,6 +110,9 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,
     list
         List of tuples containing (filename, timetable, xyz_elements)
     """
+
+    folderpath = resDir_mapKey_dic["path_to_results"]
+    mappingKey = resDir_mapKey_dic["mapping_key"]
 
     # Normalize and find the file
     filename_fix = _normalize_filename(file_name, file_extensions_i)
@@ -120,13 +128,13 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,
         with h5py.File(filepath_i, 'r') as hf:
             # Get datasets (timestamps)
             all_keys = list(hf.keys())
-            timestamps = all_keys[:-2]  # Exclude last 2 entries
+            timestamps = all_keys[:-3]  # Exclude last 2 entries
 
             # Read xyz_elements
             if '/xyz_elements' not in hf:
                 print(f"<main_hdf5> Warning: '/xyz_elements' not found in {filename_fix}.h5")
                 return []
-            print(all_keys)
+            # print(all_keys)
             xyz_elements_source = hf['/xyz_elements'][:]
 
             # Skip if no data
@@ -134,10 +142,10 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,
                 return []
 
             # Process requested cells
-            if isinstance(Cells_spatial, str) and Cells_spatial.lower() == "all":
+            if isinstance(space_elem, str) and space_elem.lower() == "all":
                 xyz_elements_requested = xyz_elements_source
             else:
-                xyz_elements_requested = np.array(Cells_spatial)
+                xyz_elements_requested = np.array(space_elem)
 
             # Find matching cells (optimized)
             indices_validated, coordinates_validated = _find_matching_cells(
@@ -150,6 +158,9 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,
 
             num_validated = len(indices_validated)
             num_timesteps = len(timestamps)
+
+            # Get corresponding hostmodel ids for the indices_validated
+            mapKey_values = np.array([x.decode('utf-8') if isinstance(x, bytes) else x for x in hf[f'/{mappingKey}'][:]])
 
             # Pre-allocate arrays
             data_all = np.full((num_timesteps, num_validated), np.nan, dtype=np.float64)
@@ -167,6 +178,7 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,
 
                 # Replace noDataFlag with NaN
                 data_i[data_i==noDataFlag] = np.nan
+                data_i[data_i != noDataFlag] = 0.1 * tstep # TO REMOVE AFTER DEBUGGING
 
                 data_all[tstep, :] = data_i[0, indices_validated]
                 time_all.append(timestamp)
@@ -197,21 +209,21 @@ def Read_h5_save_engine(folderpath, file_extensions_i, file_name, Cells_spatial,
     ttdata = pd.DataFrame(
         data_sorted,
         index=time_sorted,
-        columns=[f"Element_{j}" for j in range(num_validated)]
+        columns=[f"{mappingKey}_{j}" for j in mapKey_values]
     )
 
     # Return as list with single tuple
     return [(filename_fix, ttdata, coordinates_validated)]
 
 
-def Read_h5_driver(folderpath,
-                   OpenWQ_output_format,
-                   OpenWQ_output_debugmode,
-                   Compartments,
-                   Cells_spatial,
-                   Chemical_species,
-                   Concentration_units,
-                   noDataFlag):
+def Read_h5_driver(resDir_mapKey_dic=None,
+                   output_format=None,
+                   debugmode=None,
+                   cmp=None,
+                   space_elem=None,
+                   chemSpec=None,
+                   chemUnits=None,
+                   noDataFlag=None):
     """
     Read and plot OpenWQ output data (HDF5 and CSV) - OPTIMIZED VERSION.
 
@@ -219,17 +231,17 @@ def Read_h5_driver(folderpath,
     ----------
     folderpath : str
         Fullpath to directory where the HDF5 files are located
-    OpenWQ_output_format : str
+    output_format : str
         Output format ('HDF5' or 'CSV')
-    OpenWQ_output_debugmode : bool
+    debugmode : bool
         Debug mode flag
-    Compartments : list
-        List of compartments to extract
-    Cells_spatial : array-like or str
+    cmp : list
+        List of cmp to extract
+    space_elem : array-like or str
         Spatial cell coordinates or 'all'
-    Chemical_species : list
+    chemSpec : list
         List of chemical species to extract
-    Concentration_units : str
+    chemUnits : str
         Units for concentration
 
     Returns
@@ -239,12 +251,14 @@ def Read_h5_driver(folderpath,
     """
 
     # Validate output format
-    if OpenWQ_output_format != 'HDF5':
+    if output_format != 'HDF5':
         print(">> Only supports HDF5 outputs <<")
         return {}
 
-    # Get fullpath to outputs
-    fullpath_outputs = os.path.join(folderpath, OpenWQ_output_format, '')
+    # Updating fullpath to outputs
+    resDir_mapKey_dic["path_to_results"] = os.path.join(
+        resDir_mapKey_dic["path_to_results"]
+        , output_format, '')
 
     # Define file extensions
     file_extensions = [
@@ -257,42 +271,42 @@ def Read_h5_driver(folderpath,
     ]
 
     # Determine number of files to load
-    load_files_num = len(file_extensions) if OpenWQ_output_debugmode else 1
+    load_files_num = len(file_extensions) if debugmode else 1
 
     # Pre-allocate results dictionary
     openwq_results = {}
 
     # Calculate total iterations for more accurate progress tracking
-    total_iterations = len(Chemical_species) * len(Compartments) * load_files_num
+    total_iterations = len(chemSpec) * len(cmp) * load_files_num
 
     # Use single progress bar for all operations
     with tqdm(total=total_iterations, desc="Extracting OpenWQ data") as pbar:
 
-        for chem in Chemical_species:
+        for chem in chemSpec:
             print(f"\n> Extracting results for: {chem}")
 
-            for comp in Compartments:
+            for comp in cmp:
                 print(f"  > Extracting results for: {comp}")
 
                 # Initialize results list for this combination
                 output_openwq_tscollect_all = []
 
                 # Create composite key
-                result_key = f"{comp}@{chem}#{Concentration_units}"
+                result_key = f"{comp}@{chem}#{chemUnits}"
 
                 # Loop through file extensions
                 for f in range(load_files_num):
                     file_extensions_i = file_extensions[f]
 
                     # Create file name
-                    file_name = f"{comp}@{chem}#{Concentration_units}"
+                    file_name = f"{comp}@{chem}#{chemUnits}"
 
                     # Read data
                     output_openwq_tscollect = Read_h5_save_engine(
-                        fullpath_outputs,
+                        resDir_mapKey_dic,
                         file_extensions_i,
                         file_name,
-                        Cells_spatial,
+                        space_elem,
                         noDataFlag
                     )
 
