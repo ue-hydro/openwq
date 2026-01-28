@@ -8,11 +8,28 @@ sys.path.insert(0, 'hdf5_support_lib')
 
 import Read_h5_driver as h5_rlib
 
+######################
+# General Mapping Info
+######################
+
+openwq_mapKey_dic= {
+    "path_to_results": '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out',
+    "mapping_key": "reachID"}
+
+shpfile_fullpath_mapKey={
+        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp',
+        'mapping_key': 'SegId'
+    }
+
+hydromodel_out_fullpath={
+        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc',
+        'mapping_key': 'reachID',
+        'var2print': 'DWroutedRunoff' # 'basRunoff' or 'DWroutedRunoff
+    }
+
 # Read requested data: Read_h5_driver
 openwq_results = h5_rlib.Read_h5_driver(
-            resDir_mapKey_dic= {
-                "path_to_results": '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out',
-                "mapping_key": "reachID"},
+            openwq_mapKey_dic= openwq_mapKey_dic,
             output_format='HDF5',
             debugmode=False,
             cmp=['RIVER_NETWORK_REACHES'],
@@ -22,35 +39,8 @@ openwq_results = h5_rlib.Read_h5_driver(
             noDataFlag=-9999)
 
 ######
-# Plot results
+# Creating GIF with results
 #####
-
-
-import Plot_h5_driver as h5_plib
-
-# Example 1: Temporal plot using coordinates
-"""
-figs1 = h5_plib.Plot_h5_driver(
-        openwq_results,
-        plot_type='temporal',
-        cells_to_plot=[(0, 0, 0), (100, 0, 0), (200, 0, 0)],
-        output_dir=plots_save_dir,
-        debug_mode=False
-    )
-"""
-"""
-# Example 2: Spatial plot - snapshot at specific date
-figs4 = h5_plib.Plot_h5_driver(
-        openwq_results,
-        plot_type='spatial',
-        time_slice=50,
-        # time_slice=15
-        spatial_axis='x',
-        fixed_coords={'y': 0, 'z': 0},
-        output_dir=plots_save_dir,
-        debug_mode=False
-    )
-"""
 
 # mapping results
 
@@ -58,15 +48,8 @@ import Map_h5_driver as h5_mplib
 
 h5_mplib.Map_h5_driver(
     openwq_results=openwq_results,
-    shpfile_fullpath_mapKey={
-        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp',
-        'mapping_key': 'SegId'
-    },
-    hydromodel_out_fullpath={
-        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc',
-        'mapping_key': 'reachID',
-        'var2print': 'DWroutedRunoff' # 'basRunoff' or 'DWroutedRunoff
-    },
+    shpfile_fullpath_mapKey=shpfile_fullpath_mapKey,
+    hydromodel_out_fullpath=hydromodel_out_fullpath,
     output_html_path="/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/mapResults.gif",
     chemSpec=["NO3-N"],
     hostmodel='mizuroute',  # mizuroute or summa
