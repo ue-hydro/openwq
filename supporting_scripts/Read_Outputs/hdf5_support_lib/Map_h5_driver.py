@@ -1,6 +1,7 @@
 """
 OpenWQ Simple Static Maps with Automatic GIF Creation
-UPDATED: Can map both OpenWQ results AND hostmodel outputs (e.g., mizuRoute runoff)
+UPDATED: Supports both mizuRoute (polylines) and SUMMA (polygons)
+Can map OpenWQ results AND hostmodel outputs
 """
 
 import numpy as np
@@ -9,12 +10,13 @@ import geopandas as gpd
 import netCDF4
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.patches import Polygon as MplPolygon
 import os
 import subprocess
 
 
 def _map_data_to_geodf(data_values, xyz_coords, geodf, shpf_mapKey, data_hostmdlKeys):
-    """Map OpenWQ data to geodataframe - SAME AS WORKING VERSION"""
+    """Map OpenWQ data to geodataframe - works for both lines and polygons"""
     geodf_openwq_wq = np.zeros(len(shpf_mapKey))
     data_hostmdlKeys_mainInfo = [item.split('_')[1] for item in data_hostmdlKeys]
 
@@ -142,7 +144,7 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
                   output_html_path=None,
                   chemSpec=None,
                   file_extension='main',
-                  timesteps=50,
+                  timeframes=None,
                   hostmodel=None,
                   what2map=None,
                   create_gif=True,
@@ -150,7 +152,10 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
     """
     Create static PNG maps AND animated GIF automatically
 
-    Can map either OpenWQ results OR hostmodel outputs (e.g., mizuRoute runoff)
+    Supports:
+    - OpenWQ results (water quality)
+    - mizuRoute outputs (polylines - river segments)
+    - SUMMA outputs (polygons - HRUs)
 
     Parameters:
     -----------
@@ -162,20 +167,20 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         If what2map='openwq': Path to hydromodel NetCDF output file (string)
         If what2map='hostmodel': Dictionary with keys:
             - 'path_to_shp': Path to NetCDF file
-            - 'mapping_key': Variable name for segment IDs (e.g., 'SegId')
-            - 'var2print': Variable to map (e.g., 'runoff')
+            - 'mapping_key': Variable name for segment/HRU IDs (e.g., 'SegId' or 'hruId')
+            - 'var2print': Variable to map (e.g., 'runoff', 'scalarSWE')
     output_html_path : str
         Base path for output
     chemSpec : list or None
         List of chemical species to map (only for what2map='openwq')
     file_extension : str
         File extension identifier (default: 'main')
-    timesteps : int or None
+    timeframes : int or None
         Number of equally spaced frames (default: 50)
     hostmodel : str
-        Host model name: 'mizuroute' or 'summa' (default: 'mizuroute')
+        Host model name: 'mizuroute' or 'summa' (default: None)
     what2map : str
-        What to map: 'openwq' or 'hostmodel' (default: 'openwq')
+        What to map: 'openwq' or 'hostmodel' (default: None)
     create_gif : bool
         Whether to create GIF automatically (default: True)
     gif_duration : int
@@ -195,10 +200,10 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         output_html_path='output',
         chemSpec=['NO3'],
         what2map='openwq',
-        timesteps=50
+        timeframes=50
     )
 
-    # Map hostmodel (mizuRoute runoff)
+    # Map mizuRoute runoff (polylines)
     Map_h5_driver(
         shpfile_fullpath_mapKey={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
         hydromodel_out_fullpath={
@@ -209,13 +214,29 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         output_html_path='output',
         hostmodel='mizuroute',
         what2map='hostmodel',
-        timesteps=50
+        timeframes=50
+    )
+
+    # Map SUMMA SWE (polygons)
+    Map_h5_driver(
+        shpfile_fullpath_mapKey={'path_to_shp': 'hrus.shp', 'mapping_key': 'hruId'},
+        hydromodel_out_fullpath={
+            'path_to_shp': 'summa_output.nc',
+            'mapping_key': 'hruId',
+            'var2print': 'scalarSWE'
+        },
+        output_html_path='output',
+        hostmodel='summa',
+        what2map='hostmodel',
+        timeframes=50
     )
     """
 
     print("=" * 70)
     print("STATIC PNG MAPS + AUTOMATIC GIF CREATION")
     print(f"Mapping: {what2map.upper()}")
+    if what2map == 'hostmodel':
+        print(f"Model: {hostmodel.upper()}")
     print("=" * 70)
 
     # Load shapefile
@@ -230,7 +251,21 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
     shapefile_mappingKey = shpfile_fullpath_mapKey["mapping_key"]
     shpf_mapKey = np.array(geodf[shapefile_mappingKey])
 
+    # Detect geometry type
+    geom_types = geodf.geometry.geom_type.unique()
     print(f"  Loaded {len(geodf)} features")
+    print(f"  Geometry types: {', '.join(geom_types)}")
+
+    # Determine if we're working with lines or polygons
+    is_polygon = any(gt in ['Polygon', 'MultiPolygon'] for gt in geom_types)
+    is_line = any(gt in ['LineString', 'MultiLineString'] for gt in geom_types)
+
+    if is_polygon and is_line:
+        print("  ⚠ Warning: Mixed geometry types detected")
+    elif is_polygon:
+        print(f"  → Polygon shapefile (suitable for SUMMA HRUs)")
+    elif is_line:
+        print(f"  → Polyline shapefile (suitable for mizuRoute segments)")
 
     # Prepare output directory
     output_dir = os.path.dirname(output_html_path) if output_html_path else '.'
@@ -257,17 +292,18 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         print(f"  NetCDF file: {hostmodel_nc_path}")
         print(f"  Mapping key: {hostmodel_mapping_key}")
         print(f"  Variable: {var2print}")
+        print(f"  Model: {hostmodel}")
 
         # Open NetCDF file
         nc_file = netCDF4.Dataset(hostmodel_nc_path, 'r')
 
-        # Get segment IDs and data
+        # Get segment/HRU IDs and data
         try:
             segment_ids = np.array(nc_file.variables[hostmodel_mapping_key][:])
             data_var = nc_file.variables[var2print]
 
             print(f"  Data shape: {data_var.shape}")
-            print(f"  Segments: {len(segment_ids)}")
+            print(f"  Features: {len(segment_ids)}")
 
             # Get time variable
             if 'time' in nc_file.variables:
@@ -389,27 +425,27 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         var2print_output_dir = os.path.join(output_dir, f'maps_{var2print_i}')
         os.makedirs(var2print_output_dir, exist_ok=True)
 
-        # Determine timesteps
-        print("\nDetermining timesteps...")
-        total_timesteps = len(ttdata)
+        # Determine timeframes
+        print("\nDetermining timeframes...")
+        total_timeframes = len(ttdata)
 
-        if timesteps is None:
-            timesteps_to_plot = list(range(total_timesteps))
-            print(f"  Using ALL {total_timesteps} timesteps")
+        if timeframes is None:
+            timeframes_to_plot = list(range(total_timeframes))
+            print(f"  Using ALL {total_timeframes} timeframes")
         else:
-            if timesteps >= total_timesteps:
-                timesteps_to_plot = list(range(total_timesteps))
-                print(f"  Using ALL {total_timesteps} timesteps")
+            if timeframes >= total_timeframes:
+                timeframes_to_plot = list(range(total_timeframes))
+                print(f"  Using ALL {total_timeframes} timeframes")
             else:
-                timesteps_to_plot = list(range(0, total_timesteps, max(1, total_timesteps // timesteps)))
-                timesteps_to_plot = timesteps_to_plot[:timesteps]
-                print(f"  Using {len(timesteps_to_plot)} equally spaced timesteps")
-                print(f"  Covering: {ttdata.index[timesteps_to_plot[0]]} to {ttdata.index[timesteps_to_plot[-1]]}")
+                timeframes_to_plot = list(range(0, total_timeframes, max(1, total_timeframes // timeframes)))
+                timeframes_to_plot = timeframes_to_plot[:timeframes]
+                print(f"  Using {len(timeframes_to_plot)} equally spaced timeframes")
+                print(f"  Covering: {ttdata.index[timeframes_to_plot[0]]} to {ttdata.index[timeframes_to_plot[-1]]}")
 
         # Calculate color scale
         print("\nCalculating color scale...")
         all_values = []
-        for t_idx in timesteps_to_plot[::max(1, len(timesteps_to_plot) // 10)]:
+        for t_idx in timeframes_to_plot[::max(1, len(timeframes_to_plot) // 10)]:
             data_values = ttdata.iloc[t_idx, :].values
             all_values.extend([v for v in data_values if not np.isnan(v)])
 
@@ -421,9 +457,9 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
 
         # CREATE MAPS
-        print(f"\nCreating {len(timesteps_to_plot)} static maps...")
+        print(f"\nCreating {len(timeframes_to_plot)} static maps...")
 
-        for i, t_idx in enumerate(timesteps_to_plot):
+        for i, t_idx in enumerate(timeframes_to_plot):
             # Get data
             data_values = ttdata.iloc[t_idx, :].values
             data_hostmdlKeys = list(ttdata.iloc[t_idx, :].index)
@@ -436,7 +472,7 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
             # Create figure
             fig, ax = plt.subplots(figsize=(12, 10))
 
-            # Plot features
+            # Plot features - HANDLE BOTH LINES AND POLYGONS
             for j, geom in enumerate(geodf.geometry):
                 value = geodf_openwq_wq[j]
 
@@ -447,15 +483,42 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
                     color = cmap(norm(value))
                     alpha = 0.8
 
+                # LINES (mizuRoute)
                 if geom.geom_type == 'LineString':
                     coords = list(geom.coords)
                     xs, ys = zip(*coords)
                     ax.plot(xs, ys, color=color, linewidth=2, alpha=alpha)
+
                 elif geom.geom_type == 'MultiLineString':
                     for line in geom.geoms:
                         coords = list(line.coords)
                         xs, ys = zip(*coords)
                         ax.plot(xs, ys, color=color, linewidth=2, alpha=alpha)
+
+                # POLYGONS (SUMMA)
+                elif geom.geom_type == 'Polygon':
+                    # Get exterior coordinates
+                    xs, ys = geom.exterior.xy
+                    polygon = MplPolygon(
+                        list(zip(xs, ys)),
+                        facecolor=color,
+                        edgecolor='black',
+                        linewidth=0.5,
+                        alpha=alpha
+                    )
+                    ax.add_patch(polygon)
+
+                elif geom.geom_type == 'MultiPolygon':
+                    for poly in geom.geoms:
+                        xs, ys = poly.exterior.xy
+                        polygon = MplPolygon(
+                            list(zip(xs, ys)),
+                            facecolor=color,
+                            edgecolor='black',
+                            linewidth=0.5,
+                            alpha=alpha
+                        )
+                        ax.add_patch(polygon)
 
             # Add colorbar
             sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
@@ -475,32 +538,37 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
             ax.set_aspect('equal')
             ax.grid(True, alpha=0.3)
 
+            # Set axis limits based on geodataframe bounds
+            bounds = geodf.total_bounds
+            ax.set_xlim(bounds[0], bounds[2])
+            ax.set_ylim(bounds[1], bounds[3])
+
             # Save
             output_file = os.path.join(var2print_output_dir, f'map_{i:04d}.png')
             plt.savefig(output_file, dpi=150, bbox_inches='tight')
             plt.close()
 
-            if (i + 1) % 10 == 0 or (i + 1) == len(timesteps_to_plot):
-                print(f"    Created {i + 1}/{len(timesteps_to_plot)} maps...")
+            if (i + 1) % 10 == 0 or (i + 1) == len(timeframes_to_plot):
+                print(f"    Created {i + 1}/{len(timeframes_to_plot)} maps...")
 
         created_dirs.append(var2print_output_dir)
 
         print("=" * 70)
         print(f"✓ PNG maps complete for {var2print_i}!")
         print(f"  Directory: {var2print_output_dir}")
-        print(f"  Maps: {len(timesteps_to_plot)} PNG files")
+        print(f"  Maps: {len(timeframes_to_plot)} PNG files")
         print("=" * 70)
 
         # CREATE GIF
-        if create_gif and len(timesteps_to_plot) > 1:
+        if create_gif and len(timeframes_to_plot) > 1:
             print("\n" + "=" * 70)
             print(f"Creating animated GIF for {var2print_i}...")
             print("=" * 70)
 
-            if what2map=='hostmodel':
-                model_print=hostmodel
+            if what2map == 'hostmodel':
+                model_print = hostmodel
             else:
-                model_print='openwq'
+                model_print = 'openwq'
 
             gif_path = os.path.join(output_dir, f'{model_print}_{var2print_i}_animation.gif')
 
@@ -536,3 +604,11 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         'image_dirs': created_dirs,
         'gifs': created_gifs
     }
+
+
+if __name__ == '__main__':
+    print("\nOpenWQ Static PNG Maps with Automatic GIF Creation")
+    print("\nSupports:")
+    print("  • OpenWQ water quality results (what2map='openwq')")
+    print("  • mizuRoute outputs - polylines (hostmodel='mizuroute')")
+    print("  • SUMMA outputs - polygons (hostmodel='summa')")
