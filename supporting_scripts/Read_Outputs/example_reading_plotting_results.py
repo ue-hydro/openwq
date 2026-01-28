@@ -105,22 +105,24 @@ import Map_h5_driver as h5_mplib
 shpfile_fullpath_mapKey = {
     "path_to_shp": "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp",
     "mapping_key": "SegId"}
-hydromodel_out_fullpath =  "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/mizuroute_out/v1.2_case1.h.2017-07-28-44100.nc"
+hydromodel_out_fullpath =  "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc"
 output_html_path = plots_save_dir + "/mapResults.gif"
 hostmodel="mizuroute"
-#timestep = "all"
-timestep = [0, 100]
+timestep = 40
+what2map='hostmodel' # hostmodel or openwq
 
 h5_mplib.Map_h5_driver(
     shpfile_fullpath_mapKey=shpfile_fullpath_mapKey,
     openwq_results=openwq_results,
     hydromodel_out_fullpath=hydromodel_out_fullpath,
     output_html_path=output_html_path,
-    chemical_species=chemical_species[0],
+    chemical_species=chemical_species[1],
     file_extension='main',
-    timestep=timestep,
+    timesteps=timestep,
     hostmodel=hostmodel,
-    gif_duration=50
+    what2map="openwq",
+    create_gif=True,
+    gif_duration=100
 )
 
 

@@ -1,7 +1,6 @@
 """
 OpenWQ Simple Static Maps with Automatic GIF Creation
-Creates individual static maps for each timestep AND automatically creates GIF
-No special installs needed - tries multiple methods to create GIF
+UPDATED: Simplified - always covers entire period with equally spaced frames
 """
 
 import numpy as np
@@ -63,7 +62,7 @@ def _create_gif_from_pngs(image_dir, output_gif, duration_ms=500):
             images.append(imageio.imread(filepath))
 
         # Duration in seconds for imageio
-        imageio.mimsave(output_gif, images, duration=duration_ms/1000.0, loop=0)
+        imageio.mimsave(output_gif, images, duration=duration_ms / 1000.0, loop=0)
 
         size_mb = os.path.getsize(output_gif) / (1024 * 1024)
         print(f"  ✓ SUCCESS with imageio!")
@@ -149,13 +148,15 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
                   output_html_path=None,
                   chemical_species=None,
                   file_extension='main',
-                  timestep='all',
+                  timesteps=50,
                   hostmodel='mizuroute',
-                  max_timesteps=20,
+                  what2map='openwq', # openwq or hostmodel
                   create_gif=True,
-                  gif_duration=None):
+                  gif_duration=500):
     """
     Create static PNG maps AND animated GIF automatically
+
+    SIMPLIFIED: Always covers ENTIRE time period using equally spaced frames.
 
     Parameters:
     -----------
@@ -171,13 +172,18 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         List of chemical species to map
     file_extension : str
         File extension identifier (default: 'main')
-    timestep : str, int, or list
-        Timestep(s) to plot (default: 'all')
-    max_timesteps : int, optional
-        Maximum number of timesteps (default: 20)
-    create_gif : bool, optional
+    timesteps : int or None
+        Number of equally spaced frames across ENTIRE period.
+        Examples:
+            timesteps=20   → 20 frames spanning entire period
+            timesteps=100  → 100 frames spanning entire period
+            timesteps=None → ALL available timesteps
+        (default: 50)
+    hostmodel : str
+        Host model name (default: 'mizuroute')
+    create_gif : bool
         Whether to create GIF automatically (default: True)
-    gif_duration : int, optional
+    gif_duration : int
         Duration per frame in milliseconds (default: 500)
 
     Returns:
@@ -187,6 +193,7 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
 
     print("=" * 70)
     print("STATIC PNG MAPS + AUTOMATIC GIF CREATION")
+    print("Covers ENTIRE period with equally spaced frames")
     print("=" * 70)
 
     # Determine which species to process
@@ -273,59 +280,38 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
                     filename, ttdata, xyz_coords = data_list[0]
                     data_found = True
                     print(f"  Data shape: {ttdata.shape}")
-                    print(f"  Time: {ttdata.index[0]} to {ttdata.index[-1]}")
+                    print(f"  Time range: {ttdata.index[0]} to {ttdata.index[-1]}")
                     break
 
         if not data_found:
             print(f"✗ No data for extension '{file_extension}', skipping...")
             continue
 
-        # Determine timesteps
+        # Determine timesteps - SIMPLIFIED LOGIC
         print("\nDetermining timesteps...")
+        total_timesteps = len(ttdata)
 
-        if timestep == 'all':
-            total_timesteps = len(ttdata)
-
-            if max_timesteps and max_timesteps < total_timesteps:
-                timesteps_to_plot = list(range(0, total_timesteps, max(1, total_timesteps // max_timesteps)))
-                timesteps_to_plot = timesteps_to_plot[:max_timesteps]
-                print(f"  Using {len(timesteps_to_plot)}/{total_timesteps} timesteps")
-            else:
-                timesteps_to_plot = list(range(total_timesteps))
-                print(f"  Using all {total_timesteps} timesteps")
-        elif isinstance(timestep, list):
-            min_val, max_val = timestep[0], timestep[1]
-
-            if isinstance(min_val, int) and isinstance(max_val, int):
-                timesteps_to_plot = list(range(min_val, max_val + 1))
-            else:
-                try:
-                    min_date = pd.to_datetime(str(min_val))
-                    max_date = pd.to_datetime(str(max_val))
-
-                    timesteps_to_plot = []
-                    for i, ts in enumerate(ttdata.index):
-                        ts_datetime = pd.to_datetime(ts)
-                        if min_date <= ts_datetime <= max_date:
-                            timesteps_to_plot.append(i)
-
-                    if len(timesteps_to_plot) == 0:
-                        print(f"✗ No timesteps in range, skipping...")
-                        continue
-                except Exception as e:
-                    print(f"✗ Error parsing dates: {e}, skipping...")
-                    continue
-
-            print(f"  Using {len(timesteps_to_plot)} timesteps")
+        if timesteps is None:
+            # Use ALL timesteps
+            timesteps_to_plot = list(range(total_timesteps))
+            print(f"  Using ALL {total_timesteps} timesteps")
         else:
-            timestep_idx = timestep if isinstance(timestep, int) else ttdata.index.get_loc(timestep)
-            timesteps_to_plot = [timestep_idx]
-            print(f"  Using timestep {timestep_idx}")
+            # Use equally spaced timesteps across entire period
+            if timesteps >= total_timesteps:
+                # If requested more than available, use all
+                timesteps_to_plot = list(range(total_timesteps))
+                print(f"  Using ALL {total_timesteps} timesteps (requested {timesteps})")
+            else:
+                # Create equally spaced indices
+                timesteps_to_plot = list(range(0, total_timesteps, max(1, total_timesteps // timesteps)))
+                timesteps_to_plot = timesteps_to_plot[:timesteps]
+                print(f"  Using {len(timesteps_to_plot)} equally spaced timesteps")
+                print(f"  Covering: {ttdata.index[timesteps_to_plot[0]]} to {ttdata.index[timesteps_to_plot[-1]]}")
 
         # Calculate global color scale
         print("\nCalculating color scale...")
         all_values = []
-        for t_idx in timesteps_to_plot[::max(1, len(timesteps_to_plot)//10)]:
+        for t_idx in timesteps_to_plot[::max(1, len(timesteps_to_plot) // 10)]:
             data_values = ttdata.iloc[t_idx, :].values
             all_values.extend([v for v in data_values if not np.isnan(v)])
 
@@ -448,12 +434,3 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         'image_dirs': created_dirs,
         'gifs': created_gifs
     }
-
-
-if __name__ == '__main__':
-    print("\nOpenWQ Static PNG Maps with Automatic GIF Creation")
-    print("\nAdvantages:")
-    print("  ✓ Always creates PNG maps")
-    print("  ✓ Automatically creates GIF if possible")
-    print("  ✓ Tries multiple GIF creation methods")
-    print("  ✓ Works even if GIF creation fails")
