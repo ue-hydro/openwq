@@ -23,8 +23,7 @@ shpfile_fullpath_mapKey={
 
 hydromodel_out_fullpath={
         'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc',
-        'mapping_key': 'reachID',
-        'var2print': 'DWroutedRunoff' # 'basRunoff' or 'DWroutedRunoff
+        'mapping_key': 'reachID' # 'basRunoff' or 'DWroutedRunoff
     }
 
 # Read requested data: Read_h5_driver
@@ -40,41 +39,41 @@ openwq_results = h5_rlib.Read_h5_driver(
 
 ######
 # Creating GIF with results
-#####
-
 # mapping results
+#####
 
 import Map_h5_driver as h5_mplib
 
 h5_mplib.Map_h5_driver(
-    openwq_results=openwq_results,
-    shpfile_fullpath_mapKey=shpfile_fullpath_mapKey,
-    hydromodel_out_fullpath=hydromodel_out_fullpath,
-    output_html_path="/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/mapResults.gif",
-    chemSpec=["NO3-N"],
-    hostmodel='mizuroute',  # mizuroute or summa
+    # What to print?
     what2map='openwq',  # hostmodel or openwq
+    hostmodel='mizuroute',  # mizuroute or summa
+    # shapefile info
+    shpfile_fullpath_mapKey=shpfile_fullpath_mapKey,
+    # openwq info (👉🏼 used if what2map=openwq)
+    openwq_results=openwq_results,
+    chemSpec=["NO3-N"],
+    # hostmodel info (👉🏼 used if what2map=hostmodel)
+    hydromodel_out_fullpath=hydromodel_out_fullpath,
+    hydromodel_var2print='DWroutedRunoff',
+    # gif config
+    output_html_path="/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/mapResults.gif",
     create_gif=True,
     timeframes=200,
     gif_duration=100
 )
 
-
 """
-# test
-import read_ncdf as read_ncdf
+import Plot_h5_driver as h5_mplib
 
-shpfile_fullpath = "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/2_nrTrans_instS_PorMedia/mizuroute/mizuroute_in/shapefile/shapefiles/Flowline_CO_14_cameo.shp"
-mizuroute_out_fullpath = '/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/10_Univ_Evora/3_research/03_ACTIVE/1_MAIN_AUTHOR/9_openWQ/2_initial_develop_synthetic_tests_GMD_paper/code/mizuRoute/case_studies/synthetic_tests/4_nrTrans_contS_PorMedia/mizuroute/mizuroute_out/v1.2_case1.h.1950-01-02-43200.nc'
-folderSaveFigs_fullpath = "/Users/diogocosta/Downloads/"
-gif_name_fullpath = 'results_animation.html'
-print_step = 10
-
-read_ncdf.MapGeoPandas(shpfile_fullpath,
-                openwq_results,
-                mizuroute_out_fullpath,
-                folderSaveFigs_fullpath,
-                gif_name_fullpath,
-                print_step)
-
+h5_mplib.Plot_h5_driver(
+    hydromodel_out_fullpath={
+        'path_to_shp': 'summa_output.nc',
+        'mapping_key': 'hruId',
+        'var2print': 'scalarSWE',
+        'feature_ids': [1, 2, 3, 4, 5]
+    },
+    output_path='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/plotSeries.png',
+    hostmodel='mizuroute',
+    what2map='hostmodel')
 """

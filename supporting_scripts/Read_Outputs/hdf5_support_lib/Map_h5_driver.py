@@ -141,6 +141,7 @@ def _create_gif_from_pngs(image_dir, output_gif, duration_ms=500):
 def Map_h5_driver(shpfile_fullpath_mapKey=None,
                   openwq_results=None,
                   hydromodel_out_fullpath=None,
+                  hydromodel_var2print=None,
                   output_html_path=None,
                   chemSpec=None,
                   file_extension='main',
@@ -283,7 +284,7 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         if isinstance(hydromodel_out_fullpath, dict):
             hostmodel_nc_path = hydromodel_out_fullpath['path_to_shp']
             hostmodel_mapping_key = hydromodel_out_fullpath['mapping_key']
-            var2print = hydromodel_out_fullpath['var2print']
+            var2print = hydromodel_var2print
         else:
             print("✗ Error: For what2map='hostmodel', hydromodel_out_fullpath must be a dictionary")
             print("  with keys: 'path_to_shp', 'mapping_key', 'var2print'")
