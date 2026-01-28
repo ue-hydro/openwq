@@ -358,7 +358,7 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         if what2map == 'hostmodel':
             # Hostmodel: already have ttdata
             compartment = hostmodel
-            chemical = var2print
+            var2print_i = var2print
             xyz_coords = None
 
         else:  # openwq
@@ -366,11 +366,11 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
             parts = species_key.split('@')
             compartment = parts[0]
             chem_unit = parts[1].split('#')
-            chemical = chem_unit[0]
+            var2print_i = chem_unit[0]
             units = chem_unit[1]
 
             # Get data from results dictionary
-            print(f"\nExtracting data for {chemical}...")
+            print(f"\nExtracting data for {var2print_i}...")
             data_found = False
             for ext, data_list in openwq_results[species_key]:
                 if ext == file_extension:
@@ -386,8 +386,8 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
                 continue
 
         # Create output directory
-        species_output_dir = os.path.join(output_dir, f'maps_{chemical}')
-        os.makedirs(species_output_dir, exist_ok=True)
+        var2print_output_dir = os.path.join(output_dir, f'maps_{var2print_i}')
+        os.makedirs(var2print_output_dir, exist_ok=True)
 
         # Determine timesteps
         print("\nDetermining timesteps...")
@@ -461,14 +461,14 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
             sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
             sm.set_array([])
             cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label(f'{chemical} ({units})', rotation=270, labelpad=20)
+            cbar.set_label(f'{var2print_i} ({units})', rotation=270, labelpad=20)
 
             # Set title
             timestamp = str(ttdata.index[t_idx])
             if what2map == 'hostmodel':
-                ax.set_title(f'{hostmodel.upper()} - {chemical} - {timestamp}', fontsize=14, pad=20)
+                ax.set_title(f'{hostmodel.upper()} - {var2print_i} - {timestamp}', fontsize=14, pad=20)
             else:
-                ax.set_title(f'{chemical} Concentrations - {timestamp}', fontsize=14, pad=20)
+                ax.set_title(f'{var2print_i} Concentrations - {timestamp}', fontsize=14, pad=20)
 
             ax.set_xlabel('Longitude', fontsize=12)
             ax.set_ylabel('Latitude', fontsize=12)
@@ -476,30 +476,35 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
             ax.grid(True, alpha=0.3)
 
             # Save
-            output_file = os.path.join(species_output_dir, f'map_{i:04d}.png')
+            output_file = os.path.join(var2print_output_dir, f'map_{i:04d}.png')
             plt.savefig(output_file, dpi=150, bbox_inches='tight')
             plt.close()
 
             if (i + 1) % 10 == 0 or (i + 1) == len(timesteps_to_plot):
                 print(f"    Created {i + 1}/{len(timesteps_to_plot)} maps...")
 
-        created_dirs.append(species_output_dir)
+        created_dirs.append(var2print_output_dir)
 
         print("=" * 70)
-        print(f"✓ PNG maps complete for {chemical}!")
-        print(f"  Directory: {species_output_dir}")
+        print(f"✓ PNG maps complete for {var2print_i}!")
+        print(f"  Directory: {var2print_output_dir}")
         print(f"  Maps: {len(timesteps_to_plot)} PNG files")
         print("=" * 70)
 
         # CREATE GIF
         if create_gif and len(timesteps_to_plot) > 1:
             print("\n" + "=" * 70)
-            print(f"Creating animated GIF for {chemical}...")
+            print(f"Creating animated GIF for {var2print_i}...")
             print("=" * 70)
 
-            gif_path = os.path.join(output_dir, f'{chemical}_animation.gif')
+            if what2map=='hostmodel':
+                model_print=hostmodel
+            else:
+                model_print='openwq'
 
-            if _create_gif_from_pngs(species_output_dir, gif_path, gif_duration):
+            gif_path = os.path.join(output_dir, f'{model_print}_{var2print_i}_animation.gif')
+
+            if _create_gif_from_pngs(var2print_output_dir, gif_path, gif_duration):
                 created_gifs.append(gif_path)
 
     # Close files

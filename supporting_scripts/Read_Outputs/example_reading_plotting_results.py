@@ -65,7 +65,7 @@ h5_mplib.Map_h5_driver(
     hydromodel_out_fullpath={
         'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc',
         'mapping_key': 'reachID',
-        'var2print': 'DWroutedRunoff'
+        'var2print': 'basRunoff' #'DWroutedRunoff'
     },
     output_html_path="/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/mapResults.gif",
     timesteps=50,
