@@ -85,7 +85,7 @@ def _find_matching_cells(xyz_elements_source, xyz_elements_requested):
 
 
 def Read_h5_save_engine(
-        openwq_mapKey_dic,
+        openwq_info,
         file_extensions_i,
         file_name,
         space_elem,
@@ -111,8 +111,8 @@ def Read_h5_save_engine(
         List of tuples containing (filename, timetable, xyz_elements)
     """
 
-    folderpath = openwq_mapKey_dic["path_to_results"]
-    mappingKey = openwq_mapKey_dic["mapping_key"]
+    folderpath = openwq_info["path_to_results"]
+    mappingKey = openwq_info["mapping_key"]
 
     # Normalize and find the file
     filename_fix = _normalize_filename(file_name, file_extensions_i)
@@ -216,7 +216,7 @@ def Read_h5_save_engine(
     return [(filename_fix, ttdata, coordinates_validated)]
 
 
-def Read_h5_driver(openwq_mapKey_dic=None,
+def Read_h5_driver(openwq_info=None,
                    output_format=None,
                    debugmode=None,
                    cmp=None,
@@ -256,8 +256,8 @@ def Read_h5_driver(openwq_mapKey_dic=None,
         return {}
 
     # Updating fullpath to outputs
-    openwq_mapKey_dic["path_to_results"] = os.path.join(
-        openwq_mapKey_dic["path_to_results"]
+    openwq_info["path_to_results"] = os.path.join(
+        openwq_info["path_to_results"]
         , output_format, '')
 
     # Define file extensions
@@ -303,7 +303,7 @@ def Read_h5_driver(openwq_mapKey_dic=None,
 
                     # Read data
                     output_openwq_tscollect = Read_h5_save_engine(
-                        openwq_mapKey_dic,
+                        openwq_info,
                         file_extensions_i,
                         file_name,
                         space_elem,

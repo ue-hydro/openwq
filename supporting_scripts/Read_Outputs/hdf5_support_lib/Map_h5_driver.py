@@ -138,9 +138,9 @@ def _create_gif_from_pngs(image_dir, output_gif, duration_ms=500):
     return False
 
 
-def Map_h5_driver(shpfile_fullpath_mapKey=None,
+def Map_h5_driver(shpfile_info=None,
                   openwq_results=None,
-                  hydromodel_out_fullpath=None,
+                  hydromodel_info=None,
                   hydromodel_var2print=None,
                   output_html_path=None,
                   chemSpec=None,
@@ -160,11 +160,11 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
 
     Parameters:
     -----------
-    shpfile_fullpath_mapKey : dict
+    shpfile_info : dict
         Dictionary with 'path_to_shp' and 'mapping_key' keys
     openwq_results : dict
         Results dictionary from Read_h5_driver (required if what2map='openwq')
-    hydromodel_out_fullpath : str or dict
+    hydromodel_info : str or dict
         If what2map='openwq': Path to hydromodel NetCDF output file (string)
         If what2map='hostmodel': Dictionary with keys:
             - 'path_to_shp': Path to NetCDF file
@@ -195,9 +195,9 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
     ---------
     # Map OpenWQ results
     Map_h5_driver(
-        shpfile_fullpath_mapKey={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
+        shpfile_info={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
         openwq_results=results,
-        hydromodel_out_fullpath='mizuroute.nc',
+        hydromodel_info='mizuroute.nc',
         output_html_path='output',
         chemSpec=['NO3'],
         what2map='openwq',
@@ -206,8 +206,8 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
 
     # Map mizuRoute runoff (polylines)
     Map_h5_driver(
-        shpfile_fullpath_mapKey={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
-        hydromodel_out_fullpath={
+        shpfile_info={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
+        hydromodel_info={
             'path_to_shp': 'mizuroute_output.nc',
             'mapping_key': 'SegId',
             'var2print': 'runoff'
@@ -220,8 +220,8 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
 
     # Map SUMMA SWE (polygons)
     Map_h5_driver(
-        shpfile_fullpath_mapKey={'path_to_shp': 'hrus.shp', 'mapping_key': 'hruId'},
-        hydromodel_out_fullpath={
+        shpfile_info={'path_to_shp': 'hrus.shp', 'mapping_key': 'hruId'},
+        hydromodel_info={
             'path_to_shp': 'summa_output.nc',
             'mapping_key': 'hruId',
             'var2print': 'scalarSWE'
@@ -245,11 +245,11 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
     print("STEP 1: Loading shapefile...")
     print("=" * 70)
 
-    shpfile_fullpath = shpfile_fullpath_mapKey["path_to_shp"]
+    shpfile_fullpath = shpfile_info["path_to_shp"]
     geodf = gpd.read_file(shpfile_fullpath, engine='fiona')
     geodf = geodf.to_crs("EPSG:4326")
 
-    shapefile_mappingKey = shpfile_fullpath_mapKey["mapping_key"]
+    shapefile_mappingKey = shpfile_info["mapping_key"]
     shpf_mapKey = np.array(geodf[shapefile_mappingKey])
 
     # Detect geometry type
@@ -281,12 +281,12 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         print("=" * 70)
 
         # Extract hostmodel NetCDF info
-        if isinstance(hydromodel_out_fullpath, dict):
-            hostmodel_nc_path = hydromodel_out_fullpath['path_to_shp']
-            hostmodel_mapping_key = hydromodel_out_fullpath['mapping_key']
+        if isinstance(hydromodel_info, dict):
+            hostmodel_nc_path = hydromodel_info['path_to_shp']
+            hostmodel_mapping_key = hydromodel_info['mapping_key']
             var2print = hydromodel_var2print
         else:
-            print("✗ Error: For what2map='hostmodel', hydromodel_out_fullpath must be a dictionary")
+            print("✗ Error: For what2map='hostmodel', hydromodel_info must be a dictionary")
             print("  with keys: 'path_to_shp', 'mapping_key', 'var2print'")
             return None
 
@@ -381,8 +381,8 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
                 return None
 
         # Load mizuRoute output for reference (if needed)
-        if isinstance(hydromodel_out_fullpath, str):
-            mizuroute_out_file = netCDF4.Dataset(hydromodel_out_fullpath, 'r')
+        if isinstance(hydromodel_info, str):
+            mizuroute_out_file = netCDF4.Dataset(hydromodel_info, 'r')
         else:
             mizuroute_out_file = None
 

@@ -1,451 +1,371 @@
-# Copyright 2026, Diogo Costa, diogo.costa@uevora.pt
-# This file is part of OpenWQ model.
-
-# This program, openWQ, is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 """
-Plotly visualization function for OpenWQ model results dictionary
-Supports both temporal (time series) and spatial (snapshot) plotting
+OpenWQ Simplified Time-Series Plotting Tool
+Clean interface for plotting time-series
 """
 
-import plotly.graph_objects as go
-import plotly.express as px
-from pathlib import Path
 import numpy as np
+import pandas as pd
+import netCDF4
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import os
 
 
-def Plot_h5_driver(results_dict,
-                   plot_type='temporal',
-                   output_dir='plots',
-                   debug_mode=None,
-                   # Temporal plot parameters
-                   cells_to_plot=None,
-                   # Spatial plot parameters
-                   time_slice=0,
-                   spatial_axis='x',
-                   fixed_coords=None,
-                   # Common parameters
-                   colors=None,
-                   line_width=2,
-                   template="plotly_white",
-                   height=600,
-                   save_html=True,
-                   show_plots=False):
+def Plot_h5_driver(what2map=None,
+                   hostmodel=None,
+                   mapping_key_values=None,
+                   openwq_results=None,
+                   chemSpec=None,
+                   hydromodel_info=None,
+                   hydromodel_var2print=None,
+                   output_path=None,
+                   file_extension='main',
+                   combine_features=True,
+                   figsize=(12, 6)):
     """
-    Create Plotly plots for OpenWQ results - supports temporal and spatial visualization.
+    Plot time-series for specific features
 
-    Parameters
-    ----------
-    results_dict : dict
-        Dictionary from Read_h5_driver
+    Parameters:
+    -----------
+    what2map : str
+        'hostmodel' or 'openwq'
+    hostmodel : str
+        'mizuroute' or 'summa'
+    mapping_key_values : list
+        List of feature IDs to plot (e.g., [200005899, 200002273])
+    openwq_results : dict
+        OpenWQ results dictionary from Read_h5_driver
+        Used if what2map='openwq'
+    chemSpec : list or str
+        Chemical species to plot (e.g., ['NO3-N'] or 'NO3-N')
+        Used if what2map='openwq'
+    hydromodel_info : dict
+        Dictionary with:
+            - 'path_to_shp': Path to NetCDF file
+            - 'mapping_key': Variable for IDs (e.g., 'reachID')
+        Used if what2map='hostmodel'
+    hydromodel_var2print : str
+        Variable to plot (e.g., 'basRunoff', 'DWroutedRunoff')
+        Used if what2map='hostmodel'
+    output_path : str
+        Path where plot will be saved
+    file_extension : str
+        File extension for OpenWQ data (default: 'main')
+    combine_features : bool
+        If True, plot all features on one graph (default: True)
+    figsize : tuple
+        Figure size (width, height) in inches (default: (12, 6))
 
-    plot_type : str, optional
-        Type of plot to create:
-        - 'temporal': Time series plots (default)
-        - 'spatial': Spatial distribution at specific time
-
-    output_dir : str, optional
-        Directory to save plots (default: 'plots')
-
-    debug_mode : bool or None, optional
-        If True: plot all file extensions
-        If False: plot only 'main'
-        If None: plot all available extensions
-
-    Temporal Plot Parameters
-    ------------------------
-    cells_to_plot : list of int, list of tuples, or 'all', optional
-        Which cells to plot in time series:
-        - None or 'all': plot all cells
-        - list of int: plot cells by index, e.g., [0, 5, 10]
-        - list of tuples: plot cells by (x,y,z) coords, e.g., [(10,0,0), (20,0,0)]
-
-    Spatial Plot Parameters
-    -----------------------
-    time_slice : int or str, optional
-        Which timestep to plot (default: 0 = first timestep)
-        - int: index of timestep
-        - str: date string matching index, e.g., '2020-01-15'
-
-    spatial_axis : str, optional
-        Which spatial dimension to plot on x-axis:
-        - 'x': plot along x-axis (default)
-        - 'y': plot along y-axis
-        - 'z': plot along z-axis
-
-    fixed_coords : dict, optional
-        Fix certain coordinates for spatial plot. Examples:
-        - {'y': 0, 'z': 0}: fix y and z, plot along x
-        - {'x': 100, 'z': 0}: fix x and z, plot along y
-        - {'x': 100, 'y': 50}: fix x and y, plot along z
-        - None: plot all cells along specified axis
-
-    Common Parameters
-    -----------------
-    colors : list of str, optional
-        Custom colors for lines
-
-    line_width : float, optional
-        Width of lines (default: 2)
-
-    template : str, optional
-        Plotly template (default: "plotly_white")
-
-    height : int, optional
-        Plot height in pixels (default: 600)
-
-    save_html : bool, optional
-        Whether to save plots as HTML files (default: True)
-
-    show_plots : bool, optional
-        Whether to display plots (default: False)
-
-    Returns
-    -------
-    dict
-        Dictionary with keys as plot names and values as plotly figures
-
-    Examples
+    Returns:
     --------
-    # Example 1: Temporal plot - time series for specific cells
-    >>> figs = Plot_h5_driver(
-    ...     results,
-    ...     plot_type='temporal',
-    ...     cells_to_plot=[0, 100, 500]
-    ... )
+    str : Path to created plot
 
-    # Example 2: Temporal plot - time series for specific coordinates
-    >>> figs = Plot_h5_driver(
-    ...     results,
-    ...     plot_type='temporal',
-    ...     cells_to_plot=[(10, 0, 0), (50, 0, 0), (100, 0, 0)]
-    ... )
+    Examples:
+    ---------
+    # 1. Load OpenWQ results
+    from Read_h5_driver import Read_h5_driver
+    openwq_results = Read_h5_driver(
+        h5files_folderPath='/path/to/openwq_out',
+        hostmodel='mizuroute'
+    )
 
-    # Example 3: Spatial plot - concentration along x-axis at first timestep
-    >>> figs = Plot_h5_driver(
-    ...     results,
-    ...     plot_type='spatial',
-    ...     time_slice=0,
-    ...     spatial_axis='x',
-    ...     fixed_coords={'y': 0, 'z': 0}
-    ... )
+    # 2. Plot mizuRoute runoff
+    h5_mplib.Plot_h5_driver(
+        # 1) What results to map?
+        what2map='hostmodel',
+        hostmodel='mizuroute',
+        mapping_key_values=[200005899, 200002273],
+        # 2) openwq info (👉🏼 used if what2map=openwq)
+        openwq_results=openwq_results,
+        chemSpec=['NO3-N'],
+        # 3) hostmodel info (👉🏼 used if what2map=hostmodel)
+        hydromodel_info=hydromodel_info,
+        hydromodel_var2print='DWroutedRunoff',
+        # 4) output config
+        output_path='plots/runoff.png'
+    )
 
-    # Example 4: Spatial plot - concentration along river at specific date
-    >>> figs = Plot_h5_driver(
-    ...     results,
-    ...     plot_type='spatial',
-    ...     time_slice='2020-07-15',
-    ...     spatial_axis='x',
-    ...     fixed_coords={'y': 0, 'z': 0}
-    ... )
-
-    # Example 5: Spatial plot - all y values at x=100, z=0
-    >>> figs = Plot_h5_driver(
-    ...     results,
-    ...     plot_type='spatial',
-    ...     time_slice=0,
-    ...     spatial_axis='y',
-    ...     fixed_coords={'x': 100, 'z': 0}
-    ... )
+    # 3. Plot OpenWQ NO3
+    h5_mplib.Plot_h5_driver(
+        # 1) What results to map?
+        what2map='openwq',
+        hostmodel='mizuroute',
+        mapping_key_values=[200005899, 200002273],
+        # 2) openwq info (👉🏼 used if what2map=openwq)
+        openwq_results=openwq_results,
+        chemSpec=['NO3-N'],
+        # 3) hostmodel info (👉🏼 used if what2map=hostmodel)
+        hydromodel_info=hydromodel_info,
+        hydromodel_var2print='DWroutedRunoff',
+        # 4) output config
+        output_path='plots/NO3.png'
+    )
     """
 
-    # Validate plot_type
-    if plot_type not in ['temporal', 'spatial']:
-        raise ValueError("plot_type must be 'temporal' or 'spatial'")
-
-    # Determine which file extensions to plot
-    if debug_mode is True:
-        file_extensions_to_plot = [
-            'main',
-            'd_output_dt_chemistry',
-            'd_output_dt_transport',
-            'd_output_ss',
-            'd_output_ewf',
-            'd_output_ic'
-        ]
-    elif debug_mode is False:
-        file_extensions_to_plot = ['main']
-    else:
-        file_extensions_to_plot = None  # Plot all available
-
-    # Create output directory
-    if save_html:
-        output_path = Path(output_dir)
-        output_path.mkdir(exist_ok=True)
-
-    # Store all figures
-    all_figures = {}
-
-    # Set default colors
-    if colors is None:
-        colors = px.colors.qualitative.Plotly
-
-    # Counter for progress
-    total_plots = 0
-    created_plots = 0
-
-    # Count total plots to create
-    for key in results_dict.keys():
-        for file_ext, data_list in results_dict[key]:
-            if file_extensions_to_plot is None or file_ext in file_extensions_to_plot:
-                total_plots += 1
-
-    print(f"\nCreating {total_plots} {plot_type} plot(s)...")
+    print("=" * 70)
+    print("TIME-SERIES PLOTTING")
+    print(f"Mode: {what2map.upper()}")
     print("=" * 70)
 
-    # Loop through each entry in the dictionary
-    for key in results_dict.keys():
+    # Validate inputs
+    if what2map not in ['hostmodel', 'openwq']:
+        print(f"✗ Error: what2map must be 'hostmodel' or 'openwq', got '{what2map}'")
+        return None
 
-        # Parse the key to get compartment, chemical, and units
-        parts = key.split('@')
-        compartment = parts[0]
-        chem_unit = parts[1].split('#')
-        chemical = chem_unit[0]
-        units = chem_unit[1]
+    if mapping_key_values is None or len(mapping_key_values) == 0:
+        print("✗ Error: mapping_key_values must be provided")
+        return None
 
-        # Loop through each file extension
-        for file_ext, data_list in results_dict[key]:
+    # Convert to list if single value
+    if not isinstance(mapping_key_values, list):
+        mapping_key_values = [mapping_key_values]
 
-            # Skip if not in requested file extensions
-            if file_extensions_to_plot is not None and file_ext not in file_extensions_to_plot:
-                continue
+    print(f"Features to plot: {mapping_key_values}")
 
-            # Check if data exists
-            if not data_list or len(data_list) == 0:
-                print(f"⚠ Skipping {compartment}@{chemical} ({file_ext}): No data")
-                continue
+    # Create output directory if needed
+    if output_path:
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
 
-            # Extract data
-            filename, ttdata, xyz_coords = data_list[0]
+    # BRANCH: Load data based on what2map
+    if what2map == 'hostmodel':
+        print("\n" + "=" * 70)
+        print("Loading hostmodel data...")
+        print("=" * 70)
 
-            # Create appropriate plot based on plot_type
-            if plot_type == 'temporal':
-                fig = _create_temporal_plot(
-                    ttdata, xyz_coords, cells_to_plot,
-                    compartment, chemical, units, file_ext,
-                    colors, line_width, template, height
-                )
-                plot_suffix = "temporal"
+        if hydromodel_info is None:
+            print("✗ Error: hydromodel_info must be provided for hostmodel mode")
+            return None
 
-            else:  # spatial
-                fig = _create_spatial_plot(
-                    ttdata, xyz_coords, time_slice, spatial_axis, fixed_coords,
-                    compartment, chemical, units, file_ext,
-                    colors, line_width, template, height
-                )
-                time_label = time_slice if isinstance(time_slice, str) else f"t{time_slice}"
-                plot_suffix = f"spatial_{spatial_axis}_{time_label}"
+        if hydromodel_var2print is None:
+            print("✗ Error: hydromodel_var2print must be specified for hostmodel mode")
+            return None
 
-            if fig is None:
-                continue
+        nc_path = hydromodel_info['path_to_shp']
+        mapping_key = hydromodel_info['mapping_key']
 
-            # Create filename for saving
-            safe_compartment = compartment.replace('/', '_')
-            safe_chemical = chemical.replace('/', '_')
-            plot_name = f"{safe_compartment}_{safe_chemical}_{file_ext}_{plot_suffix}"
+        print(f"  NetCDF: {nc_path}")
+        print(f"  Variable: {hydromodel_var2print}")
+        print(f"  Mapping key: {mapping_key}")
 
-            # Save figure
-            if save_html:
-                output_file = output_path / f"{plot_name}.html"
-                fig.write_html(str(output_file))
-                print(f"✓ Created: {output_file.name}")
+        # Open NetCDF
+        nc = netCDF4.Dataset(nc_path, 'r')
 
-            # Show plot if requested
-            if show_plots:
-                fig.show()
+        try:
+            # Get IDs and find indices for requested features
+            all_ids = np.array(nc.variables[mapping_key][:])
 
-            # Store figure
-            all_figures[plot_name] = fig
-            created_plots += 1
+            print(f"  Total features in file: {len(all_ids)}")
 
+            # Get data variable
+            data_var = nc.variables[hydromodel_var2print]
+
+            # Get time
+            if 'time' in nc.variables:
+                time_var = nc.variables['time']
+                time_data = time_var[:]
+
+                if hasattr(time_var, 'units'):
+                    from netCDF4 import num2date
+                    dates = num2date(time_data, time_var.units, only_use_cftime_datetimes=False)
+                    time_index = pd.DatetimeIndex(dates)
+                else:
+                    time_index = pd.RangeIndex(len(time_data))
+            else:
+                time_index = pd.RangeIndex(data_var.shape[0])
+
+            print(f"  Time range: {time_index[0]} to {time_index[-1]}")
+            print(f"  Time steps: {len(time_index)}")
+
+            # Get units
+            units = nc.variables[hydromodel_var2print].units if hasattr(nc.variables[hydromodel_var2print], 'units') else 'units'
+
+            # Extract data for requested features
+            feature_data = {}
+            missing_features = []
+
+            for fid in mapping_key_values:
+                idx = np.where(all_ids == fid)[0]
+
+                if len(idx) > 0:
+                    data = data_var[:, idx[0]]
+                    feature_data[fid] = pd.Series(data, index=time_index)
+                    print(f"  ✓ Found data for feature {fid}")
+                else:
+                    missing_features.append(fid)
+                    print(f"  ✗ Feature {fid} not found")
+
+            nc.close()
+
+            if len(feature_data) == 0:
+                print("✗ Error: No data found for any requested features")
+                return None
+
+            if missing_features:
+                print(f"\n⚠ Warning: Missing features: {missing_features}")
+
+            plot_title = f'{hostmodel.upper()} - {hydromodel_var2print} Time Series'
+            ylabel = f'{hydromodel_var2print} ({units})'
+
+        except Exception as e:
+            print(f"✗ Error loading hostmodel data: {e}")
+            nc.close()
+            return None
+
+    else:  # what2map == 'openwq'
+        print("\n" + "=" * 70)
+        print("Loading OpenWQ data...")
+        print("=" * 70)
+
+        if openwq_results is None:
+            print("✗ Error: openwq_results must be provided for openwq mode")
+            return None
+
+        if chemSpec is None:
+            print("✗ Error: chemSpec must be specified for openwq mode")
+            return None
+
+        # Convert chemSpec to list if string
+        if isinstance(chemSpec, str):
+            chemSpec = [chemSpec]
+
+        print(f"  Chemical species: {chemSpec}")
+
+        try:
+            # Find matching species in openwq_results
+            species_key = None
+            for key in openwq_results.keys():
+                # Check if any of the requested species is in the key
+                for spec in chemSpec:
+                    if spec in key:
+                        species_key = key
+                        print(f"  Found species: {species_key}")
+                        break
+                if species_key:
+                    break
+
+            if species_key is None:
+                print(f"✗ Error: No data found for species: {chemSpec}")
+                print(f"  Available species:")
+                for key in list(openwq_results.keys())[:5]:
+                    print(f"    - {key}")
+                return None
+
+            # Extract data from openwq_results structure
+            data_found = False
+            for ext, data_list in openwq_results[species_key]:
+                if ext == file_extension:
+                    if data_list and len(data_list) > 0:
+                        filename, ttdata, xyz_coords = data_list[0]
+                        data_found = True
+                        print(f"  Data shape: {ttdata.shape}")
+                        print(f"  Time range: {ttdata.index[0]} to {ttdata.index[-1]}")
+                        break
+
+            if not data_found:
+                print(f"✗ Error: No data found for extension '{file_extension}'")
+                return None
+
+            # Parse units from species_key
+            # Format: WATERSTATE@NO3#mg-N/L
+            parts = species_key.split('#')
+            if len(parts) > 1:
+                units = parts[1]
+            else:
+                units = 'concentration'
+
+            # Get chemical name
+            chem_parts = species_key.split('@')
+            if len(chem_parts) > 1:
+                chem_name = chem_parts[1].split('#')[0]
+            else:
+                chem_name = chemSpec[0]
+
+            # Extract data for requested features
+            feature_data = {}
+            missing_features = []
+
+            # ttdata columns are like 'REACH_200005899'
+            for fid in mapping_key_values:
+                # Find column matching this feature ID
+                matching_cols = [col for col in ttdata.columns if str(fid) in col.split('_')[-1]]
+
+                if len(matching_cols) > 0:
+                    data = ttdata[matching_cols[0]]
+                    feature_data[fid] = data
+                    print(f"  ✓ Found data for feature {fid}")
+                else:
+                    missing_features.append(fid)
+                    print(f"  ✗ Feature {fid} not found")
+
+            if len(feature_data) == 0:
+                print("✗ Error: No data found for any requested features")
+                return None
+
+            if missing_features:
+                print(f"\n⚠ Warning: Missing features: {missing_features}")
+
+            plot_title = f'{chem_name} Concentrations Time Series'
+            ylabel = f'{chem_name} ({units})'
+
+        except Exception as e:
+            print(f"✗ Error loading OpenWQ data: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    # CREATE PLOT
+    print("\n" + "=" * 70)
+    print("Creating plot...")
     print("=" * 70)
-    print(f"✓ Successfully created {created_plots} plot(s)")
-    if save_html:
-        print(f"✓ Saved to directory: {output_path.absolute()}")
 
-    return all_figures
+    fig, ax = plt.subplots(figsize=figsize)
 
+    # Plot each feature
+    for fid, data in feature_data.items():
+        ax.plot(data.index, data.values, label=f'Feature {fid}', linewidth=2)
 
-def _create_temporal_plot(ttdata, xyz_coords, cells_to_plot,
-                          compartment, chemical, units, file_ext,
-                          colors, line_width, template, height):
-    """Create temporal (time series) plot"""
+    # Format plot
+    ax.set_xlabel('Time', fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_title(plot_title, fontsize=14, pad=20)
 
-    # Determine which cells to plot
-    if cells_to_plot is None or cells_to_plot == 'all':
-        selected_indices = list(range(len(ttdata.columns)))
+    if len(feature_data) > 1:
+        ax.legend(loc='best', fontsize=10)
 
-    elif isinstance(cells_to_plot[0], (tuple, list)):
-        # User provided (x,y,z) coordinates
-        selected_indices = []
-        for target_coord in cells_to_plot:
-            # Find matching cell
-            for i, coord in enumerate(xyz_coords):
-                if (coord[0] == target_coord[0] and
-                        coord[1] == target_coord[1] and
-                        coord[2] == target_coord[2]):
-                    selected_indices.append(i)
-                    break
-    else:
-        # User provided indices
-        selected_indices = cells_to_plot
+    ax.grid(True, alpha=0.3)
 
-    if len(selected_indices) == 0:
-        print(f"⚠ Warning: No matching cells found")
-        return None
+    # Format x-axis for dates
+    if isinstance(data.index, pd.DatetimeIndex):
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        fig.autofmt_xdate()
 
-    # Create figure
-    fig = go.Figure()
+    plt.tight_layout()
 
-    # Get x-axis (time)
-    x_values = ttdata.index
+    # Save plot
+    if output_path is None:
+        output_path = f'timeseries_plot.png'
 
-    # Add traces (one per cell)
-    for i, col_idx in enumerate(selected_indices):
-        col_name = ttdata.columns[col_idx]
-        y_values = ttdata[col_name].values
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
 
-        # Create line name with coordinates
-        if col_idx < len(xyz_coords):
-            coords = xyz_coords[col_idx]
-            line_name = f"Cell ({coords[0]:.0f}, {coords[1]:.0f}, {coords[2]:.0f})"
-        else:
-            line_name = col_name
+    print(f"\n✓ Plot saved: {output_path}")
 
-        # Get color (cycle if needed)
-        color = colors[i % len(colors)]
+    # Summary
+    print("\n" + "=" * 70)
+    print("✓ COMPLETE!")
+    print("=" * 70)
+    print(f"  Features plotted: {len(feature_data)}")
+    print(f"  Output: {output_path}")
+    print("=" * 70)
 
-        fig.add_trace(go.Scatter(
-            x=x_values,
-            y=y_values,
-            mode='lines',
-            name=line_name,
-            line=dict(color=color, width=line_width),
-            hovertemplate='%{y:.3e}<extra></extra>'
-        ))
-
-    # Update layout
-    title = f"{chemical} in {compartment} - {file_ext} (Temporal)"
-
-    fig.update_layout(
-        title=dict(text=title, x=0.5, xanchor='center'),
-        xaxis_title="Time",
-        yaxis_title=f"Concentration ({units})",
-        template=template,
-        showlegend=True,
-        hovermode='x unified',
-        height=height,
-        legend=dict(
-            yanchor="top",
-            y=0.99,
-            xanchor="left",
-            x=0.01
-        )
-    )
-
-    # Add grid
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
-
-    return fig
+    return output_path
 
 
-def _create_spatial_plot(ttdata, xyz_coords, time_slice, spatial_axis, fixed_coords,
-                         compartment, chemical, units, file_ext,
-                         colors, line_width, template, height):
-    """Create spatial (snapshot) plot"""
-
-    # Get the time slice
-    if isinstance(time_slice, str):
-        # Time slice is a date string
-        time_index = ttdata.index.get_loc(time_slice)
-        time_label = time_slice
-    else:
-        # Time slice is an index
-        time_index = time_slice
-        time_label = str(ttdata.index[time_index])
-
-    # Get data for this timestep
-    data_snapshot = ttdata.iloc[time_index, :]
-
-    # Determine which dimension is the spatial axis
-    axis_map = {'x': 0, 'y': 1, 'z': 2}
-    axis_idx = axis_map[spatial_axis.lower()]
-
-    # Filter cells based on fixed_coords
-    if fixed_coords is None:
-        # Plot all cells
-        selected_cells = list(range(len(xyz_coords)))
-    else:
-        # Filter cells that match fixed coordinates
-        selected_cells = []
-        for i, coord in enumerate(xyz_coords):
-            match = True
-            for axis, value in fixed_coords.items():
-                axis_i = axis_map[axis.lower()]
-                if coord[axis_i] != value:
-                    match = False
-                    break
-            if match:
-                selected_cells.append(i)
-
-    if len(selected_cells) == 0:
-        print(f"⚠ Warning: No cells match fixed_coords criteria")
-        return None
-
-    # Extract spatial coordinates and values
-    spatial_coords = [xyz_coords[i][axis_idx] for i in selected_cells]
-    values = [data_snapshot.iloc[i] for i in selected_cells]
-
-    # Sort by spatial coordinate
-    sorted_indices = np.argsort(spatial_coords)
-    spatial_coords_sorted = [spatial_coords[i] for i in sorted_indices]
-    values_sorted = [values[i] for i in sorted_indices]
-
-    # Create figure
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=spatial_coords_sorted,
-        y=values_sorted,
-        mode='lines+markers',
-        name='Concentration',
-        line=dict(color=colors[0], width=line_width),
-        marker=dict(size=6, color=colors[0]),
-        hovertemplate='%{x:.1f}: %{y:.3e}<extra></extra>'
-    ))
-
-    # Create title with fixed coordinates info
-    fixed_info = ""
-    if fixed_coords:
-        fixed_parts = [f"{k}={v}" for k, v in fixed_coords.items()]
-        fixed_info = f" (fixed: {', '.join(fixed_parts)})"
-
-    title = f"{chemical} in {compartment} - {file_ext}<br>Spatial at {time_label}{fixed_info}"
-
-    fig.update_layout(
-        title=dict(text=title, x=0.5, xanchor='center'),
-        xaxis_title=f"{spatial_axis.upper()}-coordinate",
-        yaxis_title=f"Concentration ({units})",
-        template=template,
-        showlegend=False,
-        height=height
-    )
-
-    # Add grid
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
-
-    return fig
-
+if __name__ == '__main__':
+    print("\nOpenWQ Simplified Time-Series Plotting")
+    print("\nSimple interface for plotting time-series data")
+    print("\nSupports:")
+    print("  • Hostmodel outputs (NetCDF)")
+    print("  • OpenWQ results (from Read_h5_driver)")
