@@ -6,65 +6,19 @@ import sys
 import os
 sys.path.insert(0, 'hdf5_support_lib')
 
-
-###############
-# CONFIGURATION
-##############
-
-# Openwq output folder
-openwq_resDir_mapKey = {
-    "path_to_results": '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out',
-    "mapping_key": "reachID"}
-
-# Output specs
-openwq_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
-openwq_output_debugmode = False
-
-# What to print?
-chemical_species = ["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"]
-concentration_units = "MG/L"
-compartments = ['RIVER_NETWORK_REACHES']
-cells_spatial = 'all'
-
-# Where to save plots?
-plots_save_dir = openwq_resDir_mapKey["path_to_results"]
-
-"""
-# SUMMA
-# Openwq output folder
-openwq_resDir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
-
-# Output specs
-openwq_output_format = 'HDF5' # needs to be HDF5 (CSV disabled)
-openwq_output_debugmode = False
-
-# What to print?
-chemical_species = ["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"]
-concentration_units = "MG/L"
-compartments = ['RIVER_NETWORK_REACHES']
-cells_spatial = 'all'
-
-# Where to save plots?
-plots_save_dir = '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out'
-"""
-
-###############
-# CALLING THE NECESSARY SUPPORTING SCRIPS
-# 1) read
-# 2) plot or/and map
-##############
-
 import Read_h5_driver as h5_rlib
 
 # Read requested data: Read_h5_driver
 openwq_results = h5_rlib.Read_h5_driver(
-            resDir_mapKey_dic=openwq_resDir_mapKey,
-            output_format=openwq_output_format,
-            debugmode=openwq_output_debugmode,
-            cmp=compartments,
-            space_elem=cells_spatial,
-            chemSpec=chemical_species,
-            chemUnits=concentration_units,
+            resDir_mapKey_dic= {
+                "path_to_results": '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out',
+                "mapping_key": "reachID"},
+            output_format='HDF5',
+            debugmode=False,
+            cmp=['RIVER_NETWORK_REACHES'],
+            space_elem='all',
+            chemSpec=["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"],
+            chemUnits="MG/L",
             noDataFlag=-9999)
 
 ######
@@ -102,27 +56,23 @@ figs4 = h5_plib.Plot_h5_driver(
 
 import Map_h5_driver as h5_mplib
 
-shpfile_fullpath_mapKey = {
-    "path_to_shp": "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp",
-    "mapping_key": "SegId"}
-hydromodel_out_fullpath =  "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc"
-output_html_path = plots_save_dir + "/mapResults.gif"
-hostmodel="mizuroute"
-timestep = 40
-what2map='hostmodel' # hostmodel or openwq
-
 h5_mplib.Map_h5_driver(
-    shpfile_fullpath_mapKey=shpfile_fullpath_mapKey,
     openwq_results=openwq_results,
-    hydromodel_out_fullpath=hydromodel_out_fullpath,
-    output_html_path=output_html_path,
-    chemical_species=chemical_species[1],
-    file_extension='main',
-    timesteps=timestep,
-    hostmodel=hostmodel,
-    what2map="openwq",
-    create_gif=True,
-    gif_duration=100
+    shpfile_fullpath_mapKey={
+        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp',
+        'mapping_key': 'SegId'
+    },
+    hydromodel_out_fullpath={
+        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc',
+        'mapping_key': 'reachID',
+        'var2print': 'DWroutedRunoff'
+    },
+    output_html_path="/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/mapResults.gif",
+    timesteps=50,
+    chemSpec=["NO3-N"],
+    hostmodel='mizuroute',  # mizuroute or summa
+    what2map='hostmodel',  # hostmodel or openwq
+    create_gif=True
 )
 
 

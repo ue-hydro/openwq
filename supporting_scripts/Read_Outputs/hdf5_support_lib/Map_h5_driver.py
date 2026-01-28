@@ -1,6 +1,6 @@
 """
 OpenWQ Simple Static Maps with Automatic GIF Creation
-UPDATED: Simplified - always covers entire period with equally spaced frames
+UPDATED: Can map both OpenWQ results AND hostmodel outputs (e.g., mizuRoute runoff)
 """
 
 import numpy as np
@@ -34,15 +34,11 @@ def _map_data_to_geodf(data_values, xyz_coords, geodf, shpf_mapKey, data_hostmdl
 
 
 def _create_gif_from_pngs(image_dir, output_gif, duration_ms=500):
-    """
-    Try multiple methods to create GIF from PNG files
-    Returns True if successful, False otherwise
-    """
+    """Try multiple methods to create GIF from PNG files"""
 
     print(f"\n  Attempting to create GIF: {output_gif}")
     print(f"  Frame duration: {duration_ms}ms")
 
-    # Get all PNG files
     png_files = sorted([f for f in os.listdir(image_dir) if f.endswith('.png')])
 
     if len(png_files) == 0:
@@ -51,7 +47,7 @@ def _create_gif_from_pngs(image_dir, output_gif, duration_ms=500):
 
     print(f"  Found {len(png_files)} PNG files")
 
-    # Method 1: Try imageio (most reliable Python method)
+    # Method 1: Try imageio
     try:
         import imageio.v2 as imageio
         print("  → Trying imageio...")
@@ -61,7 +57,6 @@ def _create_gif_from_pngs(image_dir, output_gif, duration_ms=500):
             filepath = os.path.join(image_dir, filename)
             images.append(imageio.imread(filepath))
 
-        # Duration in seconds for imageio
         imageio.mimsave(output_gif, images, duration=duration_ms / 1000.0, loop=0)
 
         size_mb = os.path.getsize(output_gif) / (1024 * 1024)
@@ -102,11 +97,10 @@ def _create_gif_from_pngs(image_dir, output_gif, duration_ms=500):
     except Exception as e:
         print(f"  ✗ Pillow failed: {e}")
 
-    # Method 3: Try ImageMagick (command line)
+    # Method 3: Try ImageMagick
     try:
         print("  → Trying ImageMagick (convert)...")
 
-        # Calculate delay (ImageMagick uses hundredths of a second)
         delay = int(duration_ms / 10)
 
         cmd = [
@@ -146,41 +140,42 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
                   openwq_results=None,
                   hydromodel_out_fullpath=None,
                   output_html_path=None,
-                  chemical_species=None,
+                  chemSpec=None,
                   file_extension='main',
                   timesteps=50,
-                  hostmodel='mizuroute',
-                  what2map='openwq', # openwq or hostmodel
+                  hostmodel=None,
+                  what2map=None,
                   create_gif=True,
                   gif_duration=500):
     """
     Create static PNG maps AND animated GIF automatically
 
-    SIMPLIFIED: Always covers ENTIRE time period using equally spaced frames.
+    Can map either OpenWQ results OR hostmodel outputs (e.g., mizuRoute runoff)
 
     Parameters:
     -----------
     shpfile_fullpath_mapKey : dict
         Dictionary with 'path_to_shp' and 'mapping_key' keys
     openwq_results : dict
-        Results dictionary from Read_h5_driver
-    hydromodel_out_fullpath : str
-        Path to hydromodel NetCDF output file
+        Results dictionary from Read_h5_driver (required if what2map='openwq')
+    hydromodel_out_fullpath : str or dict
+        If what2map='openwq': Path to hydromodel NetCDF output file (string)
+        If what2map='hostmodel': Dictionary with keys:
+            - 'path_to_shp': Path to NetCDF file
+            - 'mapping_key': Variable name for segment IDs (e.g., 'SegId')
+            - 'var2print': Variable to map (e.g., 'runoff')
     output_html_path : str
-        Base path for output (will be used for folder name)
-    chemical_species : list or None
-        List of chemical species to map
+        Base path for output
+    chemSpec : list or None
+        List of chemical species to map (only for what2map='openwq')
     file_extension : str
         File extension identifier (default: 'main')
     timesteps : int or None
-        Number of equally spaced frames across ENTIRE period.
-        Examples:
-            timesteps=20   → 20 frames spanning entire period
-            timesteps=100  → 100 frames spanning entire period
-            timesteps=None → ALL available timesteps
-        (default: 50)
+        Number of equally spaced frames (default: 50)
     hostmodel : str
-        Host model name (default: 'mizuroute')
+        Host model name: 'mizuroute' or 'summa' (default: 'mizuroute')
+    what2map : str
+        What to map: 'openwq' or 'hostmodel' (default: 'openwq')
     create_gif : bool
         Whether to create GIF automatically (default: True)
     gif_duration : int
@@ -189,48 +184,41 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
     Returns:
     --------
     dict : {'image_dirs': [...], 'gifs': [...]}
+
+    Examples:
+    ---------
+    # Map OpenWQ results
+    Map_h5_driver(
+        shpfile_fullpath_mapKey={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
+        openwq_results=results,
+        hydromodel_out_fullpath='mizuroute.nc',
+        output_html_path='output',
+        chemSpec=['NO3'],
+        what2map='openwq',
+        timesteps=50
+    )
+
+    # Map hostmodel (mizuRoute runoff)
+    Map_h5_driver(
+        shpfile_fullpath_mapKey={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
+        hydromodel_out_fullpath={
+            'path_to_shp': 'mizuroute_output.nc',
+            'mapping_key': 'SegId',
+            'var2print': 'runoff'
+        },
+        output_html_path='output',
+        hostmodel='mizuroute',
+        what2map='hostmodel',
+        timesteps=50
+    )
     """
 
     print("=" * 70)
     print("STATIC PNG MAPS + AUTOMATIC GIF CREATION")
-    print("Covers ENTIRE period with equally spaced frames")
+    print(f"Mapping: {what2map.upper()}")
     print("=" * 70)
 
-    # Determine which species to process
-    if chemical_species is None:
-        species_list = list(openwq_results.keys())
-        print(f"\nProcessing ALL {len(species_list)} species")
-    elif isinstance(chemical_species, list):
-        species_list = []
-        for chem in chemical_species:
-            found = False
-            for key in openwq_results.keys():
-                if chem in key:
-                    species_list.append(key)
-                    found = True
-                    break
-            if not found:
-                print(f"⚠ Warning: '{chem}' not found, skipping...")
-
-        if len(species_list) == 0:
-            print(f"✗ Error: No matching species!")
-            return None
-
-        print(f"\nProcessing {len(species_list)} species:")
-        for sp in species_list:
-            print(f"  - {sp}")
-    else:
-        species_list = []
-        for key in openwq_results.keys():
-            if chemical_species in key:
-                species_list.append(key)
-                break
-
-        if len(species_list) == 0:
-            print(f"✗ Error: '{chemical_species}' not found!")
-            return None
-
-    # Load shapefile ONCE
+    # Load shapefile
     print("\n" + "=" * 70)
     print("STEP 1: Loading shapefile...")
     print("=" * 70)
@@ -244,71 +232,181 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
 
     print(f"  Loaded {len(geodf)} features")
 
-    # Load mizuRoute output ONCE
-    print("\nSTEP 2: Loading mizuRoute output...")
-    mizuroute_out_file = netCDF4.Dataset(hydromodel_out_fullpath, 'r')
-
     # Prepare output directory
     output_dir = os.path.dirname(output_html_path) if output_html_path else '.'
 
     created_dirs = []
     created_gifs = []
 
-    # Process each species
-    for idx, species_key in enumerate(species_list):
+    # BRANCH: Handle openwq vs hostmodel
+    if what2map == 'hostmodel':
         print("\n" + "=" * 70)
-        print(f"SPECIES {idx + 1}/{len(species_list)}: {species_key}")
+        print("STEP 2: Loading hostmodel output...")
         print("=" * 70)
 
-        # Parse species key
-        parts = species_key.split('@')
-        compartment = parts[0]
-        chem_unit = parts[1].split('#')
-        chemical = chem_unit[0]
-        units = chem_unit[1]
+        # Extract hostmodel NetCDF info
+        if isinstance(hydromodel_out_fullpath, dict):
+            hostmodel_nc_path = hydromodel_out_fullpath['path_to_shp']
+            hostmodel_mapping_key = hydromodel_out_fullpath['mapping_key']
+            var2print = hydromodel_out_fullpath['var2print']
+        else:
+            print("✗ Error: For what2map='hostmodel', hydromodel_out_fullpath must be a dictionary")
+            print("  with keys: 'path_to_shp', 'mapping_key', 'var2print'")
+            return None
 
-        # Create output directory for this species
+        print(f"  NetCDF file: {hostmodel_nc_path}")
+        print(f"  Mapping key: {hostmodel_mapping_key}")
+        print(f"  Variable: {var2print}")
+
+        # Open NetCDF file
+        nc_file = netCDF4.Dataset(hostmodel_nc_path, 'r')
+
+        # Get segment IDs and data
+        try:
+            segment_ids = np.array(nc_file.variables[hostmodel_mapping_key][:])
+            data_var = nc_file.variables[var2print]
+
+            print(f"  Data shape: {data_var.shape}")
+            print(f"  Segments: {len(segment_ids)}")
+
+            # Get time variable
+            if 'time' in nc_file.variables:
+                time_var = nc_file.variables['time']
+                time_data = time_var[:]
+
+                # Try to convert to datetime
+                if hasattr(time_var, 'units'):
+                    from netCDF4 import num2date
+                    dates = num2date(time_data, time_var.units, only_use_cftime_datetimes=False)
+                    time_index = pd.DatetimeIndex(dates)
+                else:
+                    time_index = pd.RangeIndex(len(time_data))
+            else:
+                time_index = pd.RangeIndex(data_var.shape[0])
+
+            print(f"  Time range: {time_index[0]} to {time_index[-1]}")
+
+            # Create DataFrame for compatibility
+            ttdata = pd.DataFrame(
+                data_var[:, :],
+                index=time_index,
+                columns=[f'SEG_{sid}' for sid in segment_ids]
+            )
+
+            # Create species_list with single entry
+            species_list = [f'{hostmodel}_{var2print}']
+            units = nc_file.variables[var2print].units if hasattr(nc_file.variables[var2print], 'units') else 'units'
+
+            print(f"  Units: {units}")
+
+        except KeyError as e:
+            print(f"✗ Error: Variable not found in NetCDF: {e}")
+            nc_file.close()
+            return None
+
+    else:  # what2map == 'openwq'
+        print("\n" + "=" * 70)
+        print("STEP 2: Processing OpenWQ results...")
+        print("=" * 70)
+
+        # Determine which species to process
+        if chemSpec is None:
+            species_list = list(openwq_results.keys())
+            print(f"\nProcessing ALL {len(species_list)} species")
+        elif isinstance(chemSpec, list):
+            species_list = []
+            for chem in chemSpec:
+                found = False
+                for key in openwq_results.keys():
+                    if chem in key:
+                        species_list.append(key)
+                        found = True
+                        break
+                if not found:
+                    print(f"⚠ Warning: '{chem}' not found, skipping...")
+
+            if len(species_list) == 0:
+                print(f"✗ Error: No matching species!")
+                return None
+
+            print(f"\nProcessing {len(species_list)} species:")
+            for sp in species_list:
+                print(f"  - {sp}")
+        else:
+            species_list = []
+            for key in openwq_results.keys():
+                if chemSpec in key:
+                    species_list.append(key)
+                    break
+
+            if len(species_list) == 0:
+                print(f"✗ Error: '{chemSpec}' not found!")
+                return None
+
+        # Load mizuRoute output for reference (if needed)
+        if isinstance(hydromodel_out_fullpath, str):
+            mizuroute_out_file = netCDF4.Dataset(hydromodel_out_fullpath, 'r')
+        else:
+            mizuroute_out_file = None
+
+    # Process each species/variable
+    for idx, species_key in enumerate(species_list):
+        print("\n" + "=" * 70)
+        print(f"PROCESSING {idx + 1}/{len(species_list)}: {species_key}")
+        print("=" * 70)
+
+        if what2map == 'hostmodel':
+            # Hostmodel: already have ttdata
+            compartment = hostmodel
+            chemical = var2print
+            xyz_coords = None
+
+        else:  # openwq
+            # Parse species key
+            parts = species_key.split('@')
+            compartment = parts[0]
+            chem_unit = parts[1].split('#')
+            chemical = chem_unit[0]
+            units = chem_unit[1]
+
+            # Get data from results dictionary
+            print(f"\nExtracting data for {chemical}...")
+            data_found = False
+            for ext, data_list in openwq_results[species_key]:
+                if ext == file_extension:
+                    if data_list and len(data_list) > 0:
+                        filename, ttdata, xyz_coords = data_list[0]
+                        data_found = True
+                        print(f"  Data shape: {ttdata.shape}")
+                        print(f"  Time range: {ttdata.index[0]} to {ttdata.index[-1]}")
+                        break
+
+            if not data_found:
+                print(f"✗ No data for extension '{file_extension}', skipping...")
+                continue
+
+        # Create output directory
         species_output_dir = os.path.join(output_dir, f'maps_{chemical}')
         os.makedirs(species_output_dir, exist_ok=True)
 
-        # Get data from results dictionary
-        print(f"\nExtracting data for {chemical}...")
-        data_found = False
-        for ext, data_list in openwq_results[species_key]:
-            if ext == file_extension:
-                if data_list and len(data_list) > 0:
-                    filename, ttdata, xyz_coords = data_list[0]
-                    data_found = True
-                    print(f"  Data shape: {ttdata.shape}")
-                    print(f"  Time range: {ttdata.index[0]} to {ttdata.index[-1]}")
-                    break
-
-        if not data_found:
-            print(f"✗ No data for extension '{file_extension}', skipping...")
-            continue
-
-        # Determine timesteps - SIMPLIFIED LOGIC
+        # Determine timesteps
         print("\nDetermining timesteps...")
         total_timesteps = len(ttdata)
 
         if timesteps is None:
-            # Use ALL timesteps
             timesteps_to_plot = list(range(total_timesteps))
             print(f"  Using ALL {total_timesteps} timesteps")
         else:
-            # Use equally spaced timesteps across entire period
             if timesteps >= total_timesteps:
-                # If requested more than available, use all
                 timesteps_to_plot = list(range(total_timesteps))
-                print(f"  Using ALL {total_timesteps} timesteps (requested {timesteps})")
+                print(f"  Using ALL {total_timesteps} timesteps")
             else:
-                # Create equally spaced indices
                 timesteps_to_plot = list(range(0, total_timesteps, max(1, total_timesteps // timesteps)))
                 timesteps_to_plot = timesteps_to_plot[:timesteps]
                 print(f"  Using {len(timesteps_to_plot)} equally spaced timesteps")
                 print(f"  Covering: {ttdata.index[timesteps_to_plot[0]]} to {ttdata.index[timesteps_to_plot[-1]]}")
 
-        # Calculate global color scale
+        # Calculate color scale
         print("\nCalculating color scale...")
         all_values = []
         for t_idx in timesteps_to_plot[::max(1, len(timesteps_to_plot) // 10)]:
@@ -319,15 +417,14 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
         vmax = np.percentile(all_values, 99)
         print(f"  Color range: [{vmin:.3e}, {vmax:.3e}]")
 
-        # Create colormap
         cmap = plt.cm.RdYlGn_r
         norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
 
-        # CREATE INDIVIDUAL MAPS
+        # CREATE MAPS
         print(f"\nCreating {len(timesteps_to_plot)} static maps...")
 
         for i, t_idx in enumerate(timesteps_to_plot):
-            # Get data for this timestep
+            # Get data
             data_values = ttdata.iloc[t_idx, :].values
             data_hostmdlKeys = list(ttdata.iloc[t_idx, :].index)
 
@@ -339,7 +436,7 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
             # Create figure
             fig, ax = plt.subplots(figsize=(12, 10))
 
-            # Plot each feature with color based on concentration
+            # Plot features
             for j, geom in enumerate(geodf.geometry):
                 value = geodf_openwq_wq[j]
 
@@ -366,15 +463,19 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
             cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
             cbar.set_label(f'{chemical} ({units})', rotation=270, labelpad=20)
 
-            # Set title and labels
+            # Set title
             timestamp = str(ttdata.index[t_idx])
-            ax.set_title(f'{chemical} Concentrations - {timestamp}', fontsize=14, pad=20)
+            if what2map == 'hostmodel':
+                ax.set_title(f'{hostmodel.upper()} - {chemical} - {timestamp}', fontsize=14, pad=20)
+            else:
+                ax.set_title(f'{chemical} Concentrations - {timestamp}', fontsize=14, pad=20)
+
             ax.set_xlabel('Longitude', fontsize=12)
             ax.set_ylabel('Latitude', fontsize=12)
             ax.set_aspect('equal')
             ax.grid(True, alpha=0.3)
 
-            # Save figure
+            # Save
             output_file = os.path.join(species_output_dir, f'map_{i:04d}.png')
             plt.savefig(output_file, dpi=150, bbox_inches='tight')
             plt.close()
@@ -400,33 +501,29 @@ def Map_h5_driver(shpfile_fullpath_mapKey=None,
 
             if _create_gif_from_pngs(species_output_dir, gif_path, gif_duration):
                 created_gifs.append(gif_path)
-            else:
-                print("\n  Manual GIF creation commands:")
-                print(f"  imageio:      python create_gif.py {species_output_dir}")
-                print(f"  ImageMagick:  cd {species_output_dir} && convert -delay 50 -loop 0 *.png animation.gif")
 
-    # Close mizuRoute file
-    mizuroute_out_file.close()
+    # Close files
+    if what2map == 'hostmodel':
+        nc_file.close()
+    elif what2map == 'openwq' and 'mizuroute_out_file' in locals() and mizuroute_out_file is not None:
+        mizuroute_out_file.close()
 
     # SUMMARY
     print("\n" + "=" * 70)
     print("✓ ALL COMPLETE!")
     print("=" * 70)
     print(f"\nPNG Maps:")
-    print(f"  Species: {len(created_dirs)}")
     for d in created_dirs:
         png_count = len([f for f in os.listdir(d) if f.endswith('.png')])
         print(f"    - {d} ({png_count} images)")
 
     if len(created_gifs) > 0:
         print(f"\nAnimated GIFs:")
-        print(f"  Created: {len(created_gifs)}")
         for g in created_gifs:
             size_mb = os.path.getsize(g) / (1024 * 1024)
             print(f"    - {g} ({size_mb:.1f} MB)")
     else:
         print(f"\nAnimated GIFs: None created")
-        print("  Install imageio, Pillow, or ImageMagick to enable")
 
     print("=" * 70)
 
