@@ -2,6 +2,6 @@ services:
   openwq:
     build: ./
     tty: true
-    container_name: openwq
+    container_name: docker_openwq
     volumes:
       - ../../../../../../:/code:Z

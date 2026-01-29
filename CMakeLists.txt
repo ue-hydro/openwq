@@ -7,10 +7,10 @@
 # 1) Start Docker
 # 2) In the terminal, go to the folder where this CMakeLists file is located
 #    (optional) Clear all docker images and containers: docker system prune -a
-# 3) Create the "openwq" container: docker compose up -d 
+# 3) Create the "docker_openwq" container: docker compose up -d 
 #    (optional, if needed) Stop the container: docker compose down
 #    (optional, if needed) See the containers running: docker ps
-# 4) Run a shell inside the container: docker exec -it openwq /bin/bash
+# 4) Run a shell inside the container: docker exec -it docker_openwq /bin/bash
 ####################################
 # (Step A.2) For Apptainer/Singularity (for HPC use)
 ####################################
