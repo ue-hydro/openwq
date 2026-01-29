@@ -14,14 +14,10 @@
 #####
 # STEPS TO COMPILE THE PROGRAM WITH THIS CMakeLists
 ######
-# 1) Change the compilation mode below: SET(COMPILE_TARGET XXXX)
-# 2) Open terminal and go to the openwq folder that contains CMakeLists.txt, Dockerfile, and docker-compose.yml
-# 3) Create a docker container: docker compose up -d
-# 4) check the container id: docker ps
-# 5) Open a shell inside that container: docker exec -it <container id> /bin/bash
-# 6) Armadillo now disables default hdf5 support for save/load, so inside the container you need to go to “/usr/include/armadillo_bits/config.hpp” and uncomment #define ARMA_USE_HDF5
-# 7) Inside the contained, go to the openwq folder that contains CMakeLists.txt, Dockerfile, and docker-compose.yml
-# 8) Compile with e.g.: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=summa_openwq -DCMAKE_BUILD_TYPE=debug .; make -j 2; rm *.mod
+# 1) Open terminal and go to the openwq folder that contains CMakeLists.txt, Dockerfile, and docker-compose.yml
+# 2) check the container id: docker ps
+# 3) Open a shell inside that container: docker exec -it <container name or id> /bin/bash
+# 4) Compile with e.g.: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=summa_openwq -DCMAKE_BUILD_TYPE=debug .; make -j 2; rm *.mod
 
 ###############
 # Running it
