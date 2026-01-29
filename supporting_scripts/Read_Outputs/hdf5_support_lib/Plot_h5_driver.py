@@ -1,6 +1,23 @@
+# Copyright 2026, Diogo Costa, diogo.costa@uevora.pt
+# This file is part of OpenWQ model.
+
+# This program, openWQ, is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 """
 OpenWQ Simplified Time-Series Plotting Tool
 Clean interface for plotting time-series
+Supports multiple chemical species (one plot per species per extension)
 """
 
 import numpy as np
@@ -19,11 +36,12 @@ def Plot_h5_driver(what2map=None,
                    hydromodel_info=None,
                    hydromodel_var2print=None,
                    output_path=None,
-                   file_extension='main',
+                   debugmode=False,
                    combine_features=True,
                    figsize=(12, 6)):
     """
     Plot time-series for specific features
+    For OpenWQ: Creates one plot per chemical species per extension
 
     Parameters:
     -----------
@@ -37,7 +55,8 @@ def Plot_h5_driver(what2map=None,
         OpenWQ results dictionary from Read_h5_driver
         Used if what2map='openwq'
     chemSpec : list or str
-        Chemical species to plot (e.g., ['NO3-N'] or 'NO3-N')
+        Chemical species to plot (e.g., ['NO3-N', 'NH4-N'] or 'NO3-N')
+        Creates one plot per species per extension
         Used if what2map='openwq'
     hydromodel_info : dict
         Dictionary with:
@@ -49,8 +68,15 @@ def Plot_h5_driver(what2map=None,
         Used if what2map='hostmodel'
     output_path : str
         Path where plot will be saved
-    file_extension : str
-        File extension for OpenWQ data (default: 'main')
+        For multiple species/extensions, names are appended
+    debugmode : bool
+        If False: only process 'main' extension (default)
+        If True: process 'main' + all debug extensions:
+                 - d_output_dt_chemistry
+                 - d_output_dt_transport
+                 - d_output_dt_ss
+                 - d_output_dt_ewf
+                 - d_output_dt_ic
     combine_features : bool
         If True, plot all features on one graph (default: True)
     figsize : tuple
@@ -58,53 +84,43 @@ def Plot_h5_driver(what2map=None,
 
     Returns:
     --------
-    str : Path to created plot
+    str or list : Path(s) to created plot(s)
+        - Single path for hostmodel
+        - List of paths for openwq (one per species per extension)
 
     Examples:
     ---------
-    # 1. Load OpenWQ results
-    from Read_h5_driver import Read_h5_driver
-    openwq_results = Read_h5_driver(
-        h5files_folderPath='/path/to/openwq_out',
-        hostmodel='mizuroute'
-    )
-
-    # 2. Plot mizuRoute runoff
+    # Normal mode (only 'main')
     h5_mplib.Plot_h5_driver(
-        # 1) What results to map?
-        what2map='hostmodel',
-        hostmodel='mizuroute',
-        mapping_key_values=[200005899, 200002273],
-        # 2) openwq info (👉🏼 used if what2map=openwq)
-        openwq_results=openwq_results,
-        chemSpec=['NO3-N'],
-        # 3) hostmodel info (👉🏼 used if what2map=hostmodel)
-        hydromodel_info=hydromodel_info,
-        hydromodel_var2print='DWroutedRunoff',
-        # 4) output config
-        output_path='plots/runoff.png'
-    )
-
-    # 3. Plot OpenWQ NO3
-    h5_mplib.Plot_h5_driver(
-        # 1) What results to map?
         what2map='openwq',
         hostmodel='mizuroute',
         mapping_key_values=[200005899, 200002273],
-        # 2) openwq info (👉🏼 used if what2map=openwq)
         openwq_results=openwq_results,
-        chemSpec=['NO3-N'],
-        # 3) hostmodel info (👉🏼 used if what2map=hostmodel)
+        chemSpec=['NO3-N', 'NH4-N'],
         hydromodel_info=hydromodel_info,
         hydromodel_var2print='DWroutedRunoff',
-        # 4) output config
-        output_path='plots/NO3.png'
+        output_path='plots/nutrients.png',
+        debugmode=False
     )
+    # Creates: plots/nutrients_NO3-N_main.png
+    #          plots/nutrients_NH4-N_main.png
+
+    # Debug mode (all extensions)
+    h5_mplib.Plot_h5_driver(
+        ...,
+        debugmode=True
+    )
+    # Creates: plots/nutrients_NO3-N_main.png
+    #          plots/nutrients_NO3-N_d_output_dt_chemistry.png
+    #          plots/nutrients_NO3-N_d_output_dt_transport.png
+    #          ... (and so on for each species)
     """
 
     print("=" * 70)
     print("TIME-SERIES PLOTTING")
     print(f"Mode: {what2map.upper()}")
+    if what2map == 'openwq':
+        print(f"Debug mode: {debugmode}")
     print("=" * 70)
 
     # Validate inputs
@@ -179,7 +195,8 @@ def Plot_h5_driver(what2map=None,
             print(f"  Time steps: {len(time_index)}")
 
             # Get units
-            units = nc.variables[hydromodel_var2print].units if hasattr(nc.variables[hydromodel_var2print], 'units') else 'units'
+            units = nc.variables[hydromodel_var2print].units if hasattr(nc.variables[hydromodel_var2print],
+                                                                        'units') else 'units'
 
             # Extract data for requested features
             feature_data = {}
@@ -205,8 +222,55 @@ def Plot_h5_driver(what2map=None,
             if missing_features:
                 print(f"\n⚠ Warning: Missing features: {missing_features}")
 
+            # CREATE PLOT FOR HOSTMODEL
+            print("\n" + "=" * 70)
+            print("Creating plot...")
+            print("=" * 70)
+
+            fig, ax = plt.subplots(figsize=figsize)
+
+            # Plot each feature
+            for fid, data in feature_data.items():
+                ax.plot(data.index, data.values, label=f'Feature {fid}', linewidth=2)
+
+            # Format plot
             plot_title = f'{hostmodel.upper()} - {hydromodel_var2print} Time Series'
             ylabel = f'{hydromodel_var2print} ({units})'
+
+            ax.set_xlabel('Time', fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=12)
+            ax.set_title(plot_title, fontsize=14, pad=20)
+
+            if len(feature_data) > 1:
+                ax.legend(loc='best', fontsize=10)
+
+            ax.grid(True, alpha=0.3)
+
+            # Format x-axis for dates
+            if isinstance(time_index, pd.DatetimeIndex):
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+                fig.autofmt_xdate()
+
+            plt.tight_layout()
+
+            # Save plot
+            if output_path is None:
+                output_path = f'timeseries_{hydromodel_var2print}.png'
+
+            plt.savefig(output_path, dpi=150, bbox_inches='tight')
+            plt.close()
+
+            print(f"\n✓ Plot saved: {output_path}")
+
+            # Summary
+            print("\n" + "=" * 70)
+            print("✓ COMPLETE!")
+            print("=" * 70)
+            print(f"  Features plotted: {len(feature_data)}")
+            print(f"  Output: {output_path}")
+            print("=" * 70)
+
+            return output_path
 
         except Exception as e:
             print(f"✗ Error loading hostmodel data: {e}")
@@ -230,142 +294,176 @@ def Plot_h5_driver(what2map=None,
         if isinstance(chemSpec, str):
             chemSpec = [chemSpec]
 
-        print(f"  Chemical species: {chemSpec}")
+        # Define extensions to process based on debugmode
+        if debugmode:
+            file_extensions = [
+                'main',
+                'd_output_dt_chemistry',
+                'd_output_dt_transport',
+                'd_output_ss',
+                'd_output_ewf',
+                'd_output_ic'
+            ]
+        else:
+            file_extensions = ['main']
 
-        try:
-            # Find matching species in openwq_results
-            species_key = None
-            for key in openwq_results.keys():
-                # Check if any of the requested species is in the key
-                for spec in chemSpec:
+        print(f"  Chemical species: {chemSpec}")
+        print(f"  Extensions to process: {file_extensions}")
+        print(f"  Will create {len(chemSpec) * len(file_extensions)} plot(s)")
+
+        # Store all created plots
+        all_output_paths = []
+
+        # LOOP THROUGH EACH CHEMICAL SPECIES
+        for spec_idx, spec in enumerate(chemSpec):
+            print(f"\n{'=' * 70}")
+            print(f"Processing species {spec_idx + 1}/{len(chemSpec)}: {spec}")
+            print("=" * 70)
+
+            try:
+                # Find matching species in openwq_results
+                species_key = None
+                for key in openwq_results.keys():
                     if spec in key:
                         species_key = key
-                        print(f"  Found species: {species_key}")
-                        break
-                if species_key:
-                    break
-
-            if species_key is None:
-                print(f"✗ Error: No data found for species: {chemSpec}")
-                print(f"  Available species:")
-                for key in list(openwq_results.keys())[:5]:
-                    print(f"    - {key}")
-                return None
-
-            # Extract data from openwq_results structure
-            data_found = False
-            for ext, data_list in openwq_results[species_key]:
-                if ext == file_extension:
-                    if data_list and len(data_list) > 0:
-                        filename, ttdata, xyz_coords = data_list[0]
-                        data_found = True
-                        print(f"  Data shape: {ttdata.shape}")
-                        print(f"  Time range: {ttdata.index[0]} to {ttdata.index[-1]}")
+                        print(f"  Found species key: {species_key}")
                         break
 
-            if not data_found:
-                print(f"✗ Error: No data found for extension '{file_extension}'")
-                return None
+                if species_key is None:
+                    print(f"  ✗ No data found for species: {spec}")
+                    print(f"  Available species:")
+                    for key in list(openwq_results.keys())[:5]:
+                        print(f"    - {key}")
+                    continue
 
-            # Parse units from species_key
-            # Format: WATERSTATE@NO3#mg-N/L
-            parts = species_key.split('#')
-            if len(parts) > 1:
-                units = parts[1]
-            else:
-                units = 'concentration'
-
-            # Get chemical name
-            chem_parts = species_key.split('@')
-            if len(chem_parts) > 1:
-                chem_name = chem_parts[1].split('#')[0]
-            else:
-                chem_name = chemSpec[0]
-
-            # Extract data for requested features
-            feature_data = {}
-            missing_features = []
-
-            # ttdata columns are like 'REACH_200005899'
-            for fid in mapping_key_values:
-                # Find column matching this feature ID
-                matching_cols = [col for col in ttdata.columns if str(fid) in col.split('_')[-1]]
-
-                if len(matching_cols) > 0:
-                    data = ttdata[matching_cols[0]]
-                    feature_data[fid] = data
-                    print(f"  ✓ Found data for feature {fid}")
+                # Parse units from species_key (do once per species)
+                # Format: WATERSTATE@NO3-N#mg-N/L
+                parts = species_key.split('#')
+                if len(parts) > 1:
+                    units = parts[1]
                 else:
-                    missing_features.append(fid)
-                    print(f"  ✗ Feature {fid} not found")
+                    units = 'concentration'
 
-            if len(feature_data) == 0:
-                print("✗ Error: No data found for any requested features")
-                return None
+                # Get chemical name
+                chem_parts = species_key.split('@')
+                if len(chem_parts) > 1:
+                    chem_name = chem_parts[1].split('#')[0]
+                else:
+                    chem_name = spec
 
-            if missing_features:
-                print(f"\n⚠ Warning: Missing features: {missing_features}")
+                # LOOP THROUGH EACH FILE EXTENSION
+                for ext_idx, file_extension in enumerate(file_extensions):
+                    print(f"\n  {'- ' * 33}")
+                    print(f"  Processing extension {ext_idx + 1}/{len(file_extensions)}: {file_extension}")
+                    print(f"  {'- ' * 33}")
 
-            plot_title = f'{chem_name} Concentrations Time Series'
-            ylabel = f'{chem_name} ({units})'
+                    # Extract data from openwq_results structure
+                    data_found = False
+                    for ext, data_list in openwq_results[species_key]:
+                        if ext == file_extension:
+                            if data_list and len(data_list) > 0:
+                                filename, ttdata, xyz_coords = data_list[0]
+                                data_found = True
+                                print(f"    Data shape: {ttdata.shape}")
+                                print(f"    Time range: {ttdata.index[0]} to {ttdata.index[-1]}")
+                                break
 
-        except Exception as e:
-            print(f"✗ Error loading OpenWQ data: {e}")
-            import traceback
-            traceback.print_exc()
+                    if not data_found:
+                        print(f"    ✗ No data found for extension '{file_extension}'")
+                        continue
+
+                    # Extract data for requested features
+                    feature_data = {}
+                    missing_features = []
+
+                    # ttdata columns are like 'REACH_200005899'
+                    for fid in mapping_key_values:
+                        # Find column matching this feature ID
+                        matching_cols = [col for col in ttdata.columns if str(fid) in col.split('_')[-1]]
+
+                        if len(matching_cols) > 0:
+                            data = ttdata[matching_cols[0]]
+                            feature_data[fid] = data
+                            print(f"    ✓ Found data for feature {fid}")
+                        else:
+                            missing_features.append(fid)
+                            print(f"    ✗ Feature {fid} not found")
+
+                    if len(feature_data) == 0:
+                        print(f"    ✗ No data found for any requested features")
+                        continue
+
+                    if missing_features:
+                        print(f"    ⚠ Missing features: {missing_features}")
+
+                    # CREATE PLOT FOR THIS SPECIES AND EXTENSION
+                    print(f"\n    Creating plot for {chem_name} ({file_extension})...")
+
+                    fig, ax = plt.subplots(figsize=figsize)
+
+                    # Plot each feature
+                    for fid, data in feature_data.items():
+                        ax.plot(data.index, data.values, label=f'Feature {fid}', linewidth=2)
+
+                    # Format plot
+                    plot_title = f'{chem_name} Concentrations Time Series ({file_extension})'
+                    ylabel_text = f'{chem_name} ({units})'
+
+                    ax.set_xlabel('Time', fontsize=12)
+                    ax.set_ylabel(ylabel_text, fontsize=12)
+                    ax.set_title(plot_title, fontsize=14, pad=20)
+
+                    if len(feature_data) > 1:
+                        ax.legend(loc='best', fontsize=10)
+
+                    ax.grid(True, alpha=0.3)
+
+                    # Format x-axis for dates
+                    if isinstance(ttdata.index, pd.DatetimeIndex):
+                        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+                        fig.autofmt_xdate()
+
+                    plt.tight_layout()
+
+                    # Generate output path for this species and extension
+                    if output_path is None:
+                        species_output_path = f'timeseries_{spec}_{file_extension}.png'
+                    else:
+                        # Insert species name and extension before file extension
+                        base_path = os.path.splitext(output_path)[0]
+                        extension = os.path.splitext(output_path)[1]
+                        species_output_path = f'{base_path}_{spec}_{file_extension}{extension}'
+
+                    # Save plot
+                    plt.savefig(species_output_path, dpi=150, bbox_inches='tight')
+                    plt.close()
+
+                    print(f"    ✓ Plot saved: {species_output_path}")
+                    all_output_paths.append(species_output_path)
+
+            except Exception as e:
+                print(f"  ✗ Error processing species {spec}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+
+        # Summary
+        print("\n" + "=" * 70)
+        print("✓ COMPLETE!")
+        print("=" * 70)
+        print(f"  Species requested: {len(chemSpec)}")
+        print(f"  Extensions processed: {len(file_extensions)}")
+        print(f"  Plots created: {len(all_output_paths)}")
+        if len(all_output_paths) > 0:
+            print(f"\n  Output files:")
+            for path in all_output_paths:
+                print(f"    - {os.path.basename(path)}")
+        print("=" * 70)
+
+        # Return list of created plots or None
+        if len(all_output_paths) == 0:
             return None
-
-    # CREATE PLOT
-    print("\n" + "=" * 70)
-    print("Creating plot...")
-    print("=" * 70)
-
-    fig, ax = plt.subplots(figsize=figsize)
-
-    # Plot each feature
-    for fid, data in feature_data.items():
-        ax.plot(data.index, data.values, label=f'Feature {fid}', linewidth=2)
-
-    # Format plot
-    ax.set_xlabel('Time', fontsize=12)
-    ax.set_ylabel(ylabel, fontsize=12)
-    ax.set_title(plot_title, fontsize=14, pad=20)
-
-    if len(feature_data) > 1:
-        ax.legend(loc='best', fontsize=10)
-
-    ax.grid(True, alpha=0.3)
-
-    # Format x-axis for dates
-    if isinstance(data.index, pd.DatetimeIndex):
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        fig.autofmt_xdate()
-
-    plt.tight_layout()
-
-    # Save plot
-    if output_path is None:
-        output_path = f'timeseries_plot.png'
-
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    plt.close()
-
-    print(f"\n✓ Plot saved: {output_path}")
-
-    # Summary
-    print("\n" + "=" * 70)
-    print("✓ COMPLETE!")
-    print("=" * 70)
-    print(f"  Features plotted: {len(feature_data)}")
-    print(f"  Output: {output_path}")
-    print("=" * 70)
-
-    return output_path
-
-
-if __name__ == '__main__':
-    print("\nOpenWQ Simplified Time-Series Plotting")
-    print("\nSimple interface for plotting time-series data")
-    print("\nSupports:")
-    print("  • Hostmodel outputs (NetCDF)")
-    print("  • OpenWQ results (from Read_h5_driver)")
+        elif len(all_output_paths) == 1:
+            return all_output_paths[0]
+        else:
+            return all_output_paths

@@ -1,3 +1,19 @@
+# Copyright 2026, Diogo Costa, diogo.costa@uevora.pt
+# This file is part of OpenWQ model.
+
+# This program, openWQ, is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 """
 OpenWQ Simple Static Maps with Automatic GIF Creation
 UPDATED: Supports both mizuRoute (polylines) and SUMMA (polygons)
@@ -606,10 +622,3 @@ def Map_h5_driver(shpfile_info=None,
         'gifs': created_gifs
     }
 
-
-if __name__ == '__main__':
-    print("\nOpenWQ Static PNG Maps with Automatic GIF Creation")
-    print("\nSupports:")
-    print("  • OpenWQ water quality results (what2map='openwq')")
-    print("  • mizuRoute outputs - polylines (hostmodel='mizuroute')")
-    print("  • SUMMA outputs - polygons (hostmodel='summa')")

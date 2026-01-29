@@ -1,3 +1,19 @@
+# Copyright 2026, Diogo Costa, diogo.costa@uevora.pt
+# This file is part of OpenWQ model.
+
+# This program, openWQ, is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 #####
 # Reading Openwq outputs and plot
 #####
@@ -29,10 +45,10 @@ openwq_info= {
 # Read requested data: Read_h5_driver
 openwq_results = h5_rlib.Read_h5_driver(
             openwq_info= openwq_info,
-            output_format='HDF5',
-            debugmode=False,
+            output_format='HDF5',   # don't change
+            debugmode=True,         # if True, will read also d_output_dt_chemistry, d_output_dt_transport, d_output_ss, d_output_ewf, d_output_ic
             cmp=['RIVER_NETWORK_REACHES'],
-            space_elem='all',
+            space_elem='all',       # what cells to read
             chemSpec=["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"],
             chemUnits="MG/L",
             noDataFlag=-9999)
@@ -78,7 +94,8 @@ h5_mplib.Plot_h5_driver(
     mapping_key_values=[1200014181, 200014181],
     # 2) openwq info (👉🏼 used if what2map=openwq)
     openwq_results=openwq_results,
-    chemSpec=["NO3-N"],
+    chemSpec=["NO3-N","N_ORG_active"],
+    debugmode=True, # if True, will read also d_output_dt_chemistry, d_output_dt_transport, d_output_ss, d_output_ewf, d_output_ic
     # 3) hostmodel info (👉🏼 used if what2map=hostmodel)
     hydromodel_info=hydromodel_info,
     hydromodel_var2print='DWroutedRunoff',
