@@ -1,28 +1,29 @@
-######
-# STEPS TO SET UP THE APPROPRIATE Docker CONTAINER
-# ====> (ONLY NEED TO SET UP ONCE!) <====
-######
-# 0) Start Docker
-# 1) Go to the folder that contains: docker-compose.yml
-# 2) clear all images and containers: docker system prune -a
-# 3) check IF docker-compose.yml file is good: docker compose config
-# 4) running container: docker compose up -d 
-# 5) stop container: docker compose down
-# 6) see the containers running: docker ps
-# 7) run a shell inside the container: docker exec -it <container name> /bin/bash
+####################################
+# (Step A) STEPS TO CREATE THE DOCKER CONTAINER (contains all libraries to compile OpenWQ) ====> (ONLY NEED TO DO THIS ONCE!) <====
+####################################
+# 1) Start Docker
+# 2) In the terminal, go to the folder where this CMakeLists file is located
+#    (optional) Clear all docker images and containers: docker system prune -a
+# 3) Create the "openwq" container: docker compose up -d 
+#    (optional, if needed) Stop the container: docker compose down
+#    (optional, if needed) See the containers running: docker ps
+# 4) Run a shell inside the container: docker exec -it openwq /bin/bash
 
-#####
-# STEPS TO COMPILE THE PROGRAM WITH THIS CMakeLists
-######
-# 1) Open terminal and go to the openwq folder that contains CMakeLists.txt, Dockerfile, and docker-compose.yml
-# 2) check the container id: docker ps
-# 3) Open a shell inside that container: docker exec -it <container name or id> /bin/bash
-# 4) Compile with e.g.: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=summa_openwq -DCMAKE_BUILD_TYPE=debug .; make -j 2; rm *.mod
+##############################
+# (Step B) STEPS TO COMPILE THE OPENWQ
+##############################
+# 1) (as for Step A) Start Docker
+# 2) (as for Step A) In the terminal, go to the folder where this CMakeLists file is located 
+# 5) Open a shell inside that container: docker exec -it openww /bin/bash
+# 4) Inside the container, go to the folder where this CMakeLists file is located 
+# 5) Compile the model with cmake (create Makefile and compile). 
+# 5.1) Create Makefile (set DHOST_MODEL_TARGET and DCMAKE_BUILD_TYPE)
+#      Example: cmake -DHOST_MODEL_TARGET=summa_openwq -DCMAKE_BUILD_TYPE=debug .; 
+# 5.2) Compile the model: make -j 2
+# Note: Example of Step 5 in one line: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq -DCMAKE_BUILD_TYPE=debug .; make -j 2; rm *.mod
+# 5.3) The executable will be created in the "bin" folder
 
-###############
-# Running it
-# 1) Example for SUMMA-OpenWQ: ./summa_openwq_fast -m SUMMA_input/fileManager.txt
-# That's all !!!
+##############################
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
 
