@@ -29,6 +29,7 @@ From: ubuntu:24.04
   cd /opt
   git clone https://github.com/usgs-coupled/phreeqcrm_use_cmake.git phreeqcrm -b modern
   cd phreeqcrm
+  git checkout cf03df1
   cmake . -P build_phreeqcrm.cmake -DCMAKE_INSTALL_PREFIX=/usr/local/phreeqcrm
   
   # Install Sundials
@@ -57,9 +58,13 @@ From: ubuntu:24.04
   cd /opt
   git clone https://github.com/NCAR/ParallelIO.git
   cd /opt/ParallelIO
+  git checkout 39e5584
   git clone https://github.com/PARALLELIO/genf90.git bin
   cd /opt/ParallelIO/bin
+  git checkout 51cf293
   git clone https://github.com/CESM-Development/CMake_Fortran_utils.git cmake
+  cd /opt/ParallelIO/bin/cmake
+  git checkout 05ff8d8
   cd /opt
   mkdir pio-build
   mkdir piolib

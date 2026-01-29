@@ -1,5 +1,7 @@
+
 FROM ubuntu:24.04
 WORKDIR /code
+
 # Update package manager
 RUN apt-get -y update && apt-get upgrade -y && \
     DEBIAN_FRONTEND="noninteractive" \
@@ -20,14 +22,13 @@ RUN apt-get -y update && apt-get upgrade -y && \
     liblapack-dev \
     gfortran \
     git \
-    nano \
-    libopenmpi-dev \
-    openmpi-bin
+    nano
 
 # Install PHREEQC-RM
 WORKDIR /opt
 RUN git clone https://github.com/usgs-coupled/phreeqcrm_use_cmake.git phreeqcrm -b modern
 WORKDIR /opt/phreeqcrm
+RUN git checkout cf03df1
 RUN wget https://github.com/usgs-coupled/phreeqcrm/archive/master.tar.gz
 RUN tar xvzf master.tar.gz
 RUN cmake -S phreeqcrm-master -B phreeqcrm-master/build -DCMAKE_INSTALL_PREFIX=/usr/local/phreeqcrm
@@ -56,32 +57,22 @@ RUN tar -xf armadillo-10.6.0.tar.xz
 WORKDIR /opt/armadillo-10.6.0
 RUN cmake . -D DETECT_HDF5=true -DCMAKE_C_FLAGS="-DH5_USE_110_API"
 RUN make install
-
 # Enable HDF5 Support
 RUN sed -i '121s/^\/\/ #define ARMA_USE_HDF5/#define ARMA_USE_HDF5/' /usr/include/armadillo_bits/config.hpp
+# Set Entry Point
+WORKDIR /code
 
-# Install PnetCDF (ADDED THIS SECTION)
-WORKDIR /opt
-RUN wget https://parallel-netcdf.github.io/Release/pnetcdf-1.13.0.tar.gz
-RUN tar -xzf pnetcdf-1.13.0.tar.gz
-WORKDIR /opt/pnetcdf-1.13.0
-RUN ./configure --prefix=/usr/local/pnetcdf \
-    --enable-fortran \
-    CC=mpicc \
-    FC=mpif90 \
-    CXX=mpicxx
-RUN make -j4
-RUN make install
-ENV PATH=/usr/local/pnetcdf/bin:$PATH
-ENV LD_LIBRARY_PATH=/usr/local/pnetcdf/lib:$LD_LIBRARY_PATH
-
-# Install piolib (ParallelIO)
+# Install piolib (ParallelIO) (needed for MizuRoute_lakes)
 WORKDIR /opt
 RUN git clone https://github.com/NCAR/ParallelIO.git
 WORKDIR /opt/ParallelIO
+RUN git checkout 39e5584
 RUN git clone https://github.com/PARALLELIO/genf90.git bin
 WORKDIR /opt/ParallelIO/bin
+RUN git checkout 51cf293
 RUN git clone https://github.com/CESM-Development/CMake_Fortran_utils.git cmake
+WORKDIR /opt/ParallelIO/bin/cmake
+RUN git checkout 05ff8d8
 WORKDIR /opt
 RUN mkdir pio-build
 RUN mkdir piolib
@@ -98,7 +89,3 @@ RUN cmake ../ParallelIO \
   -DCMAKE_CXX_COMPILER=mpicxx \
   -DCMAKE_INSTALL_PREFIX=../piolib
 RUN make -j4
-RUN make install
-
-# Set Entry Point
-WORKDIR /code
