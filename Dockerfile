@@ -89,3 +89,11 @@ RUN cmake ../ParallelIO \
   -DCMAKE_CXX_COMPILER=mpicxx \
   -DCMAKE_INSTALL_PREFIX=../piolib
 RUN make -j4
+RUN make install
+
+# Set environment variables for piolib
+ENV PIO_DIR=/opt/piolib
+ENV LD_LIBRARY_PATH=/opt/piolib/lib:$LD_LIBRARY_PATH
+
+# Set Entry Point
+WORKDIR /code
