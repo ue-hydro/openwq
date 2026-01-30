@@ -36,6 +36,7 @@ def create_master_json(
         le_config_filepath:str,
         ts_config_filepath:str,
         si_config_filepath:str,
+        ss_config_filepath:str,
         output_file_fullpath:str,
 
         # Top-level settings
@@ -52,7 +53,6 @@ def create_master_json(
 
         # OpenWQ Input
         external_water_fluxes: Dict[str, Dict[str, str]],
-        sink_sources: Dict[str, Dict[str, str]],
 
         # Biogeochemistry module
         bgc_module_name: str,
@@ -70,6 +70,9 @@ def create_master_json(
         # Sorption Isotherm module
         si_module_name: str,
         si_sediment_compartment: str,
+
+        # Sink and Source
+        ss_method_csv_metadata_source: str,
 
         # Output settings
         output_format: str,
@@ -102,7 +105,12 @@ def create_master_json(
         "OPENWQ_INPUT": {
             "CONFIG_FILEPATH": config_file_fullpath,
             "EXTERNAL_WATER_FLUXES": external_water_fluxes,
-            "SINK_SOURCE": sink_sources
+            "SINK_SOURCE": {
+                "1": {
+                    "LABEL": ss_method_csv_metadata_source,
+                    "FILEPATH": ss_config_filepath,
+                }
+            }
         },
         "MODULES": {
             "BIOGEOCHEMISTRY": {

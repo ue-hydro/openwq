@@ -141,12 +141,32 @@ compartments_and_cells = {          # Compartments and cells to export
 ################
 # 🦎 Sink sources
 ################
-sink_sources = {
-    "1": {
-        "LABEL": "fertilizer_N_test",
-        "FILEPATH": "openwq_in/openWQ_fertilizer_N.json"
-    }
-}
+ss_method = "load_from_csv" # "load_from_csv" or "using_copernicus_lulc"
+ss_method_csv_metadata_source = "Just for demonstration"
+ss_method_csv_metadata_comment = "Leave any comments needed for future reference"
+ss_method_csv_config = source_sink_configs=[
+        {
+            "Chemical_name": "NO3-N",
+            "Compartment_name": "RIVER_NETWORK_REACHES",
+            "Type": "source",
+            "Units": "kg",
+            "Filepath": "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/supporting_scripts/Model_Config/config_support_lib/examples_SS_in_cvs/NO3_fertilizer.csv",
+            "Delimiter": ",",
+            "Number_of_header_rows": 3,
+            "Header_key_row": 3
+        },
+        {
+            "Chemical_name": "NH4-N",
+            "Compartment_name": "RIVER_NETWORK_REACHES",
+            "Type": "source",
+            "Units": "kg",
+            "Filepath": "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/supporting_scripts/Model_Config/config_support_lib/examples_SS_in_cvs/NH4_fertilizer.csv",
+            "Delimiter": ",",
+            "Number_of_header_rows": 3,
+            "Header_key_row": 3
+        }
+    ]
+
 
 ################
 # 🐠 External water fluxes
@@ -180,7 +200,6 @@ gJSON_lib.Gen_Input_Driver(
     ic_all_value=ic_all_value,
     ic_all_units=ic_all_units,
     external_water_fluxes=external_water_fluxes,
-    sink_sources=sink_sources,
     bgc_module_name=bgc_module_name,
     path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework,
     td_module_name=td_module_name,
@@ -191,6 +210,10 @@ gJSON_lib.Gen_Input_Driver(
     ts_sediment_compartment=ts_sediment_compartment,
     si_module_name=si_module_name,
     si_sediment_compartment=si_sediment_compartment,
+    ss_method=ss_method,
+    ss_method_csv_metadata_source=ss_method_csv_metadata_source,
+    ss_method_csv_metadata_comment=ss_method_csv_metadata_comment,
+    ss_method_csv_config=ss_method_csv_config,
     output_format=output_format,
     chemical_species=chemical_species,
     units=units,

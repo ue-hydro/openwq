@@ -24,6 +24,7 @@ import Gen_Config_file as cJSON_lib
 import Gen_TDmodule_file as tdmJSON_lib
 import Gen_LEmodule_file as lemJSON_lib
 import Load_BGQmodule_file as bgqmJSON_lib
+import Gen_SS_Driver as ssJSON_lib
 
 def Gen_Input_Driver(
         # where to save input files
@@ -48,7 +49,6 @@ def Gen_Input_Driver(
 
         # OpenWQ Input
         external_water_fluxes: Dict[str, Dict[str, str]],
-        sink_sources: Dict[str, Dict[str, str]],
 
         # Biogeochemistry module
         bgc_module_name: str,
@@ -62,7 +62,6 @@ def Gen_Input_Driver(
         le_module_name: str,
         le_module_config: List[Dict[str, Union[str, int, float]]],
 
-
         # Transport Sediments module
         ts_module_name: str,
         ts_sediment_compartment: str,
@@ -70,6 +69,12 @@ def Gen_Input_Driver(
         # Sorption Isotherm module
         si_module_name: str,
         si_sediment_compartment: str,
+
+        # Sink and Source settings
+        ss_method:str,
+        ss_method_csv_metadata_source:str,
+        ss_method_csv_metadata_comment:str,
+        ss_method_csv_config:List[Dict[str, Union[str, int]]],
 
         # Output settings
         output_format: str,
@@ -104,6 +109,7 @@ def Gen_Input_Driver(
     le_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{le_module_name}.json")
     ts_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{ts_module_name}.json")
     si_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{si_module_name}.json")
+    ss_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_SS_csv.json")
     output_file_fullpath = os.path.join(f'{dir2save_input_files}', "openwq_out/")
 
     ###############
@@ -119,6 +125,7 @@ def Gen_Input_Driver(
         le_config_filepath=le_config_filepath,
         ts_config_filepath=ts_config_filepath,
         si_config_filepath=si_config_filepath,
+        ss_config_filepath=ss_config_filepath,
         output_file_fullpath=output_file_fullpath,
         project_name=project_name,
         geographical_location=geographical_location,
@@ -129,7 +136,6 @@ def Gen_Input_Driver(
         run_mode_debug=run_mode_debug,
         use_num_threads=use_num_threads,
         external_water_fluxes=external_water_fluxes,
-        sink_sources=sink_sources,
         bgc_module_name=bgc_module_name,
         td_module_name=td_module_name,
         le_module_name=le_module_name,
@@ -137,6 +143,7 @@ def Gen_Input_Driver(
         ts_sediment_compartment=ts_sediment_compartment,
         si_module_name=si_module_name,
         si_sediment_compartment=si_sediment_compartment,
+        ss_method_csv_metadata_source=ss_method_csv_metadata_source,
         output_format=output_format,
         chemical_species=chemical_species,
         units=units,
@@ -201,4 +208,17 @@ def Gen_Input_Driver(
         bgc_config_filepath=bgc_config_filepath
     )
 
+
+    ###############
+    # Call gen_ss_driver
+    ###############
+    if (ss_method=="load_from_csv"):
+
+        ssJSON_lib.set_ss_from_csv(
+            ss_config_filepath=ss_config_filepath,
+            json_header_comment=json_header_comment,
+            ss_method_csv_metadata_source=ss_method_csv_metadata_source,
+            ss_method_csv_metadata_comment=ss_method_csv_metadata_comment,
+            ss_method_csv_config=ss_method_csv_config,
+        )
 
