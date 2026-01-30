@@ -11,6 +11,7 @@
 #    (optional, if needed) Stop the container: docker compose down
 #    (optional, if needed) See the containers running: docker ps
 # 4) Run a shell inside the container: docker exec -it docker_openwq /bin/bash
+
 ####################################
 # (Step A.2) For Apptainer/Singularity (for HPC use)
 ####################################
@@ -26,7 +27,7 @@
 ##############################
 # 1) (as for Step A) Start Docker
 # 2) (as for Step A) In the terminal, go to the folder where this CMakeLists file is located 
-# 5) Open a shell inside that container: docker exec -it openww /bin/bash
+# 5) Open a shell inside that container: docker exec -it openwq_docker /bin/bash
 # 4) Inside the container, go to the folder where this CMakeLists file is located 
 # 5) Compile the model with cmake (create Makefile and compile). 
 # 5.1) Create Makefile (set DHOST_MODEL_TARGET and DCMAKE_BUILD_TYPE)
@@ -52,6 +53,7 @@ Project(OpenWQ)
 # optA3) summa_openwq -> compile with summa using hydrolink
 # optA4) mizuroute_openwq -> compile with mizuRoute using hydrolink
 # optA5) fluxos_openwq -> compile with fluxos using hydrolink
+# optA5) mizuroute_lakes_cslm_openwq -> compile with mizuroute-cslm using hydrolink
 set(VALID_COMPILE_TARGETS "openwq" "crhm_openwq" "summa_openwq" 
                           "mizuroute_openwq" "mizuroute_lakes_openwq" "mizuroute_lakes_cslm_openwq" "fluxos_openwq")
 
