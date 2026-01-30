@@ -50,6 +50,9 @@ def load_bgq_module_json(
     with open(source_path, 'r') as f:
         source_content = f.read()
 
+    # Strip any leading/trailing whitespace from source content
+    source_content = source_content.strip()
+
     # Check if destination file already exists and has comments
     has_comments = False
     if dest_path.exists():
@@ -57,17 +60,19 @@ def load_bgq_module_json(
             dest_content = f.read()
         # Check if any of the header comments already exist in the destination file
         for comment in json_header_comment:
-            if comment in dest_content:
+            if comment.strip() in dest_content:
                 has_comments = True
                 break
 
     # Write to destination file
     with open(bgc_config_filepath, 'w') as f:
-        if not has_comments and json_header_comment:
-            # Add header comments
+        # Add header comments if they don't exist and are provided
+        if json_header_comment and not has_comments:
             for comment in json_header_comment:
                 f.write(comment + "\n")
         # Write the source content
         f.write(source_content)
+        # Add newline at end of file
+        f.write("\n")
 
     print(f"✓ Biogeochemistry cycling framework file saved to: {bgc_config_filepath}")

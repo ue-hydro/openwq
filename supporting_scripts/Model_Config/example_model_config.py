@@ -25,7 +25,7 @@ Example: Generate all OpenWQ input files
 """
 
 ################
-# General information
+# 🐷 General information
 ################
 project_name = "Demonstration"
 geographical_location = "NA"
@@ -39,14 +39,14 @@ hostmodel = "mizuroute" # mizuroute or summa
 dir2save_input_files = "/Users/diogocosta/Documents/openwq_code/test_input_file_generator/"
 
 ################
-# Computational settings
+# 🐨 Computational settings
 ################
 solver = "BE"           # "BE" or "SUNDIALS"
 run_mode_debug = True   # "True" will print the solver derivatives that lead to the concentrations
 use_num_threads = 4     # number of threads, accepts "all"
 
 ################
-### General configuration
+# 🐹 General configuration
 ################
 ic_all_value=2          # initial conditions value, concentration or mass
 ic_all_units="mg/l"     # set the units of ic_all_value
@@ -57,7 +57,7 @@ ic_all_units="mg/l"     # set the units of ic_all_value
 
 """
 --------------------------------------
-Biogeochemistry module
+🐮 Biogeochemistry module
 Options: 
     NATIVE_BGC_FLEX
     PHREEQC"
@@ -65,12 +65,12 @@ Options:
 --------------------------------------
 """
 bgc_module_name = "NATIVE_BGC_FLEX"
-path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/BGC_framework_examples/openWQ_Ncycling_example.json"
+path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/examples_BGC_frameworks/openWQ_Ncycling_example.json"
 # TODO - set up for PHREQC
 
 """
 --------------------------------------
-Transport Dissolved module
+🐸 Transport Dissolved module
 Options: 
     NATIVE_TD_ADV, 
     OPENWQ_NATIVE_TD_ADVDISP, 
@@ -84,7 +84,7 @@ td_module_dispersion_xyz = [0.3,0.3,0.3]
 
 """
 --------------------------------------
-Lateral Exchange module
+🦁 Lateral Exchange module
 Options:
     NATIVE_LE_BOUNDMIX
     NONE
@@ -101,7 +101,7 @@ le_module_config=[
 
 """
 --------------------------------------
-Transport Sediments module
+🐥 Transport Sediments module
 Options:
     HYPE_MMF
     HYPE_HBVSED
@@ -113,7 +113,7 @@ ts_sediment_compartment = "RIVER_NETWORK_REACHES"
 # TODO - SETUP FOR HYPE_MMF AND HYPE_HBVSED OPTIONS
 
 """
-Sorption Isotherm module
+🐞 Sorption Isotherm module
 Options:
     FREUNDLICH
     LANGMUIR
@@ -124,7 +124,7 @@ si_sediment_compartment = "SUMMA_RUNOFF"
 # TODO - SETUP FOR FREUNDLICH AND LANGMUIR OPTIONS
 
 ################
-### Output settings
+# 🦞 Output settings
 ################
 output_format = "HDF5"              # HDF5 or CSV (but HDF5 is recommended as can be used with other scripts
 chemical_species = [1, 2, 3, 4, 5]  # Chemical
@@ -139,15 +139,8 @@ compartments_and_cells = {          # Compartments and cells to export
 }
 
 ################
-# External water fluxes
-external_water_fluxes = {
-    "1": {
-        "LABEL": "SUMMA",
-        "FILEPATH": "openwq_in/openwq_EWF_mizu.json"
-    }
-}
+# 🦎 Sink sources
 ################
-# Sink sources
 sink_sources = {
     "1": {
         "LABEL": "fertilizer_N_test",
@@ -155,11 +148,20 @@ sink_sources = {
     }
 }
 
+################
+# 🐠 External water fluxes
+################
+external_water_fluxes = {
+    "1": {
+        "LABEL": "SUMMA",
+        "FILEPATH": "openwq_in/openwq_EWF_mizu.json"
+    }
+}
 
 ############################
-# ⚠️⚠️⚠️
+# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
 # DON'T CHANGE BELOW THIS POINT-------
-# ⚠️⚠️⚠️
+# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
 ############################
 # Call the function with all individual arguments
 ############################

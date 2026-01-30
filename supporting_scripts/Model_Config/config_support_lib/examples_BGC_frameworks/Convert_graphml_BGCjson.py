@@ -21,14 +21,14 @@ import numpy as np
 ###########################################
 # graphml file name (define full path)
 
-new_BGC_JSON_name = 'BGC_framework_examples/OpenWQ_BGC_STC.json'
+new_BGC_JSON_name = 'examples_BGC_frameworks/OpenWQ_BGC_STC.json'
 
 CYCLING_FRAMEWORKS_names = ['global',
                             'river'
                             ]
 
-GRAPHML_filepaths_associated = ['BGC_framework_examples/CRHM_soilNandP_cycle.graphml',
-                                'BGC_framework_examples/riverNandP_cycle.graphml']
+GRAPHML_filepaths_associated = ['examples_BGC_frameworks/CRHM_soilNandP_cycle.graphml',
+                                'examples_BGC_frameworks/riverNandP_cycle.graphml']
 
 kinetics_flag_graphml_arrow_labels = 'kinetics:'
 mobile_flag_graphml_nodes_labels = 'mobile:'
