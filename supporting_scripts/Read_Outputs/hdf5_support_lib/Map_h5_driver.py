@@ -224,7 +224,7 @@ def Map_h5_driver(shpfile_info=None,
     Map_h5_driver(
         shpfile_info={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
         hydromodel_info={
-            'path_to_shp': 'mizuroute_output.nc',
+            'path_to_results': 'mizuroute_output.nc',
             'mapping_key': 'SegId',
             'var2print': 'runoff'
         },
@@ -238,7 +238,7 @@ def Map_h5_driver(shpfile_info=None,
     Map_h5_driver(
         shpfile_info={'path_to_shp': 'hrus.shp', 'mapping_key': 'hruId'},
         hydromodel_info={
-            'path_to_shp': 'summa_output.nc',
+            'path_to_results': 'summa_output.nc',
             'mapping_key': 'hruId',
             'var2print': 'scalarSWE'
         },
@@ -298,7 +298,7 @@ def Map_h5_driver(shpfile_info=None,
 
         # Extract hostmodel NetCDF info
         if isinstance(hydromodel_info, dict):
-            hostmodel_nc_path = hydromodel_info['path_to_shp']
+            hostmodel_nc_path = hydromodel_info['path_to_results']
             hostmodel_mapping_key = hydromodel_info['mapping_key']
             var2print = hydromodel_var2print
         else:

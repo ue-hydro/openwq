@@ -14,35 +14,42 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#####
-# Reading Openwq outputs and plot
-#####
 
+#################################################
+# Example on how to use read, plot and map model results
+# using the supporting libraries in "hdf5_support_lib"
+#################################################
+# Loading libraries
 import sys
-import os
 sys.path.insert(0, 'hdf5_support_lib')
 
-import Read_h5_driver as h5_rlib
-
-######################
-# General Mapping Info
-######################
+############################################
+# General Mapping Info:
+# 1) shapefile
+# 2) hydromodel results
+# 3) openwq results
 
 shpfile_info={
-        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp',
+        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/test_demonstration/mizuroute_cslm_openwq/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp',
         'mapping_key': 'SegId'
     }
 
 hydromodel_info={
-        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc',
-        'mapping_key': 'reachID' # 'basRunoff' or 'DWroutedRunoff
+        'path_to_results': '/Users/diogocosta/Documents/openwq_code/test_demonstration/mizuroute_cslm_openwq/route/build/openwq/openwq/bin/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc',
+        'mapping_key': 'reachID'
     }
 
 openwq_info= {
-    "path_to_results": '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out',
-    "mapping_key": "reachID"}
+    "path_to_results": '/Users/diogocosta/Documents/openwq_code/test_demonstration/mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out',
+    "mapping_key": "reachID"
+    }
 
+######################
 # Read requested data: Read_h5_driver
+#######################
+
+import Read_h5_driver as h5_rlib
+
 openwq_results = h5_rlib.Read_h5_driver(
             openwq_info= openwq_info,
             output_format='HDF5',   # don't change
@@ -53,11 +60,8 @@ openwq_results = h5_rlib.Read_h5_driver(
             chemUnits="MG/L",
             noDataFlag=-9999)
 
-
-##############################
+############################################
 # Creating GIF MAPS with results
-#############################
-
 """
 import Map_h5_driver as h5_mplib
 
@@ -69,27 +73,26 @@ h5_mplib.Map_h5_driver(
     shpfile_info=shpfile_info,
     # 3) openwq info (👉🏼 used if what2map=openwq)
     openwq_results=openwq_results,
-    chemSpec=["NO3-N"],
+    chemSpec=["NO3-N","N_ORG_fresh"],
     # 4) hostmodel info (👉🏼 used if what2map=hostmodel)
     hydromodel_info=hydromodel_info,
-    hydromodel_var2print='DWroutedRunoff',
+    hydromodel_var2print='DWroutedRunoff', #e.g., 'basRunoff' or 'DWroutedRunoff
     # 5) output config
-    output_html_path="/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/mapResults.gif",
+    output_html_path="/Users/diogocosta/Documents/openwq_code/test_demonstration/mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out/",
     create_gif=True,
-    timeframes=200,
-    gif_duration=100
+    timeframes=30,
+    gif_duration=30
 )
 """
 
-##############################
-# Creating GIF MAPS with results
-#############################
+############################################
+# Plotting time evolution at specific locations
 
 import Plot_h5_driver as h5_mplib
 
 h5_mplib.Plot_h5_driver(
     # 1) What results to map?
-    what2map='openwq',
+    what2map='hostmodel',  # hostmodel or openwq
     hostmodel='mizuroute',
     mapping_key_values=[1200014181, 200014181],
     # 2) openwq info (👉🏼 used if what2map=openwq)
@@ -100,5 +103,6 @@ h5_mplib.Plot_h5_driver(
     hydromodel_info=hydromodel_info,
     hydromodel_var2print='DWroutedRunoff',
     # 4) output config
-    output_path='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/plotSeries.png'
+    output_path='/Users/diogocosta/Documents/openwq_code/test_demonstration/mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out/plotSeries.png'
     )
+

@@ -158,7 +158,7 @@ def Plot_h5_driver(what2map=None,
             print("✗ Error: hydromodel_var2print must be specified for hostmodel mode")
             return None
 
-        nc_path = hydromodel_info['path_to_shp']
+        nc_path = hydromodel_info['path_to_results']
         mapping_key = hydromodel_info['mapping_key']
 
         print(f"  NetCDF: {nc_path}")
@@ -256,11 +256,17 @@ def Plot_h5_driver(what2map=None,
             # Save plot
             if output_path is None:
                 output_path = f'timeseries_{hydromodel_var2print}.png'
+            else:
+                # Insert hydromodel_var2print name and extension before file extension
+                base_path = os.path.splitext(output_path)[0]
+                extension = os.path.splitext(output_path)[1]
+                hydro_output_path = f'{base_path}_{hydromodel_var2print}{extension}'
 
-            plt.savefig(output_path, dpi=150, bbox_inches='tight')
+
+            plt.savefig(hydro_output_path, dpi=150, bbox_inches='tight')
             plt.close()
 
-            print(f"\n✓ Plot saved: {output_path}")
+            print(f"\n✓ Plot saved: {hydro_output_path}")
 
             # Summary
             print("\n" + "=" * 70)
