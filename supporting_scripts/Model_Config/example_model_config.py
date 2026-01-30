@@ -171,18 +171,22 @@ ss_method_csv_config = source_sink_configs=[
 ################
 # 🐠 External water fluxes
 ################
-external_water_fluxes = {
-    "1": {
-        "LABEL": "SUMMA",
-        "FILEPATH": "openwq_in/openwq_EWF_mizu.json"
-    }
-}
+ewf_method = "fixed_value" # for now only "fixed value" option is available
+ewf_method_fixedval_comment = "External model: summa"
+ewf_method_fixedval_source = "Just for demonstration purposes"
+ewf_method_fixedval_chem_name = "NO3-N"
+ewf_method_fixedval_value = 2.5
+ewf_method_fixedval_units = "mg/l"
+ewf_method_fixedval_external_inputflux_name = "SUMMA_RUNOFF"
 
-############################
-# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
+
+
+########################################################
+# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
 # DON'T CHANGE BELOW THIS POINT-------
-# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
-############################
+# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
+########################################################
+
 # Call the function with all individual arguments
 ############################
 
@@ -199,7 +203,6 @@ gJSON_lib.Gen_Input_Driver(
     use_num_threads=use_num_threads,
     ic_all_value=ic_all_value,
     ic_all_units=ic_all_units,
-    external_water_fluxes=external_water_fluxes,
     bgc_module_name=bgc_module_name,
     path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework,
     td_module_name=td_module_name,
@@ -214,6 +217,13 @@ gJSON_lib.Gen_Input_Driver(
     ss_method_csv_metadata_source=ss_method_csv_metadata_source,
     ss_method_csv_metadata_comment=ss_method_csv_metadata_comment,
     ss_method_csv_config=ss_method_csv_config,
+    ewf_method=ewf_method,
+    ewf_method_fixedval_comment=ewf_method_fixedval_comment,
+    ewf_method_fixedval_source=ewf_method_fixedval_source,
+    ewf_method_fixedval_chem_name=ewf_method_fixedval_chem_name,
+    ewf_method_fixedval_value=ewf_method_fixedval_value,
+    ewf_method_fixedval_units=ewf_method_fixedval_units,
+    ewf_method_fixedval_external_inputflux_name=ewf_method_fixedval_external_inputflux_name,
     output_format=output_format,
     chemical_species=chemical_species,
     units=units,

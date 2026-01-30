@@ -25,6 +25,7 @@ import Gen_TDmodule_file as tdmJSON_lib
 import Gen_LEmodule_file as lemJSON_lib
 import Load_BGQmodule_file as bgqmJSON_lib
 import Gen_SS_Driver as ssJSON_lib
+import Gen_EWF_Driver as ewfJSON_lib
 
 def Gen_Input_Driver(
         # where to save input files
@@ -47,9 +48,6 @@ def Gen_Input_Driver(
         ic_all_value: float,
         ic_all_units: str,
 
-        # OpenWQ Input
-        external_water_fluxes: Dict[str, Dict[str, str]],
-
         # Biogeochemistry module
         bgc_module_name: str,
         path2selected_NATIVE_BGC_FLEX_framework: str,
@@ -71,10 +69,19 @@ def Gen_Input_Driver(
         si_sediment_compartment: str,
 
         # Sink and Source settings
-        ss_method:str,
-        ss_method_csv_metadata_source:str,
-        ss_method_csv_metadata_comment:str,
+        ss_method: str,
+        ss_method_csv_metadata_source: str,
+        ss_method_csv_metadata_comment: str,
         ss_method_csv_config:List[Dict[str, Union[str, int]]],
+
+        # External water fluxes
+        ewf_method: str,
+        ewf_method_fixedval_comment: str,
+        ewf_method_fixedval_source: str,
+        ewf_method_fixedval_chem_name: str,
+        ewf_method_fixedval_value: str,
+        ewf_method_fixedval_units: str,
+        ewf_method_fixedval_external_inputflux_name: str,
 
         # Output settings
         output_format: str,
@@ -110,6 +117,7 @@ def Gen_Input_Driver(
     ts_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{ts_module_name}.json")
     si_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{si_module_name}.json")
     ss_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_SS_csv.json")
+    ewf_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_EWF_fixed_value.json")
     output_file_fullpath = os.path.join(f'{dir2save_input_files}', "openwq_out/")
 
     ###############
@@ -126,6 +134,7 @@ def Gen_Input_Driver(
         ts_config_filepath=ts_config_filepath,
         si_config_filepath=si_config_filepath,
         ss_config_filepath=ss_config_filepath,
+        ewf_config_filepath=ewf_config_filepath,
         output_file_fullpath=output_file_fullpath,
         project_name=project_name,
         geographical_location=geographical_location,
@@ -135,7 +144,6 @@ def Gen_Input_Driver(
         solver=solver,
         run_mode_debug=run_mode_debug,
         use_num_threads=use_num_threads,
-        external_water_fluxes=external_water_fluxes,
         bgc_module_name=bgc_module_name,
         td_module_name=td_module_name,
         le_module_name=le_module_name,
@@ -144,6 +152,7 @@ def Gen_Input_Driver(
         si_module_name=si_module_name,
         si_sediment_compartment=si_sediment_compartment,
         ss_method_csv_metadata_source=ss_method_csv_metadata_source,
+        ewf_method_fixedval_source=ewf_method_fixedval_source,
         output_format=output_format,
         chemical_species=chemical_species,
         units=units,
@@ -221,4 +230,25 @@ def Gen_Input_Driver(
             ss_method_csv_metadata_comment=ss_method_csv_metadata_comment,
             ss_method_csv_config=ss_method_csv_config,
         )
+    else:
+        print(f"WARNING: The SS method '{ss_method} is unkown or not available for automatic generation. Only method 'load_from_csv' is available")
+
+    ###############
+    # Call gen_ewf_driver
+    ###############
+    if (ewf_method=="fixed_value"):
+        ewfJSON_lib.set_ewf_fixed_value(
+            ewf_config_filepath=ewf_config_filepath,
+            json_header_comment=json_header_comment,
+            ewf_method_fixedval_comment=ewf_method_fixedval_comment,
+            ewf_method_fixedval_source=ewf_method_fixedval_source,
+            ewf_method_fixedval_chem_name=ewf_method_fixedval_chem_name,
+            ewf_method_fixedval_value=ewf_method_fixedval_value,
+            ewf_method_fixedval_units=ewf_method_fixedval_units,
+            ewf_method_fixedval_external_inputflux_name=ewf_method_fixedval_external_inputflux_name
+        )
+    else:
+        print(
+            f"WARNING: The EWF method '{ewf_method} is unkown or not available for automatic generation. Only method 'fixed_value' is available")
+
 

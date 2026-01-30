@@ -29,15 +29,16 @@ def create_master_json(
         json_header_comment: [],
 
         # paths
-        master_file_fullpath:str,
-        config_file_fullpath:str,
-        bgc_config_filepath:str,
-        td_config_filepath:str,
-        le_config_filepath:str,
-        ts_config_filepath:str,
-        si_config_filepath:str,
-        ss_config_filepath:str,
-        output_file_fullpath:str,
+        master_file_fullpath: str,
+        config_file_fullpath: str,
+        bgc_config_filepath: str,
+        td_config_filepath: str,
+        le_config_filepath: str,
+        ts_config_filepath: str,
+        si_config_filepath: str,
+        ss_config_filepath: str,
+        ewf_config_filepath: str,
+        output_file_fullpath: str,
 
         # Top-level settings
         project_name: str,
@@ -50,9 +51,6 @@ def create_master_json(
         # Computational settings
         run_mode_debug: bool,
         use_num_threads: Union[int, str],
-
-        # OpenWQ Input
-        external_water_fluxes: Dict[str, Dict[str, str]],
 
         # Biogeochemistry module
         bgc_module_name: str,
@@ -73,6 +71,9 @@ def create_master_json(
 
         # Sink and Source
         ss_method_csv_metadata_source: str,
+
+        # External water fluxes
+        ewf_method_fixedval_source: str,
 
         # Output settings
         output_format: str,
@@ -104,7 +105,12 @@ def create_master_json(
         "SOLVER": solver,
         "OPENWQ_INPUT": {
             "CONFIG_FILEPATH": config_file_fullpath,
-            "EXTERNAL_WATER_FLUXES": external_water_fluxes,
+            "EXTERNAL_WATER_FLUXES": {
+                "1": {
+                    "LABEL": ewf_method_fixedval_source,
+                    "FILEPATH": ewf_config_filepath,
+                }
+            },
             "SINK_SOURCE": {
                 "1": {
                     "LABEL": ss_method_csv_metadata_source,
