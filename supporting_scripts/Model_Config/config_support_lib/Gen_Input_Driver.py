@@ -73,6 +73,9 @@ def Gen_Input_Driver(
         ss_method_csv_metadata_source: str,
         ss_method_csv_metadata_comment: str,
         ss_method_csv_config:List[Dict[str, Union[str, int]]],
+        ss_method_copernicus_basin_shp_path: str,
+        ss_method_copernicus_nc_lc_dir: str,
+        ss_method_copernicus_period: List[Union[int, float]],
 
         # External water fluxes
         ewf_method: str,
@@ -235,13 +238,10 @@ def Gen_Input_Driver(
         # CONTINUE HERE
         results, summaries, rasters = ssJSON_lib.set_ss_from_copericus_lulc(
             ss_config_filepath=ss_config_filepath,
-            basin_shapefile_path='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/finalcat_info_v1-0.shp',
-            netcdf_copernicus_lc_dir='/Users/diogocosta/Documents/ESACCI-LC/',
-            year_start=1993,
-            year_end=1994
+            ss_method_copernicus_basin_shp_path=ss_method_copernicus_basin_shp_path,
+            ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
+            ss_method_copernicus_period=ss_method_copernicus_period
         )
-
-        results = results
 
     else:
         print(f"WARNING: The SS method '{ss_method} is unkown or not available for automatic generation. Only method 'load_from_csv' is available")

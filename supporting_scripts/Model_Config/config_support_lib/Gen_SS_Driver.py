@@ -693,11 +693,10 @@ class OptimizedLULCAnalyzer:
 
 
 def set_ss_from_copericus_lulc(
-        basin_shapefile_path: str,
-        netcdf_copernicus_lc_dir: str,
+        ss_method_copernicus_basin_shp_path: str,
+        ss_method_copernicus_nc_lc_dir: str,
         ss_config_filepath: str,
-        year_start: Optional[int] = None,
-        year_end: Optional[int] = None,
+        ss_method_copernicus_period: List[Union[int, float]],
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc'
 ):
@@ -706,9 +705,9 @@ def set_ss_from_copericus_lulc(
 
     Parameters:
     -----------
-    basin_shapefile_path : str
+    ss_method_copernicus_basin_shp_path : str
         Path to the shapefile containing HRU/basin polygons
-    netcdf_copernicus_lc_dir : str
+    ss_method_copernicus_nc_lc_dir : str
         Directory containing Copernicus LULC NetCDF files
     ss_config_filepath : str
         Path where outputs will be saved (directory will be extracted from this)
@@ -744,6 +743,9 @@ def set_ss_from_copericus_lulc(
     )
     """
 
+    year_start = ss_method_copernicus_period[0]
+    year_end = ss_method_copernicus_period[1]
+
     # Extract output directory from ss_config_filepath
     output_base_dir = Path(ss_config_filepath).parent
     output_base_dir.mkdir(parents=True, exist_ok=True)
@@ -761,14 +763,14 @@ def set_ss_from_copericus_lulc(
     print(f"Clipped rasters will be saved to: {clipped_rasters_dir}")
 
     # Convert directory path to Path object
-    lc_dir = Path(netcdf_copernicus_lc_dir)
+    lc_dir = Path(ss_method_copernicus_nc_lc_dir)
 
     # Check if directory exists
     if not lc_dir.exists():
-        raise FileNotFoundError(f"Directory not found: {netcdf_copernicus_lc_dir}")
+        raise FileNotFoundError(f"Directory not found: {ss_method_copernicus_nc_lc_dir}")
 
     if not lc_dir.is_dir():
-        raise NotADirectoryError(f"Path is not a directory: {netcdf_copernicus_lc_dir}")
+        raise NotADirectoryError(f"Path is not a directory: {ss_method_copernicus_nc_lc_dir}")
 
     # Find all NetCDF files
     print(f"Searching for NetCDF files in: {lc_dir}")
@@ -800,7 +802,7 @@ def set_ss_from_copericus_lulc(
 
     if not netcdf_files:
         raise FileNotFoundError(
-            f"No NetCDF files found in {netcdf_copernicus_lc_dir}\n"
+            f"No NetCDF files found in {ss_method_copernicus_nc_lc_dir}\n"
             f"Searched pattern: {file_pattern}\n"
             f"Recursive: {recursive}\n"
             f"Please check the directory path and ensure it contains .nc files"
@@ -853,11 +855,11 @@ def set_ss_from_copericus_lulc(
     print(f"\n{'=' * 60}")
     print(f"Initializing analyzer")
     print(f"{'=' * 60}")
-    print(f"Shapefile: {basin_shapefile_path}")
+    print(f"Shapefile: {ss_method_copernicus_basin_shp_path}")
     print(f"Output directory: {ss_output_dir}")
 
     analyzer = OptimizedLULCAnalyzer(
-        basin_shapefile_path,
+        ss_method_copernicus_basin_shp_path,
         output_dir=str(ss_output_dir)
     )
 
@@ -902,7 +904,90 @@ def set_ss_from_copericus_lulc(
     for raster_path in clipped_raster_paths:
         print(f"  - {Path(raster_path).name}")
 
+    # Create nutrient loads reference file
+    _create_nutrient_loads_reference(ss_output_dir)
+
     return results_df, summaries, clipped_raster_paths
+
+
+def _create_nutrient_loads_reference(output_dir: Path):
+    """
+    Create a reference file with nutrient load coefficients by land use class.
+
+    Parameters:
+    -----------
+    output_dir : Path
+        Directory where the reference file will be saved
+    """
+    reference_content = """### Nutrient loads per hectare by land use class
+
+Values below are typical **annual export coefficients** (runoff loads) normalized per hectare. They vary with climate, soils, and management, but give a usable starting point.
+
+### Approximate export ranges (kg/ha/year)
+
+| Land use class               | Total N (TN) kg/ha/yr | Total P (TP) kg/ha/yr | Citations |
+|-----------------------------|-----------------------|------------------------|-----------|
+| Forest / natural catchment  | ~1–5                  | ~0.05–0.3              |  (Salvia-Castellví et al., 2005; Aaltonen et al., 2021; Wit et al., 2020)|
+| Mixed rural (forest + ag)   | ~15–25                | ~0.4–1.0               |  (Salvia-Castellví et al., 2005; Young et al., 1996)|
+| Grassland / pasture         | ~1–11                 | ~0.1–0.3               |  (Beaulac & Reckhow, 1982; Harmel et al., 2008; Adimassu et al., 2020)|
+| Row‑crop / cultivated ag    | ~10–30 (often ~14)    | ~1–5 (often ~2)        |  (Hopkins et al., 2025; Hiscock et al., 2023; Thilagam et al., 2023; Harmel et al., 2008; Young et al., 1996)|
+| Managed boreal forest (ditched, some arable) | ~2.3 (TN)                | ~0.10 (TP)             |  (Aaltonen et al., 2021)|
+
+**Figure 1:** Typical nitrogen and phosphorus exports by land use
+
+### Key examples from individual studies
+
+- **Forested vs agricultural basins (Luxembourg/Belgium):**  
+  NO3–N export was about **4 kg N/ha/yr in forested catchments** vs **27–33 kg N/ha/yr in agricultural catchments**; TP export ranged **0.4–1.3 kg P/ha/yr** across all rural basins, driven mainly by erosion  (Salvia-Castellví et al., 2005).  
+
+- **Nordic headwaters:**  
+  Across 69 catchments, **agricultural basins had the highest TN and TP fluxes**, forestry‑impacted intermediate, natural lowest, with fluxes expressed as kg N or P km²/yr (i.e., kg/ha/yr after dividing by 100)  (Wit et al., 2020).  
+
+- **Field‑scale agricultural plots (MANAGE database):**  
+  Across US croplands and pastures, mean annual loads were **14.2 kg TN/ha/yr** and **2.2 kg TP/ha/yr** under natural rainfall  (Harmel et al., 2008).  
+  In North American ecoregions, cultivated land in **Temperate Prairies** had median **11.7 kg TN/ha/yr**, while grassland‑dominated semiarid prairies had **2.4 kg TN/ha/yr**  (Hopkins et al., 2025).  
+
+- **Hilly agricultural watershed (India, modeled):**  
+  Current intensive agriculture produced up to **22.8 kg N/ha/yr** and **5.0 kg P/ha/yr** in runoff plus sediment; converting 25% of cropland to tea plantation cut N and P loads by **56% and 48%**  (Thilagam et al., 2023).  
+
+- **Managed vs unmanaged boreal forest (Finland):**  
+  Mean exports: unmanaged forests **1.43 kg TN/ha/yr, 0.053 kg TP/ha/yr**; managed forested catchments **2.31 kg TN/ha/yr, 0.095 kg TP/ha/yr**  (Aaltonen et al., 2021).  
+
+### How to use these
+
+- For **screening or planning**, use the table values as **default export coefficients** per land‑use class, then adjust upward for high fertilizer inputs, steep slopes, or high rainfall, and downward where strong mitigation (buffers, reduced fertilization, perennial cover) is in place.
+
+_These search results were found and analyzed using Consensus, an AI-powered search engine for research. Try it at https://consensus.app. © 2026 Consensus NLP, Inc. Personal, non-commercial use only; redistribution requires copyright holders' consent._
+
+## References
+
+Hopkins, A., Harmel, R., Kleinman, P., Sahoo, D., & Ippolito, J. (2025). Nutrient Runoff From Agricultural Lands in North American Ecoregions. *JAWRA Journal of the American Water Resources Association*, 61. https://doi.org/10.1111/1752-1688.70004
+
+Wit, H., Lepistö, A., Marttila, H., Wenng, H., Bechmann, M., Blicher‐Mathiesen, G., Eklöf, K., Futter, M., Kortelainen, P., Kronvang, B., Kyllmar, K., & Rakovic, J. (2020). Land‐use dominates climate controls on nitrogen and phosphorus export from managed and natural Nordic headwater catchments. *Hydrological Processes*, 34, 4831 - 4850. https://doi.org/10.1002/hyp.13939
+
+Hiscock, K., Cooper, R., Lovett, A., & Sünnenberg, G. (2023). Export Coefficient Modelling of Nutrient Neutrality to Protect Aquatic Habitats in the River Wensum Catchment, UK. *Environments*. https://doi.org/10.3390/environments10100168
+
+Thilagam, K., Manivannan, S., & Khola, O. (2023). Deriving Land Management Practices for Reduced Nutrient Movement from an Agricultural Watershed Using the AGNPS Model. *Sustainability*. https://doi.org/10.3390/su15054001
+
+Beaulac, M., & Reckhow, K. (1982). An Examination of Land Use - Nutrient Export Relationships. *Journal of The American Water Resources Association*, 18, 1013-1024. https://doi.org/10.1111/j.1752-1688.1982.tb00109.x
+
+Adimassu, Z., Tamene, L., & Degefie, D. (2020). The influence of grazing and cultivation on runoff, soil erosion, and soil nutrient export in the central highlands of Ethiopia. *Ecological Processes*, 9, 1-11. https://doi.org/10.1186/s13717-020-00230-z
+
+Salvia-Castellví, M., Iffly, J., Borght, P., & Hoffmann, L. (2005). Dissolved and particulate nutrient export from rural catchments: a case study from Luxembourg.. *The Science of the total environment*, 344 1-3, 51-65. https://doi.org/10.1016/j.scitotenv.2005.02.005
+
+Young, W., Marston, F., & Davis, R. (1996). Nutrient Exports and Land Use in Australian Catchments. *Journal of Environmental Management*, 47, 165-183. https://doi.org/10.1006/jema.1996.0043
+
+Aaltonen, H., Tuukkanen, T., Palviainen, M., Laurén, A., Tattari, S., Piirainen, S., Mattsson, T., Ojala, A., Launiainen, S., & Finér, L. (2021). Controls of Organic Carbon and Nutrient Export from Unmanaged and Managed Boreal Forested Catchments. *Water*. https://doi.org/10.3390/w13172363
+
+Harmel, D., Qian, S., Reckhow, K., & Casebolt, P. (2008). The MANAGE database: nutrient load and site characteristic updates and runoff concentration data.. *Journal of environmental quality*, 37 6, 2403-6. https://doi.org/10.2134/jeq2008.0079
+"""
+
+    reference_file = output_dir / 'SS_lulc_loads_reference.md'
+
+    with open(reference_file, 'w', encoding='utf-8') as f:
+        f.write(reference_content)
+
+    print(f"\n✓ Nutrient loads reference file created: SS_lulc_loads_reference.md")
 
 
 def _extract_year_from_filename(filename: str) -> Optional[int]:
@@ -930,7 +1015,7 @@ def _extract_year_from_filename(filename: str) -> Optional[int]:
 
 
 def list_available_files(
-        netcdf_copernicus_lc_dir: str,
+        ss_method_copernicus_nc_lc_dir: str,
         file_pattern: str = 'ESACCI-LC-*.nc',
         recursive: bool = False
 ) -> List[str]:
@@ -939,7 +1024,7 @@ def list_available_files(
 
     Parameters:
     -----------
-    netcdf_copernicus_lc_dir : str
+    ss_method_copernicus_nc_lc_dir : str
         Directory containing NetCDF files
     file_pattern : str
         Glob pattern to match files
@@ -950,10 +1035,10 @@ def list_available_files(
     --------
     list : List of file paths
     """
-    lc_dir = Path(netcdf_copernicus_lc_dir)
+    lc_dir = Path(ss_method_copernicus_nc_lc_dir)
 
     if not lc_dir.exists():
-        raise FileNotFoundError(f"Directory not found: {netcdf_copernicus_lc_dir}")
+        raise FileNotFoundError(f"Directory not found: {ss_method_copernicus_nc_lc_dir}")
 
     if recursive:
         files = sorted(lc_dir.rglob(file_pattern))

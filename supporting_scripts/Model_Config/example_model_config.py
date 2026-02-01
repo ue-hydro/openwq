@@ -168,6 +168,9 @@ ss_method_csv_config = source_sink_configs=[
         }
     ]
 # if ss_method = load_from_copernicus
+ss_method_copernicus_basin_shp_path ='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/finalcat_info_v1-0.shp'
+ss_method_copernicus_nc_lc_dir ='/Users/diogocosta/Documents/ESACCI-LC/'
+ss_method_copernicus_period = [1993, 1994]
 
 ################
 # 🐠 External water fluxes
@@ -218,6 +221,9 @@ gJSON_lib.Gen_Input_Driver(
     ss_method_csv_metadata_source=ss_method_csv_metadata_source,
     ss_method_csv_metadata_comment=ss_method_csv_metadata_comment,
     ss_method_csv_config=ss_method_csv_config,
+    ss_method_copernicus_basin_shp_path=ss_method_copernicus_basin_shp_path,
+    ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
+    ss_method_copernicus_period=ss_method_copernicus_period,
     ewf_method=ewf_method,
     ewf_method_fixedval_comment=ewf_method_fixedval_comment,
     ewf_method_fixedval_source=ewf_method_fixedval_source,
