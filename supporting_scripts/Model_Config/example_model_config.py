@@ -141,7 +141,8 @@ compartments_and_cells = {          # Compartments and cells to export
 ################
 # 🦎 Sink sources
 ################
-ss_method = "load_from_csv" # "load_from_csv" or "using_copernicus_lulc"
+ss_method = "using_copernicus_lulc" # "load_from_csv" or "using_copernicus_lulc"
+# if ss_method = "load_from_csv"
 ss_method_csv_metadata_source = "Just for demonstration"
 ss_method_csv_metadata_comment = "Leave any comments needed for future reference"
 ss_method_csv_config = source_sink_configs=[
@@ -166,7 +167,7 @@ ss_method_csv_config = source_sink_configs=[
             "Header_key_row": 3
         }
     ]
-
+# if ss_method = load_from_copernicus
 
 ################
 # 🐠 External water fluxes
