@@ -180,6 +180,8 @@ ss_method_copernicus_nc_lc_dir ='/Users/diogocosta/Documents/ESACCI-LC/'
 ss_method_copernicus_period = [1993, 1994]
 ss_method_copernicus_default_loads_bool = True
 # if ss_method_copernicus_default_loads_bool=False, then need to set ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class
+# key is the class code
+# values are: chemical_species: load (kg/ha/year)
 ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
     10: {'TN': 20.0, 'TP': 3.0, 'NH4': 2.5},  # Custom cropland values
     50: {'TN': 2.0, 'TP': 0.1, 'NH4': 0.2},   # Custom forest values
