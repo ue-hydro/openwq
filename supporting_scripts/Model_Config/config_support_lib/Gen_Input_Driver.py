@@ -79,6 +79,7 @@ def Gen_Input_Driver(
         ss_method_copernicus_nc_lc_dir: str,
         ss_method_copernicus_period: List[Union[int, float]],
         ss_method_copernicus_default_loads_bool: bool,
+        ss_method_copernicus_annual_to_seasonal_loads_method: str,
 
         # External water fluxes
         ewf_method: str,
@@ -251,7 +252,8 @@ def Gen_Input_Driver(
             ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
-            optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class
+            optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
+            ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method
         )
 
     else:

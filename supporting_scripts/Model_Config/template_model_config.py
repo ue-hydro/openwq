@@ -60,7 +60,7 @@ ic_all_units = "mg/l"     # set the units of ic_all_value
 🐮 Biogeochemistry module
 Options: 
     NATIVE_BGC_FLEX
-    PHREEQC"
+    PHREEQC
 # in this case, "NONE" is not an option
 --------------------------------------
 """
@@ -79,7 +79,7 @@ Options:
 """
 td_module_name = "NATIVE_TD_ADV"
 # if td_module_name=OPENWQ_NATIVE_TD_ADVDISP
-td_module_dispersion_xyz = [0.3,0.3,0.3]
+td_module_dispersion_xyz = [0.3, 0.3, 0.3]
 
 
 """
@@ -181,7 +181,7 @@ ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key = {
 ss_method_copernicus_compartment_name_for_load = "RIVER_NETWORK_REACHES"
 # download nc with lulc from ESA CCI LC (copernicus: https://cds.climate.copernicus.eu/datasets/satellite-land-cover?tab=overview)
 # and point the location to that folder below in 'ss_method_copernicus_nc_lc_dir'
-ss_method_copernicus_nc_lc_dir ='/Users/diogocosta/Documents/ESACCI-LC/'
+ss_method_copernicus_nc_lc_dir = '/Users/diogocosta/Documents/ESACCI-LC/'
 ss_method_copernicus_period = [1993, 1994]
 ss_method_copernicus_default_loads_bool = True
 # if ss_method_copernicus_default_loads_bool=False, then need to set ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class
@@ -192,6 +192,8 @@ ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
     50: {'TN': 2.0, 'TP': 0.1, 'NH4': 0.2},   # Custom forest values
     130: {'TN': 5.0, 'TP': 0.15, 'NH4': 0.5}  # Custom grassland values
 }
+ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform' # options: 'uniform' or 'seasonal'
+
 ################
 # 🐠 External water fluxes
 ################
@@ -247,6 +249,7 @@ gJSON_lib.Gen_Input_Driver(
     ss_method_copernicus_period=ss_method_copernicus_period,
     ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
     ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
+    ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
     ewf_method=ewf_method,
     ewf_method_fixedval_comment=ewf_method_fixedval_comment,
     ewf_method_fixedval_source=ewf_method_fixedval_source,

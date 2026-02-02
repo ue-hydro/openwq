@@ -1235,6 +1235,70 @@ def calculate_nutrient_loads(
     return loads_df, summary_by_hru
 
 
+def _calculate_temporal_load_distribution(
+        annual_load_kg: float,
+        year: int,
+        method: str = "uniform"
+) -> List[tuple]:
+    """
+    Calculate temporal distribution of annual nutrient load.
+
+    Parameters:
+    -----------
+    annual_load_kg : float
+        Total annual load in kg
+    year : int
+        Year for the load
+    method : str
+        Distribution method:
+        - "uniform": Spread load uniformly throughout the year (monthly)
+        - "seasonal": Sine curve with peak in growing season (summer), low in winter
+
+    Returns:
+    --------
+    list of tuples : [(month, day, hour, load_kg), ...]
+        List of temporal load entries
+    """
+    import math
+
+    if method == "uniform":
+        # Distribute load uniformly across 12 months (1st of each month at 1:00 AM)
+        monthly_load = annual_load_kg / 12.0
+
+        temporal_entries = []
+        for month in range(1, 13):
+            # Using day=1, hour=1, allows us to use "all" for other time fields
+            temporal_entries.append((month, 1, 1, monthly_load))
+
+        return temporal_entries
+
+    elif method == "seasonal":
+        # Sine curve: peak in July (growing season), minimum in January (winter)
+        monthly_loads = []
+        for month in range(1, 13):
+            # Sine function centered on July (month 7)
+            angle = 2 * math.pi * (month - 4) / 12
+            # Amplitude: min is 0.2 of mean, max is 1.8 of mean
+            relative_load = 1.0 + 0.8 * math.sin(angle)
+            monthly_loads.append(relative_load)
+
+        # Normalize so sum equals annual load
+        total_relative = sum(monthly_loads)
+        monthly_loads_kg = [(annual_load_kg * rel / total_relative) for rel in monthly_loads]
+
+        # Create temporal entries (1st of each month at 1:00 AM)
+        temporal_entries = []
+        for month, load_kg in enumerate(monthly_loads_kg, start=1):
+            temporal_entries.append((month, 1, 1, load_kg))
+
+        return temporal_entries
+
+    else:
+        raise ValueError(
+            f"Unknown temporal distribution method: '{method}'. "
+            f"Valid options are 'uniform' or 'seasonal'."
+        )
+
 def create_openwq_ss_json_from_loads(
         pivot_loads_csv_path: Path,
         ss_config_filepath: str,
@@ -1242,6 +1306,7 @@ def create_openwq_ss_json_from_loads(
         ss_method_copernicus_compartment_name_for_load: str,
         ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
         shp_hru_id_column: str,
+        ss_method_copernicus_annual_to_seasonal_loads_method: str = "uniform",
         ss_metadata_comment: str = "Nutrient loading from land use/land cover",
         ss_metadata_source: str = "Copernicus LULC analysis"
 ) -> None:
@@ -1275,6 +1340,23 @@ def create_openwq_ss_json_from_loads(
     print("\n" + "=" * 60)
     print("GENERATING OPENWQ SOURCE/SINK JSON")
     print("=" * 60)
+
+    # Validate temporal distribution method
+    valid_methods = ["uniform", "seasonal"]
+    if ss_method_copernicus_annual_to_seasonal_loads_method not in valid_methods:
+        raise ValueError(
+            f"Invalid temporal distribution method: '{ss_method_copernicus_annual_to_seasonal_loads_method}'. "
+            f"Valid options are: {valid_methods}"
+        )
+
+    print(f"\nTemporal distribution method: {ss_method_copernicus_annual_to_seasonal_loads_method}")
+    if ss_method_copernicus_annual_to_seasonal_loads_method == "uniform":
+        print("  → Annual loads will be distributed uniformly across 12 months")
+        print("  → Using OpenWQ 'all' keyword for compact JSON (min=0, sec=0)")
+    elif ss_method_copernicus_annual_to_seasonal_loads_method == "seasonal":
+        print("  → Annual loads will follow seasonal pattern (sine curve)")
+        print("  → Peak loads in summer (July), lowest in winter (January)")
+        print("  → Using OpenWQ 'all' keyword for compact JSON (min=0, sec=0)")
 
     # Load pivot loads data
     print(f"\nLoading pivot loads from: {pivot_loads_csv_path.name}")
@@ -1350,7 +1432,7 @@ def create_openwq_ss_json_from_loads(
             for _, row in nutrient_loads.iterrows():
                 hru_id = row[shp_hru_id_column]
                 hru_id = str(int(hru_id))
-                load_kg = row[nutrient]
+                annual_load_kg = row[nutrient]
 
                 # Get spatial coordinates
                 if hru_id not in hru_to_xyz.keys():
@@ -1359,15 +1441,24 @@ def create_openwq_ss_json_from_loads(
 
                 ix, iy, iz = hru_to_xyz[hru_id]
 
-                # Create entry: [YYYY, MM, DD, HH, min, sec, ix, iy, iz, load, "discrete"]
-                # Add load at start of year (January 1st, 1:00 AM)
-                data_entries[str(sub_idx)] = [
-                    int(year), 1, 1, 1, 0, 0,  # Year, Jan 1st, 1:00 AM
-                    ix, iy, iz,  # Spatial coordinates
-                    float(load_kg),  # Load in kg
-                    "discrete"
-                ]
-                sub_idx += 1
+                # Calculate temporal distribution of annual load
+                temporal_entries = _calculate_temporal_load_distribution(
+                    annual_load_kg=annual_load_kg,
+                    year=int(year),
+                    method=ss_method_copernicus_annual_to_seasonal_loads_method
+                )
+
+                # Create data entries for each time point
+                # Format: [YYYY, MM, DD, HH, min, sec, ix, iy, iz, load, "discrete"]
+                # Use "all" for minutes and seconds (always 0) to compress JSON
+                for month, day, hour, load_kg in temporal_entries:
+                    data_entries[str(sub_idx)] = [
+                        int(year), int(month), int(day), int(hour), "all", "all",  # Temporal (use "all" for min, sec)
+                        ix, iy, iz,  # Spatial coordinates
+                        float(load_kg),  # Load in kg
+                        "discrete"
+                    ]
+                    sub_idx += 1
 
             if len(data_entries) == 0:
                 print(f"    ⚠ No valid entries for {nutrient} in {year}, skipping...")
@@ -1503,6 +1594,7 @@ def set_ss_from_copernicus_lulc_with_loads(
 
         ss_method_copernicus_compartment_name_for_load: str,
         ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
+        ss_method_copernicus_annual_to_seasonal_loads_method: str = "uniform",
         ss_metadata_comment: str = "Nutrient loading from land use/land cover",
         ss_metadata_source: str = "Copernicus LULC analysis",
         optional_load_coefficients: Optional[Dict[int, Dict[str, float]]] = None,
@@ -1549,6 +1641,11 @@ def set_ss_from_copernicus_lulc_with_loads(
         Whether to search subdirectories
     file_pattern : str
         Glob pattern for NetCDF files
+    s_method_copernicus_annual_to_seasonal_loads_method : str, default "uniform"
+        Temporal distribution method for annual loads:
+        - 'uniform': Distribute loads evenly across 12 months
+        - 'seasonal': Use sine curve with peak in summer (July), minimum in winter (January)
+        Uses OpenWQ 'all' keyword for minutes/seconds to compress JSON file size
 
     Returns:
     --------
@@ -1602,6 +1699,7 @@ def set_ss_from_copernicus_lulc_with_loads(
         ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
         ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key=ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key,
         shp_hru_id_column=shp_hru_id_column,
+        ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
         ss_metadata_comment=ss_metadata_comment,
         ss_metadata_source=ss_metadata_source
     )
