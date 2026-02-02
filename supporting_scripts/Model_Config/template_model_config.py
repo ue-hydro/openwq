@@ -36,7 +36,7 @@ comment = "This a demonstration input file setup"
 hostmodel = "mizuroute" # mizuroute or summa
 
 # Directory to save the master file and the folder with the other input files,
-dir2save_input_files = "/Users/diogocosta/Documents/openwq_code/test_input_file_generator/"
+dir2save_input_files = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case_2/"
 
 ################
 # 🐨 Computational settings
