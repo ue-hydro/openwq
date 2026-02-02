@@ -144,8 +144,8 @@ compartments_and_cells = {          # Compartments and cells to export
 ss_method = "using_copernicus_lulc" # "load_from_csv" or "using_copernicus_lulc"
 ################
 # 👉🏼 if ss_method = "load_from_csv"
-ss_method_csv_metadata_source = "Just for demonstration"
-ss_method_csv_metadata_comment = "Leave any comments needed for future reference"
+ss_metadata_source = "Just for demonstration"
+ss_metadata_comment = "Leave any comments needed for future reference"
 ss_method_csv_config = source_sink_configs=[
         {
             "Chemical_name": "NO3-N",
@@ -172,8 +172,13 @@ ss_method_csv_config = source_sink_configs=[
 # 👉🏼 if ss_method = load_from_copernicus
 ss_method_copernicus_basin_info = {
     'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/finalcat_info_v1-0.shp',
-    'mapping_key': 'Seg_ID'
+    'mapping_key': 'SubId'
 }
+ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key = {
+    'path_to_file': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/HDF5/RIVER_NETWORK_REACHES@N_ORG_ACTIVE#MG|L-main.h5',
+    'mapping_key': 'reachID'
+}
+ss_method_copernicus_compartment_name_for_load = "RIVER_NETWORK_REACHES"
 # download nc with lulc from ESA CCI LC (copernicus: https://cds.climate.copernicus.eu/datasets/satellite-land-cover?tab=overview)
 # and point the location to that folder below in 'ss_method_copernicus_nc_lc_dir'
 ss_method_copernicus_nc_lc_dir ='/Users/diogocosta/Documents/ESACCI-LC/'
@@ -232,10 +237,12 @@ gJSON_lib.Gen_Input_Driver(
     si_module_name=si_module_name,
     si_sediment_compartment=si_sediment_compartment,
     ss_method=ss_method,
-    ss_method_csv_metadata_source=ss_method_csv_metadata_source,
-    ss_method_csv_metadata_comment=ss_method_csv_metadata_comment,
+    ss_metadata_source=ss_metadata_source,
+    ss_metadata_comment=ss_metadata_comment,
     ss_method_csv_config=ss_method_csv_config,
     ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+    ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key=ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key,
+    ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
     ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
     ss_method_copernicus_period=ss_method_copernicus_period,
     ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,

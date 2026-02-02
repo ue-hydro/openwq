@@ -68,8 +68,8 @@ def set_ss_from_csv(
         json_header_comment: List[str],
 
         # Metadata
-        ss_method_csv_metadata_source: str,
-        ss_method_csv_metadata_comment: str,
+        ss_metadata_source: str,
+        ss_metadata_comment: str,
 
         # List of source/sink configurations
         ss_method_csv_config: List[Dict[str, Union[str, int]]]
@@ -81,11 +81,11 @@ def set_ss_from_csv(
     Parameters:
         ss_config_filepath: Full path where the JSON file will be saved
         json_header_comment: List of comment lines to add at the top of the file
-        metadata_comment: Comment for metadata section
-        metadata_source: Source identifier for metadata section
+        ss_metadata_comment: Comment for metadata section
+        ss_metadata_source: Source identifier for metadata section
         ss_method_csv_config: List of dictionaries, each containing:
             - Chemical_name: Name of the chemical species
-            - Compartment_name: Name of the compartment
+            - ss_method_copernicus_compartment_name_for_load: Name of the compartment
             - Type: "source" or "sink"
             - Units: Units (e.g., "kg")
             - Data_Format: Format type (e.g., "ASCII")
@@ -102,8 +102,8 @@ def set_ss_from_csv(
     # Build the complete JSON structure
     config = {
         "METADATA": {
-            "Comment": ss_method_csv_metadata_comment,
-            "Source": ss_method_csv_metadata_source
+            "Comment": ss_metadata_comment,
+            "Source": ss_metadata_source
         }
     }
 
@@ -111,7 +111,7 @@ def set_ss_from_csv(
     for idx, ss_config in enumerate(ss_method_csv_config, start=1):
         config[str(idx)] = {
             "Chemical_name": ss_config["Chemical_name"],
-            "Compartment_name": ss_config["Compartment_name"],
+            "Comment": ss_config["ss_method_copernicus_compartment_name_for_load"],
             "Type": ss_config["Type"],
             "Units": ss_config["Units"],
             "Data_Format": "ASCII",
@@ -125,6 +125,18 @@ def set_ss_from_csv(
 
     # Convert to JSON string with standard formatting
     json_string = json.dumps(config, indent=4)
+
+    # Custom formatting function
+    def compress_array(match):
+        array_content = match.group(0)
+        compressed = re.sub(r'\s+', ' ', array_content)
+        compressed = re.sub(r'\[\s+', '[', compressed)
+        compressed = re.sub(r'\s+\]', ']', compressed)
+        compressed = re.sub(r'\s*,\s*', ', ', compressed)
+        return compressed
+
+    # Apply compression to all arrays
+    json_string = re.sub(r'\[[^\[\]]*\]', compress_array, json_string)
 
     # Write to file
     with open(ss_config_filepath, 'w') as f:
@@ -192,9 +204,9 @@ class OptimizedLULCAnalyzer:
             )
 
         # Use the specified mapping key column as HRU_ID
-        self.hru_id_column = mapping_key
+        self.shp_hru_id_column = mapping_key
 
-        print(f"Using '{self.hru_id_column}' column for HRU identification")
+        print(f"Using '{self.shp_hru_id_column}' column for HRU identification")
 
     def netcdf_to_geotiff(self, netcdf_path, output_tiff=None, use_temp=False):
         """
@@ -376,7 +388,7 @@ class OptimizedLULCAnalyzer:
             print(f"    • Processing HRUs: ", end='', flush=True)
             for idx, row in gdf_reprojected.iterrows():
                 # Get HRU ID using the specified column
-                hru_id = row.get(self.hru_id_column, idx)
+                hru_id = row.get(self.shp_hru_id_column, idx)
 
                 # Show progress every 10 HRUs
                 if (idx + 1) % 10 == 0:
@@ -417,7 +429,7 @@ class OptimizedLULCAnalyzer:
                         area_km2 = area_m2 / 1_000_000
 
                         results.append({
-                            self.hru_id_column: hru_id,
+                            self.shp_hru_id_column: hru_id,
                             'Year': year,
                             'LC_Class': int(lc_class),
                             'Pixel_Count': int(count),
@@ -669,7 +681,7 @@ class OptimizedLULCAnalyzer:
         summaries = {}
 
         # Use the actual HRU ID column name from the shapefile
-        hru_col = self.hru_id_column
+        hru_col = self.shp_hru_id_column
 
         # Summary by HRU and Year
         summaries['by_hru_year'] = df.groupby([hru_col, 'Year']).agg({
@@ -701,7 +713,7 @@ class OptimizedLULCAnalyzer:
         print("=" * 60)
 
         # Use the actual HRU ID column name
-        hru_col = self.hru_id_column
+        hru_col = self.shp_hru_id_column
 
         print(f"\nTotal records: {len(df)}")
         print(f"Number of HRUs: {df[hru_col].nunique()}")
@@ -1114,7 +1126,7 @@ def calculate_nutrient_loads(
         results_df: pd.DataFrame,
         load_coefficients: Dict[int, Dict[str, float]],
         output_dir: Path,
-        hru_id_column: str = 'HRU_ID'
+        shp_hru_id_column: str = 'HRU_ID'
 ) -> pd.DataFrame:
     """
     Calculate nutrient loads based on land cover areas and export coefficients.
@@ -1134,7 +1146,7 @@ def calculate_nutrient_loads(
         Classes not in this dict will have loads set to 0.
     output_dir : Path
         Directory to save the loads CSV file
-    hru_id_column : str
+    shp_hru_id_column : str
         Name of the HRU ID column
 
     Returns:
@@ -1171,7 +1183,7 @@ def calculate_nutrient_loads(
     for idx, row in results_df.iterrows():
         lc_class = int(row['LC_Class'])
         area_ha = row['Area_ha']
-        hru_id = row[hru_id_column]
+        hru_id = row[shp_hru_id_column]
         year = row['Year']
 
         # Get coefficients for this LC class
@@ -1184,7 +1196,7 @@ def calculate_nutrient_loads(
                 load_kg_yr = area_ha * coeff  # kg/yr = ha * (kg/ha/yr)
 
                 loads_data.append({
-                    hru_id_column: hru_id,
+                    shp_hru_id_column: hru_id,
                     'Year': year,
                     'LC_Class': lc_class,
                     'Area_ha': area_ha,
@@ -1196,7 +1208,7 @@ def calculate_nutrient_loads(
             # No coefficients for this class - set load to 0
             for nutrient in nutrient_types:
                 loads_data.append({
-                    hru_id_column: hru_id,
+                    shp_hru_id_column: hru_id,
                     'Year': year,
                     'LC_Class': lc_class,
                     'Area_ha': area_ha,
@@ -1216,7 +1228,7 @@ def calculate_nutrient_loads(
     print(f"\n✓ Detailed loads exported to: {loads_file.name}")
 
     # Create summary by HRU and Year
-    summary_by_hru = loads_df.groupby([hru_id_column, 'Year', 'Nutrient'])['Load_kg_yr'].sum().reset_index()
+    summary_by_hru = loads_df.groupby([shp_hru_id_column, 'Year', 'Nutrient'])['Load_kg_yr'].sum().reset_index()
     summary_file = output_dir / 'nutrient_loads_summary_by_hru.csv'
     summary_by_hru.to_csv(summary_file, index=False)
     print(f"✓ HRU summary exported to: {summary_file.name}")
@@ -1224,7 +1236,7 @@ def calculate_nutrient_loads(
     # Create pivot table: HRUs x Nutrients
     pivot_loads = loads_df.pivot_table(
         values='Load_kg_yr',
-        index=[hru_id_column, 'Year'],
+        index=[shp_hru_id_column, 'Year'],
         columns='Nutrient',
         aggfunc='sum',
         fill_value=0
@@ -1240,7 +1252,196 @@ def calculate_nutrient_loads(
         total_load = nutrient_loads['Load_kg_yr'].sum()
         print(f"  {nutrient}: {total_load:,.2f} kg/yr")
 
-    return loads_df
+    return loads_df, summary_by_hru
+
+
+def create_openwq_ss_json_from_loads(
+        pivot_loads_csv_path: Path,
+        ss_config_filepath: str,
+        json_header_comment: List[str],
+        ss_method_copernicus_compartment_name_for_load: str,
+        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
+        shp_hru_id_column: str,
+        ss_metadata_comment: str = "Nutrient loading from land use/land cover",
+        ss_metadata_source: str = "Copernicus LULC analysis"
+) -> None:
+    """
+    Generate OpenWQ source/sink JSON configuration from nutrient loads.
+
+    Parameters:
+    -----------
+    pivot_loads_csv_path : Path
+        Path to the nutrient_loads_pivot.csv file
+    ss_config_filepath : str
+        Full path where the JSON file will be saved
+    json_header_comment : List[str]
+        List of comment lines to add at the top of the file
+    ss_method_copernicus_compartment_name_for_load : str
+        Name of the compartment (e.g., 'RIVER_NETWORK_REACHES')
+    openwq_hru_mapping_key : str
+        Name of the HRU/segment ID column (e.g., 'Seg_ID', 'HRU_ID')
+    ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key : Dist[str, str]
+        Path to OpenWQ HDF5 output file containing xyz_elements and mapping_key data
+    ss_metadata_comment : str
+        Comment for metadata section
+    ss_metadata_source : str
+        Source identifier for metadata section
+    """
+    import h5py
+
+    openwq_hru_mapping_key = ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key['mapping_key']
+    openwq_h5_result_path = ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key['path_to_file']
+
+    print("\n" + "=" * 60)
+    print("GENERATING OPENWQ SOURCE/SINK JSON")
+    print("=" * 60)
+
+    # Load pivot loads data
+    print(f"\nLoading pivot loads from: {pivot_loads_csv_path.name}")
+    pivot_df = pd.read_csv(pivot_loads_csv_path)
+
+    # Load HDF5 mapping
+    print(f"Loading spatial mapping from: {openwq_h5_result_path}")
+    with h5py.File(openwq_h5_result_path, 'r') as h5f:
+        # Load xyz_elements
+        if 'xyz_elements' not in h5f:
+            raise ValueError(f"'xyz_elements' not found in HDF5 file. Available: {list(h5f.keys())}")
+
+        xyz_elements = h5f['xyz_elements'][:]
+
+        # Load mapping key (e.g., Seg_ID)
+        if openwq_hru_mapping_key not in h5f:
+            raise ValueError(
+                f"'{openwq_hru_mapping_key}' not found in HDF5 file. Available: {list(h5f.keys())}\n"
+                f"Make sure the mapping_key matches a variable in the HDF5 file."
+            )
+
+        mapping_ids = h5f[openwq_hru_mapping_key][:]
+
+    print(f"  Loaded {len(xyz_elements)} spatial elements")
+    print(f"  xyz_elements shape: {xyz_elements.shape}")
+    print(f"  {openwq_hru_mapping_key} shape: {mapping_ids.shape}")
+
+    # Create mapping dictionary: HRU_ID -> (ix, iy, iz)
+    hru_to_xyz = {}
+    for idx in range(len(mapping_ids)):
+        hru_id = mapping_ids[idx].decode('utf-8')
+        ix, iy, iz = xyz_elements[:, idx]
+        hru_to_xyz[hru_id] = (int(ix), int(iy), int(iz))
+
+    print(f"  Created mapping for {len(hru_to_xyz)} HRU/segments")
+
+    # Get nutrient columns (exclude HRU_ID and Year columns)
+    exclude_cols = [shp_hru_id_column, 'Year']
+    nutrient_cols = [col for col in pivot_df.columns if col not in exclude_cols]
+
+    print(f"\nNutrient species found: {nutrient_cols}")
+    print(f"Years found: {sorted(pivot_df['Year'].unique())}")
+
+    # Build JSON structure
+    config = {
+        "METADATA": {
+            "Comment": ss_metadata_comment,
+            "Source": ss_metadata_source
+        }
+    }
+
+    entry_idx = 1
+
+    # Group by year and process each nutrient
+    for year in sorted(pivot_df['Year'].unique()):
+        year_data = pivot_df[pivot_df['Year'] == year]
+
+        for nutrient in nutrient_cols:
+            print(f"\n  Processing: Year {year}, Nutrient {nutrient}")
+
+            # Get non-zero loads for this year and nutrient
+            nutrient_loads = year_data[[shp_hru_id_column, nutrient]].copy()
+            nutrient_loads = nutrient_loads[nutrient_loads[nutrient] > 0]  # Only non-zero loads
+
+            if len(nutrient_loads) == 0:
+                print(f"    ⚠ No non-zero loads for {nutrient} in {year}, skipping...")
+                continue
+
+            # Create data entries
+            data_entries = {}
+            sub_idx = 1
+
+            for _, row in nutrient_loads.iterrows():
+                hru_id = row[shp_hru_id_column]
+                hru_id = str(int(hru_id))
+                load_kg = row[nutrient]
+
+                # Get spatial coordinates
+                if hru_id not in hru_to_xyz.keys():
+                    print(f"    ⚠ Warning: HRU {hru_id} not found in HDF5 mapping, skipping...")
+                    continue
+
+                ix, iy, iz = hru_to_xyz[hru_id]
+
+                # Create entry: [YYYY, MM, DD, HH, min, sec, ix, iy, iz, load, "discrete"]
+                # Add load at start of year (January 1st, 1:00 AM)
+                data_entries[str(sub_idx)] = [
+                    int(year), 1, 1, 1, 0, 0,  # Year, Jan 1st, 1:00 AM
+                    ix, iy, iz,  # Spatial coordinates
+                    float(load_kg),  # Load in kg
+                    "discrete"
+                ]
+                sub_idx += 1
+
+            if len(data_entries) == 0:
+                print(f"    ⚠ No valid entries for {nutrient} in {year}, skipping...")
+                continue
+
+            # Add to config
+            config[str(entry_idx)] = {
+                "Chemical_name": nutrient,
+                "Comment": ss_method_copernicus_compartment_name_for_load,
+                "Type": "source",
+                "Units": "kg",
+                "Data_Format": "JSON",
+                "Data": data_entries
+            }
+
+            print(f"    ✓ Added {len(data_entries)} load entries for {nutrient} in {year}")
+            entry_idx += 1
+
+    # Convert to JSON string with standard formatting
+    json_string = json.dumps(config, indent=4)
+
+    # Custom formatting function
+    def compress_array(match):
+        array_content = match.group(0)
+        compressed = re.sub(r'\s+', ' ', array_content)
+        compressed = re.sub(r'\[\s+', '[', compressed)
+        compressed = re.sub(r'\s+\]', ']', compressed)
+        compressed = re.sub(r'\s*,\s*', ', ', compressed)
+        return compressed
+
+    # Apply compression to all arrays
+    json_string = re.sub(r'\[[^\[\]]*\]', compress_array, json_string)
+
+    # Create output directory if needed
+    output_path = Path(ss_config_filepath)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write to file
+    with open(ss_config_filepath, 'w') as f:
+        # Write comment lines first
+        for comment in json_header_comment:
+            f.write(comment + "\n")
+        # Write the JSON content
+        f.write(json_string)
+        # Add newline at end of file
+        f.write("\n")
+
+    print("\n" + "=" * 60)
+    print("✓ OpenWQ SOURCE/SINK JSON CREATED!")
+    print("=" * 60)
+    print(f"File saved to: {ss_config_filepath}")
+    print(f"Total source entries: {entry_idx - 1}")
+    print(f"Nutrients: {nutrient_cols}")
+    print(f"Compartment: {ss_method_copernicus_compartment_name_for_load}")
 
 
 def get_default_copernicus_load_coefficients() -> Dict[int, Dict[str, float]]:
@@ -1314,41 +1515,56 @@ def get_default_copernicus_load_coefficients() -> Dict[int, Dict[str, float]]:
 
 def set_ss_from_copernicus_lulc_with_loads(
         ss_config_filepath: str,
+        json_header_comment: List[str],
         ss_method_copernicus_basin_info: Dict[str, str],
         ss_method_copernicus_nc_lc_dir: str,
         ss_method_copernicus_period: List[Union[int, float]],
         ss_method_copernicus_default_loads_bool: bool,
+
+        ss_method_copernicus_compartment_name_for_load: str,
+        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
+        ss_metadata_comment: str = "Nutrient loading from land use/land cover",
+        ss_metadata_source: str = "Copernicus LULC analysis",
         optional_load_coefficients: Optional[Dict[int, Dict[str, float]]] = None,
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc'
 ):
     """
-    Process Copernicus LULC data and calculate nutrient loads.
+    Process Copernicus LULC data, calculate nutrient loads, and generate OpenWQ JSON.
 
-    This is a convenience wrapper that:
+    This is a comprehensive wrapper that:
     1. Calculates LULC areas
     2. Calculates nutrient loads based on export coefficients
-    3. Exports all results
+    3. Generates OpenWQ source/sink JSON configuration
+    4. Exports all results
 
     Parameters:
     -----------
     ss_config_filepath : str
-        Path where configuration and outputs will be saved
+        Path where JSON configuration will be saved
     ss_method_copernicus_basin_info : dict
         Dictionary containing:
         - 'path_to_shp': Path to the shapefile
-        - 'mapping_key': Column name for HRU ID
+        - 'mapping_key': Column name for HRU ID (must match HDF5 variable)
     ss_method_copernicus_nc_lc_dir : str
         Directory containing Copernicus LULC NetCDF files
     ss_method_copernicus_period : list
         [year_start, year_end]
     ss_method_copernicus_default_loads_bool : bool
-        If True, use default pre-coded load coefficients for all classes.
-        If False, use optional_load_coefficients (classes not specified will be set to 0).
+        If True, use default pre-coded load coefficients.
+        If False, use optional_load_coefficients.
+    json_header_comment : List[str]
+        Comment lines to add at the top of the JSON file
+    ss_method_copernicus_compartment_name_for_load : str
+        OpenWQ compartment name (e.g., 'RIVER_NETWORK_REACHES')
+    ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key : List[str, str]
+        Path to OpenWQ HDF5 output file with xyz_elements and mapping_key
+    ss_metadata_comment : str
+        Comment for JSON metadata section
+    ss_metadata_source : str
+        Source identifier for JSON metadata section
     optional_load_coefficients : dict, optional
-        Custom load coefficients (only used if ss_method_copernicus_default_loads_bool=False).
-        Format: {LC_Class: {'TN': value, 'TP': value, ...}}
-        Classes not specified will have loads set to 0.
+        Custom load coefficients (only used if ss_method_copernicus_default_loads_bool=False)
     recursive : bool
         Whether to search subdirectories
     file_pattern : str
@@ -1386,14 +1602,28 @@ def set_ss_from_copernicus_lulc_with_loads(
     output_dir = Path(ss_config_filepath).parent / 'ss_copernicus_files'
 
     # Get HRU ID column name
-    hru_id_column = ss_method_copernicus_basin_info.get('mapping_key', 'HRU_ID')
+    shp_hru_id_column = ss_method_copernicus_basin_info.get('mapping_key', 'HRU_ID')
 
     # Calculate nutrient loads
-    loads = calculate_nutrient_loads(
+    loads_df, pivot_loads_df = calculate_nutrient_loads(
         results_df=results,
         load_coefficients=load_coefficients,
         output_dir=output_dir,
-        hru_id_column=hru_id_column
+        shp_hru_id_column=shp_hru_id_column
     )
 
-    return results, summaries, rasters, loads
+    # Generate OpenWQ JSON configuration
+    pivot_csv_path = output_dir / 'nutrient_loads_pivot.csv'
+
+    create_openwq_ss_json_from_loads(
+        pivot_loads_csv_path=pivot_csv_path,
+        ss_config_filepath=ss_config_filepath,
+        json_header_comment=json_header_comment,
+        ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
+        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key=ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key,
+        shp_hru_id_column=shp_hru_id_column,
+        ss_metadata_comment=ss_metadata_comment,
+        ss_metadata_source=ss_metadata_source
+    )
+
+    return results, summaries, rasters, loads_df

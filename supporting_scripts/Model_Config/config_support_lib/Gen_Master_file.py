@@ -70,7 +70,7 @@ def create_master_json(
         si_sediment_compartment: str,
 
         # Sink and Source
-        ss_method_csv_metadata_source: str,
+        ss_metadata_source: str,
 
         # External water fluxes
         ewf_method_fixedval_source: str,
@@ -113,7 +113,7 @@ def create_master_json(
             },
             "SINK_SOURCE": {
                 "1": {
-                    "LABEL": ss_method_csv_metadata_source,
+                    "LABEL": ss_metadata_source,
                     "FILEPATH": ss_config_filepath,
                 }
             }

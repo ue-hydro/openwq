@@ -70,10 +70,12 @@ def Gen_Input_Driver(
 
         # Sink and Source settings
         ss_method: str,
-        ss_method_csv_metadata_source: str,
-        ss_method_csv_metadata_comment: str,
+        ss_metadata_source: str,
+        ss_metadata_comment: str,
         ss_method_csv_config: List[Dict[str, Union[str, int]]],
         ss_method_copernicus_basin_info: Dict[str, str],
+        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
+        ss_method_copernicus_compartment_name_for_load: str,
         ss_method_copernicus_nc_lc_dir: str,
         ss_method_copernicus_period: List[Union[int, float]],
         ss_method_copernicus_default_loads_bool: bool,
@@ -123,7 +125,7 @@ def Gen_Input_Driver(
     le_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{le_module_name}.json")
     ts_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{ts_module_name}.json")
     si_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{si_module_name}.json")
-    ss_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_SS_csv.json")
+    ss_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_SS_{ss_method}.json")
     ewf_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_EWF_fixed_value.json")
     output_file_fullpath = os.path.join(f'{dir2save_input_files}', "openwq_out/")
 
@@ -158,7 +160,7 @@ def Gen_Input_Driver(
         ts_sediment_compartment=ts_sediment_compartment,
         si_module_name=si_module_name,
         si_sediment_compartment=si_sediment_compartment,
-        ss_method_csv_metadata_source=ss_method_csv_metadata_source,
+        ss_metadata_source=ss_metadata_source,
         ewf_method_fixedval_source=ewf_method_fixedval_source,
         output_format=output_format,
         chemical_species=chemical_species,
@@ -232,16 +234,21 @@ def Gen_Input_Driver(
         ssJSON_lib.set_ss_from_csv(
             ss_config_filepath=ss_config_filepath,
             json_header_comment=json_header_comment,
-            ss_method_csv_metadata_source=ss_method_csv_metadata_source,
-            ss_method_csv_metadata_comment=ss_method_csv_metadata_comment,
+            ss_metadata_source=ss_metadata_source,
+            ss_metadata_comment=ss_metadata_comment,
             ss_method_csv_config=ss_method_csv_config,
         )
     elif (ss_method == "using_copernicus_lulc"):
 
         ssJSON_lib.set_ss_from_copernicus_lulc_with_loads(
             ss_config_filepath=ss_config_filepath,
+            json_header_comment=json_header_comment,
+            ss_metadata_source=ss_metadata_source,
+            ss_metadata_comment=ss_metadata_comment,
             ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
             ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
+            ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key=ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key,
+            ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class
