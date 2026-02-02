@@ -947,61 +947,41 @@ Values below are typical **annual export coefficients** (runoff loads) normalize
 
 ### Approximate export ranges (kg/ha/year)
 
-| Land use class               | Total N (TN) kg/ha/yr | Total P (TP) kg/ha/yr | Citations |
-|-----------------------------|-----------------------|------------------------|-----------|
-| Forest / natural catchment  | ~1–5                  | ~0.05–0.3              |  (Salvia-Castellví et al., 2005; Aaltonen et al., 2021; Wit et al., 2020)|
-| Mixed rural (forest + ag)   | ~15–25                | ~0.4–1.0               |  (Salvia-Castellví et al., 2005; Young et al., 1996)|
-| Grassland / pasture         | ~1–11                 | ~0.1–0.3               |  (Beaulac & Reckhow, 1982; Harmel et al., 2008; Adimassu et al., 2020)|
-| Row‑crop / cultivated ag    | ~10–30 (often ~14)    | ~1–5 (often ~2)        |  (Hopkins et al., 2025; Hiscock et al., 2023; Thilagam et al., 2023; Harmel et al., 2008; Young et al., 1996)|
-| Managed boreal forest (ditched, some arable) | ~2.3 (TN)                | ~0.10 (TP)             |  (Aaltonen et al., 2021)|
+| Land use class               | Total N (TN) | NO3–N | NO2–N | NH4–N | Total P (TP) | PO4–P | Citations |
+|-----------------------------|-------------|-------|-------|-------|--------------|-------|-----------|
+| Forest / natural catchment  | ~1–5        | ~0.5–3  | ≲0.01 | ~0.05–0.3 | ~0.05–0.3   | ~0.005–0.02 | Yoon et al. 2010; Clesceri et al. 1986; Wit et al. 2020 |
+| Mixed rural (forest + ag)   | ~15–25      | ~5–15  | ≲0.05 | ~0.2–1.0   | ~0.4–1.0    | ~0.05–0.2  | Salvia‑Castellví et al. 2005; Yoon et al. 2010; Clesceri et al. 1986 |
+| Grassland / pasture         | ~1–11       | ~0.5–5 | ≲0.02 | ~0.05–0.4 | ~0.1–0.3    | ~0.01–0.05 | Hopkins et al. 2025; Harmel et al. 2008; Clesceri et al. 1986 |
+| Row‑crop / cultivated ag    | ~10–30 (often ~14) | ~5–25 | ≲0.1  | ~0.2–2.0 | ~1–5 (often ~2) | ~0.1–0.8 | Harmel et al. 2008; Hopkins et al. 2025; Salvia‑Castellví et al. 2005; Wang et al. 2015 |
+| Managed boreal forest (ditched, some arable) | ~2.3 | ~0.8–1.5 | ≲0.01 | ~0.1–0.3 | ~0.10 | ~0.01–0.03 | Aaltonen et al. 2021; Yli‑Halla et al. 2021 |
 
-**Figure 1:** Typical nitrogen and phosphorus exports by land use
+**Figure 1:** Indicative TN, TP and inorganic species exports by land use
 
-### Key examples from individual studies
+### Key basis for NO3, NO2, NH4 and PO4 values
 
-- **Forested vs agricultural basins (Luxembourg/Belgium):**  
-  NO3–N export was about **4 kg N/ha/yr in forested catchments** vs **27–33 kg N/ha/yr in agricultural catchments**; TP export ranged **0.4–1.3 kg P/ha/yr** across all rural basins, driven mainly by erosion  (Salvia-Castellví et al., 2005).  
+- A mixed forest watershed in Korea exported **36.5 kg TN/ha/yr**, partitioned into **26.9 kg NO3–N**, **1.6 kg NH4–N**, and **0.1 kg PO4–P** per ha per year, with NO2–N negligible; this underpins the forest/natural and mixed‑rural orders of magnitude   (Yoon et al., 2010).  
+- Wisconsin export‑coefficient work shows that **TIN (largely NO3–N)** and **ortho‑P (PO4–P)** exports rise systematically from forest to mixed to agricultural basins, with OP and TIN typically making up a substantial share of TP and TN, respectively   (Clesceri et al., 1986).  
+- Field‑scale datasets compiled in the MANAGE database indicate that **>90% of inorganic N exports from tile‑drained row‑crop systems are NO3–N**, with NH4–N and NO2–N small fractions, supporting the higher NO3–N ranges assigned to cultivated agriculture relative to grassland   (Mercado & Engel, 2021; Hopkins et al., 2025).  
+- In managed boreal organic soils, about **41% of TN was NO3–N and 23% NH4–N**, giving NH4–N loads on the order of **0.3–4 kg/ha/yr** where TN is 10–20 kg/ha/yr   (Yli‐Halla et al., 2021).  
+- Export‑coefficient modeling for dissolved nutrients in the Three Gorges Reservoir Region suggests that **dissolved inorganic N (primarily NO3–N) and PO4–P from dryland and paddy agriculture dominate dissolved loads**, consistent with the upper ranges used here for row‑crop NO3–N and PO4–P   (Wang et al., 2015).  
 
-- **Nordic headwaters:**  
-  Across 69 catchments, **agricultural basins had the highest TN and TP fluxes**, forestry‑impacted intermediate, natural lowest, with fluxes expressed as kg N or P km²/yr (i.e., kg/ha/yr after dividing by 100)  (Wit et al., 2020).  
-
-- **Field‑scale agricultural plots (MANAGE database):**  
-  Across US croplands and pastures, mean annual loads were **14.2 kg TN/ha/yr** and **2.2 kg TP/ha/yr** under natural rainfall  (Harmel et al., 2008).  
-  In North American ecoregions, cultivated land in **Temperate Prairies** had median **11.7 kg TN/ha/yr**, while grassland‑dominated semiarid prairies had **2.4 kg TN/ha/yr**  (Hopkins et al., 2025).  
-
-- **Hilly agricultural watershed (India, modeled):**  
-  Current intensive agriculture produced up to **22.8 kg N/ha/yr** and **5.0 kg P/ha/yr** in runoff plus sediment; converting 25% of cropland to tea plantation cut N and P loads by **56% and 48%**  (Thilagam et al., 2023).  
-
-- **Managed vs unmanaged boreal forest (Finland):**  
-  Mean exports: unmanaged forests **1.43 kg TN/ha/yr, 0.053 kg TP/ha/yr**; managed forested catchments **2.31 kg TN/ha/yr, 0.095 kg TP/ha/yr**  (Aaltonen et al., 2021).  
-
-### How to use these
-
-- For **screening or planning**, use the table values as **default export coefficients** per land‑use class, then adjust upward for high fertilizer inputs, steep slopes, or high rainfall, and downward where strong mitigation (buffers, reduced fertilization, perennial cover) is in place.
-
-_These search results were found and analyzed using Consensus, an AI-powered search engine for research. Try it at https://consensus.app. © 2026 Consensus NLP, Inc. Personal, non-commercial use only; redistribution requires copyright holders' consent._
-
+These species‑level coefficients are intended as **order‑of‑magnitude planning values**. For detailed studies, replace them with region‑specific ratios of NO3–N, NO2–N, NH4–N and PO4–P to TN and TP derived from local monitoring or calibrated models.
+ 
+_These search results were found and analyzed using Consensus, an AI-powered search engine for research. Try it at https://consensus.app. © 2026 Consensus NLP, Inc. Personal, non-commercial use only; redistribution requires copyright holders’ consent._
+ 
 ## References
-
+ 
 Hopkins, A., Harmel, R., Kleinman, P., Sahoo, D., & Ippolito, J. (2025). Nutrient Runoff From Agricultural Lands in North American Ecoregions. *JAWRA Journal of the American Water Resources Association*, 61. https://doi.org/10.1111/1752-1688.70004
-
-Wit, H., Lepistö, A., Marttila, H., Wenng, H., Bechmann, M., Blicher‐Mathiesen, G., Eklöf, K., Futter, M., Kortelainen, P., Kronvang, B., Kyllmar, K., & Rakovic, J. (2020). Land‐use dominates climate controls on nitrogen and phosphorus export from managed and natural Nordic headwater catchments. *Hydrological Processes*, 34, 4831 - 4850. https://doi.org/10.1002/hyp.13939
-
-Hiscock, K., Cooper, R., Lovett, A., & Sünnenberg, G. (2023). Export Coefficient Modelling of Nutrient Neutrality to Protect Aquatic Habitats in the River Wensum Catchment, UK. *Environments*. https://doi.org/10.3390/environments10100168
-
-Thilagam, K., Manivannan, S., & Khola, O. (2023). Deriving Land Management Practices for Reduced Nutrient Movement from an Agricultural Watershed Using the AGNPS Model. *Sustainability*. https://doi.org/10.3390/su15054001
-
-Beaulac, M., & Reckhow, K. (1982). An Examination of Land Use - Nutrient Export Relationships. *Journal of The American Water Resources Association*, 18, 1013-1024. https://doi.org/10.1111/j.1752-1688.1982.tb00109.x
-
-Adimassu, Z., Tamene, L., & Degefie, D. (2020). The influence of grazing and cultivation on runoff, soil erosion, and soil nutrient export in the central highlands of Ethiopia. *Ecological Processes*, 9, 1-11. https://doi.org/10.1186/s13717-020-00230-z
-
-Salvia-Castellví, M., Iffly, J., Borght, P., & Hoffmann, L. (2005). Dissolved and particulate nutrient export from rural catchments: a case study from Luxembourg.. *The Science of the total environment*, 344 1-3, 51-65. https://doi.org/10.1016/j.scitotenv.2005.02.005
-
-Young, W., Marston, F., & Davis, R. (1996). Nutrient Exports and Land Use in Australian Catchments. *Journal of Environmental Management*, 47, 165-183. https://doi.org/10.1006/jema.1996.0043
-
-Aaltonen, H., Tuukkanen, T., Palviainen, M., Laurén, A., Tattari, S., Piirainen, S., Mattsson, T., Ojala, A., Launiainen, S., & Finér, L. (2021). Controls of Organic Carbon and Nutrient Export from Unmanaged and Managed Boreal Forested Catchments. *Water*. https://doi.org/10.3390/w13172363
-
-Harmel, D., Qian, S., Reckhow, K., & Casebolt, P. (2008). The MANAGE database: nutrient load and site characteristic updates and runoff concentration data.. *Journal of environmental quality*, 37 6, 2403-6. https://doi.org/10.2134/jeq2008.0079
+ 
+Mercado, J., & Engel, B. (2021). Multi-Scale Analysis of the Dependence of Water Quality on Land Use Using Linear and Mixed Models. *Water*. https://doi.org/10.3390/w13192618
+ 
+Yoon, S., Chung, S., Oh, D., & Lee, J. (2010). Monitoring of non-point source pollutants load from a mixed forest land use.. *Journal of environmental sciences*, 22 6, 801-5. https://doi.org/10.1016/s1001-0742(09)60180-7
+ 
+Yli‐Halla, M., Lötjönen, T., Kekkonen, J., Virtanen, S., Marttila, H., Liimatainen, M., Saari, M., Mikkola, J., Suomela, R., & Joki-Tokola, E. (2021). Thickness of peat influences the leaching of substances and greenhouse gas emissions from a cultivated organic soil.. *The Science of the total environment*, 806 Pt 1, 150499. https://doi.org/10.1016/j.scitotenv.2021.150499
+ 
+Clesceri, N., Curran, S., & Sedlák, R. (1986). NUTRIENT LOADS TO WISCONSIN LAKES: PART I. NITROGEN AND PHOSPHORUS EXPORT COEFFICIENTS1. *Journal of The American Water Resources Association*, 22, 983-990. https://doi.org/10.1111/j.1752-1688.1986.tb00769.x
+ 
+Wang, J., Shao, J., Wang, D., Ni, J., & Xie, D. (2015). Simulation of the dissolved nitrogen and phosphorus loads in different land uses in the Three Gorges Reservoir Region--based on the improved export coefficient model.. *Environmental science. Processes & impacts*, 17 11, 1976-89. https://doi.org/10.1039/c5em00380f
 """
 
     reference_file = output_dir / 'SS_lulc_loads_reference.md'
@@ -1459,57 +1439,57 @@ def get_default_copernicus_load_coefficients() -> Dict[int, Dict[str, float]]:
     -----------
     See SS_lulc_loads_reference.md for sources and details.
     """
-    return {
-        # Cropland classes
-        10: {'TN': 14.0, 'TP': 2.0},  # Cropland, rainfed
-        11: {'TN': 14.0, 'TP': 2.0},  # Herbaceous cover
-        12: {'TN': 12.0, 'TP': 1.5},  # Tree or shrub cover
-        20: {'TN': 18.0, 'TP': 2.5},  # Cropland, irrigated or post-flooding
-        30: {'TN': 12.0, 'TP': 1.2},  # Mosaic cropland (>50%) / natural vegetation
-        40: {'TN': 8.0, 'TP': 0.6},  # Mosaic natural vegetation (>50%) / cropland
+    return  {
+        # Cropland classes (Row-crop / cultivated agriculture)
+        10: {'TN': 14.0, 'TP': 2.0, 'NO3-N': 10.0, 'NO2-N': 0.05, 'NH4-N': 0.6, 'PO4-P': 0.3},   # Cropland, rainfed
+        11: {'TN': 14.0, 'TP': 2.0, 'NO3-N': 10.0, 'NO2-N': 0.05, 'NH4-N': 0.6, 'PO4-P': 0.3},   # Herbaceous cover
+        12: {'TN': 12.0, 'TP': 1.5, 'NO3-N': 8.0, 'NO2-N': 0.04, 'NH4-N': 0.5, 'PO4-P': 0.25},   # Tree or shrub cover
+        20: {'TN': 18.0, 'TP': 2.5, 'NO3-N': 13.0, 'NO2-N': 0.06, 'NH4-N': 0.8, 'PO4-P': 0.4},   # Cropland, irrigated or post-flooding
+        30: {'TN': 12.0, 'TP': 1.2, 'NO3-N': 8.0, 'NO2-N': 0.04, 'NH4-N': 0.5, 'PO4-P': 0.2},    # Mosaic cropland (>50%) / natural vegetation
+        40: {'TN': 8.0, 'TP': 0.6, 'NO3-N': 5.0, 'NO2-N': 0.03, 'NH4-N': 0.3, 'PO4-P': 0.1},     # Mosaic natural vegetation (>50%) / cropland (mixed rural)
 
-        # Forest classes
-        50: {'TN': 3.0, 'TP': 0.15},  # Tree cover, broadleaved, evergreen
-        60: {'TN': 3.0, 'TP': 0.15},  # Tree cover, broadleaved, deciduous
-        61: {'TN': 3.0, 'TP': 0.15},  # Tree cover, broadleaved, deciduous, closed
-        62: {'TN': 3.0, 'TP': 0.15},  # Tree cover, broadleaved, deciduous, open
-        70: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, evergreen
-        71: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, evergreen, closed
-        72: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, evergreen, open
-        80: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, deciduous
-        81: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, deciduous, closed
-        82: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, deciduous, open
-        90: {'TN': 3.0, 'TP': 0.15},  # Tree cover, mixed leaf type
-        100: {'TN': 4.0, 'TP': 0.2},  # Mosaic tree and shrub (>50%) / herbaceous
+        # Forest classes (Forest / natural catchment)
+        50: {'TN': 3.0, 'TP': 0.15, 'NO3-N': 1.5, 'NO2-N': 0.005, 'NH4-N': 0.15, 'PO4-P': 0.01},   # Tree cover, broadleaved, evergreen
+        60: {'TN': 3.0, 'TP': 0.15, 'NO3-N': 1.5, 'NO2-N': 0.005, 'NH4-N': 0.15, 'PO4-P': 0.01},   # Tree cover, broadleaved, deciduous
+        61: {'TN': 3.0, 'TP': 0.15, 'NO3-N': 1.5, 'NO2-N': 0.005, 'NH4-N': 0.15, 'PO4-P': 0.01},   # Tree cover, broadleaved, deciduous, closed
+        62: {'TN': 3.0, 'TP': 0.15, 'NO3-N': 1.5, 'NO2-N': 0.005, 'NH4-N': 0.15, 'PO4-P': 0.01},   # Tree cover, broadleaved, deciduous, open
+        70: {'TN': 2.5, 'TP': 0.12, 'NO3-N': 1.2, 'NO2-N': 0.005, 'NH4-N': 0.12, 'PO4-P': 0.008},  # Tree cover, needleleaved, evergreen
+        71: {'TN': 2.5, 'TP': 0.12, 'NO3-N': 1.2, 'NO2-N': 0.005, 'NH4-N': 0.12, 'PO4-P': 0.008},  # Tree cover, needleleaved, evergreen, closed
+        72: {'TN': 2.5, 'TP': 0.12, 'NO3-N': 1.2, 'NO2-N': 0.005, 'NH4-N': 0.12, 'PO4-P': 0.008},  # Tree cover, needleleaved, evergreen, open
+        80: {'TN': 2.5, 'TP': 0.12, 'NO3-N': 1.2, 'NO2-N': 0.005, 'NH4-N': 0.12, 'PO4-P': 0.008},  # Tree cover, needleleaved, deciduous
+        81: {'TN': 2.5, 'TP': 0.12, 'NO3-N': 1.2, 'NO2-N': 0.005, 'NH4-N': 0.12, 'PO4-P': 0.008},  # Tree cover, needleleaved, deciduous, closed
+        82: {'TN': 2.5, 'TP': 0.12, 'NO3-N': 1.2, 'NO2-N': 0.005, 'NH4-N': 0.12, 'PO4-P': 0.008},  # Tree cover, needleleaved, deciduous, open
+        90: {'TN': 3.0, 'TP': 0.15, 'NO3-N': 1.5, 'NO2-N': 0.005, 'NH4-N': 0.15, 'PO4-P': 0.01},   # Tree cover, mixed leaf type
+        100: {'TN': 4.0, 'TP': 0.2, 'NO3-N': 2.0, 'NO2-N': 0.008, 'NH4-N': 0.2, 'PO4-P': 0.015},   # Mosaic tree and shrub (>50%) / herbaceous
 
-        # Grassland and herbaceous classes
-        110: {'TN': 5.0, 'TP': 0.2},  # Mosaic herbaceous cover (>50%) / tree and shrub
-        120: {'TN': 4.0, 'TP': 0.15},  # Shrubland
-        121: {'TN': 4.0, 'TP': 0.15},  # Shrubland evergreen
-        122: {'TN': 4.0, 'TP': 0.15},  # Shrubland deciduous
-        130: {'TN': 6.0, 'TP': 0.2},  # Grassland
-        140: {'TN': 2.0, 'TP': 0.1},  # Lichens and mosses
+        # Grassland and herbaceous classes (Grassland / pasture)
+        110: {'TN': 5.0, 'TP': 0.2, 'NO3-N': 2.5, 'NO2-N': 0.01, 'NH4-N': 0.2, 'PO4-P': 0.025},   # Mosaic herbaceous cover (>50%) / tree and shrub
+        120: {'TN': 4.0, 'TP': 0.15, 'NO3-N': 2.0, 'NO2-N': 0.01, 'NH4-N': 0.15, 'PO4-P': 0.02},  # Shrubland
+        121: {'TN': 4.0, 'TP': 0.15, 'NO3-N': 2.0, 'NO2-N': 0.01, 'NH4-N': 0.15, 'PO4-P': 0.02},  # Shrubland evergreen
+        122: {'TN': 4.0, 'TP': 0.15, 'NO3-N': 2.0, 'NO2-N': 0.01, 'NH4-N': 0.15, 'PO4-P': 0.02},  # Shrubland deciduous
+        130: {'TN': 6.0, 'TP': 0.2, 'NO3-N': 3.0, 'NO2-N': 0.01, 'NH4-N': 0.25, 'PO4-P': 0.03},   # Grassland
+        140: {'TN': 2.0, 'TP': 0.1, 'NO3-N': 1.0, 'NO2-N': 0.005, 'NH4-N': 0.1, 'PO4-P': 0.01},   # Lichens and mosses
 
-        # Sparse vegetation and bare
-        150: {'TN': 1.0, 'TP': 0.05},  # Sparse vegetation
-        151: {'TN': 1.0, 'TP': 0.05},  # Sparse tree
-        152: {'TN': 1.0, 'TP': 0.05},  # Sparse shrub
-        153: {'TN': 1.0, 'TP': 0.05},  # Sparse herbaceous
+        # Sparse vegetation and bare (Forest / natural catchment - low end)
+        150: {'TN': 1.0, 'TP': 0.05, 'NO3-N': 0.5, 'NO2-N': 0.005, 'NH4-N': 0.05, 'PO4-P': 0.005},  # Sparse vegetation
+        151: {'TN': 1.0, 'TP': 0.05, 'NO3-N': 0.5, 'NO2-N': 0.005, 'NH4-N': 0.05, 'PO4-P': 0.005},  # Sparse tree
+        152: {'TN': 1.0, 'TP': 0.05, 'NO3-N': 0.5, 'NO2-N': 0.005, 'NH4-N': 0.05, 'PO4-P': 0.005},  # Sparse shrub
+        153: {'TN': 1.0, 'TP': 0.05, 'NO3-N': 0.5, 'NO2-N': 0.005, 'NH4-N': 0.05, 'PO4-P': 0.005},  # Sparse herbaceous
 
-        # Flooded/wetland classes
-        160: {'TN': 5.0, 'TP': 0.3},  # Tree cover, flooded, fresh or brackish water
-        170: {'TN': 5.0, 'TP': 0.3},  # Tree cover, flooded, saline water
-        180: {'TN': 5.0, 'TP': 0.3},  # Shrub or herbaceous cover, flooded
+        # Flooded/wetland classes (Mixed rural - moderate values)
+        160: {'TN': 5.0, 'TP': 0.3, 'NO3-N': 2.5, 'NO2-N': 0.02, 'NH4-N': 0.3, 'PO4-P': 0.05},   # Tree cover, flooded, fresh or brackish water
+        170: {'TN': 5.0, 'TP': 0.3, 'NO3-N': 2.5, 'NO2-N': 0.02, 'NH4-N': 0.3, 'PO4-P': 0.05},   # Tree cover, flooded, saline water
+        180: {'TN': 5.0, 'TP': 0.3, 'NO3-N': 2.5, 'NO2-N': 0.02, 'NH4-N': 0.3, 'PO4-P': 0.05},   # Shrub or herbaceous cover, flooded
 
-        # Urban and bare
-        190: {'TN': 8.0, 'TP': 1.0},  # Urban areas
-        200: {'TN': 0.5, 'TP': 0.05},  # Bare areas
-        201: {'TN': 0.5, 'TP': 0.05},  # Consolidated bare areas
-        202: {'TN': 0.5, 'TP': 0.05},  # Unconsolidated bare areas
+        # Urban and bare (Mixed rural to urban - moderate to high)
+        190: {'TN': 8.0, 'TP': 1.0, 'NO3-N': 5.0, 'NO2-N': 0.03, 'NH4-N': 0.4, 'PO4-P': 0.15},   # Urban areas
+        200: {'TN': 0.5, 'TP': 0.05, 'NO3-N': 0.25, 'NO2-N': 0.002, 'NH4-N': 0.025, 'PO4-P': 0.005},  # Bare areas
+        201: {'TN': 0.5, 'TP': 0.05, 'NO3-N': 0.25, 'NO2-N': 0.002, 'NH4-N': 0.025, 'PO4-P': 0.005},  # Consolidated bare areas
+        202: {'TN': 0.5, 'TP': 0.05, 'NO3-N': 0.25, 'NO2-N': 0.002, 'NH4-N': 0.025, 'PO4-P': 0.005},  # Unconsolidated bare areas
 
         # Water and snow/ice
-        210: {'TN': 0.0, 'TP': 0.0},  # Water bodies
-        220: {'TN': 0.0, 'TP': 0.0},  # Permanent snow and ice
+        210: {'TN': 0.0, 'TP': 0.0, 'NO3-N': 0.0, 'NO2-N': 0.0, 'NH4-N': 0.0, 'PO4-P': 0.0},   # Water bodies
+        220: {'TN': 0.0, 'TP': 0.0, 'NO3-N': 0.0, 'NO2-N': 0.0, 'NH4-N': 0.0, 'PO4-P': 0.0},   # Permanent snow and ice
     }
 
 

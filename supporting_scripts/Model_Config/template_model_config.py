@@ -48,8 +48,8 @@ use_num_threads = 4     # number of threads, accepts "all"
 ################
 # 🐹 General configuration
 ################
-ic_all_value=2          # initial conditions value, concentration or mass
-ic_all_units="mg/l"     # set the units of ic_all_value
+ic_all_value = 2          # initial conditions value, concentration or mass
+ic_all_units = "mg/l"     # set the units of ic_all_value
 
 ################
 ### MODULES
