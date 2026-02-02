@@ -15,7 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # !/usr/bin/env python3
 
-from typing import Dict, List, Union, Any
+from typing import Dict, List, Union, Any, Optional
 import datetime
 import os
 
@@ -37,7 +37,7 @@ def Gen_Input_Driver(
         authors: str,
         date: str,
         comment: str,
-        hostmodel:str,
+        hostmodel: str,
 
         # Computational settings
         solver: str,
@@ -72,10 +72,11 @@ def Gen_Input_Driver(
         ss_method: str,
         ss_method_csv_metadata_source: str,
         ss_method_csv_metadata_comment: str,
-        ss_method_csv_config:List[Dict[str, Union[str, int]]],
-        ss_method_copernicus_basin_shp_path: str,
+        ss_method_csv_config: List[Dict[str, Union[str, int]]],
+        ss_method_copernicus_basin_info: Dict[str, str],
         ss_method_copernicus_nc_lc_dir: str,
         ss_method_copernicus_period: List[Union[int, float]],
+        ss_method_copernicus_default_loads_bool: bool,
 
         # External water fluxes
         ewf_method: str,
@@ -93,7 +94,10 @@ def Gen_Input_Driver(
         no_water_conc_flag: int,
         export_sediment: bool,
         compartments_and_cells: Dict[str, Dict[str, List]],
-        timestep: List[Union[int, str]]
+        timestep: List[Union[int, str]],
+
+        # Optional parameters (MUST be at the end)
+        ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class: Optional[Dict[int, Dict[str, float]]] = None
 
 ) -> None:
 
@@ -169,9 +173,9 @@ def Gen_Input_Driver(
     # Call create_config_json
     ###############
 
-    if (hostmodel=="mizuroute"):
+    if (hostmodel == "mizuroute"):
         compartment_names = ["RIVER_NETWORK_REACHES"]
-    elif (hostmodel=="summa"):
+    elif (hostmodel == "summa"):
         compartment_names = ["SCALARCANOPYWAT",
                              "ILAYERVOLFRACWAT_SNOW",
                              "RUNOFF",
@@ -194,7 +198,7 @@ def Gen_Input_Driver(
 
     tdmJSON_lib.create_td_module_json(
         td_config_filepath=td_config_filepath,
-        json_header_comment =json_header_comment,
+        json_header_comment=json_header_comment,
         td_module_name=td_module_name,
         td_module_dispersion_xyz=td_module_dispersion_xyz
     )
@@ -220,11 +224,10 @@ def Gen_Input_Driver(
         bgc_config_filepath=bgc_config_filepath
     )
 
-
     ###############
     # Call gen_ss_driver
     ###############
-    if (ss_method=="load_from_csv"):
+    if (ss_method == "load_from_csv"):
 
         ssJSON_lib.set_ss_from_csv(
             ss_config_filepath=ss_config_filepath,
@@ -233,23 +236,25 @@ def Gen_Input_Driver(
             ss_method_csv_metadata_comment=ss_method_csv_metadata_comment,
             ss_method_csv_config=ss_method_csv_config,
         )
-    elif (ss_method=="using_copernicus_lulc"):
+    elif (ss_method == "using_copernicus_lulc"):
 
-        # CONTINUE HERE
-        results, summaries, rasters = ssJSON_lib.set_ss_from_copericus_lulc(
+        ssJSON_lib.set_ss_from_copernicus_lulc_with_loads(
             ss_config_filepath=ss_config_filepath,
-            ss_method_copernicus_basin_shp_path=ss_method_copernicus_basin_shp_path,
+            ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
             ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
-            ss_method_copernicus_period=ss_method_copernicus_period
+            ss_method_copernicus_period=ss_method_copernicus_period,
+            ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
+            optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class
         )
 
     else:
-        print(f"WARNING: The SS method '{ss_method} is unkown or not available for automatic generation. Only method 'load_from_csv' is available")
+        print(
+            f"WARNING: The SS method '{ss_method}' is unknown or not available for automatic generation. Only method 'load_from_csv' and 'using_copernicus_lulc' are available")
 
     ###############
     # Call gen_ewf_driver
     ###############
-    if (ewf_method=="fixed_value"):
+    if (ewf_method == "fixed_value"):
         ewfJSON_lib.set_ewf_fixed_value(
             ewf_config_filepath=ewf_config_filepath,
             json_header_comment=json_header_comment,
@@ -262,6 +267,4 @@ def Gen_Input_Driver(
         )
     else:
         print(
-            f"WARNING: The EWF method '{ewf_method} is unkown or not available for automatic generation. Only method 'fixed_value' is available")
-
-
+            f"WARNING: The EWF method '{ewf_method}' is unknown or not available for automatic generation. Only method 'fixed_value' is available")

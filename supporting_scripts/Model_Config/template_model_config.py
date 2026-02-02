@@ -142,7 +142,8 @@ compartments_and_cells = {          # Compartments and cells to export
 # 🦎 Sink sources
 ################
 ss_method = "using_copernicus_lulc" # "load_from_csv" or "using_copernicus_lulc"
-# if ss_method = "load_from_csv"
+################
+# 👉🏼 if ss_method = "load_from_csv"
 ss_method_csv_metadata_source = "Just for demonstration"
 ss_method_csv_metadata_comment = "Leave any comments needed for future reference"
 ss_method_csv_config = source_sink_configs=[
@@ -167,11 +168,23 @@ ss_method_csv_config = source_sink_configs=[
             "Header_key_row": 3
         }
     ]
-# if ss_method = load_from_copernicus
-ss_method_copernicus_basin_shp_path ='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/finalcat_info_v1-0.shp'
+################
+# 👉🏼 if ss_method = load_from_copernicus
+ss_method_copernicus_basin_info = {
+    'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/finalcat_info_v1-0.shp',
+    'mapping_key': 'Seg_ID'
+}
+# download nc with lulc from ESA CCI LC (copernicus: https://cds.climate.copernicus.eu/datasets/satellite-land-cover?tab=overview)
+# and point the location to that folder below in 'ss_method_copernicus_nc_lc_dir'
 ss_method_copernicus_nc_lc_dir ='/Users/diogocosta/Documents/ESACCI-LC/'
 ss_method_copernicus_period = [1993, 1994]
-
+ss_method_copernicus_default_loads_bool = True
+# if ss_method_copernicus_default_loads_bool=False, then need to set ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class
+ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
+    10: {'TN': 20.0, 'TP': 3.0, 'NH4': 2.5},  # Custom cropland values
+    50: {'TN': 2.0, 'TP': 0.1, 'NH4': 0.2},   # Custom forest values
+    130: {'TN': 5.0, 'TP': 0.15, 'NH4': 0.5}  # Custom grassland values
+}
 ################
 # 🐠 External water fluxes
 ################
@@ -184,12 +197,11 @@ ewf_method_fixedval_units = "mg/l"
 ewf_method_fixedval_external_inputflux_name = "SUMMA_RUNOFF"
 
 
-
-########################################################
 # ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
+########################################################
 # DON'T CHANGE BELOW THIS POINT-------
-# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
 ########################################################
+# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
 
 # Call the function with all individual arguments
 ############################
@@ -221,9 +233,11 @@ gJSON_lib.Gen_Input_Driver(
     ss_method_csv_metadata_source=ss_method_csv_metadata_source,
     ss_method_csv_metadata_comment=ss_method_csv_metadata_comment,
     ss_method_csv_config=ss_method_csv_config,
-    ss_method_copernicus_basin_shp_path=ss_method_copernicus_basin_shp_path,
+    ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
     ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
     ss_method_copernicus_period=ss_method_copernicus_period,
+    ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
+    ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
     ewf_method=ewf_method,
     ewf_method_fixedval_comment=ewf_method_fixedval_comment,
     ewf_method_fixedval_source=ewf_method_fixedval_source,

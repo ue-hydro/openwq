@@ -150,30 +150,51 @@ def set_ss_from_csv(
 class OptimizedLULCAnalyzer:
     """Optimized analyzer for land use/land cover in hydrological response units."""
 
-    def __init__(self, shapefile_path, output_dir='output'):
+    def __init__(self, shapefile_info, output_dir='output'):
         """
         Initialize the LULC analyzer.
 
         Parameters:
         -----------
-        shapefile_path : str
-            Path to the shapefile containing HRU polygons
+        shapefile_info : dict
+            Dictionary containing shapefile information (REQUIRED):
+            - 'path_to_shp': Path to the shapefile
+            - 'mapping_key': Column name for HRU/basin ID (REQUIRED - must exist in shapefile)
         output_dir : str
             Directory to save output files
         """
-        self.shapefile_path = shapefile_path
+        self.shapefile_info = shapefile_info
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
 
         # Load shapefile
-        print(f"Loading shapefile: {shapefile_path}")
-        self.gdf = gpd.read_file(shapefile_path)
+        print(f"Loading shapefile: {shapefile_info['path_to_shp']}")
+        self.gdf = gpd.read_file(shapefile_info['path_to_shp'])
         print(f"Loaded {len(self.gdf)} HRU polygons")
         print(f"CRS: {self.gdf.crs}")
 
-        # Ensure there's an ID column
-        if 'HRU_ID' not in self.gdf.columns and 'ID' not in self.gdf.columns:
-            self.gdf['HRU_ID'] = range(len(self.gdf))
+        # Require mapping_key to be provided
+        if 'mapping_key' not in shapefile_info:
+            raise ValueError(
+                "Missing 'mapping_key' in shapefile_info. "
+                "Please specify which column in the shapefile contains the HRU IDs.\n"
+                f"Available columns: {list(self.gdf.columns)}"
+            )
+
+        mapping_key = shapefile_info['mapping_key']
+
+        # Check if the mapping_key column exists in the shapefile
+        if mapping_key not in self.gdf.columns:
+            raise ValueError(
+                f"Column '{mapping_key}' specified in 'mapping_key' not found in shapefile.\n"
+                f"Available columns: {list(self.gdf.columns)}\n"
+                f"Please check the column name and try again."
+            )
+
+        # Use the specified mapping key column as HRU_ID
+        self.hru_id_column = mapping_key
+
+        print(f"Using '{self.hru_id_column}' column for HRU identification")
 
     def netcdf_to_geotiff(self, netcdf_path, output_tiff=None, use_temp=False):
         """
@@ -354,8 +375,8 @@ class OptimizedLULCAnalyzer:
             # Process each HRU
             print(f"    • Processing HRUs: ", end='', flush=True)
             for idx, row in gdf_reprojected.iterrows():
-                # Get HRU ID
-                hru_id = row.get('HRU_ID', row.get('ID', idx))
+                # Get HRU ID using the specified column
+                hru_id = row.get(self.hru_id_column, idx)
 
                 # Show progress every 10 HRUs
                 if (idx + 1) % 10 == 0:
@@ -396,7 +417,7 @@ class OptimizedLULCAnalyzer:
                         area_km2 = area_m2 / 1_000_000
 
                         results.append({
-                            'HRU_ID': hru_id,
+                            self.hru_id_column: hru_id,
                             'Year': year,
                             'LC_Class': int(lc_class),
                             'Pixel_Count': int(count),
@@ -647,22 +668,25 @@ class OptimizedLULCAnalyzer:
         """Create comprehensive summary statistics."""
         summaries = {}
 
+        # Use the actual HRU ID column name from the shapefile
+        hru_col = self.hru_id_column
+
         # Summary by HRU and Year
-        summaries['by_hru_year'] = df.groupby(['HRU_ID', 'Year']).agg({
+        summaries['by_hru_year'] = df.groupby([hru_col, 'Year']).agg({
             'Area_km2': 'sum',
             'LC_Class': 'count'
-        }).rename(columns={'LC_Class': 'Num_LC_Classes'})
+        }).rename(columns={'LC_Class': 'Num_LC_Classes'}).reset_index()
 
         # Summary by LC Class and Year
         summaries['by_lc_year'] = df.groupby(['LC_Class', 'Year']).agg({
             'Area_km2': 'sum',
-            'HRU_ID': 'count'
-        }).rename(columns={'HRU_ID': 'Num_HRUs'})
+            hru_col: 'count'
+        }).rename(columns={hru_col: 'Num_HRUs'}).reset_index()
 
         # Pivot table: HRUs x LC Classes
         summaries['pivot_hru_lc'] = df.pivot_table(
             values='Area_km2',
-            index=['HRU_ID', 'Year'],
+            index=[hru_col, 'Year'],
             columns='LC_Class',
             fill_value=0,
             aggfunc='sum'
@@ -676,8 +700,11 @@ class OptimizedLULCAnalyzer:
         print("LULC ANALYSIS REPORT")
         print("=" * 60)
 
+        # Use the actual HRU ID column name
+        hru_col = self.hru_id_column
+
         print(f"\nTotal records: {len(df)}")
-        print(f"Number of HRUs: {df['HRU_ID'].nunique()}")
+        print(f"Number of HRUs: {df[hru_col].nunique()}")
         print(f"Years analyzed: {sorted(df['Year'].unique())}")
         print(f"Land cover classes found: {sorted(df['LC_Class'].unique())}")
 
@@ -692,10 +719,10 @@ class OptimizedLULCAnalyzer:
             print(f"  {year}: {area:10.2f} km²")
 
 
-def set_ss_from_copericus_lulc(
-        ss_method_copernicus_basin_shp_path: str,
-        ss_method_copernicus_nc_lc_dir: str,
+def calc_copernicus_lulc(
         ss_config_filepath: str,
+        ss_method_copernicus_basin_info: Dict[str, str],
+        ss_method_copernicus_nc_lc_dir: str,
         ss_method_copernicus_period: List[Union[int, float]],
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc'
@@ -705,16 +732,16 @@ def set_ss_from_copericus_lulc(
 
     Parameters:
     -----------
-    ss_method_copernicus_basin_shp_path : str
-        Path to the shapefile containing HRU/basin polygons
-    ss_method_copernicus_nc_lc_dir : str
-        Directory containing Copernicus LULC NetCDF files
     ss_config_filepath : str
         Path where outputs will be saved (directory will be extracted from this)
-    year_start : int, optional
-        Filter files to only include years >= this value
-    year_end : int, optional
-        Filter files to only include years <= this value
+    ss_method_copernicus_basin_info : dict
+        Dictionary containing:
+        - 'path_to_shp': Path to the shapefile containing HRU/basin polygons
+        - 'mapping_key': Column name in shapefile for HRU ID (e.g., 'HRU_ID', 'ID', 'FID')
+    ss_method_copernicus_nc_lc_dir : str
+        Directory containing Copernicus LULC NetCDF files
+    ss_method_copernicus_period : list
+        [year_start, year_end] - Filter files to include only this period
     recursive : bool, default False
         Whether to search subdirectories recursively
     file_pattern : str, default 'ESACCI-LC-*.nc'
@@ -723,28 +750,10 @@ def set_ss_from_copericus_lulc(
     Returns:
     --------
     tuple : (results_df, summaries, clipped_rasters) - processed results, summary statistics, and paths to clipped rasters
-
-    Examples:
-    ---------
-    # Process all files in directory
-    results, summaries, rasters = set_ss_from_copericus_lulc(
-        'basin.shp',
-        'data/copernicus/',
-        'output/config.json'
-    )
-
-    # Process only years 2000-2020
-    results, summaries, rasters = set_ss_from_copericus_lulc(
-        'basin.shp',
-        'data/copernicus/',
-        'output/config.json',
-        year_start=2000,
-        year_end=2020
-    )
     """
 
-    year_start = ss_method_copernicus_period[0]
-    year_end = ss_method_copernicus_period[1]
+    year_start = ss_method_copernicus_period[0] if ss_method_copernicus_period else None
+    year_end = ss_method_copernicus_period[1] if len(ss_method_copernicus_period) > 1 else None
 
     # Extract output directory from ss_config_filepath
     output_base_dir = Path(ss_config_filepath).parent
@@ -855,11 +864,12 @@ def set_ss_from_copericus_lulc(
     print(f"\n{'=' * 60}")
     print(f"Initializing analyzer")
     print(f"{'=' * 60}")
-    print(f"Shapefile: {ss_method_copernicus_basin_shp_path}")
+    print(f"Shapefile: {ss_method_copernicus_basin_info['path_to_shp']}")
+    print(f"HRU ID column (mapping_key): {ss_method_copernicus_basin_info['mapping_key']}")
     print(f"Output directory: {ss_output_dir}")
 
     analyzer = OptimizedLULCAnalyzer(
-        ss_method_copernicus_basin_shp_path,
+        ss_method_copernicus_basin_info,
         output_dir=str(ss_output_dir)
     )
 
@@ -1015,7 +1025,7 @@ def _extract_year_from_filename(filename: str) -> Optional[int]:
 
 
 def list_available_files(
-        ss_method_copernicus_nc_lc_dir: str,
+        netcdf_copernicus_lc_dir: str,
         file_pattern: str = 'ESACCI-LC-*.nc',
         recursive: bool = False
 ) -> List[str]:
@@ -1024,7 +1034,7 @@ def list_available_files(
 
     Parameters:
     -----------
-    ss_method_copernicus_nc_lc_dir : str
+    netcdf_copernicus_lc_dir : str
         Directory containing NetCDF files
     file_pattern : str
         Glob pattern to match files
@@ -1035,10 +1045,10 @@ def list_available_files(
     --------
     list : List of file paths
     """
-    lc_dir = Path(ss_method_copernicus_nc_lc_dir)
+    lc_dir = Path(netcdf_copernicus_lc_dir)
 
     if not lc_dir.exists():
-        raise FileNotFoundError(f"Directory not found: {ss_method_copernicus_nc_lc_dir}")
+        raise FileNotFoundError(f"Directory not found: {netcdf_copernicus_lc_dir}")
 
     if recursive:
         files = sorted(lc_dir.rglob(file_pattern))
@@ -1052,3 +1062,338 @@ def list_available_files(
         print(f"  {i:2d}. {f.name}{year_str}")
 
     return [str(f) for f in files]
+
+
+# Main wrapper function
+def set_ss_from_copernicus_lulc(
+        ss_config_filepath: str,
+        ss_method_copernicus_basin_info: Dict[str, str],
+        ss_method_copernicus_nc_lc_dir: str,
+        ss_method_copernicus_period: List[Union[int, float]],
+        recursive: bool = False,
+        file_pattern: str = 'ESACCI-LC-*.nc'
+):
+    """
+    Main function to set source/sink from Copernicus LULC data.
+
+    Parameters:
+    -----------
+    ss_config_filepath : str
+        Path where configuration and outputs will be saved
+    ss_method_copernicus_basin_info : dict
+        Dictionary containing:
+        - 'path_to_shp': Path to the shapefile containing HRU/basin polygons
+        - 'mapping_key': Column name in shapefile for HRU ID (e.g., 'HRU_ID', 'ID', 'FID')
+    ss_method_copernicus_nc_lc_dir : str
+        Directory containing Copernicus LULC NetCDF files
+    ss_method_copernicus_period : list
+        [year_start, year_end] - Filter files to include only this period
+    recursive : bool, default False
+        Whether to search subdirectories recursively
+    file_pattern : str, default 'ESACCI-LC-*.nc'
+        Glob pattern to match NetCDF files
+
+    Returns:
+    --------
+    tuple : (results_df, summaries, clipped_rasters)
+    """
+    # Calculate lulc areas using copernicus global data
+    results, summaries, rasters = calc_copernicus_lulc(
+        ss_config_filepath=ss_config_filepath,
+        ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+        ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
+        ss_method_copernicus_period=ss_method_copernicus_period,
+        recursive=recursive,
+        file_pattern=file_pattern
+    )
+
+    return results, summaries, rasters
+
+
+def calculate_nutrient_loads(
+        results_df: pd.DataFrame,
+        load_coefficients: Dict[int, Dict[str, float]],
+        output_dir: Path,
+        hru_id_column: str = 'HRU_ID'
+) -> pd.DataFrame:
+    """
+    Calculate nutrient loads based on land cover areas and export coefficients.
+
+    Parameters:
+    -----------
+    results_df : pd.DataFrame
+        DataFrame with LULC areas per HRU (output from calc_copernicus_lulc)
+    load_coefficients : dict
+        Dictionary mapping LC_Class to nutrient coefficients (kg/ha/yr).
+        Example:
+        {
+            10: {'TN': 14.0, 'TP': 2.0},  # Cropland
+            50: {'TN': 3.0, 'TP': 0.15},  # Forest
+            130: {'TN': 6.0, 'TP': 0.2}   # Grassland
+        }
+        Classes not in this dict will have loads set to 0.
+    output_dir : Path
+        Directory to save the loads CSV file
+    hru_id_column : str
+        Name of the HRU ID column
+
+    Returns:
+    --------
+    pd.DataFrame : Nutrient loads per HRU, year, and nutrient type
+    """
+    print("\n" + "=" * 60)
+    print("CALCULATING NUTRIENT LOADS")
+    print("=" * 60)
+
+    # Get unique LC classes from results
+    unique_lc_classes = sorted(results_df['LC_Class'].unique())
+    print(f"\nLand cover classes found in data: {unique_lc_classes}")
+
+    # Check which classes have coefficients
+    classes_with_coeffs = [lc for lc in unique_lc_classes if lc in load_coefficients]
+    classes_without_coeffs = [lc for lc in unique_lc_classes if lc not in load_coefficients]
+
+    print(f"Classes with load coefficients: {classes_with_coeffs}")
+    if classes_without_coeffs:
+        print(f"⚠ Warning: Classes without coefficients (will be set to 0): {classes_without_coeffs}")
+
+    # Get all nutrient types from coefficients
+    nutrient_types = set()
+    for coeffs in load_coefficients.values():
+        nutrient_types.update(coeffs.keys())
+    nutrient_types = sorted(nutrient_types)
+    print(f"Nutrient types to calculate: {nutrient_types}")
+
+    # Calculate loads
+    loads_data = []
+
+    print(f"\nCalculating loads for {len(results_df)} records...")
+    for idx, row in results_df.iterrows():
+        lc_class = int(row['LC_Class'])
+        area_ha = row['Area_ha']
+        hru_id = row[hru_id_column]
+        year = row['Year']
+
+        # Get coefficients for this LC class
+        if lc_class in load_coefficients:
+            coeffs = load_coefficients[lc_class]
+
+            # Calculate load for each nutrient type
+            for nutrient in nutrient_types:
+                coeff = coeffs.get(nutrient, 0.0)  # Default to 0 if nutrient not specified
+                load_kg_yr = area_ha * coeff  # kg/yr = ha * (kg/ha/yr)
+
+                loads_data.append({
+                    hru_id_column: hru_id,
+                    'Year': year,
+                    'LC_Class': lc_class,
+                    'Area_ha': area_ha,
+                    'Nutrient': nutrient,
+                    'Coefficient_kg_ha_yr': coeff,
+                    'Load_kg_yr': load_kg_yr
+                })
+        else:
+            # No coefficients for this class - set load to 0
+            for nutrient in nutrient_types:
+                loads_data.append({
+                    hru_id_column: hru_id,
+                    'Year': year,
+                    'LC_Class': lc_class,
+                    'Area_ha': area_ha,
+                    'Nutrient': nutrient,
+                    'Coefficient_kg_ha_yr': 0.0,
+                    'Load_kg_yr': 0.0
+                })
+
+        if (idx + 1) % 1000 == 0:
+            print(f"  Processed {idx + 1}/{len(results_df)} records...")
+
+    loads_df = pd.DataFrame(loads_data)
+
+    # Export detailed loads
+    loads_file = output_dir / 'nutrient_loads_detailed.csv'
+    loads_df.to_csv(loads_file, index=False)
+    print(f"\n✓ Detailed loads exported to: {loads_file.name}")
+
+    # Create summary by HRU and Year
+    summary_by_hru = loads_df.groupby([hru_id_column, 'Year', 'Nutrient'])['Load_kg_yr'].sum().reset_index()
+    summary_file = output_dir / 'nutrient_loads_summary_by_hru.csv'
+    summary_by_hru.to_csv(summary_file, index=False)
+    print(f"✓ HRU summary exported to: {summary_file.name}")
+
+    # Create pivot table: HRUs x Nutrients
+    pivot_loads = loads_df.pivot_table(
+        values='Load_kg_yr',
+        index=[hru_id_column, 'Year'],
+        columns='Nutrient',
+        aggfunc='sum',
+        fill_value=0
+    )
+    pivot_file = output_dir / 'nutrient_loads_pivot.csv'
+    pivot_loads.to_csv(pivot_file)
+    print(f"✓ Pivot table exported to: {pivot_file.name}")
+
+    # Print summary statistics
+    print("\n--- Nutrient Load Summary (kg/yr) ---")
+    for nutrient in nutrient_types:
+        nutrient_loads = loads_df[loads_df['Nutrient'] == nutrient]
+        total_load = nutrient_loads['Load_kg_yr'].sum()
+        print(f"  {nutrient}: {total_load:,.2f} kg/yr")
+
+    return loads_df
+
+
+def get_default_copernicus_load_coefficients() -> Dict[int, Dict[str, float]]:
+    """
+    Get default nutrient load coefficients for Copernicus land cover classes.
+
+    Based on ESA CCI Land Cover classification and literature values.
+    Coefficients are in kg/ha/yr for Total Nitrogen (TN) and Total Phosphorus (TP).
+
+    Returns:
+    --------
+    dict : Load coefficients by LC class
+
+    References:
+    -----------
+    See SS_lulc_loads_reference.md for sources and details.
+    """
+    return {
+        # Cropland classes
+        10: {'TN': 14.0, 'TP': 2.0},  # Cropland, rainfed
+        11: {'TN': 14.0, 'TP': 2.0},  # Herbaceous cover
+        12: {'TN': 12.0, 'TP': 1.5},  # Tree or shrub cover
+        20: {'TN': 18.0, 'TP': 2.5},  # Cropland, irrigated or post-flooding
+        30: {'TN': 12.0, 'TP': 1.2},  # Mosaic cropland (>50%) / natural vegetation
+        40: {'TN': 8.0, 'TP': 0.6},  # Mosaic natural vegetation (>50%) / cropland
+
+        # Forest classes
+        50: {'TN': 3.0, 'TP': 0.15},  # Tree cover, broadleaved, evergreen
+        60: {'TN': 3.0, 'TP': 0.15},  # Tree cover, broadleaved, deciduous
+        61: {'TN': 3.0, 'TP': 0.15},  # Tree cover, broadleaved, deciduous, closed
+        62: {'TN': 3.0, 'TP': 0.15},  # Tree cover, broadleaved, deciduous, open
+        70: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, evergreen
+        71: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, evergreen, closed
+        72: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, evergreen, open
+        80: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, deciduous
+        81: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, deciduous, closed
+        82: {'TN': 2.5, 'TP': 0.12},  # Tree cover, needleleaved, deciduous, open
+        90: {'TN': 3.0, 'TP': 0.15},  # Tree cover, mixed leaf type
+        100: {'TN': 4.0, 'TP': 0.2},  # Mosaic tree and shrub (>50%) / herbaceous
+
+        # Grassland and herbaceous classes
+        110: {'TN': 5.0, 'TP': 0.2},  # Mosaic herbaceous cover (>50%) / tree and shrub
+        120: {'TN': 4.0, 'TP': 0.15},  # Shrubland
+        121: {'TN': 4.0, 'TP': 0.15},  # Shrubland evergreen
+        122: {'TN': 4.0, 'TP': 0.15},  # Shrubland deciduous
+        130: {'TN': 6.0, 'TP': 0.2},  # Grassland
+        140: {'TN': 2.0, 'TP': 0.1},  # Lichens and mosses
+
+        # Sparse vegetation and bare
+        150: {'TN': 1.0, 'TP': 0.05},  # Sparse vegetation
+        151: {'TN': 1.0, 'TP': 0.05},  # Sparse tree
+        152: {'TN': 1.0, 'TP': 0.05},  # Sparse shrub
+        153: {'TN': 1.0, 'TP': 0.05},  # Sparse herbaceous
+
+        # Flooded/wetland classes
+        160: {'TN': 5.0, 'TP': 0.3},  # Tree cover, flooded, fresh or brackish water
+        170: {'TN': 5.0, 'TP': 0.3},  # Tree cover, flooded, saline water
+        180: {'TN': 5.0, 'TP': 0.3},  # Shrub or herbaceous cover, flooded
+
+        # Urban and bare
+        190: {'TN': 8.0, 'TP': 1.0},  # Urban areas
+        200: {'TN': 0.5, 'TP': 0.05},  # Bare areas
+        201: {'TN': 0.5, 'TP': 0.05},  # Consolidated bare areas
+        202: {'TN': 0.5, 'TP': 0.05},  # Unconsolidated bare areas
+
+        # Water and snow/ice
+        210: {'TN': 0.0, 'TP': 0.0},  # Water bodies
+        220: {'TN': 0.0, 'TP': 0.0},  # Permanent snow and ice
+    }
+
+
+def set_ss_from_copernicus_lulc_with_loads(
+        ss_config_filepath: str,
+        ss_method_copernicus_basin_info: Dict[str, str],
+        ss_method_copernicus_nc_lc_dir: str,
+        ss_method_copernicus_period: List[Union[int, float]],
+        ss_method_copernicus_default_loads_bool: bool,
+        optional_load_coefficients: Optional[Dict[int, Dict[str, float]]] = None,
+        recursive: bool = False,
+        file_pattern: str = 'ESACCI-LC-*.nc'
+):
+    """
+    Process Copernicus LULC data and calculate nutrient loads.
+
+    This is a convenience wrapper that:
+    1. Calculates LULC areas
+    2. Calculates nutrient loads based on export coefficients
+    3. Exports all results
+
+    Parameters:
+    -----------
+    ss_config_filepath : str
+        Path where configuration and outputs will be saved
+    ss_method_copernicus_basin_info : dict
+        Dictionary containing:
+        - 'path_to_shp': Path to the shapefile
+        - 'mapping_key': Column name for HRU ID
+    ss_method_copernicus_nc_lc_dir : str
+        Directory containing Copernicus LULC NetCDF files
+    ss_method_copernicus_period : list
+        [year_start, year_end]
+    ss_method_copernicus_default_loads_bool : bool
+        If True, use default pre-coded load coefficients for all classes.
+        If False, use optional_load_coefficients (classes not specified will be set to 0).
+    optional_load_coefficients : dict, optional
+        Custom load coefficients (only used if ss_method_copernicus_default_loads_bool=False).
+        Format: {LC_Class: {'TN': value, 'TP': value, ...}}
+        Classes not specified will have loads set to 0.
+    recursive : bool
+        Whether to search subdirectories
+    file_pattern : str
+        Glob pattern for NetCDF files
+
+    Returns:
+    --------
+    tuple : (results_df, summaries, clipped_rasters, loads_df)
+    """
+    # Calculate LULC areas
+    results, summaries, rasters = set_ss_from_copernicus_lulc(
+        ss_config_filepath=ss_config_filepath,
+        ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+        ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
+        ss_method_copernicus_period=ss_method_copernicus_period,
+        recursive=recursive,
+        file_pattern=file_pattern
+    )
+
+    # Determine which coefficients to use
+    if ss_method_copernicus_default_loads_bool:
+        print("\nUsing DEFAULT pre-coded Copernicus land cover nutrient coefficients...")
+        load_coefficients = get_default_copernicus_load_coefficients()
+    else:
+        if optional_load_coefficients is None:
+            raise ValueError(
+                "ss_method_copernicus_default_loads_bool=False but no optional_load_coefficients provided. "
+                "Please provide custom load coefficients or set ss_method_copernicus_default_loads_bool=True."
+            )
+        print("\nUsing CUSTOM load coefficients from optional_load_coefficients...")
+        print("Classes not specified in optional_load_coefficients will have loads set to 0.")
+        load_coefficients = optional_load_coefficients
+
+    # Get output directory
+    output_dir = Path(ss_config_filepath).parent / 'ss_copernicus_files'
+
+    # Get HRU ID column name
+    hru_id_column = ss_method_copernicus_basin_info.get('mapping_key', 'HRU_ID')
+
+    # Calculate nutrient loads
+    loads = calculate_nutrient_loads(
+        results_df=results,
+        load_coefficients=load_coefficients,
+        output_dir=output_dir,
+        hru_id_column=hru_id_column
+    )
+
+    return results, summaries, rasters, loads
