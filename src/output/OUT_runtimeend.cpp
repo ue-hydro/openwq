@@ -1,4 +1,3 @@
-
 // Copyright 2026, Diogo Costa, diogo.costa@uevora.pt
 // This file is part of OpenWQ model.
 
@@ -15,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 #include "output/headerfile_OUT.hpp"
-
 
 int OpenWQ_output::writeResults(
     OpenWQ_json& OpenWQ_json,
@@ -25,293 +22,143 @@ int OpenWQ_output::writeResults(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_compute& OpenWQ_compute,
-    time_t simtime){ // needs to be in seconds since 00:00 hours, Jan 1, 1900 UTC
-    
+    time_t simtime){
 
-    // Local Variables
-    std::vector<int>::iterator it;          // Iterator used to store the position of searched element
-    std::string output_file_label;          // label do add to file (to flag debug mode)
-    std::string msg_string;                 // interactive message to print
-    std::string outputfile_type;            // interactive name for output file
-
-    // Create time string to print
+    // Create time string
     struct tm *tm_simtime = gmtime(&simtime);
+    char timechar[30];
+    strftime(timechar, 30, "%Y%b%d-%H:%M:%S", tm_simtime);
+    std::string timestr(timechar);
 
-    // Converting to string
-    char timechar [30];
-    strftime(timechar,30,"%Y%b%d-%H:%M:%S",tm_simtime);
-    std::string timestr = std::string(timechar);
+    // Convert to upper case
+    try {
+        std::transform(timestr.begin(), timestr.end(), timestr.begin(),
+                      [](unsigned char c) { return std::toupper(c); });
+    } catch (...) {}
 
-    // Convert timestr to upper case to avoid issues
-    try{
-        std::transform(
-        timestr.begin(),
-        timestr.end(),
-        timestr.begin(), // Convert to lower case to avoid issues
-        [](unsigned char c) { return std::toupper(c); });
-        
-    }catch (...){}
+    const unsigned int num_comps = OpenWQ_hostModelconfig.get_num_HydroComp();
+    const bool is_csv_output = OpenWQ_wqconfig.is_output_type_csv();
+    const bool is_hdf5_output = OpenWQ_wqconfig.is_output_type_hdf5();
+    const bool debug_mode = OpenWQ_wqconfig.debug_mode;
+    const bool print_once = OpenWQ_wqconfig.print_oneStep;
 
+    std::string outputfile_type = is_csv_output ? "CSV" : "HDF5";
 
     /* ########################################
-    // Loop over comparments
+    // Loop over compartments
     ######################################## */
-    
-    //Begin OpenMP parallel region
 
-    //#pragma omp parallel for private(it) num_threads(OpenWQ_wqconfig.num_threads_requested)
-    for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
+    for (unsigned int icmp = 0; icmp < num_comps; icmp++){
 
-        // See if icmp is in compt2print 
-        // (which means user wants to print variables for this compartment)
-        it = std::find(
-            OpenWQ_wqconfig.compt2print.begin(), 
-            OpenWQ_wqconfig.compt2print.end(), 
-            icmp);
+        // Check if this compartment should be printed
+        auto it = std::find(OpenWQ_wqconfig.compt2print.begin(),
+                           OpenWQ_wqconfig.compt2print.end(), icmp);
 
-        // If cannot find icmp in compt2print - do not print
-        if (it == OpenWQ_wqconfig.compt2print.end())
-            continue;
+        if (it == OpenWQ_wqconfig.compt2print.end()) continue;
 
         // ################################################
-        // CSV
-        if (OpenWQ_wqconfig.is_output_type_csv()){
+        // CSV Output
+        if (is_csv_output){
+            
+            // Main output
+            std::string output_label = "main";
+            writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                    OpenWQ_vars.chemass, output_label, timestr, icmp);
 
-            outputfile_type = "CSV";
+            // Debug outputs
+            if (debug_mode){
+                
+                output_label = "d_output_dt_chemistry";
+                writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                        OpenWQ_vars.d_chemass_dt_chem_out, output_label, timestr, icmp);
 
-            // ###########
-            // MAIN: label file and call main function
-            // print: OpenWQ_vars.chemas
-            output_file_label.assign("main");
-            OpenWQ_output::writeCSV(
-                OpenWQ_json,
-                OpenWQ_hostModelconfig,
-                OpenWQ_wqconfig,
-                OpenWQ_vars.chemass,
-                output_file_label,
-                timestr,
-                icmp);
+                output_label = "d_output_dt_transport";
+                writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                        OpenWQ_vars.d_chemass_dt_transp_out, output_label, timestr, icmp);
 
-            // ###########
-            // If DEBUG model has been selected
-            // Print the derivatives
-            if (OpenWQ_wqconfig.debug_mode == true){
+                output_label = "d_output_ss";
+                writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                        OpenWQ_vars.d_chemass_ss_out, output_label, timestr, icmp);
 
-                // ########### DERIVATIVES (d_dt) (#############
-                // chem and transport
+                output_label = "d_output_ewf";
+                writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                        OpenWQ_vars.d_chemass_ewf_out, output_label, timestr, icmp);
 
-                // Var: d_chemass_dt_chem
-                output_file_label.assign("d_output_dt_chemisry");
-                OpenWQ_output::writeCSV(
-                    OpenWQ_json,
-                    OpenWQ_hostModelconfig,
-                    OpenWQ_wqconfig,
-                    OpenWQ_vars.d_chemass_dt_chem_out,
-                    output_file_label,
-                    timestr,
-                    icmp);
-
-                // Var: d_chemass_dt_transp
-                output_file_label.assign("d_output_dt_transport");
-                OpenWQ_output::writeCSV(
-                    OpenWQ_json,
-                    OpenWQ_hostModelconfig,
-                    OpenWQ_wqconfig,
-                    OpenWQ_vars.d_chemass_dt_transp_out,
-                    output_file_label,
-                    timestr,
-                    icmp);
-
-                // ########### SS (sink and source loads) #############   
-
-                // Var: d_chemass_ss
-                output_file_label.assign("d_output_ss");
-                OpenWQ_output::writeCSV(
-                    OpenWQ_json,
-                    OpenWQ_hostModelconfig,
-                    OpenWQ_wqconfig,
-                    OpenWQ_vars.d_chemass_ss_out,
-                    output_file_label,
-                    timestr,
-                    icmp);
-
-                // ########### EWF (external water fluxes) #############   
-
-                // Var: d_chemass_ewf
-                output_file_label.assign("d_output_ewf");
-                OpenWQ_output::writeCSV(
-                    OpenWQ_json,
-                    OpenWQ_hostModelconfig,
-                    OpenWQ_wqconfig,
-                    OpenWQ_vars.d_chemass_ewf_out,
-                    output_file_label,
-                    timestr,
-                    icmp);
-
-                // ########### IC (just print once) #############   
-
-                // Var: d_chemass_ic
-                if (OpenWQ_wqconfig.print_oneStep == true){
-                    output_file_label.assign("d_output_ic");
-                    OpenWQ_output::writeCSV(
-                        OpenWQ_json,
-                        OpenWQ_hostModelconfig,
-                        OpenWQ_wqconfig,
-                        OpenWQ_vars.d_chemass_ic,
-                        output_file_label,
-                        timestr,
-                        icmp);
-                };
-
+                if (print_once){
+                    output_label = "d_output_ic";
+                    writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                            OpenWQ_vars.d_chemass_ic, output_label, timestr, icmp);
+                }
             }
-
         }
         // ################################################
-        // HDF5
-        else if (OpenWQ_wqconfig.is_output_type_hdf5()){
+        // HDF5 Output
+        else if (is_hdf5_output){
 
-            outputfile_type = "HDF5";
+            // Main output
+            std::string output_label = "main";
+            writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                     OpenWQ_vars.chemass, output_label, timestr, icmp);
 
-            // ###########
-            // MAIN: label file and call main function
-            // print: OpenWQ_vars.chemas
-            output_file_label.assign("main");
-            
-            OpenWQ_output::writeHDF5(
-                OpenWQ_json,
-                OpenWQ_hostModelconfig,
-                OpenWQ_wqconfig,
-                OpenWQ_vars.chemass,
-                output_file_label,
-                timestr,
-                icmp);
-
-            if (OpenWQ_output::export_sediment == true && (OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp))==0){
-                OpenWQ_output::writeHDF5_Sediment(
-                    OpenWQ_json,
-                    OpenWQ_hostModelconfig,
-                    OpenWQ_wqconfig,
-                    OpenWQ_vars.sedmass,
-                    output_file_label,
-                    timestr,
-                    icmp);
+            // Sediment output if applicable
+            if (export_sediment &&
+                (OpenWQ_wqconfig.TS_model->ErodTranspCmpt).compare(
+                    OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)) == 0){
+                writeHDF5_Sediment(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                                  OpenWQ_vars.sedmass, output_label, timestr, icmp);
             }
 
+            // Debug outputs
+            if (debug_mode){
 
-            // ###########
-            // If DEBUG model has been selected
-            // Print the derivatives
-            if (OpenWQ_wqconfig.debug_mode == true){
+                output_label = "d_output_dt_chemistry";
+                writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                         OpenWQ_vars.d_chemass_dt_chem_out, output_label, timestr, icmp);
 
-                // ########### DERIVATIVES (d_dt) (#############
-                // chem and transport
+                output_label = "d_output_dt_transport";
+                writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                         OpenWQ_vars.d_chemass_dt_transp_out, output_label, timestr, icmp);
 
-                // Var: d_chemass_dt_chem
-                output_file_label.assign("d_output_dt_chemistry");
-                OpenWQ_output::writeHDF5(
-                    OpenWQ_json,
-                    OpenWQ_hostModelconfig,
-                    OpenWQ_wqconfig,
-                    OpenWQ_vars.d_chemass_dt_chem_out,
-                    output_file_label,
-                    timestr,
-                    icmp);
+                output_label = "d_output_ss";
+                writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                         OpenWQ_vars.d_chemass_ss_out, output_label, timestr, icmp);
 
-                // Var: d_chemass_dt_transp
-                output_file_label.assign("d_output_dt_transport");
-                OpenWQ_output::writeHDF5(
-                    OpenWQ_json,
-                    OpenWQ_hostModelconfig,
-                    OpenWQ_wqconfig,
-                    OpenWQ_vars.d_chemass_dt_transp_out,
-                    output_file_label,
-                    timestr,
-                    icmp);
+                output_label = "d_output_ewf";
+                writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                         OpenWQ_vars.d_chemass_ewf_out, output_label, timestr, icmp);
 
-                // ########### SS (isolated inputs) #############   
-
-                // Var: d_chemass_ss
-                output_file_label.assign("d_output_ss");
-                OpenWQ_output::writeHDF5(
-                    OpenWQ_json,
-                    OpenWQ_hostModelconfig,
-                    OpenWQ_wqconfig,
-                    OpenWQ_vars.d_chemass_ss_out,
-                    output_file_label,
-                    timestr,
-                    icmp);
-
-                // ########### EWF (isolated inputs) #############   
-
-                // Var: d_chemass_ewf
-                output_file_label.assign("d_output_ewf");
-                OpenWQ_output::writeHDF5(
-                    OpenWQ_json,
-                    OpenWQ_hostModelconfig,
-                    OpenWQ_wqconfig,
-                    OpenWQ_vars.d_chemass_ewf_out,
-                    output_file_label,
-                    timestr,
-                    icmp);
-
-                // ########### IC (just print once) #############   
-
-                // Var: d_chemass_ic
-                if (OpenWQ_wqconfig.print_oneStep == true){
-                    output_file_label.assign("d_output_ic");
-                    OpenWQ_output::writeHDF5(
-                        OpenWQ_json,
-                        OpenWQ_hostModelconfig,
-                        OpenWQ_wqconfig,
-                        OpenWQ_vars.d_chemass_ic,
-                        output_file_label,
-                        timestr,
-                        icmp);
-                };
-
+                if (print_once){
+                    output_label = "d_output_ic";
+                    writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                             OpenWQ_vars.d_chemass_ic, output_label, timestr, icmp);
+                }
             }
-        
         }
     }
 
+    // Turn off one-step printing
+    OpenWQ_wqconfig.print_oneStep = false;
 
-
-    // turn off (only save once xyz_elements database)
-    OpenWQ_wqconfig.print_oneStep = false; 
-
-    // update new OpenWQ_wqconfig.nexttime_out
+    // Update next output time
     OpenWQ_wqconfig.update_nexttime_out();
 
-    // Message in console reporting output printing Sucessful
-    // Create Message
-    msg_string = "<OpenWQ> Output export successful (" 
-        + outputfile_type + "): " 
-        + timestr;
-
-    // Reset Derivatives 
-    // Needed before start of new time iteraction
+    // Reset cumulative derivatives
     OpenWQ_compute.Reset_Deriv(
         OpenWQ_hostModelconfig,
         OpenWQ_wqconfig,
         OpenWQ_vars,
-        false,       // reset inst derivatives
-        true);       // reset cumulative derivatives
+        false,  // reset inst derivatives
+        true);  // reset cumulative derivatives
 
-    // Print it (Console and/or Log file)
-    ConsoleLog(
-        OpenWQ_wqconfig,    // for Log file name
-        msg_string,         // message
-        true,               // print in console
-        true);              // print in log file
+    // Log success message
+    std::string msg_string = "<OpenWQ> Output export successful (" +
+                            outputfile_type + "): " + timestr;
+    ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
-    // Completed succesfully 
     return EXIT_SUCCESS;
-
 }
 
-
-
- /* ########################################
+/* ########################################
 // CSV output
 ######################################## */
 int OpenWQ_output::writeCSV(
@@ -320,377 +167,260 @@ int OpenWQ_output::writeCSV(
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     std::unique_ptr<arma::field<arma::field<arma::cube>>>& OpenWQ_var2print,
     std::string& output_file_label,
-    std::string timestr,            // time step (in seconds)
-    int icmp){                      // compartment index
+    std::string timestr,
+    int icmp){
 
-    // Local Variables
-    unsigned int ix, iy, iz;                // iteractive indexes for each domain elements
-    unsigned int num_cells2print;           // iteractive number of cells to print for each compartment
-    std::string CompName_icmp;              // compartment name (iteractive)
-    std::string chem_name;                  // chemical name (iteractive)
-    std::string filename;                   // iteractive output file name 
-    std::vector<double> unit_multiplers;    // multipliers to convert units  
-    double water_vol_i;                     // interactive water volume for calc of concentrations   
-    bool printflag;                         // flag for printing
-    
-    // Get number of cells to print for compartment icmp
-    num_cells2print = OpenWQ_wqconfig.cells2print_vec.at(icmp).n_rows;
-    printflag = OpenWQ_wqconfig.cells2print_bool.at(icmp);
+    // Get number of cells to print
+    const unsigned int num_cells2print = OpenWQ_wqconfig.cells2print_vec.at(icmp).n_rows;
+    const bool printflag = OpenWQ_wqconfig.cells2print_bool.at(icmp);
 
-    // If nothing to prin, then exit
-    if (printflag == false || num_cells2print == 0){
-        return EXIT_SUCCESS;
-    }
-    
-    // Compartment info
-    CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
+    // Early exit if nothing to print
+    if (!printflag || num_cells2print == 0) return EXIT_SUCCESS;
 
-    // Get unit multipliers (numerator and denominator
-    unit_multiplers.push_back(OpenWQ_wqconfig.get_output_units_numerator()); // numerator
-    unit_multiplers.push_back(OpenWQ_wqconfig.get_output_units_denominator()); // denominator
-    
-    // Reset file name for each compartment
-    filename = OpenWQ_wqconfig.get_output_dir();
+    // Cache frequently accessed values
+    const std::string CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
+    const unsigned int num_chem2print = OpenWQ_wqconfig.chem2print.size();
+    const bool is_conc_requested = OpenWQ_wqconfig.is_concentration_requested();
+    const double watervol_minlim = OpenWQ_hostModelconfig.get_watervol_minlim();
+    const double noWaterConc = OpenWQ_wqconfig.noWaterConc;
+    const unsigned int num_threads = OpenWQ_wqconfig.get_num_threads_requested();
 
-    filename.append("/");
-    filename.append(CompName_icmp);
-    filename.append("@");
-    filename.append(timestr); // time stamp
-    filename.append("-");
-    filename.append(output_file_label); // 
-    filename.append(".txt");
+    // Get unit multipliers
+    const double unit_mult_num = OpenWQ_wqconfig.get_output_units_numerator();
+    const double unit_mult_den = OpenWQ_wqconfig.get_output_units_denominator();
+    const std::string output_units = OpenWQ_wqconfig.get_output_units();
 
-    // Initiate arma::mat to print data (double vals)
-    arma::dmat filedata(num_cells2print,OpenWQ_wqconfig.chem2print.size() + 3); // starts with ix, iy and iz (so + 3)
-    
-    // Define header of file
-    arma::field<std::string> header(OpenWQ_wqconfig.chem2print.size() + 3); // starts with ix, iy and iz (so + 3)
+    // Build filename
+    std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
+                          CompName_icmp + "@" + timestr + "-" +
+                          output_file_label + ".txt";
+
+    // Initialize output matrix
+    arma::dmat filedata(num_cells2print, num_chem2print + 3);
+
+    // Define header
+    arma::field<std::string> header(num_chem2print + 3);
     header(0) = "ix [-]";
     header(1) = "iy [-]";
     header(2) = "iz [-]";
 
-    // Parallel I/O section (writting to files)
-    // #pragma omp parallel for private(chem_name,ix,iy,iz,water_vol_i) collapse(2) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
-    for (unsigned int ixyz=0;ixyz<num_cells2print;ixyz++){   
+    // Get chemical names for header
+    const bool is_native_flex = 
+        (OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0;
+    
+    for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
+        const std::string chem_name = is_native_flex ?
+            OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]] :
+            OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]];
         
-        for (unsigned int ichem=0;ichem<OpenWQ_wqconfig.chem2print.size();ichem++){
+        header(ichem + 3) = chem_name + "#" + output_units;
+    }
 
-            // Get ix, iy and iz from cells2print_vec 
-            ix = OpenWQ_wqconfig.cells2print_vec[icmp](ixyz,0);
-            iy = OpenWQ_wqconfig.cells2print_vec[icmp](ixyz,1);
-            iz = OpenWQ_wqconfig.cells2print_vec[icmp](ixyz,2);
-            // x,y,z for printing, so add 1 to initiate in 1 (and not zeros as in c++)
-            filedata(ixyz,0) = ix + 1;
-            filedata(ixyz,1) = iy + 1;
-            filedata(ixyz,2) = iz + 1;
+    // Parallelize data extraction
+    #pragma omp parallel num_threads(num_threads)
+    {
+        #pragma omp for schedule(static)
+        for (unsigned int ixyz = 0; ixyz < num_cells2print; ixyz++){
 
-            // Get cell volume
-            // only if concentration is asked as output
-            // otherwise set it to 1 for no effect
-            if (OpenWQ_wqconfig.is_concentration_requested()){
-                water_vol_i = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp,ix,iy,iz);
-            }else{
-                water_vol_i = 1.0f;
-            }
+            // Get indices (convert to 1-based for output)
+            const unsigned int ix = OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 0);
+            const unsigned int iy = OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 1);
+            const unsigned int iz = OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 2);
 
-            // Get chemical name
-            if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+            filedata(ixyz, 0) = ix + 1;
+            filedata(ixyz, 1) = iy + 1;
+            filedata(ixyz, 2) = iz + 1;
 
-                chem_name = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[
-                    OpenWQ_wqconfig.chem2print[ichem]];           // index of chemical to print
-            } else {
-                chem_name = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[
-                    OpenWQ_wqconfig.chem2print[ichem]];
-            }
-                
-            // Add chemical name to file header (add column)
-            // Include the output units
-            header(ichem + 3) = chem_name // chemical name
-                                .append("#")
-                                .append(OpenWQ_wqconfig.get_output_units()); // output units
+            // Get water volume once per cell
+            const double water_vol = is_conc_requested ?
+                OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz) : 1.0;
 
-            // Set to zero if volume of water is smaller 
-            // than OpenWQ_hostModelconfig.watervol_minlim
-            if (water_vol_i > OpenWQ_hostModelconfig.get_watervol_minlim()){
-                
-                filedata(ixyz,ichem + 3) = 
-                    (*OpenWQ_var2print)
-                        (icmp)
-                        (OpenWQ_wqconfig.chem2print[ichem])         // index of chemical to print
-                        (ix,iy,iz) 
-                    * unit_multiplers[0]                            // unit conversion (numerator)
-                    / ( water_vol_i // volume (if conc requested, set to 1 otherwise)
-                        * unit_multiplers [1] );  // unit conversion (denominator) and 
+            // Process all chemicals for this cell
+            for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
 
-            }else{
-
-                // Set as NaN because the concentration is not really zero,
-                // it simply does not exist when there is no water
-                filedata(ixyz,ichem + 3) = OpenWQ_wqconfig.noWaterConc;
-
+                if (water_vol > watervol_minlim){
+                    filedata(ixyz, ichem + 3) =
+                        (*OpenWQ_var2print)(icmp)(OpenWQ_wqconfig.chem2print[ichem])(ix, iy, iz) *
+                        unit_mult_num / (water_vol * unit_mult_den);
+                } else {
+                    filedata(ixyz, ichem + 3) = noWaterConc;
+                }
             }
         }
     }
-    
-    // Print to CSV file
-    filedata.save(arma::csv_name(filename,header));
+
+    // Write to file
+    filedata.save(arma::csv_name(filename, header));
 
     return EXIT_SUCCESS;
-
 }
-
 
 /* ########################################
 // HDF5 format
 ######################################## */
-
 int OpenWQ_output::writeHDF5(
     OpenWQ_json& OpenWQ_json,
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     std::unique_ptr<arma::field<arma::field<arma::cube>>>& OpenWQ_var2print,
     std::string& output_file_label,
-    std::string timestr,            // time step (in seconds)
-    int icmp){                      // compartment index
+    std::string timestr,
+    int icmp){
 
-     // Local Variables
-    unsigned ix, iy, iz;                    // iteractive x, y, z values for cell elemebts to print 
-    unsigned int num_chem2print;            // number of chemical species to print
-    std::string CompName_icmp;              // compartment name (iteractive)
-    const char * chem_name;                 // chemical name pointer (iteractive)
-    std::string filename;                   // iteractive output file name 
-    std::string internal_database_name;     // iteractive database name
-    unsigned int num_cells2print;           // iteractive number of cells to print
-    arma::mat cells2print_xyzElements;          // matrix with the x,y,z combinations for printing
-                                            // it will be equatl to OpenWQ_wqconfig.cells2print_vec[icmp] + 1;
-    arma::mat cells2print_xyzElements_size(1,3); // nx, ny and nz (entire domain)
-    std::vector<double> unit_multiplers;    // multipliers to convert units
-    std::string units_string;               // units of output
-    std::size_t it;                         // Iterator used to locate "/" symbol in units
-    double water_vol_i;                    // interactive water volume for calc of concentrationsdouble water_vol_i;                 
-    bool printflag;                         // flag for printing
-    std::string msg_string;                 // interactive message to print
+    // Get number of cells to print
+    const unsigned int num_cells2print = OpenWQ_wqconfig.cells2print_vec.at(icmp).n_rows;
+    const bool printflag = OpenWQ_wqconfig.cells2print_bool.at(icmp);
 
+    // Early exit if nothing to print
+    if (!printflag || num_cells2print == 0) return EXIT_SUCCESS;
 
-    // Get number of cells to print for compartment icmp
-    num_cells2print = OpenWQ_wqconfig.cells2print_vec.at(icmp).n_rows;
-    printflag = OpenWQ_wqconfig.cells2print_bool.at(icmp);
+    // Cache frequently accessed values
+    const std::string CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
+    const unsigned int num_chem2print = OpenWQ_wqconfig.chem2print.size();
+    const bool is_conc_requested = OpenWQ_wqconfig.is_concentration_requested();
+    const double watervol_minlim = OpenWQ_hostModelconfig.get_watervol_minlim();
+    const double noWaterConc = OpenWQ_wqconfig.noWaterConc;
+    const unsigned int num_threads = OpenWQ_wqconfig.get_num_threads_requested();
+    const bool is_native_flex = 
+        (OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0;
 
-    // If nothing to prin, then exit
-    if (printflag == false || num_cells2print == 0){
-        return EXIT_SUCCESS;
-    }
-    
-    // Compartment info
-    CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
-    
-    // Get compartment nx, ny, nz
-    cells2print_xyzElements_size(0,0) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
-    cells2print_xyzElements_size(0,1) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
-    cells2print_xyzElements_size(0,2) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
+    // Get unit multipliers
+    const double unit_mult_num = OpenWQ_wqconfig.get_output_units_numerator();
+    const double unit_mult_den = OpenWQ_wqconfig.get_output_units_denominator();
 
-    // num of chemicals to print
-    num_chem2print = OpenWQ_wqconfig.chem2print.size();
-
-    // Get unit multipliers (numerator and denominator
-    unit_multiplers.push_back(OpenWQ_wqconfig.get_output_units_numerator()); // numerator
-    unit_multiplers.push_back(OpenWQ_wqconfig.get_output_units_denominator()); // denominator
-
-    // Units string
-    // replace "/" by "|" is needed because "/" is not compatible with directory full paths
-    units_string = OpenWQ_wqconfig.get_output_units();
-    it = (int) units_string.find("/");
-    if (it <= units_string.size()){
-        units_string.replace(it,1, "|");
+    // Units string (replace "/" with "|")
+    std::string units_string = OpenWQ_wqconfig.get_output_units();
+    std::size_t slash_pos = units_string.find("/");
+    if (slash_pos != std::string::npos){
+        units_string.replace(slash_pos, 1, "|");
     }
 
-    // ########################################
-    // Save ix, iy and iz in dataset (the first time)
-    if (OpenWQ_wqconfig.print_oneStep == true){
+    // Prepare compartment size info
+    arma::mat cells2print_xyzElements_size(1, 3);
+    cells2print_xyzElements_size(0, 0) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
+    cells2print_xyzElements_size(0, 1) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
+    cells2print_xyzElements_size(0, 2) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
 
-        // Get x,y,z to print, which will be +1 to local 
-        // indexes of OpenWQ_wqconfig.cells2print_vec[icmp] 
-        cells2print_xyzElements = OpenWQ_wqconfig.cells2print_vec[icmp];      
-        cells2print_xyzElements.for_each([](arma::mat::elem_type& val) { val += 1.0; } );
+    /* ########################################
+    // Save metadata on first timestep
+    ######################################## */
+    if (OpenWQ_wqconfig.print_oneStep){
 
+        // Prepare xyz elements (convert to 1-based indexing)
+        arma::mat cells2print_xyzElements = OpenWQ_wqconfig.cells2print_vec[icmp];
+        cells2print_xyzElements.for_each([](arma::mat::elem_type& val) { val += 1.0; });
 
-        for (unsigned int ichem=0;ichem<num_chem2print;ichem++){
+        // Prepare host IDs
+        std::vector<std::string> host_ids;
+        host_ids.reserve(num_cells2print);
+        
+        for (unsigned int ixyz = 0; ixyz < num_cells2print; ixyz++){
+            const int ix = static_cast<int>(OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 0));
+            const int iy = static_cast<int>(OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 1));
+            const int iz = static_cast<int>(OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 2));
+            host_ids.push_back(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix, iy, iz));
+        }
 
-            // Get chemical name (convert to char for use in .save())
-            if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
-                chem_name = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[
-                OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
-            } else {
-                chem_name = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[
-                OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
-            }
+        // Write metadata for each chemical
+        for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
 
-            // Reset file name for each compartment
-            filename = OpenWQ_wqconfig.get_output_dir();
+            const std::string chem_name = is_native_flex ?
+                OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]] :
+                OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]];
 
-            filename.append("/");
-            filename.append(CompName_icmp); // compartment
-            filename.append("@");
-            filename.append(chem_name);     // chemical name
-            filename.append("#");
-            filename.append(units_string); // units
-            filename.append("-");
-            filename.append(output_file_label); // info about output (debug model) 
-            filename.append(".h5");
+            // Build filename
+            std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
+                                  CompName_icmp + "@" + chem_name + "#" +
+                                  units_string + "-" + output_file_label + ".h5";
 
-            // x,y,z elements
-            internal_database_name = "xyz_elements";      
-            cells2print_xyzElements
-                .save(arma::hdf5_name(
-                    filename,
-                    internal_database_name)); 
+            // Save xyz elements
+            cells2print_xyzElements.save(arma::hdf5_name(filename, "xyz_elements"));
 
-            // nx, ny, nz
-            // x,y,z elements
-            internal_database_name = "xyz_elements_size"; 
-            cells2print_xyzElements_size
-                .save(arma::hdf5_name(
-                    filename,
-                    internal_database_name,
-                    arma::hdf5_opts::append));                  // no append (to clean old file if existant)
-            
-            // ----------------------------------------
-            // Getting the mapping between hostmodel and openwq
-            // ----------------------------------------
-            // Get name of the hostmodel ID variable: add cellid_to_wq methods to allow mapping OpenWQ elements with the hostmodel outputs
-            internal_database_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel(); 
+            // Save domain size
+            cells2print_xyzElements_size.save(
+                arma::hdf5_name(filename, "xyz_elements_size", arma::hdf5_opts::append));
 
-            // Identifying only the requested cells to print
-            arma::mat cells2print_cmpt = OpenWQ_wqconfig.cells2print_vec[icmp];
-
-            // Preserve string IDs and write to HDF5 as variable-length strings
-            std::vector<std::string> host_ids;
-            host_ids.reserve(cells2print_cmpt.n_rows);
-            for (arma::uword rcnt = 0; rcnt < cells2print_cmpt.n_rows; ++rcnt){
-                int ix_tmp = static_cast<int>(cells2print_cmpt(rcnt, 0));
-                int iy_tmp = static_cast<int>(cells2print_cmpt(rcnt, 1));
-                int iz_tmp = static_cast<int>(cells2print_cmpt(rcnt, 2));
-                host_ids.push_back(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp));
-            }
-
-            // Prepare C string pointers
-            std::vector<const char*> cstrs(host_ids.size());
-            for (size_t i = 0; i < host_ids.size(); ++i) cstrs[i] = host_ids[i].c_str();
-
-            // Open file, create variable-length string dataset and write
-            hid_t file_h = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
-            if (file_h >= 0 && !host_ids.empty()){
-                hsize_t dims[1]; dims[0] = host_ids.size();
-                hid_t space = H5Screate_simple(1, dims, NULL);
-                hid_t dtype = H5Tcopy(H5T_C_S1);
-                H5Tset_size(dtype, H5T_VARIABLE);
-                hid_t dset = H5Dcreate(file_h, internal_database_name.c_str(), dtype, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-                if (dset >= 0) {
-                    H5Dwrite(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, cstrs.data());
-                    H5Dclose(dset);
+            // Write host IDs as variable-length strings
+            if (!host_ids.empty()){
+                const std::string internal_db_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel();
+                
+                std::vector<const char*> cstrs(host_ids.size());
+                for (size_t i = 0; i < host_ids.size(); ++i) {
+                    cstrs[i] = host_ids[i].c_str();
                 }
-                H5Tclose(dtype);
-                H5Sclose(space);
-                H5Fclose(file_h);
+
+                hid_t file_h = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
+                if (file_h >= 0){
+                    hsize_t dims[1] = {host_ids.size()};
+                    hid_t space = H5Screate_simple(1, dims, NULL);
+                    hid_t dtype = H5Tcopy(H5T_C_S1);
+                    H5Tset_size(dtype, H5T_VARIABLE);
+                    hid_t dset = H5Dcreate(file_h, internal_db_name.c_str(), dtype, space,
+                                          H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                    if (dset >= 0){
+                        H5Dwrite(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, cstrs.data());
+                        H5Dclose(dset);
+                    }
+                    H5Tclose(dtype);
+                    H5Sclose(space);
+                    H5Fclose(file_h);
+                }
             }
 
+            // Open file for subsequent writes
             OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
 
-            msg_string = "<OPENWQ> Openning output file " + filename + " " + std::to_string(OpenWQ_wqconfig.files[filename]);
-
-            ConsoleLog(
-                OpenWQ_wqconfig, 
-                msg_string, 
-                true,
-                true); 
-
+            std::string msg_string = "<OPENWQ> Opening output file " + filename +
+                                    " " + std::to_string(OpenWQ_wqconfig.files[filename]);
+            ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
         }
     }
 
-    // ########################################
-    // Save datasets for each time step
+    /* ########################################
+    // Write data for current timestep
+    ######################################## */
 
-    // Get number of cell elements to print
-    num_cells2print = OpenWQ_wqconfig.cells2print_vec[icmp].n_rows;
+    // Parallelize over chemicals
+    #pragma omp parallel num_threads(num_threads)
+    {
+        #pragma omp for schedule(static)
+        for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
 
-    // Parallel I/O section (writting to files)
-    // #pragma omp parallel for private(chem_name,filename,ix,iy,iz,water_vol_i) collapse(1) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
-    for (unsigned int ichem=0;ichem<num_chem2print;ichem++){
+            const std::string chem_name = is_native_flex ?
+                OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]] :
+                OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]];
 
-        // Initiate arma::mat to print data
-        arma::mat data2print(num_cells2print,1);
+            // Build filename
+            std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
+                                  CompName_icmp + "@" + chem_name + "#" +
+                                  units_string + "-" + output_file_label + ".h5";
 
-        // Get chemical name (convert to char for use in .save())
-        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
+            // Prepare data matrix
+            arma::mat data2print(num_cells2print, 1);
 
-            chem_name = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[
-                OpenWQ_wqconfig.chem2print[ichem]].c_str();           // index of chemical to print
-        } else {
-            chem_name = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[
-                OpenWQ_wqconfig.chem2print[ichem]].c_str();
-        }
+            // Extract data
+            for (unsigned int celli = 0; celli < num_cells2print; celli++){
 
-        // Reset file name for each compartment
-        filename = OpenWQ_wqconfig.get_output_dir();
+                const unsigned int ix = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 0);
+                const unsigned int iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 1);
+                const unsigned int iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 2);
 
-        filename.append("/");
-        filename.append(CompName_icmp); // compartment
-        filename.append("@");
-        filename.append(chem_name);     // chemical name
-        filename.append("#");
-        filename.append(units_string); // units
-        filename.append("-");
-        filename.append(output_file_label); // info about output (debug model) 
-        filename.append(".h5");
+                const double water_vol = is_conc_requested ?
+                    OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz) : 1.0;
 
-        // Extract data 2 print
-        for (unsigned int celli=0;celli<num_cells2print;celli++){
-
-            // Get ix, iy and iz from cells2print_vec 
-            ix = OpenWQ_wqconfig.cells2print_vec[icmp](celli,0);
-            iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli,1);
-            iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli,2);
-
-            // Get cell volume
-            // only if concentration is asked as output
-            // otherwise set it to 1 for no effect
-            if (OpenWQ_wqconfig.is_concentration_requested()){
-                water_vol_i = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp,ix,iy,iz);
-            }else{
-                water_vol_i = 1.0f;
+                if ((is_conc_requested && water_vol > watervol_minlim) || !is_conc_requested){
+                    data2print(celli, 0) =
+                        (*OpenWQ_var2print)(icmp)(OpenWQ_wqconfig.chem2print[ichem])(ix, iy, iz) *
+                        unit_mult_num / (water_vol * unit_mult_den);
+                } else {
+                    data2print(celli, 0) = noWaterConc;
+                }
             }
 
-            // Save data to data2print datastructure
-            // Set to zero if volume of water is smaller 
-            // than OpenWQ_hostModelconfig.watervol_minlim (only if requesting conc)
-            if (
-                (OpenWQ_wqconfig.is_concentration_requested() &&
-                water_vol_i > OpenWQ_hostModelconfig.get_watervol_minlim()) 
-                || OpenWQ_wqconfig.is_concentration_requested() == false){
-             
-                data2print(celli,0) = 
-                    (*OpenWQ_var2print)
-                        (icmp)
-                        (OpenWQ_wqconfig.chem2print[ichem])
-                        (ix,iy,iz)
-                    * unit_multiplers[0]          // numerator unit conversion
-                    / (  water_vol_i              // water volume (= 1 if mass requested (and not conc))
-                        * unit_multiplers [1] );  // denominator unit conversion 
-
-            }else{
-
-                // Set as NaN because the concentration is not really zero,
-                // it simply does not exist when there is no water
-                data2print(celli,0) = OpenWQ_wqconfig.noWaterConc;
-
-            }
-
+            // Write to HDF5 (thread-safe as each thread writes to different file)
+            hid_t file = OpenWQ_wqconfig.files[filename];
+            appendData_to_HDF5_file(file, data2print, timestr);
         }
-        
-        // Save results
-        hid_t file = OpenWQ_wqconfig.files[filename];
-        OpenWQ_output::appendData_to_HDF5_file(file, data2print, timestr);
-
     }
 
     return EXIT_SUCCESS;
@@ -702,228 +432,148 @@ int OpenWQ_output::writeHDF5_Sediment(
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     std::unique_ptr<arma::cube>& OpenWQ_var2print,
     std::string& output_file_label,
-    std::string timestr,            // time step (in seconds)
-    int icmp){                      // compartment index
+    std::string timestr,
+    int icmp){
 
-     // Local Variables
-    unsigned ix, iy, iz;                    // iteractive x, y, z values for cell elemebts to print 
-    unsigned int num_chem2print;            // number of chemical species to print
-    std::string CompName_icmp;              // compartment name (iteractive)
-    const char * chem_name;                 // chemical name pointer (iteractive)
-    std::string filename;                   // iteractive output file name 
-    std::string internal_database_name;     // iteractive database name
-    unsigned int num_cells2print;           // iteractive number of cells to print
-    arma::mat cells2print_xyzElements;          // matrix with the x,y,z combinations for printing
-                                            // it will be equatl to OpenWQ_wqconfig.cells2print_vec[icmp] + 1;
-    arma::mat cells2print_xyzElements_size(1,3); // nx, ny and nz (entire domain)
-    std::vector<double> unit_multiplers;    // multipliers to convert units
-    std::string units_string;               // units of output
-    std::size_t it;                         // Iterator used to locate "/" symbol in units
-    double water_vol_i;                    // interactive water volume for calc of concentrationsdouble water_vol_i;                 
-    bool printflag;                         // flag for printing
+    // Get number of cells to print
+    const unsigned int num_cells2print = OpenWQ_wqconfig.cells2print_vec.at(icmp).n_rows;
+    const bool printflag = OpenWQ_wqconfig.cells2print_bool.at(icmp);
 
+    // Early exit if nothing to print
+    if (!printflag || num_cells2print == 0) return EXIT_SUCCESS;
 
-    // Get unit multipliers (numerator and denominator
-    unit_multiplers.push_back(OpenWQ_wqconfig.get_output_units_numerator()); // numerator
-    unit_multiplers.push_back(OpenWQ_wqconfig.get_output_units_denominator()); // denominator
+    // Cache values
+    const std::string CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
+    const bool is_conc_requested = OpenWQ_wqconfig.is_concentration_requested();
+    const double watervol_minlim = OpenWQ_hostModelconfig.get_watervol_minlim();
+    const double noWaterConc = OpenWQ_wqconfig.noWaterConc;
+    const double unit_mult_num = OpenWQ_wqconfig.get_output_units_numerator();
+    const double unit_mult_den = OpenWQ_wqconfig.get_output_units_denominator();
 
+    // Build filename
+    std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
+                          CompName_icmp + "@Sediment-" + output_file_label + ".h5";
 
-    // Get number of cells to print for compartment icmp
-    num_cells2print = OpenWQ_wqconfig.cells2print_vec.at(icmp).n_rows;
-    printflag = OpenWQ_wqconfig.cells2print_bool.at(icmp);
+    /* ########################################
+    // Save metadata on first timestep
+    ######################################## */
+    if (OpenWQ_wqconfig.print_oneStep){
 
-    // If nothing to prin, then exit
-    if (printflag == false || num_cells2print == 0){
-        return EXIT_SUCCESS;
-    }
-    
-    // Compartment info
-    CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
-    
-    // Get compartment nx, ny, nz
-    cells2print_xyzElements_size(0,0) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
-    cells2print_xyzElements_size(0,1) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
-    cells2print_xyzElements_size(0,2) =  OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
+        // Prepare xyz elements
+        arma::mat cells2print_xyzElements = OpenWQ_wqconfig.cells2print_vec[icmp];
+        cells2print_xyzElements.for_each([](arma::mat::elem_type& val) { val += 1.0; });
 
-    // ########################################
-    // Save ix, iy and iz in dataset (the first time)
-    if (OpenWQ_wqconfig.print_oneStep == true){
+        // Prepare domain size
+        arma::mat cells2print_xyzElements_size(1, 3);
+        cells2print_xyzElements_size(0, 0) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
+        cells2print_xyzElements_size(0, 1) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
+        cells2print_xyzElements_size(0, 2) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
 
-        // Get x,y,z to print, which will be +1 to local 
-        // indexes of OpenWQ_wqconfig.cells2print_vec[icmp] 
-        cells2print_xyzElements = OpenWQ_wqconfig.cells2print_vec[icmp];      
-        cells2print_xyzElements.for_each([](arma::mat::elem_type& val) { val += 1.0; } );
+        // Save metadata
+        cells2print_xyzElements.save(arma::hdf5_name(filename, "xyz_elements"));
+        cells2print_xyzElements_size.save(
+            arma::hdf5_name(filename, "xyz_elements_size", arma::hdf5_opts::append));
 
-
-        // Reset file name for each compartment
-        filename = OpenWQ_wqconfig.get_output_dir();
-
-        filename.append("/");
-        filename.append(CompName_icmp); // compartment
-        filename.append("@");
-        filename.append("Sediment");     // chemical name
-        filename.append("-");
-        filename.append(output_file_label); // info about output (debug model) 
-        filename.append(".h5");
-
-        // x,y,z elements
-        internal_database_name = "xyz_elements";      
-        cells2print_xyzElements
-            .save(arma::hdf5_name(
-                filename,
-                internal_database_name)); 
-
-        // nx, ny, nz
-        // x,y,z elements
-        internal_database_name = "xyz_elements_size"; 
-        cells2print_xyzElements_size
-            .save(arma::hdf5_name(
-                filename,
-                internal_database_name,
-                arma::hdf5_opts::append));                  // no append (to clean old file if existant)
-
-        // ----------------------------------------
-        // Getting the mapping between hostmodel and openwq
-        // ----------------------------------------
-        // Get name of the hostmodel ID variable: add cellid_to_wq methods to allow mapping OpenWQ elements with the hostmodel outputs
-        internal_database_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel(); 
-
-        // Identifying only the requested cells to print
-        arma::mat cells2print_cmpt = OpenWQ_wqconfig.cells2print_vec[icmp];
-
-        // Preserve string IDs and write to HDF5 as variable-length strings
+        // Write host IDs
         std::vector<std::string> host_ids;
-        host_ids.reserve(cells2print_cmpt.n_rows);
-        for (arma::uword rcnt = 0; rcnt < cells2print_cmpt.n_rows; ++rcnt){
-            int ix_tmp = static_cast<int>(cells2print_cmpt(rcnt, 0));
-            int iy_tmp = static_cast<int>(cells2print_cmpt(rcnt, 1));
-            int iz_tmp = static_cast<int>(cells2print_cmpt(rcnt, 2));
-            host_ids.push_back(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix_tmp, iy_tmp, iz_tmp));
+        host_ids.reserve(num_cells2print);
+
+        for (unsigned int ixyz = 0; ixyz < num_cells2print; ixyz++){
+            const int ix = static_cast<int>(OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 0));
+            const int iy = static_cast<int>(OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 1));
+            const int iz = static_cast<int>(OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 2));
+            host_ids.push_back(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix, iy, iz));
         }
 
-        std::vector<const char*> cstrs(host_ids.size());
-        for (size_t i = 0; i < host_ids.size(); ++i) cstrs[i] = host_ids[i].c_str();
-
-        hid_t file_h = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
-        if (file_h >= 0 && !host_ids.empty()){
-            hsize_t dims[1]; dims[0] = host_ids.size();
-            hid_t space = H5Screate_simple(1, dims, NULL);
-            hid_t dtype = H5Tcopy(H5T_C_S1);
-            H5Tset_size(dtype, H5T_VARIABLE);
-            hid_t dset = H5Dcreate(file_h, internal_database_name.c_str(), dtype, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-            if (dset >= 0) {
-                H5Dwrite(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, cstrs.data());
-                H5Dclose(dset);
+        if (!host_ids.empty()){
+            const std::string internal_db_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel();
+            
+            std::vector<const char*> cstrs(host_ids.size());
+            for (size_t i = 0; i < host_ids.size(); ++i) {
+                cstrs[i] = host_ids[i].c_str();
             }
-            H5Tclose(dtype);
-            H5Sclose(space);
-            H5Fclose(file_h);
-        }
 
+            hid_t file_h = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
+            if (file_h >= 0){
+                hsize_t dims[1] = {host_ids.size()};
+                hid_t space = H5Screate_simple(1, dims, NULL);
+                hid_t dtype = H5Tcopy(H5T_C_S1);
+                H5Tset_size(dtype, H5T_VARIABLE);
+                hid_t dset = H5Dcreate(file_h, internal_db_name.c_str(), dtype, space,
+                                      H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (dset >= 0){
+                    H5Dwrite(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, cstrs.data());
+                    H5Dclose(dset);
+                }
+                H5Tclose(dtype);
+                H5Sclose(space);
+                H5Fclose(file_h);
+            }
+        }
 
         OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
-    
     }
-    
 
-    // ########################################
-    // Save datasets for each time step
+    /* ########################################
+    // Write data for current timestep
+    ######################################## */
 
-    // Get number of cell elements to print
-    num_cells2print = OpenWQ_wqconfig.cells2print_vec[icmp].n_rows;
+    arma::mat data2print(num_cells2print, 1);
 
-    // Parallel I/O section (writting to files)
-    // Initiate arma::mat to print data
-    arma::mat data2print(num_cells2print,1);
+    // Extract data
+    for (unsigned int celli = 0; celli < num_cells2print; celli++){
 
-    // Reset file name for each compartment
-    filename = OpenWQ_wqconfig.get_output_dir();
+        const unsigned int ix = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 0);
+        const unsigned int iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 1);
+        const unsigned int iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 2);
 
+        const double water_vol = is_conc_requested ?
+            OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz) : 1.0;
 
-    filename.append("/");
-    filename.append(CompName_icmp); // compartment
-    filename.append("@");
-    filename.append("Sediment");     // chemical name
-    filename.append("-");
-    filename.append(output_file_label); // info about output (debug model) 
-    filename.append(".h5");
-
-
-    // Extract data 2 print
-    for (unsigned int celli=0;celli<num_cells2print;celli++){
-
-        // Get ix, iy and iz from cells2print_vec 
-        ix = OpenWQ_wqconfig.cells2print_vec[icmp](celli,0);
-        iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli,1);
-        iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli,2);
-
-        // Get cell volume
-        // only if concentration is asked as output
-        // otherwise set it to 1 for no effect
-        if (OpenWQ_wqconfig.is_concentration_requested()){
-            water_vol_i = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp,ix,iy,iz);
-        }else{
-            water_vol_i = 1.0f;
+        if ((is_conc_requested && water_vol > watervol_minlim) || !is_conc_requested){
+            data2print(celli, 0) =
+                (*OpenWQ_var2print)(ix, iy, iz) *
+                unit_mult_num / (water_vol * unit_mult_den);
+        } else {
+            data2print(celli, 0) = noWaterConc;
         }
-
-        // Save data to data2print datastructure
-        if (
-            (OpenWQ_wqconfig.is_concentration_requested() &&
-            water_vol_i > OpenWQ_hostModelconfig.get_watervol_minlim()) 
-            || OpenWQ_wqconfig.is_concentration_requested() == false){
-             
-            data2print(celli,0) = 
-                (*OpenWQ_var2print)
-                    (ix,iy,iz)
-                * unit_multiplers[0]          // numerator unit conversion
-                / (  water_vol_i              // water volume (= 1 if mass requested (and not conc))
-                    * unit_multiplers [1] );  // denominator unit conversion 
-
-        }else{
-
-            // Set as NaN because the concentration is not really zero,
-            // it simply does not exist when there is no water
-            data2print(celli,0) = OpenWQ_wqconfig.noWaterConc;
-
-        }
-
     }
-        
-    // Save results
+
+    // Write to HDF5
     hid_t file = OpenWQ_wqconfig.files[filename];
-    OpenWQ_output::appendData_to_HDF5_file(file, data2print, timestr);
-
-    
+    appendData_to_HDF5_file(file, data2print, timestr);
 
     return EXIT_SUCCESS;
 }
 
-
-// ########################################
-// append data to HDF5 file 
-
+/* ########################################
+// Append data to HDF5 file
+######################################## */
 bool OpenWQ_output::appendData_to_HDF5_file(
     hid_t file,
     arma::mat& data,
     std::string name){
-    
-    hsize_t dims[2];
-    dims[1] = data.n_rows;
-    dims[0] = data.n_cols;
+
+    hsize_t dims[2] = {data.n_cols, data.n_rows};
 
     hid_t dataspace = H5Screate_simple(2, dims, NULL);
     hid_t datatype = H5Tcopy(H5T_NATIVE_DOUBLE);
-    hid_t dataset = H5Dcreate(file, name.c_str(), datatype, dataspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    if (dataset < 0) {
+    hid_t dataset = H5Dcreate(file, name.c_str(), datatype, dataspace,
+                              H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    if (dataset < 0){
+        H5Sclose(dataspace);
+        H5Tclose(datatype);
         return false;
     }
-    
-    // Save dataset to HDF5
+
+    // Write data
     H5Dwrite(dataset, datatype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.mem);
 
+    // Cleanup
     H5Dclose(dataset);
     H5Sclose(dataspace);
+    H5Tclose(datatype);
 
     return true;
-
 }
