@@ -1,4 +1,3 @@
-
 // Copyright 2026, Diogo Costa (diogo.costa@uevora.pt)
 // This file is part of OpenWQ model.
 
@@ -31,25 +30,24 @@ void OpenWQ_compute::Reset_Deriv(
     bool inst_deriv_flag,
     bool cum_deriv_flag){
 
-    unsigned int num_chem;
-    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
-        num_chem = OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;
-    } else {
-        num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
-    }
+    const unsigned int num_chem = 
+        ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) 
+        ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
+        : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
 
+    const unsigned int num_comps = OpenWQ_hostModelconfig.get_num_HydroComp();
+    const unsigned int num_threads = OpenWQ_wqconfig.get_num_threads_requested();
 
     // Reset Instant Derivative
-    if (inst_deriv_flag == true)
+    if (inst_deriv_flag)
     {   
-        // Chemistry variables
-
-        // Compartment loop
-        #pragma omp parallel for collapse(2) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
-        for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
-
-            // Chemical loop
-            for (unsigned int chemi=0;chemi<(num_chem);chemi++){
+        // Chemistry variables - Single parallelized loop with better work distribution
+        #pragma omp parallel num_threads(num_threads)
+        {
+            #pragma omp for schedule(static) nowait
+            for (unsigned int idx = 0; idx < num_comps * num_chem; idx++){
+                const unsigned int icmp = idx / num_chem;
+                const unsigned int chemi = idx % num_chem;
 
                 // Reset derivatives of state-variables to zero after each time interaction
                 (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi).zeros();
@@ -57,70 +55,61 @@ void OpenWQ_compute::Reset_Deriv(
                 (*OpenWQ_vars.d_chemass_ewf)(icmp)(chemi).zeros();
                 (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi).zeros();
                 (*OpenWQ_vars.d_chemass_dt_transp)(icmp)(chemi).zeros();
-
             }
 
+            // Sediment transport variables - executed by single thread
+            #pragma omp single
+            {
+                (*OpenWQ_vars.d_sedmass_mobilized_dt).zeros();
+                (*OpenWQ_vars.d_sedmass_dt).zeros();
+            }
         }
-
-        // Sediment transport variables
-        // (*OpenWQ_vars.sedmass).zeros();
-        (*OpenWQ_vars.d_sedmass_mobilized_dt).zeros();
-        (*OpenWQ_vars.d_sedmass_dt).zeros();
-
     }
 
     // Reset Cumulative Derivative
     // only used for exporting results in debug mode
-    if (cum_deriv_flag == true)
+    if (cum_deriv_flag)
     {
-        // Compartment loop
-        #pragma omp parallel for collapse(2) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
-        for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
+        // Single flattened loop for better load balancing
+        #pragma omp parallel for schedule(static) num_threads(num_threads)
+        for (unsigned int idx = 0; idx < num_comps * num_chem; idx++){
+            const unsigned int icmp = idx / num_chem;
+            const unsigned int chemi = idx % num_chem;
 
-            // Chemical loop
-            for (unsigned int chemi=0;chemi<(num_chem);chemi++){
-
-                // Reset derivatives of state-variables to zero after each time interaction
-                (*OpenWQ_vars.d_chemass_ss_out)(icmp)(chemi).zeros();
-                (*OpenWQ_vars.d_chemass_ewf_out)(icmp)(chemi).zeros();
-                (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp)(chemi).zeros();
-                (*OpenWQ_vars.d_chemass_dt_transp_out)(icmp)(chemi).zeros();
-
-            }
-
+            // Reset derivatives of state-variables to zero after each time interaction
+            (*OpenWQ_vars.d_chemass_ss_out)(icmp)(chemi).zeros();
+            (*OpenWQ_vars.d_chemass_ewf_out)(icmp)(chemi).zeros();
+            (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp)(chemi).zeros();
+            (*OpenWQ_vars.d_chemass_dt_transp_out)(icmp)(chemi).zeros();
         }
     }
-
 }
 
 // ########################################
 // Reset EWF conc 
-// // Specially needed for discrete conc requests
+// Specially needed for discrete conc requests
 // ########################################
 void OpenWQ_compute::Reset_EWFconc(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars){
 
-    unsigned int num_chem;
-    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
-        num_chem = OpenWQ_wqconfig.CH_model->NativeFlex->num_chem;
-    } else {
-        num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
-    }
+    const unsigned int num_chem = 
+        ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+        ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
+        : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
 
-    // Compartment loop
-    #pragma omp parallel for collapse(2) num_threads(OpenWQ_wqconfig.get_num_threads_requested())
-    for (unsigned int ewfi=0;ewfi<OpenWQ_hostModelconfig.get_num_HydroExtFlux();ewfi++){
+    const unsigned int num_ewf = OpenWQ_hostModelconfig.get_num_HydroExtFlux();
+    const unsigned int num_threads = OpenWQ_wqconfig.get_num_threads_requested();
 
-        // Chemical loop
-        for (unsigned int chemi=0;chemi<(num_chem);chemi++){
+    // Single flattened loop for better load balancing
+    #pragma omp parallel for schedule(static) num_threads(num_threads)
+    for (unsigned int idx = 0; idx < num_ewf * num_chem; idx++){
+        const unsigned int ewfi = idx / num_chem;
+        const unsigned int chemi = idx % num_chem;
 
-            // Reset ewf_conc after each iteraction
-            // Specially needed for discrete conc requests
-            (*OpenWQ_vars.ewf_conc)(ewfi)(chemi).zeros();
-
-        }
-
+        // Reset ewf_conc after each iteraction
+        // Specially needed for discrete conc requests
+        (*OpenWQ_vars.ewf_conc)(ewfi)(chemi).zeros();
     }
 }
