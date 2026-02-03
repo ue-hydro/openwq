@@ -136,7 +136,7 @@ class OpenWQ_couplercalls{
         OpenWQ_compute& OpenWQ_compute,
         OpenWQ_output& OpenWQ_output,
         time_t simtime, // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
-        std::string source_EWF_name,                    // name defined in HydroExtFlux (in couplecalls)
+        const std::string& source_EWF_name,             // OPTIMIZED: pass by const ref instead of value
         const int recipient, const int ix_r, const int iy_r, const int iz_r,
         const double wflux_s2r);
 

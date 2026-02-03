@@ -19,6 +19,7 @@
 #include "models_TS/headerfile_TS.hpp"
 #include "utils/headerfile_UTILS.hpp"
 
+#include <cstring> // for std::memcpy (OPTIMIZED #10)
 #include <sundials/sundials_core.hpp>
 #include <sundials/sundials_types.h>
 #include <sundials/sundials_nvector.h>
@@ -39,17 +40,20 @@ struct UserData {
     std::vector<std::tuple<int,int,int,int,int,int,int,int,double,double,std::string>>& sediment_calls;
     OpenWQ_TS_model& TS_model;
     OpenWQ_utils& utils;
-    
+
     // Cache frequently accessed values
     unsigned int num_chem;
     unsigned int num_comps;
     unsigned int num_threads;
     bool is_first_step;
     double time_step;
-    
+
     // Pre-computed compartment dimensions
     std::vector<std::tuple<unsigned int, unsigned int, unsigned int>> comp_dims;
     std::vector<unsigned int> comp_offsets; // Flattened index offsets
+
+    // OPTIMIZED #7: cached sediment compartment index
+    unsigned int sed_icmp;
 };
 
 /* #################################################
@@ -73,29 +77,17 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         }
     }
 
-    // Copy data from SUNDIALS vector to chemass in parallel
-    #pragma omp parallel num_threads(user_data.num_threads)
-    {
-        #pragma omp for schedule(static)
-        for (unsigned int icmp = 0; icmp < user_data.num_comps; icmp++){
-            const auto& [nx, ny, nz] = user_data.comp_dims[icmp];
-            const unsigned int offset = user_data.comp_offsets[icmp];
-            
-            for (unsigned int chemi = 0; chemi < user_data.num_chem; chemi++){
-                auto& chemass = (*user_data.vars.chemass)(icmp)(chemi);
-                const unsigned int chem_offset = offset + chemi * nx * ny * nz;
-                
-                unsigned int local_idx = 0;
-                for (unsigned int ix = 0; ix < nx; ix++){
-                    for (unsigned int iy = 0; iy < ny; iy++){
-                        #pragma omp simd
-                        for (unsigned int iz = 0; iz < nz; iz++){
-                            chemass(ix, iy, iz) = uvec_data[chem_offset + local_idx];
-                            local_idx++;
-                        }
-                    }
-                }
-            }
+    // OPTIMIZED #10: Copy data from SUNDIALS vector to chemass using memcpy
+    for (unsigned int icmp = 0; icmp < user_data.num_comps; icmp++){
+        const auto& [nx, ny, nz] = user_data.comp_dims[icmp];
+        const unsigned int offset = user_data.comp_offsets[icmp];
+        const unsigned int cube_size = nx * ny * nz;
+
+        for (unsigned int chemi = 0; chemi < user_data.num_chem; chemi++){
+            const unsigned int chem_offset = offset + chemi * cube_size;
+            std::memcpy((*user_data.vars.chemass)(icmp)(chemi).memptr(),
+                       uvec_data + chem_offset,
+                       cube_size * sizeof(double));
         }
     }
 
@@ -163,29 +155,22 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         }
     }
 
-    // Copy derivatives to SUNDIALS f vector in parallel
-    #pragma omp parallel num_threads(user_data.num_threads)
-    {
-        #pragma omp for schedule(static)
-        for (unsigned int icmp = 0; icmp < user_data.num_comps; icmp++){
-            const auto& [nx, ny, nz] = user_data.comp_dims[icmp];
-            const unsigned int offset = user_data.comp_offsets[icmp];
-            const double inv_dt = 1.0 / user_data.time_step;
+    // OPTIMIZED #10: Copy derivatives to SUNDIALS f vector using memcpy + scaling
+    const double inv_dt = 1.0 / user_data.time_step;
 
-            for (unsigned int chemi = 0; chemi < user_data.num_chem; chemi++){
-                const auto& d_chemass = (*user_data.vars.d_chemass)(icmp)(chemi);
-                const unsigned int chem_offset = offset + chemi * nx * ny * nz;
-                
-                unsigned int local_idx = 0;
-                for (unsigned int ix = 0; ix < nx; ix++){
-                    for (unsigned int iy = 0; iy < ny; iy++){
-                        #pragma omp simd
-                        for (unsigned int iz = 0; iz < nz; iz++){
-                            fvec_data[chem_offset + local_idx] = d_chemass(ix, iy, iz) * inv_dt;
-                            local_idx++;
-                        }
-                    }
-                }
+    for (unsigned int icmp = 0; icmp < user_data.num_comps; icmp++){
+        const auto& [nx, ny, nz] = user_data.comp_dims[icmp];
+        const unsigned int offset = user_data.comp_offsets[icmp];
+        const unsigned int cube_size = nx * ny * nz;
+
+        for (unsigned int chemi = 0; chemi < user_data.num_chem; chemi++){
+            const unsigned int chem_offset = offset + chemi * cube_size;
+            const double* src = (*user_data.vars.d_chemass)(icmp)(chemi).memptr();
+
+            // memcpy then scale (avoids triple-nested loop overhead)
+            std::memcpy(fvec_data + chem_offset, src, cube_size * sizeof(double));
+            for (unsigned int i = 0; i < cube_size; i++){
+                fvec_data[chem_offset + i] *= inv_dt;
             }
         }
     }
@@ -204,29 +189,15 @@ int sedimentFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
     (*user_data.vars.d_sedmass_mobilized_dt).zeros();
     (*user_data.vars.d_sedmass_dt).zeros();
 
-    // Find sediment compartment (cached would be better, but keeping original logic)
-    unsigned int sed_icmp = 0;
-    const std::string& erod_transp_cmpt = user_data.wqconfig.TS_model->ErodTranspCmpt;
-    
-    for (unsigned int icmp = 0; icmp < user_data.num_comps; icmp++){
-        if (erod_transp_cmpt.compare(user_data.hostModelconfig.get_HydroComp_name_at(icmp)) == 0) {
-            sed_icmp = icmp;
-            break;
-        }
-    }
+    // OPTIMIZED #7: use cached sediment compartment index
+    const unsigned int sed_icmp = user_data.sed_icmp;
 
     const auto& [nx, ny, nz] = user_data.comp_dims[sed_icmp];
     auto& sedmass = *user_data.vars.sedmass;
+    const unsigned int sed_size = nx * ny * nz;
 
-    // Copy from SUNDIALS vector to sedmass
-    unsigned int idx = 0;
-    for (unsigned int ix = 0; ix < nx; ix++){
-        for (unsigned int iy = 0; iy < ny; iy++){
-            for (unsigned int iz = 0; iz < nz; iz++){
-                sedmass(ix, iy, iz) = uvec_data[idx++];
-            }
-        }
-    }
+    // OPTIMIZED #10: Copy from SUNDIALS vector to sedmass using memcpy
+    std::memcpy(sedmass.memptr(), uvec_data, sed_size * sizeof(double));
 
     // Process sediment transport calls
     for (const auto& [source, ix_s, iy_s, iz_s, recipient, ix_r, iy_r, iz_r, wflux_s2r, wmass_source, TS_type] 
@@ -241,17 +212,12 @@ int sedimentFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
                                           wflux_s2r, wmass_source, TS_type);
     }
 
-    // Copy derivatives to SUNDIALS f vector
-    const auto& d_sedmass_dt = *user_data.vars.d_sedmass_dt;
-    const auto& d_sedmass_mobilized_dt = *user_data.vars.d_sedmass_mobilized_dt;
-    
-    idx = 0;
-    for (unsigned int ix = 0; ix < nx; ix++){
-        for (unsigned int iy = 0; iy < ny; iy++){
-            for (unsigned int iz = 0; iz < nz; iz++){
-                fvec_data[idx++] = d_sedmass_dt(ix, iy, iz) + d_sedmass_mobilized_dt(ix, iy, iz);
-            }
-        }
+    // OPTIMIZED #10: Copy derivatives to SUNDIALS f vector using raw pointers
+    const double* dt_ptr = user_data.vars.d_sedmass_dt->memptr();
+    const double* mob_ptr = user_data.vars.d_sedmass_mobilized_dt->memptr();
+
+    for (unsigned int i = 0; i < sed_size; i++){
+        fvec_data[i] = dt_ptr[i] + mob_ptr[i];
     }
 
     return 0;
@@ -270,8 +236,8 @@ void OpenWQ_compute::Solve_with_CVode(
     OpenWQ_TS_model& OpenWQ_TS_model,
     OpenWQ_utils& OpenWQ_utils){
     
-    const unsigned int num_chem = 
-        ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+    // OPTIMIZED: use cached num_chem instead of string comparison
+    const unsigned int num_chem = OpenWQ_wqconfig.is_native_bgc_flex
         ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
         : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
 
@@ -289,7 +255,7 @@ void OpenWQ_compute::Solve_with_CVode(
         const unsigned int nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
         const unsigned int ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
         const unsigned int nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
-        
+
         comp_dims.emplace_back(nx, ny, nz);
         comp_offsets.push_back(system_size);
         system_size += nx * ny * nz * num_chem;
@@ -297,50 +263,39 @@ void OpenWQ_compute::Solve_with_CVode(
 
     // Initialize UserData with cached values
     UserData user_data = {
-        OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json, 
+        OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json,
         OpenWQ_output, OpenWQ_CH_model, sediment_calls, OpenWQ_TS_model, OpenWQ_utils,
-        num_chem, num_comps, OpenWQ_wqconfig.get_num_threads_requested(),
+        num_chem, num_comps,
+        static_cast<unsigned int>(OpenWQ_wqconfig.get_num_threads_requested()),
         OpenWQ_hostModelconfig.is_first_interaction_step(),
         OpenWQ_hostModelconfig.get_time_step(),
-        comp_dims, comp_offsets
+        comp_dims, comp_offsets,
+        0 // sed_icmp (not used for chemistry solve)
     };
 
     // Create SUNDIALS context and vector
     sundials::Context sunctx;
     N_Vector u = N_VNew_Serial(system_size, sunctx);
-    sunrealtype* udata = N_VGetArrayPointer(u);
+    sunrealtype* udata_ptr = N_VGetArrayPointer(u);
 
-    // Initialize state vector in parallel
-    #pragma omp parallel num_threads(user_data.num_threads)
-    {
-        #pragma omp for schedule(static)
-        for (unsigned int icmp = 0; icmp < num_comps; icmp++){
-            const auto& [nx, ny, nz] = comp_dims[icmp];
-            const unsigned int offset = comp_offsets[icmp];
+    // OPTIMIZED #10: Initialize state vector using memcpy where possible
+    for (unsigned int icmp = 0; icmp < num_comps; icmp++){
+        const auto& [nx, ny, nz] = comp_dims[icmp];
+        const unsigned int offset = comp_offsets[icmp];
+        const unsigned int cube_size = nx * ny * nz;
 
-            for (unsigned int chemi = 0; chemi < num_chem; chemi++){
-                const unsigned int chem_offset = offset + chemi * nx * ny * nz;
-                unsigned int local_idx = 0;
+        for (unsigned int chemi = 0; chemi < num_chem; chemi++){
+            const unsigned int chem_offset = offset + chemi * cube_size;
 
-                if (user_data.is_first_step) {
-                    const auto& d_chemass_ic = (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi);
-                    for (unsigned int ix = 0; ix < nx; ix++){
-                        for (unsigned int iy = 0; iy < ny; iy++){
-                            for (unsigned int iz = 0; iz < nz; iz++){
-                                udata[chem_offset + local_idx++] = d_chemass_ic(ix, iy, iz);
-                            }
-                        }
-                    }
-                } else {
-                    const auto& chemass = (*OpenWQ_vars.chemass)(icmp)(chemi);
-                    for (unsigned int ix = 0; ix < nx; ix++){
-                        for (unsigned int iy = 0; iy < ny; iy++){
-                            for (unsigned int iz = 0; iz < nz; iz++){
-                                udata[chem_offset + local_idx++] = chemass(ix, iy, iz);
-                            }
-                        }
-                    }
-                }
+            if (user_data.is_first_step) {
+                // Armadillo stores data contiguously in column-major order
+                std::memcpy(udata_ptr + chem_offset,
+                           (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi).memptr(),
+                           cube_size * sizeof(double));
+            } else {
+                std::memcpy(udata_ptr + chem_offset,
+                           (*OpenWQ_vars.chemass)(icmp)(chemi).memptr(),
+                           cube_size * sizeof(double));
             }
         }
     }
@@ -360,27 +315,17 @@ void OpenWQ_compute::Solve_with_CVode(
         CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
     }
 
-    // Extract solution in parallel
-    #pragma omp parallel num_threads(user_data.num_threads)
-    {
-        #pragma omp for schedule(static)
-        for (unsigned int icmp = 0; icmp < num_comps; icmp++){
-            const auto& [nx, ny, nz] = comp_dims[icmp];
-            const unsigned int offset = comp_offsets[icmp];
+    // OPTIMIZED #10: Extract solution using memcpy
+    for (unsigned int icmp = 0; icmp < num_comps; icmp++){
+        const auto& [nx, ny, nz] = comp_dims[icmp];
+        const unsigned int offset = comp_offsets[icmp];
+        const unsigned int cube_size = nx * ny * nz;
 
-            for (unsigned int chemi = 0; chemi < num_chem; chemi++){
-                auto& chemass = (*OpenWQ_vars.chemass)(icmp)(chemi);
-                const unsigned int chem_offset = offset + chemi * nx * ny * nz;
-                unsigned int local_idx = 0;
-
-                for (unsigned int ix = 0; ix < nx; ix++){
-                    for (unsigned int iy = 0; iy < ny; iy++){
-                        for (unsigned int iz = 0; iz < nz; iz++){
-                            chemass(ix, iy, iz) = udata[chem_offset + local_idx++];
-                        }
-                    }
-                }
-            }
+        for (unsigned int chemi = 0; chemi < num_chem; chemi++){
+            const unsigned int chem_offset = offset + chemi * cube_size;
+            std::memcpy((*OpenWQ_vars.chemass)(icmp)(chemi).memptr(),
+                       udata_ptr + chem_offset,
+                       cube_size * sizeof(double));
         }
     }
 
@@ -404,11 +349,11 @@ void OpenWQ_compute::Solve_with_CVode_Sediment(
     OpenWQ_utils& OpenWQ_utils){
     
     const unsigned int num_comps = OpenWQ_hostModelconfig.get_num_HydroComp();
-    
-    // Find sediment compartment
+
+    // OPTIMIZED #7: Find sediment compartment index once
     unsigned int sed_icmp = 0;
     const std::string& erod_transp_cmpt = OpenWQ_wqconfig.TS_model->ErodTranspCmpt;
-    
+
     for (unsigned int icmp = 0; icmp < num_comps; icmp++){
         if (erod_transp_cmpt.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)) == 0) {
             sed_icmp = icmp;
@@ -434,36 +379,29 @@ void OpenWQ_compute::Solve_with_CVode_Sediment(
 
     std::vector<unsigned int> comp_offsets; // Not used for sediment but needed for struct
 
-    const unsigned int num_chem = 
-        ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+    // OPTIMIZED: use cached flag instead of string comparison
+    const unsigned int num_chem = OpenWQ_wqconfig.is_native_bgc_flex
         ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
         : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
 
     UserData user_data = {
         OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_vars, OpenWQ_json,
         OpenWQ_output, OpenWQ_CH_model, sediment_calls, OpenWQ_TS_model, OpenWQ_utils,
-        num_chem, num_comps, OpenWQ_wqconfig.get_num_threads_requested(),
+        num_chem, num_comps,
+        static_cast<unsigned int>(OpenWQ_wqconfig.get_num_threads_requested()),
         OpenWQ_hostModelconfig.is_first_interaction_step(),
         OpenWQ_hostModelconfig.get_time_step(),
-        comp_dims, comp_offsets
+        comp_dims, comp_offsets,
+        sed_icmp  // OPTIMIZED #7: pass cached sediment compartment index
     };
 
     // Create SUNDIALS context and vector
     sundials::Context sunctx;
     N_Vector u = N_VNew_Serial(system_size, sunctx);
-    sunrealtype* udata = N_VGetArrayPointer(u);
+    sunrealtype* udata_ptr = N_VGetArrayPointer(u);
 
-    // Initialize state vector
-    const auto& sedmass = *OpenWQ_vars.sedmass;
-    unsigned int idx = 0;
-    
-    for (unsigned int ix = 0; ix < nx; ix++){
-        for (unsigned int iy = 0; iy < ny; iy++){
-            for (unsigned int iz = 0; iz < nz; iz++){
-                udata[idx++] = sedmass(ix, iy, iz);
-            }
-        }
-    }
+    // OPTIMIZED #10: Initialize state vector using memcpy
+    std::memcpy(udata_ptr, OpenWQ_vars.sedmass->memptr(), system_size * sizeof(double));
 
     // SUNDIALS/CVode setup
     void* cvode_mem = CVodeCreate(CV_ADAMS, sunctx);
@@ -480,17 +418,8 @@ void OpenWQ_compute::Solve_with_CVode_Sediment(
         CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
     }
 
-    // Extract solution
-    auto& sedmass_out = *OpenWQ_vars.sedmass;
-    idx = 0;
-    
-    for (unsigned int ix = 0; ix < nx; ix++){
-        for (unsigned int iy = 0; iy < ny; iy++){
-            for (unsigned int iz = 0; iz < nz; iz++){
-                sedmass_out(ix, iy, iz) = udata[idx++];
-            }
-        }
-    }
+    // OPTIMIZED #10: Extract solution using memcpy
+    std::memcpy(OpenWQ_vars.sedmass->memptr(), udata_ptr, system_size * sizeof(double));
 
     // Cleanup
     N_VDestroy(u);

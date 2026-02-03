@@ -64,8 +64,8 @@ void OpenWQ_couplercalls::RunSpaceStep(
     // Mass transport with water (mobile material only)
     // #################################################
 
-    // Run TD_model model
-    if ((OpenWQ_wqconfig.TD_model->TD_module).compare("NONE") != 0) {
+    // OPTIMIZED: use cached bool instead of string comparison
+    if (OpenWQ_wqconfig.is_TD_enabled) {
 
         OpenWQ_TD_model.TD_driver_run(
             OpenWQ_wqconfig,
@@ -77,8 +77,8 @@ void OpenWQ_couplercalls::RunSpaceStep(
     
     }
 
-    // Run LE_model model
-    if ((OpenWQ_wqconfig.LE_model->LE_module).compare("NONE") != 0) {
+    // OPTIMIZED: use cached bool instead of string comparison
+    if (OpenWQ_wqconfig.is_LE_enabled) {
 
         OpenWQ_LE_model.LE_driver_run(
             OpenWQ_hostModelconfig,
@@ -91,9 +91,9 @@ void OpenWQ_couplercalls::RunSpaceStep(
 
     }
 
-    // Run TS_model model  
-    if ((OpenWQ_wqconfig.TS_model->TS_module).compare("NONE") != 0) {
-        
+    // OPTIMIZED: use cached bool instead of string comparison
+    if (OpenWQ_wqconfig.is_TS_enabled) {
+
         OpenWQ_compute.sediment_calls.push_back(std::make_tuple(source, ix_s, iy_s, iz_s, recipient, ix_r, iy_r, iz_r, wflux_s2r, wmass_source, "TS_type_LE"));
 
         OpenWQ_TS_model.TS_driver_run(
@@ -132,7 +132,7 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
     OpenWQ_compute& OpenWQ_compute,
     OpenWQ_output& OpenWQ_output,
     time_t simtime, // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
-    std::string source_EWF_name,                    // name defined in HydroExtFlux (in couplecalls)
+    const std::string& source_EWF_name,             // OPTIMIZED: pass by const ref instead of value
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     const double wflux_s2r){
     
@@ -147,8 +147,8 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
         recipient, ix_r, iy_r, iz_r,
         wflux_s2r);
 
-    // Run TS_model model  
-    if ((OpenWQ_wqconfig.TS_model->TS_module).compare("NONE") != 0) {
+    // OPTIMIZED: use cached bool instead of string comparison
+    if (OpenWQ_wqconfig.is_TS_enabled) {
 
         OpenWQ_compute.sediment_calls.push_back(std::make_tuple(0, 0, 0, 0, recipient, ix_r, iy_r, iz_r, wflux_s2r, 0, "TS_type_EWF"));
 

@@ -31,8 +31,8 @@ void OpenWQ_CH_model::CH_driver_run(
     // Local variables
     std::string msg_string; // error/warning message
     
-     // NATIVE Bioogeochemical model
-    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0){
+     // OPTIMIZED: use cached bool instead of string comparison
+    if (OpenWQ_wqconfig.is_native_bgc_flex){
 
         // Loop over number of compartments
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
@@ -51,7 +51,7 @@ void OpenWQ_CH_model::CH_driver_run(
         OpenWQ_wqconfig.BGC_Transform_print_errmsg = false;
         OpenWQ_wqconfig.invalid_bgc_entry_errmsg = false;
 
-    } else if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("PHREEQC") == 0){
+    } else if (!OpenWQ_wqconfig.is_native_bgc_flex){
             phreeqc_run( // calls PHREEQC-RM functions
                 OpenWQ_json,
                 OpenWQ_vars,

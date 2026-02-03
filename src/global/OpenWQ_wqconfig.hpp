@@ -20,6 +20,7 @@
 #include <memory>
 #include "exprtk.hpp"
 #include <string>
+#include <unordered_map>
 #include <sys/stat.h>
 #include "PhreeqcRM.h"
 
@@ -245,6 +246,25 @@ class OpenWQ_wqconfig
         bool readSet_print_errmsg = true;
         bool BGC_Transform_print_errmsg = true;
         bool invalid_bgc_entry_errmsg = true;
+
+        // ########################################
+        // PERFORMANCE: Cached flags to avoid repeated string comparisons at runtime
+        // Call cache_runtime_flags() after all modules are configured
+        // ########################################
+        bool is_native_bgc_flex = false;    // CH_model->BGC_module == "NATIVE_BGC_FLEX"
+        bool is_TD_enabled = false;         // TD_model->TD_module != "NONE"
+        bool is_LE_enabled = false;         // LE_model->LE_module != "NONE"
+        bool is_TS_enabled = false;         // TS_model->TS_module != "NONE"
+        bool is_TD_advdisp = false;         // TD_model->TD_module == "OPENWQ_NATIVE_TD_ADVDISP"
+        bool is_TD_adv = false;             // TD_model->TD_module == "NATIVE_TD_ADV"
+        unsigned int cached_num_mobile_species = 0;
+        const std::vector<unsigned int>* cached_mobile_species_ptr = nullptr;
+
+        // Pre-built BGC lookup: cycling framework name -> vector of indices into BGCexpressions_info
+        std::unordered_map<std::string, std::vector<unsigned int>> bgc_cycle_to_transf_indices;
+
+        void cache_runtime_flags();
+        void build_bgc_lookup();
         
         // ########################################
         // MODULES

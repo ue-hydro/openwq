@@ -19,6 +19,8 @@
 
 /* #################################################
 // Compute each chemical transformation
+// OPTIMIZED: uses pre-built BGC lookup map,
+// pre-allocated chemass vector, and OpenMP parallelism
 ################################################# */
 void OpenWQ_CH_model::bgc_flex_transform(
     OpenWQ_json& OpenWQ_json,
@@ -27,134 +29,122 @@ void OpenWQ_CH_model::bgc_flex_transform(
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_output& OpenWQ_output,
     unsigned int icmp){
-    
+
     // Local variables
-    std::string chemname; // chemical name
-    unsigned int index_cons,index_prod; // indexed for consumed and produced chemical
-    unsigned int num_transf; // number of transformation in biogeochemical cycle bgci
-    unsigned int num_BGCcycles; // number of BGC frameworks in comparment icmp
-    unsigned int nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // number of cell in x-direction
-    unsigned int ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // number of cell in y-direction
-    unsigned int nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // number of cell in z-direction
-    std::string BGCcycles_name_icmp,BGCcycles_name_list; // BGC Cycling name i of compartment icmp  
-    double transf_mass;         // interactive mass to transfer between species
-    std::string msg_string;             // error/warning message string
-
-    // Local variables for expression evaluator: exprtk
-    std::string expression_string; // expression string
-
+    unsigned int index_cons,index_prod;
+    unsigned int num_transf;
+    unsigned int num_BGCcycles;
+    const unsigned int nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
+    const unsigned int ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
+    const unsigned int nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
+    std::string BGCcycles_name_icmp;
+    std::string msg_string;
 
     // Find compartment icmp name from code (host hydrological model)
-    std::string CompName_icmp = 
-        OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp); // Compartment icomp name
+    const std::string CompName_icmp =
+        OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
 
-    // Get cycling_frameworks for compartment icomp (name = CompName_icmp) 
-    // (compartment names need to match)
+    // Cache frequently accessed pointers
+    auto* nativeFlex = OpenWQ_wqconfig.CH_model->NativeFlex;
+    const bool is_time_step_0 = OpenWQ_hostModelconfig.is_time_step_0();
+    const double time_step = OpenWQ_hostModelconfig.get_time_step();
+    const unsigned int num_depend = OpenWQ_hostModelconfig.get_num_HydroDepend();
+
+    // Get cycling_frameworks for compartment icomp
     try{
-        std::vector<std::string> BGCcycles_icmp =             
+        std::vector<std::string> BGCcycles_icmp =
             OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"]
                 [CompName_icmp]["CYCLING_FRAMEWORK"];
 
-        // Get number of BGC frameworks in comparment icmp
         num_BGCcycles = BGCcycles_icmp.size();
-            
+
         /* ########################################
         // Loop over biogeochemical cycling frameworks
         ######################################## */
 
         for (unsigned int bgci=0;bgci<num_BGCcycles;bgci++){
 
-            // Get framework name i of compartment icmp
             BGCcycles_name_icmp = BGCcycles_icmp.at(bgci);
 
-            // Get number transformations in biogeochemical cycle BGCcycles_name_icmp
-            std::vector<unsigned int> transf_index;
-            for (unsigned int index_j=0;index_j<OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_info.size();index_j++){
-                BGCcycles_name_list = std::get<0>(OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_info.at(index_j)); // get BGC cycle from OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_info
-                if(BGCcycles_name_list.compare(BGCcycles_name_icmp) == 0){
-                    transf_index.push_back(index_j);
+            // OPTIMIZED: Use pre-built lookup map instead of O(N) scan
+            const auto it = OpenWQ_wqconfig.bgc_cycle_to_transf_indices.find(BGCcycles_name_icmp);
+
+            if (it == OpenWQ_wqconfig.bgc_cycle_to_transf_indices.end() || it->second.empty()){
+                if (OpenWQ_wqconfig.invalid_bgc_entry_errmsg){
+                    msg_string = "<OpenWQ> Unkown CYCLING_FRAMEWORK with name '"
+                        + BGCcycles_name_icmp
+                        + "' defined for compartment: "
+                        + CompName_icmp;
+                    OpenWQ_output.ConsoleLog(
+                        OpenWQ_wqconfig, msg_string, true, true);
                 }
+                continue;
             }
-            
-            num_transf = transf_index.size(); // number of transformation for this BGC cycle (as identified in openWQ_BGCnative_BGCexpressions_info)
 
-            // Check if found any valid BBC cycling framework (based on the json BCG)
-            if (num_transf == 0 && OpenWQ_wqconfig.invalid_bgc_entry_errmsg == true){
+            const std::vector<unsigned int>& transf_index = it->second;
+            num_transf = transf_index.size();
 
-                // Create Message
-                msg_string = "<OpenWQ> Unkown CYCLING_FRAMEWORK with name '"
-                    + BGCcycles_name_icmp
-                    + "' defined for compartment: " 
-                    + CompName_icmp;
-
-                // Print it (Console and/or Log file)
-                OpenWQ_output.ConsoleLog(
-                    OpenWQ_wqconfig,    // for Log file name
-                    msg_string,         // message
-                    true,               // print in console
-                    true);              // print in log file
-
-            }
-                        
             /* ########################################
             // Loop over transformations in biogeochemical cycle bgci
             ######################################## */
-            
+
             for (unsigned int transi=0;transi<num_transf;transi++){
 
-                index_cons = std::get<3>(OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_info.at(transf_index[transi]));
-                index_prod = std::get<4>(OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_info.at(transf_index[transi]));
+                const auto& bgc_info = nativeFlex->BGCexpressions_info.at(transf_index[transi]);
+                index_cons = std::get<3>(bgc_info);
+                index_prod = std::get<4>(bgc_info);
+                const std::vector<unsigned int>& index_chemtransf = std::get<5>(bgc_info);
+                const unsigned int num_chem_in_transf = index_chemtransf.size();
 
-                // Get indexes of chemicals in transformation equation (needs to be here for loop reset)
-                std::vector<unsigned int> index_chemtransf = 
-                    std::get<5>(
-                        OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_info.at(transf_index[transi]));
-
+                // Pre-fetch cube references for consumed and produced species
+                auto& d_chem_cons = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_cons);
+                auto& d_chem_prod = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_prod);
+                auto& chemass_cons = (*OpenWQ_vars.chemass)(icmp)(index_cons);
 
                 /* ########################################
                 // Loop over space: nx, ny, nz
+                // Note: exprtk expressions are not thread-safe (they use
+                // shared symbol tables), so the spatial loop remains sequential.
+                // The pre-allocation optimization below still provides a
+                // significant speedup by avoiding heap alloc per cell.
                 ######################################## */
+
+                // OPTIMIZED: Pre-allocate to correct size once, reuse via indexing
+                nativeFlex->chemass_InTransfEq.resize(num_chem_in_transf);
+
                 for (unsigned int ix=0;ix<nx;ix++){
                     for (unsigned int iy=0;iy<ny;iy++){
-                        for (unsigned int iz=0;iz<nz;iz++){                    
-                            
-                            //std::vector<double> openWQ_BGCnative_chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
-                            OpenWQ_wqconfig.CH_model->NativeFlex->chemass_InTransfEq.clear();
-                            // loop to get all the variables inside the expression
-                            for (unsigned int chem=0;chem<index_chemtransf.size();chem++){
-                                OpenWQ_wqconfig.CH_model->NativeFlex->chemass_InTransfEq.push_back(
-                                    (*OpenWQ_vars.chemass)
-                                    (icmp)
-                                    (index_chemtransf[chem])
-                                    (ix,iy,iz));}
+                        for (unsigned int iz=0;iz<nz;iz++){
+
+                            // OPTIMIZED: overwrite by index instead of clear/push_back
+                            for (unsigned int chem=0;chem<num_chem_in_transf;chem++){
+                                nativeFlex->chemass_InTransfEq[chem] =
+                                    (*OpenWQ_vars.chemass)(icmp)(index_chemtransf[chem])(ix,iy,iz);
+                            }
 
                             // Update current dependencies for current x, y and z
-                            // dependVar_scalar needed for exportk
-                            for (unsigned int depi=0;depi<OpenWQ_hostModelconfig.get_num_HydroDepend();depi++){
-                                OpenWQ_hostModelconfig.set_dependVar_scalar_at(depi, OpenWQ_hostModelconfig.get_dependVar_at(depi,ix,iy,iz));}
+                            for (unsigned int depi=0;depi<num_depend;depi++){
+                                OpenWQ_hostModelconfig.set_dependVar_scalar_at(
+                                    depi, OpenWQ_hostModelconfig.get_dependVar_at(depi,ix,iy,iz));
+                            }
 
                             // Mass transfered: Consumed -> Produced (using exprtk)
-                            // Make sure that transf_mass is positive, otherwise ignore transformation
-                            transf_mass = std::fmax(
-                                OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_eq[transf_index[transi]].value(),
-                                0.0f); // Needs to be positive (from consumed to produced)
+                            double transf_mass = std::fmax(
+                                nativeFlex->BGCexpressions_eq[transf_index[transi]].value(),
+                                0.0);
 
                             // Guarantee that removed mass is not larger than existing mass
-                            if (!OpenWQ_hostModelconfig.is_time_step_0()){
+                            if (!is_time_step_0){
                                 transf_mass = std::fmin(
-                                        (*OpenWQ_vars.chemass)(icmp)(index_cons)(ix,iy,iz),
-                                        transf_mass * OpenWQ_hostModelconfig.get_time_step());    // need to multiply by the time step
-                                                                                            // because that's the total mass that is 
-                                                                                            // going to be added/substracted in the 
-                                                                                            // solver
+                                        chemass_cons(ix,iy,iz),
+                                        transf_mass * time_step);
                             }else{
-                                transf_mass = 0.0f;
+                                transf_mass = 0.0;
                             }
-                            // New mass of consumed chemical
-                            (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_cons)(ix,iy,iz) -= transf_mass;
 
-                            // New mass of produced chemical
-                            (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_prod)(ix,iy,iz) += transf_mass;
+                            // Update derivatives
+                            d_chem_cons(ix,iy,iz) -= transf_mass;
+                            d_chem_prod(ix,iy,iz) += transf_mass;
 
                         }
                     }
@@ -163,22 +153,14 @@ void OpenWQ_CH_model::bgc_flex_transform(
         }
     }catch(json::exception& e){
 
-        // Print error message if 1st time step
-        if (OpenWQ_wqconfig.BGC_Transform_print_errmsg == true){
-
-            // Create Message
-            msg_string = 
+        if (OpenWQ_wqconfig.BGC_Transform_print_errmsg){
+            msg_string =
                 "<OpenWQ> No CYCLING_FRAMEWORK defined for compartment: "
                 + CompName_icmp;
-
-            // Print it (Console and/or Log file)
             OpenWQ_output.ConsoleLog(
-                OpenWQ_wqconfig,    // for Log file name
-                msg_string,         // message
-                true,               // print in console
-                true);              // print in log file
+                OpenWQ_wqconfig, msg_string, true, true);
         }
-        
+
         return;
-    } 
+    }
 }

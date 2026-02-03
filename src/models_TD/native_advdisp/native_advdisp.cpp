@@ -22,63 +22,51 @@
 /* #################################################
 // Mass transport
 // Advection & Dispersion
+// OPTIMIZED: cached flags, pre-fetched refs, pre-computed ratio
 ################################################# */
 void OpenWQ_TD_model::AdvDisp(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     const int source, const int ix_s, const int iy_s, const int iz_s,
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
-    double wflux_s2r, 
+    double wflux_s2r,
     double wmass_source){
-
-    double chemass_flux_adv;
-    unsigned int ichem_mob;
 
     // Return if no flux: wflux_s2r == 0
     if(wflux_s2r == 0.0f){return;}
 
-    // CHANGE THE LINE BELOW: see my notes -> there should be no icmp because all compartments should have the same number of mobile species
-    unsigned int numspec;
-    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
-        numspec = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.size();
-    } else {
-        numspec = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.size();
-    }
+    // OPTIMIZED: use cached values instead of string comparisons
+    const unsigned int numspec = OpenWQ_wqconfig.cached_num_mobile_species;
+    const std::vector<unsigned int>& mobile_species = *OpenWQ_wqconfig.cached_mobile_species_ptr;
 
+    // OPTIMIZED: pre-compute concentration factor once
+    const double conc_factor = wflux_s2r / wmass_source;
+
+    // OPTIMIZED: pre-fetch field references to avoid repeated pointer dereferencing
+    auto& chemass_source = (*OpenWQ_vars.chemass)(source);
+    auto& d_transp_source = (*OpenWQ_vars.d_chemass_dt_transp)(source);
 
     // Loop for mobile chemical species
     for (unsigned int chemi=0;chemi<numspec;chemi++){
 
-        // mobile chemical species index
-        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
-            ichem_mob = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species[chemi];
-        } else {
-            ichem_mob = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species[chemi];
-        }
+        const unsigned int ichem_mob = mobile_species[chemi];
 
         // Chemical mass flux between source and recipient (Advection)
-        chemass_flux_adv = 
-            wflux_s2r
-            * (*OpenWQ_vars.chemass)(source)(ichem_mob)(ix_s,iy_s,iz_s) // concentration calculation
-             / wmass_source;
-        
+        const double chemass_flux_adv = conc_factor * chemass_source(ichem_mob)(ix_s,iy_s,iz_s);
+
         // dcdy(xi,yi,t)=(c(xi,yi,t-1)-c(xi,yi-1,t-1))/delty;
-        // dc2dy2(xi,yi,t)=((c(xi,yi+1,t-1)-c(xi,yi,t-1))/delty-(c(xi,yi,t-1)-c(xi,yi-1,t-1))/delty)/(delty);         
+        // dc2dy2(xi,yi,t)=((c(xi,yi+1,t-1)-c(xi,yi,t-1))/delty-(c(xi,yi,t-1)-c(xi,yi-1,t-1))/delty)/(delty);
         // dc2dx2(xi,yi,t)=((c(xi+1,yi,t-1)-c(xi,yi,t-1))/deltx-(c(xi,yi,t-1)-c(xi-1,yi,t-1))/deltx)/(deltx);
         // dcdt(xi,yi,t)=-U*dcdy(xi,yi,t)+Di(xi,yi,t)*(dc2dx2(xi,yi,t)+dc2dy2(xi,yi,t));
 
-        //##########################################
-        // Set derivative for source and recipient 
-        
-        // Remove Chemical mass flux from SOURCE 
-        (*OpenWQ_vars.d_chemass_dt_transp)(source)(ichem_mob)(ix_s,iy_s,iz_s) 
-            -= chemass_flux_adv;
+        // Remove Chemical mass flux from SOURCE
+        d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_adv;
 
         // Add Chemical mass flux to RECIPIENT
-        // if recipient == -1, then  it's an OUT-flux (loss from system)
+        // if recipient == -1, then it's an OUT-flux (loss from system)
         if (recipient == -1) continue;
-        (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r) 
+        (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
             += chemass_flux_adv;
     }
-                
+
 }

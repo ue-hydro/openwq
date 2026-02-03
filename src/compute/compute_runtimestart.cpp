@@ -31,7 +31,7 @@ void OpenWQ_compute::Reset_Deriv(
     bool cum_deriv_flag){
 
     const unsigned int num_chem = 
-        ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) 
+        OpenWQ_wqconfig.is_native_bgc_flex 
         ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
         : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
 
@@ -95,7 +95,7 @@ void OpenWQ_compute::Reset_EWFconc(
     OpenWQ_vars& OpenWQ_vars){
 
     const unsigned int num_chem = 
-        ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+        OpenWQ_wqconfig.is_native_bgc_flex
         ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
         : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
 

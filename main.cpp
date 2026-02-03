@@ -75,9 +75,16 @@ int main(int argc, char* argv[])
 
     // #######################################
     // 1.1) Pass Location of Masterfile
-    // #######################################
-    // OpenWQ_wqconfig.OpenWQ_masterjson = "/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/6_Projects/1_GWF/2_WIP/code/code_crhm/build/Case_Studies/big_creek_openwq/openWQ_master.json";
-    OpenWQ_wqconfig.set_OpenWQ_masterjson("/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/6_Projects/1_GWF/2_WIP/code/code_crhm/build/Case_Studies/big_creek_openwq/openWQ_master.json");
+    // Use command-line argument or environment variable if provided,
+    // otherwise fall back to the hard-coded default path.
+    const char* env_master = getenv("OPENWQ_MASTER_JSON");
+    if (argc > 1 && argv[1] != nullptr) {
+        OpenWQ_wqconfig.set_OpenWQ_masterjson(std::string(argv[1]));
+    } else if (env_master != nullptr) {
+        OpenWQ_wqconfig.set_OpenWQ_masterjson(std::string(env_master));
+    } else {
+        OpenWQ_wqconfig.set_OpenWQ_masterjson("/Users/diogocosta/Library/CloudStorage/OneDrive-impactblue-scientific.com/6_Projects/1_GWF/2_WIP/code/code_crhm/build/Case_Studies/big_creek_openwq/openWQ_master.json");
+    }
     // #######################################
     // 1.2) COUPLER CODE 
     // Characterize the host model domains

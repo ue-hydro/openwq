@@ -33,7 +33,7 @@
 # 5.1) Create Makefile (set DHOST_MODEL_TARGET and DCMAKE_BUILD_TYPE)
 #      Example: cmake -DHOST_MODEL_TARGET=summa_openwq -DCMAKE_BUILD_TYPE=debug .; 
 # 5.2) Compile the model: make -j 2
-# Note: Example of Step 5 in one line: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq -DCMAKE_BUILD_TYPE=debug .; make -j 2; rm *.mod
+# Note: Example of Step 5 in one line: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq -DCMAKE_BUILD_TYPE=fast .; make -j 2; rm *.mod
 # 5.3) The executable will be created in the "bin" folder
 
 ##############################
@@ -176,7 +176,10 @@ IF("${COMPILE_MODE}" STREQUAL "debug")
     SET(CMAKE_CXX_FLAGS "-g -Wall -pedantic")
 ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
     FIND_PACKAGE(OpenMP)
-    SET(CMAKE_CXX_FLAGS "-O3 -Wall -pedantic ${OpenMP_CXX_FLAGS}")
+    # OPTIMIZED #15: Added -march=native (use native SIMD: AVX2/AVX-512),
+    # -DARMA_NO_DEBUG (disable Armadillo bounds checking),
+    # -DNDEBUG (disable asserts), -funroll-loops
+    SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops -Wall -pedantic ${OpenMP_CXX_FLAGS}")
 ENDIF()
 
 IF("${COMPILE_TARGET}" STREQUAL "openwq")
@@ -686,7 +689,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                         SET(CMAKE_CXX_FLAGS "-g3 -O0 -Wall -pedantic")
                 ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
                         SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp")
-                        SET(CMAKE_CXX_FLAGS "-O3 ${OpenMP_CXX_FLAGS}")
+                        # OPTIMIZED #15: Added -march=native, -DARMA_NO_DEBUG, -DNDEBUG, -funroll-loops
+                        SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops ${OpenMP_CXX_FLAGS}")
                         FIND_PACKAGE(OpenMP)
                 ENDIF()
 
@@ -918,7 +922,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_openwq")
                         SET(CMAKE_CXX_FLAGS "-g3 -O0 -Wall -pedantic")
                 ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
                         SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp")
-                        SET(CMAKE_CXX_FLAGS "-O3 ${OpenMP_CXX_FLAGS}")
+                        # OPTIMIZED #15: Added -march=native, -DARMA_NO_DEBUG, -DNDEBUG, -funroll-loops
+                        SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops ${OpenMP_CXX_FLAGS}")
                         FIND_PACKAGE(OpenMP)
                 ENDIF()
 
@@ -1193,7 +1198,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
                         SET(CMAKE_CXX_FLAGS "-g3 -O0 -Wall -pedantic")
                 ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
                         SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp")
-                        SET(CMAKE_CXX_FLAGS "-O3 ${OpenMP_CXX_FLAGS}")
+                        # OPTIMIZED #15: Added -march=native, -DARMA_NO_DEBUG, -DNDEBUG, -funroll-loops
+                        SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops ${OpenMP_CXX_FLAGS}")
                         FIND_PACKAGE(OpenMP)
                 ENDIF()
 
@@ -1317,7 +1323,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "fluxos_openwq")
                 IF("${COMPILE_MODE}" STREQUAL "debug")
                         SET(CMAKE_CXX_FLAGS "-g3 -O0 -Wall -pedantic")
                 ELSEIF("${COMPILE_MODE}" STREQUAL "fast")
-                        SET(CMAKE_CXX_FLAGS "-O3 ${OpenMP_CXX_FLAGS}")
+                        # OPTIMIZED #15: Added -march=native, -DARMA_NO_DEBUG, -DNDEBUG, -funroll-loops
+                        SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops ${OpenMP_CXX_FLAGS}")
                         FIND_PACKAGE(OpenMP)
                 ENDIF()
 

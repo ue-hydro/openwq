@@ -116,4 +116,11 @@ void OpenWQ_couplercalls::InitialConfig(
         OpenWQ_utils,
         OpenWQ_output);
 
+    // ##################################
+    // PERFORMANCE: Cache runtime flags and build lookup tables
+    // Must be called after all modules are configured
+    // ##################################
+    OpenWQ_wqconfig.cache_runtime_flags();
+    OpenWQ_wqconfig.build_bgc_lookup();
+
 }

@@ -25,11 +25,8 @@ void OpenWQ_TD_model::TD_driver_run(
     const double wflux_s2r, 
     const double wmass_source){
     
-    // Local variables
-    std::string msg_string;
-
-    // if TD_module = OPENWQ_NATIVE_TD_ADVDISP
-    if ((OpenWQ_wqconfig.TD_model->TD_module).compare("OPENWQ_NATIVE_TD_ADVDISP") == 0)
+    // OPTIMIZED: use cached bools instead of string comparisons
+    if (OpenWQ_wqconfig.is_TD_advdisp)
     {
         AdvDisp(
             OpenWQ_vars, OpenWQ_wqconfig,
@@ -37,8 +34,7 @@ void OpenWQ_TD_model::TD_driver_run(
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, wmass_source);
 
-    // if TD_module = NATIVE_TD_ADV
-    }else if ((OpenWQ_wqconfig.TD_model->TD_module).compare("NATIVE_TD_ADV") == 0)
+    }else if (OpenWQ_wqconfig.is_TD_adv)
     {
         Adv(
             OpenWQ_vars, OpenWQ_wqconfig,

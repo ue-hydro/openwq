@@ -85,12 +85,12 @@ class OpenWQ_TD_model{
 
         // INPUT FROM EXTERNAL FORCES
         void EWF_flux_driver_run(
-            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig, 
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output,
-            std::string source_EWF_name,
+            const std::string& source_EWF_name,  // OPTIMIZED: pass by const ref
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
             const double wflux_s2r);
 

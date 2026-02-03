@@ -29,8 +29,8 @@ void OpenWQ_compute::Solve_with_BE(
     OpenWQ_output& OpenWQ_output,
     OpenWQ_CH_model& OpenWQ_CH_model){
 
-    const unsigned int num_chem = 
-        ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+    // OPTIMIZED: use cached flag instead of string comparison
+    const unsigned int num_chem = OpenWQ_wqconfig.is_native_bgc_flex
         ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
         : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
 

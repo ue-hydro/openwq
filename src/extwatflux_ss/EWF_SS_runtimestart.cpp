@@ -15,6 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "headerfile_EWF_SS.hpp"
+#include <algorithm> // for std::upper_bound (OPTIMIZED #11)
 
 
 /* #################################################
@@ -66,8 +67,8 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
     // Get number of rows in FORC
     const unsigned int num_rowdata = (*array_FORC).n_rows;
 
-    const unsigned int num_chem = 
-        ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+    // OPTIMIZED: use cached flag instead of string comparison
+    const unsigned int num_chem = OpenWQ_wqconfig.is_native_bgc_flex
         ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
         : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
 
@@ -314,16 +315,19 @@ void OpenWQ_extwatflux_ss::CheckApply_EWF_h5(
             (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_time)[reqi].size();
 
         /* ########################################
-        // Find timestamp at or above current simTime
+        // OPTIMIZED #11: Find timestamp at or above current simTime using binary search
         ######################################## */
 
-        for (unsigned long long tStamp = 0; tStamp < num_timeStamps; tStamp++){
+        const auto& time_vec = (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_time)[reqi];
+        // std::upper_bound finds first element > simTime (timestamps are sorted)
+        auto it = std::upper_bound(time_vec.begin(), time_vec.end(), simTime);
 
-            const time_t h5EWF_time_after = 
-                (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_time)[reqi][tStamp];
+        if (it != time_vec.end()){
+            const unsigned long long tStamp = std::distance(time_vec.begin(), it);
+            const time_t h5EWF_time_after = *it;
 
-            // If at next timestep
-            if (h5EWF_time_after > simTime){
+            // Equivalent to original: found first timestamp > simTime
+            {
 
                 // Get timestamps for interpolation
                 time_t h5EWF_time_before;
@@ -396,7 +400,6 @@ void OpenWQ_extwatflux_ss::CheckApply_EWF_h5(
                         h5Conc_chemi_interp);
                 }
 
-                break; // Found timestamp, exit loop
             }
         }
     }
@@ -438,8 +441,7 @@ void OpenWQ_extwatflux_ss::Apply_Source(
 
     } catch (...) {
 
-        std::string chemname = 
-            ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+        std::string chemname = OpenWQ_wqconfig.is_native_bgc_flex
             ? (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi]
             : (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list)[chemi];
 
@@ -490,14 +492,17 @@ void OpenWQ_extwatflux_ss::Apply_Sink(
             arma::span(spY_min, spY_max),
             arma::span(spZ_min, spZ_max)) -= ss_data_json;
 
-        // Replace negative values with zero
-        (*OpenWQ_vars.d_chemass_ss)(cmpi)(chemi).transform(
+        // OPTIMIZED #14: Replace negative values with zero only in the modified sub-region
+        // instead of transforming the entire cube
+        (*OpenWQ_vars.d_chemass_ss)(cmpi)(chemi)(
+            arma::span(spX_min, spX_max),
+            arma::span(spY_min, spY_max),
+            arma::span(spZ_min, spZ_max)).transform(
             [](double val) { return (val < 0.0) ? 0.0 : val; });
 
     } catch (...) {
 
-        std::string chemname =
-            ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
+        std::string chemname = OpenWQ_wqconfig.is_native_bgc_flex
             ? (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi]
             : (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list)[chemi];
 

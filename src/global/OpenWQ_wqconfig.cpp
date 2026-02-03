@@ -405,9 +405,41 @@ int OpenWQ_wqconfig::TS_model_::HypeHVB_::get_sediment_compartment()
 std::string OpenWQ_wqconfig::TS_model_::HypeHVB_::get_data_format()
 {return std::get<4>(this->info_vector);}
 
+/***********************************************
+ * Performance: cache runtime flags to avoid
+ * repeated string comparisons in hot paths
+************************************************/
+void OpenWQ_wqconfig::cache_runtime_flags()
+{
+    is_native_bgc_flex = (CH_model->BGC_module.compare("NATIVE_BGC_FLEX") == 0);
+    is_TD_enabled = (TD_model->TD_module.compare("NONE") != 0);
+    is_LE_enabled = (LE_model->LE_module.compare("NONE") != 0);
+    is_TS_enabled = (TS_model->TS_module.compare("NONE") != 0);
+    is_TD_advdisp = (TD_model->TD_module.compare("OPENWQ_NATIVE_TD_ADVDISP") == 0);
+    is_TD_adv = (TD_model->TD_module.compare("NATIVE_TD_ADV") == 0);
 
-        
+    if (is_native_bgc_flex) {
+        cached_num_mobile_species = CH_model->NativeFlex->mobile_species.size();
+        cached_mobile_species_ptr = &(CH_model->NativeFlex->mobile_species);
+    } else {
+        cached_num_mobile_species = CH_model->PHREEQC->mobile_species.size();
+        cached_mobile_species_ptr = &(CH_model->PHREEQC->mobile_species);
+    }
+}
 
+/***********************************************
+ * Performance: build BGC cycle name -> transformation
+ * index lookup to avoid O(N) scan per compartment
+************************************************/
+void OpenWQ_wqconfig::build_bgc_lookup()
+{
+    bgc_cycle_to_transf_indices.clear();
+    if (!is_native_bgc_flex) return;
 
+    for (unsigned int j = 0; j < CH_model->NativeFlex->BGCexpressions_info.size(); j++) {
+        const std::string& cycle_name = std::get<0>(CH_model->NativeFlex->BGCexpressions_info[j]);
+        bgc_cycle_to_transf_indices[cycle_name].push_back(j);
+    }
+}
 
 

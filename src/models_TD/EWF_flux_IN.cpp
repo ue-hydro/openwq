@@ -31,7 +31,7 @@ void OpenWQ_TD_model::EWF_flux_driver_run(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output,
-    std::string source_EWF_name,
+    const std::string& source_EWF_name,  // OPTIMIZED: pass by const ref
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     const double wflux_s2r){ // water flux (m3/s)
     
@@ -45,22 +45,15 @@ void OpenWQ_TD_model::EWF_flux_driver_run(
         OpenWQ_hostModelconfig.get_HydroExtFlux_names(),
         source_EWF_name);
 
-    unsigned int numspec;
-    if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
-        numspec = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.size();
-    } else {
-        numspec = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.size();
-    }
+    // OPTIMIZED: use cached values instead of string comparisons
+    const unsigned int numspec = OpenWQ_wqconfig.cached_num_mobile_species;
+    const std::vector<unsigned int>& mobile_species = *OpenWQ_wqconfig.cached_mobile_species_ptr;
 
     // Loop over mobile chemical species
     for (unsigned int chemi=0;chemi<numspec;chemi++){
 
         // mobile chemical species index
-        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
-            ichem_mob = OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species[chemi];
-        } else {
-            ichem_mob = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species[chemi];
-        }
+        ichem_mob = mobile_species[chemi];
 
         // Get appropriate chemi concentraton for this ewf and domain ix, iy, iz
         ewf_conc_chemi = (*OpenWQ_vars.ewf_conc)
