@@ -19,11 +19,11 @@ import sphinx_rtd_theme
 # -- Project information -----------------------------------------------------
 
 project = 'OpenWQ'
-copyright = '2022, Diogo Costa'
-author = 'Diogo Costa'
+copyright = '2022-2025, Diogo Costa and contributors'
+author = 'Diogo Costa and contributors'
 
 # The full version, including alpha/beta/rc tags
-release = '0.0.2'
+release = '1.0.0'
 
 
 # -- General configuration ---------------------------------------------------
@@ -32,7 +32,8 @@ release = '0.0.2'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx_rtd_theme'
+    'sphinx_rtd_theme',
+    'sphinx.ext.mathjax',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

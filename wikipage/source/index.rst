@@ -11,6 +11,17 @@ It was designed as a coupler for integration with existing hydro-models to enabl
 OpenWQ adapts to the host hydro-model spatial and temporal configurations, which can include 1D, 2D or 3D spatial discretizations based on structured or unstructured meshes.
 It aims to be flexible, fast, free, and extendable.
 
+Key capabilities:
+
+* **Flexible biogeochemistry**: User-defined reaction networks via JSON configuration, powered by the ExprTk expression engine
+* **PHREEQC geochemistry**: Full geochemical modeling (speciation, mineral reactions, ion exchange, kinetics) via the PhreeqcRM library
+* **Multiple solvers**: Backward Euler (implicit) and SUNDIALS CVode (adaptive multi-step) ODE solvers
+* **Transport modules**: Advection-only or advection-dispersion transport of dissolved constituents
+* **Sorption isotherms**: Freundlich and Langmuir isotherm models for dissolved-sorbed partitioning
+* **Sediment transport**: HBV-based erosion and mobile-immobile fractionation models
+* **Multi-model coupling**: Already coupled to SUMMA, CRHM, mizuRoute, and FLUXOS-OVERLAND
+* **High performance**: OpenMP parallelization with SIMD vectorization, MPI support for distributed computing
+
 .. toctree::
    :maxdepth: 4
 

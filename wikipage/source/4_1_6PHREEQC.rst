@@ -1,0 +1,129 @@
+PHREEQC Geochemistry Module
+==================================
+
+OpenWQ integrates the `PHREEQC <https://www.usgs.gov/software/phreeqc-version-3>`_ geochemical modeling engine through the PhreeqcRM library.
+This enables advanced equilibrium and kinetic geochemical calculations as an alternative to the flexible BGC reaction networks.
+
+PHREEQC is selected by setting the ``BIOGEOCHEMISTRY`` module to ``PHREEQC`` in the :doc:`Master configuration <4_1_1Master>`.
+
+
+Overview
+~~~~~~~~
+
+PHREEQC provides capabilities for:
+
+* **Aqueous speciation**: Computing the distribution of dissolved species at chemical equilibrium
+* **Mineral saturation**: Determining saturation indices and driving dissolution/precipitation
+* **Surface complexation**: Modeling sorption onto mineral surfaces (e.g., iron oxides, clays)
+* **Ion exchange**: Simulating cation exchange processes on soil surfaces
+* **Kinetic reactions**: User-defined kinetic rate expressions (BASIC-language scripts in the .pqi file)
+* **pH and pe calculations**: Computing solution pH and redox potential
+* **Gas-phase equilibria**: Modeling gas dissolution and exsolution
+* **Temperature-dependent reactions**: Equilibrium constants vary with temperature from the host model
+
+
+Configuration
+~~~~~~~~~~~~~~
+
+The PHREEQC module is configured through a JSON file referenced in the master configuration:
+
+.. code-block:: json
+
+    {
+        "FILEPATH": "openwq_in/phreeqc_river.pqi",
+        "DATABASE": "openwq_in/phreeqc.dat",
+        "COMPONENT_H2O": true,
+        "BGC_GENERAL_MOBILE_SPECIES": [1, 2, 3, 4, 5, 6],
+        "TEMPERATURE": {
+            "RIVER_NETWORK_REACHES": "air_temperature"
+        }
+    }
+
+Configuration fields:
+
++-----------------------------------+-----------+--------------------------------------------------------------------+
+| Field                             | Type      | Description                                                        |
++===================================+===========+====================================================================+
+| ``FILEPATH``                      | string    | Path to the PHREEQC input file (``.pqi``)                          |
++-----------------------------------+-----------+--------------------------------------------------------------------+
+| ``DATABASE``                      | string    | Path to the PHREEQC thermodynamic database file                    |
++-----------------------------------+-----------+--------------------------------------------------------------------+
+| ``COMPONENT_H2O``                 | bool      | Include water as a component (default: ``true``)                   |
++-----------------------------------+-----------+--------------------------------------------------------------------+
+| ``BGC_GENERAL_MOBILE_SPECIES``    | array     | Indices of chemical species subject to advective transport         |
++-----------------------------------+-----------+--------------------------------------------------------------------+
+| ``TEMPERATURE``                   | object    | Temperature source variable name for each compartment              |
++-----------------------------------+-----------+--------------------------------------------------------------------+
+
+The JSON file supports C/C++ syntax for comments: single-line comment (``//``) or comment blocks (``/*`` and ``*/``).
+
+
+PHREEQC input file (.pqi)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The PHREEQC input file defines the initial solution chemistry, mineral assemblages, exchange compositions,
+and any kinetic reactions using standard PHREEQC syntax. Example::
+
+    SOLUTION 1
+        units     mol/kgw
+        temp      10.0
+        pH        7.0
+        Ca        0.001
+        Mg        0.0005
+        Na        0.002
+    END
+
+Refer to the `PHREEQC documentation <https://www.usgs.gov/software/phreeqc-version-3>`_ for the complete input file syntax and keyword reference.
+
+
+Thermodynamic database
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The thermodynamic database contains equilibrium constants and thermodynamic data for aqueous species, minerals, gases, and surface species. Several databases are available from USGS:
+
+* ``phreeqc.dat`` -- General-purpose database (recommended starting point)
+* ``wateq4f.dat`` -- Extended database with additional minerals and trace metals
+* ``minteq.v4.dat`` -- MINTEQA2-compatible database
+* ``llnl.dat`` -- Lawrence Livermore National Laboratory database (comprehensive)
+
+
+Mobile species
+~~~~~~~~~~~~~~~
+
+The ``BGC_GENERAL_MOBILE_SPECIES`` array specifies which PHREEQC components are subject to advective transport between compartment cells. Only mobile species are transported by the OpenWQ transport module; immobile species remain in their original grid cell.
+
+Species indices correspond to the order returned by PHREEQC's ``FindComponents()`` function. The component list can be inspected in the OpenWQ debug output when ``RUN_MODE_DEBUG`` is enabled in the master configuration.
+
+
+Temperature coupling
+~~~~~~~~~~~~~~~~~~~~~
+
+PHREEQC reaction rates and equilibrium constants are temperature-dependent. The ``TEMPERATURE`` field maps each host-model compartment to a temperature data source variable name.
+
+Temperature values are passed to PhreeqcRM at each time step for accurate geochemical calculations.
+The variable name must match a variable exported by the host hydrological model (e.g., ``"air_temperature"`` or ``"soil_temperature"``).
+
+
+Initialization process
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+During model initialization, the PHREEQC module performs the following steps:
+
+1. **Grid calculation**: Computes the total number of grid cells across all compartments (``nxyz = nx * ny * nz``)
+2. **PhreeqcRM creation**: Creates a PhreeqcRM instance with the computed grid size and the configured number of threads
+3. **Database loading**: Loads the thermodynamic database file
+4. **Input file execution**: Runs the PHREEQC input file to set up initial solution chemistry
+5. **Component discovery**: Identifies all chemical components using ``FindComponents()``
+6. **Verification**: Confirms that the number of discovered components matches the OpenWQ configuration
+
+
+Example test case
+~~~~~~~~~~~~~~~~~~
+
+A complete PHREEQC test case is available in the ``test_case_phreeqc/`` directory of the mizuRoute-OpenWQ repository. It demonstrates:
+
+* Configuration of a simple river network with geochemical reactions
+* Initial conditions for Ca, Mg, and Na in ``mol/kgw``
+* PHREEQC input file with solution chemistry definitions
+* Transport using the pure advection module (``OPENWQ_NATIVE_TRANSP_DISS_ADV``)
+* HDF5 output of chemical species concentrations

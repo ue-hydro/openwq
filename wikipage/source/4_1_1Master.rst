@@ -19,11 +19,14 @@ The master configuration is a JSON file that provides OpenWQ with information an
 
 **Principal Key 2**: ``COMPUTATIONAL_SETTINGS``
 
-+----------------------+---------------------------------------------------------+
-| ``RUN_MODE_DEBUG``   | Run model debugging flag (true/false)                   |
-+----------------------+---------------------------------------------------------+
-| ``USE_NUM_THREADS``  | "all" or integer of number of threads to use (e.g., 10) |
-+----------------------+---------------------------------------------------------+
++----------------------+-------------------------------------------------------------------------------------+
+| ``RUN_MODE_DEBUG``   | Run model debugging flag (true/false)                                               |
++----------------------+-------------------------------------------------------------------------------------+
+| ``USE_NUM_THREADS``  | "all" or integer of number of threads to use (e.g., 10)                             |
++----------------------+-------------------------------------------------------------------------------------+
+| ``SOLVER``           | Numerical solver: ``"BE"`` (Backward Euler) or ``"SUNDIALS"`` (CVode). See          |
+|                      | :doc:`Solvers <4_1_7Solvers>`                                                       |
++----------------------+-------------------------------------------------------------------------------------+
 
 **Principal Keys 3**: ``OPENWQ_INPUT``
 
@@ -51,11 +54,14 @@ The master configuration is a JSON file that provides OpenWQ with information an
 **Principal Keys 4**: ``MODULES``
 
 +-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
-| ``BIOGEOCHEMISTRY`` -> ``MODULE_NAME``              | Biogeochemical cycling module choice                                                                          |
+| ``BIOGEOCHEMISTRY`` -> ``MODULE_NAME``              | Biogeochemical cycling module choice:                                                                         |
+|                                                     | ``NATIVE_BGC_FLEX`` (flexible reactions) or ``PHREEQC`` (geochemical engine).                                 |
+|                                                     | See :doc:`BGC config <4_1_3BGC>` or :doc:`PHREEQC config <4_1_6PHREEQC>`                                     |
 +-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
 | ``BIOGEOCHEMISTRY`` -> ``MODULE_CONFIG_FILEPATH``   | Path to `Biogeochemical cycling configuration file <https://openwq.readthedocs.io/en/latest/4_1_3BGC.html#>`_ |
+|                                                     | or PHREEQC module configuration file                                                                          |
 +-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
-| ``TRANSPORT_EROSION`` -> ``MODULE_NAME``            | Transport-Erosion module choice                                                                               |
+| ``TRANSPORT_EROSION`` -> ``MODULE_NAME``            | Transport-Erosion module choice. See :doc:`Transport config <4_1_4TE>`                                        |
 +-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
 | ``TRANSPORT_EROSION`` -> ``MODULE_CONFIG_FILEPATH`` | Transport-Erosion configuration file path                                                                     |
 +-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
@@ -103,7 +109,8 @@ Example:
         "COMMENT": "This is my first project.",
         "COMPUTATIONAL_SETTINGS": {
             "RUN_MODE_DEBUG": true,
-            "USE_NUM_THREADS": "all"
+            "USE_NUM_THREADS": "all",
+            "SOLVER": "BE"
         },
         "OPENWQ_INPUT": {
             "CONFIG_FILEPATH": "openWQ_config.json",

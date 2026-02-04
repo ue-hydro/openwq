@@ -1,7 +1,8 @@
 Input files
 ==================================
 
-The model requires 4 input files or groups of files.
+The model requires several input files or groups of files, depending on which modules are enabled.
+The master configuration file references all other input files.
 
 .. toctree::
    :maxdepth: 2
@@ -11,4 +12,6 @@ The model requires 4 input files or groups of files.
    4_1_3BGC
    4_1_4TE
    4_1_5Source
+   4_1_6PHREEQC
+   4_1_7Solvers
 

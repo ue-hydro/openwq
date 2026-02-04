@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Existing couplings &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Existing couplings &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
 
@@ -92,9 +92,13 @@
              
   <section id="existing-couplings">
 <h1>Existing couplings<a class="headerlink" href="#existing-couplings" title="Permalink to this heading"></a></h1>
+<p>OpenWQ has been coupled to the following hydrological and hydrodynamic models.
+Each coupling follows the same general architecture: the host model provides water volumes and fluxes, and OpenWQ handles constituent transport and biogeochemical reactions.</p>
+<p>To couple OpenWQ to a new model, see the <a class="reference internal" href="5_3_Coupler_guide.html"><span class="doc">Coupler Guide</span></a>.</p>
 <section id="summa">
 <h2><strong>SUMMA</strong><a class="headerlink" href="#summa" title="Permalink to this heading"></a></h2>
 <p>Structure for Unifying Multiple Modeling Alternatives</p>
+<p>SUMMA is a flexible hydrological modeling framework that allows users to select from multiple options for each model component (snow, soil, runoff generation, etc.). The SUMMA-OpenWQ coupling enables water quality simulations within SUMMA’s multi-layer soil and snow compartments.</p>
 <ul class="simple">
 <li><p>summa: <a class="reference external" href="https://summa.readthedocs.io/en/latest/">https://summa.readthedocs.io/en/latest/</a></p></li>
 <li><p>summa-openwq: <a class="reference external" href="https://github.com/ue-hydro/Summa-openWQ">https://github.com/ue-hydro/Summa-openWQ</a></p></li>
@@ -103,6 +107,7 @@
 <section id="crhm">
 <h2><strong>CRHM</strong><a class="headerlink" href="#crhm" title="Permalink to this heading"></a></h2>
 <p>Cold Regions Hydrological Model</p>
+<p>CRHM is a platform for modeling hydrological processes in cold regions, including snow redistribution, sublimation, frozen soil dynamics, and prairie hydrology. The CRHM-OpenWQ coupling was the first integration of OpenWQ and enabled nutrient transport simulations in cold-region catchments.</p>
 <ul class="simple">
 <li><p>crhm: <a class="reference external" href="https://research-groups.usask.ca/hydrology/modelling/crhm.php">https://research-groups.usask.ca/hydrology/modelling/crhm.php</a></p></li>
 <li><p>crhm-openwq: <a class="reference external" href="https://github.com/ue-hydro/CRHM">https://github.com/ue-hydro/CRHM</a></p></li>
@@ -110,7 +115,8 @@
 </section>
 <section id="mizuroute">
 <h2><strong>MizuRoute</strong><a class="headerlink" href="#mizuroute" title="Permalink to this heading"></a></h2>
-<p>A river network routing tool for a continental domain water resources applications</p>
+<p>A river network routing tool for continental domain water resources applications</p>
+<p>MizuRoute provides five numerical routing methods (IRF, KWT, KWE, Muskingum-Cunge, Diffusive Wave) for computing streamflow through river networks. The mizuRoute-OpenWQ coupling enables reactive transport of dissolved and particulate constituents through continental-scale river networks, with optional PHREEQC geochemistry and CSLM lake energy balance.</p>
 <ul class="simple">
 <li><p>mizuroute: <a class="reference external" href="https://mizuroute.readthedocs.io/en/main/">https://mizuroute.readthedocs.io/en/main/</a></p></li>
 <li><p>mizuroute-openwq: <a class="reference external" href="https://github.com/ue-hydro/mizuRoute">https://github.com/ue-hydro/mizuRoute</a></p></li>
@@ -119,6 +125,7 @@
 <section id="fluxos-overland">
 <h2><strong>FLUXOS-OVERLAND</strong><a class="headerlink" href="#fluxos-overland" title="Permalink to this heading"></a></h2>
 <p>A hydrodynamic-solute transport modelling tool suitable for basin-scale, event-based simulations</p>
+<p>FLUXOS solves the 2D shallow water equations coupled with solute transport for event-based simulations of runoff, flooding, and contaminant transport in Prairie landscapes.</p>
 <ul class="simple">
 <li><p>fluxos: <a class="reference external" href="https://fluxos-cpp.readthedocs.io/en/latest/">https://fluxos-cpp.readthedocs.io/en/latest/</a></p></li>
 <li><p>fluxos-openwq: <a class="reference external" href="https://github.com/ue-hydro/FLUXOS_cpp">https://github.com/ue-hydro/FLUXOS_cpp</a></p></li>
@@ -137,7 +144,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

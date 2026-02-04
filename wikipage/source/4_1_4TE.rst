@@ -1,7 +1,7 @@
 Transport of Dissolved Substances (TRANSPORT_DISSOLVED)
 =======================================================
 
-The Transportn file is a JSON file that defines both the transport and mobilization of species within hydrological compartments and at their interface.
+The Transport file is a JSON file that defines both the transport and mobilization of species within hydrological compartments and at their interface.
 
 **Principal Key 1**: ``MODULE_NAME``
 
@@ -26,17 +26,17 @@ The Transportn file is a JSON file that defines both the transport and mobilizat
 +---------------------------------------------------------------+--------------------------------------------------------------------+
 | ``(i#)`` -> ``UPPER_COMPARTMENT``                             | Name of the upper compartment, e.g., ``"RUNOFF"``                  |
 +---------------------------------------------------------------+--------------------------------------------------------------------+
-| ``(i#)`` -> ``UPPER_COMPARTMENT``                             | Name of the upper compartment, e.g., ``"ILAYERVOLFRACWAT_SOIL"``   |
+| ``(i#)`` -> ``LOWER_COMPARTMENT``                             | Name of the lower compartment, e.g., ``"ILAYERVOLFRACWAT_SOIL"``   |
 +---------------------------------------------------------------+--------------------------------------------------------------------+
 | ``(i#)`` -> ``K_VAL``                                         | Exchange rate ``"k_val": 0.001``                                   |
 +---------------------------------------------------------------+--------------------------------------------------------------------+
 
 The JSON file supports C/C++ syntax for comments: single-line comment (``//``) or comment blocks (``/*`` and ``*/``). 
 
-The symbol ``(i#)`` refers to a integer number sequence.. The symbol ``(s#)`` refers to a string input. The symbol ``<f#>`` refers to a float input value.
+The symbol ``(i#)`` refers to an integer number sequence. The symbol ``(s#)`` refers to a string input. The symbol ``<f#>`` refers to a float input value.
 
 The Kinetics Equation is supported by the C++ Mathematical Expression Toolkit Library
-`C++ Mathematical Expression Toolkit Library <http://www.partow.net/programming/exprtk/index.html>`_. The equations can be written with (1) multiple chemical species, (2) user-defined parameters (``PARAMETER_NAMES`` and ``PARAMETER_VALUES``), and (3) in-build hytdrological model dependencies (``Tair`` and ``Tsoil``).
+`C++ Mathematical Expression Toolkit Library <http://www.partow.net/programming/exprtk/index.html>`_. The equations can be written with (1) multiple chemical species, (2) user-defined parameters (``PARAMETER_NAMES`` and ``PARAMETER_VALUES``), and (3) in-built hydrological model dependencies (``Tair`` and ``Tsoil``).
 These model dependencies are tailored to each hydrological model. They can be soil moisture, air and/or soil temperature, etc.
 
 Example:

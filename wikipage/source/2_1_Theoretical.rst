@@ -82,3 +82,60 @@ The implementation of ``ExprTk`` in OpenWQ is simple to use and provides an extr
     \end{equation}
 
 where :math:`c_a` and :math:`c_b` :math:`[ML^{-3}]` are the concentrations of chemical species :math:`a` and :math:`b`, parameter/variable :math:`B` represents weather/hydrological dependencies (such as soil moisture and temperature) and :math:`k` is the reaction rate :math:`[ML^{-3}T^{-1}]`. The reaction rate :math:`k` can be provided as the reaction rate (usually using standard maximum at a reference temperature, often :math:`20^oC`) or using expressions that can include relationships with the hydrological/weather dependency variables/parameters.
+
+
+PHREEQC Geochemistry
+~~~~~~~~~~~~~~~~~~~~~~
+
+As an alternative to the flexible BGC reaction networks, OpenWQ integrates the PHREEQC geochemical engine via PhreeqcRM.
+PHREEQC computes equilibrium speciation and kinetic reactions based on thermodynamic databases, solving the full set of mass-action equations for aqueous species, minerals, surfaces, and exchangers.
+
+For a given solution, PHREEQC solves:
+
+.. math::
+
+    K_i = \prod_j a_j^{\nu_{ij}}
+
+where :math:`K_i` is the equilibrium constant for reaction :math:`i`, :math:`a_j` is the activity of species :math:`j`, and :math:`\nu_{ij}` is the stoichiometric coefficient.
+
+This approach is more computationally expensive than the BGC-Flex approach, but provides thermodynamically consistent speciation calculations, which are essential for problems involving pH-dependent reactions, mineral interactions, or complex aqueous chemistry. See :doc:`PHREEQC configuration <4_1_6PHREEQC>` for setup details.
+
+
+Sorption Isotherms
+~~~~~~~~~~~~~~~~~~~~~~
+
+OpenWQ includes two sorption isotherm models for simulating partitioning between dissolved and sorbed phases:
+
+**Freundlich isotherm** -- Models nonlinear sorption:
+
+.. math::
+
+    q = K_F \cdot C^{1/n}
+
+where :math:`q` is the sorbed concentration, :math:`C` is the dissolved concentration, :math:`K_F` is the Freundlich coefficient, and :math:`n` is the Freundlich exponent.
+
+**Langmuir isotherm** -- Models sorption with a finite number of binding sites:
+
+.. math::
+
+    q = \frac{q_{max} \cdot K_L \cdot C}{1 + K_L \cdot C}
+
+where :math:`q_{max}` is the maximum adsorption capacity and :math:`K_L` is the Langmuir equilibrium constant.
+
+
+Sediment Transport
+~~~~~~~~~~~~~~~~~~~~~~
+
+OpenWQ includes sediment transport modules based on the HYPE model framework:
+
+* **HBV sediment model**: Simulates soil erosion and sediment generation with land-use and soil-type dependent erosion factors.
+* **Mobile-immobile fractionation**: Models the partitioning of constituents between mobile and immobile water fractions, accounting for diffusive exchange between the two phases.
+
+
+Numerical Solvers
+~~~~~~~~~~~~~~~~~~~~~~
+
+OpenWQ provides two numerical solvers for integrating the water quality ODEs:
+
+* **Backward Euler**: A first-order implicit method. Simple, fast, unconditionally stable. See :doc:`Solvers <4_1_7Solvers>`.
+* **SUNDIALS CVode**: An adaptive multi-step method (Adams or BDF) with variable order and automatic step-size control. Provides higher-order accuracy for stiff and non-stiff problems. See :doc:`Solvers <4_1_7Solvers>`.
