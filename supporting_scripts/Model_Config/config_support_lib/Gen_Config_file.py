@@ -34,8 +34,8 @@ def create_config_json(
         # Compartment settings
         compartment_names: List[str],  # Changed to list of compartment names
 
-        # Cycling framework
-        cycling_framework: List[str],
+        # Cycling framework (None for PHREEQC, list for NATIVE_BGC_FLEX)
+        cycling_framework: Union[List[str], None],
 
         # Chemical species
         chemical_species_names: List[str],
@@ -52,10 +52,10 @@ def create_config_json(
         config_file_fullpath: Full path where the JSON file will be saved (directories will be created if needed)
         json_header_comment: List of comment lines to add at the top of the file
         compartment_names: List of compartment names (e.g., ["RIVER_NETWORK_REACHES", "SNOW_LAYER", "SOIL_LAYER"])
-        cycling_framework: List of cycling frameworks (e.g., ["N_cycle"])
+        cycling_framework: List of cycling frameworks (e.g., ["N_cycle"]) or None for PHREEQC
         chemical_species_names: List of chemical species names (e.g., ["NO3-N", "NH4-N", ...])
-        initial_value: Initial value for all species (same value for all)
-        initial_unit: Unit for initial conditions (e.g., "mg/l")
+        ic_all_value: Initial value for all species (same value for all)
+        ic_all_units: Unit for initial conditions (e.g., "mg/l")
     """
 
     # Create the directory path if it doesn't exist
@@ -71,12 +71,15 @@ def create_config_json(
         }
 
     # Build compartment configuration (same for all compartments)
-    compartment_config = {
-        "CYCLING_FRAMEWORK": cycling_framework,
-        "INITIAL_CONDITIONS": {
-            "Data_Format": "JSON",
-            "Data": initial_conditions_data
-        }
+    # PHREEQC: no CYCLING_FRAMEWORK needed (reactions defined in .pqi file)
+    # NATIVE_BGC_FLEX: CYCLING_FRAMEWORK references the framework defined in the BGC module file
+    compartment_config = {}
+    if cycling_framework is not None:
+        compartment_config["CYCLING_FRAMEWORK"] = cycling_framework
+
+    compartment_config["INITIAL_CONDITIONS"] = {
+        "Data_Format": "JSON",
+        "Data": initial_conditions_data
     }
 
     # Build the complete JSON structure with all compartments

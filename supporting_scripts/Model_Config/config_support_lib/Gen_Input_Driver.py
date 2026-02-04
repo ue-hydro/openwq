@@ -24,6 +24,7 @@ import Gen_Config_file as cJSON_lib
 import Gen_TDmodule_file as tdmJSON_lib
 import Gen_LEmodule_file as lemJSON_lib
 import Load_BGQmodule_file as bgqmJSON_lib
+import Gen_PHREEQCmodule_file as phreeqcJSON_lib
 import Gen_SS_Driver as ssJSON_lib
 import Gen_EWF_Driver as ewfJSON_lib
 
@@ -50,54 +51,63 @@ def Gen_Input_Driver(
 
         # Biogeochemistry module
         bgc_module_name: str,
-        path2selected_NATIVE_BGC_FLEX_framework: str,
+        path2selected_NATIVE_BGC_FLEX_framework: str = "",
+
+        # PHREEQC-specific settings (used when bgc_module_name = "PHREEQC")
+        phreeqc_input_filepath: str = "",
+        phreeqc_database_filepath: str = "",
+        phreeqc_mobile_species: Optional[List[int]] = None,
+        phreeqc_component_h2o: bool = True,
+        phreeqc_temperature_mapping: Optional[Dict[str, str]] = None,
+        phreeqc_pressure_mapping: Optional[Dict[str, str]] = None,
+        phreeqc_chemical_species_names: Optional[List[str]] = None,
 
         # Transport Dissolved module
-        td_module_name: str,
-        td_module_dispersion_xyz: List[Union[int, float]],
+        td_module_name: str = "NATIVE_TD_ADV",
+        td_module_dispersion_xyz: List[Union[int, float]] = None,
 
         # Lateral Exchange module
-        le_module_name: str,
-        le_module_config: List[Dict[str, Union[str, int, float]]],
+        le_module_name: str = "NONE",
+        le_module_config: List[Dict[str, Union[str, int, float]]] = None,
 
         # Transport Sediments module
-        ts_module_name: str,
-        ts_sediment_compartment: str,
+        ts_module_name: str = "NONE",
+        ts_sediment_compartment: str = "RIVER_NETWORK_REACHES",
 
         # Sorption Isotherm module
-        si_module_name: str,
-        si_sediment_compartment: str,
+        si_module_name: str = "NONE",
+        si_sediment_compartment: str = "RIVER_NETWORK_REACHES",
 
         # Sink and Source settings
-        ss_method: str,
-        ss_metadata_source: str,
-        ss_metadata_comment: str,
-        ss_method_csv_config: List[Dict[str, Union[str, int]]],
-        ss_method_copernicus_basin_info: Dict[str, str],
-        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
-        ss_method_copernicus_compartment_name_for_load: str,
-        ss_method_copernicus_nc_lc_dir: str,
-        ss_method_copernicus_period: List[Union[int, float]],
-        ss_method_copernicus_default_loads_bool: bool,
-        ss_method_copernicus_annual_to_seasonal_loads_method: str,
+        ss_method: str = "load_from_csv",
+        ss_metadata_source: str = "",
+        ss_metadata_comment: str = "",
+        ss_method_csv_config: List[Dict[str, Union[str, int]]] = None,
+        ss_method_copernicus_basin_info: Dict[str, str] = None,
+        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str] = None,
+        ss_method_copernicus_compartment_name_for_load: str = "",
+        ss_method_copernicus_nc_lc_dir: str = "",
+        ss_method_copernicus_period: List[Union[int, float]] = None,
+        ss_method_copernicus_default_loads_bool: bool = True,
+        ss_method_copernicus_annual_to_seasonal_loads_method: str = "uniform",
 
         # External water fluxes
-        ewf_method: str,
-        ewf_method_fixedval_comment: str,
-        ewf_method_fixedval_source: str,
-        ewf_method_fixedval_chem_name: str,
-        ewf_method_fixedval_value: str,
-        ewf_method_fixedval_units: str,
-        ewf_method_fixedval_external_inputflux_name: str,
+        ewf_method: str = "fixed_value",
+        ewf_method_fixedval_comment: str = "",
+        ewf_method_fixedval_source: str = "",
+        ewf_method_fixedval_chem_name: str = "",
+        ewf_method_fixedval_value: str = "",
+        ewf_method_fixedval_units: str = "",
+        ewf_method_fixedval_external_inputflux_name: str = "",
 
         # Output settings
-        output_format: str,
-        chemical_species: List[int],
-        units: str,
-        no_water_conc_flag: int,
-        export_sediment: bool,
-        compartments_and_cells: Dict[str, Dict[str, List]],
-        timestep: List[Union[int, str]],
+        output_format: str = "HDF5",
+        chemical_species: List[int] = None,
+        units: str = "MG/L",
+        no_water_conc_flag: int = -9999,
+        export_sediment: bool = False,
+        compartments_and_cells: Dict[str, Dict[str, List]] = None,
+        timestep: List[Union[int, str]] = None,
 
         # Optional parameters (MUST be at the end)
         ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class: Optional[Dict[int, Dict[str, float]]] = None
@@ -106,6 +116,18 @@ def Gen_Input_Driver(
 
     print(f"Project: {project_name}")
     print(f"Authors: {authors}")
+
+    # Set defaults for mutable args
+    if td_module_dispersion_xyz is None:
+        td_module_dispersion_xyz = [0.0, 0.0, 0.0]
+    if le_module_config is None:
+        le_module_config = []
+    if ss_method_csv_config is None:
+        ss_method_csv_config = []
+    if chemical_species is None:
+        chemical_species = [1]
+    if timestep is None:
+        timestep = [1, "hour"]
 
     # Add comment lines at the top
     json_header_comment = [
@@ -173,7 +195,7 @@ def Gen_Input_Driver(
     )
 
     ###############
-    # Call create_config_json
+    # Determine compartment names from host model
     ###############
 
     if (hostmodel == "mizuroute"):
@@ -185,18 +207,48 @@ def Gen_Input_Driver(
                              "ILAYERVOLFRACWAT_SOIL",
                              "SCALARAQUIFER"]
 
-    cJSON_lib.create_config_json(
-        config_file_fullpath=config_file_fullpath,
-        json_header_comment=json_header_comment,
-        compartment_names=compartment_names,
-        cycling_framework=["N_cycle"],
-        chemical_species_names=["NO3-N", "NH4-N", "N_ORG_fresh", "N_ORG_stable", "N_ORG_active", "OUT"],
-        ic_all_value=ic_all_value,
-        ic_all_units=ic_all_units,
-    )
+    ###############
+    # Call create_config_json
+    # For PHREEQC: species come from the user-provided list (auto-discovered at runtime);
+    #              no CYCLING_FRAMEWORK is needed.
+    # For NATIVE_BGC_FLEX: species and cycling frameworks are hardcoded from the framework file.
+    ###############
+
+    if bgc_module_name == "PHREEQC":
+
+        # PHREEQC species are discovered at runtime from the database/input file.
+        # The user provides expected species names for initial conditions.
+        if phreeqc_chemical_species_names is None or len(phreeqc_chemical_species_names) == 0:
+            print("WARNING: phreeqc_chemical_species_names is empty. "
+                  "Config file will have no initial conditions. "
+                  "PHREEQC will use default initial conditions from the .pqi file.")
+            chem_names = []
+        else:
+            chem_names = phreeqc_chemical_species_names
+
+        cJSON_lib.create_config_json(
+            config_file_fullpath=config_file_fullpath,
+            json_header_comment=json_header_comment,
+            compartment_names=compartment_names,
+            cycling_framework=None,  # PHREEQC does not use cycling frameworks
+            chemical_species_names=chem_names,
+            ic_all_value=ic_all_value,
+            ic_all_units=ic_all_units,
+        )
+    else:
+        # NATIVE_BGC_FLEX path (original)
+        cJSON_lib.create_config_json(
+            config_file_fullpath=config_file_fullpath,
+            json_header_comment=json_header_comment,
+            compartment_names=compartment_names,
+            cycling_framework=["N_cycle"],
+            chemical_species_names=["NO3-N", "NH4-N", "N_ORG_fresh", "N_ORG_stable", "N_ORG_active", "OUT"],
+            ic_all_value=ic_all_value,
+            ic_all_units=ic_all_units,
+        )
 
     ###############
-    # Call create_ts_module_json
+    # Call create_td_module_json
     ###############
 
     tdmJSON_lib.create_td_module_json(
@@ -218,14 +270,31 @@ def Gen_Input_Driver(
     )
 
     ###############
-    # Call load_bgq_module_json
+    # Call BGC module setup (NATIVE_BGC_FLEX or PHREEQC)
     ###############
 
-    bgqmJSON_lib.load_bgq_module_json(
-        json_header_comment=json_header_comment,
-        path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework,
-        bgc_config_filepath=bgc_config_filepath
-    )
+    if bgc_module_name == "PHREEQC":
+        # Generate PHREEQC module JSON + copy database and input files
+        phreeqcJSON_lib.create_phreeqc_module_json(
+            bgc_config_filepath=bgc_config_filepath,
+            json_header_comment=json_header_comment,
+            phreeqc_input_filepath=phreeqc_input_filepath,
+            phreeqc_database_filepath=phreeqc_database_filepath,
+            phreeqc_mobile_species=phreeqc_mobile_species if phreeqc_mobile_species else [1],
+            phreeqc_component_h2o=phreeqc_component_h2o,
+            phreeqc_temperature_mapping=phreeqc_temperature_mapping,
+            phreeqc_pressure_mapping=phreeqc_pressure_mapping,
+        )
+    elif bgc_module_name == "NATIVE_BGC_FLEX":
+        # Copy the selected BGC framework file
+        bgqmJSON_lib.load_bgq_module_json(
+            json_header_comment=json_header_comment,
+            path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework,
+            bgc_config_filepath=bgc_config_filepath
+        )
+    else:
+        print(f"WARNING: Unknown bgc_module_name '{bgc_module_name}'. "
+              f"Valid options are: NATIVE_BGC_FLEX, PHREEQC")
 
     ###############
     # Call gen_ss_driver
@@ -255,10 +324,13 @@ def Gen_Input_Driver(
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
             ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method
         )
+    elif (ss_method == "none"):
+        print("  Skipping sink/source generation (ss_method='none')")
 
     else:
         print(
-            f"WARNING: The SS method '{ss_method}' is unknown or not available for automatic generation. Only method 'load_from_csv' and 'using_copernicus_lulc' are available")
+            f"WARNING: The SS method '{ss_method}' is unknown or not available for automatic generation. "
+            f"Available methods: 'load_from_csv', 'using_copernicus_lulc', 'none'")
 
     ###############
     # Call gen_ewf_driver
@@ -274,6 +346,9 @@ def Gen_Input_Driver(
             ewf_method_fixedval_units=ewf_method_fixedval_units,
             ewf_method_fixedval_external_inputflux_name=ewf_method_fixedval_external_inputflux_name
         )
+    elif (ewf_method == "none"):
+        print("  Skipping external water flux generation (ewf_method='none')")
     else:
         print(
-            f"WARNING: The EWF method '{ewf_method}' is unknown or not available for automatic generation. Only method 'fixed_value' is available")
+            f"WARNING: The EWF method '{ewf_method}' is unknown or not available for automatic generation. "
+            f"Available methods: 'fixed_value', 'none'")

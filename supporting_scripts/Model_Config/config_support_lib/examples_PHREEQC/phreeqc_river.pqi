@@ -1,0 +1,35 @@
+TITLE River water nitrogen chemistry - OpenWQ PHREEQC example
+
+# ============================================================
+# SOLUTION 1: Define initial river water composition
+# This solution will be replicated to all grid cells by PhreeqcRM.
+# Concentrations in mg/kgw.
+# ============================================================
+SOLUTION 1 River water
+    temp      15.0
+    pH        7.5
+    pe        8.0
+    redox     pe
+    units     mg/kgw
+    density   1.0
+    N(5)      2.0 as N       # Nitrate as mg-N/kgw
+    N(-3)     0.5 as N       # Ammonium as mg-N/kgw
+    Ca        40.0
+    Mg        10.0
+    Na        15.0
+    K         3.0
+    Alkalinity 100.0 as HCO3
+    Cl        20.0
+    S(6)      15.0
+    O(0)      8.0 as O       # Dissolved oxygen
+
+# ============================================================
+# EQUILIBRIUM_PHASES 1: Gas-water equilibrium
+# Maintains equilibrium with atmospheric CO2 and O2
+# ============================================================
+EQUILIBRIUM_PHASES 1
+    CO2(g)    -3.5   10.0
+    O2(g)     -0.7    1.0
+
+SAVE SOLUTION 1
+END

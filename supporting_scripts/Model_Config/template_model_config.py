@@ -25,7 +25,7 @@ Example: Generate all OpenWQ input files
 """
 
 ################
-# 🐷 General information
+# General information
 ################
 project_name = "Demonstration"
 geographical_location = "NA"
@@ -39,14 +39,14 @@ hostmodel = "mizuroute" # mizuroute or summa
 dir2save_input_files = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case_2/"
 
 ################
-# 🐨 Computational settings
+# Computational settings
 ################
 solver = "BE"           # "BE" or "SUNDIALS"
 run_mode_debug = True   # "True" will print the solver derivatives that lead to the concentrations
 use_num_threads = 4     # number of threads, accepts "all"
 
 ################
-# 🐹 General configuration
+# General configuration
 ################
 ic_all_value = 2          # initial conditions value, concentration or mass
 ic_all_units = "mg/l"     # set the units of ic_all_value
@@ -57,23 +57,52 @@ ic_all_units = "mg/l"     # set the units of ic_all_value
 
 """
 --------------------------------------
-🐮 Biogeochemistry module
-Options: 
-    NATIVE_BGC_FLEX
-    PHREEQC
+Biogeochemistry module
+Options:
+    NATIVE_BGC_FLEX   - User-defined kinetic expressions (simple, fast)
+    PHREEQC           - Full geochemical equilibrium engine (thermodynamic)
 # in this case, "NONE" is not an option
 --------------------------------------
 """
-bgc_module_name = "NATIVE_BGC_FLEX"
+bgc_module_name = "NATIVE_BGC_FLEX"    # Change to "PHREEQC" to use the PHREEQC geochemical engine
+
+# ---- NATIVE_BGC_FLEX settings ----
+# Path to the BGC cycling framework JSON file (only used when bgc_module_name = "NATIVE_BGC_FLEX")
 path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/examples_BGC_frameworks/openWQ_Ncycling_example.json"
-# TODO - set up for PHREQC
+
+# ---- PHREEQC settings ----
+# Only used when bgc_module_name = "PHREEQC"
+# Path to PHREEQC input file (.pqi) defining solutions, reactions, kinetics
+phreeqc_input_filepath = "config_support_lib/examples_PHREEQC/phreeqc_river.pqi"
+# Path to PHREEQC thermodynamic database (.dat)
+# Download full database from: https://www.usgs.gov/software/phreeqc-version-3
+phreeqc_database_filepath = "config_support_lib/examples_PHREEQC/phreeqc.dat"
+# Mobile species indices (1-indexed). These species will be transported.
+# The species order is determined by PhreeqcRM::GetComponents() after parsing
+# the database + input file. Run once to see the component list in the log.
+phreeqc_mobile_species = [1, 2, 3, 4, 5, 6]
+# Whether to include H2O as a component in PHREEQC (default True)
+phreeqc_component_h2o = True
+# Temperature dependency mapping: compartment name -> dependency variable name
+# Set to None if not using temperature-dependent reactions
+phreeqc_temperature_mapping = {
+    "RIVER_NETWORK_REACHES": "air_temperature"
+}
+# Pressure dependency mapping: compartment name -> dependency variable name
+# Set to None if not using pressure-dependent reactions
+phreeqc_pressure_mapping = None
+# Chemical species names for initial conditions in the config file.
+# These should match the component names discovered by PHREEQC from the database.
+# Common PHREEQC components: H, O, Charge, Ca, Mg, Na, K, N, C, Cl, S, etc.
+# Set to empty list [] to skip initial conditions (PHREEQC will use .pqi defaults).
+phreeqc_chemical_species_names = ["Ca", "Mg", "Na", "K", "N", "C", "Cl", "S"]
 
 """
 --------------------------------------
-🐸 Transport Dissolved module
-Options: 
-    NATIVE_TD_ADV, 
-    OPENWQ_NATIVE_TD_ADVDISP, 
+Transport Dissolved module
+Options:
+    NATIVE_TD_ADV,
+    OPENWQ_NATIVE_TD_ADVDISP,
     "NONE"
 --------------------------------------
 """
@@ -84,7 +113,7 @@ td_module_dispersion_xyz = [0.3, 0.3, 0.3]
 
 """
 --------------------------------------
-🦁 Lateral Exchange module
+Lateral Exchange module
 Options:
     NATIVE_LE_BOUNDMIX
     NONE
@@ -101,7 +130,7 @@ le_module_config=[
 
 """
 --------------------------------------
-🐥 Transport Sediments module
+Transport Sediments module
 Options:
     HYPE_MMF
     HYPE_HBVSED
@@ -113,7 +142,7 @@ ts_sediment_compartment = "RIVER_NETWORK_REACHES"
 # TODO - SETUP FOR HYPE_MMF AND HYPE_HBVSED OPTIONS
 
 """
-🐞 Sorption Isotherm module
+Sorption Isotherm module
 Options:
     FREUNDLICH
     LANGMUIR
@@ -124,7 +153,7 @@ si_sediment_compartment = "SUMMA_RUNOFF"
 # TODO - SETUP FOR FREUNDLICH AND LANGMUIR OPTIONS
 
 ################
-# 🦞 Output settings
+# Output settings
 ################
 output_format = "HDF5"              # HDF5 or CSV (but HDF5 is recommended as can be used with other scripts
 chemical_species = [1, 2, 3, 4, 5]  # Chemical
@@ -139,11 +168,11 @@ compartments_and_cells = {          # Compartments and cells to export
 }
 
 ################
-# 🦎 Sink sources
+# Sink sources
 ################
-ss_method = "using_copernicus_lulc" # "load_from_csv" or "using_copernicus_lulc"
+ss_method = "using_copernicus_lulc" # "load_from_csv", "using_copernicus_lulc", or "none"
 ################
-# 👉🏼 if ss_method = "load_from_csv"
+# if ss_method = "load_from_csv"
 ss_metadata_source = "Just for demonstration"
 ss_metadata_comment = "Leave any comments needed for future reference"
 ss_method_csv_config = source_sink_configs=[
@@ -169,7 +198,7 @@ ss_method_csv_config = source_sink_configs=[
         }
     ]
 ################
-# 👉🏼 if ss_method = load_from_copernicus
+# if ss_method = load_from_copernicus
 ss_method_copernicus_basin_info = {
     'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/finalcat_info_v1-0.shp',
     'mapping_key': 'SubId'
@@ -195,9 +224,9 @@ ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
 ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform' # options: 'uniform' or 'seasonal'
 
 ################
-# 🐠 External water fluxes
+# External water fluxes
 ################
-ewf_method = "fixed_value" # for now only "fixed value" option is available
+ewf_method = "fixed_value" # "fixed_value" or "none"
 ewf_method_fixedval_comment = "External model: summa"
 ewf_method_fixedval_source = "Just for demonstration purposes"
 ewf_method_fixedval_chem_name = "NO3-N"
@@ -206,11 +235,9 @@ ewf_method_fixedval_units = "mg/l"
 ewf_method_fixedval_external_inputflux_name = "SUMMA_RUNOFF"
 
 
-# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
 ########################################################
 # DON'T CHANGE BELOW THIS POINT-------
 ########################################################
-# ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️ ⚠️⚠️⚠️
 
 # Call the function with all individual arguments
 ############################
@@ -230,6 +257,15 @@ gJSON_lib.Gen_Input_Driver(
     ic_all_units=ic_all_units,
     bgc_module_name=bgc_module_name,
     path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework,
+    # PHREEQC-specific settings (ignored if bgc_module_name != "PHREEQC")
+    phreeqc_input_filepath=phreeqc_input_filepath,
+    phreeqc_database_filepath=phreeqc_database_filepath,
+    phreeqc_mobile_species=phreeqc_mobile_species,
+    phreeqc_component_h2o=phreeqc_component_h2o,
+    phreeqc_temperature_mapping=phreeqc_temperature_mapping,
+    phreeqc_pressure_mapping=phreeqc_pressure_mapping,
+    phreeqc_chemical_species_names=phreeqc_chemical_species_names,
+    # Transport and other modules
     td_module_name=td_module_name,
     td_module_dispersion_xyz=td_module_dispersion_xyz,
     le_module_name=le_module_name,
