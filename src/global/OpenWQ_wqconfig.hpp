@@ -23,8 +23,14 @@
 #include <unordered_map>
 #include <sys/stat.h>
 #include "PhreeqcRM.h"
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 
+
+// Forward declaration
+class OpenWQ_hostModelconfig;
 
 /* #################################################
  General information for openWQ about the project
@@ -263,8 +269,14 @@ class OpenWQ_wqconfig
         // Pre-built BGC lookup: cycling framework name -> vector of indices into BGCexpressions_info
         std::unordered_map<std::string, std::vector<unsigned int>> bgc_cycle_to_transf_indices;
 
+        // Cached solver flags
+        bool is_solver_sundials = false;
+        bool is_solver_be = false;
+
         void cache_runtime_flags();
         void build_bgc_lookup();
+        void build_thread_local_expressions(
+            OpenWQ_hostModelconfig& hostModelconfig);
         
         // ########################################
         // MODULES
@@ -486,6 +498,26 @@ class OpenWQ_wqconfig::CH_model_::NativeFlex_{
         >BGCexpressions_eq;            // BGC kinetic formulas for all biogeochemical cycles
     
     std::vector<double> chemass_InTransfEq; // chemical mass involved in transformation (needs to be here for loop reset)
+
+    // Store modified expression strings (with variable substitutions and unit multipliers)
+    // for re-compilation in per-thread expression copies
+    std::vector<std::string> BGCexpressions_modif_strings;
+
+    // ########################################
+    // PARALLEL: Per-thread copies of expressions and their bound data vectors
+    // Each thread gets its own chemass vector, dependVar_scalar vector,
+    // and compiled expressions that reference the thread-local data.
+    // Thread 0 uses the original (shared) data above.
+    // ########################################
+    int num_omp_threads = 1;
+    // Per-thread chemass vectors: [thread_id][chem_index]
+    std::vector<std::vector<double>> thread_chemass_InTransfEq;
+    // Per-thread dependency scalar vectors: [thread_id][dep_index]
+    std::vector<std::vector<double>> thread_dependVar_scalar;
+    // Per-thread compiled expressions: [thread_id][transf_index]
+    std::vector<std::vector<exprtk::expression<double>>> thread_BGCexpressions_eq;
+    // Flag indicating thread-local copies are ready
+    bool thread_local_ready = false;
 
 };
 // Module CH_model -> PHREEQC

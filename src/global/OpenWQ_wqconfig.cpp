@@ -15,6 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "OpenWQ_wqconfig.hpp"
+#include "OpenWQ_hostModelConfig.hpp"
 
 
 // Constructor
@@ -417,6 +418,8 @@ void OpenWQ_wqconfig::cache_runtime_flags()
     is_TS_enabled = (TS_model->TS_module.compare("NONE") != 0);
     is_TD_advdisp = (TD_model->TD_module.compare("OPENWQ_NATIVE_TD_ADVDISP") == 0);
     is_TD_adv = (TD_model->TD_module.compare("NATIVE_TD_ADV") == 0);
+    is_solver_sundials = (SOLVER_module.compare("SUNDIALS") == 0);
+    is_solver_be = (SOLVER_module.compare("BE") == 0);
 
     if (is_native_bgc_flex) {
         cached_num_mobile_species = CH_model->NativeFlex->mobile_species.size();
@@ -440,6 +443,109 @@ void OpenWQ_wqconfig::build_bgc_lookup()
         const std::string& cycle_name = std::get<0>(CH_model->NativeFlex->BGCexpressions_info[j]);
         bgc_cycle_to_transf_indices[cycle_name].push_back(j);
     }
+}
+
+/***********************************************
+ * Performance: Build per-thread copies of exprtk
+ * expressions and their bound data vectors to
+ * enable OpenMP parallelization of the BGC
+ * spatial loops. Each thread gets its own
+ * chemass_InTransfEq vector, dependVar_scalar
+ * vector, and compiled expression objects.
+ * Must be called AFTER bgc_flex_setBGCexpressions().
+************************************************/
+void OpenWQ_wqconfig::build_thread_local_expressions(
+    OpenWQ_hostModelconfig& hostModelconfig)
+{
+    if (!is_native_bgc_flex) return;
+
+    auto* nativeFlex = CH_model->NativeFlex;
+    const unsigned int num_expressions = nativeFlex->BGCexpressions_eq.size();
+    if (num_expressions == 0) return;
+
+    // Determine number of threads
+    int nthreads = 1;
+#ifdef _OPENMP
+    nthreads = omp_get_max_threads();
+#endif
+    nativeFlex->num_omp_threads = nthreads;
+
+    if (nthreads <= 1) {
+        nativeFlex->thread_local_ready = false;
+        return;
+    }
+
+    const unsigned int num_depend = hostModelconfig.get_num_HydroDepend();
+
+    // Allocate per-thread storage
+    nativeFlex->thread_chemass_InTransfEq.resize(nthreads);
+    nativeFlex->thread_dependVar_scalar.resize(nthreads);
+    nativeFlex->thread_BGCexpressions_eq.resize(nthreads);
+
+    // For each thread, we need to:
+    // 1. Create a local chemass vector (same size as the max needed)
+    // 2. Create a local dependVar_scalar vector
+    // 3. Re-compile each expression with a symbol table pointing to thread-local data
+
+    // Find the maximum chemass vector size needed across all transformations
+    unsigned int max_chemass_size = 0;
+    for (unsigned int j = 0; j < num_expressions; j++) {
+        const auto& bgc_info = nativeFlex->BGCexpressions_info[j];
+        unsigned int sz = std::get<5>(bgc_info).size();
+        if (sz > max_chemass_size) max_chemass_size = sz;
+    }
+
+    // Check that modified expression strings were stored during setBGCexpressions.
+    // These contain the fully-substituted expressions (chemical names replaced by
+    // vector indices, unit multipliers applied) needed to re-compile per-thread copies.
+    if (nativeFlex->BGCexpressions_modif_strings.size() != num_expressions) {
+        nativeFlex->thread_local_ready = false;
+        return;
+    }
+
+    typedef exprtk::symbol_table<double> symbol_table_t;
+    typedef exprtk::expression<double> expression_t;
+    typedef exprtk::parser<double> parser_t;
+
+    for (int t = 0; t < nthreads; t++) {
+        // Allocate thread-local data vectors
+        nativeFlex->thread_chemass_InTransfEq[t].resize(max_chemass_size, 0.0);
+        nativeFlex->thread_dependVar_scalar[t].resize(num_depend, 0.0);
+
+        // Compile each expression for this thread
+        nativeFlex->thread_BGCexpressions_eq[t].resize(num_expressions);
+
+        for (unsigned int j = 0; j < num_expressions; j++) {
+            // Create symbol table bound to thread-local data
+            symbol_table_t sym_table;
+
+            // Resize thread-local chemass to match this expression's needs
+            // (all threads share the same max_chemass_size allocation)
+            sym_table.add_vector(
+                "openWQ_BGCnative_chemass_InTransfEq",
+                nativeFlex->thread_chemass_InTransfEq[t]);
+
+            // Add dependency variables bound to thread-local scalars
+            for (unsigned int depi = 0; depi < num_depend; depi++) {
+                sym_table.add_variable(
+                    hostModelconfig.get_HydroDepend_name_at(depi),
+                    nativeFlex->thread_dependVar_scalar[t][depi]);
+            }
+
+            // Create and compile expression
+            expression_t expr;
+            expr.register_symbol_table(sym_table);
+
+            parser_t parser;
+            parser.compile(
+                nativeFlex->BGCexpressions_modif_strings[j],
+                expr);
+
+            nativeFlex->thread_BGCexpressions_eq[t][j] = expr;
+        }
+    }
+
+    nativeFlex->thread_local_ready = true;
 }
 
 

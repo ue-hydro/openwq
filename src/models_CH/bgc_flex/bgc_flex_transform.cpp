@@ -16,11 +16,15 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "models_CH/headerfile_CH.hpp"
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 /* #################################################
 // Compute each chemical transformation
 // OPTIMIZED: uses pre-built BGC lookup map,
-// pre-allocated chemass vector, and OpenMP parallelism
+// pre-allocated chemass vector, OpenMP parallelism
+// with per-thread exprtk expression copies
 ################################################# */
 void OpenWQ_CH_model::bgc_flex_transform(
     OpenWQ_json& OpenWQ_json,
@@ -49,6 +53,7 @@ void OpenWQ_CH_model::bgc_flex_transform(
     const bool is_time_step_0 = OpenWQ_hostModelconfig.is_time_step_0();
     const double time_step = OpenWQ_hostModelconfig.get_time_step();
     const unsigned int num_depend = OpenWQ_hostModelconfig.get_num_HydroDepend();
+    const bool use_parallel = nativeFlex->thread_local_ready && (nx * ny * nz > 1);
 
     // Get cycling_frameworks for compartment icomp
     try{
@@ -95,6 +100,7 @@ void OpenWQ_CH_model::bgc_flex_transform(
                 index_prod = std::get<4>(bgc_info);
                 const std::vector<unsigned int>& index_chemtransf = std::get<5>(bgc_info);
                 const unsigned int num_chem_in_transf = index_chemtransf.size();
+                const unsigned int expr_idx = transf_index[transi];
 
                 // Pre-fetch cube references for consumed and produced species
                 auto& d_chem_cons = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_cons);
@@ -103,52 +109,124 @@ void OpenWQ_CH_model::bgc_flex_transform(
 
                 /* ########################################
                 // Loop over space: nx, ny, nz
-                // Note: exprtk expressions are not thread-safe (they use
-                // shared symbol tables), so the spatial loop remains sequential.
-                // The pre-allocation optimization below still provides a
-                // significant speedup by avoiding heap alloc per cell.
+                // PARALLEL: If thread-local expressions are available,
+                // use OpenMP to parallelize the spatial loop.
+                // Each thread uses its own chemass vector, dependVar_scalar
+                // vector, and compiled expressions.
                 ######################################## */
 
-                // OPTIMIZED: Pre-allocate to correct size once, reuse via indexing
-                nativeFlex->chemass_InTransfEq.resize(num_chem_in_transf);
+                // Total number of spatial cells
+                const unsigned int total_cells = nx * ny * nz;
 
-                for (unsigned int ix=0;ix<nx;ix++){
-                    for (unsigned int iy=0;iy<ny;iy++){
-                        for (unsigned int iz=0;iz<nz;iz++){
+                if (use_parallel && total_cells > 1) {
+                    // ============================================
+                    // PARALLEL PATH: OpenMP with thread-local exprtk
+                    // ============================================
 
-                            // OPTIMIZED: overwrite by index instead of clear/push_back
-                            for (unsigned int chem=0;chem<num_chem_in_transf;chem++){
-                                nativeFlex->chemass_InTransfEq[chem] =
-                                    (*OpenWQ_vars.chemass)(icmp)(index_chemtransf[chem])(ix,iy,iz);
+                    // Pre-fetch all chemass cubes for species in this transformation
+                    // (read-only, safe to share across threads)
+                    std::vector<const arma::Cube<double>*> chemass_cubes(num_chem_in_transf);
+                    for (unsigned int chem = 0; chem < num_chem_in_transf; chem++) {
+                        chemass_cubes[chem] = &((*OpenWQ_vars.chemass)(icmp)(index_chemtransf[chem]));
+                    }
+
+                    #pragma omp parallel
+                    {
+                        #ifdef _OPENMP
+                        const int tid = omp_get_thread_num();
+                        #else
+                        const int tid = 0;
+                        #endif
+
+                        // Get thread-local data vectors and expression
+                        auto& tl_chemass = nativeFlex->thread_chemass_InTransfEq[tid];
+                        auto& tl_depvar = nativeFlex->thread_dependVar_scalar[tid];
+                        auto& tl_expr = nativeFlex->thread_BGCexpressions_eq[tid][expr_idx];
+
+                        #pragma omp for schedule(static)
+                        for (unsigned int cell = 0; cell < total_cells; cell++) {
+                            // Decompose linear index to ix, iy, iz
+                            const unsigned int iz = cell % nz;
+                            const unsigned int iy = (cell / nz) % ny;
+                            const unsigned int ix = cell / (ny * nz);
+
+                            // Fill thread-local chemass vector
+                            for (unsigned int chem = 0; chem < num_chem_in_transf; chem++) {
+                                tl_chemass[chem] = (*chemass_cubes[chem])(ix, iy, iz);
                             }
 
-                            // Update current dependencies for current x, y and z
-                            for (unsigned int depi=0;depi<num_depend;depi++){
-                                OpenWQ_hostModelconfig.set_dependVar_scalar_at(
-                                    depi, OpenWQ_hostModelconfig.get_dependVar_at(depi,ix,iy,iz));
+                            // Fill thread-local dependency scalars
+                            for (unsigned int depi = 0; depi < num_depend; depi++) {
+                                tl_depvar[depi] = OpenWQ_hostModelconfig.get_dependVar_at(depi, ix, iy, iz);
                             }
 
-                            // Mass transfered: Consumed -> Produced (using exprtk)
-                            double transf_mass = std::fmax(
-                                nativeFlex->BGCexpressions_eq[transf_index[transi]].value(),
-                                0.0);
+                            // Evaluate expression using thread-local data
+                            double transf_mass = std::fmax(tl_expr.value(), 0.0);
 
                             // Guarantee that removed mass is not larger than existing mass
-                            if (!is_time_step_0){
+                            if (!is_time_step_0) {
                                 transf_mass = std::fmin(
-                                        chemass_cons(ix,iy,iz),
-                                        transf_mass * time_step);
-                            }else{
+                                    chemass_cons(ix, iy, iz),
+                                    transf_mass * time_step);
+                            } else {
                                 transf_mass = 0.0;
                             }
 
-                            // Update derivatives
-                            d_chem_cons(ix,iy,iz) -= transf_mass;
-                            d_chem_prod(ix,iy,iz) += transf_mass;
+                            // Update derivatives (atomic updates since different threads
+                            // may write to the same cell - but with static scheduling
+                            // on a flattened loop, each cell is processed by exactly one thread)
+                            d_chem_cons(ix, iy, iz) -= transf_mass;
+                            d_chem_prod(ix, iy, iz) += transf_mass;
+                        }
+                    } // end omp parallel
 
+                } else {
+                    // ============================================
+                    // SEQUENTIAL PATH: Original serial code
+                    // (used when OpenMP not available or single cell)
+                    // ============================================
+
+                    // Pre-allocate to correct size once, reuse via indexing
+                    nativeFlex->chemass_InTransfEq.resize(num_chem_in_transf);
+
+                    for (unsigned int ix=0;ix<nx;ix++){
+                        for (unsigned int iy=0;iy<ny;iy++){
+                            for (unsigned int iz=0;iz<nz;iz++){
+
+                                // Overwrite by index instead of clear/push_back
+                                for (unsigned int chem=0;chem<num_chem_in_transf;chem++){
+                                    nativeFlex->chemass_InTransfEq[chem] =
+                                        (*OpenWQ_vars.chemass)(icmp)(index_chemtransf[chem])(ix,iy,iz);
+                                }
+
+                                // Update current dependencies for current x, y and z
+                                for (unsigned int depi=0;depi<num_depend;depi++){
+                                    OpenWQ_hostModelconfig.set_dependVar_scalar_at(
+                                        depi, OpenWQ_hostModelconfig.get_dependVar_at(depi,ix,iy,iz));
+                                }
+
+                                // Mass transfered: Consumed -> Produced (using exprtk)
+                                double transf_mass = std::fmax(
+                                    nativeFlex->BGCexpressions_eq[expr_idx].value(),
+                                    0.0);
+
+                                // Guarantee that removed mass is not larger than existing mass
+                                if (!is_time_step_0){
+                                    transf_mass = std::fmin(
+                                            chemass_cons(ix,iy,iz),
+                                            transf_mass * time_step);
+                                }else{
+                                    transf_mass = 0.0;
+                                }
+
+                                // Update derivatives
+                                d_chem_cons(ix,iy,iz) -= transf_mass;
+                                d_chem_prod(ix,iy,iz) += transf_mass;
+
+                            }
                         }
                     }
-                }
+                } // end if use_parallel
             }
         }
     }catch(json::exception& e){

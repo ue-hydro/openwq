@@ -35,9 +35,9 @@ void OpenWQ_compute::SOLVER_driver(
     
     // Local variables
     std::string msg_string; // error/warning message
-    
 
-    if ((OpenWQ_wqconfig.SOLVER_module).compare("SUNDIALS") == 0){
+    // OPTIMIZED: use cached bools instead of string comparisons
+    if (OpenWQ_wqconfig.is_solver_sundials){
 
         Solve_with_CVode(
             OpenWQ_hostModelconfig,
@@ -48,8 +48,8 @@ void OpenWQ_compute::SOLVER_driver(
             OpenWQ_CH_model,
             OpenWQ_TS_model,
             OpenWQ_utils);
-        
-        if ((OpenWQ_wqconfig.TS_model->TS_module).compare("NONE") != 0) {
+
+        if (OpenWQ_wqconfig.is_TS_enabled) {
 
             Solve_with_CVode_Sediment(
                 OpenWQ_hostModelconfig,
@@ -63,8 +63,8 @@ void OpenWQ_compute::SOLVER_driver(
 
         }
 
-    } else if ((OpenWQ_wqconfig.SOLVER_module).compare("BE") == 0) {
-        
+    } else if (OpenWQ_wqconfig.is_solver_be) {
+
         Solve_with_BE(
             OpenWQ_hostModelconfig,
             OpenWQ_wqconfig,
@@ -72,8 +72,8 @@ void OpenWQ_compute::SOLVER_driver(
             OpenWQ_json,
             OpenWQ_output,
             OpenWQ_CH_model);
-        
-        if ((OpenWQ_wqconfig.TS_model->TS_module).compare("NONE") != 0) {
+
+        if (OpenWQ_wqconfig.is_TS_enabled) {
 
             Solve_with_BE_Sediment(
                 OpenWQ_hostModelconfig,

@@ -122,5 +122,8 @@ void OpenWQ_couplercalls::InitialConfig(
     // ##################################
     OpenWQ_wqconfig.cache_runtime_flags();
     OpenWQ_wqconfig.build_bgc_lookup();
+    // PARALLEL: Build per-thread copies of exprtk expressions
+    // for OpenMP parallelization of BGC spatial loops
+    OpenWQ_wqconfig.build_thread_local_expressions(OpenWQ_hostModelconfig);
 
 }

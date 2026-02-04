@@ -269,6 +269,11 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
 
             OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_eq.push_back(expression);
 
+            // PARALLEL: Store modified expression string for re-compilation
+            // in per-thread copies (needed for OpenMP parallelization)
+            OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_modif_strings.push_back(
+                expression_string_modif);
+
         }
     }
 }
