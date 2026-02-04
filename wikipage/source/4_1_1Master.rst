@@ -53,18 +53,18 @@ The master configuration is a JSON file that provides OpenWQ with information an
 
 **Principal Keys 4**: ``MODULES``
 
-+-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
-| ``BIOGEOCHEMISTRY`` -> ``MODULE_NAME``              | Biogeochemical cycling module choice:                                                                         |
-|                                                     | ``NATIVE_BGC_FLEX`` (flexible reactions) or ``PHREEQC`` (geochemical engine).                                 |
-|                                                     | See :doc:`BGC config <4_1_3BGC>` or :doc:`PHREEQC config <4_1_6PHREEQC>`                                     |
-+-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
-| ``BIOGEOCHEMISTRY`` -> ``MODULE_CONFIG_FILEPATH``   | Path to `Biogeochemical cycling configuration file <https://openwq.readthedocs.io/en/latest/4_1_3BGC.html#>`_ |
-|                                                     | or PHREEQC module configuration file                                                                          |
-+-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
-| ``TRANSPORT_EROSION`` -> ``MODULE_NAME``            | Transport-Erosion module choice. See :doc:`Transport config <4_1_4TE>`                                        |
-+-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
-| ``TRANSPORT_EROSION`` -> ``MODULE_CONFIG_FILEPATH`` | Transport-Erosion configuration file path                                                                     |
-+-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------+
++-----------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+| ``BIOGEOCHEMISTRY`` -> ``MODULE_NAME``              | Biogeochemical cycling module choice:                                                                          |
+|                                                     | ``NATIVE_BGC_FLEX`` (flexible reactions) or ``PHREEQC`` (geochemical engine).                                  |
+|                                                     | See :doc:`BGC config <4_1_3BGC>` or :doc:`PHREEQC config <4_1_6PHREEQC>`                                       |
++-----------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+| ``BIOGEOCHEMISTRY`` -> ``MODULE_CONFIG_FILEPATH``   | Path to `Biogeochemical cycling configuration file <https://openwq.readthedocs.io/en/latest/4_1_3BGC.html#>`_  |
+|                                                     | or PHREEQC module configuration file                                                                           |
++-----------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+| ``TRANSPORT_EROSION`` -> ``MODULE_NAME``            | Transport-Erosion module choice. See :doc:`Transport config <4_1_4TE>`                                         |
++-----------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
+| ``TRANSPORT_EROSION`` -> ``MODULE_CONFIG_FILEPATH`` | Transport-Erosion configuration file path                                                                      |
++-----------------------------------------------------+----------------------------------------------------------------------------------------------------------------+
 
 **Principal Keys 5**: ``OPENWQ_OUTPUT``
 

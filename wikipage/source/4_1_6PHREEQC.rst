@@ -117,6 +117,113 @@ During model initialization, the PHREEQC module performs the following steps:
 6. **Verification**: Confirms that the number of discovered components matches the OpenWQ configuration
 
 
+Example PHREEQC input file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A complete PHREEQC input file (``.pqi``) defines the geochemical system. Here is a more detailed example for river water quality modeling::
+
+    # Example: River water geochemistry with carbonate equilibrium
+
+    TITLE River carbonate system
+
+    SOLUTION 1   River water - Initial composition
+        units       mol/kgw
+        temp        15.0
+        pH          7.5
+        pe          4.0      # Oxidizing conditions
+        Ca          0.002    # Calcium
+        Mg          0.001    # Magnesium
+        Na          0.003    # Sodium
+        K           0.0002   # Potassium
+        Cl          0.002    # Chloride
+        S(6)        0.001    # Sulfate as S
+        C(4)        0.003    # Carbonate as C
+        N(-3)       0.00001  # Ammonium as N
+        N(5)        0.00005  # Nitrate as N
+    END
+
+    EQUILIBRIUM_PHASES 1
+        Calcite     0.0      # Equilibrium with calcite (SI=0)
+        CO2(g)     -3.5      # Atmospheric CO2
+    END
+
+    KINETICS 1
+        # Example kinetic reaction: organic matter decomposition
+        -formula  CH2O  -1  O2  -1  CO2  1  H2O  1
+        -m0       0.001     # Initial moles
+        -parms    0.01      # Rate constant (1/day)
+    END
+
+**Key PHREEQC blocks:**
+
+* ``SOLUTION``: Defines initial water chemistry with concentrations and master species
+* ``EQUILIBRIUM_PHASES``: Minerals and gases at chemical equilibrium
+* ``KINETICS``: User-defined kinetic reactions with rate expressions
+* ``EXCHANGE``: Cation exchange surfaces (e.g., clay minerals)
+* ``SURFACE``: Surface complexation modeling (e.g., iron oxide adsorption)
+
+
+Switching between NATIVE_BGC_FLEX and PHREEQC
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+OpenWQ provides two biogeochemistry engines:
+
+**NATIVE_BGC_FLEX** (default):
+
+* User-defined kinetic expressions using the ExprTk library
+* Fast computation, suitable for simple reaction networks
+* Direct control over reaction equations and parameters
+* No thermodynamic database required
+
+**PHREEQC**:
+
+* Full thermodynamic equilibrium calculations
+* Comprehensive mineral/gas equilibria
+* Built-in aqueous speciation
+* Requires thermodynamic database (.dat file)
+* More computationally intensive
+
+To switch between engines, modify the ``BIOGEOCHEMISTRY`` field in the :doc:`Master configuration <4_1_1Master>`:
+
+.. code-block:: json
+
+    // For NATIVE_BGC_FLEX:
+    "BIOGEOCHEMISTRY": "NATIVE_BGC_FLEX"
+
+    // For PHREEQC:
+    "BIOGEOCHEMISTRY": "PHREEQC"
+
+When using PHREEQC, the biogeochemistry JSON file must contain the PHREEQC-specific configuration fields (``FILEPATH``, ``DATABASE``, ``BGC_GENERAL_MOBILE_SPECIES``) instead of the ``CYCLING_FRAMEWORKS`` structure used by NATIVE_BGC_FLEX.
+
+
+Discovering PHREEQC component names
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+PHREEQC determines chemical components dynamically from the database and input file. To discover the available component names:
+
+1. Set ``RUN_MODE_DEBUG: true`` in the master configuration
+2. Run OpenWQ with an initial PHREEQC configuration
+3. Check the console output for the component list from ``FindComponents()``
+
+The component order matters for ``BGC_GENERAL_MOBILE_SPECIES``. Common components (with the standard ``phreeqc.dat`` database) include:
+
+* ``H`` - Hydrogen
+* ``O`` - Oxygen
+* ``Charge`` - Electrical charge balance
+* ``Ca`` - Calcium
+* ``Mg`` - Magnesium
+* ``Na`` - Sodium
+* ``K`` - Potassium
+* ``C`` - Carbon (total)
+* ``N`` - Nitrogen (total)
+* ``S`` - Sulfur
+* ``Cl`` - Chloride
+
+.. warning::
+
+    The number of species in ``BGC_GENERAL_MOBILE_SPECIES`` must not exceed the number of components found by PHREEQC. If indices are invalid, OpenWQ will report an error during initialization.
+
+
 Example test case
 ~~~~~~~~~~~~~~~~~~
 
@@ -127,3 +234,13 @@ A complete PHREEQC test case is available in the ``test_case_phreeqc/`` director
 * PHREEQC input file with solution chemistry definitions
 * Transport using the pure advection module (``OPENWQ_NATIVE_TRANSP_DISS_ADV``)
 * HDF5 output of chemical species concentrations
+
+
+Best practices
+~~~~~~~~~~~~~~~
+
+1. **Start simple**: Begin with a few species and simple equilibrium reactions, then add complexity
+2. **Validate with PHREEQC standalone**: Test your .pqi file in standalone PHREEQC before coupling with OpenWQ
+3. **Check convergence**: Monitor PhreeqcRM warnings in the log output for convergence issues
+4. **Balance charges**: Ensure your solutions are electrically balanced to avoid numerical issues
+5. **Match units**: PHREEQC uses mol/kgw internally; ensure input concentrations are converted appropriately
