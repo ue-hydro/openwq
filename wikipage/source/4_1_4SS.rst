@@ -1,0 +1,245 @@
+Source/Sink & External Fluxes
+==========================================
+
+``Source/Sink`` loads and ``External Fluxes`` are optional entries defined in the :doc:`Master configuration <4_1_1Master>` under ``OPENWQ_INPUT``.
+They use a similar data structure. The differences are highlighted in each section below.
+
+Each sink/source or external flux is defined in an individual JSON file, and you can add as many files as desired.
+
+There are three ways to provide source/sink data:
+
+1. **JSON** -- inline time series in the JSON file
+2. **CSV/ASCII** -- time series in an external CSV file
+3. **Copernicus LULC** -- land-use-based loading using Copernicus satellite data and the Python config generator
+
+
+Common Structure
+~~~~~~~~~~~~~~~~
+
+All source/sink and external flux JSON files share the following top-level structure.
+
+**Key 1**: ``METADATA``
+
++---------------+--------------------------------------------------+
+| ``COMMENT``   | Comments or relevant information about the data  |
++---------------+--------------------------------------------------+
+| ``SOURCE``    | Additional information or additional comments    |
++---------------+--------------------------------------------------+
+
+**Key 2**: ``(i#)`` (numbered entries in sequential order)
+
+Each numbered entry defines one loading or flux:
+
++--------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| ``DATA_FORMAT``                      | Data format: ``"JSON"``, ``"ASCII"``, or ``"HDF5"`` (EWF only)                                                          |
++--------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| ``UNITS``                            | Units of input, e.g., ``"mg/l"``, ``"kg"``                                                                              |
++--------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| ``CHEMICAL_NAME``                    | Chemical species name (as defined in :doc:`Modules <4_1_3Modules>` biogeochemistry config)                              |
++--------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| ``COMPARTMENT_NAME``                 | Compartment name (*Sink/Source only*)                                                                                   |
++--------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| ``EXTERNAL_INPUTFLUX_NAME``          | External water source name (*External Fluxes only*)                                                                     |
++--------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| ``TYPE``                             | ``"source"`` or ``"sink"`` (*Sink/Source only*)                                                                          |
++--------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+
+Method 1: JSON (inline data)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Set ``DATA_FORMAT`` to ``"JSON"``. The ``DATA`` block contains the time series directly in the JSON file.
+
+Each entry is a numbered row with the format:
+
+``"(i#)"``: ``[YYYY, MM, DD, HH, MIN, SEC, ix, iy, iz, load, load_type, time_units]``
+
++---------------------+-------------------------------------------------------------------------+
+| ``<YYYY>``          | Input year: ``(i#)`` or ``"all"``                                       |
++---------------------+-------------------------------------------------------------------------+
+| ``<MM>``            | Input month: ``(i#)`` or ``"all"``                                      |
++---------------------+-------------------------------------------------------------------------+
+| ``<DD>``            | Input day: ``(i#)`` or ``"all"``                                        |
++---------------------+-------------------------------------------------------------------------+
+| ``<HH>``            | Input hour: ``(i#)`` or ``"all"``                                       |
++---------------------+-------------------------------------------------------------------------+
+| ``<MIN>``           | Input minute: ``(i#)`` or ``"all"``                                     |
++---------------------+-------------------------------------------------------------------------+
+| ``<SEC>``           | Input second: ``(i#)`` or ``"all"``                                     |
++---------------------+-------------------------------------------------------------------------+
+| ``<ix>``            | Spatial ix index: ``(i#)`` or ``"all"``                                 |
++---------------------+-------------------------------------------------------------------------+
+| ``<iy>``            | Spatial iy index: ``(i#)`` or ``"all"``                                 |
++---------------------+-------------------------------------------------------------------------+
+| ``<iz>``            | Spatial iz index: ``(i#)`` or ``"all"``                                 |
++---------------------+-------------------------------------------------------------------------+
+| ``<load>``          | Load value (float)                                                      |
++---------------------+-------------------------------------------------------------------------+
+| ``<load type>``     | ``"discrete"`` or ``"continuous"`` (*Sink/Source only*)                  |
++---------------------+-------------------------------------------------------------------------+
+| ``<time units>``    | Time units if ``"continuous"``, e.g., ``"1/day"`` (*Sink/Source only*)   |
++---------------------+-------------------------------------------------------------------------+
+
+Example:
+
+.. code-block:: json
+
+    {
+        "METADATA": {
+            "Comment": "synthetic loading",
+            "Source": "test_1"
+        },
+        "1": {
+            "Chemical_name": "species_A",
+            "Compartment_name": "SCALARAQUIFER",
+            "Type": "source",
+            "Units": "kg",
+            "Data_Format": "JSON",
+            "Data": {
+                "1": ["all","all","all","all","all","all","all","all","all",0.0001,"discrete"],
+                "2": ["all","all","all","all","all","all","all","all","all",0.0001,"continuous","min"],
+                "3": [2018,"all",4,6,30,30,1,1,1,100,"discrete"],
+                "4": [2019,"all",4,6,30,"all",1,1,1,10,"continuous","min"],
+                "5": [2019,2,4,6,30,15,1,1,1,350,"discrete"]
+            }
+        }
+    }
+
+
+Method 2: CSV/ASCII (external file)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Set ``DATA_FORMAT`` to ``"ASCII"``. The time series is provided through an external CSV file.
+The ``DATA`` block points to the file instead of containing inline data.
+
++-------------------------------+-------------------------------------------------------------------------+
+| ``"FILEPATH"``                | Path to the CSV/ASCII file with the input data                          |
++-------------------------------+-------------------------------------------------------------------------+
+| ``"DELIMITER"``               | Delimiter used in the file, e.g., ``","``                               |
++-------------------------------+-------------------------------------------------------------------------+
+| ``"NUMBER_OF_HEADER_ROWS"``   | Number of header rows to skip, e.g., ``3``                              |
++-------------------------------+-------------------------------------------------------------------------+
+| ``"HEADER_KEY_ROW"``          | Row number containing the column headers                                |
+|                               | (must have: YYYY, MM, DD, HH, MIN, SEC, ix, iy, iz, load, etc.)        |
++-------------------------------+-------------------------------------------------------------------------+
+
+Example:
+
+.. code-block:: json
+
+    {
+        "METADATA": {
+            "Comment": "CSV-based loading",
+            "Source": "fertilizer_data"
+        },
+        "1": {
+            "Chemical_name": "species_B",
+            "Compartment_name": "SCALARAQUIFER",
+            "Type": "source",
+            "Units": "kg",
+            "Data_Format": "ASCII",
+            "Data": {
+                "Filepath": "SS_speciesA_ScalarAquifer_test.csv",
+                "Delimiter": ",",
+                "Number_of_header_rows": 3,
+                "Header_key_row": 3
+            }
+        }
+    }
+
+.. image:: ss_ascii.png
+
+
+Method 3: Copernicus LULC (land-use-based loading)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Python configuration generator can compute spatially distributed source/sink loads based on **Copernicus ESA CCI Land Use/Land Cover (LULC)** satellite data. This method:
+
+1. Reads Copernicus LULC NetCDF files (``ESACCI-LC-*.nc``)
+2. Clips the raster data to the catchment boundary using a shapefile
+3. Computes the area of each land use class per HRU (Hydrological Response Unit)
+4. Generates per-HRU, per-year loading CSV files
+5. Creates the OpenWQ source/sink JSON configuration referencing those CSV files
+
+This is configured in the Python ``template_model_config.py`` using:
+
+.. code-block:: python
+
+    ss_method = "COPERNICUS"
+
+    # Basin shapefile information
+    ss_method_copernicus_basin_info = {
+        "path_to_shp": "path/to/catchment.shp",
+        "mapping_key": "HRU_ID"
+    }
+
+    # Directory containing Copernicus LULC NetCDF files
+    ss_method_copernicus_nc_lc_dir = "path/to/copernicus_lulc/"
+
+    # Period to process [year_start, year_end]
+    ss_method_copernicus_period = [2000, 2020]
+
+    # Compartment name for the loads
+    ss_method_copernicus_compartment_name_for_load = "SUMMA_RUNOFF"
+
+The generator creates a ``ss_copernicus_files/`` subdirectory containing the clipped rasters, per-HRU area tables, and the resulting CSV loading files that are referenced by the generated JSON configuration.
+
+
+HDF5 External Fluxes (inter-model coupling)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This method is only applicable to ``External Fluxes`` (not Sink/Source).
+It is used when loading external flux concentrations from the HDF5 output of another host_model-OpenWQ coupled simulation (e.g., an atmospheric model providing precipitation chemistry to a hydrological model).
+
+.. image:: coupled_host_models.PNG
+    :width: 300
+    :alt: Coupling two host_model-OpenWQ coupled models
+
+The general steps are:
+
+1. Run the upstream host_model-OpenWQ coupled model. Export data for the compartment from where the inter-model fluxes originate.
+2. Run the downstream host_model-OpenWQ coupled model, pointing to the upstream HDF5 outputs.
+
+Additional keys for HDF5 external fluxes:
+
++---------------------------------+-----------------------------------------------------------------------------------------------------------------+
+| ``"EXTERNAL_COMPARTMENT_NAME"`` | Name of the compartment in the upstream model from where the fluxes originate                                   |
++---------------------------------+-----------------------------------------------------------------------------------------------------------------+
+| ``"INTERACTION_INTERFACE"``     | Array specifying the interface elements, e.g., ``["all", "all", 1]``                                            |
++---------------------------------+-----------------------------------------------------------------------------------------------------------------+
+| ``"INTERPOLATION"``             | Time interpolation method: ``"STEP"``, ``"NEAREST"``, or ``"LINEAR"``                                           |
++---------------------------------+-----------------------------------------------------------------------------------------------------------------+
+| ``"FOLDERPATH"``                | Path to the HDF5 output folder from the upstream model                                                          |
+|                                 | (must also contain ``Log_OpenWQ.txt`` from the upstream instance)                                               |
++---------------------------------+-----------------------------------------------------------------------------------------------------------------+
+
+**Diagrams showing examples of** ``"INTERACTION_INTERFACE"`` **setup:**
+
+.. image:: ewf_h5_loading_interface_convention.PNG
+    :width: 500
+    :alt: Interface characterization for two host_model-OpenWQ coupled models
+
+Example:
+
+.. code-block:: json
+
+    {
+        "METADATA": {
+            "Comment": "atmospheric deposition",
+            "Source": "upstream_model"
+        },
+        "1": {
+            "DATA_FORMAT": "HDF5",
+            "UNITS": "mg/l",
+            "EXTERNAL_COMPARTMENT_NAME": "ATMOSPHERE_LAYER",
+            "EXTERNAL_INPUTFLUX_NAME": "PRECIP",
+            "INTERACTION_INTERFACE": ["all", 1, 1],
+            "INTERPOLATION": "LINEAR",
+            "FOLDERPATH": "openwq_ewf_h5"
+        }
+    }
+
+
+The JSON file supports C/C++ syntax for comments: single-line comment (``//``) or comment blocks (``/*`` and ``*/``).
+
+The symbol ``(i#)`` refers to an integer number sequence. The symbol ``(s#)`` refers to a string input. The symbol ``(f#)`` refers to a float input value.

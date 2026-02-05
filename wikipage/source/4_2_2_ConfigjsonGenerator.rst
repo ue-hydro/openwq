@@ -229,7 +229,7 @@ HYPE_HBVSED settings (HBV-sed):
     # Set to None when si_module_name = "NONE"
     si_species_params = None
 
-See :doc:`Sorption Isotherms <4_1_7SI>` for detailed parameter descriptions and JSON format.
+See :doc:`Sorption Isotherms <4_1_3Modules>` for detailed parameter descriptions and JSON format.
 
 
 Source/sink configuration

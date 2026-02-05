@@ -2,7 +2,7 @@ Sink-Source JSON Generator
 ========================================
 
 The Sink-Source JSON file defines external chemical loads (point sources, non-point sources, atmospheric deposition) and removal processes (water treatment, abstraction) for OpenWQ simulations.
-While this file can be created manually (see :doc:`Source and Sink configuration <4_1_8SS>`), the following guidelines help generate it correctly.
+While this file can be created manually (see :doc:`Source and Sink configuration <4_1_4SS>`), the following guidelines help generate it correctly.
 
 
 Manual creation
@@ -21,7 +21,7 @@ Manual creation
 
 4. Specify the chemical species and mass loading rates with units
 
-The JSON structure follows the format described in :doc:`Source and Sink configuration <4_1_8SS>`.
+The JSON structure follows the format described in :doc:`Source and Sink configuration <4_1_4SS>`.
 
 .. tip::
 

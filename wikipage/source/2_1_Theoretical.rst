@@ -116,7 +116,7 @@ For a given solution, PHREEQC solves:
 
 where :math:`K_i` is the equilibrium constant for reaction :math:`i`, :math:`a_j` is the activity of species :math:`j`, and :math:`\nu_{ij}` is the stoichiometric coefficient.
 
-This approach is more computationally expensive than the BGC-Flex approach, but provides thermodynamically consistent speciation calculations, which are essential for problems involving pH-dependent reactions, mineral interactions, or complex aqueous chemistry. See :doc:`PHREEQC configuration <4_1_3bPHREEQC>` for setup details.
+This approach is more computationally expensive than the BGC-Flex approach, but provides thermodynamically consistent speciation calculations, which are essential for problems involving pH-dependent reactions, mineral interactions, or complex aqueous chemistry. See :doc:`PHREEQC configuration <4_1_3Modules>` for setup details.
 
 
 Sorption Isotherms
@@ -150,7 +150,7 @@ where :math:`q_{max}` is the maximum adsorption capacity :math:`[MM^{-1}_{soil}]
 
     F_{sorption} = \Delta q \cdot \rho \cdot L
 
-where :math:`K_{adsdes}` is the kinetic adsorption/desorption rate :math:`[T^{-1}]`, :math:`\rho` is bulk density :math:`[ML^{-3}]`, and :math:`L` is layer thickness :math:`[L]`. This flux is applied as a sink/source on the dissolved mass. See :doc:`Sorption Isotherm configuration <4_1_7SI>` for setup details.
+where :math:`K_{adsdes}` is the kinetic adsorption/desorption rate :math:`[T^{-1}]`, :math:`\rho` is bulk density :math:`[ML^{-3}]`, and :math:`L` is layer thickness :math:`[L]`. This flux is applied as a sink/source on the dissolved mass. See :doc:`Sorption Isotherm configuration <4_1_3Modules>` for setup details.
 
 
 Sediment Transport
@@ -220,5 +220,5 @@ Numerical Solvers
 
 OpenWQ provides two numerical solvers for integrating the water quality ODEs:
 
-* **Forward Euler**: A first-order explicit method. Simple and fast. See :doc:`Solvers <4_1_9Solvers>`.
-* **SUNDIALS CVode**: An adaptive multi-step method (Adams or BDF) with variable order and automatic step-size control. Provides higher-order accuracy for stiff and non-stiff problems. See :doc:`Solvers <4_1_9Solvers>`.
+* **Forward Euler**: A first-order explicit method. Simple and fast. See :doc:`Solvers <4_1_5Solvers>`.
+* **SUNDIALS CVode**: An adaptive multi-step method (Adams or BDF) with variable order and automatic step-size control. Provides higher-order accuracy for stiff and non-stiff problems. See :doc:`Solvers <4_1_5Solvers>`.

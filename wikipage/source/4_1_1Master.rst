@@ -45,7 +45,7 @@ Top-level key that selects the numerical solver.
 | ``"SUNDIALS"``      | SUNDIALS CVode adaptive multi-step solver                                       |
 +-------------------+-----------------------------------------------------------------------------------+
 
-See :doc:`Numerical Solvers <4_1_9Solvers>` for details.
+See :doc:`Numerical Solvers <4_1_5Solvers>` for details.
 
 
 ``OPENWQ_INPUT``
@@ -64,7 +64,7 @@ EXTERNAL_WATER_FLUXES
 ^^^^^^^^^^^^^^^^^^^^^^
 
 Numbered pairs of ``LABEL`` and ``FILEPATH`` for external water flux input files.
-Each entry references a :doc:`Source/Sink & External Fluxes file <4_1_8SS>`. *Optional*.
+Each entry references a :doc:`Source/Sink & External Fluxes file <4_1_4SS>`. *Optional*.
 
 +--------------------------+----------------------------------------------+
 | ``(#)`` -> ``LABEL``     | Label identifying this flux entry            |
@@ -76,7 +76,7 @@ SINK_SOURCE
 ^^^^^^^^^^^^^
 
 Numbered pairs of ``LABEL`` and ``FILEPATH`` for chemical source/sink input files.
-Each entry references a :doc:`Source/Sink file <4_1_8SS>`. *Optional*.
+Each entry references a :doc:`Source/Sink file <4_1_4SS>`. *Optional*.
 
 +--------------------------+----------------------------------------------+
 | ``(#)`` -> ``LABEL``     | Label identifying this source/sink entry     |
@@ -100,7 +100,7 @@ BIOGEOCHEMISTRY
 | ``MODULE_CONFIG_FILEPATH``    | Path to biogeochemistry config file                           |
 +-------------------------------+---------------------------------------------------------------+
 
-See :doc:`NATIVE_BGC_FLEX <4_1_3BGC>` or :doc:`PHREEQC <4_1_3bPHREEQC>`.
+See :doc:`Modules <4_1_3Modules>`.
 
 TRANSPORT_DISSOLVED
 ^^^^^^^^^^^^^^^^^^^^^
@@ -111,7 +111,7 @@ TRANSPORT_DISSOLVED
 | ``MODULE_CONFIG_FILEPATH``    | Path to transport dissolved config file                       |
 +-------------------------------+---------------------------------------------------------------+
 
-See :doc:`Transport Dissolved <4_1_4TD>`.
+See :doc:`Modules <4_1_3Modules>`.
 
 LATERAL_EXCHANGE
 ^^^^^^^^^^^^^^^^^^
@@ -122,7 +122,7 @@ LATERAL_EXCHANGE
 | ``MODULE_CONFIG_FILEPATH``    | Path to lateral exchange config file                          |
 +-------------------------------+---------------------------------------------------------------+
 
-See :doc:`Lateral Exchange <4_1_5LE>`.
+See :doc:`Modules <4_1_3Modules>`.
 
 TRANSPORT_SEDIMENTS
 ^^^^^^^^^^^^^^^^^^^^^
@@ -135,7 +135,7 @@ TRANSPORT_SEDIMENTS
 | ``MODULE_CONFIG_FILEPATH``    | Path to transport sediments config file                       |
 +-------------------------------+---------------------------------------------------------------+
 
-See :doc:`Transport Sediments <4_1_6TS>`.
+See :doc:`Modules <4_1_3Modules>`.
 
 SORPTION_ISOTHERM
 ^^^^^^^^^^^^^^^^^^^
@@ -148,7 +148,7 @@ SORPTION_ISOTHERM
 | ``MODULE_CONFIG_FILEPATH``    | Path to sorption isotherm config file                         |
 +-------------------------------+---------------------------------------------------------------+
 
-See :doc:`Sorption Isotherms <4_1_7SI>`.
+See :doc:`Modules <4_1_3Modules>`.
 
 
 ``OPENWQ_OUTPUT``

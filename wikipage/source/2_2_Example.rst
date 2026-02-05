@@ -45,4 +45,4 @@ Example applications include:
 * **Phosphorus cycle**: Sorption-desorption, mineralization, and particulate transport
 * **Dissolved oxygen**: BOD decay, reaeration, and sediment oxygen demand
 
-These reaction networks are defined entirely in JSON configuration files. See :doc:`BGC configuration <4_1_3BGC>` for the file format and the :doc:`Theoretical Foundation <2_1_Theoretical>` for the underlying equations.
+These reaction networks are defined entirely in JSON configuration files. See :doc:`Modules <4_1_3Modules>` for the file format and the :doc:`Theoretical Foundation <2_1_Theoretical>` for the underlying equations.

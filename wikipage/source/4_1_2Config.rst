@@ -7,7 +7,7 @@ The transportation and biogeochemical configuration file is a JSON file made up 
 
 +---------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------+
 | ``<Compt_Name>`` -> ``CYCLING_FRAMEWORK``                     | - List of cycling frameworks                                                                                          |
-|                                                               | - As defined in `Biogeochemical cycling configuration file <https://openwq.readthedocs.io/en/latest/4_1_3BGC.html#>`_ |
+|                                                               | - As defined in :doc:`Modules — Biogeochemistry <4_1_3Modules>`                                                       |
 |                                                               | - Format: ``[<s#>, <s#>, ...]``                                                                                       |
 |                                                               | - Example: ``["N_org", "N_inorg", "P_org", "P_inorg"]``                                                               |
 +---------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------+
@@ -57,7 +57,7 @@ The JSON file supports C/C++ syntax for comments: single-line comment (``//``) o
 
 The symbol ``<Compt_Name>`` refers to compartment names as defined by the host model. We can add as many of such compartment json-key blocks as desired (see example below). The compartment names should match those defined in the hostmodel.
 
-The symbol ``<Chem_Name>`` refers to chemical species names as defined in the `Biogeochemical cycling configuration file <https://openwq.readthedocs.io/en/latest/4_1_3BGC.html#>`_.
+The symbol ``<Chem_Name>`` refers to chemical species names as defined in :doc:`Modules — Biogeochemistry <4_1_3Modules>`.
 
 The symbol ``(i#)`` refers to a integer number sequence.. The symbol ``(s#)`` refers to a string input. The symbol ``<f#>`` refers to a float input value.
 
