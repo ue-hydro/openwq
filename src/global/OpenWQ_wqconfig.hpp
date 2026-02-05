@@ -442,8 +442,19 @@ class OpenWQ_wqconfig::TD_model_::NativeAdvDisp_{
 
     public:
 
-    // add variables here if needed
-    // current not passing any variables
+    // Dispersion coefficients [m2/s] (from JSON config)
+    double dispersion_x = 0.0;  // dispersion coefficient in x direction
+    double dispersion_y = 0.0;  // dispersion coefficient in y direction
+    double dispersion_z = 0.0;  // dispersion coefficient in z direction
+
+    // Characteristic length [m] between cell centers
+    // Used to convert D [m2/s] to an effective dispersion rate D_eff = D_avg / L^2 [1/s]
+    // where D_avg = (Dx + Dy + Dz) / 3
+    double characteristic_length_m = 1.0;
+
+    // Pre-computed effective dispersion rate [1/s] = D_avg / L^2
+    // Computed once after JSON parsing to avoid repeated division at runtime
+    double D_eff = 0.0;
 
 };
 

@@ -164,6 +164,7 @@ def Gen_Input_Driver(
         # Transport Dissolved module
         td_module_name: str = "NATIVE_TD_ADV",
         td_module_dispersion_xyz: List[Union[int, float]] = None,
+        td_module_characteristic_length_m: Union[int, float] = 1.0,
 
         # Lateral Exchange module
         le_module_name: str = "NONE",
@@ -433,7 +434,8 @@ def Gen_Input_Driver(
         td_config_filepath=td_config_filepath,
         json_header_comment=json_header_comment,
         td_module_name=td_module_name,
-        td_module_dispersion_xyz=td_module_dispersion_xyz
+        td_module_dispersion_xyz=td_module_dispersion_xyz,
+        td_module_characteristic_length_m=td_module_characteristic_length_m
     )
 
     ###############

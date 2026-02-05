@@ -21,10 +21,28 @@
 
 /* #################################################
 // Mass transport
-// Advection & Dispersion
-// OPTIMIZED: cached flags, pre-fetched refs, pre-computed ratio
+// Advection & Dispersion (Fickian dispersive flux approximation)
+//
+// The advective flux is: F_adv = (wflux_s2r / wmass_source) * chemass_source
+//   which moves mass proportionally to the water flux (concentration-based).
+//
+// The dispersive flux uses a Fickian approximation between cell pairs:
+//   F_disp = D_eff * (C_source - C_recipient) * wmass_source
+// where:
+//   D_eff = D_avg / L^2  [1/s]
+//   D_avg = (Dx + Dy + Dz) / 3  [m2/s]  (averaged since we don't know connection orientation)
+//   L = characteristic_length_m  [m]  (user-provided distance between cell centers)
+//   C_source = chemass_source / wmass_source
+//   C_recipient = chemass_recipient / wmass_recipient
+//
+// The dispersive flux is BIDIRECTIONAL: it can move mass in either direction
+// depending on the concentration gradient, smoothing concentration differences
+// regardless of flow direction. This is physically correct for dispersion.
+//
+// OPTIMIZED: cached flags, pre-fetched refs, pre-computed D_eff
 ################################################# */
 void OpenWQ_TD_model::AdvDisp(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     const int source, const int ix_s, const int iy_s, const int iz_s,
@@ -39,8 +57,20 @@ void OpenWQ_TD_model::AdvDisp(
     const unsigned int numspec = OpenWQ_wqconfig.cached_num_mobile_species;
     const std::vector<unsigned int>& mobile_species = *OpenWQ_wqconfig.cached_mobile_species_ptr;
 
-    // OPTIMIZED: pre-compute concentration factor once
+    // OPTIMIZED: pre-compute advective concentration factor once
     const double conc_factor = wflux_s2r / wmass_source;
+
+    // Get pre-computed effective dispersion rate [1/s]
+    const double D_eff = OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff;
+
+    // Get recipient water mass from host model for concentration calculation
+    // wmass_recipient is needed to compute the recipient concentration: C_r = chemass_r / wmass_r
+    double wmass_recipient = 0.0;
+    bool has_recipient = (recipient != -1);
+    if (has_recipient){
+        wmass_recipient = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+            recipient, ix_r, iy_r, iz_r);
+    }
 
     // OPTIMIZED: pre-fetch field references to avoid repeated pointer dereferencing
     auto& chemass_source = (*OpenWQ_vars.chemass)(source);
@@ -51,22 +81,42 @@ void OpenWQ_TD_model::AdvDisp(
 
         const unsigned int ichem_mob = mobile_species[chemi];
 
-        // Chemical mass flux between source and recipient (Advection)
+        // ===========================
+        // 1) ADVECTIVE FLUX
+        // F_adv = (wflux_s2r / wmass_source) * chemass_source
+        // ===========================
         const double chemass_flux_adv = conc_factor * chemass_source(ichem_mob)(ix_s,iy_s,iz_s);
 
-        // dcdy(xi,yi,t)=(c(xi,yi,t-1)-c(xi,yi-1,t-1))/delty;
-        // dc2dy2(xi,yi,t)=((c(xi,yi+1,t-1)-c(xi,yi,t-1))/delty-(c(xi,yi,t-1)-c(xi,yi-1,t-1))/delty)/(delty);
-        // dc2dx2(xi,yi,t)=((c(xi+1,yi,t-1)-c(xi,yi,t-1))/deltx-(c(xi,yi,t-1)-c(xi-1,yi,t-1))/deltx)/(deltx);
-        // dcdt(xi,yi,t)=-U*dcdy(xi,yi,t)+Di(xi,yi,t)*(dc2dx2(xi,yi,t)+dc2dy2(xi,yi,t));
-
-        // Remove Chemical mass flux from SOURCE
+        // Remove advective flux from SOURCE
         d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_adv;
 
-        // Add Chemical mass flux to RECIPIENT
-        // if recipient == -1, then it's an OUT-flux (loss from system)
-        if (recipient == -1) continue;
+        // Add advective flux to RECIPIENT (if not an OUT-flux)
+        if (!has_recipient){
+            continue;
+        }
         (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
             += chemass_flux_adv;
+
+        // ===========================
+        // 2) DISPERSIVE FLUX (Fickian approximation between cell pairs)
+        // F_disp = D_eff * (C_source - C_recipient) * wmass_source
+        // Positive F_disp means mass moves from source to recipient (source has higher concentration)
+        // Negative F_disp means mass moves from recipient to source (recipient has higher concentration)
+        // ===========================
+        if (D_eff > 0.0 && wmass_recipient > 0.0){
+
+            // Compute concentrations [mass/mass] in source and recipient
+            const double C_source = chemass_source(ichem_mob)(ix_s,iy_s,iz_s) / wmass_source;
+            const double C_recipient = (*OpenWQ_vars.chemass)(recipient)(ichem_mob)(ix_r,iy_r,iz_r) / wmass_recipient;
+
+            // Dispersive mass flux [mass/time]
+            const double chemass_flux_disp = D_eff * (C_source - C_recipient) * wmass_source;
+
+            // Apply dispersive flux: remove from source, add to recipient
+            d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_disp;
+            (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
+                += chemass_flux_disp;
+        }
     }
 
 }

@@ -34,7 +34,11 @@ def create_td_module_json(
         td_module_name: str,
 
         # Transport configuration parameters
-        td_module_dispersion_xyz: List[Union[int, float]]
+        td_module_dispersion_xyz: List[Union[int, float]],
+
+        # Characteristic length between cell centers [m]
+        # Used to compute effective dispersion rate: D_eff = D_avg / L^2
+        td_module_characteristic_length_m: Union[int, float] = 1.0
 
 ) -> None:
     """
@@ -43,10 +47,11 @@ def create_td_module_json(
     Parameters:
         td_config_filepath: Full path where the JSON file will be saved (directories will be created if needed)
         json_header_comment: List of comment lines to add at the top of the file
-        module_name: Name of the transport module (e.g., "OPENWQ_NATIVE_TE_ADVP")
-        dispersion_x: Dispersion coefficient in x direction (m2/s)
-        dispersion_y: Dispersion coefficient in y direction (m2/s)
-        dispersion_z: Dispersion coefficient in z direction (m2/s)
+        td_module_name: Name of the transport module (e.g., "OPENWQ_NATIVE_TD_ADVDISP")
+        td_module_dispersion_xyz: Dispersion coefficients [Dx, Dy, Dz] in m2/s
+        td_module_characteristic_length_m: Characteristic distance between cell centers [m].
+            Used with OPENWQ_NATIVE_TD_ADVDISP to compute the effective dispersion rate
+            D_eff = D_avg / L^2, where D_avg = (Dx + Dy + Dz) / 3.
     """
 
     dispersion_x = td_module_dispersion_xyz[0]
@@ -61,9 +66,10 @@ def create_td_module_json(
     config = {
         "MODULE_NAME": td_module_name,
         "TRANSPORT_CONFIGURATION": {
-            "disperson_x_m2/s": dispersion_x,
-            "disperson_y_m2/s": dispersion_y,
-            "disperson_z_m2/s": dispersion_z
+            "dispersion_x_m2/s": dispersion_x,
+            "dispersion_y_m2/s": dispersion_y,
+            "dispersion_z_m2/s": dispersion_z,
+            "characteristic_length_m": td_module_characteristic_length_m
         }
     }
 
@@ -78,4 +84,4 @@ def create_td_module_json(
         # Write the JSON content
         f.write(json_string)
 
-    print(f"✓ Transport config file saved to: {td_config_filepath}")
+    print(f"  Transport config file saved to: {td_config_filepath}")

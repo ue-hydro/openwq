@@ -106,4 +106,51 @@ void OpenWQ_readjson::SetConfigInfo_TDModule(
             "",
             input_filepath);
     }
+
+    // ############################################
+    // Extract dispersion parameters for ADVDISP module
+    // ############################################
+    if (input_module_name.compare("OPENWQ_NATIVE_TD_ADVDISP") == 0){
+
+        // Get TRANSPORT_CONFIGURATION sub-structure
+        errorMsgIdentifier = "TD module JSON file > TRANSPORT_CONFIGURATION";
+        json td_config = OpenWQ_utils.RequestJsonKeyVal_json(
+            OpenWQ_wqconfig, OpenWQ_output,
+            OpenWQ_json.TD_module, "TRANSPORT_CONFIGURATION",
+            errorMsgIdentifier,
+            true);
+
+        // Extract dispersion coefficients [m2/s]
+        OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_x =
+            td_config["DISPERSION_X_M2/S"].get<double>();
+        OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_y =
+            td_config["DISPERSION_Y_M2/S"].get<double>();
+        OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_z =
+            td_config["DISPERSION_Z_M2/S"].get<double>();
+
+        // Extract characteristic length [m] between cell centers
+        OpenWQ_wqconfig.TD_model->NativeAdvDisp->characteristic_length_m =
+            td_config["CHARACTERISTIC_LENGTH_M"].get<double>();
+
+        // Pre-compute effective dispersion rate: D_eff = D_avg / L^2 [1/s]
+        double D_avg = (OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_x
+                      + OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_y
+                      + OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_z) / 3.0;
+        double L = OpenWQ_wqconfig.TD_model->NativeAdvDisp->characteristic_length_m;
+        OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff = D_avg / (L * L);
+
+        // Log the dispersion parameters
+        msg_string = "<OpenWQ> ADVDISP: Dx="
+            + std::to_string(OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_x)
+            + " m2/s, Dy="
+            + std::to_string(OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_y)
+            + " m2/s, Dz="
+            + std::to_string(OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_z)
+            + " m2/s, L="
+            + std::to_string(L)
+            + " m, D_eff="
+            + std::to_string(OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff)
+            + " 1/s";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
 }

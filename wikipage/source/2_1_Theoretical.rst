@@ -48,6 +48,40 @@ where :math:`E^{turb}` is the turbulent or eddy diffusivity, which is a complex 
 In this model, this relationship is approximated by an algebraic expression: :math:`\nu_t \approx k u^* l_t`, where :math:`k` is a user-defined scaling factor to account for sub-grid scale eddies.
 
 
+Fickian Dispersive Flux Approximation
+""""""""""""""""""""""""""""""""""""""
+
+Since OpenWQ operates as a plug-in module and only receives pairwise source-recipient cell connections from the host hydrological model (without access to neighbouring cells or spatial grid topology), the classical second-order spatial derivatives in the ADE cannot be computed directly.
+
+Instead, the dispersion term is approximated using a **Fickian dispersive flux between cell pairs**:
+
+.. math::
+
+    F_{disp} = D_{eff} \cdot (C_s - C_r) \cdot W_s
+
+where:
+
+* :math:`F_{disp}` is the dispersive mass flux :math:`[MT^{-1}]`
+* :math:`C_s = m_s / W_s` is the concentration in the source cell
+* :math:`C_r = m_r / W_r` is the concentration in the recipient cell
+* :math:`W_s` is the water mass in the source cell
+* :math:`D_{eff}` is the effective dispersion rate :math:`[T^{-1}]`
+
+The effective dispersion rate is computed from user-provided parameters:
+
+.. math::
+
+    D_{eff} = \frac{D_{avg}}{L^2}
+
+where :math:`D_{avg} = (D_x + D_y + D_z) / 3` is the average of the directional dispersion coefficients :math:`[L^2T^{-1}]` (averaged because the orientation of each source-recipient connection is not known), and :math:`L` is a user-provided characteristic length :math:`[L]` representing the distance between cell centers.
+
+This formulation is **bidirectional**: the dispersive flux can move mass in either direction depending on the concentration gradient, smoothing concentration differences regardless of flow direction. The total transport flux for the advection-dispersion option is:
+
+.. math::
+
+    F_{total} = F_{adv} + F_{disp}
+
+
 Biogeochemistry: Reaction networks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

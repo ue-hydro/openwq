@@ -118,9 +118,13 @@ Options:
     "NONE"
 --------------------------------------
 """
-td_module_name = "NATIVE_TD_ADV"
+td_module_name = "OPENWQ_NATIVE_TD_ADVDISP"
 # if td_module_name=OPENWQ_NATIVE_TD_ADVDISP
-td_module_dispersion_xyz = [0.3, 0.3, 0.3]
+td_module_dispersion_xyz = [0.3, 0.3, 0.3]  # Dispersion coefficients [Dx, Dy, Dz] in m2/s
+# Characteristic distance between cell centers [m] for computing effective dispersion.
+# D_eff = D_avg / L^2, where D_avg = (Dx + Dy + Dz) / 3.
+# This parameter accounts for the spatial scale of the model grid.
+td_module_characteristic_length_m = 100.0
 
 
 """
@@ -393,6 +397,7 @@ gJSON_lib.Gen_Input_Driver(
     # Transport and other modules
     td_module_name=td_module_name,
     td_module_dispersion_xyz=td_module_dispersion_xyz,
+    td_module_characteristic_length_m=td_module_characteristic_length_m,
     le_module_name=le_module_name,
     le_module_config=le_module_config,
     ts_module_name=ts_module_name,

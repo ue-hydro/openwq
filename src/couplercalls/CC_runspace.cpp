@@ -71,6 +71,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
     if (OpenWQ_wqconfig.is_TD_enabled) {
 
         OpenWQ_TD_model.TD_driver_run(
+            OpenWQ_hostModelconfig,
             OpenWQ_wqconfig,
             OpenWQ_vars,
             OpenWQ_output,

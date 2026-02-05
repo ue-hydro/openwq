@@ -103,7 +103,8 @@ Module configuration
 
     # Advection-dispersion
     td_module_name = "OPENWQ_NATIVE_TD_ADVDISP"
-    td_module_dispersion_xyz = [0.3, 0.3, 0.3]  # Dispersion coefficients
+    td_module_dispersion_xyz = [0.3, 0.3, 0.3]  # Dispersion coefficients [Dx, Dy, Dz] in m2/s
+    td_module_characteristic_length_m = 100.0     # Distance between cell centers [m]
 
     # No transport
     td_module_name = "NONE"
