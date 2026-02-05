@@ -1,0 +1,190 @@
+Transport Sediments (TRANSPORT_SEDIMENTS)
+===========================================
+
+The Transport Sediments module simulates soil erosion and sediment transport processes.
+Two erosion models are available, both based on the HYPE (HYdrological Predictions for the Environment) framework.
+
+
+Module Options
+--------------
+
++----------------------------------+----------------------------------------------------------+
+| ``MODULE_NAME``                  | Description                                              |
++==================================+==========================================================+
+| ``HYPE_MMF``                    | Morgan-Morgan-Finney erosion model                       |
++----------------------------------+----------------------------------------------------------+
+| ``HYPE_HBVSED``                 | HBV-SED erosion model                                    |
++----------------------------------+----------------------------------------------------------+
+| ``NONE``                         | No sediment transport                                    |
++----------------------------------+----------------------------------------------------------+
+
+In the :doc:`Master configuration <4_1_1Master>`, the ``TRANSPORT_SEDIMENTS`` block also requires a ``SEDIMENT_COMPARTMENT`` key specifying which compartment the erosion process acts on.
+
+
+Common Configuration
+---------------------
+
+Both models share a common JSON structure with the following blocks:
+
++-------------------------------+--------------------------------------------------------------+
+| Key                           | Description                                                  |
++===============================+==============================================================+
+| ``MODULE_NAME``              | ``"HYPE_MMF"`` or ``"HYPE_HBVSED"``                         |
++-------------------------------+--------------------------------------------------------------+
+| ``CONFIGURATION``            | General settings (direction, inhibit compartment, format)    |
++-------------------------------+--------------------------------------------------------------+
+| ``PARAMETER_DEFAULTS``       | Default values for erosion parameters                        |
++-------------------------------+--------------------------------------------------------------+
+| ``PARAMETERS``               | Spatially distributed parameter overrides per cell           |
++-------------------------------+--------------------------------------------------------------+
+
+CONFIGURATION
+^^^^^^^^^^^^^^
+
++--------------------------------------+--------------------------------------------------------------+
+| Key                                  | Description                                                  |
++======================================+==============================================================+
+| ``direction``                       | Erosion direction: ``"x"``, ``"y"``, or ``"z"``              |
++--------------------------------------+--------------------------------------------------------------+
+| ``EROSION_INHIBIT_COMPARTMENT``     | Compartment that inhibits erosion (e.g., snow cover)         |
++--------------------------------------+--------------------------------------------------------------+
+| ``Data_Format``                     | ``"JSON"`` or ``"ASCII"`` for parameter input                |
++--------------------------------------+--------------------------------------------------------------+
+
+
+HYPE_MMF Parameters
+--------------------
+
+The Morgan-Morgan-Finney (MMF) model computes soil detachment and sediment transport using soil erodibility, rainfall kinetic energy, and ground cover.
+
++------------------------------+--------------------------------------------------------------+
+| Parameter                    | Description                                                  |
++==============================+==============================================================+
+| ``COHESION``                | Soil cohesion                                                |
++------------------------------+--------------------------------------------------------------+
+| ``ERODIBILITY``             | Soil erodibility factor                                      |
++------------------------------+--------------------------------------------------------------+
+| ``SREROEXP``                | Surface runoff erosion exponent                              |
++------------------------------+--------------------------------------------------------------+
+| ``CROPCOVER``               | Crop cover factor [0-1]                                      |
++------------------------------+--------------------------------------------------------------+
+| ``GROUNDCOVER``             | Ground cover factor [0-1]                                    |
++------------------------------+--------------------------------------------------------------+
+| ``SLOPE``                   | Terrain slope                                                |
++------------------------------+--------------------------------------------------------------+
+| ``TRANSPORT_FACTOR_1``      | Sediment transport capacity factor 1                         |
++------------------------------+--------------------------------------------------------------+
+| ``TRANSPORT_FACTOR_2``      | Sediment transport capacity factor 2                         |
++------------------------------+--------------------------------------------------------------+
+
+
+HYPE_HBVSED Parameters
+-----------------------
+
+The HBV-SED model uses a simpler erosion formulation based on precipitation intensity, soil erodibility, and slope characteristics.
+
++---------------------------------------------+--------------------------------------------------------------+
+| Parameter                                   | Description                                                  |
++=============================================+==============================================================+
+| ``SLOPE``                                  | Terrain slope                                                |
++---------------------------------------------+--------------------------------------------------------------+
+| ``EROSION_INDEX``                          | Erosion index                                                |
++---------------------------------------------+--------------------------------------------------------------+
+| ``SOIL_EROSION_FACTOR_LAND_DEPENDENCE``    | Soil erosion factor (land use dependence)                    |
++---------------------------------------------+--------------------------------------------------------------+
+| ``SOIL_EROSION_FACTOR_SOIL_DEPENDENCE``    | Soil erosion factor (soil type dependence)                   |
++---------------------------------------------+--------------------------------------------------------------+
+| ``SLOPE_EROSION_FACTOR_EXPONENT``          | Slope erosion factor exponent                                |
++---------------------------------------------+--------------------------------------------------------------+
+| ``PRECIP_EROSION_FACTOR_EXPONENT``         | Precipitation erosion factor exponent                        |
++---------------------------------------------+--------------------------------------------------------------+
+| ``PARAM_SCALING_EROSION_INDEX``            | Scaling parameter for erosion index                          |
++---------------------------------------------+--------------------------------------------------------------+
+
+The HYPE_HBVSED model also accepts a ``MONTHLY_EROSION_FACTOR`` array (12 values, January--December) that adjusts the erosion rate seasonally. The factor is applied as ``erodmonth = 1.0 + MONTHLY_EROSION_FACTOR[month]``.
+
+
+Spatially Distributed Parameters
+----------------------------------
+
+Under the ``PARAMETERS`` key, each parameter can be overridden for specific cells.
+Default values from ``PARAMETER_DEFAULTS`` are used for any cells not listed.
+
+The format for each parameter block is:
+
+.. code-block:: json
+
+    "PARAMETER_NAME": {
+        "0": ["IX", "IY", "IZ", "VALUE"],
+        "1": [13, 1, 1, 0.094],
+        "2": [19, 1, 1, 0.418]
+    }
+
+Row ``"0"`` is the header, and subsequent numbered rows provide cell-specific values.
+
+
+Example (HYPE_HBVSED)
+-----------------------
+
+.. code-block:: json
+
+    {
+        "MODULE_NAME": "HYPE_HBVSED",
+        "CONFIGURATION": {
+            "direction": "z",
+            "EROSION_INHIBIT_COMPARTMENT": "ILAYERVOLFRACWAT_SNOW",
+            "Data_Format": "JSON"
+        },
+        "PARAMETER_DEFAULTS": {
+            "SLOPE": 0.4,
+            "EROSION_INDEX": 0.4,
+            "SOIL_EROSION_FACTOR_LAND_DEPENDENCE": 0.4,
+            "SOIL_EROSION_FACTOR_SOIL_DEPENDENCE": 0.4,
+            "SLOPE_EROSION_FACTOR_EXPONENT": 1.5,
+            "PRECIP_EROSION_FACTOR_EXPONENT": 1.5,
+            "PARAM_SCALING_EROSION_INDEX": 0.5
+        },
+        "MONTHLY_EROSION_FACTOR": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        "PARAMETERS": {
+            "SLOPE": {
+                "0": ["IX", "IY", "IZ", "VALUE"],
+                "1": [13, 1, 1, 0.094],
+                "2": [19, 1, 1, 0.418]
+            }
+        }
+    }
+
+
+Example (HYPE_MMF)
+-------------------
+
+.. code-block:: json
+
+    {
+        "MODULE_NAME": "HYPE_MMF",
+        "CONFIGURATION": {
+            "direction": "z",
+            "EROSION_INHIBIT_COMPARTMENT": "ILAYERVOLFRACWAT_SNOW",
+            "Data_Format": "JSON"
+        },
+        "PARAMETER_DEFAULTS": {
+            "COHESION": 7.5,
+            "ERODIBILITY": 2.0,
+            "SREROEXP": 1.2,
+            "CROPCOVER": 0.5,
+            "GROUNDCOVER": 0.5,
+            "SLOPE": 0.4,
+            "TRANSPORT_FACTOR_1": 0.2,
+            "TRANSPORT_FACTOR_2": 0.5
+        },
+        "PARAMETERS": {
+            "COHESION": {
+                "0": ["IX", "IY", "IZ", "VALUE"],
+                "1": ["ALL", 1, 1, 7.5]
+            }
+        }
+    }
+
+
+The JSON file supports C/C++ syntax for comments: single-line comment (``//``) or comment blocks (``/*`` and ``*/``).

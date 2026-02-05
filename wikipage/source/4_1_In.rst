@@ -3,6 +3,7 @@ Input files
 
 The model requires several input files or groups of files, depending on which modules are enabled.
 The master configuration file references all other input files.
+The sections below follow the structure of the master JSON file.
 
 .. toctree::
    :maxdepth: 2
@@ -10,9 +11,10 @@ The master configuration file references all other input files.
    4_1_1Master
    4_1_2Config
    4_1_3BGC
-   4_1_4TE
-   4_1_4bSI
-   4_1_5Source
-   4_1_6PHREEQC
-   4_1_7Solvers
-
+   4_1_3bPHREEQC
+   4_1_4TD
+   4_1_5LE
+   4_1_6TS
+   4_1_7SI
+   4_1_8SS
+   4_1_9Solvers

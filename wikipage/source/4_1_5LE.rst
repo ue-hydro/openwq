@@ -1,0 +1,58 @@
+Lateral Exchange (LATERAL_EXCHANGE)
+=====================================
+
+The Lateral Exchange module controls boundary mixing between adjacent compartments.
+It simulates the diffusive exchange of dissolved chemical species across compartment interfaces (e.g., between surface water and soil layers).
+
+
+Module Options
+--------------
+
++----------------------------------+----------------------------------------------------------+
+| ``MODULE_NAME``                  | Description                                              |
++==================================+==========================================================+
+| ``NATIVE_LE_BOUNDMIX``          | Boundary mixing between upper and lower compartments     |
++----------------------------------+----------------------------------------------------------+
+| ``NONE``                         | No lateral exchange                                      |
++----------------------------------+----------------------------------------------------------+
+
+
+Configuration
+--------------
+
+The ``CONFIGURATION`` key contains numbered entries, each defining an exchange interface between two compartments.
+
++-------------------------------+--------------------------------------------------------------+
+| Key                           | Description                                                  |
++===============================+==============================================================+
+| ``direction``                | Exchange direction: ``"x"``, ``"y"``, or ``"z"``             |
++-------------------------------+--------------------------------------------------------------+
+| ``upper_compartment``        | Name of the upper compartment                                |
++-------------------------------+--------------------------------------------------------------+
+| ``lower_compartment``        | Name of the lower compartment                                |
++-------------------------------+--------------------------------------------------------------+
+| ``K_val``                    | Exchange coefficient [1/s]                                   |
++-------------------------------+--------------------------------------------------------------+
+
+Multiple exchange interfaces can be defined by adding numbered entries (``"1"``, ``"2"``, etc.) under ``CONFIGURATION``.
+
+
+Example
+--------
+
+.. code-block:: json
+
+    {
+        "MODULE_NAME": "NATIVE_LE_BOUNDMIX",
+        "CONFIGURATION": {
+            "1": {
+                "direction": "z",
+                "upper_compartment": "RUNOFF",
+                "lower_compartment": "ILAYERVOLFRACWAT_SOIL",
+                "K_val": 0.000000001
+            }
+        }
+    }
+
+
+The JSON file supports C/C++ syntax for comments: single-line comment (``//``) or comment blocks (``/*`` and ``*/``).

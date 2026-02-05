@@ -1,7 +1,11 @@
-Biogeochemistry
+Biogeochemistry: NATIVE_BGC_FLEX
 ==================================
 
-The biogeochemical cycling file is a JSON file that defines both the chemical species to include in the model configuration and the transformations that define each cycling framework. 
+The NATIVE_BGC_FLEX biogeochemistry module uses a flexible reaction framework. The configuration JSON file defines the chemical species and the transformation kinetics for each cycling framework.
+
+For the PHREEQC geochemistry engine alternative, see :doc:`PHREEQC <4_1_3bPHREEQC>`.
+
+The biogeochemical cycling file is a JSON file that defines both the chemical species to include in the model configuration and the transformations that define each cycling framework.
 
 **Principal Key 1**: ``MODULE_NAME``
 
