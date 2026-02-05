@@ -6,11 +6,13 @@ They use a similar data structure. The differences are highlighted in each secti
 
 Each sink/source or external flux is defined in an individual JSON file, and you can add as many files as desired.
 
-There are three ways to provide source/sink data:
+There are five ways to provide source/sink data:
 
 1. **JSON** -- inline time series in the JSON file
 2. **CSV/ASCII** -- time series in an external CSV file
-3. **Copernicus LULC** -- land-use-based loading using Copernicus satellite data and the Python config generator
+3. **Copernicus LULC (static coefficients)** -- land-use-based loading using Copernicus satellite data and static export coefficients
+4. **Copernicus LULC (dynamic coefficients)** -- extends Method 3 with precipitation and temperature scaling (SWAT-inspired)
+5. **ML Model** -- XGBoost or Random Forest trained on monitoring data (EPA XGBest-inspired)
 
 
 Common Structure
@@ -150,8 +152,8 @@ Example:
 .. image:: ss_ascii.png
 
 
-Method 3: Copernicus LULC (land-use-based loading)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Method 3: Copernicus LULC with static coefficients
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The Python configuration generator can compute spatially distributed source/sink loads based on **Copernicus ESA CCI Land Use/Land Cover (LULC)** satellite data. This method:
 
@@ -165,7 +167,7 @@ This is configured in the Python ``template_model_config.py`` using:
 
 .. code-block:: python
 
-    ss_method = "COPERNICUS"
+    ss_method = "using_copernicus_lulc_with_static_coeff"
 
     # Basin shapefile information
     ss_method_copernicus_basin_info = {
@@ -183,6 +185,132 @@ This is configured in the Python ``template_model_config.py`` using:
     ss_method_copernicus_compartment_name_for_load = "SUMMA_RUNOFF"
 
 The generator creates a ``ss_copernicus_files/`` subdirectory containing the clipped rasters, per-HRU area tables, and the resulting CSV loading files that are referenced by the generated JSON configuration.
+
+
+.. _ss-method-climate-adjusted:
+
+Method 4: Copernicus LULC with dynamic coefficients
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This method extends Method 3 (Copernicus LULC with static coefficients) by applying monthly precipitation and temperature scaling to the annual export coefficients. It distributes annual loads across months using a combined hydrological-biological weight, inspired by SWAT's precipitation-driven loading and Q10 temperature scaling.
+
+**Monthly weight formula:**
+
+.. math::
+
+    w_m = P_m^{\alpha} \cdot Q_{10}^{(T_m - T_{ref}) / 10}
+
+where:
+
+- :math:`P_m` is monthly precipitation (mm)
+- :math:`\alpha` is the precipitation scaling power (default 1.0; higher values amplify runoff sensitivity)
+- :math:`Q_{10}` is the biological rate doubling per 10 C (default 2.0)
+- :math:`T_m` is monthly temperature (C)
+- :math:`T_{ref}` is the reference temperature (default 15 C)
+
+Weights are normalized so that monthly loads sum to the annual load for each nutrient and HRU.
+
+This is configured in the Python ``template_model_config.py`` using:
+
+.. code-block:: python
+
+    ss_method = "using_copernicus_lulc_with_dynamic_coeff"
+
+    # Climate data: monthly precipitation (mm) and temperature (C) per year
+    ss_climate_data = {
+        2018: {
+            "precip_mm": [80, 60, 70, 90, 110, 80, 50, 45, 65, 85, 95, 100],
+            "temp_c": [-5, -3, 2, 8, 14, 19, 22, 21, 16, 10, 3, -2]
+        },
+        2019: {
+            "precip_mm": [75, 65, 80, 95, 100, 75, 55, 50, 70, 80, 90, 85],
+            "temp_c": [-4, -2, 3, 9, 15, 20, 23, 22, 17, 11, 4, -1]
+        }
+    }
+
+    # Precipitation scaling power (default 1.0)
+    ss_climate_precip_scaling_power = 1.0
+
+    # Q10 temperature scaling (default 2.0; biological rate doubling per 10C)
+    ss_climate_temp_q10 = 2.0
+
+    # Reference temperature (C) for Q10 scaling
+    ss_climate_temp_reference_c = 15.0
+
+The method reuses the Copernicus LULC pipeline for spatial area computation, then applies the climate adjustment to redistribute the annual loads across months. The output is standard JSON ``DATA_FORMAT`` entries that the C++ runtime processes transparently.
+
+.. note::
+
+    This method requires the same Copernicus LULC configuration parameters as Method 3 (basin shapefile, LULC NetCDF directory, period, compartment name, and HDF5 mapping file).
+
+
+.. _ss-method-ml-model:
+
+Method 5: ML Model (XGBoost / Random Forest)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This method trains a machine learning model on water quality monitoring data and generates source/sink predictions. It is inspired by the `EPA XGBest methodology <https://cfpub.epa.gov/si/si_public_record_Report.cfm?dirEntryId=364132>`_, which demonstrated that tree-based models outperform traditional statistical methods (LOADEST, WRTDS) for daily nutrient load prediction.
+
+**Workflow:**
+
+1. Reads a monitoring CSV file containing dates, features (discharge, precipitation, temperature, etc.), and target nutrient concentrations
+2. Engineers temporal features (month, day-of-year, cyclical sin/cos encoding)
+3. Trains an XGBoost or Random Forest model per target species
+4. Converts predicted concentrations to loads using discharge (if available)
+5. Aggregates predictions to monthly time steps
+6. Generates standard OpenWQ SS JSON with ``DATA_FORMAT: "JSON"`` entries
+7. Saves trained models in XGBoost text format (FastForest-compatible for future C++ runtime inference)
+
+This is configured in the Python ``template_model_config.py`` using:
+
+.. code-block:: python
+
+    ss_method = "ml_model"
+
+    # Path to monitoring data CSV
+    # Must contain: 'date' column, feature columns, and target nutrient columns
+    ss_ml_training_data_csv = "path/to/monitoring_data.csv"
+
+    # Model type: "xgboost" or "random_forest"
+    ss_ml_model_type = "xgboost"
+
+    # Target species (nutrient column names in CSV)
+    # If None, auto-detected from non-feature numeric columns
+    ss_ml_target_species = ["NO3-N", "TP"]
+
+    # Feature columns (if None, auto-detected)
+    ss_ml_feature_columns = None
+
+    # Number of trees and max depth
+    ss_ml_n_estimators = 200
+    ss_ml_max_depth = 6
+
+**Expected CSV format:**
+
+.. code-block:: text
+
+    date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
+    2018-01-01,15.2,3.5,-2.1,2.3,0.05
+    2018-01-02,14.8,0.0,-3.0,2.1,0.04
+    ...
+
+**Model outputs:**
+
+The script saves the following in ``ss_ml_model_files/``:
+
+- ``ml_model_<species>.txt`` -- XGBoost text dump (FastForest-compatible for C++ deployment)
+- ``ml_model_<species>.json`` -- XGBoost binary model (for Python reuse)
+- ``ml_model_features.json`` -- Feature configuration, metrics (R2, RMSE, MAE)
+
+The generated SS JSON uses standard ``DATA_FORMAT: "JSON"`` entries, so no C++ runtime changes are needed. The existing ``CheckApply_EWFandSS_jsonAscii`` function processes the ML-predicted loads transparently.
+
+.. note::
+
+    **Dependencies:** This method requires ``scikit-learn`` and ``xgboost`` Python packages. Install with: ``pip install scikit-learn xgboost``
+
+.. note::
+
+    **Future C++ runtime inference:** The trained XGBoost models are saved in text format compatible with the `FastForest <https://github.com/guitargeek/XGBoost-FastForest>`_ C++ library (header-only, no dependencies, thread-safe, C++98 compatible). This enables future integration for dynamic runtime inference based on live host-model state variables instead of pre-computed predictions.
 
 
 HDF5 External Fluxes (inter-model coupling)

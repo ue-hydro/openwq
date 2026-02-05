@@ -111,6 +111,8 @@ def set_ss_from_csv(
     for idx, ss_config in enumerate(ss_method_csv_config, start=1):
         config[str(idx)] = {
             "Chemical_name": ss_config["Chemical_name"],
+            "Compartment_name": ss_config.get("Compartment_name",
+                                               ss_config.get("ss_method_copernicus_compartment_name_for_load", "")),
             "Type": ss_config["Type"],
             "Units": ss_config["Units"],
             "Data_Format": "ASCII",
@@ -1295,8 +1297,351 @@ def _calculate_temporal_load_distribution(
     else:
         raise ValueError(
             f"Unknown temporal distribution method: '{method}'. "
-            f"Valid options are 'uniform' or 'seasonal'."
+            f"Valid options are 'uniform', 'seasonal', or 'climate_adjusted'."
         )
+
+
+def _apply_climate_adjustment(
+        annual_load_kg: float,
+        year: int,
+        monthly_precip_mm: List[float],
+        monthly_temp_c: List[float],
+        precip_scaling_power: float = 1.0,
+        temp_q10: float = 2.0,
+        temp_reference_c: float = 15.0
+) -> List[tuple]:
+    """
+    Distribute annual nutrient load across months using climate adjustments.
+
+    The approach combines precipitation-scaling and temperature-scaling:
+      - Precipitation scaling: months with more precipitation export proportionally more
+        nutrients (runoff-driven), raised to a power to control nonlinearity.
+      - Temperature scaling: biological processes (mineralization, denitrification)
+        increase with temperature following a Q10 relationship.
+
+    The combined monthly weight is: w_m = P_m^alpha * Q10^((T_m - T_ref) / 10)
+    Monthly loads are then: L_m = annual_load * w_m / sum(w_m)
+
+    Parameters:
+    -----------
+    annual_load_kg : float
+        Total annual load in kg
+    year : int
+        Year for the load
+    monthly_precip_mm : list of 12 floats
+        Monthly precipitation totals [mm] for the year (Jan-Dec)
+    monthly_temp_c : list of 12 floats
+        Monthly mean temperature [deg C] for the year (Jan-Dec)
+    precip_scaling_power : float, default 1.0
+        Exponent for precipitation scaling (1.0 = linear, >1 = more concentrated
+        in wet months, <1 = more uniform). Literature range: 0.5-2.0
+    temp_q10 : float, default 2.0
+        Q10 factor for temperature scaling. Q10=2.0 means biological reaction
+        rates double per 10 deg C increase. Literature range: 1.5-3.0
+    temp_reference_c : float, default 15.0
+        Reference temperature [deg C] at which the temperature factor equals 1.0
+
+    Returns:
+    --------
+    list of tuples : [(month, day, hour, load_kg), ...]
+        List of 12 monthly temporal load entries
+    """
+    import math
+
+    if len(monthly_precip_mm) != 12:
+        raise ValueError(f"monthly_precip_mm must have 12 values, got {len(monthly_precip_mm)}")
+    if len(monthly_temp_c) != 12:
+        raise ValueError(f"monthly_temp_c must have 12 values, got {len(monthly_temp_c)}")
+
+    # Compute monthly weights
+    monthly_weights = []
+    for month_idx in range(12):
+        # Precipitation factor: P^alpha (clamp P to minimum 0.1 mm to avoid zero)
+        precip = max(monthly_precip_mm[month_idx], 0.1)
+        precip_factor = precip ** precip_scaling_power
+
+        # Temperature factor: Q10^((T - Tref) / 10)
+        temp = monthly_temp_c[month_idx]
+        temp_factor = temp_q10 ** ((temp - temp_reference_c) / 10.0)
+
+        # Combined weight
+        monthly_weights.append(precip_factor * temp_factor)
+
+    # Normalize weights so they sum to the annual load
+    total_weight = sum(monthly_weights)
+    if total_weight <= 0:
+        # Fallback to uniform if all weights are zero
+        monthly_loads_kg = [annual_load_kg / 12.0] * 12
+    else:
+        monthly_loads_kg = [(annual_load_kg * w / total_weight) for w in monthly_weights]
+
+    # Create temporal entries (1st of each month at 1:00 AM)
+    temporal_entries = []
+    for month, load_kg in enumerate(monthly_loads_kg, start=1):
+        temporal_entries.append((month, 1, 1, load_kg))
+
+    return temporal_entries
+
+
+def set_ss_climate_adjusted_export_coefficients(
+        ss_config_filepath: str,
+        json_header_comment: List[str],
+        ss_method_copernicus_basin_info: Dict[str, str],
+        ss_method_copernicus_nc_lc_dir: str,
+        ss_method_copernicus_period: List[Union[int, float]],
+        ss_method_copernicus_default_loads_bool: bool,
+        ss_method_copernicus_compartment_name_for_load: str,
+        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
+        climate_data: Dict[int, Dict[str, List[float]]],
+        precip_scaling_power: float = 1.0,
+        temp_q10: float = 2.0,
+        temp_reference_c: float = 15.0,
+        ss_metadata_comment: str = "Climate-adjusted nutrient loading from LULC",
+        ss_metadata_source: str = "Copernicus LULC + climate adjustment",
+        optional_load_coefficients: Optional[Dict[int, Dict[str, float]]] = None,
+        recursive: bool = False,
+        file_pattern: str = 'ESACCI-LC-*.nc'
+) -> None:
+    """
+    Generate climate-adjusted source/sink JSON from Copernicus LULC data.
+
+    This extends the Copernicus LULC method by modulating the static export
+    coefficients with monthly precipitation and temperature data. This approach
+    is inspired by SWAT's temporal nutrient dynamics and produces more realistic
+    seasonal loading patterns than simple uniform or sinusoidal distributions.
+
+    The monthly load for each HRU and nutrient is computed as:
+        L_m = L_annual * w_m / sum(w_m)
+    where the monthly weight w_m combines precipitation and temperature effects:
+        w_m = P_m^alpha * Q10^((T_m - T_ref) / 10)
+
+    Parameters:
+    -----------
+    ss_config_filepath : str
+        Path where JSON configuration will be saved
+    json_header_comment : List[str]
+        Comment lines for JSON header
+    ss_method_copernicus_basin_info : dict
+        Shapefile info: {'path_to_shp': ..., 'mapping_key': ...}
+    ss_method_copernicus_nc_lc_dir : str
+        Directory with Copernicus LULC NetCDF files
+    ss_method_copernicus_period : list
+        [year_start, year_end]
+    ss_method_copernicus_default_loads_bool : bool
+        If True, use default export coefficients; if False, use optional_load_coefficients
+    ss_method_copernicus_compartment_name_for_load : str
+        OpenWQ compartment name (e.g., 'RIVER_NETWORK_REACHES')
+    ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key : dict
+        HDF5 file info: {'path_to_file': ..., 'mapping_key': ...}
+    climate_data : dict
+        Monthly climate data indexed by year. Format:
+        {
+            2020: {
+                'precip_mm': [p1, p2, ..., p12],  # monthly precipitation [mm]
+                'temp_c': [t1, t2, ..., t12]       # monthly mean temperature [deg C]
+            },
+            2021: { ... }
+        }
+        If a year from the LULC period is missing, the nearest available year is used.
+    precip_scaling_power : float, default 1.0
+        Exponent for precipitation scaling (1.0=linear, >1=more concentrated in wet months)
+    temp_q10 : float, default 2.0
+        Q10 temperature scaling factor (rate doubling per 10 deg C increase)
+    temp_reference_c : float, default 15.0
+        Reference temperature [deg C] at which temperature factor = 1.0
+    ss_metadata_comment : str
+        Comment for JSON metadata section
+    ss_metadata_source : str
+        Source identifier for JSON metadata section
+    optional_load_coefficients : dict, optional
+        Custom load coefficients (used if ss_method_copernicus_default_loads_bool=False)
+    recursive : bool
+        Whether to search subdirectories for NetCDF files
+    file_pattern : str
+        Glob pattern for NetCDF files
+    """
+    import h5py
+
+    print("\n" + "=" * 60)
+    print("CLIMATE-ADJUSTED EXPORT COEFFICIENT METHOD")
+    print("=" * 60)
+    print(f"Precipitation scaling power (alpha): {precip_scaling_power}")
+    print(f"Temperature Q10: {temp_q10}")
+    print(f"Reference temperature: {temp_reference_c} deg C")
+    print(f"Climate data years available: {sorted(climate_data.keys())}")
+
+    # Step 1: Calculate LULC areas (reuses existing Copernicus pipeline)
+    results, summaries, rasters = set_ss_from_copernicus_lulc(
+        ss_config_filepath=ss_config_filepath,
+        ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+        ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
+        ss_method_copernicus_period=ss_method_copernicus_period,
+        recursive=recursive,
+        file_pattern=file_pattern
+    )
+
+    # Step 2: Determine export coefficients
+    if ss_method_copernicus_default_loads_bool:
+        print("\nUsing DEFAULT Copernicus land cover nutrient coefficients...")
+        load_coefficients = get_default_copernicus_load_coefficients()
+    else:
+        if optional_load_coefficients is None:
+            raise ValueError(
+                "ss_method_copernicus_default_loads_bool=False but no optional_load_coefficients provided."
+            )
+        print("\nUsing CUSTOM load coefficients...")
+        load_coefficients = optional_load_coefficients
+
+    # Step 3: Calculate annual loads per HRU
+    output_dir = Path(ss_config_filepath).parent / 'ss_copernicus_files'
+    shp_hru_id_column = ss_method_copernicus_basin_info.get('mapping_key', 'HRU_ID')
+
+    loads_df, pivot_loads_df = calculate_nutrient_loads(
+        results_df=results,
+        load_coefficients=load_coefficients,
+        output_dir=output_dir,
+        shp_hru_id_column=shp_hru_id_column
+    )
+
+    # Step 4: Load HDF5 spatial mapping
+    openwq_hru_mapping_key = ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key['mapping_key']
+    openwq_h5_result_path = ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key['path_to_file']
+
+    print(f"\nLoading spatial mapping from: {openwq_h5_result_path}")
+    with h5py.File(openwq_h5_result_path, 'r') as h5f:
+        xyz_elements = h5f['xyz_elements'][:]
+        mapping_ids = h5f[openwq_hru_mapping_key][:]
+
+    hru_to_xyz = {}
+    for idx in range(len(mapping_ids)):
+        hru_id = mapping_ids[idx].decode('utf-8')
+        ix, iy, iz = xyz_elements[:, idx]
+        hru_to_xyz[hru_id] = (int(ix), int(iy), int(iz))
+
+    print(f"  Mapped {len(hru_to_xyz)} HRU/segments")
+
+    # Step 5: Build climate-adjusted JSON
+    pivot_csv_path = output_dir / 'nutrient_loads_pivot.csv'
+    pivot_df = pd.read_csv(pivot_csv_path)
+
+    exclude_cols = [shp_hru_id_column, 'Year']
+    nutrient_cols = [col for col in pivot_df.columns if col not in exclude_cols]
+
+    config = {
+        "METADATA": {
+            "Comment": ss_metadata_comment,
+            "Source": ss_metadata_source,
+            "Climate_Adjustment": {
+                "precip_scaling_power": precip_scaling_power,
+                "temp_Q10": temp_q10,
+                "temp_reference_C": temp_reference_c
+            }
+        }
+    }
+
+    # Helper: find nearest climate data year
+    climate_years = sorted(climate_data.keys())
+
+    def _get_climate_for_year(yr):
+        if yr in climate_data:
+            return climate_data[yr]
+        # Find nearest year
+        nearest = min(climate_years, key=lambda y: abs(y - yr))
+        print(f"    (using climate data from {nearest} for year {yr})")
+        return climate_data[nearest]
+
+    entry_idx = 1
+
+    for year in sorted(pivot_df['Year'].unique()):
+        year_data = pivot_df[pivot_df['Year'] == year]
+        climate = _get_climate_for_year(int(year))
+
+        for nutrient in nutrient_cols:
+            print(f"\n  Processing: Year {year}, Nutrient {nutrient}")
+
+            nutrient_loads = year_data[[shp_hru_id_column, nutrient]].copy()
+            nutrient_loads = nutrient_loads[nutrient_loads[nutrient] > 0]
+
+            if len(nutrient_loads) == 0:
+                print(f"    No non-zero loads, skipping...")
+                continue
+
+            data_entries = {}
+            sub_idx = 1
+
+            for _, row in nutrient_loads.iterrows():
+                hru_id = str(int(row[shp_hru_id_column]))
+                annual_load_kg = row[nutrient]
+
+                if hru_id not in hru_to_xyz:
+                    continue
+
+                ix, iy, iz = hru_to_xyz[hru_id]
+
+                # Climate-adjusted temporal distribution
+                temporal_entries = _apply_climate_adjustment(
+                    annual_load_kg=annual_load_kg,
+                    year=int(year),
+                    monthly_precip_mm=climate['precip_mm'],
+                    monthly_temp_c=climate['temp_c'],
+                    precip_scaling_power=precip_scaling_power,
+                    temp_q10=temp_q10,
+                    temp_reference_c=temp_reference_c
+                )
+
+                for month, day, hour, load_kg in temporal_entries:
+                    data_entries[str(sub_idx)] = [
+                        int(year), int(month), int(day), int(hour), "all", "all",
+                        ix, iy, iz,
+                        float(load_kg),
+                        "discrete"
+                    ]
+                    sub_idx += 1
+
+            if len(data_entries) == 0:
+                continue
+
+            config[str(entry_idx)] = {
+                "Chemical_name": nutrient,
+                "Compartment_name": ss_method_copernicus_compartment_name_for_load,
+                "Comment": f"Climate-adjusted loading for {nutrient}",
+                "Type": "source",
+                "Units": "kg",
+                "Data_Format": "JSON",
+                "Data": data_entries
+            }
+
+            print(f"    Added {len(data_entries)} climate-adjusted entries")
+            entry_idx += 1
+
+    # Write JSON
+    json_string = json.dumps(config, indent=4)
+
+    def compress_array(match):
+        array_content = match.group(0)
+        compressed = re.sub(r'\s+', ' ', array_content)
+        compressed = re.sub(r'\[\s+', '[', compressed)
+        compressed = re.sub(r'\s+\]', ']', compressed)
+        compressed = re.sub(r'\s*,\s*', ', ', compressed)
+        return compressed
+
+    json_string = re.sub(r'\[[^\[\]]*\]', compress_array, json_string)
+
+    output_path = Path(ss_config_filepath)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(ss_config_filepath, 'w') as f:
+        for comment in json_header_comment:
+            f.write(comment + "\n")
+        f.write(json_string)
+        f.write("\n")
+
+    print("\n" + "=" * 60)
+    print("CLIMATE-ADJUSTED SS JSON CREATED!")
+    print("=" * 60)
+    print(f"File: {ss_config_filepath}")
+    print(f"Total source entries: {entry_idx - 1}")
+    print(f"Climate parameters: alpha={precip_scaling_power}, Q10={temp_q10}, Tref={temp_reference_c}")
 
 def create_openwq_ss_json_from_loads(
         pivot_loads_csv_path: Path,
@@ -1466,7 +1811,8 @@ def create_openwq_ss_json_from_loads(
             # Add to config
             config[str(entry_idx)] = {
                 "Chemical_name": nutrient,
-                "Comment": ss_method_copernicus_compartment_name_for_load,
+                "Compartment_name": ss_method_copernicus_compartment_name_for_load,
+                "Comment": f"Copernicus LULC-based loading for {nutrient} in {year}",
                 "Type": "source",
                 "Units": "kg",
                 "Data_Format": "JSON",

@@ -222,6 +222,22 @@ def Gen_Input_Driver(
         compartments_and_cells: Dict[str, Dict[str, List]] = None,
         timestep: List[Union[int, str]] = None,
 
+        # Climate-adjusted export coefficient parameters
+        # (used when ss_method = "using_copernicus_lulc_with_dynamic_coeff")
+        ss_climate_data: Optional[Dict[int, Dict[str, List[float]]]] = None,
+        ss_climate_precip_scaling_power: float = 1.0,
+        ss_climate_temp_q10: float = 2.0,
+        ss_climate_temp_reference_c: float = 15.0,
+
+        # ML model source/sink parameters
+        # (used when ss_method = "ml_model")
+        ss_ml_training_data_csv: Optional[str] = None,
+        ss_ml_model_type: str = "xgboost",
+        ss_ml_target_species: Optional[List[str]] = None,
+        ss_ml_feature_columns: Optional[List[str]] = None,
+        ss_ml_n_estimators: int = 200,
+        ss_ml_max_depth: int = 6,
+
         # Optional parameters (MUST be at the end)
         ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class: Optional[Dict[int, Dict[str, float]]] = None
 
@@ -547,7 +563,7 @@ def Gen_Input_Driver(
             ss_metadata_comment=ss_metadata_comment,
             ss_method_csv_config=ss_method_csv_config,
         )
-    elif (ss_method == "using_copernicus_lulc"):
+    elif (ss_method == "using_copernicus_lulc_with_static_coeff"):
 
         ssJSON_lib.set_ss_from_copernicus_lulc_with_loads(
             ss_config_filepath=ss_config_filepath,
@@ -563,13 +579,62 @@ def Gen_Input_Driver(
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
             ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method
         )
+    elif (ss_method == "using_copernicus_lulc_with_dynamic_coeff"):
+
+        if ss_climate_data is None:
+            raise ValueError(
+                "ss_method='using_copernicus_lulc_with_dynamic_coeff' requires ss_climate_data.\n"
+                "Provide a dict of {year: {'precip_mm': [12 values], 'temp_c': [12 values]}}"
+            )
+
+        ssJSON_lib.set_ss_climate_adjusted_export_coefficients(
+            ss_config_filepath=ss_config_filepath,
+            json_header_comment=json_header_comment,
+            ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+            ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
+            ss_method_copernicus_period=ss_method_copernicus_period,
+            ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
+            ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
+            ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key=ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key,
+            climate_data=ss_climate_data,
+            precip_scaling_power=ss_climate_precip_scaling_power,
+            temp_q10=ss_climate_temp_q10,
+            temp_reference_c=ss_climate_temp_reference_c,
+            optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
+        )
+
+    elif (ss_method == "ml_model"):
+
+        import Gen_MLmodel_SS as mlJSON_lib
+
+        if ss_ml_training_data_csv is None:
+            raise ValueError(
+                "ss_method='ml_model' requires ss_ml_training_data_csv.\n"
+                "Provide path to a CSV with columns: date, discharge_m3s, precip_mm, temp_c, <species_concentration>"
+            )
+
+        mlJSON_lib.train_and_generate_ss_json(
+            ss_config_filepath=ss_config_filepath,
+            json_header_comment=json_header_comment,
+            training_data_csv=ss_ml_training_data_csv,
+            model_type=ss_ml_model_type,
+            target_species=ss_ml_target_species,
+            feature_columns=ss_ml_feature_columns,
+            n_estimators=ss_ml_n_estimators,
+            max_depth=ss_ml_max_depth,
+            ss_metadata_comment=ss_metadata_comment,
+            ss_metadata_source=ss_metadata_source,
+            compartment_name=ss_method_copernicus_compartment_name_for_load,
+        )
+
     elif (ss_method == "none"):
         print("  Skipping sink/source generation (ss_method='none')")
 
     else:
         print(
             f"WARNING: The SS method '{ss_method}' is unknown or not available for automatic generation. "
-            f"Available methods: 'load_from_csv', 'using_copernicus_lulc', 'none'")
+            f"Available methods: 'load_from_csv', 'using_copernicus_lulc_with_static_coeff', "
+            f"'using_copernicus_lulc_with_dynamic_coeff', 'ml_model', 'none'")
 
     ###############
     # Call gen_ewf_driver

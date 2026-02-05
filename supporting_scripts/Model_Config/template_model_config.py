@@ -314,9 +314,15 @@ si_species_params = None  # Set to None when si_module_name = "NONE"
 ################
 # Sink sources
 ################
-ss_method = "load_from_csv" # "load_from_csv", "using_copernicus_lulc", or "none"
-                    # Note: When using PHREEQC, set to "none" unless your CSV references
-                    # valid PHREEQC component names (not NATIVE_BGC_FLEX species like NO3-N)
+ss_method = "load_from_csv"
+    # Options:
+    #   "load_from_csv"                             - Load from user-provided CSV time series
+    #   "using_copernicus_lulc_with_static_coeff"   - Static export coefficients from Copernicus LULC
+    #   "using_copernicus_lulc_with_dynamic_coeff"  - Export coefficients modulated by monthly P and T
+    #   "ml_model"                                  - Train ML model from monitoring data
+    #   "none"                                      - No source/sink
+    # Note: When using PHREEQC, set to "none" unless your CSV references
+    # valid PHREEQC component names (not NATIVE_BGC_FLEX species like NO3-N)
 ################
 # if ss_method = "load_from_csv"
 ss_metadata_source = "Just for demonstration"
@@ -368,6 +374,41 @@ ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
     130: {'TN': 5.0, 'TP': 0.15, 'NH4': 0.5}  # Custom grassland values
 }
 ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform' # options: 'uniform' or 'seasonal'
+
+################
+# if ss_method = "using_copernicus_lulc_with_dynamic_coeff"
+# This extends the Copernicus LULC method by modulating export coefficients
+# with monthly precipitation and temperature data.
+# Monthly weight: w_m = P_m^alpha * Q10^((T_m - T_ref) / 10)
+# Requires the same Copernicus LULC settings above, plus climate data.
+ss_climate_data = {
+    1993: {
+        'precip_mm': [80, 70, 90, 100, 110, 120, 80, 60, 70, 90, 100, 85],  # Jan-Dec
+        'temp_c':    [2, 3, 7, 12, 17, 22, 25, 24, 19, 13, 7, 3]            # Jan-Dec
+    },
+    1994: {
+        'precip_mm': [85, 75, 95, 105, 115, 125, 85, 65, 75, 95, 105, 90],
+        'temp_c':    [1, 4, 8, 13, 18, 23, 26, 25, 20, 14, 8, 2]
+    }
+}
+ss_climate_precip_scaling_power = 1.0   # Exponent for precipitation scaling (1.0=linear, >1=wet-month focus)
+ss_climate_temp_q10 = 2.0              # Q10: biological rate doubling per 10 deg C increase
+ss_climate_temp_reference_c = 15.0     # Reference temperature where temp factor = 1.0
+
+################
+# if ss_method = "ml_model"
+# Train an XGBoost/Random Forest model from monitoring data, then
+# generate SS JSON from predictions. Requires scikit-learn and xgboost.
+# The trained model is also saved for optional C++ runtime inference (FastForest).
+ss_ml_training_data_csv = None  # Path to CSV with monitoring data
+    # Required columns: date, discharge_m3s, precip_mm, temp_c, <species_conc>
+    # Example: "path/to/monitoring_data.csv"
+ss_ml_model_type = "xgboost"    # "xgboost" or "random_forest"
+ss_ml_target_species = None     # List of species column names in CSV, e.g. ["NO3-N", "TP"]
+ss_ml_feature_columns = None    # Feature columns, e.g. ["discharge_m3s", "precip_mm", "temp_c"]
+    # If None, auto-detected from CSV (all numeric columns except date and target species)
+ss_ml_n_estimators = 200        # Number of trees
+ss_ml_max_depth = 6             # Max tree depth
 
 ################
 # External water fluxes
@@ -462,6 +503,18 @@ gJSON_lib.Gen_Input_Driver(
     ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
     ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
     ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
+    # Climate-adjusted export coefficient parameters
+    ss_climate_data=ss_climate_data,
+    ss_climate_precip_scaling_power=ss_climate_precip_scaling_power,
+    ss_climate_temp_q10=ss_climate_temp_q10,
+    ss_climate_temp_reference_c=ss_climate_temp_reference_c,
+    # ML model parameters
+    ss_ml_training_data_csv=ss_ml_training_data_csv,
+    ss_ml_model_type=ss_ml_model_type,
+    ss_ml_target_species=ss_ml_target_species,
+    ss_ml_feature_columns=ss_ml_feature_columns,
+    ss_ml_n_estimators=ss_ml_n_estimators,
+    ss_ml_max_depth=ss_ml_max_depth,
     ewf_method=ewf_method,
     ewf_method_fixedval_comment=ewf_method_fixedval_comment,
     ewf_method_fixedval_source=ewf_method_fixedval_source,
