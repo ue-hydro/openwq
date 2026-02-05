@@ -1,0 +1,502 @@
+Model Calibration Framework
+===========================
+
+OpenWQ provides a comprehensive Python calibration framework for parameter optimization and sensitivity analysis. The framework is designed for computationally expensive models, supporting both local (Docker) and HPC (Apptainer/SLURM) execution environments.
+
+Key features:
+
+* **DDS Optimization**: Dynamically Dimensioned Search algorithm, efficient for expensive models (200-1000 evaluations)
+* **Sensitivity Analysis**: Morris screening and Sobol variance-based methods for parameter importance ranking
+* **All Parameter Types**: Supports BGC rates, PHREEQC geochemistry, sorption isotherms, sediment transport, source/sink loads, and more
+* **HPC Support**: SLURM/PBS job arrays for parallel evaluation on clusters
+* **Checkpointing**: Save and resume long-running calibrations
+
+Location
+~~~~~~~~
+
+The calibration framework is located at::
+
+    openwq/supporting_scripts/Calibration/
+
+Key files:
+
+* ``calibration_config_template.py`` - User configuration template (copy and edit)
+* ``calibration_driver.py`` - Main entry point
+* ``calibration_lib/`` - Core library modules
+
+
+Quick Start
+~~~~~~~~~~~
+
+1. Copy the configuration template::
+
+    cd openwq/supporting_scripts/Calibration/
+    cp calibration_config_template.py my_calibration.py
+
+2. Edit paths and parameters in ``my_calibration.py``
+
+3. Run calibration::
+
+    python my_calibration.py
+
+4. Resume if interrupted::
+
+    python my_calibration.py --resume
+
+5. Run sensitivity analysis only::
+
+    python my_calibration.py --sensitivity-only
+
+6. Validate configuration (dry run)::
+
+    python my_calibration.py --dry-run
+
+
+Configuration Overview
+~~~~~~~~~~~~~~~~~~~~~~
+
+The configuration file has seven main sections:
+
+1. **Path Configuration** - Model config, observations, working directory
+2. **Container Runtime** - Docker (local) or Apptainer (HPC) settings
+3. **Calibration Parameters** - Parameters to optimize with bounds
+4. **Calibration Settings** - Algorithm, max evaluations, objective function
+5. **Sensitivity Analysis** - Morris/Sobol settings
+6. **HPC Settings** - SLURM/PBS job configuration
+7. **Run Calibration** - Entry point
+
+
+Supported Parameter Types
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The framework supports calibration of all major OpenWQ parameter types:
+
+**BGC Parameters (NATIVE_BGC_FLEX)**
+
+.. code-block:: python
+
+    {
+        "name": "k_nitrification",
+        "file_type": "bgc_json",
+        "path": ["CYCLING_FRAMEWORKS", "N_cycle", "3", "parameter_values", "k"],
+        "initial": 0.03,
+        "bounds": (0.001, 0.5),
+        "transform": "log"
+    }
+
+**PHREEQC Geochemistry Parameters**
+
+.. code-block:: python
+
+    # Initial solution concentrations
+    {
+        "name": "initial_NO3",
+        "file_type": "phreeqc_pqi",
+        "path": {"block": "SOLUTION", "species": "N(5)"},
+        "initial": 2.0,
+        "bounds": (0.1, 10.0)
+    }
+
+    # Equilibrium phase partial pressures
+    {
+        "name": "pCO2_log",
+        "file_type": "phreeqc_pqi",
+        "path": {"block": "EQUILIBRIUM_PHASES", "phase": "CO2(g)", "field": "si"},
+        "initial": -3.5,
+        "bounds": (-4.5, -2.5)
+    }
+
+**Sorption Isotherm Parameters**
+
+.. code-block:: python
+
+    # Freundlich isotherm
+    {
+        "name": "NH4_Kfr",
+        "file_type": "sorption_json",
+        "path": {"module": "FREUNDLICH", "species": "NH4-N", "param": "Kfr"},
+        "initial": 0.5,
+        "bounds": (0.01, 10.0),
+        "transform": "log"
+    }
+
+    # Langmuir isotherm
+    {
+        "name": "NH4_qmax",
+        "file_type": "sorption_json",
+        "path": {"module": "LANGMUIR", "species": "NH4-N", "param": "qmax_mg_per_kg"},
+        "initial": 100.0,
+        "bounds": (10.0, 500.0)
+    }
+
+**Sediment Transport Parameters**
+
+.. code-block:: python
+
+    # HYPE_HBVSED module
+    {
+        "name": "erosion_index",
+        "file_type": "sediment_json",
+        "path": {"module": "HYPE_HBVSED", "param": "EROSION_INDEX"},
+        "initial": 0.4,
+        "bounds": (0.1, 1.0)
+    }
+
+    # HYPE_MMF module
+    {
+        "name": "cohesion",
+        "file_type": "sediment_json",
+        "path": {"module": "HYPE_MMF", "param": "COHESION"},
+        "initial": 7.5,
+        "bounds": (1.0, 20.0)
+    }
+
+**Source/Sink Parameters**
+
+.. code-block:: python
+
+    # CSV load scaling
+    {
+        "name": "fertilizer_N_scale",
+        "file_type": "ss_csv_scale",
+        "path": {"species": "all"},
+        "initial": 1.0,
+        "bounds": (0.1, 5.0)
+    }
+
+    # Copernicus LULC export coefficients
+    {
+        "name": "cropland_TN_coeff",
+        "file_type": "ss_copernicus_static",
+        "path": {"lulc_class": 10, "species": "TN"},
+        "initial": 20.0,
+        "bounds": (5.0, 50.0)
+    }
+
+    # Climate response parameters
+    {
+        "name": "precip_scaling_power",
+        "file_type": "ss_climate_param",
+        "path": "ss_climate_precip_scaling_power",
+        "initial": 1.0,
+        "bounds": (0.5, 2.0)
+    }
+
+**Transport Parameters**
+
+.. code-block:: python
+
+    {
+        "name": "dispersion_x",
+        "file_type": "transport_json",
+        "path": {"param": "DISPERSION_X_M2_S"},
+        "initial": 0.3,
+        "bounds": (0.01, 10.0),
+        "transform": "log"
+    }
+
+
+Parameter Options
+~~~~~~~~~~~~~~~~~
+
+Each parameter definition supports these options:
+
++---------------+-------------------------------------------------------------------+
+| Option        | Description                                                       |
++===============+===================================================================+
+| ``name``      | Unique identifier (used in results)                               |
++---------------+-------------------------------------------------------------------+
+| ``file_type`` | Type of configuration file (see list above)                       |
++---------------+-------------------------------------------------------------------+
+| ``path``      | Location of parameter within the file                             |
++---------------+-------------------------------------------------------------------+
+| ``initial``   | Starting value for optimization                                   |
++---------------+-------------------------------------------------------------------+
+| ``bounds``    | (min, max) tuple defining search space                            |
++---------------+-------------------------------------------------------------------+
+| ``transform`` | ``"linear"`` (default) or ``"log"`` for log-space optimization    |
++---------------+-------------------------------------------------------------------+
+| ``dtype``     | ``"float"`` (default) or ``"int"`` for integer parameters         |
++---------------+-------------------------------------------------------------------+
+
+
+Objective Functions
+~~~~~~~~~~~~~~~~~~~
+
+The framework supports three objective functions:
+
+* **RMSE** - Root Mean Square Error
+* **NSE** - Nash-Sutcliffe Efficiency (1 - NSE for minimization)
+* **KGE** - Kling-Gupta Efficiency (1 - KGE for minimization) - *Recommended*
+
+Configure in your calibration file:
+
+.. code-block:: python
+
+    objective_function = "KGE"
+
+    # Multi-species weighting
+    objective_weights = {
+        "NO3-N": 1.0,
+        "NH4-N": 0.5,
+    }
+
+    # Target species and locations
+    calibration_targets = {
+        "species": ["NO3-N", "NH4-N"],
+        "reach_ids": "all",  # or [1200014181, 200014181]
+        "compartments": ["RIVER_NETWORK_REACHES"]
+    }
+
+
+Observation Data Format
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Observation data must be in CSV format with these columns:
+
+.. code-block:: text
+
+    datetime,reach_id,species,value,units,source,uncertainty,quality_flag
+    2010-06-01 00:00:00,1200014181,NO3-N,2.50,mg/l,USGS_station_A,0.25,GOOD
+    2010-06-01 00:00:00,1200014181,NH4-N,0.15,mg/l,USGS_station_A,0.02,GOOD
+
+Required columns:
+
+* ``datetime`` - Observation timestamp (YYYY-MM-DD HH:MM:SS)
+* ``reach_id`` - River network reach ID matching model output
+* ``species`` - Chemical species name (must match model species)
+* ``value`` - Measured concentration value
+* ``units`` - Concentration units (e.g., mg/l)
+
+Optional columns:
+
+* ``source`` - Data source identifier
+* ``uncertainty`` - Measurement uncertainty
+* ``quality_flag`` - Quality flag (GOOD, SUSPECT, BAD)
+
+An example file is provided at ``observation_data/example_observations.csv``.
+
+
+DDS Optimization Algorithm
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Dynamically Dimensioned Search (DDS) algorithm is a global optimization method designed for computationally expensive models. Key features:
+
+* **Efficient convergence**: Typically requires 200-500 evaluations
+* **Adaptive search**: Starts with global exploration, progressively focuses on local refinement
+* **No gradient needed**: Uses perturbation-based search
+
+Configure DDS settings:
+
+.. code-block:: python
+
+    algorithm = "DDS"
+    max_evaluations = 500
+    random_seed = 42  # For reproducibility
+
+
+Sensitivity Analysis
+~~~~~~~~~~~~~~~~~~~~
+
+For calibrations with many parameters (10+), run sensitivity analysis first to identify influential parameters.
+
+**Morris Screening** (fast, qualitative)
+
+.. code-block:: python
+
+    run_sensitivity_first = True
+    sensitivity_method = "morris"
+    sensitivity_morris_trajectories = 10
+    sensitivity_morris_levels = 4
+    sensitivity_threshold = 0.1  # Relative to max mu_star
+
+**Sobol Analysis** (slower, quantitative)
+
+.. code-block:: python
+
+    sensitivity_method = "sobol"
+    sensitivity_sobol_samples = 1024
+
+
+Recommended HPC Workflow
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+For large-scale calibrations with dozens of parameters:
+
+1. **Morris Screening** (~200 evaluations)
+
+   - Identifies non-influential parameters
+   - Typically eliminates 50-70% of parameters
+
+2. **Sobol Sensitivity** (~1000 evaluations on reduced set)
+
+   - Quantifies parameter importance and interactions
+   - Further reduces to 10-15 most influential parameters
+
+3. **DDS Optimization** (~300-500 evaluations on final set)
+
+   - Calibrates only influential parameters
+   - Fixed non-influential parameters at defaults
+
+**Total**: ~1500-2000 evaluations (vs 10,000+ without screening)
+
+
+HPC Configuration (SLURM)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For running on HPC clusters with Apptainer:
+
+.. code-block:: python
+
+    # Container runtime
+    container_runtime = "apptainer"
+    apptainer_sif_path = "/path/to/openwq.sif"
+    apptainer_bind_path = "/scratch/user/openwq_code:/code"
+
+    # HPC settings
+    hpc_enabled = True
+    hpc_scheduler = "slurm"
+    hpc_partition = "standard"
+    hpc_walltime = "24:00:00"
+    hpc_nodes = 1
+    hpc_tasks_per_node = 4
+    hpc_memory = "8G"
+    hpc_max_concurrent_jobs = 50
+
+SLURM job templates are provided in ``hpc_templates/``:
+
+* ``slurm_array_template.sh`` - For sensitivity analysis (parallel array)
+* ``slurm_worker_template.sh`` - For DDS optimization (worker pool)
+* ``pbs_array_template.sh`` - For PBS/Torque schedulers
+
+
+Checkpointing and Resume
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The framework automatically saves checkpoints after each evaluation. To resume an interrupted calibration::
+
+    python my_calibration.py --resume
+
+Checkpoint files are saved in your working directory:
+
+* ``calibration_state.json`` - Optimization state
+* ``calibration_history.pkl`` - Full evaluation history
+* ``rng_state.pkl`` - Random number generator state
+
+
+Results and Outputs
+~~~~~~~~~~~~~~~~~~~
+
+After calibration completes, results are saved to ``results/``:
+
+* ``best_parameters.json`` - Optimal parameter values
+* ``calibration_history.json`` - All evaluated parameter sets and objectives
+* ``convergence.png`` - Convergence plot
+* ``parameter_evolution.png`` - Parameter values over evaluations
+* ``sensitivity_results.json`` - Sensitivity analysis results (if run)
+* ``calibration_report.txt`` - Summary report
+
+
+Complete Configuration Example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+    # =============================================================================
+    # PATH CONFIGURATION
+    # =============================================================================
+    base_model_config_dir = "/path/to/Model_Config"
+    calibration_work_dir = "/path/to/calibration_workspace"
+    observation_data_path = "/path/to/observations.csv"
+    test_case_dir = "/path/to/test_case"
+
+    # =============================================================================
+    # CONTAINER RUNTIME
+    # =============================================================================
+    container_runtime = "docker"  # or "apptainer"
+    docker_container_name = "docker_openwq"
+    docker_compose_path = "/path/to/docker-compose.yml"
+    executable_name = "mizuroute_lakes_cslm_openwq_fast"
+    executable_args = "-g 1 1"
+    file_manager_path = "/code/.../fileManager.txt"
+
+    # =============================================================================
+    # CALIBRATION PARAMETERS
+    # =============================================================================
+    calibration_parameters = [
+        {
+            "name": "k_nitrification",
+            "file_type": "bgc_json",
+            "path": ["CYCLING_FRAMEWORKS", "N_cycle", "3", "parameter_values", "k"],
+            "initial": 0.03,
+            "bounds": (0.001, 0.5),
+            "transform": "log"
+        },
+        {
+            "name": "fertilizer_N_scale",
+            "file_type": "ss_csv_scale",
+            "path": {"species": "all"},
+            "initial": 1.0,
+            "bounds": (0.1, 5.0)
+        },
+    ]
+
+    # =============================================================================
+    # CALIBRATION SETTINGS
+    # =============================================================================
+    algorithm = "DDS"
+    max_evaluations = 500
+    n_parallel = 1
+    objective_function = "KGE"
+    objective_weights = {"NO3-N": 1.0, "NH4-N": 0.5}
+    calibration_targets = {
+        "species": ["NO3-N", "NH4-N"],
+        "reach_ids": "all",
+        "compartments": ["RIVER_NETWORK_REACHES"]
+    }
+    random_seed = 42
+
+
+Dependencies
+~~~~~~~~~~~~
+
+**Required:**
+
+* numpy
+* pandas
+* h5py
+* matplotlib (for plotting)
+
+**Optional:**
+
+* SALib (for Morris/Sobol sensitivity analysis)::
+
+    pip install SALib
+
+**Runtime:**
+
+* Docker (local) or Apptainer/Singularity (HPC)
+
+
+Troubleshooting
+~~~~~~~~~~~~~~~
+
+**"No observations loaded" error:**
+
+Check that your observation file path is correct and the file contains data matching your target species and reach IDs.
+
+**"Container not found" error:**
+
+Ensure Docker is running (local) or the Apptainer SIF path is correct (HPC).
+
+**Calibration converges to bounds:**
+
+Consider expanding parameter bounds or using log-transform for rate constants.
+
+**HPC jobs fail immediately:**
+
+Check SLURM logs in ``slurm_logs/`` for error messages. Verify bind paths and module loads in the job script.
+
+**Checkpoint resume fails:**
+
+Ensure you're running from the same working directory. Check that ``calibration_state.json`` exists and is not corrupted.
