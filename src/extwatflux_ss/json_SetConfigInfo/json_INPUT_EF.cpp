@@ -75,7 +75,7 @@ void OpenWQ_readjson::SetConfigInfo_INPUT_EF(
             input_filepath);
 
         // Print it (Console and/or Log file)
-        msg_string = "<OPENWQ> EXTERNAL_WATER_FLUXES file loaded > " + input_filepath;
+        msg_string = "<OpenWQ> EXTERNAL_WATER_FLUXES file loaded > " + input_filepath;
         OpenWQ_output.ConsoleLog(
             OpenWQ_wqconfig,    // for Log file name
             msg_string,         // message

@@ -65,7 +65,7 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
     (OpenWQ_wqconfig.CH_model->BGC_module).append(input_module_name);
 
     // Print it (Console and/or Log file)
-    msg_string = "<OPENWQ> MODULE LOADED: BIOGEOCHEMISTRY > " 
+    msg_string = "<OpenWQ> MODULE LOADED: BIOGEOCHEMISTRY > " 
                 + OpenWQ_wqconfig.CH_model->BGC_module;
     OpenWQ_output.ConsoleLog(
         OpenWQ_wqconfig,    // for Log file name

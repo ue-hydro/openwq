@@ -63,7 +63,7 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
     (OpenWQ_wqconfig.SI_model->SI_module).append(input_module_name);
 
     // Print it (Console and/or Log file)
-    msg_string = "<OPENWQ> MODULE LOADED: SORPTION_ISOTHERM > " + OpenWQ_wqconfig.SI_model->SI_module;
+    msg_string = "<OpenWQ> MODULE LOADED: SORPTION_ISOTHERM > " + OpenWQ_wqconfig.SI_model->SI_module;
     OpenWQ_output.ConsoleLog(
         OpenWQ_wqconfig,    // for Log file name
         msg_string,         // message

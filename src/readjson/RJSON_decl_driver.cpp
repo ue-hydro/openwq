@@ -55,7 +55,7 @@ void OpenWQ_readjson::JSON_driver(
         OpenWQ_wqconfig.get_OpenWQ_masterjson()); // Name of JSON file
 
     // Print it (Console and/or Log file)
-    msg_string = "<OPENWQ> MASTER file loaded > " + OpenWQ_wqconfig.get_OpenWQ_masterjson();
+    msg_string = "<OpenWQ> MASTER file loaded > " + OpenWQ_wqconfig.get_OpenWQ_masterjson();
     OpenWQ_output.ConsoleLog(
         OpenWQ_wqconfig,    // for Log file name
         msg_string,         // message

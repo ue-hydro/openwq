@@ -57,7 +57,7 @@ void OpenWQ_readjson::SetConfigInfo_INPUT_general(
         input_filepath);
 
     // Print it (Console and/or Log file)
-    msg_string = "<OPENWQ> CONFIG file loaded > " + input_filepath;
+    msg_string = "<OpenWQ> CONFIG file loaded > " + input_filepath;
     OpenWQ_output.ConsoleLog(
         OpenWQ_wqconfig,    // for Log file name
         msg_string,         // message

@@ -70,7 +70,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
     (OpenWQ_wqconfig.TS_model->TS_module).append(input_module_name);
 
     // Print it (Console and/or Log file)
-    msg_string = "<OPENWQ> MODULE LOADED: TRANSPORT_SEDIMENTS > " + OpenWQ_wqconfig.TS_model->TS_module;
+    msg_string = "<OpenWQ> MODULE LOADED: TRANSPORT_SEDIMENTS > " + OpenWQ_wqconfig.TS_model->TS_module;
     OpenWQ_output.ConsoleLog(
         OpenWQ_wqconfig,    // for Log file name
         msg_string,         // message

@@ -38,7 +38,7 @@
     // Get compartment index of lower compartment
     icmp_SedCmpt = OpenWQ_hostModelconfig.get_HydroComp_index(
         OpenWQ_wqconfig.TS_model->SedCmpt,
-        "<OPENWQ> ERROR: TS_model > Unkown sediment compartment name: " 
+        "<OpenWQ> ERROR: TS_model > Unkown sediment compartment name: " 
         + OpenWQ_wqconfig.TS_model->SedCmpt,
         true); 
        
