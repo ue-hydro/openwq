@@ -40,5 +40,5 @@ A hydrodynamic-solute transport modelling tool suitable for basin-scale, event-b
 
 FLUXOS solves the 2D shallow water equations coupled with solute transport for event-based simulations of runoff, flooding, and contaminant transport in Prairie landscapes.
 
-- fluxos:https://fluxos.readthedocs.io
+- fluxos: https://fluxos.readthedocs.io
 - fluxos-openwq: https://github.com/ue-hydro/FLUXOS_cpp
