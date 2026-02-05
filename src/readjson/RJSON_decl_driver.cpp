@@ -172,6 +172,39 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     OpenWQ_wqconfig.cache_runtime_flags();
 
     // #############################
+    // Cross-module compatibility validation
+    // Detect conflicting module combinations that would
+    // cause double-counting of physical processes
+    // #############################
+
+    std::string msg_string;
+
+    // PHREEQC + Sorption Isotherm conflict:
+    // PHREEQC natively handles sorption via SURFACE/EXCHANGE keywords.
+    // If the SI module (Freundlich/Langmuir) is also active, both will
+    // write sorption fluxes to d_chemass_dt_chem => double-counting.
+    if (!OpenWQ_wqconfig.is_native_bgc_flex
+        && OpenWQ_wqconfig.CH_model->BGC_module.compare("NONE") != 0
+        && OpenWQ_wqconfig.SI_model->SI_module.compare("NONE") != 0)
+    {
+        msg_string =
+            "<OpenWQ> ERROR: PHREEQC is the active BIOGEOCHEMISTRY engine "
+            "and SORPTION_ISOTHERM is set to '"
+            + OpenWQ_wqconfig.SI_model->SI_module + "'. "
+            "PHREEQC natively handles sorption processes via SURFACE and "
+            "EXCHANGE blocks in the input (.pqi) file. Running both will "
+            "double-count sorption on the chemistry derivative array. "
+            "Set SORPTION_ISOTHERM to 'NONE' when using PHREEQC, or use "
+            "NATIVE_BGC_FLEX as the BIOGEOCHEMISTRY engine if you need "
+            "the simplified Freundlich/Langmuir isotherms.";
+
+        OpenWQ_output.ConsoleLog(
+            OpenWQ_wqconfig, msg_string, true, true);
+
+        exit(EXIT_FAILURE);
+    }
+
+    // #############################
     // Set output options
     // #############################
 

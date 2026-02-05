@@ -372,6 +372,41 @@ Best practices
 5. **Match units**: PHREEQC uses mol/kgw internally; ensure input concentrations are converted appropriately
 
 
+.. _phreeqc-process-overlap:
+
+Process overlap with other OpenWQ modules
+""""""""""""""""""""""""""""""""""""""""""
+
+PHREEQC is a comprehensive geochemistry engine that natively handles several processes also available as standalone OpenWQ modules. Understanding these overlaps is critical to avoid double-counting.
+
+**Sorption (PHREEQC vs. SORPTION_ISOTHERM module)**
+
+.. warning::
+
+   When PHREEQC is the active biogeochemistry engine, the ``SORPTION_ISOTHERM`` module **must** be set to ``NONE``. OpenWQ will abort with an error if both are active simultaneously.
+
+PHREEQC natively handles sorption processes through:
+
+* **Surface complexation** (``SURFACE`` keyword) — Dzombak & Morel diffuse double-layer model, CD-MUSIC
+* **Ion exchange** (``EXCHANGE`` keyword) — Gaines-Thomas, Gapon, Vanselow conventions
+* **Langmuir isotherms** — directly expressible as mass-action reactions with ``SURFACE_SPECIES``
+* **Freundlich isotherms** — achievable via workaround approaches with ``-no_check`` / ``-mole_balance``
+
+These are mechanistically more rigorous than the simplified Freundlich/Langmuir isotherms in the ``SORPTION_ISOTHERM`` module. To configure sorption when using PHREEQC, define ``SURFACE`` or ``EXCHANGE`` blocks in the ``.pqi`` input file rather than enabling the SI module.
+
+**Transport (PHREEQC vs. TRANSPORT_DISSOLVED module)**
+
+PHREEQC also supports 1D advection-dispersion via the ``TRANSPORT`` and ``ADVECTION`` keywords. However, the OpenWQ integration uses PHREEQC strictly as a **batch reaction engine** (cell-by-cell equilibration via ``RunCells()``). Spatial transport is handled by the OpenWQ ``TRANSPORT_DISSOLVED`` module, which operates on a separate derivative array.
+
+.. note::
+
+   Do **not** include ``TRANSPORT`` or ``ADVECTION`` keywords in the ``.pqi`` input file when using PHREEQC within OpenWQ. These keywords are processed during the ``RunFile()`` initialization call and may alter the initial solution state unpredictably. All spatial transport should be handled by the ``TRANSPORT_DISSOLVED`` module.
+
+**Kinetic reactions (PHREEQC vs. NATIVE_BGC_FLEX)**
+
+PHREEQC and NATIVE_BGC_FLEX are mutually exclusive — only one biogeochemistry engine runs per simulation. This is enforced in the code and poses no risk of double-counting.
+
+
 TRANSPORT_DISSOLVED
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -705,6 +740,10 @@ SORPTION_ISOTHERM
 ~~~~~~~~~~~~~~~~~~~~
 
 The Sorption Isotherm module configures equilibrium partitioning between dissolved and sorbed phases. It applies a kinetic approach: the equilibrium sorbed concentration is computed from the isotherm equation, and mass is transferred at a user-defined kinetic rate.
+
+.. warning::
+
+   This module is designed for use with **NATIVE_BGC_FLEX** as the biogeochemistry engine. When using **PHREEQC**, set ``SORPTION_ISOTHERM`` to ``NONE`` and configure sorption via PHREEQC's ``SURFACE`` or ``EXCHANGE`` blocks in the ``.pqi`` file instead. See :ref:`phreeqc-process-overlap` for details.
 
 Module Options
 """""""""""""""

@@ -152,6 +152,10 @@ where :math:`q_{max}` is the maximum adsorption capacity :math:`[MM^{-1}_{soil}]
 
 where :math:`K_{adsdes}` is the kinetic adsorption/desorption rate :math:`[T^{-1}]`, :math:`\rho` is bulk density :math:`[ML^{-3}]`, and :math:`L` is layer thickness :math:`[L]`. This flux is applied as a sink/source on the dissolved mass. See :doc:`Sorption Isotherm configuration <4_1_3Modules>` for setup details.
 
+.. note::
+
+   The Freundlich/Langmuir SI module is intended for use with NATIVE_BGC_FLEX. When PHREEQC is the active biogeochemistry engine, sorption should be handled through PHREEQC's ``SURFACE`` and ``EXCHANGE`` blocks, which provide mechanistically richer surface complexation and ion exchange models. See :ref:`phreeqc-process-overlap`.
+
 
 Sediment Transport
 ~~~~~~~~~~~~~~~~~~~~~~
