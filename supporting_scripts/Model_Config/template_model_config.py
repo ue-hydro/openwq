@@ -72,7 +72,7 @@ Options:
 # in this case, "NONE" is not an option
 --------------------------------------
 """
-bgc_module_name = "NATIVE_BGC_FLEX"    # Change to "PHREEQC" to use the PHREEQC geochemical engine
+bgc_module_name = "PHREEQC"    # Change to "PHREEQC" to use the PHREEQC geochemical engine
 
 # ---- NATIVE_BGC_FLEX settings ----
 # Path to the BGC cycling framework JSON file (only used when bgc_module_name = "NATIVE_BGC_FLEX")
@@ -273,9 +273,14 @@ Options:
     FREUNDLICH  - Freundlich nonlinear sorption: q = Kfr * C^(1/Nfr)
     LANGMUIR    - Langmuir sorption with finite binding sites: q = (qmax * KL * C) / (1 + KL * C)
     NONE        - No sorption
+
+WARNING: The SI module (Freundlich/Langmuir) is ONLY compatible with NATIVE_BGC_FLEX.
+         When using PHREEQC as the BGC engine, set si_module_name = "NONE".
+         PHREEQC handles sorption natively via SURFACE/EXCHANGE blocks in the .pqi file.
+         Running both will cause double-counting of sorption processes.
 --------------------------------------
 """
-si_module_name = "LANGMUIR"
+si_module_name = "NONE"  # Set to "NONE" when using PHREEQC; use "FREUNDLICH" or "LANGMUIR" with NATIVE_BGC_FLEX
 si_sediment_compartment = "RIVER_NETWORK_REACHES"
 
 # Soil/medium properties (used by both Freundlich and Langmuir)

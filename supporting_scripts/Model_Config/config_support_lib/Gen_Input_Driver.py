@@ -273,6 +273,30 @@ def Gen_Input_Driver(
             print("WARNING: running_on_docker=True but could not determine Docker path mapping. "
                   "Paths will NOT be corrected.")
 
+    # =============================================
+    # Cross-module compatibility validation
+    # =============================================
+    # PHREEQC natively handles sorption via SURFACE/EXCHANGE keywords.
+    # If the SI module (Freundlich/Langmuir) is also active, both will
+    # write sorption fluxes to d_chemass_dt_chem at runtime, causing
+    # double-counting of sorption processes.
+    if (bgc_module_name.upper() == "PHREEQC"
+            and si_module_name.upper() not in ("NONE", "")):
+        raise ValueError(
+            f"\n\n"
+            f"  ERROR: Incompatible module combination detected!\n"
+            f"  ================================================\n"
+            f"  BIOGEOCHEMISTRY = '{bgc_module_name}'\n"
+            f"  SORPTION_ISOTHERM = '{si_module_name}'\n\n"
+            f"  PHREEQC natively handles sorption processes via SURFACE and\n"
+            f"  EXCHANGE blocks in the .pqi input file. Running both PHREEQC\n"
+            f"  and the Freundlich/Langmuir SI module will double-count\n"
+            f"  sorption on the chemistry derivative array (d_chemass_dt_chem).\n\n"
+            f"  FIX: Set si_module_name = \"NONE\" when using PHREEQC,\n"
+            f"  or use bgc_module_name = \"NATIVE_BGC_FLEX\" if you need the\n"
+            f"  simplified Freundlich/Langmuir isotherms.\n"
+        )
+
     # Set defaults for mutable args
     if td_module_dispersion_xyz is None:
         td_module_dispersion_xyz = [0.0, 0.0, 0.0]
