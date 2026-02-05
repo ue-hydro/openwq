@@ -15,7 +15,7 @@ The biogeochemical cycling file is a JSON file that defines both the chemical sp
 | ``LIST`` -> ``(i#)``              | - Numbered list of chemical species                   |
 |                                   | - Example: ``"1":"NO3"``                              |
 +-----------------------------------+-------------------------------------------------------+
-| ``BGC_GENERAL_MOBILE_SPECIES``    | List of numbers of mobile species                     |
+| ``BGC_GENERAL_MOBILE_SPECIES``    | List of mobile species names (strings)                |
 +-----------------------------------+-------------------------------------------------------+
 
 **Principal Key 3**: ``CYCLING_FRAMEWORK``
@@ -67,7 +67,7 @@ Example:
                 "3": "SRP",
                 "4": "partP",
             },
-            "MOBILE_SPECIES": [1,2,4,7,8,9]
+            "MOBILE_SPECIES": ["NO3", "NH4", "partP"]
         },
         "CYCLING_FRAMEWORKS": {
             "N_inorg": {

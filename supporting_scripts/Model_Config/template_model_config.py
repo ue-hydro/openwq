@@ -85,11 +85,11 @@ phreeqc_input_filepath = "config_support_lib/examples_PHREEQC/phreeqc_river.pqi"
 # Path to PHREEQC thermodynamic database (.dat)
 # Download full database from: https://www.usgs.gov/software/phreeqc-version-3
 phreeqc_database_filepath = "config_support_lib/examples_PHREEQC/phreeqc.dat"
-# Mobile species indices (1-indexed). These species will be transported.
+# Mobile species names. These species will be transported.
 # The species order is determined by PhreeqcRM::GetComponents() after parsing
 # the database + input file. Run once to see the component list in the log.
-# IMPORTANT: Indices must not exceed the number of components found by PHREEQC.
-phreeqc_mobile_species = [1, 2, 3, 4]
+# IMPORTANT: Names must match the components discovered by PHREEQC.
+phreeqc_mobile_species = ["H", "O", "Charge", "Ca"]
 # Whether to include H2O as a component in PHREEQC (default True)
 phreeqc_component_h2o = True
 # Temperature dependency mapping: compartment name -> dependency variable name
@@ -348,7 +348,7 @@ ewf_method_fixedval_external_inputflux_name = "SUMMA_RUNOFF"
 # Output settings
 ################
 output_format = "HDF5"              # HDF5 or CSV (but HDF5 is recommended as can be used with other scripts
-chemical_species = [1, 2, 3, 4]     # Chemical species indices to export (must not exceed num components)
+chemical_species = ["NO3-N", "NH4-N", "N_ORG_fresh", "N_ORG_stable"]  # Chemical species names to export (must match species defined in BGC module)
 units = "MG/L"                      # Units (concentrations or mass)
 no_water_conc_flag = -9999          # Flag for cells without water, so no concentration values
 export_sediment = True             # Set True to export sediments results

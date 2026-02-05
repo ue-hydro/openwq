@@ -36,7 +36,7 @@ def create_phreeqc_module_json(
         # PHREEQC-specific settings
         phreeqc_input_filepath: str,
         phreeqc_database_filepath: str,
-        phreeqc_mobile_species: List[int],
+        phreeqc_mobile_species: List[str],
         phreeqc_component_h2o: bool = True,
         phreeqc_temperature_mapping: Optional[Dict[str, str]] = None,
         phreeqc_pressure_mapping: Optional[Dict[str, str]] = None,
@@ -52,7 +52,7 @@ def create_phreeqc_module_json(
         json_header_comment: List of comment lines to add at the top of the file
         phreeqc_input_filepath: Path to the PHREEQC input file (.pqi)
         phreeqc_database_filepath: Path to the PHREEQC thermodynamic database (.dat)
-        phreeqc_mobile_species: List of mobile species indices (1-indexed)
+        phreeqc_mobile_species: List of mobile species names (must match PHREEQC components)
         phreeqc_component_h2o: Whether to include H2O as a component (default True)
         phreeqc_temperature_mapping: Optional dict mapping compartment names to
             dependency variable names for temperature (e.g., {"RIVER_NETWORK_REACHES": "air_temperature"})

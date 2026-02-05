@@ -13,7 +13,7 @@
             "10": "SOIL_P_ORG_stable",
             "11": "SOIL_P_ORG_active"
         },
-        "mobile_species": [1,2,6]
+        "mobile_species": ["SOIL_NO3", "SOIL_NH4", "SOIL_P_MIN_solution"]
     },
     "CYCLING_FRAMEWORKS": {
         "SOIL_N": {

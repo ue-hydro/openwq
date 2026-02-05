@@ -96,8 +96,16 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_PHREEQC(
     }
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
-    // Get mobile species
-    // reset index to start on zero
+    // Get chemical species list from component names
+    // (must be done before mobile species resolution)
+    for (unsigned int chemi = 0; chemi < (OpenWQ_wqconfig.CH_model->PHREEQC->num_chem); chemi++)
+    {
+        (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list).push_back(
+            component_names[chemi]);
+    }
+
+    // Get mobile species (now specified by name instead of index)
+    // Resolve each name to its 0-based index in chem_species_list
     // Note: For PHREEQC, BGC_GENERAL_MOBILE_SPECIES is a top-level key
     // in the BGC module JSON (unlike NATIVE_BGC_FLEX where it's nested
     // under CHEMICAL_SPECIES)
@@ -117,29 +125,25 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_PHREEQC(
 
     for (unsigned int chemi = 0; chemi < BGCjson_mobileSpecies.size(); chemi++){
 
-        int mobile_idx = (int)BGCjson_mobileSpecies.at(chemi) - 1;
+        std::string mobile_name = BGCjson_mobileSpecies.at(chemi).get<std::string>();
+        bool found = false;
 
-        // Validate mobile species index is within bounds
-        if (mobile_idx < 0 || mobile_idx >= (int)OpenWQ_wqconfig.CH_model->PHREEQC->num_chem) {
-            msg_string =
-                "<OpenWQ> WARNING: PHREEQC BGC_GENERAL_MOBILE_SPECIES index "
-                + std::to_string((int)BGCjson_mobileSpecies.at(chemi))
-                + " is out of range [1, "
-                + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->num_chem)
-                + "]. Skipping.";
-            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-            continue;
+        for (unsigned int si = 0; si < OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list.size(); si++){
+            if (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[si] == mobile_name){
+                OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.push_back((int)si);
+                found = true;
+                break;
+            }
         }
 
-        OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.push_back(mobile_idx);
+        if (!found){
+            msg_string =
+                "<OpenWQ> WARNING: PHREEQC BGC_GENERAL_MOBILE_SPECIES name '"
+                + mobile_name
+                + "' not found in PHREEQC component list. Skipping.";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        }
 
-    }
-
-    // Get chemical species list from component names
-    for (unsigned int chemi = 0; chemi < (OpenWQ_wqconfig.CH_model->PHREEQC->num_chem); chemi++)
-    {
-        (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list).push_back(
-            component_names[chemi]);
     }
 
 }

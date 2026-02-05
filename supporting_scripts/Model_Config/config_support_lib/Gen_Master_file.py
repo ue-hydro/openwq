@@ -80,7 +80,7 @@ def create_master_json(
 
         # Output settings
         output_format: str,
-        chemical_species: List[int],
+        chemical_species: List[str],
         units: str,
         no_water_conc_flag: int,
         export_sediment: bool,

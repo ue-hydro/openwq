@@ -21,7 +21,7 @@
             "18": "TDP_streambed",
             "19": "organism_P"
         },
-        "mobile_species": [1,2,5,8,9,10,11,13,14,15,16,17,18]
+        "mobile_species": ["SOM", "NH4_inorg_soil", "NO3_groundwater", "inactive_P_soil", "labile_org_P_soil", "TDP_soil", "TDP_groundwater", "TDP_quickflow", "PP_quickflow", "TDP_stream", "PP_stream", "PP_streambed", "TDP_streambed"]
     },
     "CYCLING_FRAMEWORKS": {
         "SOIL_N": {

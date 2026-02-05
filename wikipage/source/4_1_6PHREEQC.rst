@@ -33,7 +33,7 @@ The PHREEQC module is configured through a JSON file referenced in the master co
         "FILEPATH": "openwq_in/phreeqc_river.pqi",
         "DATABASE": "openwq_in/phreeqc.dat",
         "COMPONENT_H2O": true,
-        "BGC_GENERAL_MOBILE_SPECIES": [1, 2, 3, 4, 5, 6],
+        "BGC_GENERAL_MOBILE_SPECIES": ["H", "O", "Charge", "Ca", "Mg", "Na"],
         "TEMPERATURE": {
             "RIVER_NETWORK_REACHES": "air_temperature"
         }
@@ -50,7 +50,7 @@ Configuration fields:
 +-----------------------------------+-----------+--------------------------------------------------------------------+
 | ``COMPONENT_H2O``                 | bool      | Include water as a component (default: ``true``)                   |
 +-----------------------------------+-----------+--------------------------------------------------------------------+
-| ``BGC_GENERAL_MOBILE_SPECIES``    | array     | Indices of chemical species subject to advective transport         |
+| ``BGC_GENERAL_MOBILE_SPECIES``    | array     | Names of chemical species subject to advective transport           |
 +-----------------------------------+-----------+--------------------------------------------------------------------+
 | ``TEMPERATURE``                   | object    | Temperature source variable name for each compartment              |
 +-----------------------------------+-----------+--------------------------------------------------------------------+
@@ -92,7 +92,7 @@ Mobile species
 
 The ``BGC_GENERAL_MOBILE_SPECIES`` array specifies which PHREEQC components are subject to advective transport between compartment cells. Only mobile species are transported by the OpenWQ transport module; immobile species remain in their original grid cell.
 
-Species indices correspond to the order returned by PHREEQC's ``FindComponents()`` function. The component list can be inspected in the OpenWQ debug output when ``RUN_MODE_DEBUG`` is enabled in the master configuration.
+Species are identified by their component name (string), which must match the names returned by PHREEQC's ``FindComponents()`` function. The component list can be inspected in the OpenWQ debug output when ``RUN_MODE_DEBUG`` is enabled in the master configuration.
 
 
 Temperature coupling
@@ -205,7 +205,7 @@ PHREEQC determines chemical components dynamically from the database and input f
 2. Run OpenWQ with an initial PHREEQC configuration
 3. Check the console output for the component list from ``FindComponents()``
 
-The component order matters for ``BGC_GENERAL_MOBILE_SPECIES``. Common components (with the standard ``phreeqc.dat`` database) include:
+The component names used in ``BGC_GENERAL_MOBILE_SPECIES`` must match the names discovered by PHREEQC. Common components (with the standard ``phreeqc.dat`` database) include:
 
 * ``H`` - Hydrogen
 * ``O`` - Oxygen
@@ -221,7 +221,7 @@ The component order matters for ``BGC_GENERAL_MOBILE_SPECIES``. Common component
 
 .. warning::
 
-    The number of species in ``BGC_GENERAL_MOBILE_SPECIES`` must not exceed the number of components found by PHREEQC. If indices are invalid, OpenWQ will report an error during initialization.
+    The species names in ``BGC_GENERAL_MOBILE_SPECIES`` must match valid component names found by PHREEQC. If a name is not found in the component list, OpenWQ will report a warning during initialization and skip that species.
 
 
 Example test case

@@ -33,51 +33,10 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_langmuir(
     json BGCjson_mobileSpecies;
     std::string msg_string;           // error/warning message string
 
-    // Adapt the code below to this module
-    
-    /*
-    // Check if BGQ json has CHEMICAL_SPECIES key
-    errorMsgIdentifier = "BGQ file";
-    BGCjson_subStruct = OpenWQ_utils.RequestJsonKeyVal_json(
-        OpenWQ_wqconfig, OpenWQ_output,
-        OpenWQ_json.BGC_module, "CHEMICAL_SPECIES",
-        errorMsgIdentifier,
-        true); 
-
-    // Check if BGQ json has CHEMICAL_SPECIES key
-    errorMsgIdentifier = "BGQ file in CHEMICAL_SPECIES";
-    BGCjson_ChemList = OpenWQ_utils.RequestJsonKeyVal_json(
-        OpenWQ_wqconfig, OpenWQ_output,
-        BGCjson_subStruct, "LIST",
-        errorMsgIdentifier,
-        true); 
-
-    // Get number of chemical species from BGC_json
-    (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem) = BGCjson_ChemList.size();
-
-    // Get mobile species 
-    // reset index to start on zero
-    errorMsgIdentifier = "BGQ file in CHEMICAL_SPECIES";
-    BGCjson_mobileSpecies = OpenWQ_utils.RequestJsonKeyVal_json(
-        OpenWQ_wqconfig, OpenWQ_output,
-        BGCjson_subStruct, "BGC_GENERAL_MOBILE_SPECIES",
-        errorMsgIdentifier,
-        false);  // no abort
-
-    for (unsigned int chemi = 0; chemi < BGCjson_mobileSpecies.size(); chemi++){
-    
-        OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.push_back(
-            (int)BGCjson_mobileSpecies.at(chemi) - 1);
-
-    }
-
-    // Get chemical species list from BGC_json
-    for (unsigned int chemi = 0; chemi < (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem); chemi++)
-    {
-        (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list).push_back(
-            BGCjson_ChemList[std::to_string(chemi + 1)]);
-    }
-    */
+    // TODO: Adapt to this module (Langmuir sorption isotherm)
+    // Note: BGC_GENERAL_MOBILE_SPECIES now uses species names (strings)
+    // instead of integer indices. See bgc_flex/json_set.cpp for the
+    // name-based resolution pattern.
 
 }
 

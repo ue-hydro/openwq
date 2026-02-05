@@ -63,25 +63,37 @@ void OpenWQ_readjson::SetConfigInfo_output_what2print(
         true);
 
     errorMsgIdentifier = "Master file > OPENWQ_OUTPUT";
-    num_chem2print = OpenWQ_utils.RequestJsonKeyVal_json(
+    json json_chemSpecies = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
         json_output_subStruct,"CHEMICAL_SPECIES",
         errorMsgIdentifier,
-        true).size();
-    
+        true);
+    num_chem2print = json_chemSpecies.size();
+
     // Get indexes for the list of chemicals requested
+    // CHEMICAL_SPECIES is now an array of species name strings (e.g., ["NO3-N", "NH4-N"])
+    // Resolve each name to its 0-based index in the internal species list
     const auto& chem_list = *OpenWQ_wqconfig.cached_chem_species_list_ptr;
     const unsigned int num_chem_total = OpenWQ_wqconfig.cached_num_chem;
     for (unsigned int chemi = 0; chemi < num_chem2print; chemi++){
-        // Chemical name (to print)
-        chem_name2print = chem_list[chemi];
+        // Chemical name from the JSON array
+        chem_name2print = json_chemSpecies.at(chemi).get<std::string>();
+        bool found = false;
         for (unsigned int chemlisti = 0; chemlisti < num_chem_total; chemlisti++){
             chem_namelist = chem_list[chemlisti];
-            // Check if compartments listed match internal compartment names
+            // Check if species name matches internal species list
             if (chem_namelist.compare(chem_name2print) == 0){
                 OpenWQ_wqconfig.chem2print.push_back(chemlisti);
+                found = true;
                 break;
             }
+        }
+        if (!found){
+            msg_string =
+                "<OpenWQ> WARNING: CHEMICAL_SPECIES name '"
+                + chem_name2print
+                + "' not found in internal species list. Skipping.";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
         }
     }
 

@@ -9,7 +9,7 @@
             "5": "N_ORG_active",
             "6": "OUT"
         },
-        "BGC_GENERAL_MOBILE_SPECIES": [1,2]
+        "BGC_GENERAL_MOBILE_SPECIES": ["NO3-N", "NH4-N"]
     },
     "CYCLING_FRAMEWORKS": {
         "N_cycle": {

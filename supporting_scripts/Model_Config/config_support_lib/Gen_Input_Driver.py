@@ -155,7 +155,7 @@ def Gen_Input_Driver(
         # PHREEQC-specific settings (used when bgc_module_name = "PHREEQC")
         phreeqc_input_filepath: str = "",
         phreeqc_database_filepath: str = "",
-        phreeqc_mobile_species: Optional[List[int]] = None,
+        phreeqc_mobile_species: Optional[List[str]] = None,
         phreeqc_component_h2o: bool = True,
         phreeqc_temperature_mapping: Optional[Dict[str, str]] = None,
         phreeqc_pressure_mapping: Optional[Dict[str, str]] = None,
@@ -210,7 +210,7 @@ def Gen_Input_Driver(
 
         # Output settings
         output_format: str = "HDF5",
-        chemical_species: List[int] = None,
+        chemical_species: List[str] = None,
         units: str = "MG/L",
         no_water_conc_flag: int = -9999,
         export_sediment: bool = False,
@@ -276,7 +276,7 @@ def Gen_Input_Driver(
     if ss_method_csv_config is None:
         ss_method_csv_config = []
     if chemical_species is None:
-        chemical_species = [1]
+        chemical_species = ["NO3-N"]
     if timestep is None:
         timestep = [1, "hour"]
 
@@ -476,7 +476,7 @@ def Gen_Input_Driver(
             json_header_comment=json_header_comment,
             phreeqc_input_filepath=phreeqc_input_filepath,
             phreeqc_database_filepath=phreeqc_database_filepath,
-            phreeqc_mobile_species=phreeqc_mobile_species if phreeqc_mobile_species else [1],
+            phreeqc_mobile_species=phreeqc_mobile_species if phreeqc_mobile_species else ["H"],
             phreeqc_component_h2o=phreeqc_component_h2o,
             phreeqc_temperature_mapping=phreeqc_temperature_mapping,
             phreeqc_pressure_mapping=phreeqc_pressure_mapping,

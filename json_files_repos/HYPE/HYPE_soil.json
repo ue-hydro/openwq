@@ -11,7 +11,7 @@
             "8": "SRP",
             "9": "DOP",
         },
-        "mobile_species": [3,4,5,8]
+        "mobile_species": ["DIN", "DON", "partP", "SRP"]
     },
     "CYCLING_FRAMEWORKS": {
         "SOIL_N": {

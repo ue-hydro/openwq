@@ -88,7 +88,7 @@ Module configuration
     bgc_module_name = "PHREEQC"
     phreeqc_input_filepath = "config_support_lib/examples_PHREEQC/phreeqc_river.pqi"
     phreeqc_database_filepath = "config_support_lib/examples_PHREEQC/phreeqc.dat"
-    phreeqc_mobile_species = [1, 2, 3, 4]
+    phreeqc_mobile_species = ["H", "O", "Charge", "Ca"]
     phreeqc_component_h2o = True
     phreeqc_temperature_mapping = {
         "RIVER_NETWORK_REACHES": "air_temperature"
@@ -250,7 +250,7 @@ Output configuration
 .. code-block:: python
 
     output_format = "HDF5"              # "HDF5" or "CSV"
-    chemical_species = [1, 2, 3, 4]     # Species indices to export
+    chemical_species = ["NO3-N", "NH4-N", "N_ORG_fresh", "N_ORG_stable"]  # Species names to export
     units = "MG/L"                      # Output units
     no_water_conc_flag = -9999          # No-data flag
     export_sediment = False             # Export sediment results

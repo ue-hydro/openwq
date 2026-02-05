@@ -301,8 +301,9 @@ for i in range(0, len(node_labels_all_vec)):
             exit()
 
     # Add to vector_mobile_all_vec is elem = 1 (i.e. mobile)
+    # Use species name instead of index for user-friendly identification
     if elem == 1:
-        vector_mobile_all_vec.append(i+1) # + 1 because numbering in the json file starts in 1
+        vector_mobile_all_vec.append(node_labels_all_vec_i)
 
 # Add mobility info to JSON
 BGC_JSON_dict["CHEMICAL_SPECIES"]["MOBILE_SPECIES"] = vector_mobile_all_vec

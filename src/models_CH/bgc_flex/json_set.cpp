@@ -52,8 +52,16 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_BGC_FLEX(
     // Get number of chemical species from BGC_json
     (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem) = BGCjson_ChemList.size();
 
-    // Get mobile species 
-    // reset index to start on zero
+    // Get chemical species list from BGC_json
+    // (must be done before mobile species resolution)
+    for (unsigned int chemi = 0; chemi < (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem); chemi++)
+    {
+        (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list).push_back(
+            BGCjson_ChemList[std::to_string(chemi + 1)]);
+    }
+
+    // Get mobile species (now specified by name instead of index)
+    // Resolve each name to its 0-based index in chem_species_list
     errorMsgIdentifier = "BGQ file in CHEMICAL_SPECIES";
     BGCjson_mobileSpecies = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
@@ -62,17 +70,26 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_BGC_FLEX(
         false);  // no abort
 
     for (unsigned int chemi = 0; chemi < BGCjson_mobileSpecies.size(); chemi++){
-    
-        OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.push_back(
-            (int)BGCjson_mobileSpecies.at(chemi) - 1);
 
-    }
+        std::string mobile_name = BGCjson_mobileSpecies.at(chemi).get<std::string>();
+        bool found = false;
 
-    // Get chemical species list from BGC_json
-    for (unsigned int chemi = 0; chemi < (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem); chemi++)
-    {
-        (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list).push_back(
-            BGCjson_ChemList[std::to_string(chemi + 1)]);
+        for (unsigned int si = 0; si < OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list.size(); si++){
+            if (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[si] == mobile_name){
+                OpenWQ_wqconfig.CH_model->NativeFlex->mobile_species.push_back((int)si);
+                found = true;
+                break;
+            }
+        }
+
+        if (!found){
+            msg_string =
+                "<OpenWQ> WARNING: BGC_GENERAL_MOBILE_SPECIES name '"
+                + mobile_name
+                + "' not found in CHEMICAL_SPECIES LIST. Skipping.";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        }
+
     }
 
 }
