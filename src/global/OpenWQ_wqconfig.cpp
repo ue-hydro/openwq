@@ -419,14 +419,18 @@ void OpenWQ_wqconfig::cache_runtime_flags()
     is_TD_advdisp = (TD_model->TD_module.compare("OPENWQ_NATIVE_TD_ADVDISP") == 0);
     is_TD_adv = (TD_model->TD_module.compare("NATIVE_TD_ADV") == 0);
     is_solver_sundials = (SOLVER_module.compare("SUNDIALS") == 0);
-    is_solver_be = (SOLVER_module.compare("BE") == 0);
+    is_solver_forward_euler = (SOLVER_module.compare("FORWARD_EULER") == 0);
 
     if (is_native_bgc_flex) {
         cached_num_mobile_species = CH_model->NativeFlex->mobile_species.size();
         cached_mobile_species_ptr = &(CH_model->NativeFlex->mobile_species);
+        cached_num_chem = CH_model->NativeFlex->num_chem;
+        cached_chem_species_list_ptr = &(CH_model->NativeFlex->chem_species_list);
     } else {
         cached_num_mobile_species = CH_model->PHREEQC->mobile_species.size();
         cached_mobile_species_ptr = &(CH_model->PHREEQC->mobile_species);
+        cached_num_chem = CH_model->PHREEQC->num_chem;
+        cached_chem_species_list_ptr = &(CH_model->PHREEQC->chem_species_list);
     }
 }
 

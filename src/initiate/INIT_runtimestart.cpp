@@ -104,7 +104,16 @@ void OpenWQ_initiate::setIC_phreeqc(
     const unsigned int num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
     const unsigned int num_comps = OpenWQ_hostModelconfig.get_num_HydroComp();
 
-    std::vector<double> c(nxyz * num_chem);
+    // Debug: log grid and component info
+    std::string msg_string = "<OpenWQ> PHREEQC IC setup: nxyz=" + std::to_string(nxyz)
+        + ", nc(GetComponentCount)=" + std::to_string(nc)
+        + ", num_chem(stored)=" + std::to_string(num_chem)
+        + ", num_comps(hydro)=" + std::to_string(num_comps);
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+    // Use nc (actual PhreeqcRM component count) for concentration vector size
+    // PhreeqcRM::GetConcentrations expects size = nxyz * GetComponentCount()
+    std::vector<double> c(nxyz * nc);
     std::vector<int> ic1(nxyz * 7, -1);
 
     int indx = 0;
@@ -113,18 +122,21 @@ void OpenWQ_initiate::setIC_phreeqc(
         const std::string CompName_icmp = 
             OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
         
-        // Initialize all IDs to -1
-        int SOLUTIONS_id = -1;
+        // Initialize IDs: SOLUTIONS defaults to 1 (required), others to -1 (undefined/skip)
+        // PhreeqcRM requires a valid SOLUTION for each cell. Default to SOLUTION 1
+        // which should be defined in the .pqi input file.
+        int SOLUTIONS_id = 1;  // Default to SOLUTION 1 (required)
         int EQUILIBRIUM_PHASES_id = -1;
         int EXCHANGE_id = -1;
         int SURFACE_id = -1;
         int GAS_PHASE_id = -1;
         int SOLID_SOLUTIONS_id = -1;
         int KINETICS_id = -1;
-        
+
         if (OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"].contains(CompName_icmp)){
             const auto& bgc_config = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp];
-            
+
+            // Override defaults if specified in config
             if (bgc_config.contains("SOLUTIONS"))
                 SOLUTIONS_id = bgc_config["SOLUTIONS"];
             if (bgc_config.contains("EQUILIBRIUM_PHASES"))
@@ -140,9 +152,9 @@ void OpenWQ_initiate::setIC_phreeqc(
             if (bgc_config.contains("KINETICS"))
                 KINETICS_id = bgc_config["KINETICS"];
         } else {
-            std::string msg_string = 
-                "<OpenWQ> PHREEQC conditions not defined for compartment:" 
-                + CompName_icmp + " (set to undefined)";
+            std::string msg_string =
+                "<OpenWQ> PHREEQC: Using default SOLUTION 1 for compartment: "
+                + CompName_icmp;
             OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
         }
 
@@ -166,11 +178,52 @@ void OpenWQ_initiate::setIC_phreeqc(
         }
     }
 
-    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->InitialPhreeqc2Module(ic1);
+    // Debug: log ic1 mapping
+    msg_string = "<OpenWQ> PHREEQC IC mapping: nxyz=" + std::to_string(nxyz)
+        + ", first few SOLUTIONS ids: ";
+    for (int i = 0; i < std::min(5, nxyz); i++) {
+        msg_string += std::to_string(ic1[i]) + " ";
+    }
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+    // Initialize PHREEQC cells from the input file definitions
+    // Note: SetUnitsSolution, SetRepresentativeVolume, SetSaturationUser are called in phreeqc_setup
+    msg_string = "<OpenWQ> PHREEQC: Calling InitialPhreeqc2Module...";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+    IRM_RESULT init_result = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->InitialPhreeqc2Module(ic1);
+    if (init_result != IRM_OK) {
+        msg_string = "<OpenWQ> ERROR: PHREEQC InitialPhreeqc2Module failed with code: "
+            + std::to_string(init_result);
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    } else {
+        msg_string = "<OpenWQ> PHREEQC: InitialPhreeqc2Module succeeded";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
+
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTime(0.0);
-    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTimeStep(0);
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTimeStep(0.0);
+
+    msg_string = "<OpenWQ> PHREEQC: Calling RunCells...";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     IRM_RESULT result = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->RunCells();
+    if (result != IRM_OK) {
+        msg_string = "<OpenWQ> ERROR: PHREEQC RunCells failed with code: "
+            + std::to_string(result);
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    } else {
+        msg_string = "<OpenWQ> PHREEQC: RunCells succeeded";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
+
+    msg_string = "<OpenWQ> PHREEQC: Calling GetConcentrations...";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetConcentrations(c);
+
+    msg_string = "<OpenWQ> PHREEQC: GetConcentrations succeeded";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
     // Parallelized concentration extraction
     #pragma omp parallel num_threads(OpenWQ_wqconfig.get_num_threads_requested())
@@ -246,7 +299,7 @@ void OpenWQ_initiate::setIC_driver(
 
         // Get chem name
         const std::string chemname = 
-            (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi];
+            (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[chemi];
 
         // Default all IC chemical mass to zero
         (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi).zeros();
@@ -315,7 +368,7 @@ void OpenWQ_initiate::setIC_json(
 
     // Get chem name
     const std::string chemname = 
-        (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi];
+        (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[chemi];
 
     // Get compartment dimensions
     const int nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
@@ -348,11 +401,22 @@ void OpenWQ_initiate::setIC_json(
         OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["INITIAL_CONDITIONS"], "DATA",
         errorMsgIdentifier, true);
 
-    errorMsgIdentifier = "Config file > BIOGEOCHEMISTRY_CONFIGURATION > " + CompName_icmp + "INITIAL_CONDITIONS > DATA";
-    json ic_info_i = OpenWQ_utils.RequestJsonKeyVal_json(
-        OpenWQ_wqconfig, OpenWQ_output,
-        OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["INITIAL_CONDITIONS"]["DATA"], chemname,
-        errorMsgIdentifier, true);
+    errorMsgIdentifier = "Config file > BIOGEOCHEMISTRY_CONFIGURATION > " + CompName_icmp + " > INITIAL_CONDITIONS > DATA";
+
+    // Check if this chemical species exists in the IC data (non-fatal)
+    // Species may not have IC entries (e.g., PHREEQC components not listed in config)
+    json ic_data_section = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"][CompName_icmp]["INITIAL_CONDITIONS"]["DATA"];
+    if (!ic_data_section.contains(chemname)) {
+        // No IC data for this species — use default (zero, already set above)
+        std::string msg_string =
+            "<OpenWQ> WARNING (non-fatal): No initial conditions found for species '"
+            + chemname + "' in compartment '" + CompName_icmp
+            + "'. Using default (zero).";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        return;
+    }
+
+    json ic_info_i = ic_data_section[chemname];
 
     const int num_icData = ic_info_i.size();
 
@@ -457,7 +521,7 @@ void OpenWQ_initiate::setIC_h5(
 
     // Get chem name
     const std::string chemname = 
-        (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi];
+        (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[chemi];
 
     // Validate JSON structure
     std::string errorMsgIdentifier = "Config file";

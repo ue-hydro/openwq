@@ -24,8 +24,8 @@ The master configuration is a JSON file that provides OpenWQ with information an
 +----------------------+-------------------------------------------------------------------------------------+
 | ``USE_NUM_THREADS``  | "all" or integer of number of threads to use (e.g., 10)                             |
 +----------------------+-------------------------------------------------------------------------------------+
-| ``SOLVER``           | Numerical solver: ``"BE"`` (Backward Euler) or ``"SUNDIALS"`` (CVode). See          |
-|                      | :doc:`Solvers <4_1_7Solvers>`                                                       |
+| ``SOLVER``           | Numerical solver: ``"FORWARD_EULER"`` (Forward Euler) or ``"SUNDIALS"`` (CVode).    |
+|                      | See :doc:`Solvers <4_1_7Solvers>`                                                   |
 +----------------------+-------------------------------------------------------------------------------------+
 
 **Principal Keys 3**: ``OPENWQ_INPUT``
@@ -110,7 +110,7 @@ Example:
         "COMPUTATIONAL_SETTINGS": {
             "RUN_MODE_DEBUG": true,
             "USE_NUM_THREADS": "all",
-            "SOLVER": "BE"
+            "SOLVER": "FORWARD_EULER"
         },
         "OPENWQ_INPUT": {
             "CONFIG_FILEPATH": "openWQ_config.json",

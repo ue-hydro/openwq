@@ -47,9 +47,12 @@ void OpenWQ_couplercalls::RunSpaceStep(
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     const double wflux_s2r, const double wmass_source){
 
-    
+
     // Local variables
     std::string msg_string;
+
+    // Store simulation time for use by TS models (also accessible via SUNDIALS path)
+    OpenWQ_wqconfig.set_simtime(simtime);
 
     // Return if flux or source_volume is zero
     if (wflux_s2r <= OpenWQ_hostModelconfig.get_waterflux_minlim() || 
@@ -101,7 +104,7 @@ void OpenWQ_couplercalls::RunSpaceStep(
             OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
             OpenWQ_vars,
             OpenWQ_utils,
-            OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+            OpenWQ_output,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, wmass_source,
@@ -158,7 +161,7 @@ void OpenWQ_couplercalls::RunSpaceStep_IN(
             OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
             OpenWQ_vars,
             OpenWQ_utils,
-            OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+            OpenWQ_output,
             0, 0, 0, 0,
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, 0,

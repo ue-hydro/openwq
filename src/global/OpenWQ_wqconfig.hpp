@@ -17,6 +17,7 @@
 #pragma once
 
 #include <armadillo>
+#include <ctime>
 #include <memory>
 #include "exprtk.hpp"
 #include <string>
@@ -92,6 +93,7 @@ class OpenWQ_wqconfig
         double timestep_out;             // time step (in seconds)
         std::string timestep_out_unit;  // time step unit
         double nexttime_out = 0.0f;     // iteractive next printing time (in seconds)
+        time_t simtime = 0;             // current simulation time (seconds since 00:00 hours, Jan 1, 1970 UTC)
 
 
         // Sink and Source AND External fluxes
@@ -147,6 +149,8 @@ class OpenWQ_wqconfig
         /***********************************************
         * Time Methods
         ************************************************/
+        time_t get_simtime() { return simtime; }
+        void set_simtime(time_t simtime_in) { simtime = simtime_in; }
         double get_time_previous();
         void set_time_previous(double time_previous);
         double get_nexttime_out();
@@ -203,7 +207,7 @@ class OpenWQ_wqconfig
          // ##########################
         // 3) Solver
         // General info 
-        // Native BE and not native SUNDIALS
+        // Native Forward Euler and not native SUNDIALS
         std::string SOLVER_module;  // Get module name
 
         /***********************************************
@@ -265,13 +269,15 @@ class OpenWQ_wqconfig
         bool is_TD_adv = false;             // TD_model->TD_module == "NATIVE_TD_ADV"
         unsigned int cached_num_mobile_species = 0;
         const std::vector<unsigned int>* cached_mobile_species_ptr = nullptr;
+        unsigned int cached_num_chem = 0;
+        const std::vector<std::string>* cached_chem_species_list_ptr = nullptr;
 
         // Pre-built BGC lookup: cycling framework name -> vector of indices into BGCexpressions_info
         std::unordered_map<std::string, std::vector<unsigned int>> bgc_cycle_to_transf_indices;
 
         // Cached solver flags
         bool is_solver_sundials = false;
-        bool is_solver_be = false;
+        bool is_solver_forward_euler = false;
 
         void cache_runtime_flags();
         void build_bgc_lookup();
@@ -526,7 +532,7 @@ class OpenWQ_wqconfig::CH_model_::PHREEQC_{
 
     public:
 
-    unsigned int num_chem;                  //Number of chemical species  
+    unsigned int num_chem = 0;              //Number of chemical species
 
     std::vector
         <std::string> chem_species_list;    // Chemical species list
@@ -574,8 +580,13 @@ class OpenWQ_wqconfig::TS_model_::HypeHVB_{
      // slope       ! basin slope
     arma::Cube<double> slope_entryArmaCube;  
 
-    // erosion index 
-    arma::Cube<double> eroindex_entryArmaCube;  
+    // erosion index
+    arma::Cube<double> eroindex_entryArmaCube;
+
+    // Monthly erosion factor (12 values, one per month, Jan=index 0)
+    // In HYPE: erodmonth = 1.0 + monthpar(m_erodmon, current_month)
+    std::vector<double> monthpar = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
     // METHODS
     int get_exchange_direction();
@@ -600,8 +611,7 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
         std::string>    // data_format
             info_vector;
 
-    // TODO
-    // this is fixed now but should vary with the month (hype)
+    // Pseudo day-of-year (1-365), dynamically updated from simtime at runtime
     unsigned pdayno = 1;
 
     // #################

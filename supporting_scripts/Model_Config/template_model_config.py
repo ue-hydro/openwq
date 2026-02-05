@@ -49,7 +49,7 @@ running_on_docker = True
 ################
 # Computational settings
 ################
-solver = "BE"           # "BE" or "SUNDIALS"
+solver = "FORWARD_EULER"           # "FORWARD_EULER" or "SUNDIALS"
 run_mode_debug = True   # "True" will print the solver derivatives that lead to the concentrations
 use_num_threads = 4     # number of threads, accepts "all"
 

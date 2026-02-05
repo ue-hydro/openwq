@@ -30,17 +30,17 @@ sys.path.insert(0, 'hdf5_support_lib')
 # 3) openwq results
 
 shpfile_info={
-        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/test_demonstration/mizuroute_cslm_openwq/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp',
+        'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case_2/mizuroute_in/shapefiles/mizuSegId/mizuSegId.shp',
         'mapping_key': 'SegId'
     }
 
 hydromodel_info={
-        'path_to_results': '/Users/diogocosta/Documents/openwq_code/test_demonstration/mizuroute_cslm_openwq/route/build/openwq/openwq/bin/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc',
+        'path_to_results': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case_2/mizuroute_out/allvarsL5.h.1961-01-01-00000.nc',
         'mapping_key': 'reachID'
     }
 
 openwq_info= {
-    "path_to_results": '/Users/diogocosta/Documents/openwq_code/test_demonstration/mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out',
+    "path_to_results": '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case_2/openwq_out',
     "mapping_key": "reachID"
     }
 
@@ -53,7 +53,7 @@ import Read_h5_driver as h5_rlib
 openwq_results = h5_rlib.Read_h5_driver(
             openwq_info= openwq_info,
             output_format='HDF5',   # don't change
-            debugmode=True,         # if True, will read also d_output_dt_chemistry, d_output_dt_transport, d_output_ss, d_output_ewf, d_output_ic
+            debugmode=False,         # if True, will read also d_output_dt_chemistry, d_output_dt_transport, d_output_ss, d_output_ewf, d_output_ic
             cmp=['RIVER_NETWORK_REACHES'],
             space_elem='all',       # what cells to read
             chemSpec=["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"],
@@ -92,17 +92,17 @@ import Plot_h5_driver as h5_mplib
 
 h5_mplib.Plot_h5_driver(
     # 1) What results to map?
-    what2map='hostmodel',  # hostmodel or openwq
+    what2map='openwq',  # hostmodel or openwq
     hostmodel='mizuroute',
     mapping_key_values=[1200014181, 200014181],
     # 2) openwq info (👉🏼 used if what2map=openwq)
     openwq_results=openwq_results,
     chemSpec=["NO3-N","N_ORG_active"],
-    debugmode=True, # if True, will read also d_output_dt_chemistry, d_output_dt_transport, d_output_ss, d_output_ewf, d_output_ic
+    debugmode=False, # if True, will read also d_output_dt_chemistry, d_output_dt_transport, d_output_ss, d_output_ewf, d_output_ic
     # 3) hostmodel info (👉🏼 used if what2map=hostmodel)
     hydromodel_info=hydromodel_info,
     hydromodel_var2print='DWroutedRunoff',
     # 4) output config
-    output_path='/Users/diogocosta/Documents/openwq_code/test_demonstration/mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out/plotSeries.png'
+    output_path='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out/plotSeries.png'
     )
 

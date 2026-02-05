@@ -13,26 +13,26 @@ The solver is specified in the master configuration file under ``COMPUTATIONAL_S
 
     {
         "COMPUTATIONAL_SETTINGS": {
-            "SOLVER": "BE",
+            "SOLVER": "FORWARD_EULER",
             "USE_NUM_THREADS": 4
         }
     }
 
 Available options:
 
-+-----------------+--------------------------------------+--------------------------------------------------+
-| Value           | Solver                               | Description                                      |
-+=================+======================================+==================================================+
-| ``"BE"``        | Backward Euler                       | Simple implicit solver; fast, first-order        |
-+-----------------+--------------------------------------+--------------------------------------------------+
-| ``"SUNDIALS"``  | SUNDIALS CVode                       | Adaptive multi-step solver; higher accuracy      |
-+-----------------+--------------------------------------+--------------------------------------------------+
++------------------------+--------------------------------------+--------------------------------------------------+
+| Value                  | Solver                               | Description                                      |
++========================+======================================+==================================================+
+| ``"FORWARD_EULER"``    | Forward Euler                        | Simple explicit solver; fast, first-order         |
++------------------------+--------------------------------------+--------------------------------------------------+
+| ``"SUNDIALS"``         | SUNDIALS CVode                       | Adaptive multi-step solver; higher accuracy       |
++------------------------+--------------------------------------+--------------------------------------------------+
 
 
-Backward Euler (BE)
-~~~~~~~~~~~~~~~~~~~~
+Forward Euler (FORWARD_EULER)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The Backward Euler solver is a first-order implicit method that updates chemical mass at each time step by summing all source/sink terms:
+The Forward Euler solver is a first-order explicit method that updates chemical mass at each time step by summing all source/sink terms:
 
 .. math::
 
@@ -47,19 +47,19 @@ where:
 * :math:`\dot{M}_{chem}` is the biogeochemical reaction rate
 * :math:`\dot{M}_{transp}` is the transport rate (advection and dispersion)
 
-The BE solver processes all compartments and chemical species in parallel using OpenMP with dynamic scheduling.
+The Forward Euler solver processes all compartments and chemical species in parallel using OpenMP with dynamic scheduling.
 Inner loops are further optimized with SIMD vectorization.
 
 **Advantages**:
 
 * Simple implementation with low computational overhead per step
-* Unconditionally stable for stiff systems
-* Good performance for problems with moderate stiffness and large spatial domains
+* Good performance for problems with moderate dynamics and large spatial domains
 
 **Limitations**:
 
 * First-order accuracy; may require small time steps for high accuracy
 * No adaptive time stepping
+* Conditionally stable; time step must be small enough for the problem dynamics
 
 
 SUNDIALS CVode
@@ -84,7 +84,7 @@ The right-hand side (RHS) function computes the total flux rate for each chemica
 
 **Limitations**:
 
-* Higher computational cost per step compared to BE
+* Higher computational cost per step compared to Forward Euler
 * Requires the SUNDIALS library to be installed (see :doc:`Installation <3_0_Installation>`)
 
 
@@ -108,15 +108,16 @@ Solver choice guidelines
 +------------------------------------------+----------------------+--------------------------------------+
 | Scenario                                 | Recommended solver   | Reason                               |
 +==========================================+======================+======================================+
-| Simple kinetic reactions (BGC-Flex)      | BE                   | Fast and sufficient                  |
+| Simple kinetic reactions (BGC-Flex)      | FORWARD_EULER        | Fast and sufficient                  |
 +------------------------------------------+----------------------+--------------------------------------+
-| Complex PHREEQC geochemistry             | BE or SUNDIALS       | Depends on problem stiffness         |
+| Complex PHREEQC geochemistry             | FORWARD_EULER or     | Depends on problem stiffness         |
+|                                          | SUNDIALS             |                                      |
 +------------------------------------------+----------------------+--------------------------------------+
 | Rapidly varying concentrations           | SUNDIALS             | Adaptive stepping captures dynamics  |
 +------------------------------------------+----------------------+--------------------------------------+
-| Large networks with many species         | BE                   | Lower per-step overhead              |
+| Large networks with many species         | FORWARD_EULER        | Lower per-step overhead              |
 +------------------------------------------+----------------------+--------------------------------------+
 | High-accuracy requirements               | SUNDIALS             | Higher-order methods available       |
 +------------------------------------------+----------------------+--------------------------------------+
-| Quick exploratory runs                   | BE                   | Simpler, faster setup                |
+| Quick exploratory runs                   | FORWARD_EULER        | Simpler, faster setup                |
 +------------------------------------------+----------------------+--------------------------------------+

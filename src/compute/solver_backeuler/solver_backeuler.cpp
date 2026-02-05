@@ -18,10 +18,10 @@
 #include "compute/headerfile_compute.hpp"
 
 /* #################################################
-// Euler solver
+// Forward Euler (explicit) solver
 ################################################# */
 
-void OpenWQ_compute::Solve_with_BE(
+void OpenWQ_compute::Solve_with_ForwardEuler(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars,
@@ -113,7 +113,7 @@ void OpenWQ_compute::Solve_with_BE(
     }
 }
 
-void OpenWQ_compute::Solve_with_BE_Sediment(
+void OpenWQ_compute::Solve_with_ForwardEuler_Sediment(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_vars& OpenWQ_vars,

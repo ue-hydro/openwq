@@ -190,5 +190,5 @@ Numerical Solvers
 
 OpenWQ provides two numerical solvers for integrating the water quality ODEs:
 
-* **Backward Euler**: A first-order implicit method. Simple, fast, unconditionally stable. See :doc:`Solvers <4_1_7Solvers>`.
+* **Forward Euler**: A first-order explicit method. Simple and fast. See :doc:`Solvers <4_1_7Solvers>`.
 * **SUNDIALS CVode**: An adaptive multi-step method (Adams or BDF) with variable order and automatic step-size control. Provides higher-order accuracy for stiff and non-stiff problems. See :doc:`Solvers <4_1_7Solvers>`.

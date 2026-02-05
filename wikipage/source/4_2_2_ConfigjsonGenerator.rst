@@ -61,7 +61,7 @@ Configuration parameters
 
 .. code-block:: python
 
-    solver = "BE"           # "BE" (Backward Euler) or "SUNDIALS" (CVode)
+    solver = "FORWARD_EULER"           # "FORWARD_EULER" (Forward Euler) or "SUNDIALS" (CVode)
     run_mode_debug = True   # Enable debug output
     use_num_threads = 4     # Number of threads (or "all")
 

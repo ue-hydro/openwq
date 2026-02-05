@@ -55,8 +55,8 @@ class OpenWQ_compute{
         OpenWQ_utils& OpenWQ_utils);
     
 
-    // Solver using Euler method
-    void Solve_with_BE(
+    // Solver using Forward Euler (explicit) method
+    void Solve_with_ForwardEuler(
         OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_vars& OpenWQ_vars,
@@ -64,7 +64,7 @@ class OpenWQ_compute{
         OpenWQ_output& OpenWQ_output,
         OpenWQ_CH_model& OpenWQ_CH_model);
 
-    void Solve_with_BE_Sediment(
+    void Solve_with_ForwardEuler_Sediment(
         OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_vars& OpenWQ_vars,

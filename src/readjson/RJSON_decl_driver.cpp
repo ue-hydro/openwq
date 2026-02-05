@@ -161,16 +161,22 @@ void OpenWQ_readjson::SetConfigInfo_driver(
 
     // Set SI_model module settings (sorption isotherm)
     SetConfigInfo_SIModule(
-        OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
+        OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
         OpenWQ_utils, OpenWQ_output);
 
+    // #############################
+    // Cache runtime flags BEFORE output configuration
+    // This must be called after all module settings are loaded
+    // but before SetConfigInfo_OUT_driver which needs cached_chem_species_list_ptr
+    // #############################
+    OpenWQ_wqconfig.cache_runtime_flags();
 
     // #############################
     // Set output options
     // #############################
 
     SetConfigInfo_OUT_driver(
-        OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, 
+        OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
         OpenWQ_utils, OpenWQ_units, OpenWQ_output);
 
 }

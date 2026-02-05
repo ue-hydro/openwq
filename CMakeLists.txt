@@ -33,7 +33,7 @@
 # 5.1) Create Makefile (set DHOST_MODEL_TARGET and DCMAKE_BUILD_TYPE)
 #      Example: cmake -DHOST_MODEL_TARGET=summa_openwq -DCMAKE_BUILD_TYPE=debug .; 
 # 5.2) Compile the model: make -j 2
-# Note: Example of Step 5 in one line: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq -DCMAKE_BUILD_TYPE=fast .; make -j 2; rm *.mod
+# Note: Example of Step 5 in one line: rm CMakeCache.txt; rm -r CMakeFiles; cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq -DCMAKE_BUILD_TYPE=debug .; make -j 4; rm *.mod
 # 5.3) The executable will be created in the "bin" folder
 
 ##############################

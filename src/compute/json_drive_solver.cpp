@@ -41,7 +41,7 @@ void OpenWQ_readjson::SetConfigInfo_solver(
     (OpenWQ_wqconfig.SOLVER_module).append(Solver_method_local);
 
     // Check if SOLVER module exists
-    if (OpenWQ_wqconfig.SOLVER_module != "BE" && 
+    if (OpenWQ_wqconfig.SOLVER_module != "FORWARD_EULER" &&
         OpenWQ_wqconfig.SOLVER_module != "SUNDIALS"){
 
         // Create Message (Warning Message)

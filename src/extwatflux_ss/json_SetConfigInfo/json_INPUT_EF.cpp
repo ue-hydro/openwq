@@ -38,12 +38,11 @@ void OpenWQ_readjson::SetConfigInfo_INPUT_EF(
         errorMsgIdentifier,
         true);
 
-    // if not found, throw a warning message and continue
-    OpenWQ_utils.RequestJsonKeyVal_json(
-        OpenWQ_wqconfig, OpenWQ_output,
-        jsonMaster_SubStruct, "EXTERNAL_WATER_FLUXES",
-        errorMsgIdentifier,
-        false);
+    // Check if EXTERNAL_WATER_FLUXES section exists
+    // If not found, skip (no EWF configured)
+    if (!jsonMaster_SubStruct.contains("EXTERNAL_WATER_FLUXES")) {
+        return;
+    }
 
     unsigned int num_eff = jsonMaster_SubStruct["EXTERNAL_WATER_FLUXES"].size();
     

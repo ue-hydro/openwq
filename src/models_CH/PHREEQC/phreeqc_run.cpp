@@ -1,4 +1,5 @@
 #include "models_CH/headerfile_CH.hpp"
+#include <cmath>  // for isnan, isinf
 
 /* #################################################
 // Compute each chemical transformation
@@ -23,8 +24,15 @@ void OpenWQ_CH_model::phreeqc_run(
 
     nxyz = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetGridCellCount();
 
+    // Get the actual component count from PhreeqcRM
+    int nc = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetComponentCount();
+    msg_string = "<OpenWQ> PHREEQC phreeqc_run: nxyz=" + std::to_string(nxyz)
+        + ", nc=" + std::to_string(nc)
+        + ", num_chem=" + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->num_chem);
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
-    c.resize(nxyz * (OpenWQ_wqconfig.CH_model->PHREEQC->num_chem));
+    // Use nc (actual PhreeqcRM component count) for sizing
+    c.resize(nxyz * nc);
     volumes.resize(nxyz);
     temperatures.resize(nxyz);
     pressures.resize(nxyz);
@@ -107,10 +115,13 @@ void OpenWQ_CH_model::phreeqc_run(
     }
 
 
-    for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->PHREEQC->num_chem);chemi++){
+    // Initialize concentration array - use nc from PhreeqcRM
+    // Note: num_chem from config might differ from actual PhreeqcRM component count
+    unsigned int num_chem_to_use = std::min((unsigned int)nc, OpenWQ_wqconfig.CH_model->PHREEQC->num_chem);
+    for (unsigned int chemi=0;chemi<num_chem_to_use;chemi++){
         indx = 0;
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
-           
+
 
             nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // num of x elements
             ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // num of y elements
@@ -118,7 +129,10 @@ void OpenWQ_CH_model::phreeqc_run(
             for (int ix=0; ix<nx; ix++) {
                 for (int iy = 0; iy<ny;iy++) {
                     for (int iz=0; iz<nz; iz++) {
-                        c[chemi*nxyz+indx] = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz)/volumes[indx];
+                        double val = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz)/volumes[indx];
+                        // Validate - replace NaN/Inf with 0
+                        if (std::isnan(val) || std::isinf(val) || val < 0) val = 0.0;
+                        c[chemi*nxyz+indx] = val;
                         indx++;
                     }
                 }
@@ -128,15 +142,47 @@ void OpenWQ_CH_model::phreeqc_run(
 
     indx = 0;
 
+    // Validate and fix temperatures - PHREEQC needs reasonable values (0-100°C typical)
+    for (int i = 0; i < nxyz; i++) {
+        if (std::isnan(temperatures[i]) || std::isinf(temperatures[i]) || temperatures[i] < -50 || temperatures[i] > 200) {
+            temperatures[i] = 25.0;  // Default to 25°C
+        }
+        if (std::isnan(pressures[i]) || std::isinf(pressures[i]) || pressures[i] <= 0) {
+            pressures[i] = 1.0;  // Default to 1 atm
+        }
+    }
+
+    msg_string = "<OpenWQ> PHREEQC: Setting T[0]=" + std::to_string(temperatures[0])
+        + ", P[0]=" + std::to_string(pressures[0])
+        + ", c[0]=" + std::to_string(c[0])
+        + ", vol[0]=" + std::to_string(volumes[0]);
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetPressure(pressures);
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTemperature(temperatures);
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetConcentrations(c);
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetRepresentativeVolume(volumes);
 
+    // Set fixed density and saturation to avoid calc_dens() crash
+    std::vector<double> density(nxyz, 1.0);  // 1.0 kg/L
+    std::vector<double> saturation(nxyz, 1.0);  // Fully saturated
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetDensityUser(density);
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetSaturationUser(saturation);
+
+    // CRITICAL: Tell PhreeqcRM to use user-provided density, not calculate internally
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->UseSolutionDensityVolume(false);
+
+    msg_string = "<OpenWQ> PHREEQC: About to call RunCells with timestep="
+        + std::to_string(OpenWQ_hostModelconfig.get_time_step());
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTimeStep(OpenWQ_hostModelconfig.get_time_step());
     if (OpenWQ_hostModelconfig.get_time_step() != 0)    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->RunCells();
+    msg_string = "<OpenWQ> PHREEQC: RunCells completed, getting concentrations";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetConcentrations(c);
-    for (unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->PHREEQC->num_chem);chemi++){
+    for (unsigned int chemi=0;chemi<num_chem_to_use;chemi++){
         indx = 0;
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
            

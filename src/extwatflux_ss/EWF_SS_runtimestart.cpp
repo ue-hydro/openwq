@@ -441,9 +441,7 @@ void OpenWQ_extwatflux_ss::Apply_Source(
 
     } catch (...) {
 
-        std::string chemname = OpenWQ_wqconfig.is_native_bgc_flex
-            ? (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi]
-            : (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list)[chemi];
+        std::string chemname = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[chemi];
 
         std::string msg_string =
             "<OpenWQ> WARNING: Sink/Source load out of boundaries. "
@@ -502,9 +500,7 @@ void OpenWQ_extwatflux_ss::Apply_Sink(
 
     } catch (...) {
 
-        std::string chemname = OpenWQ_wqconfig.is_native_bgc_flex
-            ? (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi]
-            : (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list)[chemi];
+        std::string chemname = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[chemi];
 
         std::string msg_string =
             "<OpenWQ> WARNING: Sink/Source load out of boundaries. "
@@ -559,10 +555,7 @@ void OpenWQ_extwatflux_ss::Update_EWFconc_jsonAscii(
 
     } catch (...) {
 
-        std::string chemname =
-            ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
-            ? (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi]
-            : (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list)[chemi];
+        std::string chemname = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[chemi];
 
         std::string msg_string =
             "<OpenWQ> WARNING: EWF conc out of boundaries. "
@@ -612,10 +605,7 @@ void OpenWQ_extwatflux_ss::Update_EWFconc_h5(
 
     } catch (...) {
 
-        std::string chemname =
-            ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0)
-            ? (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi]
-            : (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list)[chemi];
+        std::string chemname = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[chemi];
 
         std::string msg_string =
             "<OpenWQ> WARNING: EWF conc out of boundaries. "

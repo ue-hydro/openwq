@@ -63,9 +63,9 @@ void OpenWQ_compute::SOLVER_driver(
 
         }
 
-    } else if (OpenWQ_wqconfig.is_solver_be) {
+    } else if (OpenWQ_wqconfig.is_solver_forward_euler) {
 
-        Solve_with_BE(
+        Solve_with_ForwardEuler(
             OpenWQ_hostModelconfig,
             OpenWQ_wqconfig,
             OpenWQ_vars,
@@ -75,7 +75,7 @@ void OpenWQ_compute::SOLVER_driver(
 
         if (OpenWQ_wqconfig.is_TS_enabled) {
 
-            Solve_with_BE_Sediment(
+            Solve_with_ForwardEuler_Sediment(
                 OpenWQ_hostModelconfig,
                 OpenWQ_wqconfig,
                 OpenWQ_vars,

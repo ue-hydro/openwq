@@ -15,7 +15,7 @@ Key capabilities:
 
 * **Flexible biogeochemistry**: User-defined reaction networks via JSON configuration, powered by the ExprTk expression engine
 * **PHREEQC geochemistry**: Full geochemical modeling (speciation, mineral reactions, ion exchange, kinetics) via the PhreeqcRM library
-* **Multiple solvers**: Backward Euler (implicit) and SUNDIALS CVode (adaptive multi-step) ODE solvers
+* **Multiple solvers**: Forward Euler (explicit) and SUNDIALS CVode (adaptive multi-step) ODE solvers
 * **Transport modules**: Advection-only or advection-dispersion transport of dissolved constituents
 * **Sorption isotherms**: Freundlich and Langmuir isotherm models for dissolved-sorbed partitioning
 * **Sediment transport**: HBV-based erosion and mobile-immobile fractionation models

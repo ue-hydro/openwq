@@ -1294,11 +1294,7 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
         // Get and process interface H5 data 
 
         // Get chem name
-        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
-            chemname = (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi];
-        } else {
-            chemname = (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list)[chemi];
-        }
+        chemname = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[chemi];
 
         // Throw consolde update
         msg_string = "         " + external_waterFluxName + " => " + chemname + " .";

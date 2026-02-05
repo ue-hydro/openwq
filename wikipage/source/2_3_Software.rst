@@ -8,8 +8,8 @@ OpenWQ is written in C++17 and uses a modular architecture organized into the fo
 
 **Computational Engine** (``src/compute/``)
 
-* ``SOLVER_run_driver.cpp`` -- Main solver orchestration, selects between Backward Euler and SUNDIALS CVode
-* ``solver_backeuler/`` -- Backward Euler implicit solver with OpenMP parallelization
+* ``SOLVER_run_driver.cpp`` -- Main solver orchestration, selects between Forward Euler and SUNDIALS CVode
+* ``solver_backeuler/`` -- Forward Euler explicit solver with OpenMP parallelization
 * ``solver_sundials/`` -- SUNDIALS CVode adaptive ODE solver integration
 
 **Chemistry Modules** (``src/models_CH/``)

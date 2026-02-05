@@ -70,29 +70,17 @@ void OpenWQ_readjson::SetConfigInfo_output_what2print(
         true).size();
     
     // Get indexes for the list of chemicals requested
+    const auto& chem_list = *OpenWQ_wqconfig.cached_chem_species_list_ptr;
+    const unsigned int num_chem_total = OpenWQ_wqconfig.cached_num_chem;
     for (unsigned int chemi = 0; chemi < num_chem2print; chemi++){
         // Chemical name (to print)
-        if ((OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0) {
-            chem_name2print = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[chemi];
-            for (unsigned int chemlisti = 0; chemlisti < (OpenWQ_wqconfig.CH_model->NativeFlex->num_chem); chemlisti++){ 
-                chem_namelist = OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[chemlisti];
-                // Check if compartments listed match internal compartment names
-                if (chem_namelist.compare(chem_name2print) == 0){                                    
-                    OpenWQ_wqconfig.chem2print.push_back(chemlisti);
-                    break;
-                }
-            }
-
-        } else {
-
-            chem_name2print = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[chemi];
-            for (unsigned int chemlisti = 0; chemlisti < (OpenWQ_wqconfig.CH_model->PHREEQC->num_chem); chemlisti++){ 
-                chem_namelist = OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[chemlisti];
-                // Check if compartments listed match internal compartment names
-                if (chem_namelist.compare(chem_name2print) == 0){                                    
-                    OpenWQ_wqconfig.chem2print.push_back(chemlisti);
-                    break;
-                }
+        chem_name2print = chem_list[chemi];
+        for (unsigned int chemlisti = 0; chemlisti < num_chem_total; chemlisti++){
+            chem_namelist = chem_list[chemlisti];
+            // Check if compartments listed match internal compartment names
+            if (chem_namelist.compare(chem_name2print) == 0){
+                OpenWQ_wqconfig.chem2print.push_back(chemlisti);
+                break;
             }
         }
     }

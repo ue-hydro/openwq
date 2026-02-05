@@ -209,9 +209,7 @@ int OpenWQ_output::writeCSV(
         (OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0;
     
     for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
-        const std::string chem_name = is_native_flex ?
-            OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]] :
-            OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]];
+        const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
         
         header(ichem + 3) = chem_name + "#" + output_units;
     }
@@ -324,9 +322,7 @@ int OpenWQ_output::writeHDF5(
         // Write metadata for each chemical
         for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
 
-            const std::string chem_name = is_native_flex ?
-                OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]] :
-                OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]];
+            const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
 
             // Build filename
             std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
@@ -370,7 +366,7 @@ int OpenWQ_output::writeHDF5(
             // Open file for subsequent writes
             OpenWQ_wqconfig.files[filename] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
 
-            std::string msg_string = "<OPENWQ> Opening output file " + filename +
+            std::string msg_string = "<OpenWQ> Opening output file " + filename +
                                     " " + std::to_string(OpenWQ_wqconfig.files[filename]);
             ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
         }
@@ -386,9 +382,7 @@ int OpenWQ_output::writeHDF5(
         #pragma omp for schedule(static)
         for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
 
-            const std::string chem_name = is_native_flex ?
-                OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]] :
-                OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[OpenWQ_wqconfig.chem2print[ichem]];
+            const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
 
             // Build filename
             std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +

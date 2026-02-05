@@ -37,13 +37,11 @@ void OpenWQ_readjson::SetConfigInfo_INPUT_SS(
         errorMsgIdentifier,
         true);
     
-    // if not found, throw a warning message and continue
-    errorMsgIdentifier = "Master file inside OPENWQ_INPUT";
-    OpenWQ_utils.RequestJsonKeyVal_json(
-        OpenWQ_wqconfig, OpenWQ_output,
-        jsonMaster_SubStruct, "SINK_SOURCE",
-        errorMsgIdentifier,
-        false);
+    // Check if SINK_SOURCE section exists
+    // If not found, skip (no SS configured)
+    if (!jsonMaster_SubStruct.contains("SINK_SOURCE")) {
+        return;
+    }
 
     unsigned int num_ssf = jsonMaster_SubStruct["SINK_SOURCE"].size();
 

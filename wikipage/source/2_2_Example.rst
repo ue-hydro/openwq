@@ -25,7 +25,7 @@ This example simulates the transport and geochemical evolution of Ca, Mg, and Na
 
 Configuration files include:
 
-* ``openWQ_master.json`` -- Master configuration with Backward Euler solver
+* ``openWQ_master.json`` -- Master configuration with Forward Euler solver
 * ``openwq_in/openWQ_config.json`` -- Initial conditions (Ca, Mg, Na in mol/kgw)
 * ``openwq_in/openWQ_MODULE_PHREEQC.json`` -- PHREEQC module settings
 * ``openwq_in/openWQ_MODULE_TD.json`` -- Pure advection transport

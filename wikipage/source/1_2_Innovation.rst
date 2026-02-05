@@ -58,7 +58,7 @@ The structural flexibility of OpenWQ enables systematic exploration of modeling 
 * **Parameter uncertainty**: The JSON-based configuration makes it straightforward to script ensemble simulations with varying parameter values for sensitivity analysis.
 * **Structural uncertainty**: By coupling to different host models (e.g., SUMMA vs. CRHM vs. mizuRoute), users can assess how the choice of hydrological model affects water quality predictions.
 * **Chemistry module comparison**: Users can compare flexible BGC-Flex reactions against PHREEQC-based geochemical calculations to evaluate the importance of detailed speciation.
-* **Solver uncertainty**: Users can compare results between the Backward Euler and SUNDIALS CVode solvers to assess numerical accuracy.
+* **Solver uncertainty**: Users can compare results between the Forward Euler and SUNDIALS CVode solvers to assess numerical accuracy.
 
 .. image:: OpenWQ_structure.png
     :width: 350 px
