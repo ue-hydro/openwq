@@ -19,7 +19,7 @@ Key capabilities:
 * **Transport modules**: Advection-only or advection-dispersion transport of dissolved constituents
 * **Sorption isotherms**: Freundlich and Langmuir isotherm models for dissolved-sorbed partitioning
 * **Sediment transport**: HBV-based erosion and mobile-immobile fractionation models
-* **Multi-model coupling**: Already coupled to SUMMA, CRHM, mizuRoute, and FLUXOS-OVERLAND
+* **Multi-model coupling**: Already coupled to SUMMA, CRHM, mizuRoute, and FLUXOS
 * **High performance**: OpenMP parallelization with SIMD vectorization, MPI support for distributed computing
 
 .. toctree::
