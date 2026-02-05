@@ -85,14 +85,11 @@ def set_ss_from_csv(
         ss_metadata_source: Source identifier for metadata section
         ss_method_csv_config: List of dictionaries, each containing:
             - Chemical_name: Name of the chemical species
-            - ss_method_copernicus_compartment_name_for_load: Name of the compartment
+            - Compartment_name: Name of the compartment
             - Type: "source" or "sink"
             - Units: Units (e.g., "kg")
-            - Data_Format: Format type (e.g., "ASCII")
-            - Filepath: Path to data file
+            - Filepath: Path to CSV data file (header row auto-detected by 'YYYY' column)
             - Delimiter: CSV delimiter (e.g., ",")
-            - Number_of_header_rows: Number of header rows
-            - Header_key_row: Row number containing headers
     """
 
     # Create the destination directory path if it doesn't exist
@@ -110,17 +107,15 @@ def set_ss_from_csv(
     # Add each source/sink configuration with numbered keys
     for idx, ss_config in enumerate(ss_method_csv_config, start=1):
         config[str(idx)] = {
-            "Chemical_name": ss_config["Chemical_name"],
-            "Compartment_name": ss_config.get("Compartment_name",
+            "CHEMICAL_NAME": ss_config["Chemical_name"],
+            "COMPARTMENT_NAME": ss_config.get("Compartment_name",
                                                ss_config.get("ss_method_copernicus_compartment_name_for_load", "")),
-            "Type": ss_config["Type"],
-            "Units": ss_config["Units"],
-            "Data_Format": "ASCII",
-            "Data": {
-                "Filepath": ss_config["Filepath"],
-                "Delimiter": ss_config["Delimiter"],
-                "Number_of_header_rows": ss_config["Number_of_header_rows"],
-                "Header_key_row": ss_config["Header_key_row"]
+            "TYPE": ss_config["Type"],
+            "UNITS": ss_config["Units"],
+            "DATA_FORMAT": "ASCII",
+            "DATA": {
+                "FILEPATH": ss_config["Filepath"],
+                "DELIMITER": ss_config["Delimiter"]
             }
         }
 
@@ -1602,13 +1597,13 @@ def set_ss_climate_adjusted_export_coefficients(
                 continue
 
             config[str(entry_idx)] = {
-                "Chemical_name": nutrient,
-                "Compartment_name": ss_method_copernicus_compartment_name_for_load,
-                "Comment": f"Climate-adjusted loading for {nutrient}",
-                "Type": "source",
-                "Units": "kg",
-                "Data_Format": "JSON",
-                "Data": data_entries
+                "CHEMICAL_NAME": nutrient,
+                "COMPARTMENT_NAME": ss_method_copernicus_compartment_name_for_load,
+                "COMMENT": f"Climate-adjusted loading for {nutrient}",
+                "TYPE": "source",
+                "UNITS": "kg",
+                "DATA_FORMAT": "JSON",
+                "DATA": data_entries
             }
 
             print(f"    Added {len(data_entries)} climate-adjusted entries")
@@ -1810,16 +1805,16 @@ def create_openwq_ss_json_from_loads(
 
             # Add to config
             config[str(entry_idx)] = {
-                "Chemical_name": nutrient,
-                "Compartment_name": ss_method_copernicus_compartment_name_for_load,
-                "Comment": f"Copernicus LULC-based loading for {nutrient} in {year}",
-                "Type": "source",
-                "Units": "kg",
-                "Data_Format": "JSON",
-                "Data": data_entries
+                "CHEMICAL_NAME": nutrient,
+                "COMPARTMENT_NAME": ss_method_copernicus_compartment_name_for_load,
+                "COMMENT": f"Copernicus LULC-based loading for {nutrient} in {year}",
+                "TYPE": "source",
+                "UNITS": "kg",
+                "DATA_FORMAT": "JSON",
+                "DATA": data_entries
             }
 
-            print(f"    ✓ Added {len(data_entries)} load entries for {nutrient} in {year}")
+            print(f"    Added {len(data_entries)} load entries for {nutrient} in {year}")
             entry_idx += 1
 
     # Convert to JSON string with standard formatting

@@ -408,13 +408,13 @@ def generate_predictions_json(
 
         if data_entries:
             config[str(entry_idx)] = {
-                "Chemical_name": species,
-                "Compartment_name": compartment_name,
-                "Comment": f"ML-predicted {species} for {compartment_name}",
-                "Type": "source",
-                "Units": units,
-                "Data_Format": "JSON",
-                "Data": data_entries
+                "CHEMICAL_NAME": species,
+                "COMPARTMENT_NAME": compartment_name,
+                "COMMENT": f"ML-predicted {species} for {compartment_name}",
+                "TYPE": "source",
+                "UNITS": units,
+                "DATA_FORMAT": "JSON",
+                "DATA": data_entries
             }
             print(f"    Added {len(data_entries)} monthly prediction entries")
             entry_idx += 1

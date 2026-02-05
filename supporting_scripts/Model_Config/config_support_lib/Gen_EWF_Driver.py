@@ -67,11 +67,11 @@ def set_ewf_fixed_value(
             "ewf_method_fixedval_source": ewf_method_fixedval_source
         },
         "1": {
-            "Data_Format": "JSON",
-            "Units": ewf_method_fixedval_units,
-            "External_InputFlux_name": ewf_method_fixedval_external_inputflux_name,
-            "Chemical_name": ewf_method_fixedval_chem_name,
-            "Data": {
+            "DATA_FORMAT": "JSON",
+            "UNITS": ewf_method_fixedval_units,
+            "EXTERNAL_INPUTFLUX_NAME": ewf_method_fixedval_external_inputflux_name,
+            "CHEMICAL_NAME": ewf_method_fixedval_chem_name,
+            "DATA": {
                 "1": ["all", "all", "all", "all", "all", "all", "all", "all", "all", ewf_method_fixedval_value]
             }
         }

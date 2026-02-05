@@ -682,7 +682,7 @@ Example (HYPE_HBVSED)
         "CONFIGURATION": {
             "direction": "z",
             "EROSION_INHIBIT_COMPARTMENT": "ILAYERVOLFRACWAT_SNOW",
-            "Data_Format": "JSON"
+            "DATA_FORMAT": "JSON"
         },
         "PARAMETER_DEFAULTS": {
             "SLOPE": 0.4,
@@ -715,7 +715,7 @@ Example (HYPE_MMF)
         "CONFIGURATION": {
             "direction": "z",
             "EROSION_INHIBIT_COMPARTMENT": "ILAYERVOLFRACWAT_SNOW",
-            "Data_Format": "JSON"
+            "DATA_FORMAT": "JSON"
         },
         "PARAMETER_DEFAULTS": {
             "COHESION": 7.5,

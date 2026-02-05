@@ -31,6 +31,15 @@ import Gen_SImodule_file as simJSON_lib
 import Gen_SS_Driver as ssJSON_lib
 import Gen_EWF_Driver as ewfJSON_lib
 
+def uniform_param(value):
+    """Build a spatially-varying parameter table that applies *value* to all cells.
+
+    Returns the dict format expected by the TS module parameters:
+        {"0": ["IX", "IY", "IZ", "VALUE"], "1": ["ALL", 1, 1, value]}
+    """
+    return {"0": ["IX", "IY", "IZ", "VALUE"], "1": ["ALL", 1, 1, value]}
+
+
 def _parse_docker_volume_mount(docker_compose_path: str) -> tuple:
     """
     Parse docker-compose.yml to extract the volume mount mapping.
@@ -239,7 +248,10 @@ def Gen_Input_Driver(
         ss_ml_max_depth: int = 6,
 
         # Optional parameters (MUST be at the end)
-        ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class: Optional[Dict[int, Dict[str, float]]] = None
+        ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class: Optional[Dict[int, Dict[str, float]]] = None,
+
+        # Accept extra kwargs so template_model_config.py can pass locals() cleanly
+        **kwargs
 
 ) -> None:
 

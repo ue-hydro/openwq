@@ -82,7 +82,7 @@ Example:
           "SOIL_RECHR":{
               "CYCLING_FRAMEWORK": ["N_inorg","P_inorg","N_soil_org","P_soil_org"],
               "INITIAL_CONDITIONS":{
-                    "Data_Format": "HDF5",
+                    "DATA_FORMAT": "HDF5",
                     "FOLDERPATH": "openwq_ic_h5",
                     "TIMESTAMP": "1950Apr01-12:00:00",
                     "UNITS": "mg"

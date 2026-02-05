@@ -332,65 +332,63 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 errorMsgIdentifier,
                 true);
 
-            // number of header rows
-            ascii_numHeaderRows = OpenWQ_utils.RequestJsonKeyVal_int(
-                OpenWQ_wqconfig, OpenWQ_output,
-                EWF_SS_json_sub["DATA"], "NUMBER_OF_HEADER_ROWS",
-                errorMsgIdentifier,
-                true);            
+            // Open ASCII file and auto-detect header row by scanning for "YYYY"
+            {
+                std::ifstream asciiFile (ascii_FilePath, std::ios::in);
 
-            // position of key header
-            ascii_headerKeyRow = OpenWQ_utils.RequestJsonKeyVal_int(
-                OpenWQ_wqconfig, OpenWQ_output,
-                EWF_SS_json_sub["DATA"], "HEADER_KEY_ROW",
-                errorMsgIdentifier,
-            true);  
+                if (asciiFile.is_open()){
 
-            // Get number of rows in ASCII file
-            num_rowdata = OpenWQ_utils.getNumLinesfromASCIIFile(
-                OpenWQ_wqconfig,
-                OpenWQ_output,
-                ascii_FilePath)
-                - ascii_numHeaderRows;
+                    bool headerFound = false;
+                    lineCount = 1;
 
-            // Open ASCII file (read mode only)
-            std::ifstream asciiFile (ascii_FilePath, std::ios::in);
+                    while(std::getline(asciiFile, rowEntryASCII)){
 
-            // Read skip header lines
-            if (asciiFile.is_open()){
-                lineCount = 1;
-                while(std::getline(asciiFile, rowEntryASCII)){
-                    // get header row when found
-                    if(lineCount==ascii_headerKeyRow){
-                        headerRowASCII = rowEntryASCII;
-                        // Convert string to uppercase
-                        headerRowASCII = OpenWQ_utils.ConvertStringToUpperCase(headerRowASCII);
-                        // Parse the headerRowASCII to get a vector with the json entries
-                        // parsing based on the delimiter ascii_delimiter defined by the user
-                        headerKeys = OpenWQ_utils.StringSplit(
-                            headerRowASCII,
-                            ascii_delimiter);}
-                    // push new entry to if actual row data
-                    if(lineCount>ascii_numHeaderRows) ASCIIRowdata.push_back(rowEntryASCII);
-                    // update line count
-                    ++lineCount;
-                }
-                asciiFile.close();
-            }else{
+                        // Convert line to uppercase for header detection
+                        std::string lineUpper = OpenWQ_utils.ConvertStringToUpperCase(rowEntryASCII);
+
+                        // Auto-detect: header row is the first line containing "YYYY"
+                        if (!headerFound && lineUpper.find("YYYY") != std::string::npos){
+                            headerFound = true;
+                            ascii_headerKeyRow = lineCount;
+                            ascii_numHeaderRows = lineCount;  // all lines up to and including header
+                            headerRowASCII = lineUpper;
+                            headerKeys = OpenWQ_utils.StringSplit(headerRowASCII, ascii_delimiter);
+                        }
+                        // Everything after the header row is data
+                        else if (headerFound){
+                            ASCIIRowdata.push_back(rowEntryASCII);
+                        }
+
+                        ++lineCount;
+                    }
+                    asciiFile.close();
+
+                    // Check that we found a header
+                    if (!headerFound){
+                        msg_string = "<OpenWQ> WARNING: SS/EWF ASCII file has no header row "
+                            "containing 'YYYY' (entry skipped): File=" + ascii_FilePath;
+                        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                        return;
+                    }
+
+                    num_rowdata = ASCIIRowdata.size();
+
+                }else{
                     // If there is an issue with the ASCII input data
-                // through a warning message and skip entry
-                msg_string = 
-                    "<OpenWQ> WARNING: SS/EWF '" 
-                    " load/sink/conc ASCII file cannot be found (entry skipped): File=" 
-                    + ascii_FilePath
-                    + " in JSON SS file "
-                    + std::to_string(ssf+1)
-                    + ", Sub_structure=" + std::to_string(ssi+1);
-                // Print it (Console and/or Log file)
-                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-                return;
-            }
-    
+                    // through a warning message and skip entry
+                    msg_string =
+                        "<OpenWQ> WARNING: SS/EWF '"
+                        " load/sink/conc ASCII file cannot be found (entry skipped): File="
+                        + ascii_FilePath
+                        + " in JSON SS file "
+                        + std::to_string(ssf+1)
+                        + ", Sub_structure=" + std::to_string(ssi+1);
+                    // Print it (Console and/or Log file)
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    return;
+                }
+            } // end scope block for ASCII file reading
+
         }catch(...){
             // If there is an issue with the ASCII input data
             // through a warning message and skip entry
@@ -426,23 +424,33 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
         row_data_col.reset(); 
 
         // Get row-json di from EWF_SS_json_sub ["DATA"]
-        // Abort if not found
-        errorMsgIdentifier = inputType + " json block 'DATA', row " 
-                            + std::to_string(di) + " with DataFormat=" 
-                            + DataFormat;
-        EWF_SS_json_sub_rowi = OpenWQ_utils.RequestJsonKeyVal_json(
-            OpenWQ_wqconfig, OpenWQ_output,
-            EWF_SS_json_sub["DATA"], std::to_string(di+1),
-            errorMsgIdentifier,
-            true);
+        // Only needed for JSON format (ASCII reads from file directly)
+        if (DataFormat.compare("JSON")==0){
+            errorMsgIdentifier = inputType + " json block 'DATA', row "
+                                + std::to_string(di) + " with DataFormat="
+                                + DataFormat;
+            EWF_SS_json_sub_rowi = OpenWQ_utils.RequestJsonKeyVal_json(
+                OpenWQ_wqconfig, OpenWQ_output,
+                EWF_SS_json_sub["DATA"], std::to_string(di+1),
+                errorMsgIdentifier,
+                true);
+        }
 
-        // If DataFormat=ASCII, then get row data 
+        // If DataFormat=ASCII, then get row data
         // and convert-to-upper-case and split it by element entry
         if (DataFormat.compare("ASCII")==0){
-            ASCIIRowElemEntry = 
+            ASCIIRowElemEntry =
                 OpenWQ_utils.StringSplit(
                     OpenWQ_utils.ConvertStringToUpperCase(ASCIIRowdata[di]),
-                    ascii_delimiter);}
+                    ascii_delimiter);
+            // Safety: skip row if header or data parsing failed
+            if (ASCIIRowElemEntry.empty() || headerKeys.empty()){
+                msg_string = "<OpenWQ> WARNING: SS/EWF ASCII row "
+                    + std::to_string(di) + " could not be parsed (empty header or data). Skipping.";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                continue;
+            }
+        }
 
         // ###################
         // Year
@@ -457,7 +465,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(0);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[ 
+                entryVal = std::stoi(ASCIIRowElemEntry[
                 OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"YYYY")]);}
 
             YYYY_json = entryVal;
@@ -471,7 +479,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(0);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
+                entryVal = ASCIIRowElemEntry[
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"YYYY")];}
 
             // Check if "all" and return flag validEntryFlag

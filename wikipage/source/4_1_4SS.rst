@@ -92,12 +92,12 @@ Example:
             "Source": "test_1"
         },
         "1": {
-            "Chemical_name": "species_A",
-            "Compartment_name": "SCALARAQUIFER",
-            "Type": "source",
-            "Units": "kg",
-            "Data_Format": "JSON",
-            "Data": {
+            "CHEMICAL_NAME": "species_A",
+            "COMPARTMENT_NAME": "SCALARAQUIFER",
+            "TYPE": "source",
+            "UNITS": "kg",
+            "DATA_FORMAT": "JSON",
+            "DATA": {
                 "1": ["all","all","all","all","all","all","all","all","all",0.0001,"discrete"],
                 "2": ["all","all","all","all","all","all","all","all","all",0.0001,"continuous","min"],
                 "3": [2018,"all",4,6,30,30,1,1,1,100,"discrete"],
@@ -119,11 +119,11 @@ The ``DATA`` block points to the file instead of containing inline data.
 +-------------------------------+-------------------------------------------------------------------------+
 | ``"DELIMITER"``               | Delimiter used in the file, e.g., ``","``                               |
 +-------------------------------+-------------------------------------------------------------------------+
-| ``"NUMBER_OF_HEADER_ROWS"``   | Number of header rows to skip, e.g., ``3``                              |
-+-------------------------------+-------------------------------------------------------------------------+
-| ``"HEADER_KEY_ROW"``          | Row number containing the column headers                                |
-|                               | (must have: YYYY, MM, DD, HH, MIN, SEC, ix, iy, iz, load, etc.)        |
-+-------------------------------+-------------------------------------------------------------------------+
+
+The header row is **auto-detected**: the C++ parser scans each line for the ``YYYY`` column name.
+Everything before the header is ignored; everything after it is treated as data.
+
+Required columns: ``YYYY, MM, DD, HH, MIN, SEC, ix, iy, iz, load, load_type, time_units``
 
 Example:
 
@@ -135,16 +135,14 @@ Example:
             "Source": "fertilizer_data"
         },
         "1": {
-            "Chemical_name": "species_B",
-            "Compartment_name": "SCALARAQUIFER",
-            "Type": "source",
-            "Units": "kg",
-            "Data_Format": "ASCII",
-            "Data": {
-                "Filepath": "SS_speciesA_ScalarAquifer_test.csv",
-                "Delimiter": ",",
-                "Number_of_header_rows": 3,
-                "Header_key_row": 3
+            "CHEMICAL_NAME": "species_B",
+            "COMPARTMENT_NAME": "SCALARAQUIFER",
+            "TYPE": "source",
+            "UNITS": "kg",
+            "DATA_FORMAT": "ASCII",
+            "DATA": {
+                "FILEPATH": "SS_speciesA_ScalarAquifer_test.csv",
+                "DELIMITER": ","
             }
         }
     }

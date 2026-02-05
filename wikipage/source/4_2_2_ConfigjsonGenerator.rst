@@ -247,17 +247,18 @@ Source/sink configuration
             "Type": "source",
             "Units": "kg",
             "Filepath": "/path/to/source_data.csv",
-            "Delimiter": ",",
-            "Number_of_header_rows": 3,
-            "Header_key_row": 3
+            "Delimiter": ","
         }
     ]
+
+The header row is auto-detected by scanning for the ``YYYY`` column.
+The CSV must contain a row with columns: ``YYYY, MM, DD, HH, MIN, SEC, ix, iy, iz, load, load_type, time_units``.
 
 **Method 2: Load from Copernicus land use data:**
 
 .. code-block:: python
 
-    ss_method = "using_copernicus_lulc"
+    ss_method = "using_copernicus_lulc_with_static_coeff"
     ss_method_copernicus_nc_lc_dir = '/path/to/ESACCI-LC/'
     ss_method_copernicus_period = [1993, 2020]
     ss_method_copernicus_default_loads_bool = True
