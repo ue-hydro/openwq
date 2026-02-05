@@ -37,6 +37,7 @@ def Plot_h5_driver(what2map=None,
                    hydromodel_var2print=None,
                    output_path=None,
                    debugmode=False,
+                   sediment_as_well=False,
                    combine_features=True,
                    figsize=(12, 6)):
     """
@@ -77,6 +78,9 @@ def Plot_h5_driver(what2map=None,
                  - d_output_dt_ss
                  - d_output_dt_ewf
                  - d_output_dt_ic
+    sediment_as_well : bool
+        If True, also plot sediment transport results (requires sediment_as_well=True
+        in Read_h5_driver so that openwq_results contains 'COMPARTMENT@Sediment' entries).
     combine_features : bool
         If True, plot all features on one graph (default: True)
     figsize : tuple
@@ -100,20 +104,12 @@ def Plot_h5_driver(what2map=None,
         hydromodel_info=hydromodel_info,
         hydromodel_var2print='DWroutedRunoff',
         output_path='plots/nutrients.png',
-        debugmode=False
+        debugmode=False,
+        sediment_as_well=True   # also plot sediment
     )
     # Creates: plots/nutrients_NO3-N_main.png
     #          plots/nutrients_NH4-N_main.png
-
-    # Debug mode (all extensions)
-    h5_mplib.Plot_h5_driver(
-        ...,
-        debugmode=True
-    )
-    # Creates: plots/nutrients_NO3-N_main.png
-    #          plots/nutrients_NO3-N_d_output_dt_chemistry.png
-    #          plots/nutrients_NO3-N_d_output_dt_transport.png
-    #          ... (and so on for each species)
+    #          plots/nutrients_Sediment_main.png
     """
 
     print("=" * 70)
@@ -300,6 +296,10 @@ def Plot_h5_driver(what2map=None,
         if isinstance(chemSpec, str):
             chemSpec = [chemSpec]
 
+        # Append sediment if requested
+        if sediment_as_well and 'Sediment' not in chemSpec:
+            chemSpec = list(chemSpec) + ['Sediment']
+
         # Define extensions to process based on debugmode
         if debugmode:
             file_extensions = [
@@ -343,14 +343,16 @@ def Plot_h5_driver(what2map=None,
                     continue
 
                 # Parse units from species_key (do once per species)
-                # Format: WATERSTATE@NO3-N#mg-N/L
+                # Chemical species format: COMPARTMENT@CHEMNAME#UNITS
+                # Sediment format:         COMPARTMENT@Sediment (no #UNITS)
                 parts = species_key.split('#')
                 if len(parts) > 1:
                     units = parts[1]
                 else:
-                    units = 'concentration'
+                    # Sediment results have no #UNITS part
+                    units = 'kg' if 'Sediment' in species_key else 'concentration'
 
-                # Get chemical name
+                # Get chemical/variable name
                 chem_parts = species_key.split('@')
                 if len(chem_parts) > 1:
                     chem_name = chem_parts[1].split('#')[0]

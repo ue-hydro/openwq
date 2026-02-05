@@ -165,12 +165,14 @@ def Map_h5_driver(shpfile_info=None,
                   hostmodel=None,
                   what2map=None,
                   create_gif=True,
-                  gif_duration=500):
+                  gif_duration=500,
+                  sediment_as_well=False):
     """
     Create static PNG maps AND animated GIF automatically
 
     Supports:
     - OpenWQ results (water quality)
+    - Sediment transport results (when sediment_as_well=True)
     - mizuRoute outputs (polylines - river segments)
     - SUMMA outputs (polygons - HRUs)
 
@@ -202,6 +204,9 @@ def Map_h5_driver(shpfile_info=None,
         Whether to create GIF automatically (default: True)
     gif_duration : int
         Duration per frame in milliseconds (default: 500)
+    sediment_as_well : bool
+        If True, also map sediment transport results (requires sediment_as_well=True
+        in Read_h5_driver so that openwq_results contains 'COMPARTMENT@Sediment' entries).
 
     Returns:
     --------
@@ -209,7 +214,7 @@ def Map_h5_driver(shpfile_info=None,
 
     Examples:
     ---------
-    # Map OpenWQ results
+    # Map OpenWQ results including sediment
     Map_h5_driver(
         shpfile_info={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
         openwq_results=results,
@@ -217,35 +222,8 @@ def Map_h5_driver(shpfile_info=None,
         output_html_path='output',
         chemSpec=['NO3'],
         what2map='openwq',
-        timeframes=50
-    )
-
-    # Map mizuRoute runoff (polylines)
-    Map_h5_driver(
-        shpfile_info={'path_to_shp': 'rivers.shp', 'mapping_key': 'ID'},
-        hydromodel_info={
-            'path_to_results': 'mizuroute_output.nc',
-            'mapping_key': 'SegId',
-            'var2print': 'runoff'
-        },
-        output_html_path='output',
-        hostmodel='mizuroute',
-        what2map='hostmodel',
-        timeframes=50
-    )
-
-    # Map SUMMA SWE (polygons)
-    Map_h5_driver(
-        shpfile_info={'path_to_shp': 'hrus.shp', 'mapping_key': 'hruId'},
-        hydromodel_info={
-            'path_to_results': 'summa_output.nc',
-            'mapping_key': 'hruId',
-            'var2print': 'scalarSWE'
-        },
-        output_html_path='output',
-        hostmodel='summa',
-        what2map='hostmodel',
-        timeframes=50
+        timeframes=50,
+        sediment_as_well=True
     )
     """
 
@@ -396,6 +374,13 @@ def Map_h5_driver(shpfile_info=None,
                 print(f"✗ Error: '{chemSpec}' not found!")
                 return None
 
+        # Append sediment if requested
+        if sediment_as_well:
+            for key in openwq_results.keys():
+                if 'Sediment' in key and key not in species_list:
+                    species_list.append(key)
+                    print(f"  + Sediment: {key}")
+
         # Load mizuRoute output for reference (if needed)
         if isinstance(hydromodel_info, str):
             mizuroute_out_file = netCDF4.Dataset(hydromodel_info, 'r')
@@ -416,11 +401,13 @@ def Map_h5_driver(shpfile_info=None,
 
         else:  # openwq
             # Parse species key
+            # Chemical species format: COMPARTMENT@CHEMNAME#UNITS
+            # Sediment format:         COMPARTMENT@Sediment (no #UNITS)
             parts = species_key.split('@')
             compartment = parts[0]
             chem_unit = parts[1].split('#')
             var2print_i = chem_unit[0]
-            units = chem_unit[1]
+            units = chem_unit[1] if len(chem_unit) > 1 else 'kg'
 
             # Get data from results dictionary
             print(f"\nExtracting data for {var2print_i}...")

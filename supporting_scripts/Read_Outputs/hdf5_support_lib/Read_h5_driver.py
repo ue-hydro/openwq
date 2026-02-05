@@ -223,14 +223,15 @@ def Read_h5_driver(openwq_info=None,
                    space_elem=None,
                    chemSpec=None,
                    chemUnits=None,
-                   noDataFlag=None):
+                   noDataFlag=None,
+                   sediment_as_well=False):
     """
     Read and plot OpenWQ output data (HDF5 and CSV) - OPTIMIZED VERSION.
 
     Parameters
     ----------
-    folderpath : str
-        Fullpath to directory where the HDF5 files are located
+    openwq_info : dict
+        Dictionary with 'path_to_results' and 'mapping_key'
     output_format : str
         Output format ('HDF5' or 'CSV')
     debugmode : bool
@@ -243,11 +244,18 @@ def Read_h5_driver(openwq_info=None,
         List of chemical species to extract
     chemUnits : str
         Units for concentration
+    noDataFlag : number
+        No-data flag value (e.g., -9999)
+    sediment_as_well : bool
+        If True, also read sediment transport HDF5 output (COMPARTMENT@Sediment-main.h5).
+        Sediment results are added to the returned dictionary with key "COMPARTMENT@Sediment".
+        Requires export_sediment=True in model config and TS module enabled.
 
     Returns
     -------
     dict
-        Dictionary with keys as "Compartment@Chemical#Units" and values as results
+        Dictionary with keys as "Compartment@Chemical#Units" and values as results.
+        If sediment_as_well=True, also includes "Compartment@Sediment" entries.
     """
 
     # Validate output format
@@ -278,6 +286,8 @@ def Read_h5_driver(openwq_info=None,
 
     # Calculate total iterations for more accurate progress tracking
     total_iterations = len(chemSpec) * len(cmp) * load_files_num
+    if sediment_as_well:
+        total_iterations += len(cmp)  # one sediment file per compartment
 
     # Use single progress bar for all operations
     with tqdm(total=total_iterations, desc="Extracting OpenWQ data") as pbar:
@@ -321,6 +331,31 @@ def Read_h5_driver(openwq_info=None,
 
                 # Store in results dictionary
                 openwq_results[result_key] = output_openwq_tscollect_all
+
+        # -----------------------------------------------------------
+        # Sediment transport: COMPARTMENT@Sediment-main.h5
+        # Only one file per compartment (no debug derivatives, no units)
+        # -----------------------------------------------------------
+        if sediment_as_well:
+            for comp in cmp:
+                print(f"\n> Extracting sediment results for: {comp}")
+
+                file_name = f"{comp}@Sediment"
+                result_key = f"{comp}@Sediment"
+
+                output_tscollect = Read_h5_save_engine(
+                    openwq_info,
+                    'main',
+                    file_name,
+                    space_elem,
+                    noDataFlag
+                )
+
+                openwq_results[result_key] = [
+                    ('main', output_tscollect)
+                ]
+
+                pbar.update(1)
 
     return openwq_results
 

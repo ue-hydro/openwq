@@ -18,6 +18,10 @@
 #################################################
 # Example on how to use read, plot and map model results
 # using the supporting libraries in "hdf5_support_lib"
+#
+# Set sediment_as_well=True to also read, plot and map
+# sediment transport results (requires export_sediment=True
+# in template_model_config.py and TS module enabled).
 #################################################
 # Loading libraries
 import sys
@@ -46,6 +50,7 @@ openwq_info= {
 
 ######################
 # Read requested data: Read_h5_driver
+# sediment_as_well=True will also read the COMPARTMENT@Sediment-main.h5 file
 #######################
 
 import Read_h5_driver as h5_rlib
@@ -58,10 +63,12 @@ openwq_results = h5_rlib.Read_h5_driver(
             space_elem='all',       # what cells to read
             chemSpec=["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"],
             chemUnits="MG/L",
-            noDataFlag=-9999)
+            noDataFlag=-9999,
+            sediment_as_well=True)  # also read sediment transport HDF5 output
 
 ############################################
 # Creating GIF MAPS with results
+# sediment_as_well=True will also map sediment in addition to the chemSpec listed
 """
 import Map_h5_driver as h5_mplib
 
@@ -71,10 +78,11 @@ h5_mplib.Map_h5_driver(
     hostmodel='mizuroute',  # mizuroute or summa
     # 2) shapefile info
     shpfile_info=shpfile_info,
-    # 3) openwq info (👉🏼 used if what2map=openwq)
+    # 3) openwq info (used if what2map=openwq)
     openwq_results=openwq_results,
     chemSpec=["NO3-N","N_ORG_fresh"],
-    # 4) hostmodel info (👉🏼 used if what2map=hostmodel)
+    sediment_as_well=True,  # also map sediment transport
+    # 4) hostmodel info (used if what2map=hostmodel)
     hydromodel_info=hydromodel_info,
     hydromodel_var2print='DWroutedRunoff', #e.g., 'basRunoff' or 'DWroutedRunoff
     # 5) output config
@@ -87,22 +95,23 @@ h5_mplib.Map_h5_driver(
 
 ############################################
 # Plotting time evolution at specific locations
+# sediment_as_well=True will also plot sediment in addition to the chemSpec listed
 
-import Plot_h5_driver as h5_mplib
+import Plot_h5_driver as h5_plib
 
-h5_mplib.Plot_h5_driver(
-    # 1) What results to map?
+h5_plib.Plot_h5_driver(
+    # 1) What results to plot?
     what2map='openwq',  # hostmodel or openwq
     hostmodel='mizuroute',
     mapping_key_values=[1200014181, 200014181],
-    # 2) openwq info (👉🏼 used if what2map=openwq)
+    # 2) openwq info (used if what2map=openwq)
     openwq_results=openwq_results,
     chemSpec=["NO3-N","N_ORG_active"],
+    sediment_as_well=True,  # also plot sediment transport
     debugmode=False, # if True, will read also d_output_dt_chemistry, d_output_dt_transport, d_output_ss, d_output_ewf, d_output_ic
-    # 3) hostmodel info (👉🏼 used if what2map=hostmodel)
+    # 3) hostmodel info (used if what2map=hostmodel)
     hydromodel_info=hydromodel_info,
     hydromodel_var2print='DWroutedRunoff',
     # 4) output config
     output_path='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out/plotSeries.png'
     )
-
