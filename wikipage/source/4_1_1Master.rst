@@ -71,7 +71,7 @@ The master configuration is a JSON file that provides OpenWQ with information an
 +----------------------------+-----------------------------------------------------------------------------------------------------+
 | ``RESULTS_FOLDERPATH``     | Output folder path                                                                                  |
 +----------------------------+-----------------------------------------------------------------------------------------------------+
-| ``FORMAT``                 | Output file format ( `VTU, CSV, or HDF5 <https://openwq.readthedocs.io/en/latest/4_2_1file.html>`_) |
+| ``FORMAT``                 | Output file format ( `HDF5 or CSV <https://openwq.readthedocs.io/en/latest/4_2_1file.html>`_)       |
 +----------------------------+-----------------------------------------------------------------------------------------------------+
 | ``CHEMICAL_SPECIES``       | Chemical species to include in output files                                                         |
 +----------------------------+-----------------------------------------------------------------------------------------------------+

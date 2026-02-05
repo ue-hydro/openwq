@@ -21,7 +21,7 @@ OpenWQ builds upon experience and code from several predecessor models:
 * **CRHM-WQ** -- Cold Regions Hydrological Model - Water Quality
 * **WINTRA** -- Winter nutrient transport framework
 * **PULSE** -- Multiphase multilayer snow hydrochemistry model
-* **FLUXOS-OVERLAND** -- Watershed hydrodynamic-water quality model
+* **FLUXOS** -- Watershed hydrodynamic-water quality model
 
 Third-Party Libraries
 ~~~~~~~~~~~~~~~~~~~~~

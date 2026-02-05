@@ -42,7 +42,7 @@ OpenWQ is written in C++17 and uses a modular architecture organized into the fo
 **I/O and Configuration** (``src/readjson/``, ``src/output/``)
 
 * JSON parsing using a custom reader with C/C++ comment support
-* Output in HDF5, CSV, or VTU formats
+* Output in HDF5 (preferred) or CSV formats
 
 **Integration** (``src/couplercalls/``, ``src/global/``, ``src/initiate/``)
 
@@ -62,7 +62,7 @@ OpenWQ uses CMake (minimum version 3.10) with support for multiple build targets
 * ``mizuroute_openwq`` -- Coupled to mizuRoute
 * ``mizuroute_lakes_openwq`` -- mizuRoute with lake routing
 * ``mizuroute_lakes_cslm_openwq`` -- Full coupling with CSLM lake model
-* ``fluxos_openwq`` -- Coupled to FLUXOS-OVERLAND
+* ``fluxos_openwq`` -- Coupled to FLUXOS
 
 Two build modes are available:
 

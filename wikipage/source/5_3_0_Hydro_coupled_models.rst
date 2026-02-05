@@ -34,8 +34,8 @@ MizuRoute provides five numerical routing methods (IRF, KWT, KWE, Muskingum-Cung
 - mizuroute: https://mizuroute.readthedocs.io/en/main/
 - mizuroute-openwq: https://github.com/ue-hydro/mizuRoute
 
-**FLUXOS-OVERLAND**
-~~~~~~~~~~~~~~~~~~~
+**FLUXOS**
+~~~~~~~~~~
 A hydrodynamic-solute transport modelling tool suitable for basin-scale, event-based simulations
 
 FLUXOS solves the 2D shallow water equations coupled with solute transport for event-based simulations of runoff, flooding, and contaminant transport in Prairie landscapes.
