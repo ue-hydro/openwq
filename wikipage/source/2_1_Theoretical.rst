@@ -122,15 +122,15 @@ This approach is more computationally expensive than the BGC-Flex approach, but 
 Sorption Isotherms
 ~~~~~~~~~~~~~~~~~~~~~~
 
-OpenWQ includes two sorption isotherm models for simulating partitioning between dissolved and sorbed phases:
+OpenWQ includes two sorption isotherm models for simulating partitioning between dissolved and sorbed phases. Both use a **kinetic approach**: the equilibrium sorbed concentration is computed from the isotherm equation, and mass is transferred at a user-defined kinetic rate.
 
 **Freundlich isotherm** -- Models nonlinear sorption:
 
 .. math::
 
-    q = K_F \cdot C^{1/n}
+    q = K_{fr} \cdot C^{N_{fr}}
 
-where :math:`q` is the sorbed concentration, :math:`C` is the dissolved concentration, :math:`K_F` is the Freundlich coefficient, and :math:`n` is the Freundlich exponent.
+where :math:`q` is the sorbed concentration :math:`[ML^{-3}_{soil}]`, :math:`C` is the dissolved concentration :math:`[ML^{-3}]`, :math:`K_{fr}` is the Freundlich coefficient, and :math:`N_{fr}` is the Freundlich exponent. The equilibrium dissolved concentration is found via Newton-Raphson iteration on the mass conservation equation :math:`C_{eq} \cdot V + K_{fr} \cdot C_{eq}^{N_{fr}} \cdot \rho \cdot L = m_{total}`.
 
 **Langmuir isotherm** -- Models sorption with a finite number of binding sites:
 
@@ -138,7 +138,19 @@ where :math:`q` is the sorbed concentration, :math:`C` is the dissolved concentr
 
     q = \frac{q_{max} \cdot K_L \cdot C}{1 + K_L \cdot C}
 
-where :math:`q_{max}` is the maximum adsorption capacity and :math:`K_L` is the Langmuir equilibrium constant.
+where :math:`q_{max}` is the maximum adsorption capacity :math:`[MM^{-1}_{soil}]` and :math:`K_L` is the Langmuir equilibrium constant :math:`[L^3M^{-1}]`. The equilibrium concentration is solved analytically via the quadratic formula.
+
+**Kinetic adsorption/desorption** -- For both isotherms, the mass flux from dissolved to sorbed phase is:
+
+.. math::
+
+    \Delta q = (q_{eq} - q_{current}) \cdot (1 - e^{-K_{adsdes} \cdot \Delta t})
+
+.. math::
+
+    F_{sorption} = \Delta q \cdot \rho \cdot L
+
+where :math:`K_{adsdes}` is the kinetic adsorption/desorption rate :math:`[T^{-1}]`, :math:`\rho` is bulk density :math:`[ML^{-3}]`, and :math:`L` is layer thickness :math:`[L]`. This flux is applied as a sink/source on the dissolved mass. See :doc:`Sorption Isotherm configuration <4_1_4bSI>` for setup details.
 
 
 Sediment Transport

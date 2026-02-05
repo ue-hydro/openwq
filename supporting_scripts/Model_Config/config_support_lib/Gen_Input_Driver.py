@@ -27,6 +27,7 @@ import Gen_LEmodule_file as lemJSON_lib
 import Load_BGQmodule_file as bgqmJSON_lib
 import Gen_PHREEQCmodule_file as phreeqcJSON_lib
 import Gen_TSmodule_file as tsmJSON_lib
+import Gen_SImodule_file as simJSON_lib
 import Gen_SS_Driver as ssJSON_lib
 import Gen_EWF_Driver as ewfJSON_lib
 
@@ -186,6 +187,9 @@ def Gen_Input_Driver(
         # Sorption Isotherm module
         si_module_name: str = "NONE",
         si_sediment_compartment: str = "RIVER_NETWORK_REACHES",
+        si_bulk_density_kg_m3: float = 1500.0,
+        si_layer_thickness_m: float = 1.0,
+        si_species_params: Optional[Dict[str, Dict[str, float]]] = None,
 
         # Sink and Source settings
         ss_method: str = "load_from_csv",
@@ -465,6 +469,19 @@ def Gen_Input_Driver(
         ts_hbvsed_defaults=ts_hbvsed_defaults,
         ts_hbvsed_parameters=ts_hbvsed_parameters,
         ts_hbvsed_monthly_erosion_factor=ts_hbvsed_monthly_erosion_factor
+    )
+
+    ###############
+    # Call create_si_module_json
+    ###############
+
+    simJSON_lib.create_si_module_json(
+        si_config_filepath=si_config_filepath,
+        json_header_comment=json_header_comment,
+        si_module_name=si_module_name,
+        si_bulk_density_kg_m3=si_bulk_density_kg_m3,
+        si_layer_thickness_m=si_layer_thickness_m,
+        si_species_params=si_species_params
     )
 
     ###############

@@ -213,6 +213,24 @@ HYPE_HBVSED settings (HBV-sed):
     si_module_name = "NONE"  # or "FREUNDLICH", "LANGMUIR"
     si_sediment_compartment = "SUMMA_RUNOFF"
 
+    # Soil/medium properties (used by both Freundlich and Langmuir)
+    si_bulk_density_kg_m3 = 1500.0   # Bulk density [kg/m3]
+    si_layer_thickness_m = 1.0       # Representative layer thickness [m]
+
+    # Per-species isotherm parameters
+    # For FREUNDLICH:
+    si_species_params = {
+        "NH4-N": {"Kfr": 1.2, "Nfr": 0.8, "Kadsdes_1_per_s": 0.001}
+    }
+    # For LANGMUIR:
+    si_species_params = {
+        "NH4-N": {"qmax_mg_per_kg": 200.0, "KL_L_per_mg": 0.05, "Kadsdes_1_per_s": 0.002}
+    }
+    # Set to None when si_module_name = "NONE"
+    si_species_params = None
+
+See :doc:`Sorption Isotherms <4_1_4bSI>` for detailed parameter descriptions and JSON format.
+
 
 Source/sink configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

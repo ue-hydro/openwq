@@ -671,19 +671,49 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
 };
 
 // Module SI_model -> Langmuir Isotherm
+// q = (qmax * KL * C) / (1 + KL * C)
+// where q = sorbed concentration [M/M_soil], C = dissolved concentration [M/L^3]
+// Kinetic: sorption_rate = Kadsdes * (q_eq - q_current) * bulk_density * layer_thickness
 class OpenWQ_wqconfig::SI_model_::LANGMUIR_{
 
-    public: 
+    public:
 
-    int test_parameter_langmuir_2_delete;
+    // Number of species with Langmuir sorption configured
+    unsigned int num_species = 0;
+
+    // Per-species parameters (vectors indexed by local species index)
+    std::vector<unsigned int> species_index;     // Global chemical species index
+    std::vector<std::string> species_name;       // Species name (for logging)
+    std::vector<double> qmax;                    // Maximum adsorption capacity [mg/kg_soil]
+    std::vector<double> KL;                      // Langmuir equilibrium constant [L/mg]
+    std::vector<double> Kadsdes;                 // Kinetic adsorption/desorption rate [1/s]
+
+    // Soil/medium properties (uniform or per-compartment in future)
+    double bulk_density = 1500.0;                // Bulk density [kg/m^3]
+    double layer_thickness = 1.0;                // Representative layer thickness [m]
 
 };
 
-// Module SI_model -> Langmuir Isotherm
+// Module SI_model -> Freundlich Isotherm
+// q = Kfr * C^(1/Nfr)
+// where q = sorbed concentration [M/M_soil], C = dissolved concentration [M/L^3]
+// Uses Newton-Raphson for equilibrium + kinetic adsorption/desorption
 class OpenWQ_wqconfig::SI_model_::FREUNDLICH_{
 
-    public: 
+    public:
 
-    int test_parameter_freundlich_2_delete;
+    // Number of species with Freundlich sorption configured
+    unsigned int num_species = 0;
+
+    // Per-species parameters (vectors indexed by local species index)
+    std::vector<unsigned int> species_index;     // Global chemical species index
+    std::vector<std::string> species_name;       // Species name (for logging)
+    std::vector<double> Kfr;                     // Freundlich coefficient [mg/kg / (mg/L)^(1/Nfr)]
+    std::vector<double> Nfr;                     // Freundlich exponent [-]
+    std::vector<double> Kadsdes;                 // Kinetic adsorption/desorption rate [1/s]
+
+    // Soil/medium properties
+    double bulk_density = 1500.0;                // Bulk density [kg/m^3]
+    double layer_thickness = 1.0;                // Representative layer thickness [m]
 
 };

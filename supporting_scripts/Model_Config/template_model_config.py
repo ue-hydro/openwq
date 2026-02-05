@@ -267,15 +267,44 @@ ts_hbvsed_parameters = {
 ts_hbvsed_monthly_erosion_factor = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 """
+--------------------------------------
 Sorption Isotherm module
 Options:
-    FREUNDLICH
-    LANGMUIR
-    NONE
+    FREUNDLICH  - Freundlich nonlinear sorption: q = Kfr * C^(1/Nfr)
+    LANGMUIR    - Langmuir sorption with finite binding sites: q = (qmax * KL * C) / (1 + KL * C)
+    NONE        - No sorption
+--------------------------------------
 """
-si_module_name = "NONE"
-si_sediment_compartment = "SUMMA_RUNOFF"
-# TODO - SETUP FOR FREUNDLICH AND LANGMUIR OPTIONS
+si_module_name = "LANGMUIR"
+si_sediment_compartment = "RIVER_NETWORK_REACHES"
+
+# Soil/medium properties (used by both Freundlich and Langmuir)
+si_bulk_density_kg_m3 = 1500.0   # Bulk density of the soil/medium [kg/m3]
+si_layer_thickness_m = 1.0       # Representative layer thickness [m]
+
+# Per-species isotherm parameters
+# For FREUNDLICH: dict of species_name -> {"Kfr": float, "Nfr": float, "Kadsdes_1_per_s": float}
+#   Kfr             - Freundlich coefficient [mg/kg / (mg/L)^(1/Nfr)]
+#   Nfr             - Freundlich exponent [-] (1.0 = linear)
+#   Kadsdes_1_per_s - Kinetic adsorption/desorption rate [1/s]
+#
+# For LANGMUIR: dict of species_name -> {"qmax_mg_per_kg": float, "KL_L_per_mg": float, "Kadsdes_1_per_s": float}
+#   qmax_mg_per_kg  - Maximum adsorption capacity [mg/kg_soil]
+#   KL_L_per_mg     - Langmuir equilibrium constant [L/mg]
+#   Kadsdes_1_per_s - Kinetic adsorption/desorption rate [1/s]
+#
+# Example for Freundlich:
+# si_species_params = {
+#     "NO3-N": {"Kfr": 0.5, "Nfr": 0.7, "Kadsdes_1_per_s": 0.001},
+#     "NH4-N": {"Kfr": 1.2, "Nfr": 0.8, "Kadsdes_1_per_s": 0.002}
+# }
+#
+# Example for Langmuir:
+# si_species_params = {
+#     "NO3-N": {"qmax_mg_per_kg": 100.0, "KL_L_per_mg": 0.01, "Kadsdes_1_per_s": 0.001},
+#     "NH4-N": {"qmax_mg_per_kg": 200.0, "KL_L_per_mg": 0.05, "Kadsdes_1_per_s": 0.002}
+# }
+si_species_params = None  # Set to None when si_module_name = "NONE"
 
 ################
 # Sink sources
@@ -413,6 +442,9 @@ gJSON_lib.Gen_Input_Driver(
     ts_hbvsed_monthly_erosion_factor=ts_hbvsed_monthly_erosion_factor,
     si_module_name=si_module_name,
     si_sediment_compartment=si_sediment_compartment,
+    si_bulk_density_kg_m3=si_bulk_density_kg_m3,
+    si_layer_thickness_m=si_layer_thickness_m,
+    si_species_params=si_species_params,
     ss_method=ss_method,
     ss_metadata_source=ss_metadata_source,
     ss_metadata_comment=ss_metadata_comment,

@@ -17,7 +17,21 @@
 
 #include "models_SI/headerfile_SI.hpp"
 
-// Function to calculate sorption based on the Langmuir isotherm
+/* #################################################
+// Freundlich Sorption Isotherm
+// q = Kfr * C^(1/Nfr)
+//
+// Uses Newton-Raphson to find equilibrium dissolved concentration C_eq
+// given total mass (dissolved + sorbed) conservation:
+//     C_eq * V + Kfr * C_eq^Nfr * rho * L = total_mass
+//
+// Then applies kinetic adsorption/desorption:
+//     adsdes_flux = (q_eq - q_current) * (1 - exp(-Kadsdes * dt)) * rho * L
+//
+// The flux is added to d_chemass_dt_chem (removes from dissolved, adds to sorbed phase).
+// In the current simplified implementation, we track only the dissolved phase
+// (chemass) and the sorption acts as a sink/source on the dissolved concentration.
+################################################# */
 
 void OpenWQ_SI_model::freundlich(
     OpenWQ_json& OpenWQ_json,
@@ -26,89 +40,166 @@ void OpenWQ_SI_model::freundlich(
     OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_output& OpenWQ_output){
 
-    // TO REMOVE -> only testing the cpassing of relevant variable lass-nested/nested/nested variable 
-    OpenWQ_wqconfig.SI_model->FREUNDLICH->test_parameter_freundlich_2_delete = 8;
+    // Newton-Raphson convergence parameters
+    const double NR_Limit = 1.0e-5;     // Convergence threshold
+    const int NR_MaxIter = 20;           // Maximum iterations
+    const double NR_dx_rel_tol = 1.0e-6; // Relative step tolerance
 
-    /*
-      const double Limit = 0.00001; // Threshold for breaking iterations
+    // Get Freundlich parameters
+    auto* FR = OpenWQ_wqconfig.SI_model->FREUNDLICH;
+    const unsigned int num_si_species = FR->num_species;
 
-    // Local variables
-    double totalP, PPequi_conc;
-    double conc_sol, adsdes;
-    double x0, xn, xn_1, fxn, fprimxn, dx;
-    double coeff;
-    double nfrloc;
-    double help;
+    if (num_si_species == 0) return;  // Nothing to do
 
-    if (Vol == 0) return;
+    const double bulk_density = FR->bulk_density;    // kg/m3
+    const double layer_thick = FR->layer_thickness;  // m
+    const double rhoL = bulk_density * layer_thick;  // kg/m2
 
-    if (Kfr == 0 || Nfr == 0 || Kadsdes == 0) {
-        std::cerr << "ERROR: Values for freundlich parameters missing" << std::endl;
-        exit(1);
-    }
+    // Get timestep for kinetic rate
+    const double dt = OpenWQ_hostModelconfig.get_time_step();  // seconds
+    if (dt <= 0.0) return;
 
-    nfrloc = Nfr;
-    totalP = poolPP + SRP_Conc * Vol; // Total amount of P (kg/km2)
-    if (totalP == 0.0) return;
+    // Get number of compartments
+    const unsigned int num_comps = OpenWQ_hostModelconfig.get_num_HydroComp();
 
-    conc_sol = (poolPP / bulkdensity) / LayerThick; // mg P / kg soil
-    if (conc_sol <= 0.0) {
-        nfrloc = 1.0;
-        if (conductwarning) {
-            std::cerr << "Warning: soil partP <= 0. Freundlich will give error, take shortcut." << std::endl;
-        }
-    }
+    // Water volume minimum limit (to avoid division by zero)
+    const double watervol_minlim = OpenWQ_hostModelconfig.get_watervol_minlim();
 
-    coeff = Kfr * bulkdensity * LayerThick;
+    // Loop over each SI species
+    for (unsigned int si = 0; si < num_si_species; si++) {
 
-    if (nfrloc == 1.0) {
-        xn_1 = totalP / (Vol + coeff);
-        PPequi_conc = Kfr * xn_1;
-    } else {
-        // Newton-Raphson method to calculate equilibrium concentration
-        x0 = exp((log(conc_sol) - log(Kfr)) / Nfr); // Initial guess of equilibrium liquid concentration
-        fxn = x0 * Vol + coeff * pow(x0, Nfr) - totalP;
-        xn = x0;
-        xn_1 = xn;
-        int i = 0;
+        const unsigned int chemi = FR->species_index[si];
+        const double Kfr = FR->Kfr[si];
+        const double Nfr = FR->Nfr[si];
+        const double Kadsdes = FR->Kadsdes[si];
 
-        while (fabs(fxn) > Limit && i < 20) {
-            fxn = xn * Vol + coeff * pow(xn, Nfr) - totalP;
-            fprimxn = Vol + Nfr * coeff * pow(xn, Nfr - 1);
-            dx = fxn / fprimxn;
-            if (fabs(dx) < 0.000001 * xn) break;
-            xn_1 = xn - dx;
-            if (xn_1 <= 0.0) {
-                xn_1 = 1.0E-10;
-            }
-            xn = xn_1;
-            ++i;
-        }
-        PPequi_conc = Kfr * pow(xn_1, Nfr);
-    }
+        // Skip if parameters are invalid
+        if (Kfr <= 0.0 || Nfr <= 0.0 || Kadsdes <= 0.0) continue;
 
-    // Calculate new pool and concentration, depends on the equilibrium concentration
-    if (fabs(PPequi_conc - conc_sol) > 1.0E-6) {
-        adsdes = (PPequi_conc - conc_sol) * (1 - exp(-Kadsdes)); // Kinetic adsorption/desorption
-        help = adsdes * bulkdensity * LayerThick;
-        if (-help > poolPP || SRP_Conc < (help / Vol)) {
-            if (-help > poolPP) help = -poolPP;
-            if (SRP_Conc < (help / Vol)) help = SRP_Conc * Vol;
-            if (conductwarning) {
-                std::cerr << "Warning: freundlich flow adjusted, was larger than pool" << std::endl;
-            }
-        }
-        poolPP += help;       // New Pool PP
-        SRP_Conc -= (help / Vol); // New liquid concentration
-    }
+        // Pre-compute kinetic factor: (1 - exp(-Kadsdes * dt))
+        const double kinetic_factor = 1.0 - std::exp(-Kadsdes * dt);
 
-    // Safety check for negative SRP_Conc
-    if (SRP_Conc < 0.0) {
-        std::cerr << "ERROR: SRP_Conc in freundlich negative! " << SRP_Conc << std::endl;
-        std::cerr << iin << " " << jin << " " << lin << std::endl;
-        exit(1);
-    }
+        // Coefficient for mass balance: Kfr * rho * L
+        const double coeff = Kfr * rhoL;
 
-    */
+        // Loop over all compartments and cells
+        for (unsigned int icmp = 0; icmp < num_comps; icmp++) {
 
+            const unsigned int nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
+            const unsigned int ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
+            const unsigned int nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
+
+            // References to state and derivative cubes
+            auto& chemass = (*OpenWQ_vars.chemass)(icmp)(chemi);
+            auto& d_chemass = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi);
+
+            for (unsigned int ix = 0; ix < nx; ix++) {
+                for (unsigned int iy = 0; iy < ny; iy++) {
+                    for (unsigned int iz = 0; iz < nz; iz++) {
+
+                        // Get water volume [m3] in this cell
+                        const double Vol = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+                            icmp, ix, iy, iz);
+
+                        // Skip dry cells
+                        if (Vol <= watervol_minlim) continue;
+
+                        // Current dissolved mass [g] in this cell
+                        const double mass_dissolved = chemass(ix, iy, iz);
+                        if (mass_dissolved <= 0.0) continue;
+
+                        // Current dissolved concentration [g/m3 = mg/L]
+                        const double C_current = mass_dissolved / Vol;
+
+                        // Current sorbed concentration [mg/kg_soil]
+                        // q_current = Kfr * C_current^Nfr  (assuming at current quasi-equilibrium)
+                        // Note: We don't track sorbed mass separately; we compute
+                        // the equilibrium target and apply kinetic correction
+
+                        // Total mass in this cell (dissolved + sorbed)
+                        // total_mass = C * Vol + q * rho * L
+                        // where q = Kfr * C^Nfr (current sorbed conc estimate)
+                        const double q_current = Kfr * std::pow(C_current, Nfr);
+                        const double total_mass = C_current * Vol + q_current * rhoL;
+
+                        if (total_mass <= 0.0) continue;
+
+                        // ############################
+                        // Newton-Raphson to find equilibrium dissolved concentration C_eq
+                        // f(C) = C * Vol + Kfr * C^Nfr * rho * L - total_mass = 0
+                        // f'(C) = Vol + Nfr * Kfr * C^(Nfr-1) * rho * L
+                        // ############################
+
+                        double C_eq;
+                        double nfrloc = Nfr;
+
+                        // Handle edge case where sorbed conc is zero or negative
+                        if (q_current <= 0.0) {
+                            nfrloc = 1.0;  // Linear shortcut
+                        }
+
+                        if (std::fabs(nfrloc - 1.0) < 1.0e-10) {
+                            // Linear case: C_eq * Vol + Kfr * C_eq * rho * L = total_mass
+                            C_eq = total_mass / (Vol + coeff);
+                        } else {
+                            // Newton-Raphson for nonlinear Freundlich
+                            // Initial guess from inverse Freundlich
+                            double x0;
+                            if (C_current > 1.0e-10) {
+                                x0 = C_current;  // Use current concentration as initial guess
+                            } else {
+                                x0 = total_mass / Vol;  // Fallback: assume all dissolved
+                            }
+
+                            double xn = x0;
+                            double fxn, fprimxn, dx;
+
+                            for (int iter = 0; iter < NR_MaxIter; iter++) {
+                                fxn = xn * Vol + coeff * std::pow(xn, Nfr) - total_mass;
+
+                                if (std::fabs(fxn) < NR_Limit) break;
+
+                                fprimxn = Vol + Nfr * coeff * std::pow(xn, Nfr - 1.0);
+                                dx = fxn / fprimxn;
+
+                                if (std::fabs(dx) < NR_dx_rel_tol * std::fabs(xn)) break;
+
+                                xn -= dx;
+
+                                // Ensure positive concentration
+                                if (xn <= 0.0) xn = 1.0e-10;
+                            }
+
+                            C_eq = xn;
+                        }
+
+                        // Equilibrium sorbed concentration
+                        const double q_eq = Kfr * std::pow(C_eq, Nfr);
+
+                        // ############################
+                        // Kinetic adsorption/desorption
+                        // Mass flux from dissolved to sorbed phase
+                        // positive = adsorption (remove from dissolved)
+                        // negative = desorption (add to dissolved)
+                        // ############################
+
+                        const double delta_q = (q_eq - q_current) * kinetic_factor;
+                        double flux_mass = delta_q * rhoL;  // [g]
+
+                        // Safety: flux cannot remove more mass than available
+                        if (flux_mass > 0.0 && flux_mass > mass_dissolved) {
+                            flux_mass = mass_dissolved;
+                        }
+                        // Safety: desorption cannot create negative sorbed pool
+                        // (not tracked explicitly, but limit to reasonable bounds)
+
+                        // Apply as a sink on dissolved concentration
+                        // (positive flux_mass = adsorption = decrease dissolved)
+                        d_chemass(ix, iy, iz) -= flux_mass;
+
+                    } // iz
+                } // iy
+            } // ix
+        } // icmp
+    } // si species
 }

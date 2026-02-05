@@ -22,29 +22,26 @@
 #include <armadillo>
 #include <string>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <tuple>
 #include <vector>
-
-// #include "utility.h"
-#include "global/OpenWQ_json.hpp"
 
 #include "global/OpenWQ_json.hpp"
 #include "global/OpenWQ_vars.hpp"
 #include "global/OpenWQ_wqconfig.hpp"
 #include "global/OpenWQ_hostModelConfig.hpp"
 #include "output/headerfile_OUT.hpp"
-#include "units/headerfile_units.hpp"
 
-// Biogeochemistry
+// Sorption Isotherm Models
 
 class OpenWQ_SI_model{
 
     public:
 
         // ##########################
-        // MAIN DRIVER 
-        // => Run ST model
+        // MAIN DRIVER
+        // => Run SI model
         // ##########################
 
         void SI_driver_run(
@@ -57,10 +54,10 @@ class OpenWQ_SI_model{
     private:
 
         // ##########################
-        // MODEL OPTIONS 
+        // MODEL OPTIONS
         // ##########################
 
-        // langmuir
+        // Langmuir isotherm: q = (qmax * KL * C) / (1 + KL * C)
         void langmuir(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_vars& OpenWQ_vars,
@@ -68,35 +65,13 @@ class OpenWQ_SI_model{
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_output& OpenWQ_output);
 
-        // freundlich
+        // Freundlich isotherm: q = Kfr * C^(1/Nfr)
         void freundlich(
             OpenWQ_json& OpenWQ_json,
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_output& OpenWQ_output);
-
-    private:
-
-        // ##################
-        // BGC_FLEX model
-        // ##################
-
-        // Perform transformations
-        // chem_runtimestart.cpp
-        void bgc_flex_transform(
-            OpenWQ_json& OpenWQ_json,
-            OpenWQ_vars& OpenWQ_vars,
-            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig& OpenWQ_wqconfig,
-            OpenWQ_output& OpenWQ_output,
-            unsigned int icmp);
-
-        // ##################
-        // PHREEQC model
-        // ##################
-
-        // add here
 
 };
 
