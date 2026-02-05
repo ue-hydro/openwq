@@ -29,8 +29,11 @@ OpenWQ is written in C++17 and uses a modular architecture organized into the fo
 
 **Sediment Transport** (``src/models_TS/``)
 
-* ``hype_hvb/`` -- HBV-based sediment erosion model
-* ``hype_mmf/`` -- Mobile-immobile fractionation model
+* ``hype_hvb/`` -- HYPE_HBVSED: HBV-based sediment erosion model with land-use, soil-type, slope, precipitation, and monthly erosion factors
+* ``hype_mmf/`` -- HYPE_MMF: Morgan-Morgan-Finney erosion model with rainfall kinetic energy, soil cohesion, erodibility, and transport capacity
+* ``json_driver.cpp`` -- TS module JSON configuration loader (reads MODULE_CONFIG_FILEPATH and populates TS_module)
+* ``TS_config_driver.cpp`` -- TS configuration driver
+* ``TS_runspace_driver.cpp`` -- TS runtime driver
 
 **Lagrangian Elements** (``src/models_LE/``)
 

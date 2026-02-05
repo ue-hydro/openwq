@@ -14,8 +14,12 @@ Key files:
 
 * ``template_model_config.py`` - Main template script (edit this file)
 * ``config_support_lib/Gen_Input_Driver.py`` - Core generation engine
+* ``config_support_lib/Gen_Master_file.py`` - Master JSON generator
+* ``config_support_lib/Gen_TSmodule_file.py`` - Transport Sediments module JSON generator
+* ``config_support_lib/Gen_LEmodule_file.py`` - Lateral Exchange module JSON generator
 * ``config_support_lib/examples_BGC_frameworks/`` - Example biogeochemistry configurations
 * ``config_support_lib/examples_PHREEQC/`` - Example PHREEQC configurations
+* ``config_support_lib/examples_SS_in_cvs/`` - Example source/sink CSV files
 
 
 Quick start
@@ -49,6 +53,9 @@ Configuration parameters
 
     hostmodel = "mizuroute"  # "mizuroute" or "summa"
     dir2save_input_files = "/path/to/output/"
+
+    # Docker support (see Docker section below)
+    running_on_docker = False
 
 **Computational settings:**
 
@@ -115,15 +122,93 @@ Module configuration
         }
     ]
 
-**Sediment and sorption modules:**
+**Sediment transport module:**
+
+Three options are available: ``HYPE_MMF`` (Morgan-Morgan-Finney), ``HYPE_HBVSED`` (HBV-sed), or ``NONE``.
 
 .. code-block:: python
 
-    # Sediment transport
-    ts_module_name = "NONE"  # or "HYPE_MMF", "HYPE_HBVSED"
+    ts_module_name = "HYPE_HBVSED"  # or "HYPE_MMF", "NONE"
     ts_sediment_compartment = "RIVER_NETWORK_REACHES"
+    ts_transport_compartment = "RIVER_NETWORK_REACHES"
 
-    # Sorption isotherms
+    # Common configuration
+    ts_direction = "z"                                        # Exchange direction: "x", "y", or "z"
+    ts_erosion_inhibit_compartment = "ILAYERVOLFRACWAT_SNOW"  # Compartment inhibiting erosion (e.g., snow)
+    ts_data_format = "JSON"                                   # "JSON" or "ASCII"
+
+HYPE_MMF settings (Morgan-Morgan-Finney):
+
+.. code-block:: python
+
+    # Default parameter values (applied to all cells unless overridden)
+    # IMPORTANT: CROPCOVER + GROUNDCOVER must sum to 1.0
+    ts_mmf_defaults = {
+        "COHESION": 7.5,              # Soil cohesion (kPa)
+        "ERODIBILITY": 2.0,           # Soil erodibility (g/J)
+        "SREROEXP": 1.2,              # Surface runoff erosion exponent (-)
+        "CROPCOVER": 0.5,             # Crop cover fraction (0-1)
+        "GROUNDCOVER": 0.5,           # Ground cover fraction (0-1)
+        "SLOPE": 0.4,                 # Basin slope
+        "TRANSPORT_FACTOR_1": 0.2,    # Transport capacity factor 1
+        "TRANSPORT_FACTOR_2": 0.5     # Transport capacity factor 2
+    }
+
+    # Spatially-varying parameters (cell-specific overrides)
+    # Row "0" is the header; rows "1","2",... are data entries
+    # Use "ALL" for ix/iy/iz to apply to all cells in that dimension
+    ts_mmf_parameters = {
+        "COHESION": {
+            "0": ["IX", "IY", "IZ", "VALUE"],
+            "1": ["ALL", 1, 1, 7.5]
+        },
+        "ERODIBILITY": {
+            "0": ["IX", "IY", "IZ", "VALUE"],
+            "1": ["ALL", 1, 1, 2.0]
+        },
+        # ... repeat for all parameters
+    }
+
+HYPE_HBVSED settings (HBV-sed):
+
+.. code-block:: python
+
+    # Default parameter values
+    ts_hbvsed_defaults = {
+        "SLOPE": 0.4,                                   # Basin slope
+        "EROSION_INDEX": 0.4,                           # Erosion index
+        "SOIL_EROSION_FACTOR_LAND_DEPENDENCE": 0.4,     # Land use factor (lusepar)
+        "SOIL_EROSION_FACTOR_SOIL_DEPENDENCE": 0.4,     # Soil factor (soilpar)
+        "SLOPE_EROSION_FACTOR_EXPONENT": 1.5,           # Slope exponent (slopepar)
+        "PRECIP_EROSION_FACTOR_EXPONENT": 1.5,          # Precipitation exponent (precexppar)
+        "PARAM_SCALING_EROSION_INDEX": 0.5              # Erosion index scaling (eroindexpar)
+    }
+
+    # Spatially-varying parameters (same format as HYPE_MMF)
+    ts_hbvsed_parameters = {
+        "SLOPE": {
+            "0": ["IX", "IY", "IZ", "VALUE"],
+            "1": ["ALL", 1, 1, 0.4]
+        },
+        # ... repeat for all parameters
+    }
+
+    # Monthly erosion factor (12 values, Jan-Dec)
+    # Used as: erodmonth = 1.0 + MONTHLY_EROSION_FACTOR[month]
+    ts_hbvsed_monthly_erosion_factor = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                        0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+.. note::
+
+    The ``PARAMETERS`` section provides spatially-varying overrides. If a parameter is not specified
+    in ``PARAMETERS``, the value from ``PARAMETER_DEFAULTS`` is used for all cells.
+    The pseudo day-of-year (MMF) and monthly erosion factor (HBVSED) are dynamically
+    computed from the simulation time at runtime.
+
+**Sorption isotherm module:**
+
+.. code-block:: python
+
     si_module_name = "NONE"  # or "FREUNDLICH", "LANGMUIR"
     si_sediment_compartment = "SUMMA_RUNOFF"
 
@@ -182,13 +267,44 @@ Generated files
 
 The configuration generator creates the following files in your output directory:
 
-* ``openwq_master.json`` - Master configuration file
-* ``openwq_in/openwq_config.json`` - Initial conditions and compartment mapping
-* ``openwq_in/openwq_bgc.json`` - Biogeochemistry configuration
-* ``openwq_in/openwq_te.json`` - Transport configuration
-* ``openwq_in/openwq_ss.json`` - Source/sink configuration (if applicable)
-* ``openwq_in/openwq_ewf.json`` - External water flux configuration (if applicable)
-* ``openwq_in/openwq_output.json`` - Output configuration
+* ``openWQ_master.json`` -- Master configuration file (references all module files)
+* ``openwq_in/openWQ_config.json`` -- Initial conditions and compartment mapping
+* ``openwq_in/openWQ_MODULE_<BGC>.json`` -- Biogeochemistry module configuration (NATIVE_BGC_FLEX or PHREEQC)
+* ``openwq_in/openWQ_MODULE_<TD>.json`` -- Transport dissolved module configuration
+* ``openwq_in/openWQ_MODULE_<LE>.json`` -- Lateral exchange module configuration
+* ``openwq_in/openWQ_MODULE_<TS>.json`` -- Transport sediments module configuration (HYPE_MMF or HYPE_HBVSED)
+* ``openwq_in/openWQ_MODULE_<SI>.json`` -- Sorption isotherm module configuration
+* ``openwq_in/openWQ_SS_<method>.json`` -- Source/sink configuration (if applicable)
+* ``openwq_in/openWQ_EWF_fixed_value.json`` -- External water flux configuration (if applicable)
+
+
+Docker support
+~~~~~~~~~~~~~~~
+
+When running OpenWQ inside a Docker container, file paths in the generated JSON files must reference the container filesystem rather than the host filesystem. The ``running_on_docker`` flag automates this path correction.
+
+.. code-block:: python
+
+    running_on_docker = True   # Set to True when model runs inside Docker
+
+When enabled, the generator:
+
+1. Reads ``docker-compose.yml`` (located at the openwq root) to determine the volume mount mapping
+2. Resolves the relative host path from the compose file location
+3. Replaces host path prefixes with container path prefixes in all JSON content
+
+For example, with the default volume mount ``../../../../../../:/code:Z``:
+
+* **Host path**: ``/Users/username/Documents/project/test_case/``
+* **Container path**: ``/code/project/test_case/``
+
+.. note::
+
+    The path correction only applies to paths **embedded inside generated JSON files**
+    (which OpenWQ reads at runtime inside the container). The files themselves are still
+    written to the host filesystem so the script can create them on disk.
+    Paths used for file I/O during generation (e.g., BGC framework files, PHREEQC database,
+    shapefiles) are **not** corrected since the script runs on the host.
 
 
 Tips
@@ -201,3 +317,9 @@ Tips
 3. **Compartment names**: Enable debug mode to see the exact compartment names exported by the host model
 
 4. **Units consistency**: Ensure initial condition units match the expected units in the biogeochemistry module
+
+5. **Sediment parameters**: When ``PARAMETERS`` is left empty (``{}``), warnings are shown but the model uses ``PARAMETER_DEFAULTS`` for all cells. Populate ``PARAMETERS`` with at least one entry per parameter to suppress warnings
+
+6. **Docker paths**: When ``running_on_docker = True``, verify the generated master JSON contains container paths (e.g., ``/code/...``) rather than host paths
+
+7. **Spatially-varying overrides**: Use ``"ALL"`` in the IX/IY/IZ fields to apply a value to all cells in that dimension. Add multiple rows (``"2"``, ``"3"``, ...) for cell-specific overrides

@@ -126,10 +126,63 @@ where :math:`q_{max}` is the maximum adsorption capacity and :math:`K_L` is the 
 Sediment Transport
 ~~~~~~~~~~~~~~~~~~~~~~
 
-OpenWQ includes sediment transport modules based on the HYPE model framework:
+OpenWQ includes two sediment transport erosion models based on the HYPE hydrological model framework. Both models compute erosion rates and transport sediments between compartments along a user-defined direction.
 
-* **HBV sediment model**: Simulates soil erosion and sediment generation with land-use and soil-type dependent erosion factors.
-* **Mobile-immobile fractionation**: Models the partitioning of constituents between mobile and immobile water fractions, accounting for diffusive exchange between the two phases.
+**HYPE_HBVSED** -- HBV-based sediment erosion model
+
+This model computes soil erosion as a function of precipitation, slope, soil properties, and land use. The erosion rate is computed as:
+
+.. math::
+
+    \text{erosion} = \text{eroindex} \cdot \text{eroindexpar} \cdot \text{lusepar} \cdot \text{soilpar} \cdot \text{slope}^{\text{slopepar}} \cdot \text{precip}^{\text{precexppar}} \cdot \text{erodmonth}
+
+where:
+
+* :math:`\text{eroindex}` -- erosion index (spatially varying)
+* :math:`\text{eroindexpar}` -- scaling parameter for the erosion index
+* :math:`\text{lusepar}` -- land-use dependent soil erosion factor
+* :math:`\text{soilpar}` -- soil-type dependent erosion factor
+* :math:`\text{slope}` -- basin slope
+* :math:`\text{slopepar}` -- slope erosion exponent
+* :math:`\text{precip}` -- precipitation intensity
+* :math:`\text{precexppar}` -- precipitation erosion exponent
+* :math:`\text{erodmonth} = 1 + \text{monthpar}(m)` -- monthly erosion factor, where :math:`\text{monthpar}` is a 12-value array (Jan--Dec) allowing seasonal variation
+
+Erosion only occurs when precipitation exceeds zero and the inhibiting compartment (e.g., snow layer) has no water. Sediments are removed from the source compartment and added to the recipient compartment.
+
+**HYPE_MMF** -- Morgan-Morgan-Finney erosion model
+
+This model uses the MMF approach to compute erosion based on kinetic energy from rainfall, soil cohesion, erodibility, and ground cover fractions. The erosion rate depends on:
+
+.. math::
+
+    F = K \cdot KE \cdot 10^{-3}
+
+.. math::
+
+    H = \text{cohesion}^{0.5} \cdot \text{cropcover} \cdot e^{-\text{erodibility} \cdot SR^{\text{sreroexp}}}
+
+.. math::
+
+    TC = \text{trans}_1 \cdot (SR)^{\text{trans}_2} \cdot \sin(\text{slope}) \cdot (1 - \text{groundcover})
+
+where:
+
+* :math:`F` -- soil particle detachment by raindrop impact
+* :math:`H` -- resistance to erosion (soil cohesion and crop cover)
+* :math:`TC` -- transport capacity of overland flow
+* :math:`KE` -- total kinetic energy of rainfall (direct throughfall + leaf drainage)
+* :math:`SR` -- surface runoff depth
+* :math:`\text{cohesion}` -- soil cohesion (kPa)
+* :math:`\text{erodibility}` -- soil erodibility (g/J)
+* :math:`\text{sreroexp}` -- surface runoff erosion exponent
+* :math:`\text{cropcover}` + :math:`\text{groundcover}` -- must sum to 1.0
+* :math:`\text{trans}_1`, :math:`\text{trans}_2` -- transport capacity factors
+* :math:`\text{slope}` -- basin slope
+
+The pseudo day-of-year is dynamically computed from the simulation time and used to estimate kinetic energy from rainfall. Erosion only occurs when the inhibiting compartment has no water and crop/ground cover fractions are valid.
+
+Both models support spatially-varying parameters via JSON or ASCII input formats, allowing cell-by-cell parameter overrides over the default values.
 
 
 Numerical Solvers
