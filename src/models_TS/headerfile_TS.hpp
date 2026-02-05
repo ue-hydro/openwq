@@ -67,7 +67,7 @@ class OpenWQ_TS_model{
             OpenWQ_wqconfig& OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
             OpenWQ_vars& OpenWQ_vars,
             OpenWQ_utils& OpenWQ_utils,
-            OpenWQ_output& OpenWQ_output,                                   // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+            OpenWQ_output& OpenWQ_output,
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
             const double wflux_s2r, const double wmass_source,
@@ -110,7 +110,7 @@ class OpenWQ_TS_model{
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
-            double wflux_s2r, 
+            double wflux_s2r,
             std::string TS_type);
             
          // Based on the Morgan-Morgan-Finney erosion model implemented in HYPE
@@ -122,7 +122,7 @@ class OpenWQ_TS_model{
             OpenWQ_output& OpenWQ_output,
             const int source, const int ix_s, const int iy_s, const int iz_s,
             const int recipient, const int ix_r, const int iy_r, const int iz_r,
-            double wflux_s2r, 
+            double wflux_s2r,
             std::string TS_type);
         
 };

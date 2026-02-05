@@ -64,15 +64,18 @@ def create_master_json(
         # Transport Sediments module
         ts_module_name: str,
         ts_sediment_compartment: str,
+        ts_transport_compartment: str,
 
         # Sorption Isotherm module
         si_module_name: str,
         si_sediment_compartment: str,
 
         # Sink and Source
+        ss_method: str,
         ss_metadata_source: str,
 
         # External water fluxes
+        ewf_method: str,
         ewf_method_fixedval_source: str,
 
         # Output settings
@@ -91,6 +94,25 @@ def create_master_json(
     All parameters are required - no defaults are provided.
     """
 
+    # Build OPENWQ_INPUT section (conditionally include EWF and SS)
+    openwq_input = {
+        "CONFIG_FILEPATH": config_file_fullpath,
+    }
+    if ewf_method != "none":
+        openwq_input["EXTERNAL_WATER_FLUXES"] = {
+            "1": {
+                "LABEL": ewf_method_fixedval_source,
+                "FILEPATH": ewf_config_filepath,
+            }
+        }
+    if ss_method != "none":
+        openwq_input["SINK_SOURCE"] = {
+            "1": {
+                "LABEL": ss_metadata_source,
+                "FILEPATH": ss_config_filepath,
+            }
+        }
+
     # Build the JSON structure
     config = {
         "PROJECT_NAME": project_name,
@@ -103,21 +125,7 @@ def create_master_json(
             "USE_NUM_THREADS": use_num_threads
         },
         "SOLVER": solver,
-        "OPENWQ_INPUT": {
-            "CONFIG_FILEPATH": config_file_fullpath,
-            "EXTERNAL_WATER_FLUXES": {
-                "1": {
-                    "LABEL": ewf_method_fixedval_source,
-                    "FILEPATH": ewf_config_filepath,
-                }
-            },
-            "SINK_SOURCE": {
-                "1": {
-                    "LABEL": ss_metadata_source,
-                    "FILEPATH": ss_config_filepath,
-                }
-            }
-        },
+        "OPENWQ_INPUT": openwq_input,
         "MODULES": {
             "BIOGEOCHEMISTRY": {
                 "MODULE_NAME": bgc_module_name,
@@ -134,6 +142,7 @@ def create_master_json(
             "TRANSPORT_SEDIMENTS": {
                 "MODULE_NAME": ts_module_name,
                 "SEDIMENT_COMPARTMENT": ts_sediment_compartment,
+                "TRANSPORT_COMPARTMENT": ts_transport_compartment,
                 "MODULE_CONFIG_FILEPATH": ts_config_filepath
             },
             "SORPTION_ISOTHERM": {

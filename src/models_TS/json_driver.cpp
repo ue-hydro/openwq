@@ -122,7 +122,26 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
             errorMsgIdentifier + ">" + jsonKey,
             true); // abort if not found
 
-        // Load information fo the TS_model model selected
+        // #############################
+        // Get configuration file path from master JSON
+        jsonKey = "MODULE_CONFIG_FILEPATH";
+        input_filepath = OpenWQ_utils.RequestJsonKeyVal_str(
+            OpenWQ_wqconfig, OpenWQ_output,
+            jsonMaster_SubStruct["TRANSPORT_SEDIMENTS"], jsonKey,
+            errorMsgIdentifier + ">" + jsonKey,
+            true);
+
+        // Load the TS module JSON file into OpenWQ_json.TS_module
+        OpenWQ_readjson::read_JSON_2class(
+            OpenWQ_wqconfig,
+            OpenWQ_output,
+            OpenWQ_utils,
+            OpenWQ_json.TS_module,
+            false,
+            "",
+            input_filepath);
+
+        // Load information for the TS_model model selected
         if ((OpenWQ_wqconfig.TS_model->TS_module).compare("HYPE_MMF") == 0){
             
             SetConfigInfo_TSModule_MMF_hype( 

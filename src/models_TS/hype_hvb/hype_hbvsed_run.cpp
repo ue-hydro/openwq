@@ -95,13 +95,19 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
                   * pow(wflux_s2r,precexppar); // !tonnes/km2 = g/m2
     
     // Eroded sediment calculated from mobilised sediment with a monthly factor
-    // TODO (from hype): erodmonth = 1. + monthpar(m_erodmon,current_time%date%month)
-    erodmonth = 1.0;
+    // From HYPE: erodmonth = 1. + monthpar(m_erodmon, current_time%date%month)
+    {
+      time_t simtime = OpenWQ_wqconfig.get_simtime();
+      struct tm tm_sim;
+      gmtime_r(&simtime, &tm_sim);
+      int current_month = tm_sim.tm_mon; // 0-based (Jan=0, Dec=11)
+      erodmonth = 1.0 + OpenWQ_wqconfig.TS_model->HypeHVB->monthpar[current_month];
+    }
     (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_r, iy_r, iz_r) = 1000. * mobilisedsed * erodmonth;  // kg/km2
   
   // #######################
   // Mobind with runoff if flow exists
-  } if (TS_type.compare("TS_type_LE") == 0 
+  } else if (TS_type.compare("TS_type_LE") == 0
       && source == erodFlux_icmp
       && source == recipient
       && ix_r!=-1 
@@ -114,11 +120,11 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
 	  // then it will all move with flow regardless of the flow/runoff intensity
     (*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_s, iy_s, iz_s);
 
-    // Move sediments with flow: from source to sink
-    // removing from sink 
-    (*OpenWQ_vars.d_sedmass_dt)(ix_s, iy_s, iz_s) = - (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
+    // Move sediments with flow: from source to recipient
+    // removing from source
+    (*OpenWQ_vars.d_sedmass_dt)(ix_s, iy_s, iz_s) -= (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
 
-    // adding to source
+    // adding to recipient
     (*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
 
   }

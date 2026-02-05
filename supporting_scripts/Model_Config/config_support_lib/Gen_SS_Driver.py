@@ -111,7 +111,6 @@ def set_ss_from_csv(
     for idx, ss_config in enumerate(ss_method_csv_config, start=1):
         config[str(idx)] = {
             "Chemical_name": ss_config["Chemical_name"],
-            "Comment": ss_config["ss_method_copernicus_compartment_name_for_load"],
             "Type": ss_config["Type"],
             "Units": ss_config["Units"],
             "Data_Format": "ASCII",

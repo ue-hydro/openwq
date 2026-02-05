@@ -63,10 +63,10 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 
 
 	// Get TS model elements
-	int exchange_direction = OpenWQ_wqconfig.TS_model->HypeHVB->get_exchange_direction();
-  int erodFlux_icmp = OpenWQ_wqconfig.TS_model->HypeHVB->get_eroding_transp_compartment();
-  int erodInhibut_icmp = OpenWQ_wqconfig.TS_model->HypeHVB->get_erosion_inhibit_compartment();
-	int sediment_icmp = OpenWQ_wqconfig.TS_model->HypeHVB->get_sediment_compartment();
+	int exchange_direction = OpenWQ_wqconfig.TS_model->HypeMMF->get_exchange_direction();
+  int erodFlux_icmp = OpenWQ_wqconfig.TS_model->HypeMMF->get_eroding_transp_compartment();
+  int erodInhibut_icmp = OpenWQ_wqconfig.TS_model->HypeMMF->get_erosion_inhibit_compartment();
+	int sediment_icmp = OpenWQ_wqconfig.TS_model->HypeMMF->get_sediment_compartment();
 
 	// Return if there is snow
 	double snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
@@ -74,6 +74,15 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 				ix_s,iy_s,iz_s);
 	if (snow != 0.0)
 		return;
+
+	// Compute pseudo day-of-year from simulation time
+	// Used for seasonal variation in rainfall energy calculation
+	{
+		time_t simtime = OpenWQ_wqconfig.get_simtime();
+		struct tm tm_sim;
+		gmtime_r(&simtime, &tm_sim);
+		OpenWQ_wqconfig.TS_model->HypeMMF->pdayno = tm_sim.tm_yday + 1; // tm_yday is 0-based, pdayno is 1-based
+	}
 
 	// ######################
 	// If runoff mobilization: TS_type_LE
@@ -165,6 +174,9 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 			true,               // print in console
 			true);              // print in log file
 
+		// Skip this entry as cover fractions are invalid
+		return;
+
 	}
 
 	// #################################
@@ -253,11 +265,11 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 			+= (*OpenWQ_vars.d_sedmass_mobilized_dt)(
 					xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
 
-	// Move sediments with flow: from source to sink
-	// removing from sink 
-	(*OpenWQ_vars.d_sedmass_dt)(ix_s, iy_s, iz_s) = -(*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
+	// Move sediments with flow: from source to recipient
+	// removing from source
+	(*OpenWQ_vars.d_sedmass_dt)(ix_s, iy_s, iz_s) -= (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
 
-	// adding to source
+	// adding to recipient
 	(*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
 	
 	}

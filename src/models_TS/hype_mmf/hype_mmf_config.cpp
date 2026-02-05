@@ -54,7 +54,7 @@
         OpenWQ_wqconfig, OpenWQ_output,
         OpenWQ_json.TS_module, "PARAMETERS",
         errorMsgIdentifier,
-        true);
+        false);  // Not compulsory: empty PARAMETERS means use PARAMETER_DEFAULTS for all cells
 
     // #############################
     // Get parameters

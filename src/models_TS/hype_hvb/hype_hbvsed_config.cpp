@@ -58,7 +58,7 @@
         OpenWQ_wqconfig, OpenWQ_output,
         OpenWQ_json.TS_module, "PARAMETERS",
         errorMsgIdentifier,
-        true);
+        false);  // Not compulsory: empty PARAMETERS means use PARAMETER_DEFAULTS for all cells
 
     // #############################
     // Get parameters
@@ -196,5 +196,37 @@
                 json_PARAMETER_subStruct,
                 json_PARAMETER_DEFAULTS_subStruct,
                 errorMsgIdentifier + " > " + model_parameter);
+
+    // #############################
+    // 8) MONTHLY_EROSION_FACTOR (optional, 12 values for Jan-Dec)
+    // In HYPE: erodmonth = 1.0 + monthpar(m_erodmon, current_month)
+    // This is a top-level key in the TS module JSON (not inside PARAMETERS)
+
+    model_parameter = "MONTHLY_EROSION_FACTOR";
+
+    if (OpenWQ_json.TS_module.contains(model_parameter)){
+
+        json json_monthpar = OpenWQ_json.TS_module[model_parameter];
+
+        if (json_monthpar.is_array() && json_monthpar.size() == 12){
+            for (int m = 0; m < 12; m++){
+                OpenWQ_wqconfig.TS_model->HypeHVB->monthpar[m] = json_monthpar[m].get<double>();
+            }
+        } else {
+
+            // Create Message (Warning Message)
+            std::string msg_string =
+                "<OpenWQ> WARNING: TS_model -> HYPE_HBVSED - \"MONTHLY_EROSION_FACTOR\" "
+                "must be an array of 12 values (Jan-Dec). Using defaults (all zeros).";
+
+            // Print it (Console and/or Log file)
+            OpenWQ_output.ConsoleLog(
+                OpenWQ_wqconfig,    // for Log file name
+                msg_string,         // message
+                true,               // print in console
+                true);              // print in log file
+        }
+    }
+    // If not present, defaults (all zeros) are used => erodmonth = 1.0
 
 }

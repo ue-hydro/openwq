@@ -20,17 +20,17 @@ void OpenWQ_TS_model::TS_driver_run(
     OpenWQ_wqconfig& OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_utils& OpenWQ_utils,
-    OpenWQ_output& OpenWQ_output,                            // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+    OpenWQ_output& OpenWQ_output,
     const int source, const int ix_s, const int iy_s, const int iz_s,
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
     const double wflux_s2r, const double wmass_source,
     std::string TS_type // EWF (erosion due to prec), LE_model (erosion due to runoff)
-    ){ 
-    
+    ){
+
     // Local variables
     std::string msg_string;
 
-    
+
     // #################################################
     // ST module
     // Sediment Transport
@@ -38,10 +38,10 @@ void OpenWQ_TS_model::TS_driver_run(
 
     if (OpenWQ_wqconfig.TS_model->TS_module.compare("HYPE_HBVSED") == 0)
     {
-        
+
         hbvsed_hype_erosion_run(
-            OpenWQ_hostModelconfig, 
-            OpenWQ_vars, 
+            OpenWQ_hostModelconfig,
+            OpenWQ_vars,
             OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
@@ -52,16 +52,16 @@ void OpenWQ_TS_model::TS_driver_run(
     }else if (OpenWQ_wqconfig.TS_model->TS_module.compare("HYPE_MMF") == 0)
     {
         mmf_hype_erosion_run(
-            OpenWQ_hostModelconfig, 
-            OpenWQ_vars, 
+            OpenWQ_hostModelconfig,
+            OpenWQ_vars,
             OpenWQ_wqconfig,
             OpenWQ_utils,
             OpenWQ_output,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, 
+            wflux_s2r,
             TS_type);
-            
+
     }
-    
+
 }
