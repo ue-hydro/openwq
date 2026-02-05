@@ -11,6 +11,7 @@ The master configuration file references all other input files.
    4_1_2Config
    4_1_3BGC
    4_1_4TE
+   4_1_4bSI
    4_1_5Source
    4_1_6PHREEQC
    4_1_7Solvers

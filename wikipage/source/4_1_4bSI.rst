@@ -1,0 +1,160 @@
+Sorption Isotherms (SORPTION_ISOTHERM)
+=======================================
+
+The Sorption Isotherm module configures equilibrium partitioning between dissolved and sorbed phases. It applies a kinetic approach: the equilibrium sorbed concentration is computed from the isotherm equation, and mass is transferred at a user-defined kinetic rate.
+
+Module Options
+--------------
+
++----------------------------------+----------------------------------------------------------+
+| ``MODULE_NAME``                  | Description                                              |
++==================================+==========================================================+
+| ``FREUNDLICH``                  | Freundlich nonlinear sorption isotherm                   |
++----------------------------------+----------------------------------------------------------+
+| ``LANGMUIR``                    | Langmuir sorption isotherm (finite binding sites)        |
++----------------------------------+----------------------------------------------------------+
+| ``NONE``                         | No sorption                                              |
++----------------------------------+----------------------------------------------------------+
+
+
+Soil Properties
+---------------
+
+Both isotherm models require soil/medium properties, specified under the ``SOIL_PROPERTIES`` key:
+
++-----------------------------------+--------------------------------------------------------------+
+| Key                               | Description                                                  |
++===================================+==============================================================+
+| ``bulk_density_kg/m3``           | Bulk density of the soil/medium [kg/m3]                      |
++-----------------------------------+--------------------------------------------------------------+
+| ``layer_thickness_m``            | Representative layer thickness [m]                           |
++-----------------------------------+--------------------------------------------------------------+
+
+
+Per-Species Parameters
+----------------------
+
+Species are listed under the ``SPECIES`` key. Each species name must match a chemical species defined in the biogeochemistry module. The isotherm is applied independently to each listed species, across all compartments and cells.
+
+
+Freundlich Parameters
+^^^^^^^^^^^^^^^^^^^^^
+
+The Freundlich isotherm models nonlinear sorption:
+
+.. math::
+
+    q = K_{fr} \cdot C^{N_{fr}}
+
+where :math:`q` is the sorbed concentration [mg/kg], :math:`C` is the dissolved concentration [mg/L], :math:`K_{fr}` is the Freundlich coefficient, and :math:`N_{fr}` is the Freundlich exponent.
+
++-----------------------------------+--------------------------------------------------------------+
+| Key                               | Description                                                  |
++===================================+==============================================================+
+| ``Kfr``                          | Freundlich coefficient [mg/kg / (mg/L)^Nfr]                 |
++-----------------------------------+--------------------------------------------------------------+
+| ``Nfr``                          | Freundlich exponent [-] (1.0 = linear)                       |
++-----------------------------------+--------------------------------------------------------------+
+| ``Kadsdes_1/s``                  | Kinetic adsorption/desorption rate [1/s]                     |
++-----------------------------------+--------------------------------------------------------------+
+
+The equilibrium dissolved concentration is found via Newton-Raphson iteration on the mass conservation equation:
+
+.. math::
+
+    C_{eq} \cdot V + K_{fr} \cdot C_{eq}^{N_{fr}} \cdot \rho \cdot L = m_{total}
+
+
+Langmuir Parameters
+^^^^^^^^^^^^^^^^^^^
+
+The Langmuir isotherm models sorption with a finite number of binding sites:
+
+.. math::
+
+    q = \frac{q_{max} \cdot K_L \cdot C}{1 + K_L \cdot C}
+
+where :math:`q_{max}` is the maximum adsorption capacity [mg/kg] and :math:`K_L` is the Langmuir equilibrium constant [L/mg].
+
++-----------------------------------+--------------------------------------------------------------+
+| Key                               | Description                                                  |
++===================================+==============================================================+
+| ``qmax_mg/kg``                   | Maximum adsorption capacity [mg/kg_soil]                     |
++-----------------------------------+--------------------------------------------------------------+
+| ``KL_L/mg``                      | Langmuir equilibrium constant [L/mg]                         |
++-----------------------------------+--------------------------------------------------------------+
+| ``Kadsdes_1/s``                  | Kinetic adsorption/desorption rate [1/s]                     |
++-----------------------------------+--------------------------------------------------------------+
+
+The equilibrium dissolved concentration is found analytically via the quadratic formula from mass conservation.
+
+
+Kinetic Approach
+----------------
+
+Both models use a kinetic adsorption/desorption approach. The mass flux from dissolved to sorbed phase is:
+
+.. math::
+
+    \Delta q = (q_{eq} - q_{current}) \cdot (1 - e^{-K_{adsdes} \cdot \Delta t})
+
+.. math::
+
+    F_{sorption} = \Delta q \cdot \rho \cdot L
+
+where :math:`q_{eq}` is the equilibrium sorbed concentration from the isotherm, :math:`q_{current}` is the current sorbed concentration, :math:`K_{adsdes}` is the kinetic rate, and :math:`\Delta t` is the timestep. The flux is applied as a sink on the dissolved mass in ``d_chemass_dt_chem``.
+
+
+Example (Freundlich)
+--------------------
+
+.. code-block:: json
+
+    {
+        "MODULE_NAME": "FREUNDLICH",
+        "SOIL_PROPERTIES": {
+            "bulk_density_kg/m3": 1500.0,
+            "layer_thickness_m": 1.0
+        },
+        "SPECIES": {
+            "NH4-N": {
+                "Kfr": 1.2,
+                "Nfr": 0.8,
+                "Kadsdes_1/s": 0.001
+            }
+        }
+    }
+
+
+Example (Langmuir)
+------------------
+
+.. code-block:: json
+
+    {
+        "MODULE_NAME": "LANGMUIR",
+        "SOIL_PROPERTIES": {
+            "bulk_density_kg/m3": 1500.0,
+            "layer_thickness_m": 1.0
+        },
+        "SPECIES": {
+            "NH4-N": {
+                "qmax_mg/kg": 200.0,
+                "KL_L/mg": 0.05,
+                "Kadsdes_1/s": 0.002
+            }
+        }
+    }
+
+
+Example (No sorption)
+---------------------
+
+.. code-block:: json
+
+    {
+        "MODULE_NAME": "NONE"
+    }
+
+
+The JSON file supports C/C++ syntax for comments: single-line comment (``//``) or comment blocks (``/*`` and ``*/``).
