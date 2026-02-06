@@ -100,6 +100,48 @@ class OpenWQ_compute{
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_vars& OpenWQ_vars);
 
+    // ############################################
+    // Mass Balance Tracking Functions
+    // ############################################
+
+    // Initialize mass balance tracking (call once at simulation start)
+    void MassBalance_Initialize(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_vars& OpenWQ_vars,
+        OpenWQ_output& OpenWQ_output);
+
+    // Compute current total mass across all compartments
+    void MassBalance_ComputeTotals(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_vars& OpenWQ_vars);
+
+    // Update cumulative fluxes (call after solver step)
+    void MassBalance_UpdateFluxes(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_vars& OpenWQ_vars);
+
+    // Compute mass balance error
+    void MassBalance_ComputeError(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_vars& OpenWQ_vars);
+
+    // Print mass balance report to console/log
+    void MassBalance_Report(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_vars& OpenWQ_vars,
+        OpenWQ_output& OpenWQ_output);
+
+    // Track mass lost to negative clamping
+    void MassBalance_TrackNegativeCorrection(
+        OpenWQ_vars& OpenWQ_vars,
+        unsigned int chemi,
+        double mass_lost);
+
 };
 
 #endif
