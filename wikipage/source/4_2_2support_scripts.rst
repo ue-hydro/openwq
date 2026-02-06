@@ -1,4 +1,4 @@
-Supporting scripts
+Supporting Scripts
 ========================================
 
 .. toctree::
@@ -8,6 +8,5 @@ Supporting scripts
    4_2_2_ConfigjsonGenerator
    4_2_2_SSjsonGenerator
    4_2_2_OutputReadScript
-   4_2_2_Calibration
 
 

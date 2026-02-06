@@ -30,5 +30,7 @@ Key capabilities:
    3_0_Installation
    5_3_base_Hydro_models
    4_1_OpenWQ_IO
+   4_2_2support_scripts
+   4_2_2_Calibration
    5_0_Developer
    6_0_Contact
