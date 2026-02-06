@@ -102,7 +102,15 @@ void OpenWQ_CH_model::phreeqc_run(
                     if (volumes[indx] == 0) volumes[indx] = 1;
 
                     if (temperature_indx!=-1) {
-                        temperatures[indx] = OpenWQ_hostModelconfig.get_dependVar_at(temperature_indx, ix, iy, iz);
+                        double temp_val = OpenWQ_hostModelconfig.get_dependVar_at(temperature_indx, ix, iy, iz);
+                        // Auto-detect if temperature is in Kelvin (>100 suggests Kelvin)
+                        // PHREEQC expects Celsius, so convert if needed
+                        // Typical water temps: 0-40°C or 273-313K
+                        if (temp_val > 100.0) {
+                            // Likely Kelvin - convert to Celsius
+                            temp_val = temp_val - 273.15;
+                        }
+                        temperatures[indx] = temp_val;
                     }
                     if (pressure_indx != -1) {
                         pressures[indx] = OpenWQ_hostModelconfig.get_dependVar_at(pressure_indx, ix, iy, iz);

@@ -193,12 +193,13 @@ The PHREEQC module is configured through a JSON file referenced in the master co
 .. code-block:: json
 
     {
+        "MODULE_NAME": "PHREEQC",
         "FILEPATH": "openwq_in/phreeqc_river.pqi",
         "DATABASE": "openwq_in/phreeqc.dat",
         "COMPONENT_H2O": true,
         "BGC_GENERAL_MOBILE_SPECIES": ["H", "O", "Charge", "Ca", "Mg", "Na"],
         "TEMPERATURE": {
-            "RIVER_NETWORK_REACHES": "air_temperature"
+            "RIVER_NETWORK_REACHES": "Treach_K"
         }
     }
 
@@ -262,7 +263,36 @@ Temperature coupling
 PHREEQC reaction rates and equilibrium constants are temperature-dependent. The ``TEMPERATURE`` field maps each host-model compartment to a temperature data source variable name.
 
 Temperature values are passed to PhreeqcRM at each time step for accurate geochemical calculations.
-The variable name must match a variable exported by the host hydrological model (e.g., ``"air_temperature"`` or ``"soil_temperature"``).
+The variable name must match a variable exported by the host hydrological model.
+
+.. note::
+
+   **Automatic temperature unit conversion:** OpenWQ auto-detects if temperatures are in Kelvin (values > 100) and automatically converts to Celsius for PHREEQC. This allows direct use of host model temperature variables without manual conversion.
+
+**Available temperature variables by host model:**
+
++----------------+---------------------------+------------------------------------------+
+| Host Model     | Variable Name             | Description                              |
++================+===========================+==========================================+
+| MIZUROUTE      | ``Treach_K``              | Reach water temperature (Kelvin)         |
++----------------+---------------------------+------------------------------------------+
+| MIZUROUTE      | ``Tlake_K``               | Lake temperature (Kelvin)                |
++----------------+---------------------------+------------------------------------------+
+| SUMMA          | ``Tair_K``                | Air temperature (Kelvin)                 |
++----------------+---------------------------+------------------------------------------+
+| SUMMA          | ``Tsoil_K``               | Soil temperature (Kelvin)                |
++----------------+---------------------------+------------------------------------------+
+
+Example configuration:
+
+.. code-block:: json
+
+    {
+        "TEMPERATURE": {
+            "RIVER_NETWORK_REACHES": "Treach_K",
+            "LAKES": "Tlake_K"
+        }
+    }
 
 
 Initialization process
@@ -366,19 +396,156 @@ PHREEQC determines chemical components dynamically from the database and input f
 2. Run OpenWQ with an initial PHREEQC configuration
 3. Check the console output for the component list from ``FindComponents()``
 
-The component names used in ``BGC_GENERAL_MOBILE_SPECIES`` must match the names discovered by PHREEQC. Common components (with the standard ``phreeqc.dat`` database) include:
+The component names used in ``BGC_GENERAL_MOBILE_SPECIES`` must match the names discovered by PHREEQC.
 
-* ``H`` - Hydrogen
-* ``O`` - Oxygen
-* ``Charge`` - Electrical charge balance
-* ``Ca`` - Calcium
-* ``Mg`` - Magnesium
-* ``Na`` - Sodium
-* ``K`` - Potassium
-* ``C`` - Carbon (total)
-* ``N`` - Nitrogen (total)
-* ``S`` - Sulfur
-* ``Cl`` - Chloride
+.. note::
+
+   Species names are **case-insensitive** in OpenWQ. Both ``"Ca"`` and ``"CA"`` will match the PHREEQC component ``Ca``.
+
+
+Complete PHREEQC Species Reference (phreeqc.dat)
+""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The following tables list all chemical species supported by the standard ``phreeqc.dat`` thermodynamic database.
+
+**Master Species (Elements)**
+
+These are the primary elements that PHREEQC tracks as components. Use these element names in ``BGC_GENERAL_MOBILE_SPECIES``.
+
++----------------+------------------------------+--------------------+------------------+
+| Element        | Description                  | Default Species    | GFW (g/mol)      |
++================+==============================+====================+==================+
+| ``H``          | Hydrogen                     | H+                 | 1.008            |
++----------------+------------------------------+--------------------+------------------+
+| ``O``          | Oxygen                       | H2O                | 16.0             |
++----------------+------------------------------+--------------------+------------------+
+| ``Ca``         | Calcium                      | Ca+2               | 40.08            |
++----------------+------------------------------+--------------------+------------------+
+| ``Mg``         | Magnesium                    | Mg+2               | 24.312           |
++----------------+------------------------------+--------------------+------------------+
+| ``Na``         | Sodium                       | Na+                | 22.9898          |
++----------------+------------------------------+--------------------+------------------+
+| ``K``          | Potassium                    | K+                 | 39.102           |
++----------------+------------------------------+--------------------+------------------+
+| ``Fe``         | Iron                         | Fe+2               | 55.847           |
++----------------+------------------------------+--------------------+------------------+
+| ``Mn``         | Manganese                    | Mn+2               | 54.938           |
++----------------+------------------------------+--------------------+------------------+
+| ``Al``         | Aluminum                     | Al+3               | 26.9815          |
++----------------+------------------------------+--------------------+------------------+
+| ``Ba``         | Barium                       | Ba+2               | 137.34           |
++----------------+------------------------------+--------------------+------------------+
+| ``Sr``         | Strontium                    | Sr+2               | 87.62            |
++----------------+------------------------------+--------------------+------------------+
+| ``Si``         | Silicon (silica)             | H4SiO4             | 28.0843          |
++----------------+------------------------------+--------------------+------------------+
+| ``Cl``         | Chloride                     | Cl-                | 35.453           |
++----------------+------------------------------+--------------------+------------------+
+| ``C``          | Carbon (inorganic)           | CO3-2              | 12.0111          |
++----------------+------------------------------+--------------------+------------------+
+| ``S``          | Sulfur                       | SO4-2              | 32.064           |
++----------------+------------------------------+--------------------+------------------+
+| ``N``          | Nitrogen                     | NO3-               | 14.0067          |
++----------------+------------------------------+--------------------+------------------+
+| ``B``          | Boron                        | H3BO3              | 10.81            |
++----------------+------------------------------+--------------------+------------------+
+| ``P``          | Phosphorus                   | PO4-3              | 30.9738          |
++----------------+------------------------------+--------------------+------------------+
+| ``F``          | Fluoride                     | F-                 | 18.9984          |
++----------------+------------------------------+--------------------+------------------+
+| ``Li``         | Lithium                      | Li+                | 6.939            |
++----------------+------------------------------+--------------------+------------------+
+| ``Br``         | Bromide                      | Br-                | 79.904           |
++----------------+------------------------------+--------------------+------------------+
+| ``Zn``         | Zinc                         | Zn+2               | 65.37            |
++----------------+------------------------------+--------------------+------------------+
+| ``Cd``         | Cadmium                      | Cd+2               | 112.4            |
++----------------+------------------------------+--------------------+------------------+
+| ``Pb``         | Lead                         | Pb+2               | 207.19           |
++----------------+------------------------------+--------------------+------------------+
+| ``Cu``         | Copper                       | Cu+2               | 63.546           |
++----------------+------------------------------+--------------------+------------------+
+| ``Charge``     | Electrical charge balance    | --                 | --               |
++----------------+------------------------------+--------------------+------------------+
+| ``Alkalinity`` | Alkalinity (as CaCO3)        | CO3-2              | 50.05            |
++----------------+------------------------------+--------------------+------------------+
+
+**Redox States**
+
+For redox-sensitive elements, PHREEQC tracks multiple oxidation states:
+
++----------------+--------------------------------------------------+
+| Element        | Available Redox States                           |
++================+==================================================+
+| ``H``          | H(0) = H2, H(1) = H+                             |
++----------------+--------------------------------------------------+
+| ``O``          | O(0) = O2, O(-2) = H2O                           |
++----------------+--------------------------------------------------+
+| ``Fe``         | Fe(+2) = Fe+2, Fe(+3) = Fe+3                     |
++----------------+--------------------------------------------------+
+| ``Mn``         | Mn(+2) = Mn+2, Mn(+3) = Mn+3                     |
++----------------+--------------------------------------------------+
+| ``Cu``         | Cu(+1) = Cu+, Cu(+2) = Cu+2                      |
++----------------+--------------------------------------------------+
+| ``C``          | C(+4) = CO3-2/HCO3-, C(-4) = CH4                 |
++----------------+--------------------------------------------------+
+| ``S``          | S(6) = SO4-2, S(-2) = HS-/H2S                    |
++----------------+--------------------------------------------------+
+| ``N``          | N(+5) = NO3-, N(+3) = NO2-, N(0) = N2, N(-3) = NH4+ |
++----------------+--------------------------------------------------+
+
+**Mineral Phases (for EQUILIBRIUM_PHASES)**
+
+Carbonate minerals:
+
+* Calcite, Aragonite, Dolomite, Siderite, Rhodochrosite
+* Strontianite, Witherite, Cerussite, Smithsonite, Otavite
+
+Sulfate minerals:
+
+* Gypsum, Anhydrite, Celestite, Barite, Anglesite
+* Arcanite, Mirabilite, Thenardite, Epsomite, Melanterite
+
+Silicate minerals:
+
+* SiO2(a), Chalcedony, Quartz, Gibbsite, Kaolinite
+* Albite, Anorthite, K-feldspar, K-mica, Illite
+* Ca-Montmorillonite, Chlorite(14A), Talc, Chrysotile, Sepiolite
+
+Iron/Manganese minerals:
+
+* Hematite, Goethite, Fe(OH)3(a), Pyrite, FeS(ppt), Mackinawite
+* Hausmannite, Manganite, Pyrochroite
+
+Other minerals:
+
+* Hydroxyapatite, Vivianite, Fluorite, Halite, Sylvite
+* Sulfur, Sphalerite, Willemite, Alunite, Jarosite-K
+
+**Gas Phases**
+
+Available for equilibrium with aqueous solutions:
+
+* CO2(g), O2(g), H2(g), N2(g), H2S(g), CH4(g), NH3(g), H2O(g)
+
+Redox-uncoupled gas species (for independent gas equilibria):
+
+* Hdg (H2), Oxg (O2), Mtg (CH4), Sg (H2S), Ntg (N2)
+
+
+**Recommended Species for Common Applications**
+
++---------------------------+--------------------------------------------------+
+| Application               | Recommended Mobile Species                       |
++===========================+==================================================+
+| Major ion chemistry       | Ca, Mg, Na, K, Cl, S, C                          |
++---------------------------+--------------------------------------------------+
+| Nutrient modeling         | N, P, C                                          |
++---------------------------+--------------------------------------------------+
+| Trace metal transport     | Fe, Mn, Zn, Cu, Pb, Cd                           |
++---------------------------+--------------------------------------------------+
+| Complete water quality    | Ca, Mg, Na, K, Cl, S, C, N, P, Si, Fe, Mn        |
++---------------------------+--------------------------------------------------+
 
 .. warning::
 
