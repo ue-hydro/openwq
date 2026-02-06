@@ -69,7 +69,7 @@ Each entry is a numbered row with the format:
 +---------------------+-------------------------------------------------------------------------+
 | ``<SEC>``           | Input second: ``(i#)`` or ``"all"``                                     |
 +---------------------+-------------------------------------------------------------------------+
-| ``<ix>``            | Spatial ix index: ``(i#)`` or ``"all"``                                 |
+| ``<ix>``            | Spatial ix index: ``(i#)``, ``"all"``, or ``"cell_id"`` (see below)     |
 +---------------------+-------------------------------------------------------------------------+
 | ``<iy>``            | Spatial iy index: ``(i#)`` or ``"all"``                                 |
 +---------------------+-------------------------------------------------------------------------+
@@ -81,6 +81,45 @@ Each entry is a numbered row with the format:
 +---------------------+-------------------------------------------------------------------------+
 | ``<time units>``    | Time units if ``"continuous"``, e.g., ``"1/day"`` (*Sink/Source only*)   |
 +---------------------+-------------------------------------------------------------------------+
+
+**Using Host Model Cell IDs (cell_id mapping)**
+
+Instead of using internal OpenWQ indices (ix, iy, iz), you can specify the cell identifier from the host model directly in the ``<ix>`` field. OpenWQ will automatically look up the corresponding (ix, iy, iz) indices using the ``cellid_to_wq`` mapping provided by the host model coupler.
+
+The cell_id is a **single string** that uniquely identifies a spatial element across all dimensions (ix, iy, iz). The exact format depends on how the host model coupler populates the mapping:
+
+- **mizuroute**: Uses reach IDs directly (e.g., ``"1200014181"``)
+- **SUMMA**: Combines HRU ID with layer index (e.g., ``"123456_z1"``, ``"123456_z2"``)
+
+When OpenWQ encounters a string value in the ``<ix>`` position that is not ``"all"``, it searches the ``cellid_to_wq`` mapping to find the corresponding internal indices. If found, the ``<iy>`` and ``<iz>`` values in the JSON are ignored since the cell_id uniquely identifies all three dimensions.
+
+Example for mizuroute (1D river network):
+
+.. code-block:: json
+
+    "DATA": {
+        "1": [2018, 6, 15, 0, 0, 0, "1200014181", 1, 1, 1000, "discrete"]
+    }
+
+Example for SUMMA (multi-layer soil):
+
+.. code-block:: json
+
+    "DATA": {
+        "1": [2018, 6, 15, 0, 0, 0, "123456_z1", 1, 1, 500, "discrete"],
+        "2": [2018, 6, 15, 0, 0, 0, "123456_z2", 1, 1, 300, "discrete"]
+    }
+
+This feature:
+
+- Eliminates the need to know internal OpenWQ index mappings
+- Uses the same identifiers visible in the HDF5 output files (printed under the ``cellid_to_wqlabel`` column, e.g., ``reachId``, ``hruId``)
+- Works globally for all host model couplings that provide the ``cellid_to_wq`` mapping
+- Falls back to standard index parsing if the cell_id is not found (with a warning message)
+
+.. note::
+
+    Check the HDF5 output files to see the exact cell_id format used by your host model. The cell IDs are printed in the output alongside the water quality results, making it easy to identify which identifier to use in your input files.
 
 Example:
 
@@ -103,6 +142,52 @@ Example:
                 "3": [2018,"all",4,6,30,30,1,1,1,100,"discrete"],
                 "4": [2019,"all",4,6,30,"all",1,1,1,10,"continuous","min"],
                 "5": [2019,2,4,6,30,15,1,1,1,350,"discrete"]
+            }
+        }
+    }
+
+Example using cell_id (mizuroute reach_id):
+
+.. code-block:: json
+
+    {
+        "METADATA": {
+            "Comment": "N loading from fertilizer using reach IDs",
+            "Source": "fertilizer_application"
+        },
+        "1": {
+            "CHEMICAL_NAME": "NO3-N",
+            "COMPARTMENT_NAME": "RIVER_NETWORK_REACHES",
+            "TYPE": "source",
+            "UNITS": "kg",
+            "DATA_FORMAT": "JSON",
+            "DATA": {
+                "1": [2018, 6, 1, 0, 0, 0, "1200014181", 1, 1, 500, "discrete"],
+                "2": [2018, 6, 15, 0, 0, 0, "200014182", 1, 1, 300, "discrete"],
+                "3": [2018, 7, 1, 0, 0, 0, "1200014181", 1, 1, 250, "discrete"]
+            }
+        }
+    }
+
+Example using cell_id (SUMMA hruId with layer):
+
+.. code-block:: json
+
+    {
+        "METADATA": {
+            "Comment": "Fertilizer loading to soil layers",
+            "Source": "agricultural_input"
+        },
+        "1": {
+            "CHEMICAL_NAME": "NO3-N",
+            "COMPARTMENT_NAME": "ILAYERVOLFRACWAT_SOIL",
+            "TYPE": "source",
+            "UNITS": "kg",
+            "DATA_FORMAT": "JSON",
+            "DATA": {
+                "1": [2018, 6, 1, 0, 0, 0, "12345_z1", 1, 1, 500, "discrete"],
+                "2": [2018, 6, 1, 0, 0, 0, "12345_z2", 1, 1, 300, "discrete"],
+                "3": [2018, 6, 1, 0, 0, 0, "67890_z1", 1, 1, 400, "discrete"]
             }
         }
     }
