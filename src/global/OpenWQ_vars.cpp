@@ -141,7 +141,7 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
         sedmass = std::unique_ptr<
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>(new arma::cube);
-        
+
         d_sedmass_dt = std::unique_ptr<
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>(new arma::cube);
@@ -149,6 +149,16 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
         d_sedmass_mobilized_dt = std::unique_ptr<
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>(new arma::cube);
+
+        // ############################################
+        // Sorbed mass for sorption isotherm tracking
+        // Units: g (grams), same as chemass
+        // ############################################
+        sorbed_mass = std::unique_ptr<
+            arma::field< // Compartments
+            arma::field< // Chemical Species
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
 
     }catch(const std::exception& e){
 

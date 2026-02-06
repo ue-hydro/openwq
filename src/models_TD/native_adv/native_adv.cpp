@@ -61,7 +61,14 @@ void OpenWQ_TD_model::Adv(
 
         // Add Chemical mass flux to RECIPIENT
         // if recipient == -1, then it's an OUT-flux (loss from system)
-        if (recipient == -1) continue;
+        if (recipient == -1) {
+            // Track mass leaving the system for mass balance
+            if (OpenWQ_vars.mass_balance.initialized &&
+                ichem_mob < OpenWQ_vars.mass_balance.num_species) {
+                OpenWQ_vars.mass_balance.cumulative_out_flux[ichem_mob] += chemass_flux_adv;
+            }
+            continue;
+        }
         (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
             += chemass_flux_adv;
     }

@@ -102,9 +102,21 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
                             // ####################################
                             // 5. Apply all changes to state variable
                             double new_mass = chemass(ix, iy, iz) + dm_ic + dm_ss + dm_ewf + dm_dt_chem + dm_dt_trans;
-                            
-                            // Ensure non-negativity
-                            chemass(ix, iy, iz) = (new_mass > 0.0) ? new_mass : 0.0;
+
+                            // Ensure non-negativity and track mass lost to clamping
+                            if (new_mass > 0.0) {
+                                chemass(ix, iy, iz) = new_mass;
+                            } else {
+                                // Track mass lost to negative correction for mass balance
+                                if (OpenWQ_vars.mass_balance.initialized &&
+                                    chemi < OpenWQ_vars.mass_balance.num_species) {
+                                    // Note: This is not thread-safe, but the error is small
+                                    // For exact tracking, would need atomic or per-thread accumulation
+                                    #pragma omp atomic
+                                    OpenWQ_vars.mass_balance.cumulative_negative_correction[chemi] -= new_mass;
+                                }
+                                chemass(ix, iy, iz) = 0.0;
+                            }
                         }
                     }
                 }

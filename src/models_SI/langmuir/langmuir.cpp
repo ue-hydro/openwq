@@ -87,6 +87,11 @@ void OpenWQ_SI_model::langmuir(
             auto& chemass = (*OpenWQ_vars.chemass)(icmp)(chemi);
             auto& d_chemass = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi);
 
+            // Reference to sorbed mass (if tracking is enabled)
+            const bool track_sorbed = OpenWQ_vars.sorbed_mass &&
+                (*OpenWQ_vars.sorbed_mass)(icmp).n_elem > chemi &&
+                (*OpenWQ_vars.sorbed_mass)(icmp)(chemi).n_elem > 0;
+
             for (unsigned int ix = 0; ix < nx; ix++) {
                 for (unsigned int iy = 0; iy < ny; iy++) {
                     for (unsigned int iz = 0; iz < nz; iz++) {
@@ -171,9 +176,23 @@ void OpenWQ_SI_model::langmuir(
                             flux_mass = mass_dissolved;
                         }
 
+                        // Safety: desorption cannot create negative sorbed pool
+                        if (track_sorbed && flux_mass < 0.0) {
+                            double current_sorbed = (*OpenWQ_vars.sorbed_mass)(icmp)(chemi)(ix, iy, iz);
+                            if (-flux_mass > current_sorbed) {
+                                flux_mass = -current_sorbed;
+                            }
+                        }
+
                         // Apply as a sink on dissolved concentration
                         // (positive flux_mass = adsorption = decrease dissolved)
                         d_chemass(ix, iy, iz) -= flux_mass;
+
+                        // Update sorbed mass tracking (if enabled)
+                        // positive flux_mass = adsorption = increase sorbed
+                        if (track_sorbed) {
+                            (*OpenWQ_vars.sorbed_mass)(icmp)(chemi)(ix, iy, iz) += flux_mass;
+                        }
 
                     } // iz
                 } // iy
