@@ -225,11 +225,70 @@ ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
 }
 ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform'   # 'uniform' or 'seasonal'
 
-# -- Cell ID mapping (recommended) --
-# When True, uses cell_id (e.g., reachId, hruId) directly in JSON instead of (ix, iy, iz) indices
-# OpenWQ C++ will perform the lookup at runtime using the cellid_to_wq mapping
-# This eliminates the need for the HDF5 file (ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key)
-# and makes JSON files portable across different model configurations
+# -- Cell ID Mapping Configuration --
+# =============================================================================
+# This setting controls how spatial locations are specified in the generated
+# SS/EWF JSON files. OpenWQ uses (ix, iy, iz) internal indices, but these can
+# be difficult to work with directly. The cell_id mapping feature allows you
+# to use host model identifiers instead.
+#
+# When ss_use_cellid_mapping = True (RECOMMENDED):
+#   - JSON files use cell_id strings from the host model (e.g., "1200023181")
+#   - OpenWQ C++ performs the lookup at runtime using the cellid_to_wq mapping
+#   - JSON files are portable across different model configurations
+#   - No need for the HDF5 file mapping (ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key)
+#
+# When ss_use_cellid_mapping = False (legacy mode):
+#   - JSON files use (ix, iy, iz) internal indices
+#   - Requires HDF5 file to map host model IDs to OpenWQ indices
+#   - JSON files are tied to specific model grid configurations
+#
+# HOST MODEL IDENTIFIER FORMATS:
+# -----------------------------------------------------------------------------
+# The cell_id format depends on which host model OpenWQ is coupled to:
+#
+# 1. MIZUROUTE (river routing model):
+#    - Cell ID = reachID (river segment identifier)
+#    - Format: Simple integer string, e.g., "1200023181", "200014477"
+#    - Each reach has a unique reachID from the river network topology
+#    - ix = reach index (0 to nRch-1), iy = 0, iz = 0
+#
+#    Example SS JSON entry for mizuroute:
+#      "1": [1961, 1, 4, 1, 0, 0, "1200023181", 1, 1, 50000, "discrete"]
+#                                  ^^^^^^^^^^^
+#                                  reachID as cell_id
+#
+# 2. SUMMA (land surface model):
+#    - Cell ID = hruId + "_z" + layer_number
+#    - Format: "{hruId}_z{layer}", e.g., "123456_z1", "123456_z5"
+#    - hruId = Hydrological Response Unit identifier
+#    - layer = vertical layer (1-indexed: z1, z2, z3, ...)
+#    - ix = HRU index, iy = 0, iz = layer index
+#
+#    Example SS JSON entry for SUMMA:
+#      "1": [1961, 1, 4, 1, 0, 0, "123456_z1", 1, 1, 50000, "discrete"]
+#                                  ^^^^^^^^^^
+#                                  hruId_z{layer} as cell_id
+#
+#    SUMMA compartments have different vertical structures:
+#      - SCALARCANOPYWAT:       1 layer  (z1 only)
+#      - ILAYERVOLFRACWAT_SNOW: up to 5 layers (z1-z5)
+#      - RUNOFF:                1 layer  (z1 only)
+#      - ILAYERVOLFRACWAT_SOIL: varies by configuration (e.g., z1-z20)
+#      - SCALARAQUIFER:         1 layer  (z1 only)
+#
+# FINDING VALID CELL IDs:
+# -----------------------------------------------------------------------------
+# To find valid cell_ids for your model domain, check the HDF5 output files:
+#
+#   import h5py
+#   with h5py.File('openwq_out/HDF5/RIVER_NETWORK_REACHES@NO3-N#MG|L-main.h5', 'r') as f:
+#       print(f['reachID'][:])  # For mizuroute
+#       # or
+#       print(f['hruId'][:])    # For SUMMA
+#
+# Or check the network topology / HRU configuration files from your host model.
+# =============================================================================
 ss_use_cellid_mapping = True    # True = use cell_id strings, False = use (ix, iy, iz) indices
 
 # -- Climate-adjusted settings (ss_method = "using_copernicus_lulc_with_dynamic_coeff") --
