@@ -148,8 +148,19 @@ RUNNING SUMMA-OPENWQ WITH THE CONTAINER:
 -->
 
 ## Supporting Scripts
-* Used for post-processing
+* Used for post-processing, calibration, and model configuration
 * See [supporting_scripts](supporting_scripts) folder
+
+### Calibration and Sensitivity Analysis
+OpenWQ includes a comprehensive calibration framework with:
+- **106+ Calibratable Parameters** across all modules (BGC, sorption, sediment, transport, etc.)
+- **Sensitivity Analysis**: Morris screening and Sobol variance-based methods
+- **DDS Optimization**: Efficient parameter calibration for expensive models
+- **HPC Support**: SLURM/PBS templates for high-performance computing
+
+Key documentation:
+- [Sensitivity Analysis Guide](supporting_scripts/Calibration/SENSITIVITY_ANALYSIS_GUIDE.md) - Complete parameter sensitivity reference
+- [Parameter Defaults](supporting_scripts/Calibration/calibration_lib/parameter_defaults.py) - Scientifically-grounded parameter ranges
 
 ## PHREEQC Geochemistry Module
 
