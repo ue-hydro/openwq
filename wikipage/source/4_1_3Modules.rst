@@ -63,8 +63,43 @@ The biogeochemical cycling file is a JSON file that defines both the chemical sp
 The symbol ``(i#)`` refers to a integer number sequence.. The symbol ``(s#)`` refers to a string input. The symbol ``<f#>`` refers to a float input value.
 
 The Kinetics Equation is supported by the C++ Mathematical Expression Toolkit Library
-`C++ Mathematical Expression Toolkit Library <http://www.partow.net/programming/exprtk/index.html>`_. The equations can be written with (1) multiple chemical species, (2) user-defined parameters (``PARAMETER_NAMES`` and ``PARAMETER_VALUES``), and (3) in-built hydrological model dependencies (``Tair`` and ``Tsoil``).
-These model dependencies are tailored to each hydrological model. They can be soil moisture, air and/or soil temperature, etc.
+`C++ Mathematical Expression Toolkit Library <http://www.partow.net/programming/exprtk/index.html>`_. The equations can be written with (1) multiple chemical species, (2) user-defined parameters (``PARAMETER_NAMES`` and ``PARAMETER_VALUES``), and (3) in-built hydrological model dependencies.
+
+These model dependencies are tailored to each hydrological model. The available dependency variables are listed below for each supported host model.
+
+
+Available Dependency Variables by Host Model
+"""""""""""""""""""""""""""""""""""""""""""""
+
+**MIZUROUTE** (river routing model):
+
++-------------------+-------------------------------------------------------+---------------+
+| Variable Name     | Description                                           | Units         |
++===================+=======================================================+===============+
+| ``Treach_K``      | Reach water temperature (from air temperature proxy)  | Kelvin [K]    |
++-------------------+-------------------------------------------------------+---------------+
+| ``SWrad_Wm2``     | Incoming shortwave radiation at the reach             | W/m²          |
++-------------------+-------------------------------------------------------+---------------+
+
+**SUMMA** (land surface / snow / soil model):
+
++-------------------+-------------------------------------------------------+---------------+
+| Variable Name     | Description                                           | Units         |
++===================+=======================================================+===============+
+| ``SM``            | Soil moisture (volumetric water content fraction)     | [-]           |
++-------------------+-------------------------------------------------------+---------------+
+| ``Tair_K``        | Air temperature                                       | Kelvin [K]    |
++-------------------+-------------------------------------------------------+---------------+
+| ``Tsoil_K``       | Soil temperature                                      | Kelvin [K]    |
++-------------------+-------------------------------------------------------+---------------+
+| ``SWrad_Wm2``     | Incoming shortwave radiation at the surface           | W/m²          |
++-------------------+-------------------------------------------------------+---------------+
+
+.. note::
+
+   Dependency variables can be used directly in kinetic expressions. For example, a temperature-dependent reaction rate could be written as:
+   ``"KINETICS": ["NO3 * k * exp(-Ea / (R * Tsoil_K))", "1/day"]``
+   where ``Ea`` and ``R`` are user-defined parameters.
 
 
 
@@ -115,7 +150,7 @@ Example:
                 "1":{
                     "CONSUMED": "SRP",
                     "PRODUCED": "partP",
-                    "KINETICS": ["SRP * k * Tsoil", "1/day"],
+                    "KINETICS": ["SRP * k * Tsoil_K / 273.15", "1/day"],
                     "PARAMETER_NAMES": ["k"],
                     "PARAMETER_VALUES":{
                         "k": 0.01
