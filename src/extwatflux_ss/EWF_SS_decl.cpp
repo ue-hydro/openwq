@@ -200,6 +200,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
     std::string loadScheme_str;                 // Load scheme string: (1) discrete or (2) continuous
     double loadScheme_id = 9999;                // Load scheme id number: (1) discrete or (2) continuous
     std::string contDt_str;                     // time units of continuous load
+    bool cell_id_lookup_used = false;           // Flag to track if cell_id mapping was used for ix/iy/iz
 
 
     // Get element list (compartment for SS, and External fluxes for EWF)
@@ -752,32 +753,50 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
 
         }catch(...){
 
-            // try as string for the cases where entry is "all"
+            // try as string for the cases where entry is "all" or a cell_id (e.g., reach_id)
             std::string entryVal = ""; // dummy variable
             // if JSON
             if (DataFormat.compare("JSON")==0){
                 entryVal = EWF_SS_json_sub_rowi.at(6);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
+                entryVal = ASCIIRowElemEntry[
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IX")];}
 
-            validEntryFlag = getArrayElem_SS(
-                OpenWQ_wqconfig,
-                OpenWQ_output,
-                elemName,
-                (std::string) entryVal,
-                ix_json,
-                ssf,    // SS file
-                ssi,    // SS structure
-                di);    // SS row
+            // Convert to uppercase for "ALL" comparison
+            std::string entryVal_upper = OpenWQ_utils.ConvertStringToUpperCase(entryVal);
 
-            if (!validEntryFlag){continue;}
+            // First, check if it's "ALL"
+            if (entryVal_upper.compare("ALL") == 0) {
+                ix_json = OpenWQ_wqconfig.get_allSS_flag();
+                cell_id_lookup_used = false;  // Still need to parse iy and iz
+            }
+            // Otherwise, try to interpret as a cell_id (e.g., reach_id, hru_id)
+            else {
+                // Try cell_id lookup - this will set ix_json, iy_json, iz_json if successful
+                validEntryFlag = lookupCellId_SS(
+                    OpenWQ_hostModelconfig,
+                    OpenWQ_wqconfig,
+                    OpenWQ_output,
+                    static_cast<int>(cmpi_ssi),  // compartment index
+                    entryVal,                     // cell_id string
+                    ix_json, iy_json, iz_json,   // output indices
+                    ssf, ssi, di);               // for error reporting
+
+                if (!validEntryFlag) {
+                    continue;  // Skip this entry if cell_id not found
+                }
+                cell_id_lookup_used = true;  // Skip iy and iz parsing
+            }
         }
 
         // ###################
         // iy
         // ###################
+        // Skip if cell_id lookup was used (iy already set)
+        if (cell_id_lookup_used) {
+            // iy_json already set by lookupCellId_SS
+        } else {
         elemName = "iy";
         try{
 
@@ -838,10 +857,15 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
 
             if (!validEntryFlag){continue;}
         }
+        }  // end of else block for cell_id_lookup_used (iy)
 
         // ###################
         // iz
         // ###################
+        // Skip if cell_id lookup was used (iz already set)
+        if (cell_id_lookup_used) {
+            // iz_json already set by lookupCellId_SS
+        } else {
         elemName = "iz";
         try{
 
@@ -902,6 +926,10 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
 
             if (!validEntryFlag){continue;}
         }
+        }  // end of else block for cell_id_lookup_used (iz)
+
+        // Reset cell_id_lookup_used for next iteration
+        cell_id_lookup_used = false;
 
         // ###################
         // SS sink/source load or EWF conc
@@ -1633,6 +1661,48 @@ bool OpenWQ_extwatflux_ss::getModIndex(
 
     return validEntryFlag;
 
+}
+
+/* #################################################
+ // Lookup cell_id (e.g., reach_id, hru_id) and return corresponding ix, iy, iz indices
+ // This allows users to specify cell IDs from the host model (e.g., "1200014181")
+ // instead of internal OpenWQ indices (ix, iy, iz)
+ ################################################# */
+bool OpenWQ_extwatflux_ss::lookupCellId_SS(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_output& OpenWQ_output,
+    int compartment_index,
+    const std::string& cell_id_str,
+    int& ix, int& iy, int& iz,
+    unsigned int& file_i,
+    unsigned int& struc_i,
+    unsigned int& row_i){
+
+    // Local variables
+    std::string msg_string;
+    std::string cellid_label = OpenWQ_hostModelconfig.get_cellid_to_wqlabel();
+
+    // Try to find the cell_id in the mapping
+    bool found = OpenWQ_hostModelconfig.find_indices_from_cellid(
+        compartment_index, cell_id_str, ix, iy, iz);
+
+    if (!found) {
+        // Cell ID not found - print warning
+        msg_string =
+            "<OpenWQ> WARNING: SS cell_id '" + cell_id_str +
+            "' (from " + cellid_label + ") not found in compartment " +
+            std::to_string(compartment_index) +
+            " (entry skipped): File=" + std::to_string(file_i + 1) +
+            ", Sub_structure=" + std::to_string(struc_i + 1) +
+            ", Data_row=" + std::to_string(row_i + 1);
+
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+        return false;
+    }
+
+    return true;
 }
 
 // Add new row to SinkSource_FORC or ExtFlux_FORC_jsonAscii

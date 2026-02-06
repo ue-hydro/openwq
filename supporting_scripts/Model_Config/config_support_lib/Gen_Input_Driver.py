@@ -212,6 +212,7 @@ def Gen_Input_Driver(
         ss_method_copernicus_period: List[Union[int, float]] = None,
         ss_method_copernicus_default_loads_bool: bool = True,
         ss_method_copernicus_annual_to_seasonal_loads_method: str = "uniform",
+        ss_use_cellid_mapping: bool = True,
 
         # External water fluxes
         ewf_method: str = "fixed_value",
@@ -589,7 +590,8 @@ def Gen_Input_Driver(
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
-            ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method
+            ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
+            use_cellid_mapping=ss_use_cellid_mapping
         )
     elif (ss_method == "using_copernicus_lulc_with_dynamic_coeff"):
 
@@ -613,6 +615,7 @@ def Gen_Input_Driver(
             temp_q10=ss_climate_temp_q10,
             temp_reference_c=ss_climate_temp_reference_c,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
+            use_cellid_mapping=ss_use_cellid_mapping
         )
 
     elif (ss_method == "ml_model"):

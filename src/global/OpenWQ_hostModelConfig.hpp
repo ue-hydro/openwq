@@ -93,6 +93,11 @@ class OpenWQ_hostModelconfig
         void set_cellid_to_wq_at(int index, int ix, int iy, int iz, const std::string& value);
         std::string get_cellid_to_wq_at(int index, int ix, int iy, int iz);
 
+        // Reverse lookup: find (ix, iy, iz) from cell_id string
+        // Returns true if found, false otherwise. If found, ix, iy, iz are set to the indices.
+        bool find_indices_from_cellid(int compartment_index, const std::string& cell_id,
+                                      int& ix, int& iy, int& iz);
+
         /********************
          * HydroTuple methods
         *********************/

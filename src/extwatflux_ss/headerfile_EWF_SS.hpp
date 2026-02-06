@@ -194,6 +194,19 @@ class OpenWQ_extwatflux_ss{
         unsigned int& struc_i,
         unsigned int& row_i);
 
+    // Lookup cell_id (e.g., reach_id, hru_id) and return corresponding ix, iy, iz indices
+    // Returns true if cell_id was found and indices were set, false otherwise
+    bool lookupCellId_SS(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_output& OpenWQ_output,
+        int compartment_index,
+        const std::string& cell_id_str,
+        int& ix, int& iy, int& iz,
+        unsigned int& file_i,
+        unsigned int& struc_i,
+        unsigned int& row_i);
+
     void RemoveLoadBeforeSimStart_jsonAscii(
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_units& OpenWQ_units,

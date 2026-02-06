@@ -225,6 +225,13 @@ ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
 }
 ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform'   # 'uniform' or 'seasonal'
 
+# -- Cell ID mapping (recommended) --
+# When True, uses cell_id (e.g., reachId, hruId) directly in JSON instead of (ix, iy, iz) indices
+# OpenWQ C++ will perform the lookup at runtime using the cellid_to_wq mapping
+# This eliminates the need for the HDF5 file (ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key)
+# and makes JSON files portable across different model configurations
+ss_use_cellid_mapping = True    # True = use cell_id strings, False = use (ix, iy, iz) indices
+
 # -- Climate-adjusted settings (ss_method = "using_copernicus_lulc_with_dynamic_coeff") --
 # Monthly weight: w_m = P_m^alpha * Q10^((T_m - T_ref) / 10)
 ss_climate_data = {

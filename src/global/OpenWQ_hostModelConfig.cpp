@@ -90,13 +90,49 @@ std::unique_ptr<std::vector<std::vector<std::vector<std::vector<std::string>>>>>
 }
 
 // set cellid_to_wq - ids fron hostmodel to map OpenWQ elements in the outputs
-void OpenWQ_hostModelconfig::set_cellid_to_wq_at(int index, int ix, int iy, int iz, const std::string& value) 
+void OpenWQ_hostModelconfig::set_cellid_to_wq_at(int index, int ix, int iy, int iz, const std::string& value)
 {
     (*this->cellid_to_wq)[index][ix][iy][iz] = value;
 }
-std::string OpenWQ_hostModelconfig::get_cellid_to_wq_at(int index, int ix, int iy, int iz) 
+std::string OpenWQ_hostModelconfig::get_cellid_to_wq_at(int index, int ix, int iy, int iz)
 {
     return (*this->cellid_to_wq)[index][ix][iy][iz];
+}
+
+// Reverse lookup: find (ix, iy, iz) from cell_id string
+// Searches through the cellid_to_wq structure for the given compartment
+// Returns true if found, false otherwise. If found, ix, iy, iz are set to the indices.
+bool OpenWQ_hostModelconfig::find_indices_from_cellid(int compartment_index,
+                                                       const std::string& cell_id,
+                                                       int& ix, int& iy, int& iz)
+{
+    // Check if cellid_to_wq is initialized and compartment index is valid
+    if (!this->cellid_to_wq ||
+        compartment_index < 0 ||
+        compartment_index >= static_cast<int>((*this->cellid_to_wq).size())) {
+        return false;
+    }
+
+    // Get the 3D structure for this compartment
+    const auto& compartment_data = (*this->cellid_to_wq)[compartment_index];
+
+    // Search through all (ix, iy, iz) positions
+    for (size_t i = 0; i < compartment_data.size(); ++i) {
+        for (size_t j = 0; j < compartment_data[i].size(); ++j) {
+            for (size_t k = 0; k < compartment_data[i][j].size(); ++k) {
+                if (compartment_data[i][j][k] == cell_id) {
+                    // Found it - set the output indices
+                    ix = static_cast<int>(i);
+                    iy = static_cast<int>(j);
+                    iz = static_cast<int>(k);
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Not found
+    return false;
 }
 
 
