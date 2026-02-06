@@ -157,4 +157,39 @@ void OpenWQ_CH_model::phreeqc_setup(
     }
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
+    // ########################################################
+    // Get Gram Formula Weights (GFW) for unit conversion
+    // OpenWQ uses mg/L internally, PHREEQC uses mol/kgw
+    // GFW allows conversion: mol/kgw = mg/L / (1000 * GFW)
+    // ########################################################
+    std::vector<double> gfw = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetGfw();
+    OpenWQ_wqconfig.CH_model->PHREEQC->gfw = gfw;
+
+    msg_string = "<OpenWQ> PHREEQC Gram Formula Weights (GFW) for unit conversion:";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+    for (size_t i = 0; i < components.size() && i < gfw.size(); i++) {
+        msg_string = "  [" + std::to_string(i) + "] " + components[i]
+            + ": GFW=" + std::to_string(gfw[i]) + " g/mol";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
+
+    // Validate GFW values
+    bool gfw_valid = true;
+    for (size_t i = 0; i < gfw.size(); i++) {
+        if (gfw[i] <= 0 || std::isnan(gfw[i]) || std::isinf(gfw[i])) {
+            msg_string = "<OpenWQ> WARNING: Invalid GFW for component " + components[i]
+                + " (index " + std::to_string(i) + "): " + std::to_string(gfw[i])
+                + ". Setting to 1.0 (no conversion).";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+            OpenWQ_wqconfig.CH_model->PHREEQC->gfw[i] = 1.0;
+            gfw_valid = false;
+        }
+    }
+
+    if (gfw_valid) {
+        msg_string = "<OpenWQ> PHREEQC unit conversion enabled: mg/L (OpenWQ) <-> mol/kgw (PHREEQC)";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
+
 }

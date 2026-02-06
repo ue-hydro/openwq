@@ -2,7 +2,25 @@
 #include <cmath>  // for isnan, isinf
 
 /* #################################################
-// Compute each chemical transformation
+// Compute each chemical transformation using PHREEQC
+//
+// UNIT CONVERSION NOTES:
+// ----------------------
+// OpenWQ internal units:
+//   - chemass: stored in grams (g)
+//   - concentration: mg/L (calculated as chemass/volume * 1000)
+//   - volumes: liters (L)
+//
+// PHREEQC PhreeqcRM units (with SetUnitsSolution(2)):
+//   - concentration: mol/kgw (moles per kilogram water)
+//   - For dilute solutions: mol/kgw ≈ mol/L (since water density ~1 kg/L)
+//
+// Conversion formulas:
+//   mg/L to mol/kgw:  conc_mol = conc_mg_L / (GFW * 1000)
+//   mol/kgw to mg/L:  conc_mg_L = conc_mol * GFW * 1000
+//
+// where GFW = Gram Formula Weight in g/mol
+//
 ################################################# */
 void OpenWQ_CH_model::phreeqc_run(
     OpenWQ_json& OpenWQ_json,
@@ -31,6 +49,16 @@ void OpenWQ_CH_model::phreeqc_run(
         + ", num_chem=" + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->num_chem);
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
+    // Get GFW for unit conversion
+    const std::vector<double>& gfw = OpenWQ_wqconfig.CH_model->PHREEQC->gfw;
+    bool has_gfw = (gfw.size() >= (size_t)nc);
+
+    if (!has_gfw) {
+        msg_string = "<OpenWQ> WARNING: GFW not available for all components. "
+            "Unit conversion disabled (assuming units already in mol/kgw).";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
+
     // Use nc (actual PhreeqcRM component count) for sizing
     c.resize(nxyz * nc);
     volumes.resize(nxyz);
@@ -39,8 +67,10 @@ void OpenWQ_CH_model::phreeqc_run(
     indx = 0;
     pressures = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetPressure();
     temperatures = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetTemperature();
+
+    // First pass: collect volumes, temperatures, pressures
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
-           
+
 
         nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // num of x elements
         ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // num of y elements
@@ -56,7 +86,7 @@ void OpenWQ_CH_model::phreeqc_run(
                 // Create Message
                 msg_string = "<OpenWQ> Unknown TEMPERATURE dependancy with name '"
                     + dependancy
-                    + "' defined for compartment: " 
+                    + "' defined for compartment: "
                     + compName_icmp;
 
                 // Print it (Console and/or Log file)
@@ -81,7 +111,7 @@ void OpenWQ_CH_model::phreeqc_run(
                 // Create Message
                 msg_string = "<OpenWQ> Unknown PRESSURE dependancy with name '"
                     + dependancy
-                    + "' defined for compartment: " 
+                    + "' defined for compartment: "
                     + compName_icmp;
 
                 // Print it (Console and/or Log file)
@@ -123,13 +153,30 @@ void OpenWQ_CH_model::phreeqc_run(
     }
 
 
-    // Initialize concentration array - use nc from PhreeqcRM
-    // Note: num_chem from config might differ from actual PhreeqcRM component count
+    // ########################################################
+    // UNIT CONVERSION: OpenWQ (mg/L) -> PHREEQC (mol/kgw)
+    // ########################################################
+    // OpenWQ chemass is in grams (g)
+    // concentration = chemass / volume gives g/L
+    // To get mg/L: multiply by 1000
+    // To get mol/kgw: divide mg/L by (GFW * 1000)
+    // Combined: conc_mol = (chemass_g / volume_L) / GFW
+    //         = chemass_g / (volume_L * GFW)
+    // ########################################################
+
     unsigned int num_chem_to_use = std::min((unsigned int)nc, OpenWQ_wqconfig.CH_model->PHREEQC->num_chem);
     for (unsigned int chemi=0;chemi<num_chem_to_use;chemi++){
         indx = 0;
-        for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
 
+        // Get GFW for this component (default to 1.0 if not available)
+        double component_gfw = (has_gfw && chemi < gfw.size()) ? gfw[chemi] : 1.0;
+
+        // Protect against invalid GFW
+        if (component_gfw <= 0 || std::isnan(component_gfw) || std::isinf(component_gfw)) {
+            component_gfw = 1.0;
+        }
+
+        for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
 
             nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // num of x elements
             ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // num of y elements
@@ -137,10 +184,20 @@ void OpenWQ_CH_model::phreeqc_run(
             for (int ix=0; ix<nx; ix++) {
                 for (int iy = 0; iy<ny;iy++) {
                     for (int iz=0; iz<nz; iz++) {
-                        double val = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz)/volumes[indx];
+                        // OpenWQ: chemass is in grams, volume in liters
+                        // conc_g_L = chemass_g / volume_L
+                        double conc_g_L = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz) / volumes[indx];
+
+                        // Convert g/L to mol/kgw (mol/L for dilute solutions)
+                        // mol/L = g/L / GFW(g/mol)
+                        double conc_mol_kgw = conc_g_L / component_gfw;
+
                         // Validate - replace NaN/Inf with 0
-                        if (std::isnan(val) || std::isinf(val) || val < 0) val = 0.0;
-                        c[chemi*nxyz+indx] = val;
+                        if (std::isnan(conc_mol_kgw) || std::isinf(conc_mol_kgw) || conc_mol_kgw < 0) {
+                            conc_mol_kgw = 0.0;
+                        }
+
+                        c[chemi*nxyz+indx] = conc_mol_kgw;
                         indx++;
                     }
                 }
@@ -160,10 +217,20 @@ void OpenWQ_CH_model::phreeqc_run(
         }
     }
 
-    msg_string = "<OpenWQ> PHREEQC: Setting T[0]=" + std::to_string(temperatures[0])
-        + ", P[0]=" + std::to_string(pressures[0])
-        + ", c[0]=" + std::to_string(c[0])
-        + ", vol[0]=" + std::to_string(volumes[0]);
+    // Log first cell values for debugging (with units)
+    if (num_chem_to_use > 0 && has_gfw) {
+        double first_gfw = (gfw.size() > 0) ? gfw[0] : 1.0;
+        msg_string = "<OpenWQ> PHREEQC: Setting T[0]=" + std::to_string(temperatures[0]) + " C"
+            + ", P[0]=" + std::to_string(pressures[0]) + " atm"
+            + ", c[0]=" + std::to_string(c[0]) + " mol/kgw"
+            + " (GFW=" + std::to_string(first_gfw) + " g/mol)"
+            + ", vol[0]=" + std::to_string(volumes[0]) + " L";
+    } else {
+        msg_string = "<OpenWQ> PHREEQC: Setting T[0]=" + std::to_string(temperatures[0])
+            + ", P[0]=" + std::to_string(pressures[0])
+            + ", c[0]=" + std::to_string(c[0])
+            + ", vol[0]=" + std::to_string(volumes[0]);
+    }
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetPressure(pressures);
@@ -181,19 +248,42 @@ void OpenWQ_CH_model::phreeqc_run(
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->UseSolutionDensityVolume(false);
 
     msg_string = "<OpenWQ> PHREEQC: About to call RunCells with timestep="
-        + std::to_string(OpenWQ_hostModelconfig.get_time_step());
+        + std::to_string(OpenWQ_hostModelconfig.get_time_step()) + " s";
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTimeStep(OpenWQ_hostModelconfig.get_time_step());
-    if (OpenWQ_hostModelconfig.get_time_step() != 0)    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->RunCells();
-    msg_string = "<OpenWQ> PHREEQC: RunCells completed, getting concentrations";
+    if (OpenWQ_hostModelconfig.get_time_step() != 0) {
+        OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->RunCells();
+    }
+    msg_string = "<OpenWQ> PHREEQC: RunCells succeeded";
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
+    // Get updated concentrations from PHREEQC (in mol/kgw)
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetConcentrations(c);
+    msg_string = "<OpenWQ> PHREEQC: GetConcentrations succeeded";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+    // ########################################################
+    // UNIT CONVERSION: PHREEQC (mol/kgw) -> OpenWQ (grams)
+    // ########################################################
+    // PHREEQC returns concentration in mol/kgw
+    // Convert to g/L: conc_g_L = conc_mol_kgw * GFW
+    // Convert to mass: mass_g = conc_g_L * volume_L
+    // Delta mass = new_mass - old_mass
+    // ########################################################
+
     for (unsigned int chemi=0;chemi<num_chem_to_use;chemi++){
         indx = 0;
+
+        // Get GFW for this component
+        double component_gfw = (has_gfw && chemi < gfw.size()) ? gfw[chemi] : 1.0;
+
+        // Protect against invalid GFW
+        if (component_gfw <= 0 || std::isnan(component_gfw) || std::isinf(component_gfw)) {
+            component_gfw = 1.0;
+        }
+
         for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
-           
 
             nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp); // num of x elements
             ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // num of y elements
@@ -201,7 +291,30 @@ void OpenWQ_CH_model::phreeqc_run(
             for (int ix=0; ix<nx; ix++) {
                 for (int iy = 0; iy<ny;iy++) {
                     for (int iz=0; iz<nz; iz++) {
-                        (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi)(ix,iy,iz) = c[chemi*nxyz+indx]*volumes[indx] - (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz);
+                        // PHREEQC concentration in mol/kgw
+                        double conc_mol_kgw = c[chemi*nxyz+indx];
+
+                        // Validate concentration
+                        if (std::isnan(conc_mol_kgw) || std::isinf(conc_mol_kgw)) {
+                            conc_mol_kgw = 0.0;
+                        }
+                        if (conc_mol_kgw < 0) {
+                            conc_mol_kgw = 0.0;  // PHREEQC shouldn't return negative, but protect anyway
+                        }
+
+                        // Convert mol/kgw to g/L
+                        // g/L = mol/kgw * GFW(g/mol)
+                        double conc_g_L = conc_mol_kgw * component_gfw;
+
+                        // Convert to mass: mass_g = conc_g_L * volume_L
+                        double new_mass_g = conc_g_L * volumes[indx];
+
+                        // Current mass in OpenWQ
+                        double old_mass_g = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz);
+
+                        // Delta mass for the chemistry derivative
+                        (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi)(ix,iy,iz) = new_mass_g - old_mass_g;
+
                         indx++;
                     }
                 }
@@ -209,5 +322,15 @@ void OpenWQ_CH_model::phreeqc_run(
         }
     }
 
+    // Log summary of first component change for debugging
+    if (num_chem_to_use > 0 && nxyz > 0) {
+        double first_gfw = (has_gfw && gfw.size() > 0) ? gfw[0] : 1.0;
+        double conc_after_mol = c[0];
+        double conc_after_g_L = conc_after_mol * first_gfw;
+        msg_string = "<OpenWQ> PHREEQC: After reaction c[0]=" + std::to_string(conc_after_mol) + " mol/kgw"
+            + " = " + std::to_string(conc_after_g_L) + " g/L"
+            + " = " + std::to_string(conc_after_g_L * 1000) + " mg/L";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
 
 }

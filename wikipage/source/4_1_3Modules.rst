@@ -257,6 +257,64 @@ The ``BGC_GENERAL_MOBILE_SPECIES`` array specifies which PHREEQC components are 
 Species are identified by their component name (string), which must match the names returned by PHREEQC's ``FindComponents()`` function. The component list can be inspected in the OpenWQ debug output when ``RUN_MODE_DEBUG`` is enabled in the master configuration.
 
 
+Unit conversion (automatic)
+""""""""""""""""""""""""""""
+
+OpenWQ automatically handles concentration unit conversion between OpenWQ and PHREEQC:
+
++----------------+--------------------+------------------------------------------------+
+| System         | Internal Units     | Notes                                          |
++================+====================+================================================+
+| **OpenWQ**     | g/L (or mg/L)      | Mass stored in grams, conc = mass/volume       |
++----------------+--------------------+------------------------------------------------+
+| **PHREEQC**    | mol/kgw            | Moles per kilogram water (PhreeqcRM default)   |
++----------------+--------------------+------------------------------------------------+
+
+OpenWQ retrieves **Gram Formula Weights (GFW)** from PHREEQC for each chemical component during initialization and applies automatic conversion:
+
+**Before PHREEQC reactions (OpenWQ → PHREEQC):**
+
+.. code-block:: none
+
+   conc_mol_kgw = conc_g_L / GFW
+
+**After PHREEQC reactions (PHREEQC → OpenWQ):**
+
+.. code-block:: none
+
+   conc_g_L = conc_mol_kgw × GFW
+   mass_g = conc_g_L × volume_L
+
+**Example GFW values retrieved from PHREEQC:**
+
++----------------+------------------+
+| Component      | GFW (g/mol)      |
++================+==================+
+| Ca             | 40.08            |
++----------------+------------------+
+| Mg             | 24.312           |
++----------------+------------------+
+| Na             | 22.9898          |
++----------------+------------------+
+| K              | 39.102           |
++----------------+------------------+
+| Cl             | 35.453           |
++----------------+------------------+
+| S (as SO4)     | 32.064           |
++----------------+------------------+
+| C (as CO3)     | 12.0111          |
++----------------+------------------+
+| N (as NO3)     | 14.0067          |
++----------------+------------------+
+
+The GFW values are logged during initialization when ``RUN_MODE_DEBUG: true``.
+
+.. note::
+
+   When setting initial conditions in ``openWQ_config.json``, use **g/L** units.
+   Example: ``0.04 g/L`` of Ca is automatically converted to ``0.04 / 40.08 = 0.000998 mol/kgw`` for PHREEQC.
+
+
 Temperature coupling
 """""""""""""""""""""
 

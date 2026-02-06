@@ -550,6 +550,16 @@ class OpenWQ_wqconfig::CH_model_::PHREEQC_{
     std::vector
         <unsigned int> mobile_species;      // index of mobile chem species
 
+    // Gram formula weights (GFW) for each component [g/mol]
+    // Used for unit conversion between OpenWQ (mg/L) and PHREEQC (mol/kgw)
+    // Index matches chem_species_list order
+    std::vector<double> gfw;                // Gram formula weights [g/mol]
+
+    // Unit conversion factors (computed once during setup)
+    // OpenWQ uses mg/L internally, PHREEQC uses mol/kgw
+    // To convert mg/L to mol/kgw: conc_mol = conc_mg_L / (1000 * gfw)
+    // To convert mol/kgw to mg/L: conc_mg_L = conc_mol * 1000 * gfw
+    // Note: Assumes water density ~1 kg/L, so mg/L ≈ mg/kgw
 
     // PHREEQC
     std::unique_ptr<PhreeqcRM> phreeqcrm;
