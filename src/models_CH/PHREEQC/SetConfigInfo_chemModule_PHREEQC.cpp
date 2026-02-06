@@ -19,6 +19,7 @@
 #include "readjson/headerfile_RJSON.hpp"
 #include "PhreeqcRM.h"
 #include <memory>
+#include <cctype>  // for std::tolower
 
 // Set chemModule = PHREEQC
 void OpenWQ_readjson::SetConfigInfo_CHModule_PHREEQC(
@@ -123,15 +124,29 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_PHREEQC(
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
     }
 
+    // Helper lambda for case-insensitive comparison
+    auto iequals = [](const std::string& a, const std::string& b) {
+        if (a.size() != b.size()) return false;
+        for (size_t i = 0; i < a.size(); i++) {
+            if (std::tolower(a[i]) != std::tolower(b[i])) return false;
+        }
+        return true;
+    };
+
     for (unsigned int chemi = 0; chemi < BGCjson_mobileSpecies.size(); chemi++){
 
         std::string mobile_name = BGCjson_mobileSpecies.at(chemi).get<std::string>();
         bool found = false;
 
         for (unsigned int si = 0; si < OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list.size(); si++){
-            if (OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[si] == mobile_name){
+            // Case-insensitive comparison for species names
+            if (iequals(OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[si], mobile_name)){
                 OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.push_back((int)si);
                 found = true;
+                msg_string =
+                    "<OpenWQ> PHREEQC: Mapped mobile species '" + mobile_name
+                    + "' to component index " + std::to_string(si);
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
                 break;
             }
         }
@@ -140,7 +155,10 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_PHREEQC(
             msg_string =
                 "<OpenWQ> WARNING: PHREEQC BGC_GENERAL_MOBILE_SPECIES name '"
                 + mobile_name
-                + "' not found in PHREEQC component list. Skipping.";
+                + "' not found in PHREEQC component list. Available components:";
+            for (const auto& comp : OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list) {
+                msg_string += " " + comp;
+            }
             OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
         }
 

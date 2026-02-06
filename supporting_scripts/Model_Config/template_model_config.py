@@ -88,8 +88,12 @@ phreeqc_input_filepath = "config_support_lib/examples_PHREEQC/phreeqc_river.pqi"
 phreeqc_database_filepath = "config_support_lib/examples_PHREEQC/phreeqc.dat"
 phreeqc_mobile_species = ["H", "O", "Charge", "Ca"]   # must match PHREEQC components
 phreeqc_component_h2o = True
-phreeqc_temperature_mapping = {"RIVER_NETWORK_REACHES": "air_temperature"}  # or None
-phreeqc_pressure_mapping = None
+# Temperature mapping: maps compartment to dependency variable name
+# NOTE: OpenWQ auto-converts Kelvin to Celsius for PHREEQC (detects Kelvin if > 100)
+# For MIZUROUTE: use "Treach_K" (Kelvin, from basinAirTemp)
+# For SUMMA: use "Tair_K" or "Tsoil_K" (Kelvin)
+phreeqc_temperature_mapping = {"RIVER_NETWORK_REACHES": "Treach_K"}  # or None
+phreeqc_pressure_mapping = None  # Maps compartment to pressure dependency (in atm)
 phreeqc_chemical_species_names = []  # empty = use .pqi defaults; run once with [] to see component names in log
 
 

@@ -257,6 +257,19 @@ class ParameterHandler:
         else:
             logger.warning(f"Could not find PHREEQC parameter: {path}")
 
+    def _is_phreeqc_block_start(self, line: str) -> bool:
+        """Check if line starts a new PHREEQC block."""
+        block_keywords = [
+            "SOLUTION", "EQUILIBRIUM_PHASES", "KINETICS", "SURFACE",
+            "EXCHANGE", "GAS_PHASE", "SOLID_SOLUTIONS", "REACTION",
+            "MIX", "USE", "SAVE", "END", "TITLE", "PRINT", "SELECTED_OUTPUT"
+        ]
+        stripped = line.strip().upper()
+        for keyword in block_keywords:
+            if stripped.startswith(keyword):
+                return True
+        return False
+
     def _modify_pqi_solution(self, lines: List[str], species: str, value: float) -> Tuple[List[str], bool]:
         """Modify a species concentration in SOLUTION block."""
         in_solution = False
@@ -265,35 +278,47 @@ class ParameterHandler:
             if stripped.startswith("SOLUTION"):
                 in_solution = True
             elif in_solution and stripped and not stripped.startswith("#"):
-                if stripped.startswith("END") or stripped.startswith("EQUILIBRIUM") or \
-                   stripped.startswith("KINETICS") or stripped.startswith("SURFACE"):
+                # Check if we've left the SOLUTION block
+                if self._is_phreeqc_block_start(line) and not stripped.startswith("SOLUTION"):
                     in_solution = False
-                elif species.upper() in stripped.split()[0].upper():
-                    # Found the species line - replace value
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        # Handle "N(5)  2.0 as N" format
-                        parts[1] = str(value)
-                        lines[i] = "    " + "  ".join(parts) + "\n"
-                        return lines, True
+                # Match species name (handle cases like "N(5)" or "Ca")
+                elif stripped:
+                    first_word = stripped.split()[0]
+                    if species.upper() == first_word or species.upper() in first_word:
+                        # Found the species line - replace value
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            # Handle "N(5)  2.0 as N" format
+                            parts[1] = str(value)
+                            lines[i] = "    " + "  ".join(parts) + "\n"
+                            return lines, True
         return lines, False
 
     def _modify_pqi_equilibrium(self, lines: List[str], phase: str, field: str, value: float) -> Tuple[List[str], bool]:
-        """Modify equilibrium phase parameters."""
+        """
+        Modify equilibrium phase parameters.
+
+        PHREEQC format: "Phase_name  SI  amount"
+        - field="si": modify saturation index (2nd value)
+        - field="amount": modify initial moles (3rd value)
+        """
         in_equil = False
         for i, line in enumerate(lines):
             stripped = line.strip().upper()
             if stripped.startswith("EQUILIBRIUM_PHASES"):
                 in_equil = True
             elif in_equil and stripped and not stripped.startswith("#"):
-                if stripped.startswith("END") or stripped.startswith("SOLUTION") or \
-                   stripped.startswith("KINETICS") or stripped.startswith("SURFACE"):
+                # Check if we've left the block
+                if self._is_phreeqc_block_start(line) and not stripped.startswith("EQUILIBRIUM_PHASES"):
                     in_equil = False
                 elif phase.upper() in stripped:
-                    # Found the phase line - replace si value (first number after phase name)
+                    # Found the phase line
                     parts = line.split()
                     if len(parts) >= 2:
-                        parts[1] = str(value)  # SI is typically second value
+                        if field.lower() == "si":
+                            parts[1] = str(value)  # SI is second value
+                        elif field.lower() == "amount" and len(parts) >= 3:
+                            parts[2] = str(value)  # Amount is third value
                         lines[i] = "    " + "    ".join(parts) + "\n"
                         return lines, True
         return lines, False

@@ -151,6 +151,16 @@ RUNNING SUMMA-OPENWQ WITH THE CONTAINER:
 * Used for post-processing
 * See [supporting_scripts](supporting_scripts) folder
 
+## PHREEQC Geochemistry Module
+
+OpenWQ supports the PHREEQC geochemical engine for advanced water quality simulations including:
+- Aqueous speciation and saturation indices
+- Equilibrium with mineral phases and gases
+- Ion exchange and surface complexation
+- Kinetic reactions (dissolution, precipitation, redox)
+
+For setup instructions, see the [PHREEQC Setup Guide](supporting_scripts/PHREEQC_SETUP_GUIDE.md).
+
 ## Working Example
 * Coming soon!
 <!--
