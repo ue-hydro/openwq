@@ -81,56 +81,56 @@ KINETICS 1
 
 # Antibiotic (e.g., sulfamethoxazole) degradation
 # Combined biodegradation and photolysis
--antibiotic_decay
+antibiotic_decay
     -formula  H2O 0        # Placeholder - no actual PHREEQC species change
     -m0       1e-6          # Initial concentration (mol) ~ 0.25 ug/L SMX
     -parms    0.05 0.1 500  # k_bio (1/day), k_photo (1/day at I0), I0 (W/m2)
     -tol      1e-10
 
 # Analgesic (e.g., ibuprofen, diclofenac) degradation
--analgesic_decay
+analgesic_decay
     -formula  H2O 0
     -m0       5e-6          # ~ 1 ug/L
     -parms    0.08 0.15 500
     -tol      1e-10
 
 # Hormone (e.g., estradiol, EE2) degradation
--hormone_decay
+hormone_decay
     -formula  H2O 0
     -m0       1e-8          # ~ 3 ng/L (very low concentrations)
     -parms    0.1 0.05 500
     -tol      1e-10
 
 # Carbamazepine (psychiatric - persistent tracer)
--carbamazepine_decay
+carbamazepine_decay
     -formula  H2O 0
     -m0       2e-6          # ~ 0.5 ug/L
     -parms    0.01 0.02 500 # Very slow decay
     -tol      1e-10
 
 # PFOS (perfluorooctane sulfonate) - essentially no decay
--pfos_persistence
+pfos_persistence
     -formula  H2O 0
     -m0       1e-7          # ~ 50 ng/L
     -parms    0.0001 0.01   # k_decay (nearly zero), k_sorption
     -tol      1e-10
 
 # PFOA (perfluorooctanoic acid)
--pfoa_persistence
+pfoa_persistence
     -formula  H2O 0
     -m0       2e-7          # ~ 80 ng/L
     -parms    0.0001 0.008
     -tol      1e-10
 
 # Triclosan (antimicrobial) - rapid photolysis
--triclosan_decay
+triclosan_decay
     -formula  H2O 0
     -m0       5e-7          # ~ 150 ng/L
     -parms    0.04 0.2 500  # Moderate bio, rapid photo
     -tol      1e-10
 
 # Bisphenol A (BPA) - moderate degradation
--bpa_decay
+bpa_decay
     -formula  H2O 0
     -m0       1e-6          # ~ 0.2 ug/L
     -parms    0.15 0.1 500
@@ -144,7 +144,7 @@ END
 RATES
 
 antibiotic_decay
--start
+start
 10 REM Antibiotic degradation: biodegradation + photolysis
 20 k_bio = PARM(1) / 86400           # Convert 1/day to 1/s
 30 k_photo_ref = PARM(2) / 86400
@@ -170,10 +170,10 @@ antibiotic_decay
 190 moles = total_rate * TIME
 200 SAVE moles
 210 END
--end
+end
 
 analgesic_decay
--start
+start
 10 REM Analgesic degradation (ibuprofen degrades faster than diclofenac)
 20 k_bio = PARM(1) / 86400
 30 k_photo_ref = PARM(2) / 86400
@@ -191,10 +191,10 @@ analgesic_decay
 150 moles = rate * TIME
 160 SAVE moles
 170 END
--end
+end
 
 hormone_decay
--start
+start
 10 REM Hormone degradation (estrogens)
 20 REM Natural estrogens (E1, E2) degrade faster than synthetic EE2
 30 k_bio = PARM(1) / 86400
@@ -211,10 +211,10 @@ hormone_decay
 140 moles = rate * TIME
 150 SAVE moles
 160 END
--end
+end
 
 carbamazepine_decay
--start
+start
 10 REM Carbamazepine - very persistent, often used as wastewater tracer
 20 k_bio = PARM(1) / 86400
 30 k_photo_ref = PARM(2) / 86400
@@ -229,10 +229,10 @@ carbamazepine_decay
 120 moles = rate * TIME
 130 SAVE moles
 140 END
--end
+end
 
 pfos_persistence
--start
+start
 10 REM PFOS - extremely persistent "forever chemical"
 20 REM Only removal is via sorption; no biodegradation or photolysis
 30 k_decay = PARM(1) / 86400         # Essentially zero
@@ -253,10 +253,10 @@ pfos_persistence
 150 moles = total_rate * TIME
 160 SAVE moles
 170 END
--end
+end
 
 pfoa_persistence
--start
+start
 10 REM PFOA - similar to PFOS but slightly less sorptive
 20 k_decay = PARM(1) / 86400
 30 k_sorp = PARM(2) / 86400
@@ -269,10 +269,10 @@ pfoa_persistence
 100 moles = total_rate * TIME
 110 SAVE moles
 120 END
--end
+end
 
 triclosan_decay
--start
+start
 10 REM Triclosan - antimicrobial with rapid photolysis
 20 k_bio = PARM(1) / 86400
 30 k_photo_ref = PARM(2) / 86400
@@ -289,10 +289,10 @@ triclosan_decay
 130 moles = rate * TIME
 140 SAVE moles
 150 END
--end
+end
 
 bpa_decay
--start
+start
 10 REM Bisphenol A - moderate biodegradation
 20 k_bio = PARM(1) / 86400
 30 k_photo_ref = PARM(2) / 86400
@@ -307,7 +307,7 @@ bpa_decay
 120 moles = rate * TIME
 130 SAVE moles
 140 END
--end
+end
 
 END
 

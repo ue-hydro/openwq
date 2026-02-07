@@ -82,77 +82,77 @@ END
 KINETICS 1
 
 # Labile organic matter (G1): fast decay, k ~ 0.1-1 /day
--om_labile_decay
+om_labile_decay
     -formula  H2O 0
     -m0       10.0         # Initial labile OM (mg-C/L porewater equiv)
     -parms    0.3 1.07     # k_labile (1/day), theta (temp coeff)
     -tol      1e-8
 
 # Intermediate organic matter (G2): medium decay, k ~ 0.01-0.1 /day
--om_intermediate_decay
+om_intermediate_decay
     -formula  H2O 0
     -m0       20.0
     -parms    0.05 1.07
     -tol      1e-8
 
 # Refractory organic matter (G3): slow decay, k ~ 0.001 /day
--om_refractory_decay
+om_refractory_decay
     -formula  H2O 0
     -m0       50.0
     -parms    0.002 1.05
     -tol      1e-8
 
 # Aerobic respiration
--aerobic_respiration
+aerobic_respiration
     -formula  O2 -1 CO2 1
     -m0       0.0
     -parms    0.5 0.5      # k_aero, Ks_O2 (mg/L)
     -tol      1e-8
 
 # Denitrification
--denitrification
+denitrification
     -formula  NO3 -0.8 N2 0.4 CO2 1
     -m0       0.0
     -parms    0.3 0.5 0.5  # k_denit, Ks_NO3, Ks_O2_inhib
     -tol      1e-8
 
 # Manganese reduction
--mn_reduction
+mn_reduction
     -formula  Mn 0.5 CO2 1
     -m0       0.0
     -parms    0.2 1.0 0.5 0.5  # k_Mn, Ks_MnO2, Ks_O2_inhib, Ks_NO3_inhib
     -tol      1e-8
 
 # Iron reduction
--fe_reduction
+fe_reduction
     -formula  Fe 0.5 CO2 1
     -m0       0.0
     -parms    0.15 2.0 0.5 0.5 0.5  # k_Fe, Ks_FeOH3, Ks_O2, Ks_NO3, Ks_Mn
     -tol      1e-8
 
 # Sulfate reduction
--sulfate_reduction
+sulfate_reduction
     -formula  SO4 -0.5 HS 0.5 CO2 1
     -m0       0.0
     -parms    0.1 1.0 0.5 0.5  # k_SR, Ks_SO4, Ks_O2_inhib, Ks_NO3_inhib
     -tol      1e-8
 
 # Methanogenesis
--methanogenesis
+methanogenesis
     -formula  CO2 -0.5 CH4 0.5
     -m0       0.0
     -parms    0.05 0.5 0.5 1.0  # k_meth, Ks_O2_inhib, Ks_SO4_inhib, Ks_Ac
     -tol      1e-8
 
 # Methane ebullition
--methane_ebullition
+methane_ebullition
     -formula  H2O 0
     -m0       0.0
     -parms    0.1 2.0      # k_ebull, CH4_threshold (mM)
     -tol      1e-8
 
 # Phosphorus release from Fe reduction
--p_release_fe
+p_release_fe
     -formula  H2O 0
     -m0       0.0
     -parms    0.1 0.1      # P:Fe ratio, k_release
@@ -173,7 +173,7 @@ END
 RATES
 
 om_labile_decay
--start
+start
 10 REM Labile OM decay - first-order
 20 k = PARM(1) / 86400            # Convert 1/day to 1/s
 30 theta = PARM(2)
@@ -184,10 +184,10 @@ om_labile_decay
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 om_intermediate_decay
--start
+start
 10 REM Intermediate OM decay
 20 k = PARM(1) / 86400
 30 theta = PARM(2)
@@ -198,10 +198,10 @@ om_intermediate_decay
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 om_refractory_decay
--start
+start
 10 REM Refractory OM decay - very slow
 20 k = PARM(1) / 86400
 30 theta = PARM(2)
@@ -212,10 +212,10 @@ om_refractory_decay
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 aerobic_respiration
--start
+start
 10 REM Aerobic respiration: CH2O + O2 -> CO2 + H2O
 20 k = PARM(1) / 86400
 30 Ks_O2 = PARM(2) / 32000         # Convert mg/L to mol/L
@@ -226,10 +226,10 @@ aerobic_respiration
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 denitrification
--start
+start
 10 REM Denitrification: 5CH2O + 4NO3- + 4H+ -> 5CO2 + 2N2 + 7H2O
 20 k = PARM(1) / 86400
 30 Ks_NO3 = PARM(2) / 14000        # Convert mg-N/L to mol/L
@@ -243,10 +243,10 @@ denitrification
 110 moles = rate * TIME
 120 SAVE moles
 130 END
--end
+end
 
 mn_reduction
--start
+start
 10 REM Mn(IV) reduction: CH2O + 2MnO2 + 4H+ -> CO2 + 2Mn2+ + 3H2O
 20 k = PARM(1) / 86400
 30 Ks_MnO2 = PARM(2)
@@ -262,10 +262,10 @@ mn_reduction
 130 moles = rate * TIME
 140 SAVE moles
 150 END
--end
+end
 
 fe_reduction
--start
+start
 10 REM Fe(III) reduction: CH2O + 4Fe(OH)3 + 8H+ -> CO2 + 4Fe2+ + 11H2O
 20 k = PARM(1) / 86400
 30 Ks_FeOH3 = PARM(2)
@@ -282,10 +282,10 @@ fe_reduction
 140 moles = rate * TIME
 150 SAVE moles
 160 END
--end
+end
 
 sulfate_reduction
--start
+start
 10 REM Sulfate reduction: 2CH2O + SO4-- + 2H+ -> 2CO2 + H2S + 2H2O
 20 k = PARM(1) / 86400
 30 Ks_SO4 = PARM(2) / 96000        # Convert mg/L to mol/L
@@ -301,10 +301,10 @@ sulfate_reduction
 130 moles = rate * TIME
 140 SAVE moles
 150 END
--end
+end
 
 methanogenesis
--start
+start
 10 REM Methanogenesis: 2CH2O -> CO2 + CH4
 20 k = PARM(1) / 86400
 30 Ks_O2_inhib = PARM(2) / 32000
@@ -318,10 +318,10 @@ methanogenesis
 110 moles = rate * TIME
 120 SAVE moles
 130 END
--end
+end
 
 methane_ebullition
--start
+start
 10 REM Methane ebullition when CH4 exceeds solubility
 20 k_ebull = PARM(1) / 86400
 30 CH4_threshold = PARM(2) / 1000  # mM to M
@@ -332,10 +332,10 @@ methane_ebullition
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 p_release_fe
--start
+start
 10 REM P release associated with Fe(III) reduction
 20 P_Fe_ratio = PARM(1)            # mol P per mol Fe
 30 k_release = PARM(2) / 86400
@@ -343,17 +343,17 @@ p_release_fe
 50 P_released = P_Fe_ratio * Fe_reduced
 60 SAVE P_released
 70 END
--end
+end
 
 nh4_release
--start
+start
 10 REM NH4 release from organic matter mineralization
 20 N_C_ratio = PARM(1)             # mol N per mol C
 30 OM_mineralized = KIN("om_labile_decay") + KIN("om_intermediate_decay") + KIN("om_refractory_decay")
 40 NH4_released = N_C_ratio * OM_mineralized
 50 SAVE NH4_released
 60 END
--end
+end
 
 END
 

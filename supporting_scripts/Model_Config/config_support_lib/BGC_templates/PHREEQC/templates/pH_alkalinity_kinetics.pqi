@@ -115,14 +115,14 @@ KINETICS 1
     -tol      1e-8
 
 # Carbonate mineral dissolution (alkalinity source)
--calcite_dissolution
+calcite_dissolution
     -formula  Ca 1 C(4) 1
     -m0       0.0
     -parms    0.01 3.36e-9 1.0  # k_diss, Ksp_calcite, surface_area
     -tol      1e-8
 
 # Carbonate precipitation (alkalinity sink)
--calcite_precipitation
+calcite_precipitation
     -formula  Ca -1 C(4) -1
     -m0       0.0
     -parms    0.1 3.36e-9       # k_precip, Ksp
@@ -133,28 +133,28 @@ KINETICS 1
 # ================================================================
 
 # Silicate weathering (slow ALK source)
--silicate_weathering
+silicate_weathering
     -formula  C(4) 2
     -m0       0.0
     -parms    0.001 0.5         # k_weather, H+ order
     -tol      1e-8
 
 # Denitrification (ALK production: +1 eq per mol NO3)
--denitrification_alk
+denitrification_alk
     -formula  N(5) -0.8 C(4) 1
     -m0       0.0
     -parms    0.2 0.5 0.5       # k_denit, Ks_NO3, Ks_O2_inhib
     -tol      1e-8
 
 # Sulfate reduction (ALK production: +2 eq per mol SO4)
--sulfate_reduction_alk
+sulfate_reduction_alk
     -formula  S(6) -1 S(-2) 1 C(4) 2
     -m0       0.0
     -parms    0.05 1.0 0.5 0.5  # k_SR, Ks_SO4, Ks_O2, Ks_NO3
     -tol      1e-8
 
 # Organic N mineralization (ALK production: +1 eq per mol N)
--ammonification_alk
+ammonification_alk
     -formula  N(-3) 1
     -m0       1.0               # Organic N (mg/L)
     -parms    0.1 1.07          # k_ammon, theta
@@ -165,14 +165,14 @@ KINETICS 1
 # ================================================================
 
 # Nitrification (ALK consumption: -2 eq per mol NH4)
--nitrification_alk
+nitrification_alk
     -formula  N(-3) -1 N(5) 1
     -m0       0.0
     -parms    0.3 1.0 1.08      # k_nit, Ks_O2, theta
     -tol      1e-8
 
 # Sulfide oxidation (ALK consumption: -2 eq per mol H2S)
--sulfide_oxidation_alk
+sulfide_oxidation_alk
     -formula  S(-2) -1 S(6) 1
     -m0       0.0
     -parms    1.0 0.5           # k_sulf_ox, Ks_O2
@@ -183,28 +183,28 @@ KINETICS 1
 # ================================================================
 
 # Pyrite oxidation (major acid source)
--pyrite_oxidation
+pyrite_oxidation
     -formula  Fe 1 S(6) 2
     -m0       10.0              # Pyrite concentration (mol/L equiv)
     -parms    0.001 10.0 0.1    # k_pyrite, k_Fe3_catalysis, Ks_Fe3
     -tol      1e-8
 
 # Fe2+ oxidation and hydrolysis (acid generation)
--fe_oxidation_hydrolysis
+fe_oxidation_hydrolysis
     -formula  Fe(3) 1 Fe(2) -1
     -m0       0.0
     -parms    0.01 0.5 3.5      # k_FeOx, Ks_O2, pH_threshold
     -tol      1e-8
 
 # Al hydrolysis (acid generation at pH > 4.5)
--al_hydrolysis
+al_hydrolysis
     -formula  Al 1
     -m0       0.0
     -parms    1.0 4.5           # k_Al, pH_threshold
     -tol      1e-8
 
 # Limestone neutralization (acid consumption)
--limestone_neutralization
+limestone_neutralization
     -formula  Ca 1 C(4) 1
     -m0       0.0
     -parms    1.0 0.0           # k_neutral, armoring_factor
@@ -215,14 +215,14 @@ KINETICS 1
 # ================================================================
 
 # DOC organic acid contribution
--organic_acid_equilibrium
+organic_acid_equilibrium
     -formula  H 1
     -m0       5.0               # DOC (mg-C/L)
     -parms    0.1 3.16e-5       # carboxyl fraction, Ka_org (pKa=4.5)
     -tol      1e-8
 
 # DOC photodegradation
--doc_photodegradation
+doc_photodegradation
     -formula  C(4) 1
     -m0       0.0
     -parms    0.01 10.0         # k_photo, I_UV_ref
@@ -236,7 +236,7 @@ END
 RATES
 
 co2_gas_exchange
--start
+start
 10 REM CO2 gas exchange with atmosphere
 20 k = PARM(1) / 86400
 30 pCO2_atm = PARM(2)
@@ -248,10 +248,10 @@ co2_gas_exchange
 90 moles = rate * TIME
 100 SAVE moles
 110 END
--end
+end
 
 calcite_dissolution
--start
+start
 10 REM Calcite dissolution: CaCO3 + CO2 + H2O -> Ca2+ + 2HCO3-
 20 k = PARM(1) / 86400
 30 Ksp = PARM(2)
@@ -264,10 +264,10 @@ calcite_dissolution
 100 moles = rate * TIME
 110 SAVE moles
 120 END
--end
+end
 
 calcite_precipitation
--start
+start
 10 REM Calcite precipitation (when supersaturated)
 20 k = PARM(1) / 86400
 30 Ksp = PARM(2)
@@ -279,10 +279,10 @@ calcite_precipitation
 90 moles = rate * TIME
 100 SAVE moles
 110 END
--end
+end
 
 silicate_weathering
--start
+start
 10 REM Silicate mineral weathering (slow)
 20 k = PARM(1) / 86400
 30 n = PARM(2)
@@ -292,10 +292,10 @@ silicate_weathering
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 denitrification_alk
--start
+start
 10 REM Denitrification: 5CH2O + 4NO3- + 4H+ -> 5CO2 + 2N2 + 7H2O
 20 REM Consumes H+, produces alkalinity
 30 k = PARM(1) / 86400
@@ -309,10 +309,10 @@ denitrification_alk
 110 moles = rate * TIME
 120 SAVE moles
 130 END
--end
+end
 
 sulfate_reduction_alk
--start
+start
 10 REM Sulfate reduction: 2CH2O + SO4-- + 2H+ -> 2CO2 + H2S + 2H2O
 20 k = PARM(1) / 86400
 30 Ks_SO4 = PARM(2) / 96000
@@ -327,10 +327,10 @@ sulfate_reduction_alk
 120 moles = rate * TIME
 130 SAVE moles
 140 END
--end
+end
 
 ammonification_alk
--start
+start
 10 REM Organic N mineralization to NH4+
 20 k = PARM(1) / 86400
 30 theta = PARM(2)
@@ -341,10 +341,10 @@ ammonification_alk
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 nitrification_alk
--start
+start
 10 REM Nitrification: NH4+ + 2O2 -> NO3- + 2H+ + H2O
 20 REM Produces H+, consumes alkalinity (2 eq per mol NH4)
 30 k = PARM(1) / 86400
@@ -359,10 +359,10 @@ nitrification_alk
 120 moles = rate * TIME
 130 SAVE moles
 140 END
--end
+end
 
 sulfide_oxidation_alk
--start
+start
 10 REM Sulfide oxidation: H2S + 2O2 -> SO4-- + 2H+
 20 k = PARM(1) / 86400
 30 Ks_O2 = PARM(2) / 32000
@@ -373,10 +373,10 @@ sulfide_oxidation_alk
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 pyrite_oxidation
--start
+start
 10 REM Pyrite oxidation: FeS2 + 3.5O2 + H2O -> Fe2+ + 2SO4-- + 2H+
 20 REM Major acid source in AMD
 30 k = PARM(1) / 86400
@@ -391,10 +391,10 @@ pyrite_oxidation
 120 moles = rate * TIME
 130 SAVE moles
 140 END
--end
+end
 
 fe_oxidation_hydrolysis
--start
+start
 10 REM Fe2+ oxidation: 4Fe2+ + O2 + 10H2O -> 4Fe(OH)3 + 8H+
 20 k = PARM(1) / 86400
 30 Ks_O2 = PARM(2) / 32000
@@ -408,10 +408,10 @@ fe_oxidation_hydrolysis
 110 moles = rate * TIME
 120 SAVE moles
 130 END
--end
+end
 
 al_hydrolysis
--start
+start
 10 REM Al hydrolysis: Al3+ + 3H2O -> Al(OH)3 + 3H+
 20 k = PARM(1) / 86400
 30 pH_thresh = PARM(2)
@@ -421,10 +421,10 @@ al_hydrolysis
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 limestone_neutralization
--start
+start
 10 REM Limestone treatment: CaCO3 + 2H+ -> Ca2+ + CO2 + H2O
 20 k = PARM(1) / 86400
 30 armor = PARM(2)
@@ -434,10 +434,10 @@ limestone_neutralization
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 organic_acid_equilibrium
--start
+start
 10 REM Organic acid contribution to acidity
 20 f_carboxyl = PARM(1)
 30 Ka = PARM(2)
@@ -448,10 +448,10 @@ organic_acid_equilibrium
 80 acid_equiv = DOC * f_carboxyl * f_dissoc
 90 SAVE acid_equiv
 100 END
--end
+end
 
 doc_photodegradation
--start
+start
 10 REM DOC photodegradation (reduces organic acid content)
 20 k = PARM(1) / 86400
 30 I_ref = PARM(2)
@@ -461,7 +461,7 @@ doc_photodegradation
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 END
 

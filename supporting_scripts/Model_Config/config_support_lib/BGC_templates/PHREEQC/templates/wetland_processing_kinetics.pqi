@@ -68,21 +68,21 @@ KINETICS 1
 # ================================================================
 
 # Ammonification (organic N to NH4)
--ammonification
+ammonification
     -formula  N(-3) 1
     -m0       1.0          # Organic N (mg-N/L)
     -parms    0.1 1.07     # k_ammon (1/day), theta
     -tol      1e-8
 
 # Nitrification (NH4 to NO3)
--nitrification
+nitrification
     -formula  N(-3) -1 N(5) 1
     -m0       0.0
     -parms    0.3 1.08 1.0 0.5  # k_nit, theta, Ks_NH4, Ks_O2
     -tol      1e-8
 
 # Denitrification (NO3 to N2)
--denitrification_wetland
+denitrification_wetland
     -formula  N(5) -1
     -m0       0.0
     -parms    0.5 1.09 0.5 1.0  # k_denit, theta, Ks_NO3, Ks_O2_inhib
@@ -103,7 +103,7 @@ KINETICS 1
     -tol      1e-8
 
 # Algal/periphyton N uptake
--algal_n_uptake
+algal_n_uptake
     -formula  N(5) -1
     -m0       0.0
     -parms    0.1 0.2 200   # k_uptake, Ks_N, Ks_light
@@ -114,28 +114,28 @@ KINETICS 1
 # ================================================================
 
 # Plant P uptake
--plant_p_uptake
+plant_p_uptake
     -formula  P -1
     -m0       0.0
     -parms    0.1 0.05      # k_uptake, Ks_P
     -tol      1e-8
 
 # P sedimentation (particulate P settling)
--p_sedimentation
+p_sedimentation
     -formula  H2O 0
     -m0       1.0           # Particulate P (mg-P/L)
     -parms    0.5 1.0       # v_settle (m/day), depth (m)
     -tol      1e-8
 
 # P sorption to sediments
--p_sorption
+p_sorption
     -formula  H2O 0
     -m0       0.0
     -parms    0.05 0.1      # k_sorp, qmax
     -tol      1e-8
 
 # P accretion (permanent burial)
--p_accretion
+p_accretion
     -formula  H2O 0
     -m0       0.0
     -parms    0.01          # k_accretion (1/day)
@@ -146,21 +146,21 @@ KINETICS 1
 # ================================================================
 
 # TSS settling
--tss_settling
+tss_settling
     -formula  H2O 0
     -m0       50.0          # TSS (mg/L)
     -parms    2.0 0.5 0.3   # v_settle (m/day), depth (m), Ci (mg/L irreducible)
     -tol      1e-8
 
 # TSS filtration by vegetation
--tss_filtration
+tss_filtration
     -formula  H2O 0
     -m0       0.0
     -parms    0.1 0.5       # k_filt, stem_density
     -tol      1e-8
 
 # TSS resuspension
--tss_resuspension
+tss_resuspension
     -formula  H2O 0
     -m0       0.0
     -parms    0.01 5.0      # k_resuspension, wind_threshold
@@ -171,21 +171,21 @@ KINETICS 1
 # ================================================================
 
 # BOD decay (aerobic)
--bod_decay_aerobic
+bod_decay_aerobic
     -formula  O(0) -1 C(4) 1
     -m0       20.0          # BOD (mg/L)
     -parms    0.2 1.07 1.0  # k_BOD, theta, Ks_O2
     -tol      1e-8
 
 # BOD decay (anaerobic)
--bod_decay_anaerobic
+bod_decay_anaerobic
     -formula  C(4) 1
     -m0       0.0
     -parms    0.05 1.05 0.5 # k_BOD_anae, theta, Ks_O2_inhib
     -tol      1e-8
 
 # Reaeration
--reaeration_wetland
+reaeration_wetland
     -formula  O(0) 1
     -m0       0.0
     -parms    1.0 8.0       # k_reaer (1/day), DO_sat
@@ -196,21 +196,21 @@ KINETICS 1
 # ================================================================
 
 # E. coli die-off
--ecoli_dieoff
+ecoli_dieoff
     -formula  H2O 0
     -m0       10000.0       # E.coli (CFU/100mL)
     -parms    1.0 1.07 0.5  # k_die, theta, k_UV
     -tol      1e-8
 
 # Fecal coliform die-off
--fecal_coliform_dieoff
+fecal_coliform_dieoff
     -formula  H2O 0
     -m0       5000.0
     -parms    0.8 1.07 0.4
     -tol      1e-8
 
 # Pathogen sedimentation
--pathogen_settling
+pathogen_settling
     -formula  H2O 0
     -m0       0.0
     -parms    0.3 0.5       # v_settle, depth
@@ -224,7 +224,7 @@ END
 RATES
 
 ammonification
--start
+start
 10 REM Organic N to NH4
 20 k = PARM(1) / 86400
 30 theta = PARM(2)
@@ -235,10 +235,10 @@ ammonification
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 nitrification
--start
+start
 10 REM NH4 + 2O2 -> NO3 + H2O + 2H+
 20 k = PARM(1) / 86400
 30 theta = PARM(2)
@@ -254,10 +254,10 @@ nitrification
 130 moles = rate * TIME
 140 SAVE moles
 150 END
--end
+end
 
 denitrification_wetland
--start
+start
 10 REM 5CH2O + 4NO3 + 4H+ -> 5CO2 + 2N2 + 7H2O
 20 k = PARM(1) / 86400
 30 theta = PARM(2)
@@ -273,10 +273,10 @@ denitrification_wetland
 130 moles = rate * TIME
 140 SAVE moles
 150 END
--end
+end
 
 plant_n_uptake_no3
--start
+start
 10 REM Plant uptake of NO3
 20 k = PARM(1) / 86400
 30 Ks_N = PARM(2) / 14000
@@ -286,10 +286,10 @@ plant_n_uptake_no3
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 plant_n_uptake_nh4
--start
+start
 10 REM Plant uptake of NH4
 20 k = PARM(1) / 86400
 30 Ks_N = PARM(2) / 14000
@@ -299,10 +299,10 @@ plant_n_uptake_nh4
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 algal_n_uptake
--start
+start
 10 REM Algal/periphyton N uptake
 20 k = PARM(1) / 86400
 30 Ks_N = PARM(2) / 14000
@@ -315,10 +315,10 @@ algal_n_uptake
 100 moles = rate * TIME
 110 SAVE moles
 120 END
--end
+end
 
 plant_p_uptake
--start
+start
 10 REM Plant P uptake
 20 k = PARM(1) / 86400
 30 Ks_P = PARM(2) / 31000
@@ -328,10 +328,10 @@ plant_p_uptake
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 p_sedimentation
--start
+start
 10 REM Particulate P settling
 20 v_s = PARM(1) / 86400          # m/s
 30 depth = PARM(2)
@@ -340,10 +340,10 @@ p_sedimentation
 60 moles = rate * TIME
 70 SAVE moles
 80 END
--end
+end
 
 p_sorption
--start
+start
 10 REM P sorption to sediments (Langmuir-type)
 20 k_sorp = PARM(1) / 86400
 30 qmax = PARM(2)
@@ -354,10 +354,10 @@ p_sorption
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 p_accretion
--start
+start
 10 REM Permanent P burial through sediment accretion
 20 k = PARM(1) / 86400
 30 P_sed = M
@@ -365,10 +365,10 @@ p_accretion
 50 moles = rate * TIME
 60 SAVE moles
 70 END
--end
+end
 
 tss_settling
--start
+start
 10 REM TSS settling: first-order with irreducible concentration
 20 v_s = PARM(1) / 86400
 30 depth = PARM(2)
@@ -379,10 +379,10 @@ tss_settling
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 tss_filtration
--start
+start
 10 REM TSS filtration by vegetation
 20 k_filt = PARM(1) / 86400
 30 stem_density = PARM(2)
@@ -391,10 +391,10 @@ tss_filtration
 60 moles = rate * TIME
 70 SAVE moles
 80 END
--end
+end
 
 tss_resuspension
--start
+start
 10 REM TSS resuspension from wind/bioturbation
 20 k_resusp = PARM(1) / 86400
 30 wind_threshold = PARM(2)
@@ -403,10 +403,10 @@ tss_resuspension
 60 moles = rate * TIME
 70 SAVE moles
 80 END
--end
+end
 
 bod_decay_aerobic
--start
+start
 10 REM Aerobic BOD decay
 20 k = PARM(1) / 86400
 30 theta = PARM(2)
@@ -420,10 +420,10 @@ bod_decay_aerobic
 110 moles = rate * TIME
 120 SAVE moles
 130 END
--end
+end
 
 bod_decay_anaerobic
--start
+start
 10 REM Anaerobic BOD decay (slower)
 20 k = PARM(1) / 86400
 30 theta = PARM(2)
@@ -437,10 +437,10 @@ bod_decay_anaerobic
 110 moles = rate * TIME
 120 SAVE moles
 130 END
--end
+end
 
 reaeration_wetland
--start
+start
 10 REM Reaeration from atmosphere
 20 k = PARM(1) / 86400
 30 DO_sat = PARM(2) / 32000
@@ -451,10 +451,10 @@ reaeration_wetland
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 ecoli_dieoff
--start
+start
 10 REM E. coli die-off (temperature + UV dependent)
 20 k_die = PARM(1) / 86400
 30 theta = PARM(2)
@@ -467,10 +467,10 @@ ecoli_dieoff
 100 moles = rate * TIME
 110 SAVE moles
 120 END
--end
+end
 
 fecal_coliform_dieoff
--start
+start
 10 REM Fecal coliform die-off
 20 k_die = PARM(1) / 86400
 30 theta = PARM(2)
@@ -483,10 +483,10 @@ fecal_coliform_dieoff
 100 moles = rate * TIME
 110 SAVE moles
 120 END
--end
+end
 
 pathogen_settling
--start
+start
 10 REM Pathogen settling (attached to particles)
 20 v_s = PARM(1) / 86400
 30 depth = PARM(2)
@@ -495,7 +495,7 @@ pathogen_settling
 60 moles = rate * TIME
 70 SAVE moles
 80 END
--end
+end
 
 END
 
