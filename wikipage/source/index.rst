@@ -6,10 +6,19 @@
 Welcome to OpenWQ's documentation!
 ==================================
 
-OpenWQ is a generalised biogeochemical reaction-network model written in C++.
-It was designed as a coupler for integration with existing hydro-models to enable flexible, multi-scale, multi-chemistry simulations.
-OpenWQ adapts to the host hydro-model spatial and temporal configurations, which can include 1D, 2D or 3D spatial discretizations based on structured or unstructured meshes.
-It aims to be flexible, fast, free, and extendable.
+OpenWQ is a flexible biogeochemical modeling framework written in C++ that takes a fundamentally different approach from traditional water quality models. It supports both kinetic reaction networks (via the native BGC-Flex engine) and equilibrium geochemistry (via PHREEQC integration).
+
+**What makes OpenWQ different?**
+
+Unlike conventional water quality models that embed rigid, hard-coded biogeochemical processes alongside simplified hydrology, OpenWQ is designed as a **coupler** that integrates with existing, well-tested hydrological and hydrodynamic models. This architecture solves three major challenges:
+
+1. **No hard-coded chemistry**: Most water quality models require source code modifications to change reaction formulations. OpenWQ uses JSON-configurable reaction networks — users define arbitrary kinetic expressions without recompilation, enabling rapid hypothesis testing and model adaptation to diverse environments (permafrost, peatlands, estuaries, etc.).
+
+2. **Leverages state-of-the-art hydrology**: Rather than implementing its own simplified hydrology (which often lags behind dedicated hydro-models), OpenWQ inherits water volumes, fluxes, and state variables from the host model. This means users benefit from advanced process representations (e.g., multilayer snowpack in CRHM, flexible hydrological structures in SUMMA, continental-scale routing in mizuRoute) while gaining full biogeochemical capabilities.
+
+3. **Enables structural uncertainty analysis**: The flexible architecture supports systematic comparison of reaction formulations, parameter sensitivity studies, and cross-model evaluations — essential for quantifying uncertainty in water quality predictions under climate change.
+
+OpenWQ adapts to the host model's spatial and temporal discretization, supporting 1D, 2D, or 3D domains on structured or unstructured meshes. It is open-source, HPC-ready, and designed for extensibility.
 
 Key capabilities:
 
