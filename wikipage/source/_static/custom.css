@@ -1,0 +1,28 @@
+/* Custom CSS for OpenWQ documentation */
+
+/* Style the navigation header to work with the white logo */
+.wy-side-nav-search {
+    background-color: #1a1a2e !important;
+}
+
+/* Ensure the logo displays properly */
+.wy-side-nav-search > a img.logo {
+    max-width: 200px;
+    height: auto;
+    padding: 10px 0;
+}
+
+/* Style the project name */
+.wy-side-nav-search > a {
+    color: #ffffff !important;
+}
+
+/* Version text color */
+.wy-side-nav-search > div.version {
+    color: #a0aec0 !important;
+}
+
+/* Search input styling */
+.wy-side-nav-search input[type="text"] {
+    border-color: #0f3460;
+}

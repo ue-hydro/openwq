@@ -1,4 +1,18 @@
-# OpenWQ 
+<p align="right">
+  <img src="uevora_logo.png" alt="University of Évora" height="80">
+</p>
+
+# OpenWQ
+
+**A flexible biogeochemical modeling framework for water quality simulations**
+
+OpenWQ couples with existing hydrological and hydrodynamic models to enable multi-scale, multi-chemistry simulations. It supports both kinetic reaction networks (via the native BGC-Flex engine) and equilibrium geochemistry (via PHREEQC integration).
+
+[![Documentation](https://img.shields.io/badge/docs-readthedocs-blue)](https://openwq.readthedocs.io)
+[![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
+
+---
+
 ## Table of Contents
 - [OpenWQ](#openwq)
 	- [Table of Contents](#table-of-contents)
