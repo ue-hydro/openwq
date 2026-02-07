@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWQ - BGC Templates Library</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004499;
+            --secondary: #00a86b;
+            --accent: #ff6b35;
+            --purple: #7c3aed;
+            --teal: #0891b2;
+            --pink: #db2777;
+            --dark: #1a1a2e;
+            --light: #f8f9fa;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #000; overflow: hidden; }
+        .presentation { height: 100vh; width: 100vw; position: relative; }
+
+        .slide {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; padding: 50px 70px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%); overflow: hidden;
+        }
+        .slide.active { display: flex; }
+
+        .slide.title-slide {
+            background: linear-gradient(135deg, var(--dark) 0%, #16213e 50%, #0f3460 100%);
+            justify-content: center; align-items: center; text-align: center; color: white;
+        }
+        .slide.title-slide h1 { font-size: 3.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .slide.title-slide h1 span { color: var(--secondary); }
+        .slide.title-slide .subtitle { font-size: 1.8rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
+        .slide.title-slide .tagline { font-size: 1.2rem; color: #718096; max-width: 800px; }
+
+        .slide.section-slide {
+            background: linear-gradient(135deg, var(--primary) 0%, #0055aa 100%);
+            justify-content: center; align-items: center; color: white;
+        }
+        .slide.section-slide.green { background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%); }
+        .slide.section-slide.purple { background: linear-gradient(135deg, var(--purple) 0%, #5b21b6 100%); }
+        .slide.section-slide.teal { background: linear-gradient(135deg, var(--teal) 0%, #0e7490 100%); }
+        .slide.section-slide.pink { background: linear-gradient(135deg, var(--pink) 0%, #be185d 100%); }
+        .slide.section-slide h2 { font-size: 3.5rem; font-weight: 600; }
+        .slide.section-slide .section-number { font-size: 8rem; font-weight: 700; opacity: 0.15; position: absolute; top: 40px; right: 80px; }
+
+        .slide-header { margin-bottom: 30px; }
+        .slide-header h2 { font-size: 2.4rem; font-weight: 600; color: var(--dark); border-left: 5px solid var(--primary); padding-left: 20px; }
+        .slide-content { flex: 1; display: flex; flex-direction: column; }
+
+        .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; height: 100%; }
+        .three-column { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 25px; }
+        .four-column { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; }
+        .column { display: flex; flex-direction: column; }
+
+        .card {
+            background: white; border-radius: 14px; padding: 22px;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.07); margin-bottom: 15px;
+        }
+        .card.primary { border-left: 4px solid var(--primary); }
+        .card.secondary { border-left: 4px solid var(--secondary); }
+        .card.accent { border-left: 4px solid var(--accent); }
+        .card.purple { border-left: 4px solid var(--purple); }
+        .card.teal { border-left: 4px solid var(--teal); }
+        .card.pink { border-left: 4px solid var(--pink); }
+        .card h3 { font-size: 1.2rem; color: var(--dark); margin-bottom: 10px; }
+        .card p, .card li { font-size: 1rem; color: var(--text); line-height: 1.4; }
+
+        ul, ol { margin-left: 20px; }
+        li { font-size: 1.15rem; color: var(--text); margin-bottom: 10px; line-height: 1.3; }
+        li strong { color: var(--primary-dark); }
+
+        .template-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .template-item {
+            background: white; border-radius: 10px; padding: 15px 18px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.06); border-left: 4px solid var(--primary);
+        }
+        .template-item.new { border-left-color: var(--secondary); }
+        .template-item.new::after { content: "v2.0"; background: var(--secondary); color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; margin-left: 8px; }
+        .template-item h4 { font-size: 0.95rem; color: var(--dark); margin-bottom: 5px; display: inline; }
+        .template-item p { font-size: 0.85rem; color: var(--text-light); margin: 0; }
+
+        pre {
+            background: var(--dark); color: #e2e8f0; padding: 18px; border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.4; overflow-x: auto;
+        }
+        pre .comment { color: #68d391; }
+        pre .string { color: #fbd38d; }
+        pre .keyword { color: #63b3ed; }
+        pre .number { color: #f687b3; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; background: white; border-radius: 10px; overflow: hidden; }
+        th { background: var(--dark); color: white; padding: 12px 15px; text-align: left; font-weight: 600; }
+        td { padding: 10px 15px; border-bottom: 1px solid #e2e8f0; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #fff7ed, #ffedd5);
+            border-left: 4px solid var(--accent); padding: 18px 22px; border-radius: 0 10px 10px 0; margin: 12px 0;
+        }
+        .highlight-box.info { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-left-color: var(--primary); }
+        .highlight-box.success { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-left-color: var(--secondary); }
+        .highlight-box.purple { background: linear-gradient(135deg, #f5f3ff, #ede9fe); border-left-color: var(--purple); }
+
+        .process-list { display: flex; flex-direction: column; gap: 8px; }
+        .process-item { display: flex; align-items: center; gap: 12px; padding: 10px 15px; background: #f8fafc; border-radius: 8px; }
+        .process-item .icon { font-size: 1.3rem; }
+        .process-item .name { font-weight: 600; color: var(--dark); min-width: 150px; }
+        .process-item .desc { font-size: 0.9rem; color: var(--text-light); }
+
+        .slide-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 15px; border-top: 1px solid #e2e8f0; margin-top: auto;
+        }
+        .slide-footer .logo { font-weight: 700; font-size: 1.1rem; color: var(--dark); }
+        .slide-footer .logo span { color: var(--primary); }
+        .slide-footer .page-number {
+            background: var(--dark); color: white; width: 36px; height: 36px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;
+        }
+
+        .nav-hint {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 25px;
+            font-size: 0.85rem; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+        }
+        .nav-hint.visible { opacity: 1; }
+
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px; }
+        .badge.new { background: var(--secondary); color: white; }
+        .badge.phreeqc { background: var(--purple); color: white; }
+    </style>
+</head>
+<body>
+    <div class="presentation" id="presentation">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1>Open<span>WQ</span></h1>
+            <div class="subtitle">BGC Templates Library</div>
+            <div class="tagline">
+                Pre-built biogeochemical reaction frameworks for NATIVE_BGC_FLEX and PHREEQC<br>
+                — ready to use, easy to customize
+            </div>
+        </div>
+
+        <!-- Slide 2: Overview -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Templates Library Overview</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>🧪 NATIVE_BGC_FLEX Templates</h3>
+                            <p>JSON-based kinetic reaction frameworks</p>
+                            <ul style="margin-top: 12px; margin-left: 15px;">
+                                <li style="font-size: 0.95rem;"><strong>Individual Chemicals</strong> — N, P, C, DO, metals</li>
+                                <li style="font-size: 0.95rem;"><strong>Popular Models</strong> — SWAT, QUAL2K, HYPE, WASP8</li>
+                                <li style="font-size: 0.95rem;"><strong>Thermodynamic</strong> — Redox ladder, diagenesis</li>
+                                <li style="font-size: 0.95rem;"><strong>v2.0 New</strong> — Algae, plant uptake, PFAS</li>
+                            </ul>
+                        </div>
+                        <div class="card purple">
+                            <h3>⚗️ PHREEQC Templates</h3>
+                            <p>Equilibrium + kinetic geochemistry (.pqi)</p>
+                            <ul style="margin-top: 12px; margin-left: 15px;">
+                                <li style="font-size: 0.95rem;"><strong>Equilibrium</strong> — Major ions, minerals</li>
+                                <li style="font-size: 0.95rem;"><strong>v2.0 Kinetic</strong> — DO, algae, plant uptake, ECs</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="highlight-box success">
+                            <strong>Location:</strong><br>
+                            <code style="font-size: 0.9rem;">supporting_scripts/Model_Config/config_support_lib/BGC_templates/</code>
+                        </div>
+                        <div class="card secondary" style="margin-top: 15px;">
+                            <h3>How to Use</h3>
+                            <ol style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;">Select template(s) for your application</li>
+                                <li style="font-size: 0.95rem;">Copy to your project folder</li>
+                                <li style="font-size: 0.95rem;">Customize parameters as needed</li>
+                                <li style="font-size: 0.95rem;">Reference in master config</li>
+                            </ol>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>Tip:</strong> Templates can be merged! Combine species and frameworks from multiple templates.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Section - Individual Chemicals -->
+        <div class="slide section-slide" data-slide="3">
+            <div class="section-number">01</div>
+            <h2>Individual Chemicals</h2>
+        </div>
+
+        <!-- Slide 4: Nutrients -->
+        <div class="slide" data-slide="4">
+            <div class="slide-header">
+                <h2>Nitrogen & Phosphorus Templates</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>nitrogen_simple.json</h3>
+                            <p>Basic 3-pool nitrogen cycle</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">NH₄ ↔ NO₃ ↔ N₂</li>
+                                <li style="font-size: 0.9rem;">Mineralization, nitrification, denitrification</li>
+                                <li style="font-size: 0.9rem;">Temperature-dependent (Q10)</li>
+                            </ul>
+                        </div>
+                        <div class="card primary">
+                            <h3>nitrogen_full.json</h3>
+                            <p>Complete N cycle with advanced processes</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">O₂ limitation on all reactions</li>
+                                <li style="font-size: 0.9rem;">N₂O emissions pathway</li>
+                                <li style="font-size: 0.9rem;">Plant uptake with seasonal dynamics</li>
+                                <li style="font-size: 0.9rem;">Immobilization under high C:N</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>phosphorus_simple.json</h3>
+                            <p>Basic 3-pool phosphorus cycle</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">SRP ↔ Organic-P ↔ Particulate-P</li>
+                                <li style="font-size: 0.9rem;">Mineralization, sorption</li>
+                            </ul>
+                        </div>
+                        <div class="card secondary">
+                            <h3>phosphorus_full.json</h3>
+                            <p>Full P cycle with redox control</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">Fe-bound P release under anoxia</li>
+                                <li style="font-size: 0.9rem;">Sediment P flux</li>
+                                <li style="font-size: 0.9rem;">Labile vs refractory pools</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">4</div>
+            </div>
+        </div>
+
+        <!-- Slide 5: DO & Carbon -->
+        <div class="slide" data-slide="5">
+            <div class="slide-header">
+                <h2>Dissolved Oxygen & Carbon <span class="badge new">v2.0</span></h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>dissolved_oxygen.json <span class="badge new">Updated</span></h3>
+                            <p>Complete DO budget with 12 transformations</p>
+                            <div class="process-list" style="margin-top: 12px;">
+                                <div class="process-item">
+                                    <span class="icon">🌊</span>
+                                    <span class="name">Reaeration</span>
+                                    <span class="desc">4 formulas (Owens, O'Connor-Dobbins...)</span>
+                                </div>
+                                <div class="process-item">
+                                    <span class="icon">🌿</span>
+                                    <span class="name">Photosynthesis</span>
+                                    <span class="desc">Steele light model</span>
+                                </div>
+                                <div class="process-item">
+                                    <span class="icon">🔥</span>
+                                    <span class="name">BOD decay</span>
+                                    <span class="desc">Fast + slow fractions</span>
+                                </div>
+                                <div class="process-item">
+                                    <span class="icon">⚗️</span>
+                                    <span class="name">NOD</span>
+                                    <span class="desc">4.57 mg O₂/mg NH₄-N</span>
+                                </div>
+                                <div class="process-item">
+                                    <span class="icon">🏔️</span>
+                                    <span class="name">SOD</span>
+                                    <span class="desc">Sediment oxygen demand</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>carbon_organic.json</h3>
+                            <p>DOC/POC cycling</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">DOC mineralization → CO₂</li>
+                                <li style="font-size: 0.9rem;">POC hydrolysis → DOC</li>
+                                <li style="font-size: 0.9rem;">Photochemical degradation</li>
+                                <li style="font-size: 0.9rem;">Flocculation (DOC → POC)</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box success">
+                            <strong>DO_BALANCE_SIMPLE</strong> — Included framework for Streeter-Phelps screening (3 transformations)
+                        </div>
+                        <pre style="font-size: 0.8rem; margin-top: 15px;">
+<span class="comment">// Reaeration example (O'Connor-Dobbins)</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"(ka_20 * 1.024^(T-20)) * (DO_sat - DO)"</span>,
+  <span class="string">"mg-O2/L/day"</span>
+]
+                        </pre>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">5</div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Phytoplankton -->
+        <div class="slide" data-slide="6">
+            <div class="slide-header">
+                <h2>Phytoplankton/Algae Dynamics <span class="badge new">v2.0 NEW</span></h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>phytoplankton_algae.json</h3>
+                            <p>WASP8-style eutrophication model — 11 transformations</p>
+                            <table style="font-size: 0.85rem; margin-top: 12px;">
+                                <tr><th>Process</th><th>Description</th></tr>
+                                <tr><td>Growth</td><td>Light (Steele) + Nutrient (MM)</td></tr>
+                                <tr><td>N uptake</td><td>Preferential NH₄, then NO₃</td></tr>
+                                <tr><td>P uptake</td><td>Redfield C:N:P = 106:16:1</td></tr>
+                                <tr><td>Respiration</td><td>Temperature-dependent</td></tr>
+                                <tr><td>Mortality</td><td>Non-predatory death</td></tr>
+                                <tr><td>Settling</td><td>Gravitational sinking</td></tr>
+                                <tr><td>Grazing</td><td>Zooplankton (Ivlev model)</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="highlight-box info">
+                            <strong>8 Chemical Species:</strong><br>
+                            PHYTO, ZOO, Chla, NO3_N, NH4_N, PO4_P, DOC, DO
+                        </div>
+                        <pre style="font-size: 0.78rem; margin-top: 15px;">
+<span class="comment">// Steele photoinhibition model</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"mu_max * PHYTO * (I/I_opt) * exp(1 - I/I_opt)
+   * (TIN/(Ks_N + TIN)) * (PO4_P/(Ks_P + PO4_P))
+   * theta^(T - 20)"</span>
+]
+
+<span class="comment">// Ivlev grazing formulation</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"g_max * ZOO * (1 - exp(-lambda * PHYTO))"</span>
+]
+                        </pre>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>Chlorophyll-a proxy:</strong> Chla:C ratio for biomass tracking
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">6</div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Plant Uptake -->
+        <div class="slide" data-slide="7">
+            <div class="slide-header">
+                <h2>Plant Uptake Module <span class="badge new">v2.0 NEW</span></h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>plant_uptake.json</h3>
+                            <p>SWAT/HYPE-style vegetation cycling — 3 frameworks, 15 transformations</p>
+                        </div>
+                        <div class="card primary">
+                            <h3>PLANT_UPTAKE_FULL (8 transforms)</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;"><strong>NO₃ uptake</strong> — Mobile, easily transported</li>
+                                <li style="font-size: 0.9rem;"><strong>NH₄ uptake</strong> — Preferred (less energy cost)</li>
+                                <li style="font-size: 0.9rem;"><strong>PO₄ uptake</strong> — Diffusion-limited</li>
+                                <li style="font-size: 0.9rem;"><strong>Senescence</strong> — Litterfall with retranslocation</li>
+                                <li style="font-size: 0.9rem;"><strong>Litter N/P/C mineralization</strong></li>
+                            </ul>
+                        </div>
+                        <div class="card accent">
+                            <h3>RIPARIAN_BUFFER (3 transforms)</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;">Enhanced NO₃ uptake in riparian zone</li>
+                                <li style="font-size: 0.9rem;">Denitrification in saturated soil</li>
+                                <li style="font-size: 0.9rem;">P retention via sedimentation</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="highlight-box info">
+                            <strong>Seasonal Modulation:</strong><br>
+                            f_season = sin(π × (DOY - 60) / 240) for growing season
+                        </div>
+                        <pre style="font-size: 0.8rem; margin-top: 15px;">
+<span class="comment">// NO3 uptake with seasonal factor</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"k_uptake_no3 * NO3_N / (Ks_N + NO3_N + NH4_N)
+   * f_growth * f_temp * f_moisture"</span>
+]
+
+<span class="comment">// Litter N mineralization</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"k_litter_N * LITTER_N * theta^(T - 293)"</span>
+]
+                        </pre>
+                        <div class="card teal" style="margin-top: 15px;">
+                            <h3>PLANT_UPTAKE_SIMPLE (4 transforms)</h3>
+                            <p style="font-size: 0.9rem;">Lumped N and P uptake for screening models</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">7</div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Emerging Contaminants -->
+        <div class="slide" data-slide="8">
+            <div class="slide-header">
+                <h2>Emerging Contaminants <span class="badge new">v2.0 NEW</span></h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card pink">
+                            <h3>emerging_contaminants.json</h3>
+                            <p>Micropollutants framework — 6 cycling frameworks, 32 transformations</p>
+                        </div>
+                        <table style="font-size: 0.85rem;">
+                            <tr><th>Framework</th><th>Compounds</th><th>Transforms</th></tr>
+                            <tr><td>PHARMACEUTICALS</td><td>Antibiotics, analgesics, hormones</td><td>8</td></tr>
+                            <tr><td>PPCPS</td><td>Fragrances, UV filters, triclosan</td><td>6</td></tr>
+                            <tr><td>PFAS</td><td>PFOA, PFOS, GenX</td><td>5</td></tr>
+                            <tr><td>MICROPLASTICS</td><td>Fibers, fragments, beads</td><td>6</td></tr>
+                            <tr><td>ENDOCRINE_DISRUPTORS</td><td>Estrogens, BPA</td><td>4</td></tr>
+                            <tr><td>EMERGING_SIMPLE</td><td>Generic screening</td><td>3</td></tr>
+                        </table>
+                    </div>
+                    <div class="column">
+                        <div class="highlight-box" style="background: linear-gradient(135deg, #fdf2f8, #fce7f3); border-left-color: var(--pink);">
+                            <strong>Key Processes:</strong>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">Biodegradation (T-dependent)</li>
+                                <li style="font-size: 0.9rem;">Photolysis (light + depth)</li>
+                                <li style="font-size: 0.9rem;">Sorption to sediments</li>
+                                <li style="font-size: 0.9rem;">Volatilization (fragrances)</li>
+                                <li style="font-size: 0.9rem;">Settling/aggregation (MPs)</li>
+                            </ul>
+                        </div>
+                        <pre style="font-size: 0.78rem; margin-top: 15px;">
+<span class="comment">// PFAS - extremely persistent</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"k_sorp_pfoa * PFAS_PFOA * (1 - PFAS_PFOA/Smax)"</span>
+]
+<span class="comment">// Only sorption - no biodegradation!</span>
+
+<span class="comment">// Microplastic settling</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"v_settle * MP_fiber / depth"</span>
+]
+                        </pre>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">8</div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Groundwater Age -->
+        <div class="slide" data-slide="9">
+            <div class="slide-header">
+                <h2>Groundwater Age Tracking <span class="badge new">v2.0 NEW</span></h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>groundwater_age.json</h3>
+                            <p>Environmental tracers for residence time — 7 frameworks</p>
+                        </div>
+                        <table style="font-size: 0.85rem;">
+                            <tr><th>Tracer</th><th>Half-life</th><th>Age Range</th></tr>
+                            <tr><td>³H-³He (Tritium)</td><td>12.32 yr</td><td>0-50 years</td></tr>
+                            <tr><td>CFC-11, CFC-12</td><td>—</td><td>1940s-1990s</td></tr>
+                            <tr><td>SF₆</td><td>—</td><td>Post-1990</td></tr>
+                            <tr><td>¹⁴C</td><td>5,730 yr</td><td>100-40,000 yr</td></tr>
+                        </table>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>Mean Age:</strong> Tracks water age directly (1 day/day accumulation)
+                        </div>
+                    </div>
+                    <div class="column">
+                        <pre style="font-size: 0.78rem;">
+<span class="comment">// Tritium decay: 3H -> 3He</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"lambda_H3 * TRITIUM"</span>
+]
+<span class="comment">// lambda = ln(2)/12.32yr = 0.0562/yr</span>
+
+<span class="comment">// 3H-3He apparent age</span>
+<span class="comment">// Age = ln(1 + 3He_trit/3H) / lambda</span>
+
+<span class="comment">// Carbon-14 age</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"lambda_C14 * CARBON14"</span>
+]
+<span class="comment">// Age = -8267 × ln(14C/100)</span>
+                        </pre>
+                        <div class="card secondary" style="margin-top: 15px;">
+                            <h3>Applications</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;">Aquifer vulnerability assessment</li>
+                                <li style="font-size: 0.9rem;">Recharge rate estimation</li>
+                                <li style="font-size: 0.9rem;">Flow path delineation</li>
+                                <li style="font-size: 0.9rem;">Mixing model calibration</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">9</div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Other Templates -->
+        <div class="slide" data-slide="10">
+            <div class="slide-header">
+                <h2>Other Individual Chemical Templates</h2>
+            </div>
+            <div class="slide-content">
+                <div class="template-grid">
+                    <div class="template-item">
+                        <h4>heavy_metals.json</h4>
+                        <p>Cu, Zn, Pb, Cd, Hg speciation and sorption</p>
+                    </div>
+                    <div class="template-item">
+                        <h4>pathogens.json</h4>
+                        <p>E. coli, fecal coliforms, virus decay</p>
+                    </div>
+                    <div class="template-item">
+                        <h4>pesticides.json</h4>
+                        <p>Generic pesticide fate with hydrolysis</p>
+                    </div>
+                    <div class="template-item">
+                        <h4>silica.json</h4>
+                        <p>Dissolved silica for diatom modeling</p>
+                    </div>
+                    <div class="template-item">
+                        <h4>iron_manganese.json</h4>
+                        <p>Fe/Mn redox cycling in sediments</p>
+                    </div>
+                </div>
+                <div class="highlight-box info" style="margin-top: 25px;">
+                    <strong>All templates include:</strong>
+                    <ul style="margin: 8px 0 0 20px;">
+                        <li>Complete <code>CHEMICAL_SPECIES</code> definitions</li>
+                        <li>Mobile species configuration</li>
+                        <li>Parameter values with literature-based ranges</li>
+                        <li>Inline documentation (underscore keys)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">10</div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Section - Popular Models -->
+        <div class="slide section-slide green" data-slide="11">
+            <div class="section-number">02</div>
+            <h2>Popular Model Frameworks</h2>
+        </div>
+
+        <!-- Slide 12: Popular Models -->
+        <div class="slide" data-slide="12">
+            <div class="slide-header">
+                <h2>SWAT, QUAL2K, HYPE, WASP8 Frameworks</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>SWAT_full_nutrients.json</h3>
+                            <p>Complete SWAT-style N/P/C cycling</p>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">3 organic N pools (fresh, active, stable)</li>
+                                <li style="font-size: 0.9rem;">3 organic P pools</li>
+                                <li style="font-size: 0.9rem;">Soil layer decomposition</li>
+                                <li style="font-size: 0.9rem;">Erosion-linked P transport</li>
+                            </ul>
+                        </div>
+                        <div class="card secondary">
+                            <h3>QUAL2E_stream.json</h3>
+                            <p>Classic stream water quality</p>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">DO-BOD dynamics</li>
+                                <li style="font-size: 0.9rem;">Algae + nutrients</li>
+                                <li style="font-size: 0.9rem;">SOD, reaeration</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>HYPE_nutrients.json</h3>
+                            <p>Nordic-style large-scale modeling</p>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">Wetland retention processes</li>
+                                <li style="font-size: 0.9rem;">Tile drainage N loss</li>
+                                <li style="font-size: 0.9rem;">Snow-melt nutrient flush</li>
+                            </ul>
+                        </div>
+                        <div class="card accent">
+                            <h3>WASP8_eutrophication.json</h3>
+                            <p>Lake/estuary eutrophication</p>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">Multi-algae groups (diatoms, greens, cyano)</li>
+                                <li style="font-size: 0.9rem;">Sediment diagenesis</li>
+                                <li style="font-size: 0.9rem;">Zooplankton grazing</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">12</div>
+            </div>
+        </div>
+
+        <!-- Slide 13: Section - Thermodynamic -->
+        <div class="slide section-slide purple" data-slide="13">
+            <div class="section-number">03</div>
+            <h2>Thermodynamic Templates</h2>
+        </div>
+
+        <!-- Slide 14: Thermodynamic Templates -->
+        <div class="slide" data-slide="14">
+            <div class="slide-header">
+                <h2>F<sub>T</sub> Factor Templates — Redox Ladder</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <table style="font-size: 0.9rem;">
+                            <tr><th>Template</th><th>ΔG° (kJ/mol)</th></tr>
+                            <tr><td>aerobic_respiration.json</td><td>−125</td></tr>
+                            <tr><td>nitrification.json</td><td>−119 to −79</td></tr>
+                            <tr><td>denitrification_thermodynamic.json</td><td>−119</td></tr>
+                            <tr><td>anammox.json</td><td>−357</td></tr>
+                            <tr><td>manganese_reduction.json</td><td>−95</td></tr>
+                            <tr><td>iron_reduction.json</td><td>−50</td></tr>
+                            <tr><td>sulfate_reduction.json</td><td>−25</td></tr>
+                            <tr><td>methanogenesis.json</td><td>−20</td></tr>
+                        </table>
+                    </div>
+                    <div class="column">
+                        <div class="card purple">
+                            <h3>full_sediment_diagenesis.json</h3>
+                            <p>Complete redox cascade — 13 reactions</p>
+                            <p style="margin-top: 10px; font-size: 0.9rem;">
+                                Combines all TEAPs (Terminal Electron Accepting Processes) with automatic F<sub>T</sub> enforcement
+                            </p>
+                        </div>
+                        <pre style="font-size: 0.75rem; margin-top: 15px;">
+<span class="comment">// F_T auto-enforces redox sequence</span>
+<span class="string">"kinetics"</span>: [
+  <span class="string">"k * X * (NO3/(Km+NO3)) * (DOC/(Km_DOC+DOC))
+   * (1 - exp(-((119-45)/(2*R*(T+273)))))"</span>
+]
+<span class="comment">//        ^^^^^ F_T term ^^^^^^</span>
+                        </pre>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">14</div>
+            </div>
+        </div>
+
+        <!-- Slide 15: Section - PHREEQC -->
+        <div class="slide section-slide teal" data-slide="15">
+            <div class="section-number">04</div>
+            <h2>PHREEQC Templates</h2>
+        </div>
+
+        <!-- Slide 16: PHREEQC Templates -->
+        <div class="slide" data-slide="16">
+            <div class="slide-header">
+                <h2>PHREEQC Templates (.pqi files)</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card purple">
+                            <h3>Equilibrium Templates</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;"><strong>major_ions_equilibrium.pqi</strong><br>
+                                    <span style="color: var(--text-light);">Ca, Mg, Na, K, Cl, SO₄, HCO₃</span></li>
+                                <li style="font-size: 0.95rem;"><strong>nitrogen_speciation.pqi</strong><br>
+                                    <span style="color: var(--text-light);">NH₄/NH₃, NO₂, NO₃ with redox</span></li>
+                                <li style="font-size: 0.95rem;"><strong>phosphorus_minerals.pqi</strong><br>
+                                    <span style="color: var(--text-light);">PO₄ speciation + mineral SI</span></li>
+                                <li style="font-size: 0.95rem;"><strong>trace_metals.pqi</strong><br>
+                                    <span style="color: var(--text-light);">Fe, Mn, Cu, Zn complexation</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>Kinetic Templates <span class="badge new">v2.0</span></h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;"><strong>dissolved_oxygen_kinetics.pqi</strong><br>
+                                    <span style="color: var(--text-light);">BOD, NOD, SOD with RATES</span></li>
+                                <li style="font-size: 0.95rem;"><strong>phytoplankton_kinetics.pqi</strong><br>
+                                    <span style="color: var(--text-light);">Algae growth, grazing</span></li>
+                                <li style="font-size: 0.95rem;"><strong>plant_uptake_kinetics.pqi</strong><br>
+                                    <span style="color: var(--text-light);">N/P uptake, litter cycling</span></li>
+                                <li style="font-size: 0.95rem;"><strong>emerging_contaminants_kinetics.pqi</strong><br>
+                                    <span style="color: var(--text-light);">Pharma, PFAS, EDCs</span></li>
+                                <li style="font-size: 0.95rem;"><strong>groundwater_age_kinetics.pqi</strong><br>
+                                    <span style="color: var(--text-light);">³H-³He, ¹⁴C, CFCs, SF₆</span></li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box purple" style="margin-top: 15px;">
+                            <strong>Note:</strong> Use NATIVE_BGC_FLEX for complex biological processes. PHREEQC kinetics best for coupled geochemical-biological systems.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">16</div>
+            </div>
+        </div>
+
+        <!-- Slide 17: Summary Table -->
+        <div class="slide" data-slide="17">
+            <div class="slide-header">
+                <h2>Template Summary</h2>
+            </div>
+            <div class="slide-content">
+                <table style="font-size: 0.85rem;">
+                    <tr>
+                        <th>Category</th>
+                        <th>Templates</th>
+                        <th>Key Features</th>
+                        <th>Status</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Nutrients</strong></td>
+                        <td>nitrogen, phosphorus (simple/full)</td>
+                        <td>N & P cycling, plant uptake, redox</td>
+                        <td>Stable</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Dissolved Oxygen</strong></td>
+                        <td>dissolved_oxygen</td>
+                        <td>12 transforms, 4 reaeration formulas</td>
+                        <td><span class="badge new">v2.0</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Algae</strong></td>
+                        <td>phytoplankton_algae</td>
+                        <td>Steele + MM, zooplankton, Chla</td>
+                        <td><span class="badge new">v2.0</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Vegetation</strong></td>
+                        <td>plant_uptake</td>
+                        <td>3 frameworks, riparian buffer</td>
+                        <td><span class="badge new">v2.0</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Micropollutants</strong></td>
+                        <td>emerging_contaminants</td>
+                        <td>PFAS, PPCPs, microplastics, EDCs</td>
+                        <td><span class="badge new">v2.0</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Popular Models</strong></td>
+                        <td>SWAT, QUAL2K, HYPE, WASP8</td>
+                        <td>Complete model frameworks</td>
+                        <td>Stable</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Thermodynamic</strong></td>
+                        <td>10 redox templates + diagenesis</td>
+                        <td>F<sub>T</sub> factor, automatic ladder</td>
+                        <td>Stable</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Groundwater Age</strong></td>
+                        <td>groundwater_age</td>
+                        <td>³H-³He, ¹⁴C, CFCs, SF₆ tracers</td>
+                        <td><span class="badge new">v2.0</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>PHREEQC</strong></td>
+                        <td>4 equilibrium + 5 kinetic</td>
+                        <td>Full geochemistry + bio processes</td>
+                        <td><span class="badge phreeqc">Mixed</span></td>
+                    </tr>
+                </table>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">17</div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Thank You -->
+        <div class="slide title-slide" data-slide="18">
+            <h1 style="font-size: 3rem;">BGC Templates Library</h1>
+            <div class="subtitle" style="font-size: 1.5rem;">Ready to use • Easy to customize</div>
+            <div class="tagline" style="margin-top: 30px;">
+                <a href="https://github.com/ue-hydro/openwq" style="color: var(--secondary);">github.com/ue-hydro/openwq</a>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="nav-hint" id="navHint">Use ← → arrows | Press F for fullscreen</div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            history.replaceState(null, null, `#${currentSlide}`);
+        }
+
+        function nextSlide() { currentSlide++; showSlide(currentSlide); }
+        function prevSlide() { currentSlide--; showSlide(currentSlide); }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
+                case 'Home': currentSlide = 1; showSlide(currentSlide); break;
+                case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
+                case 'f': case 'F':
+                    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                    else document.exitFullscreen();
+                    break;
+            }
+        });
+
+        document.querySelector('.presentation').addEventListener('click', (e) => {
+            const rect = e.target.getBoundingClientRect();
+            if (e.clientX - rect.left > rect.width / 2) nextSlide(); else prevSlide();
+        });
+
+        const navHint = document.getElementById('navHint');
+        navHint.classList.add('visible');
+        setTimeout(() => navHint.classList.remove('visible'), 4000);
+
+        let hintTimeout;
+        document.addEventListener('mousemove', () => {
+            navHint.classList.add('visible');
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => navHint.classList.remove('visible'), 2000);
+        });
+
+        if (window.location.hash) {
+            const slideNum = parseInt(window.location.hash.substring(1));
+            if (slideNum >= 1 && slideNum <= totalSlides) currentSlide = slideNum;
+        }
+        showSlide(currentSlide);
+
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', (e) => {
+            const diff = touchStartX - e.changedTouches[0].screenX;
+            if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,312 @@
+# PHREEQC Template: Groundwater Age Tracking and Environmental Tracers
+# Description: Tritium-3He, 14C, CFCs, SF6 for groundwater dating
+# Reference: Cook & Herczeg (2000); Clark & Fritz (1997)
+# ================================================================
+#
+# NOTE: Age tracers undergo radioactive decay and can be used to
+# estimate groundwater residence times. PHREEQC can track these
+# using KINETICS blocks for decay reactions.
+#
+# ================================================================
+
+DATABASE phreeqc.dat
+
+TITLE Groundwater Age Tracers - Tritium, 14C, CFCs
+
+# ================================================================
+# SOLUTION 1: Young groundwater (recent recharge)
+# ================================================================
+SOLUTION 1  Young Groundwater (post-1950)
+    temp      12.0
+    pH        7.2
+    pe        4.0        # Mildly reducing
+    units     mg/L
+
+    # Major ions
+    Ca        60.0
+    Mg        15.0
+    Na        20.0
+    K         5.0
+    Cl        25.0
+    C(4)      200 as HCO3
+    S(6)      30 as SO4
+    N(5)      5.0        # Nitrate (indicates young water)
+    O(0)      2.0        # Some DO present
+
+    # Age tracers (initial values at recharge)
+    # Note: Tracers modeled via KINETICS, not SOLUTION
+
+END
+
+# ================================================================
+# SOLUTION 2: Old groundwater (pre-1950)
+# ================================================================
+SOLUTION 2  Old Groundwater (pre-1950)
+    temp      14.0
+    pH        7.8
+    pe        -2.0       # Reducing
+    units     mg/L
+
+    Ca        80.0
+    Mg        25.0
+    Na        40.0
+    K         8.0
+    Cl        15.0       # Low Cl indicates old recharge
+    C(4)      300 as HCO3
+    S(6)      10 as SO4
+    N(5)      0.1        # Very low nitrate (denitrified or pre-fertilizer)
+    Fe        2.0        # Elevated Fe in reducing conditions
+
+END
+
+# ================================================================
+# EQUILIBRIUM_PHASES: Carbonate system
+# ================================================================
+EQUILIBRIUM_PHASES 1
+    Calcite     0.0   0.0   # Equilibrium with calcite
+    CO2(g)      -2.0  10.0  # Elevated soil CO2
+
+END
+
+# ================================================================
+# KINETICS 1: Age tracer decay
+# ================================================================
+KINETICS 1
+
+# Mean age accumulation (abstract tracer)
+# Age increases at rate of 1 year/year
+-mean_age
+    -formula  H2O 0        # No actual species change
+    -m0       0            # Initial age = 0 years
+    -parms    1.0          # Rate = 1 year/year
+    -tol      1e-8
+
+# Tritium decay: 3H -> 3He, t1/2 = 12.32 years
+-tritium_decay
+    -formula  H2O 0
+    -m0       10           # Initial 3H in TU (modern = ~5-15 TU)
+    -parms    0.05626      # lambda = ln(2)/12.32 = 0.05626 /yr
+    -tol      1e-10
+
+# Tritiogenic 3He production
+-he3_production
+    -formula  H2O 0
+    -m0       0            # Initial 3He_trit = 0
+    -parms    0.05626      # Same as tritium decay
+    -tol      1e-10
+
+# Carbon-14 decay: t1/2 = 5730 years
+-carbon14_decay
+    -formula  H2O 0
+    -m0       100          # Initial 14C in pmC (100 = modern)
+    -parms    0.000121     # lambda = ln(2)/5730 = 0.000121 /yr
+    -tol      1e-10
+
+# CFC-11 (no decay in groundwater under oxic conditions)
+-cfc11_tracer
+    -formula  H2O 0
+    -m0       250          # Initial CFC-11 in pmol/kg (1990s peak)
+    -parms    0.0          # No decay under oxic conditions
+    -tol      1e-10
+
+# CFC-12 tracer
+-cfc12_tracer
+    -formula  H2O 0
+    -m0       550          # Initial CFC-12 in pmol/kg
+    -parms    0.0
+    -tol      1e-10
+
+# SF6 tracer
+-sf6_tracer
+    -formula  H2O 0
+    -m0       2.0          # Initial SF6 in fmol/kg (modern)
+    -parms    0.0          # No decay
+    -tol      1e-10
+
+END
+
+# ================================================================
+# RATES: Kinetic rate expressions
+# ================================================================
+RATES
+
+mean_age
+-start
+10 REM Mean age accumulation in groundwater
+20 REM Age increases at rate of 1 year per year
+30 rate_per_year = PARM(1)
+40 current_age = M
+50 REM Convert rate to per-second for PHREEQC TIME
+60 rate = rate_per_year / 31557600    # seconds per year
+70 moles = rate * TIME
+80 SAVE moles
+90 END
+-end
+
+tritium_decay
+-start
+10 REM Tritium radioactive decay: 3H -> 3He + beta
+20 REM Half-life = 12.32 years, lambda = 0.05626 /yr
+30 lambda = PARM(1) / 31557600         # Convert to /s
+40 H3 = M                               # Current tritium (TU)
+50 IF H3 <= 0 THEN GOTO 90
+60 rate = lambda * H3
+70 moles = rate * TIME
+80 SAVE moles
+90 END
+-end
+
+he3_production
+-start
+10 REM Tritiogenic 3He production from 3H decay
+20 REM Amount of 3He = initial_3H - current_3H
+30 lambda = PARM(1) / 31557600
+40 H3_initial = 10                      # Initial 3H (TU)
+50 H3_current = KIN("tritium_decay")    # Current 3H
+60 He3_trit = H3_initial - H3_current   # Tritiogenic 3He
+70 current_He3 = M
+80 rate = lambda * H3_current
+90 moles = rate * TIME
+100 SAVE moles
+110 END
+-end
+
+carbon14_decay
+-start
+10 REM Carbon-14 radioactive decay
+20 REM Half-life = 5730 years, lambda = 0.000121 /yr
+30 lambda = PARM(1) / 31557600
+40 C14 = M                              # Current 14C (pmC)
+50 IF C14 <= 0 THEN GOTO 90
+60 rate = lambda * C14
+70 moles = rate * TIME
+80 SAVE moles
+90 END
+-end
+
+cfc11_tracer
+-start
+10 REM CFC-11 tracer (conservative in oxic groundwater)
+20 REM May degrade under anoxic/sulfidic conditions
+30 k_deg = PARM(1) / 31557600
+40 CFC11 = M
+50 pe_val = -LA("e-")                   # Get pe
+60 IF pe_val > 0 THEN k_deg = 0         # No degradation if oxic
+70 rate = k_deg * CFC11
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+cfc12_tracer
+-start
+10 REM CFC-12 tracer (more stable than CFC-11)
+20 k_deg = PARM(1) / 31557600
+30 CFC12 = M
+40 rate = k_deg * CFC12
+50 moles = rate * TIME
+60 SAVE moles
+70 END
+-end
+
+sf6_tracer
+-start
+10 REM SF6 tracer (extremely stable)
+20 k_deg = PARM(1) / 31557600
+30 SF6 = M
+40 rate = k_deg * SF6
+50 moles = rate * TIME
+60 SAVE moles
+70 END
+-end
+
+END
+
+# ================================================================
+# SELECTED_OUTPUT
+# ================================================================
+SELECTED_OUTPUT
+    -file         groundwater_age_results.txt
+    -reset        false
+    -pH           true
+    -pe           true
+    -temperature  true
+    -totals       C(4) N(5) O(0) Fe
+    -kinetic_reactants  mean_age tritium_decay he3_production carbon14_decay
+    -kinetic_reactants  cfc11_tracer cfc12_tracer sf6_tracer
+
+END
+
+# ================================================================
+# USER_PUNCH: Age calculations
+# ================================================================
+USER_PUNCH
+    -headings  Age_yr  H3_TU  He3_trit  H3_He3_age  C14_pmC  C14_age
+
+    # Mean age (years)
+    10 age = KIN("mean_age")
+    20 PUNCH age
+
+    # Tritium (TU)
+    30 H3 = KIN("tritium_decay")
+    40 PUNCH H3
+
+    # Tritiogenic 3He (TU equivalent)
+    50 He3 = KIN("he3_production")
+    60 PUNCH He3
+
+    # 3H-3He apparent age (years)
+    70 IF H3 > 0.1 THEN H3_He3_age = LOG(1 + He3/H3) / 0.05626 ELSE H3_He3_age = -999
+    80 PUNCH H3_He3_age
+
+    # Carbon-14 (pmC)
+    90 C14 = KIN("carbon14_decay")
+    100 PUNCH C14
+
+    # 14C apparent age (years) - uncorrected
+    110 IF C14 > 0.1 THEN C14_age = -8267 * LOG(C14/100) ELSE C14_age = 99999
+    120 PUNCH C14_age
+
+END
+
+# ================================================================
+# Notes on Groundwater Age Dating
+# ================================================================
+#
+# TRITIUM-HELIUM-3 DATING:
+#   - Tritium (3H) from atmospheric testing, peaked 1963
+#   - Decays to 3He with t1/2 = 12.32 years
+#   - Age = ln(1 + 3He_trit/3H) / lambda
+#   - Useful range: 0-50 years
+#   - Requires measurement of 3He from 3H decay (tritiogenic)
+#
+# CARBON-14 DATING:
+#   - 14C decays with t1/2 = 5730 years
+#   - Apparent age = -8267 * ln(14C/14C_initial)
+#   - Useful range: 100-40,000 years
+#   - Must correct for:
+#     * Dead carbon dilution from carbonate dissolution
+#     * Soil CO2 exchange
+#     * Methanogenesis
+#
+# CFC DATING:
+#   - CFCs entered atmosphere 1940s-1990s (now declining)
+#   - CFC-11: CCl3F, entered 1940, peaked ~1994
+#   - CFC-12: CCl2F2, entered 1945, peaked ~2000
+#   - CFC-113: C2Cl3F3, entered 1970, peaked ~1996
+#   - Useful range: 0-50 years (post-1940 recharge)
+#   - May degrade in anoxic conditions
+#
+# SF6 DATING:
+#   - SF6 increasing since 1970s (~7%/year)
+#   - Most stable tracer (no degradation)
+#   - Useful for modern water (post-1990)
+#   - Can have terrigenic sources (false young ages)
+#
+# MIXING CONSIDERATIONS:
+#   - Real groundwater is often a mixture of ages
+#   - Mean age ≠ piston flow age
+#   - Multiple tracers help constrain residence time distribution
+#   - Binary mixing: fraction_young = tracer_measured / tracer_young
+#
+# ================================================================
