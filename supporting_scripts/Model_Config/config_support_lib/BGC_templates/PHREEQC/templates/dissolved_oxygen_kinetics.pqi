@@ -77,7 +77,7 @@ KINETICS 1
 
 # BOD decay (carbonaceous oxygen demand)
 # CBOD + O2 -> CO2 + H2O (simplified)
--bod_decay
+bod_decay
     -formula  O(0) -1  C(4) 1
     -m0       0.005           # Initial BOD (mol equivalent)
     -parms    0.3 0.5         # kd (1/day), Ks_O2 (mg/L)
@@ -85,7 +85,7 @@ KINETICS 1
 
 # Nitrification (nitrogenous oxygen demand)
 # NH4+ + 2O2 -> NO3- + 2H+ + H2O
--nitrification_nod
+nitrification_nod
     -formula  N(-3) -1 N(5) 1 O(0) -2
     -m0       0.001
     -parms    0.1 1.0 4.57    # k_nitrif (1/day), Ks_O2 (mg/L), rO2_N
@@ -93,7 +93,7 @@ KINETICS 1
 
 # Sediment oxygen demand (SOD)
 # Benthic respiration consuming O2
--sediment_od
+sediment_od
     -formula  O(0) -1 C(4) 1
     -m0       0.01
     -parms    1.5 2.0 1.0     # SOD_20 (g/m2/day), depth (m), Ks_O2 (mg/L)
@@ -101,7 +101,7 @@ KINETICS 1
 
 # Algal respiration (dark respiration)
 # CH2O + O2 -> CO2 + H2O
--algal_respiration
+algal_respiration
     -formula  O(0) -1 C(4) 1
     -m0       0.0005
     -parms    0.1 2.67        # k_resp (1/day), rO2_C (mg O2/mg C)
@@ -115,7 +115,7 @@ END
 RATES
 
 bod_decay
--start
+start
 10 REM CBOD decay with O2 limitation (Monod kinetics)
 20 kd = PARM(1) / 86400                  # Convert 1/day to 1/s
 30 Ks_O2 = PARM(2) / 32000               # Convert mg/L to mol/L
@@ -127,10 +127,10 @@ bod_decay
 90 moles = rate * TIME
 95 SAVE moles
 100 END
--end
+end
 
 nitrification_nod
--start
+start
 10 REM Nitrification - NH4 oxidation consuming O2
 20 REM Stoichiometry: 4.57 mg O2 per mg NH4-N
 30 k_nitrif = PARM(1) / 86400
@@ -145,10 +145,10 @@ nitrification_nod
 115 moles = rate * TIME
 118 SAVE moles
 120 END
--end
+end
 
 sediment_od
--start
+start
 10 REM Sediment oxygen demand (areal flux / depth)
 20 SOD_20 = PARM(1)                      # g O2/m2/day at 20C
 30 depth = PARM(2)                       # Water depth (m)
@@ -164,10 +164,10 @@ sediment_od
 125 moles = rate_mol * f_O2 * TIME
 128 SAVE moles
 130 END
--end
+end
 
 algal_respiration
--start
+start
 10 REM Algal dark respiration consuming O2
 20 k_resp = PARM(1) / 86400
 30 rO2_C = PARM(2)                       # 2.67 mg O2 / mg C fixed
@@ -178,7 +178,7 @@ algal_respiration
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 END
 

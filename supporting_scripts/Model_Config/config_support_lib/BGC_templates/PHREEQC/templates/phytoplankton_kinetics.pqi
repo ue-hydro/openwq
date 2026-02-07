@@ -85,7 +85,7 @@ KINETICS 1
 
 # Phytoplankton growth (nutrient uptake from N pool)
 # Redfield: 106 CO2 + 16 NO3 + H3PO4 -> C106H263O110N16P + O2
--phyto_growth
+phyto_growth
     -formula  N(5) -0.0151 P -0.00094 C(4) -1 O(0) 1.3
     -m0       0.001           # Initial phyto biomass (mol C)
     -parms    2.0 0.025 0.005 300 1.068
@@ -94,21 +94,21 @@ KINETICS 1
 
 # Phytoplankton respiration
 # CH2O + O2 -> CO2 + H2O
--phyto_respiration
+phyto_respiration
     -formula  O(0) -1 C(4) 1
     -m0       0.001
     -parms    0.1 1.045       # k_resp (1/day), theta
     -tol      1e-8
 
 # Phytoplankton mortality (lysis -> DOC)
--phyto_mortality
+phyto_mortality
     -formula  C(4) 1
     -m0       0.001
     -parms    0.02            # k_mort (1/day)
     -tol      1e-8
 
 # Zooplankton grazing on phytoplankton
--zoo_grazing
+zoo_grazing
     -formula  C(4) 1
     -m0       0.0002          # Zooplankton biomass (mol C)
     -parms    1.5 0.5 0.3 1.08
@@ -123,7 +123,7 @@ END
 RATES
 
 phyto_growth
--start
+start
 10 REM Phytoplankton growth: Steele light + Michaelis-Menten nutrients
 20 mu_max = PARM(1) / 86400             # Convert 1/day to 1/s
 30 Ks_N = PARM(2) / 14000               # Convert mg N/L to mol/L
@@ -158,10 +158,10 @@ phyto_growth
 246 moles = rate * TIME
 248 SAVE moles
 250 END
--end
+end
 
 phyto_respiration
--start
+start
 10 REM Algal respiration (dark + light respiration)
 20 k_resp = PARM(1) / 86400
 30 theta = PARM(2)
@@ -174,10 +174,10 @@ phyto_respiration
 100 moles = rate * TIME
 110 SAVE moles
 120 END
--end
+end
 
 phyto_mortality
--start
+start
 10 REM Non-predatory mortality (senescence, lysis)
 20 k_mort = PARM(1) / 86400
 30 phyto = M
@@ -185,10 +185,10 @@ phyto_mortality
 50 moles = rate * TIME
 60 SAVE moles
 70 END
--end
+end
 
 zoo_grazing
--start
+start
 10 REM Zooplankton grazing (Ivlev formulation)
 20 g_max = PARM(1) / 86400
 30 lambda = PARM(2) * 1000              # Convert L/mg to L/mol approx
@@ -203,7 +203,7 @@ zoo_grazing
 120 moles = grazing * TIME
 130 SAVE moles
 140 END
--end
+end
 
 END
 

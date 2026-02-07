@@ -123,28 +123,28 @@ KINETICS 1
 # ================================================================
 
 # Dissolved P leaching through matrix
--p_dissolved_leaching
+p_dissolved_leaching
     -formula  P -1
     -m0       0.5          # Soil solution P (mg/L)
     -parms    0.1 5.0 0.45 1.0 0.5  # k_leach_P, q_drain, theta_sat, depth, f_P_sat
     -tol      1e-8
 
 # Preferential flow dissolved P
--p_preferential
+p_preferential
     -formula  P -1
     -m0       0.0
     -parms    0.3 0.1 0.0  # k_pref_P, f_macropore, q_drain_intense
     -tol      1e-8
 
 # Particulate P via macropores
--p_particulate_macropore
+p_particulate_macropore
     -formula  H2O 0
     -m0       0.3          # Particulate P (mg/L)
     -parms    0.2 0.1 0.0  # k_part_P, f_macropore, q_drain_intense
     -tol      1e-8
 
 # Legacy P release from soil
--p_legacy_release
+p_legacy_release
     -formula  P 1
     -m0       0.0
     -parms    0.001 0.1    # k_legacy, EPC0 (mg-P/L)
@@ -162,14 +162,14 @@ KINETICS 1
     -tol      1e-8
 
 # Snowmelt P flush
--snowmelt_p_flush
+snowmelt_p_flush
     -formula  P -1
     -m0       0.0
     -parms    1.0 0.0      # k_flush_P, q_melt
     -tol      1e-8
 
 # Frozen soil bypass
--frozen_soil_bypass
+frozen_soil_bypass
     -formula  H2O 0
     -m0       0.0
     -parms    0.5 0.0 0.0  # k_bypass, f_frozen, q_runoff
@@ -180,14 +180,14 @@ KINETICS 1
 # ================================================================
 
 # Reduced drainage (controlled outlet)
--controlled_drainage
+controlled_drainage
     -formula  N(5) -1
     -m0       0.0
     -parms    0.0          # f_control (0-0.5)
     -tol      1e-8
 
 # Enhanced denitrification under controlled drainage
--enhanced_denitrification
+enhanced_denitrification
     -formula  N(5) -1
     -m0       0.0
     -parms    0.2 0.0 5.0  # k_denit_enhanced, f_control, Ks_C
@@ -198,14 +198,14 @@ KINETICS 1
 # ================================================================
 
 # Buffer denitrification
--buffer_denitrification
+buffer_denitrification
     -formula  N(5) -1
     -m0       0.0
     -parms    0.5 5.0 2.0 1.0 10.0  # k_denit_buf, Ks_C, HRT_buf, HRT_ref, DOC_buf
     -tol      1e-8
 
 # Buffer plant uptake
--buffer_plant_uptake
+buffer_plant_uptake
     -formula  N(5) -1
     -m0       0.0
     -parms    0.1 1.0      # k_uptake_buffer, f_season
@@ -219,7 +219,7 @@ END
 RATES
 
 no3_matrix_leaching
--start
+start
 10 REM NO3 transport through soil matrix to tile drain
 20 k = PARM(1) / 86400
 30 q_drain = PARM(2) / 1000 / 86400   # mm/day to m/s
@@ -230,10 +230,10 @@ no3_matrix_leaching
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 no3_preferential
--start
+start
 10 REM NO3 preferential flow via macropores
 20 k = PARM(1) / 86400
 30 f_macro = PARM(2)
@@ -243,10 +243,10 @@ no3_preferential
 70 moles = rate * TIME / 14000          # Convert back to mol
 80 SAVE moles
 90 END
--end
+end
 
 no3_denitrification_tile
--start
+start
 10 REM Denitrification in saturated zone near tile drains
 20 k = PARM(1) / 86400
 30 Ks_C = PARM(2)                       # mg-C/L
@@ -261,10 +261,10 @@ no3_denitrification_tile
 120 moles = rate * TIME / 14000
 130 SAVE moles
 140 END
--end
+end
 
 no3_tile_export
--start
+start
 10 REM NO3 export from tile to receiving water
 20 q_scale = PARM(1)
 30 NO3_tile = KIN("no3_matrix_leaching") + KIN("no3_preferential")
@@ -272,10 +272,10 @@ no3_tile_export
 50 moles = rate * TIME
 60 SAVE moles
 70 END
--end
+end
 
 p_dissolved_leaching
--start
+start
 10 REM Dissolved P leaching (limited by sorption)
 20 k = PARM(1) / 86400
 30 q_drain = PARM(2) / 1000 / 86400
@@ -287,10 +287,10 @@ p_dissolved_leaching
 90 moles = rate * TIME
 100 SAVE moles
 110 END
--end
+end
 
 p_preferential
--start
+start
 10 REM Dissolved P preferential flow
 20 k = PARM(1) / 86400
 30 f_macro = PARM(2)
@@ -300,10 +300,10 @@ p_preferential
 70 moles = rate * TIME / 31000
 80 SAVE moles
 90 END
--end
+end
 
 p_particulate_macropore
--start
+start
 10 REM Particulate P through macropores
 20 k = PARM(1) / 86400
 30 f_macro = PARM(2)
@@ -313,10 +313,10 @@ p_particulate_macropore
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 p_legacy_release
--start
+start
 10 REM Legacy P release from P-enriched soils
 20 k = PARM(1) / 86400
 30 EPC0 = PARM(2) / 31000               # Equilibrium P concentration
@@ -325,10 +325,10 @@ p_legacy_release
 60 moles = rate * TIME
 70 SAVE moles
 80 END
--end
+end
 
 snowmelt_no3_flush
--start
+start
 10 REM NO3 flush during snowmelt
 20 k = PARM(1) / 86400
 30 q_melt = PARM(2) / 1000 / 86400      # mm/day to m/s
@@ -337,10 +337,10 @@ snowmelt_no3_flush
 60 moles = rate * TIME
 70 SAVE moles
 80 END
--end
+end
 
 snowmelt_p_flush
--start
+start
 10 REM P flush during snowmelt (vegetation P release)
 20 k = PARM(1) / 86400
 30 q_melt = PARM(2) / 1000 / 86400
@@ -349,10 +349,10 @@ snowmelt_p_flush
 60 moles = rate * TIME
 70 SAVE moles
 80 END
--end
+end
 
 frozen_soil_bypass
--start
+start
 10 REM Preferential flow over frozen soil
 20 k = PARM(1) / 86400
 30 f_frozen = PARM(2)
@@ -362,20 +362,20 @@ frozen_soil_bypass
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 controlled_drainage
--start
+start
 10 REM Reduced tile flow under controlled drainage
 20 f_control = PARM(1)
 30 NO3_tile = KIN("no3_tile_export")
 40 reduction = NO3_tile * f_control
 50 SAVE reduction
 60 END
--end
+end
 
 enhanced_denitrification
--start
+start
 10 REM Enhanced denitrification with higher water table
 20 k = PARM(1) / 86400
 30 f_control = PARM(2)
@@ -387,10 +387,10 @@ enhanced_denitrification
 90 moles = rate * TIME / 14000
 100 SAVE moles
 110 END
--end
+end
 
 buffer_denitrification
--start
+start
 10 REM Denitrification in saturated buffer zone
 20 k = PARM(1) / 86400
 30 Ks_C = PARM(2)
@@ -404,10 +404,10 @@ buffer_denitrification
 110 moles = rate * TIME / 14000
 120 SAVE moles
 130 END
--end
+end
 
 buffer_plant_uptake
--start
+start
 10 REM Plant uptake in buffer zone
 20 k = PARM(1) / 86400
 30 f_season = PARM(2)
@@ -416,7 +416,7 @@ buffer_plant_uptake
 60 moles = rate * TIME / 14000
 70 SAVE moles
 80 END
--end
+end
 
 END
 

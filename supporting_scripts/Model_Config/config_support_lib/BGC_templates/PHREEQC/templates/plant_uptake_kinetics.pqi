@@ -150,21 +150,21 @@ KINETICS 1
 
 # Litter decomposition (organic N mineralization)
 # Returns N to soil solution
--litter_n_mineralization
+litter_n_mineralization
     -formula  N(-3) 1
     -m0       0.002           # Litter N pool (mol)
     -parms    0.005 1.07      # k_litter (1/day), theta
     -tol      1e-8
 
 # Litter P mineralization
--litter_p_mineralization
+litter_p_mineralization
     -formula  P 1
     -m0       0.0002          # Litter P pool (mol)
     -parms    0.003 1.07
     -tol      1e-8
 
 # Riparian denitrification (in reducing zones)
--riparian_denitrification
+riparian_denitrification
     -formula  N(5) -2 N(0) 1
     -m0       0.001
     -parms    0.5 0.2 1.07    # k_denit, Ks_O2_inhib, theta
@@ -178,7 +178,7 @@ END
 RATES
 
 no3_uptake
--start
+start
 10 REM Plant NO3 uptake with seasonal/environmental modulation
 20 k_uptake = PARM(1) / 86400
 30 Ks_N = PARM(2) / 14000             # mg/L to mol/L
@@ -198,10 +198,10 @@ no3_uptake
 140 moles = rate * TIME
 145 SAVE moles
 150 END
--end
+end
 
 nh4_uptake
--start
+start
 10 REM Plant NH4 uptake (preferred N source)
 20 k_uptake = PARM(1) / 86400
 30 Ks_N = PARM(2) / 14000
@@ -221,10 +221,10 @@ nh4_uptake
 140 moles = rate * TIME
 145 SAVE moles
 150 END
--end
+end
 
 po4_uptake
--start
+start
 10 REM Plant PO4 uptake (often diffusion-limited)
 20 k_uptake = PARM(1) / 86400
 30 Ks_P = PARM(2) / 31000              # mg/L to mol/L
@@ -240,10 +240,10 @@ po4_uptake
 105 moles = rate * TIME
 108 SAVE moles
 110 END
--end
+end
 
 litter_n_mineralization
--start
+start
 10 REM Litter N mineralization -> NH4
 20 k_litter = PARM(1) / 86400
 30 theta = PARM(2)
@@ -255,10 +255,10 @@ litter_n_mineralization
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 litter_p_mineralization
--start
+start
 10 REM Litter P mineralization -> PO4
 20 k_litter = PARM(1) / 86400
 30 theta = PARM(2)
@@ -270,10 +270,10 @@ litter_p_mineralization
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 riparian_denitrification
--start
+start
 10 REM Enhanced denitrification in saturated riparian zone
 20 k_denit = PARM(1) / 86400
 30 Ks_O2_inhib = PARM(2) / 32000
@@ -292,7 +292,7 @@ riparian_denitrification
 130 moles = rate * TIME
 135 SAVE moles
 140 END
--end
+end
 
 END
 

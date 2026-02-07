@@ -75,21 +75,21 @@ KINETICS 1
 
 # Mean age accumulation (abstract tracer)
 # Age increases at rate of 1 year/year
--mean_age
+mean_age
     -formula  H2O 0        # No actual species change
     -m0       0            # Initial age = 0 years
     -parms    1.0          # Rate = 1 year/year
     -tol      1e-8
 
 # Tritium decay: 3H -> 3He, t1/2 = 12.32 years
--tritium_decay
+tritium_decay
     -formula  H2O 0
     -m0       10           # Initial 3H in TU (modern = ~5-15 TU)
     -parms    0.05626      # lambda = ln(2)/12.32 = 0.05626 /yr
     -tol      1e-10
 
 # Tritiogenic 3He production
--he3_production
+he3_production
     -formula  H2O 0
     -m0       0            # Initial 3He_trit = 0
     -parms    0.05626      # Same as tritium decay
@@ -131,7 +131,7 @@ END
 RATES
 
 mean_age
--start
+start
 10 REM Mean age accumulation in groundwater
 20 REM Age increases at rate of 1 year per year
 30 rate_per_year = PARM(1)
@@ -141,10 +141,10 @@ mean_age
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 tritium_decay
--start
+start
 10 REM Tritium radioactive decay: 3H -> 3He + beta
 20 REM Half-life = 12.32 years, lambda = 0.05626 /yr
 30 lambda = PARM(1) / 31557600         # Convert to /s
@@ -154,10 +154,10 @@ tritium_decay
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 he3_production
--start
+start
 10 REM Tritiogenic 3He production from 3H decay
 20 REM Amount of 3He = initial_3H - current_3H
 30 lambda = PARM(1) / 31557600
@@ -169,10 +169,10 @@ he3_production
 90 moles = rate * TIME
 100 SAVE moles
 110 END
--end
+end
 
 carbon14_decay
--start
+start
 10 REM Carbon-14 radioactive decay
 20 REM Half-life = 5730 years, lambda = 0.000121 /yr
 30 lambda = PARM(1) / 31557600
@@ -182,10 +182,10 @@ carbon14_decay
 70 moles = rate * TIME
 80 SAVE moles
 90 END
--end
+end
 
 cfc11_tracer
--start
+start
 10 REM CFC-11 tracer (conservative in oxic groundwater)
 20 REM May degrade under anoxic/sulfidic conditions
 30 k_deg = PARM(1) / 31557600
@@ -196,10 +196,10 @@ cfc11_tracer
 80 moles = rate * TIME
 90 SAVE moles
 100 END
--end
+end
 
 cfc12_tracer
--start
+start
 10 REM CFC-12 tracer (more stable than CFC-11)
 20 k_deg = PARM(1) / 31557600
 30 CFC12 = M
@@ -207,10 +207,10 @@ cfc12_tracer
 50 moles = rate * TIME
 60 SAVE moles
 70 END
--end
+end
 
 sf6_tracer
--start
+start
 10 REM SF6 tracer (extremely stable)
 20 k_deg = PARM(1) / 31557600
 30 SF6 = M
@@ -218,7 +218,7 @@ sf6_tracer
 50 moles = rate * TIME
 60 SAVE moles
 70 END
--end
+end
 
 END
 
