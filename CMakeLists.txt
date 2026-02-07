@@ -1,13 +1,13 @@
 ####################################
-# (Step A) 
+# (Step A)
 # STEPS TO CREATE CONTAINER (contains all libraries to compile OpenWQ) ====> (ONLY NEED TO DO THIS ONCE!) <====
 ####################################
 # (Step A.1) For DOCKER (for local machine use)
 ####################################
 # 1) Start Docker
-# 2) In the terminal, go to the folder where this CMakeLists file is located
+# 2) In the terminal, go to the containers/ folder: cd containers/
 #    (optional) Clear all docker images and containers: docker system prune -a
-# 3) Create the "docker_openwq" container: docker compose up -d 
+# 3) Create the "docker_openwq" container: docker compose up -d
 #    (optional, if needed) Stop the container: docker compose down
 #    (optional, if needed) See the containers running: docker ps
 # 4) Run a shell inside the container: docker exec -it docker_openwq /bin/bash
@@ -16,9 +16,9 @@
 # (Step A.2) For Apptainer/Singularity (for HPC use)
 ####################################
 # 1) May need to load apptainer/singularity module
-# 2) Go to the folder where this CMakeLists file is located (you will find there the def file: openwq_apptainer.def)
-# 3) Create the singularity: singularity build openwq_apptainer.sif openwq_apptainer.def 
-# (note: may need to add the --fakeroot flag if you don't have root permissions, e.g., singularity build --fakeroot openwq_apptainer.sif openwq_apptainer.def)
+# 2) Go to the containers/ folder: cd containers/
+# 3) Create the singularity: apptainer build openwq.sif openwq_apptainer.def
+# (note: may need to add the --fakeroot flag if you don't have root permissions)
 ####################################
 
 ##############################
