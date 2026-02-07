@@ -203,6 +203,8 @@ The ``NATIVE_BGC_FLEX/`` folder contains templates organized by category:
 +------------------------------+----------------------------------------------------------+
 | ``emerging_contaminants.json``| Pharmaceuticals, PFAS, microplastics, EDCs              |
 +------------------------------+----------------------------------------------------------+
+| ``groundwater_age.json``     | Age tracers: Tritium-3He, 14C, CFCs, SF6                 |
++------------------------------+----------------------------------------------------------+
 
 *Popular Model Frameworks* (``popular_models/``):
 
@@ -326,6 +328,20 @@ Key processes modeled:
 
 Includes ``PHARMACEUTICALS``, ``PPCPS``, ``PFAS``, ``MICROPLASTICS``, ``ENDOCRINE_DISRUPTORS``, and simplified ``EMERGING_SIMPLE`` cycling frameworks.
 
+**Groundwater Age Tracking** (``groundwater_age.json``):
+
+Environmental tracer framework for groundwater residence time estimation:
+
+* **Mean Age Tracking** — Direct age accumulation (1 day/day)
+* **Binary Age Fractions** — Young (<50 yr) vs old water mixing
+* **CFC Tracers** — CFC-11, CFC-12, CFC-113 (post-1940s water)
+* **SF6 Tracer** — Modern tracer (post-1990), terrigenic sources
+* **Tritium-3He** — Bomb-peak dating (t½ = 12.32 yr), 3He ingrowth
+* **Carbon-14** — Radiocarbon dating (t½ = 5730 yr) for old groundwater
+* **Conservative Tracers** — Generic tracers for flow path delineation
+
+Includes ``MEAN_AGE_TRACKING``, ``CFC_TRACERS``, ``SF6_TRACER``, ``TRITIUM_HELIUM``, ``CARBON14``, and ``CONSERVATIVE_TRACERS`` cycling frameworks.
+
 
 **PHREEQC Templates:**
 
@@ -357,6 +373,8 @@ The ``PHREEQC/templates/`` folder contains geochemical equilibrium and kinetic t
 | ``plant_uptake_kinetics.pqi``        | Vegetation N/P uptake, litter mineralization             |
 +--------------------------------------+----------------------------------------------------------+
 | ``emerging_contaminants_kinetics.pqi``| Pharmaceuticals, PFAS, EDCs with decay rates            |
++--------------------------------------+----------------------------------------------------------+
+| ``groundwater_age_kinetics.pqi``     | Tritium-3He, 14C, CFCs, SF6 age tracers                 |
 +--------------------------------------+----------------------------------------------------------+
 
 The kinetic templates use PHREEQC's RATES and KINETICS blocks with BASIC-language rate expressions. They complement the equilibrium templates by adding biological and biogeochemical processes.

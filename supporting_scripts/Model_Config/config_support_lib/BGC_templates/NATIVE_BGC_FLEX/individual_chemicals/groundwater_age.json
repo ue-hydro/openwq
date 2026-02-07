@@ -1,0 +1,455 @@
+{
+  "_DESCRIPTION": "Groundwater Age Tracking and Environmental Tracers",
+  "_REFERENCE": "Cook & Herczeg (2000) Environmental Tracers; McGuire & McDonnell (2006) WRR",
+  "_VERSION": "1.0",
+  "_PROCESSES": {
+    "MEAN_AGE": "Mean age of water parcels (residence time distribution)",
+    "TRACER_DECAY": "Radioactive decay of age-dating tracers",
+    "CFCs": "Chlorofluorocarbon atmospheric tracers",
+    "SF6": "Sulfur hexafluoride modern tracer",
+    "TRITIUM": "Tritium (3H) decay and bomb-peak tracking",
+    "CARBON14": "Radiocarbon dating for old groundwater"
+  },
+  "_NOTES": [
+    "Groundwater age helps understand flow paths and vulnerability",
+    "Mean age ≠ point-source age due to mixing",
+    "CFCs and SF6 best for water recharged after 1950s",
+    "Tritium useful for bomb-peak (1960s) water",
+    "14C for old groundwater (100-40,000 years)",
+    "Age tracers can be combined to constrain residence time distributions"
+  ],
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "AGE_mean",
+      "2": "AGE_young",
+      "3": "AGE_old",
+      "4": "CFC11",
+      "5": "CFC12",
+      "6": "CFC113",
+      "7": "SF6",
+      "8": "TRITIUM",
+      "9": "HELIUM3_trit",
+      "10": "CARBON14",
+      "11": "TRACER_conservative",
+      "12": "TRACER_reactive"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": [
+      "AGE_mean", "AGE_young", "AGE_old",
+      "CFC11", "CFC12", "CFC113", "SF6",
+      "TRITIUM", "HELIUM3_trit", "CARBON14",
+      "TRACER_conservative", "TRACER_reactive"
+    ]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+
+    "MEAN_AGE_TRACKING": {
+      "_description": "Direct mean age calculation via age mass balance",
+      "_reference": "Goode (1996) WRR; Cornaton & Perrochet (2006)",
+      "_notes": [
+        "Age increases at rate of 1 day/day in subsurface",
+        "Recharge water has age = 0",
+        "Mixing: mean age = sum(Qi * age_i) / sum(Qi)"
+      ],
+
+      "list_transformations": {
+        "1": "age_accumulation",
+        "2": "age_reset_recharge"
+      },
+
+      "1": {
+        "_name": "age_accumulation",
+        "_description": "Age increases linearly with time in subsurface",
+        "_reaction": "AGE_mean + dt -> AGE_mean + 1",
+        "_notes": "Rate = 1 day/day (or 1 year/year depending on units)",
+        "consumed": "AGE_mean",
+        "produced": "AGE_mean",
+        "kinetics": [
+          "1.0",
+          "days/day"
+        ],
+        "parameter_names": ["k_age"],
+        "parameter_values": {
+          "k_age": 1.0
+        },
+        "_parameter_ranges": {
+          "k_age": {"value": 1.0, "units": "days/day", "source": "Physical definition of age"}
+        },
+        "_notes": "This is a source term: d(Age)/dt = 1. Implemented as production rate."
+      },
+
+      "2": {
+        "_name": "age_reset_recharge",
+        "_description": "Recharge water resets age to zero",
+        "_notes": "Applied at recharge boundaries via source/sink",
+        "consumed": "AGE_mean",
+        "produced": "AGE_young",
+        "kinetics": [
+          "k_recharge * AGE_mean",
+          "days/day"
+        ],
+        "parameter_names": ["k_recharge"],
+        "parameter_values": {
+          "k_recharge": 0.0
+        },
+        "_notes": "k_recharge should be set via boundary conditions, not kinetics"
+      }
+    },
+
+    "BINARY_AGE_FRACTIONS": {
+      "_description": "Track young vs old water fractions",
+      "_reference": "Suckow (2014) Applied Geochemistry",
+      "_notes": [
+        "Binary mixing model: water is young (<50 yr) or old (>50 yr)",
+        "Fraction young = tracer_measured / tracer_young_endmember"
+      ],
+
+      "list_transformations": {
+        "1": "young_to_old_transition",
+        "2": "young_tracer_decay"
+      },
+
+      "1": {
+        "_name": "young_to_old_transition",
+        "_description": "Young water becomes old after threshold age",
+        "_notes": "Threshold typically 50 years for CFC-based definition",
+        "consumed": "AGE_young",
+        "produced": "AGE_old",
+        "kinetics": [
+          "k_transition * AGE_young * step(AGE_mean - age_threshold)",
+          "fraction/day"
+        ],
+        "parameter_names": ["k_transition", "age_threshold"],
+        "parameter_values": {
+          "k_transition": 0.001,
+          "age_threshold": 18250
+        },
+        "_parameter_ranges": {
+          "age_threshold": {"value": 18250, "units": "days", "source": "50 years × 365 days"}
+        }
+      },
+
+      "2": {
+        "_name": "young_tracer_decay",
+        "_description": "Young fraction tracer decay",
+        "consumed": "AGE_young",
+        "produced": "AGE_old",
+        "kinetics": [
+          "k_decay * AGE_young",
+          "fraction/day"
+        ],
+        "parameter_names": ["k_decay"],
+        "parameter_values": {
+          "k_decay": 0.0001
+        }
+      }
+    },
+
+    "CFC_TRACERS": {
+      "_description": "Chlorofluorocarbon atmospheric tracers for post-1940s water",
+      "_reference": "Busenberg & Plummer (1992) WRR",
+      "_notes": [
+        "CFCs entered atmosphere from 1940s-1990s (now declining)",
+        "CFC-11: CCl3F, t1/2 = 45 yr (atmospheric)",
+        "CFC-12: CCl2F2, t1/2 = 100 yr (atmospheric)",
+        "CFC-113: C2Cl3F3, t1/2 = 85 yr (atmospheric)",
+        "In groundwater: conservative (no decay) but can be degraded under anoxic"
+      ],
+
+      "list_transformations": {
+        "1": "cfc11_equilibration",
+        "2": "cfc12_equilibration",
+        "3": "cfc11_degradation",
+        "4": "cfc12_degradation"
+      },
+
+      "1": {
+        "_name": "cfc11_equilibration",
+        "_description": "CFC-11 equilibration with recharge atmosphere",
+        "_notes": "Concentration at recharge reflects atmospheric history",
+        "consumed": "CFC11",
+        "produced": "CFC11",
+        "kinetics": [
+          "k_equil * (CFC11_atm - CFC11)",
+          "pmol/kg/day"
+        ],
+        "parameter_names": ["k_equil", "CFC11_atm"],
+        "parameter_values": {
+          "k_equil": 0.1,
+          "CFC11_atm": 250
+        },
+        "_parameter_ranges": {
+          "CFC11_atm": {"min": 0, "max": 280, "units": "pmol/kg", "source": "Atmospheric history curve"}
+        }
+      },
+
+      "2": {
+        "_name": "cfc12_equilibration",
+        "_description": "CFC-12 equilibration with recharge atmosphere",
+        "consumed": "CFC12",
+        "produced": "CFC12",
+        "kinetics": [
+          "k_equil * (CFC12_atm - CFC12)",
+          "pmol/kg/day"
+        ],
+        "parameter_names": ["k_equil", "CFC12_atm"],
+        "parameter_values": {
+          "k_equil": 0.1,
+          "CFC12_atm": 550
+        }
+      },
+
+      "3": {
+        "_name": "cfc11_degradation",
+        "_description": "CFC-11 degradation under anoxic conditions",
+        "_notes": "CFCs can degrade in anoxic/sulfidic environments",
+        "consumed": "CFC11",
+        "produced": "CFC11_degraded",
+        "kinetics": [
+          "k_deg_cfc * CFC11 * (Ks_DO / (Ks_DO + DO))",
+          "pmol/kg/day"
+        ],
+        "parameter_names": ["k_deg_cfc", "Ks_DO"],
+        "parameter_values": {
+          "k_deg_cfc": 0.001,
+          "Ks_DO": 0.5
+        },
+        "_parameter_ranges": {
+          "k_deg_cfc": {"min": 0, "max": 0.01, "units": "1/day", "source": "Only under anoxia"}
+        }
+      },
+
+      "4": {
+        "_name": "cfc12_degradation",
+        "_description": "CFC-12 degradation (slower than CFC-11)",
+        "consumed": "CFC12",
+        "produced": "CFC12_degraded",
+        "kinetics": [
+          "k_deg_cfc12 * CFC12 * (Ks_DO / (Ks_DO + DO))",
+          "pmol/kg/day"
+        ],
+        "parameter_names": ["k_deg_cfc12", "Ks_DO"],
+        "parameter_values": {
+          "k_deg_cfc12": 0.0005,
+          "Ks_DO": 0.5
+        }
+      }
+    },
+
+    "SF6_TRACER": {
+      "_description": "Sulfur hexafluoride - modern tracer",
+      "_reference": "Busenberg & Plummer (2000) WRR",
+      "_notes": [
+        "SF6 increasing in atmosphere since 1970s",
+        "Very stable - no degradation in groundwater",
+        "Best for water recharged after 1990",
+        "Can have excess from terrigenic sources"
+      ],
+
+      "list_transformations": {
+        "1": "sf6_equilibration",
+        "2": "sf6_terrigenic_source"
+      },
+
+      "1": {
+        "_name": "sf6_equilibration",
+        "_description": "SF6 equilibration with atmosphere at recharge",
+        "consumed": "SF6",
+        "produced": "SF6",
+        "kinetics": [
+          "k_equil * (SF6_atm - SF6)",
+          "fmol/kg/day"
+        ],
+        "parameter_names": ["k_equil", "SF6_atm"],
+        "parameter_values": {
+          "k_equil": 0.1,
+          "SF6_atm": 2.5
+        },
+        "_parameter_ranges": {
+          "SF6_atm": {"min": 0, "max": 10, "units": "fmol/kg", "source": "Increasing ~7%/year"}
+        }
+      },
+
+      "2": {
+        "_name": "sf6_terrigenic_source",
+        "_description": "Terrigenic SF6 from igneous rocks",
+        "_notes": "Can cause apparent ages too young",
+        "consumed": "SF6_terrigenic",
+        "produced": "SF6",
+        "kinetics": [
+          "k_terrigenic",
+          "fmol/kg/day"
+        ],
+        "parameter_names": ["k_terrigenic"],
+        "parameter_values": {
+          "k_terrigenic": 0.0
+        }
+      }
+    },
+
+    "TRITIUM_HELIUM": {
+      "_description": "Tritium-Helium-3 dating system",
+      "_reference": "Schlosser et al. (1988) EPSL; Solomon & Cook (2000)",
+      "_notes": [
+        "Tritium (3H) from bomb testing peaked in 1963",
+        "Decays to 3He with t1/2 = 12.32 years",
+        "3H-3He age = ln(1 + 3He_trit/3H) / lambda",
+        "Good for ages 0-50 years"
+      ],
+
+      "list_transformations": {
+        "1": "tritium_decay",
+        "2": "helium3_production",
+        "3": "helium3_degassing"
+      },
+
+      "1": {
+        "_name": "tritium_decay",
+        "_description": "Radioactive decay of tritium",
+        "_reaction": "3H -> 3He + beta",
+        "consumed": "TRITIUM",
+        "produced": "HELIUM3_trit",
+        "kinetics": [
+          "lambda_H3 * TRITIUM",
+          "TU/day"
+        ],
+        "parameter_names": ["lambda_H3"],
+        "parameter_values": {
+          "lambda_H3": 0.0001540
+        },
+        "_parameter_ranges": {
+          "lambda_H3": {"value": 0.0001540, "units": "1/day", "source": "t1/2 = 12.32 yr = 4500 days"}
+        }
+      },
+
+      "2": {
+        "_name": "helium3_production",
+        "_description": "Tritiogenic 3He production from 3H decay",
+        "_notes": "Tracks ingrowth of 3He from tritium",
+        "consumed": "TRITIUM",
+        "produced": "HELIUM3_trit",
+        "kinetics": [
+          "lambda_H3 * TRITIUM",
+          "TU-equiv/day"
+        ],
+        "parameter_names": ["lambda_H3"],
+        "parameter_values": {
+          "lambda_H3": 0.0001540
+        }
+      },
+
+      "3": {
+        "_name": "helium3_degassing",
+        "_description": "3He loss via degassing in unsaturated zone",
+        "_notes": "3He can escape before water reaches saturated zone",
+        "consumed": "HELIUM3_trit",
+        "produced": "HELIUM3_atm",
+        "kinetics": [
+          "k_degas * HELIUM3_trit * f_unsat",
+          "TU-equiv/day"
+        ],
+        "parameter_names": ["k_degas", "f_unsat"],
+        "parameter_values": {
+          "k_degas": 0.1,
+          "f_unsat": 0.0
+        },
+        "_notes": "f_unsat = 0 in saturated zone, 1 in unsaturated"
+      }
+    },
+
+    "CARBON14": {
+      "_description": "Radiocarbon dating for old groundwater",
+      "_reference": "Clark & Fritz (1997) Environmental Isotopes",
+      "_notes": [
+        "14C has t1/2 = 5,730 years",
+        "Useful for ages 100 - 40,000 years",
+        "Initial 14C activity affected by soil CO2",
+        "Dilution by dead carbon (carbonates) must be corrected"
+      ],
+
+      "list_transformations": {
+        "1": "c14_decay",
+        "2": "c14_dilution"
+      },
+
+      "1": {
+        "_name": "c14_decay",
+        "_description": "Radioactive decay of 14C",
+        "_reaction": "14C -> 14N + beta",
+        "consumed": "CARBON14",
+        "produced": "C14_decayed",
+        "kinetics": [
+          "lambda_C14 * CARBON14",
+          "pmC/day"
+        ],
+        "parameter_names": ["lambda_C14"],
+        "parameter_values": {
+          "lambda_C14": 3.31e-7
+        },
+        "_parameter_ranges": {
+          "lambda_C14": {"value": 3.31e-7, "units": "1/day", "source": "t1/2 = 5730 yr"}
+        }
+      },
+
+      "2": {
+        "_name": "c14_dilution",
+        "_description": "14C dilution by dead carbon from carbonate dissolution",
+        "_notes": "Carbonates have 0 pmC, diluting DIC 14C content",
+        "consumed": "CARBON14",
+        "produced": "CARBON14_corrected",
+        "kinetics": [
+          "k_dilution * CARBON14 * (DIC_carb / DIC_total)",
+          "pmC/day"
+        ],
+        "parameter_names": ["k_dilution", "DIC_carb", "DIC_total"],
+        "parameter_values": {
+          "k_dilution": 0.01,
+          "DIC_carb": 0.5,
+          "DIC_total": 1.0
+        }
+      }
+    },
+
+    "CONSERVATIVE_TRACERS": {
+      "_description": "Generic conservative and reactive tracers",
+      "_notes": "For tracer tests and residence time estimation",
+
+      "list_transformations": {
+        "1": "conservative_transport",
+        "2": "reactive_decay"
+      },
+
+      "1": {
+        "_name": "conservative_transport",
+        "_description": "Conservative tracer (no reaction)",
+        "_notes": "Useful for flow path delineation",
+        "consumed": "TRACER_conservative",
+        "produced": "TRACER_conservative",
+        "kinetics": [
+          "0.0",
+          "mg/L/day"
+        ],
+        "parameter_names": [],
+        "parameter_values": {}
+      },
+
+      "2": {
+        "_name": "reactive_decay",
+        "_description": "First-order decay of reactive tracer",
+        "consumed": "TRACER_reactive",
+        "produced": "TRACER_product",
+        "kinetics": [
+          "k_decay * TRACER_reactive",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_decay"],
+        "parameter_values": {
+          "k_decay": 0.01
+        }
+      }
+    }
+  }
+}
