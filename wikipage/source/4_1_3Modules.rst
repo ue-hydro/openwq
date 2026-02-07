@@ -201,6 +201,8 @@ The ``NATIVE_BGC_FLEX/`` folder contains templates organized by category:
 +------------------------------+----------------------------------------------------------+
 | ``iron_manganese.json``      | Fe/Mn redox cycling                                      |
 +------------------------------+----------------------------------------------------------+
+| ``emerging_contaminants.json``| Pharmaceuticals, PFAS, microplastics, EDCs              |
++------------------------------+----------------------------------------------------------+
 
 *Popular Model Frameworks* (``popular_models/``):
 
@@ -304,6 +306,26 @@ Vegetation nutrient cycling based on SWAT/HYPE frameworks:
 
 Each template includes ``PLANT_UPTAKE_FULL``, ``PLANT_UPTAKE_SIMPLE``, and ``RIPARIAN_BUFFER`` cycling frameworks.
 
+**Emerging Contaminants** (``emerging_contaminants.json``):
+
+Comprehensive framework for micropollutants and emerging contaminants:
+
+* **Pharmaceuticals** — Antibiotics (sulfamethoxazole, ciprofloxacin), analgesics (ibuprofen, diclofenac), hormones (estradiol, EE2), psychiatric drugs (carbamazepine)
+* **Personal Care Products (PPCPs)** — Fragrances, UV filters (oxybenzone), antimicrobials (triclosan)
+* **PFAS** — Per- and polyfluoroalkyl substances (PFOA, PFOS, GenX) with extreme persistence
+* **Microplastics** — Fibers, fragments, beads with settling, aggregation, biofouling
+* **Endocrine Disruptors (EDCs)** — Estrogens, bisphenol A, phthalates
+
+Key processes modeled:
+
+* Biodegradation (temperature-dependent, compound-specific rates)
+* Photolysis (light-dependent, with depth attenuation)
+* Sorption to sediments and organic matter
+* Volatilization (for fragrances)
+* Settling and aggregation (for microplastics)
+
+Includes ``PHARMACEUTICALS``, ``PPCPS``, ``PFAS``, ``MICROPLASTICS``, ``ENDOCRINE_DISRUPTORS``, and simplified ``EMERGING_SIMPLE`` cycling frameworks.
+
 
 **PHREEQC Templates:**
 
@@ -333,6 +355,8 @@ The ``PHREEQC/templates/`` folder contains geochemical equilibrium and kinetic t
 | ``phytoplankton_kinetics.pqi``       | Algal growth, respiration, mortality, zooplankton        |
 +--------------------------------------+----------------------------------------------------------+
 | ``plant_uptake_kinetics.pqi``        | Vegetation N/P uptake, litter mineralization             |
++--------------------------------------+----------------------------------------------------------+
+| ``emerging_contaminants_kinetics.pqi``| Pharmaceuticals, PFAS, EDCs with decay rates            |
 +--------------------------------------+----------------------------------------------------------+
 
 The kinetic templates use PHREEQC's RATES and KINETICS blocks with BASIC-language rate expressions. They complement the equilibrium templates by adding biological and biogeochemical processes.
