@@ -1,0 +1,533 @@
+{
+  "_DESCRIPTION": "Explicit pH and Alkalinity Dynamics for NATIVE_BGC_FLEX",
+  "_REFERENCE": "Stumm & Morgan (1996) Aquatic Chemistry; Chapra (1997) Surface Water Quality",
+  "_VERSION": "1.0",
+  "_PROCESSES": {
+    "CARBONATE_SYSTEM": "CO2-HCO3-CO3 equilibria and pH buffering",
+    "ALKALINITY_SOURCES": "Weathering, photosynthesis, denitrification",
+    "ALKALINITY_SINKS": "Nitrification, sulfide oxidation, calcification",
+    "ACID_INPUTS": "Atmospheric deposition, AMD, organic acids",
+    "BUFFER_CAPACITY": "Resistance to pH change"
+  },
+  "_NOTES": [
+    "PHREEQC handles pH implicitly via equilibrium; this provides explicit tracking",
+    "Alkalinity = [HCO3-] + 2[CO3--] + [OH-] - [H+] (approximate)",
+    "pH affects speciation, toxicity (NH3/NH4, metals), and reaction rates",
+    "Carbonate buffering dominant in most natural waters",
+    "This module tracks alkalinity as a state variable with pH calculated"
+  ],
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "ALK",
+      "2": "DIC",
+      "3": "CO2_aq",
+      "4": "HCO3",
+      "5": "CO3",
+      "6": "H_ion",
+      "7": "OH_ion",
+      "8": "Ca",
+      "9": "Cite",
+      "10": "ACID_strong",
+      "11": "BASE_strong",
+      "12": "DOC_acid"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": [
+      "ALK", "DIC", "CO2_aq", "HCO3", "CO3", "Ca", "ACID_strong", "BASE_strong", "DOC_acid"
+    ]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+
+    "CARBONATE_EQUILIBRIUM": {
+      "_description": "CO2-bicarbonate-carbonate system dynamics",
+      "_reference": "Stumm & Morgan (1996)",
+      "_notes": [
+        "CO2(aq) + H2O <-> H2CO3 <-> HCO3- + H+ <-> CO3-- + 2H+",
+        "pK1 = 6.35, pK2 = 10.33 at 25C",
+        "Temperature affects equilibrium constants",
+        "This framework approximates equilibrium via fast kinetics"
+      ],
+
+      "list_transformations": {
+        "1": "co2_hydration",
+        "2": "bicarbonate_dissociation",
+        "3": "co2_gas_exchange",
+        "4": "ph_calculation"
+      },
+
+      "1": {
+        "_name": "co2_hydration",
+        "_description": "CO2 hydration to form bicarbonate",
+        "_reaction": "CO2(aq) + H2O <-> HCO3- + H+",
+        "_notes": "Fast equilibrium approximated as kinetic process",
+        "consumed": "CO2_aq",
+        "produced": "HCO3",
+        "kinetics": [
+          "k_hydration * (CO2_aq - HCO3 * H_ion / K1)",
+          "mmol/L/day"
+        ],
+        "parameter_names": ["k_hydration", "K1"],
+        "parameter_values": {
+          "k_hydration": 100.0,
+          "K1": 4.47e-7
+        },
+        "_parameter_ranges": {
+          "K1": {"value": 4.47e-7, "units": "mol/L", "source": "pK1 = 6.35 at 25C"}
+        }
+      },
+
+      "2": {
+        "_name": "bicarbonate_dissociation",
+        "_description": "Bicarbonate dissociation to carbonate",
+        "_reaction": "HCO3- <-> CO3-- + H+",
+        "consumed": "HCO3",
+        "produced": "CO3",
+        "kinetics": [
+          "k_dissoc * (HCO3 - CO3 * H_ion / K2)",
+          "mmol/L/day"
+        ],
+        "parameter_names": ["k_dissoc", "K2"],
+        "parameter_values": {
+          "k_dissoc": 100.0,
+          "K2": 4.68e-11
+        },
+        "_parameter_ranges": {
+          "K2": {"value": 4.68e-11, "units": "mol/L", "source": "pK2 = 10.33 at 25C"}
+        }
+      },
+
+      "3": {
+        "_name": "co2_gas_exchange",
+        "_description": "CO2 exchange with atmosphere",
+        "_reaction": "CO2(g) <-> CO2(aq)",
+        "_notes": "Henry's Law equilibrium",
+        "consumed": "CO2_atm",
+        "produced": "CO2_aq",
+        "kinetics": [
+          "k_CO2 * (KH * pCO2_atm - CO2_aq)",
+          "mmol/L/day"
+        ],
+        "parameter_names": ["k_CO2", "KH", "pCO2_atm"],
+        "parameter_values": {
+          "k_CO2": 1.0,
+          "KH": 0.034,
+          "pCO2_atm": 415e-6
+        },
+        "_parameter_ranges": {
+          "KH": {"value": 0.034, "units": "mol/L/atm", "source": "Henry constant at 25C"},
+          "pCO2_atm": {"value": 415e-6, "units": "atm", "source": "2023 atmospheric CO2"}
+        }
+      },
+
+      "4": {
+        "_name": "ph_calculation",
+        "_description": "Calculate pH from H+ concentration",
+        "_notes": "pH = -log10([H+]); H+ derived from charge balance",
+        "consumed": "H_ion",
+        "produced": "H_ion",
+        "kinetics": [
+          "0.0",
+          "mol/L/day"
+        ],
+        "parameter_names": [],
+        "parameter_values": {},
+        "_notes": "pH is diagnostic: use post-processing or USER_DEFINED output"
+      }
+    },
+
+    "ALKALINITY_PRODUCTION": {
+      "_description": "Processes that generate alkalinity",
+      "_reference": "Drever (1997) Geochemistry of Natural Waters",
+      "_notes": [
+        "Weathering: CaCO3 + CO2 + H2O -> Ca2+ + 2HCO3- (+2 eq ALK)",
+        "Photosynthesis: CO2 + H2O -> CH2O + O2 (consumes CO2, increases pH)",
+        "Denitrification: 5CH2O + 4NO3- + 4H+ -> 5CO2 + 2N2 + 7H2O (+1 eq ALK per NO3-)",
+        "Sulfate reduction: 2CH2O + SO4-- + 2H+ -> 2CO2 + H2S + 2H2O (+2 eq ALK)"
+      ],
+
+      "list_transformations": {
+        "1": "carbonate_weathering",
+        "2": "silicate_weathering",
+        "3": "photosynthesis_alk",
+        "4": "denitrification_alk",
+        "5": "sulfate_reduction_alk"
+      },
+
+      "1": {
+        "_name": "carbonate_weathering",
+        "_description": "Carbonate mineral dissolution",
+        "_reaction": "CaCO3 + CO2 + H2O -> Ca2+ + 2HCO3-",
+        "_notes": "Major source of alkalinity in limestone regions",
+        "consumed": "CaCO3_solid",
+        "produced": "ALK",
+        "kinetics": [
+          "k_weather_carb * (1 - IAP/Ksp_calcite) * SA_calcite",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_weather_carb", "Ksp_calcite", "SA_calcite"],
+        "parameter_values": {
+          "k_weather_carb": 0.01,
+          "Ksp_calcite": 3.36e-9,
+          "SA_calcite": 1.0
+        },
+        "_parameter_ranges": {
+          "Ksp_calcite": {"value": 3.36e-9, "units": "mol2/L2", "source": "Calcite solubility product"}
+        }
+      },
+
+      "2": {
+        "_name": "silicate_weathering",
+        "_description": "Silicate mineral weathering",
+        "_reaction": "CaAl2Si2O8 + 2CO2 + 3H2O -> Ca2+ + 2HCO3- + Al2Si2O5(OH)4",
+        "_notes": "Slower than carbonate weathering but important in igneous terrain",
+        "consumed": "SILICATE_solid",
+        "produced": "ALK",
+        "kinetics": [
+          "k_weather_sil * (H_ion / H_ref)^n_sil",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_weather_sil", "H_ref", "n_sil"],
+        "parameter_values": {
+          "k_weather_sil": 0.001,
+          "H_ref": 1e-7,
+          "n_sil": 0.5
+        }
+      },
+
+      "3": {
+        "_name": "photosynthesis_alk",
+        "_description": "Alkalinity change from photosynthesis",
+        "_notes": "Net effect depends on N source (NO3 vs NH4)",
+        "consumed": "CO2_aq",
+        "produced": "ALK",
+        "kinetics": [
+          "k_photo * PHYTO * I_light / (Ks_I + I_light) * (DIC / (Ks_DIC + DIC)) * (NO3 / (NO3 + NH4))",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_photo", "Ks_I", "Ks_DIC"],
+        "parameter_values": {
+          "k_photo": 0.1,
+          "Ks_I": 100.0,
+          "Ks_DIC": 0.5
+        },
+        "_notes": "NO3 uptake adds 1 eq ALK per mol N; NH4 uptake removes 1 eq ALK"
+      },
+
+      "4": {
+        "_name": "denitrification_alk",
+        "_description": "Alkalinity production from denitrification",
+        "_reaction": "5CH2O + 4NO3- + 4H+ -> 5CO2 + 2N2 + 7H2O",
+        "_notes": "Consumes H+, generates 1 eq ALK per mol NO3- reduced",
+        "consumed": "NO3",
+        "produced": "ALK",
+        "kinetics": [
+          "k_denit * OM * (NO3 / (Ks_NO3 + NO3)) * (Ks_O2 / (Ks_O2 + DO)) * 1.0",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_denit", "Ks_NO3", "Ks_O2"],
+        "parameter_values": {
+          "k_denit": 0.2,
+          "Ks_NO3": 0.5,
+          "Ks_O2": 0.5
+        },
+        "_stoichiometry": "1 eq ALK per mol NO3- reduced"
+      },
+
+      "5": {
+        "_name": "sulfate_reduction_alk",
+        "_description": "Alkalinity production from sulfate reduction",
+        "_reaction": "2CH2O + SO4-- + 2H+ -> 2CO2 + H2S + 2H2O",
+        "_notes": "Generates 2 eq ALK per mol SO4 reduced",
+        "consumed": "SO4",
+        "produced": "ALK",
+        "kinetics": [
+          "k_sr * OM * (SO4 / (Ks_SO4 + SO4)) * (Ks_O2 / (Ks_O2 + DO)) * (Ks_NO3 / (Ks_NO3 + NO3)) * 2.0",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_sr", "Ks_SO4", "Ks_O2", "Ks_NO3"],
+        "parameter_values": {
+          "k_sr": 0.05,
+          "Ks_SO4": 1.0,
+          "Ks_O2": 0.5,
+          "Ks_NO3": 0.5
+        },
+        "_stoichiometry": "2 eq ALK per mol SO4 reduced"
+      }
+    },
+
+    "ALKALINITY_CONSUMPTION": {
+      "_description": "Processes that consume alkalinity",
+      "_notes": [
+        "Nitrification: NH4+ + 2O2 -> NO3- + 2H+ + H2O (-2 eq ALK per mol NH4)",
+        "Sulfide oxidation: H2S + 2O2 -> SO4-- + 2H+ (-2 eq ALK)",
+        "Calcification: Ca2+ + 2HCO3- -> CaCOite + CO2 + H2O (-2 eq ALK)"
+      ],
+
+      "list_transformations": {
+        "1": "nitrification_alk",
+        "2": "sulfide_oxidation_alk",
+        "3": "calcification",
+        "4": "respiration_alk"
+      },
+
+      "1": {
+        "_name": "nitrification_alk",
+        "_description": "Alkalinity consumption by nitrification",
+        "_reaction": "NH4+ + 2O2 -> NO3- + 2H+ + H2O",
+        "_notes": "Major ALK sink in N-rich waters; 2 eq ALK consumed per mol NH4+",
+        "consumed": "ALK",
+        "produced": "H_ion",
+        "kinetics": [
+          "k_nit * NH4 * (DO / (Ks_O2 + DO)) * 2.0",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_nit", "Ks_O2"],
+        "parameter_values": {
+          "k_nit": 0.1,
+          "Ks_O2": 1.0
+        },
+        "_stoichiometry": "2 eq ALK consumed per mol NH4+ oxidized"
+      },
+
+      "2": {
+        "_name": "sulfide_oxidation_alk",
+        "_description": "Alkalinity consumption by sulfide oxidation",
+        "_reaction": "H2S + 2O2 -> SO4-- + 2H+",
+        "_notes": "Important at oxic-anoxic interfaces",
+        "consumed": "ALK",
+        "produced": "H_ion",
+        "kinetics": [
+          "k_sulf_ox * H2S * (DO / (Ks_O2 + DO)) * 2.0",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_sulf_ox", "Ks_O2"],
+        "parameter_values": {
+          "k_sulf_ox": 1.0,
+          "Ks_O2": 0.5
+        }
+      },
+
+      "3": {
+        "_name": "calcification",
+        "_description": "Calcite precipitation (biotic or abiotic)",
+        "_reaction": "Ca2+ + 2HCO3- -> CaCO3 + CO2 + H2O",
+        "_notes": "Removes 2 eq ALK per mol CaCO3 precipitated",
+        "consumed": "ALK",
+        "produced": "CaCO3_solid",
+        "kinetics": [
+          "k_precip * (IAP / Ksp_calcite - 1) * f_precip_site",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_precip", "Ksp_calcite", "f_precip_site"],
+        "parameter_values": {
+          "k_precip": 0.1,
+          "Ksp_calcite": 3.36e-9,
+          "f_precip_site": 1.0
+        },
+        "_notes": "IAP = [Ca2+][CO3--]; precipitation when IAP > Ksp"
+      },
+
+      "4": {
+        "_name": "respiration_alk",
+        "_description": "Alkalinity change from respiration with NH4 release",
+        "_notes": "Organic N mineralization releases NH4+, slightly increases ALK",
+        "consumed": "OM",
+        "produced": "ALK",
+        "kinetics": [
+          "k_resp * OM * (DO / (Ks_O2 + DO)) * rN_OM * 1.0",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_resp", "Ks_O2", "rN_OM"],
+        "parameter_values": {
+          "k_resp": 0.1,
+          "Ks_O2": 1.0,
+          "rN_OM": 0.07
+        },
+        "_stoichiometry": "1 eq ALK produced per mol NH4+ released"
+      }
+    },
+
+    "ACID_MINE_DRAINAGE": {
+      "_description": "pH dynamics in acid mine drainage systems",
+      "_reference": "Nordstrom & Alpers (1999)",
+      "_notes": [
+        "Pyrite oxidation: FeS2 + 3.5O2 + H2O -> Fe2+ + 2SO4-- + 2H+",
+        "Fe oxidation: 4Fe2+ + O2 + 10H2O -> 4Fe(OH)3 + 8H+",
+        "Total: FeS2 + 3.75O2 + 3.5H2O -> Fe(OH)3 + 2SO4-- + 4H+",
+        "Extreme acidity (pH < 3) common in AMD"
+      ],
+
+      "list_transformations": {
+        "1": "pyrite_oxidation",
+        "2": "fe_oxidation_hydrolysis",
+        "3": "amd_neutralization"
+      },
+
+      "1": {
+        "_name": "pyrite_oxidation",
+        "_description": "Pyrite oxidation generating acidity",
+        "_reaction": "FeS2 + 3.5O2 + H2O -> Fe2+ + 2SO4-- + 2H+",
+        "_notes": "Rate increases at low pH due to Fe3+ oxidation pathway",
+        "consumed": "FeS2",
+        "produced": "ACID_strong",
+        "kinetics": [
+          "k_pyrite * FeS2 * (DO / (Ks_O2 + DO)) * (1 + k_Fe3 * Fe3 / (Ks_Fe3 + Fe3))",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_pyrite", "Ks_O2", "k_Fe3", "Ks_Fe3"],
+        "parameter_values": {
+          "k_pyrite": 0.001,
+          "Ks_O2": 2.0,
+          "k_Fe3": 10.0,
+          "Ks_Fe3": 0.1
+        },
+        "_stoichiometry": "2 eq H+ per mol pyrite"
+      },
+
+      "2": {
+        "_name": "fe_oxidation_hydrolysis",
+        "_description": "Fe2+ oxidation and hydrolysis",
+        "_reaction": "4Fe2+ + O2 + 10H2O -> 4Fe(OH)3 + 8H+",
+        "_notes": "Generates additional acidity",
+        "consumed": "Fe2",
+        "produced": "ACID_strong",
+        "kinetics": [
+          "k_Fe_ox * Fe2 * (DO / (Ks_O2 + DO)) * 2.0",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_Fe_ox", "Ks_O2"],
+        "parameter_values": {
+          "k_Fe_ox": 0.1,
+          "Ks_O2": 1.0
+        },
+        "_stoichiometry": "2 eq H+ per mol Fe2+ oxidized"
+      },
+
+      "3": {
+        "_name": "amd_neutralization",
+        "_description": "AMD neutralization by carbonate",
+        "_reaction": "CaCO3 + 2H+ -> Ca2+ + CO2 + H2O",
+        "_notes": "Limestone treatment for AMD",
+        "consumed": "ACID_strong",
+        "produced": "Ca",
+        "kinetics": [
+          "k_neutral * ACID_strong * CaCO3_reactive * (1 - pH_inhibit)",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_neutral", "pH_inhibit"],
+        "parameter_values": {
+          "k_neutral": 1.0,
+          "pH_inhibit": 0.0
+        },
+        "_notes": "Rate decreases as armoring occurs on limestone"
+      }
+    },
+
+    "ORGANIC_ACIDS": {
+      "_description": "Dissolved organic carbon and organic acids",
+      "_reference": "Thurman (1985) Organic Geochemistry of Natural Waters",
+      "_notes": [
+        "DOC includes humic and fulvic acids with carboxyl groups",
+        "Organic acids contribute to acidity in low-ALK waters",
+        "pKa of humic acids ~4-5",
+        "Color affects light penetration"
+      ],
+
+      "list_transformations": {
+        "1": "organic_acid_dissociation",
+        "2": "doc_photo_degradation",
+        "3": "doc_microbial_processing"
+      },
+
+      "1": {
+        "_name": "organic_acid_dissociation",
+        "_description": "Organic acid contribution to acidity",
+        "_reaction": "R-COOH <-> R-COO- + H+",
+        "_notes": "Equilibrium with pKa ~ 4.5 for typical humic acids",
+        "consumed": "DOC_acid",
+        "produced": "H_ion",
+        "kinetics": [
+          "k_org_eq * (DOC_acid * f_carboxyl - DOC_deprot * H_ion / Ka_org)",
+          "meq/L/day"
+        ],
+        "parameter_names": ["k_org_eq", "f_carboxyl", "Ka_org"],
+        "parameter_values": {
+          "k_org_eq": 100.0,
+          "f_carboxyl": 0.1,
+          "Ka_org": 3.16e-5
+        },
+        "_parameter_ranges": {
+          "f_carboxyl": {"min": 0.05, "max": 0.2, "units": "eq/mg-C", "source": "Carboxyl content"},
+          "Ka_org": {"value": 3.16e-5, "units": "mol/L", "source": "pKa = 4.5"}
+        }
+      },
+
+      "2": {
+        "_name": "doc_photo_degradation",
+        "_description": "Photochemical degradation of DOC",
+        "_notes": "Reduces organic acid content",
+        "consumed": "DOC_acid",
+        "produced": "CO2_aq",
+        "kinetics": [
+          "k_photo_DOC * DOC_acid * I_UV / I_UV_ref",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_photo_DOC", "I_UV_ref"],
+        "parameter_values": {
+          "k_photo_DOC": 0.01,
+          "I_UV_ref": 10.0
+        }
+      },
+
+      "3": {
+        "_name": "doc_microbial_processing",
+        "_description": "Microbial processing of DOC",
+        "consumed": "DOC_acid",
+        "produced": "CO2_aq",
+        "kinetics": [
+          "k_mic_DOC * DOC_acid * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_mic_DOC", "Ks_O2", "theta"],
+        "parameter_values": {
+          "k_mic_DOC": 0.05,
+          "Ks_O2": 1.0,
+          "theta": 1.07
+        }
+      }
+    },
+
+    "BUFFER_INTENSITY": {
+      "_description": "Buffer capacity calculations",
+      "_reference": "Stumm & Morgan (1996)",
+      "_notes": [
+        "Buffer intensity = dC/dpH where C is strong acid/base added",
+        "Maximum buffering at pH = pKa",
+        "Low-ALK waters vulnerable to acidification",
+        "Buffer intensity important for ANC (Acid Neutralizing Capacity)"
+      ],
+
+      "list_transformations": {
+        "1": "anc_calculation"
+      },
+
+      "1": {
+        "_name": "anc_calculation",
+        "_description": "Acid Neutralizing Capacity tracking",
+        "_notes": "ANC = ALK + [NH3] + [organic bases] - [organic acids]",
+        "consumed": "ALK",
+        "produced": "ANC",
+        "kinetics": [
+          "0.0",
+          "meq/L/day"
+        ],
+        "parameter_names": [],
+        "parameter_values": {},
+        "_notes": "ANC is diagnostic; computed from other species"
+      }
+    }
+  }
+}

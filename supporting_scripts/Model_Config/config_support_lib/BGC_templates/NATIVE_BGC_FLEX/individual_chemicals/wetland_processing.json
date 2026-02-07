@@ -1,0 +1,474 @@
+{
+  "_DESCRIPTION": "Wetland Nutrient Processing Module for BMP Effectiveness Studies",
+  "_REFERENCE": "Kadlec & Wallace (2009) Treatment Wetlands; Mitsch & Gosselink (2015)",
+  "_VERSION": "1.0",
+  "_PROCESSES": {
+    "NITROGEN_REMOVAL": "Denitrification, plant uptake, sedimentation",
+    "PHOSPHORUS_RETENTION": "Adsorption, precipitation, plant uptake",
+    "TSS_REMOVAL": "Settling, filtration by vegetation",
+    "PATHOGEN_REMOVAL": "UV exposure, die-off, predation",
+    "ORGANIC_MATTER": "Production, decomposition, accretion"
+  },
+  "_NOTES": [
+    "Wetlands are natural BMPs for nutrient removal",
+    "N removal primarily via denitrification (permanent)",
+    "P removal via sedimentation and sorption (may saturate)",
+    "Performance depends on HRT, loading, vegetation, temperature",
+    "First-order k-C* model common for design"
+  ],
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "NO3_N",
+      "2": "NH4_N",
+      "3": "N_ORG",
+      "4": "N2_gas",
+      "5": "PO4_P",
+      "6": "P_ORG",
+      "7": "P_SED",
+      "8": "TSS",
+      "9": "BOD",
+      "10": "DO",
+      "11": "PATHOGEN",
+      "12": "DOC",
+      "13": "POC",
+      "14": "PLANT_N",
+      "15": "PLANT_P",
+      "16": "LITTER"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": [
+      "NO3_N", "NH4_N", "N_ORG", "PO4_P", "P_ORG",
+      "TSS", "BOD", "DO", "PATHOGEN", "DOC", "POC"
+    ]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+
+    "NITROGEN_WETLAND": {
+      "_description": "Wetland nitrogen cycling and removal",
+      "_notes": [
+        "Denitrification is main N removal pathway (permanent)",
+        "Plant uptake is temporary storage (released at senescence)",
+        "Typical removal rates: 200-2000 kg N/ha/yr"
+      ],
+
+      "list_transformations": {
+        "1": "denitrification_wetland",
+        "2": "nitrification_wetland",
+        "3": "n_plant_uptake",
+        "4": "n_sedimentation",
+        "5": "n_mineralization",
+        "6": "n_plant_senescence"
+      },
+
+      "1": {
+        "_name": "denitrification_wetland",
+        "_description": "Microbial denitrification in anoxic zones",
+        "_reaction": "NO3 + C -> N2 (gas loss)",
+        "_notes": "Primary permanent N removal mechanism",
+        "consumed": "NO3_N",
+        "produced": "N2_gas",
+        "kinetics": [
+          "k_denit_wet * NO3_N * (DOC / (Ks_C + DOC)) * (Ks_O2 / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_denit_wet", "Ks_C", "Ks_O2", "theta"],
+        "parameter_values": {
+          "k_denit_wet": 0.3,
+          "Ks_C": 5.0,
+          "Ks_O2": 0.5,
+          "theta": 1.08
+        },
+        "_parameter_ranges": {
+          "k_denit_wet": {"min": 0.1, "max": 1.0, "units": "1/day", "source": "Kadlec & Wallace 2009"}
+        }
+      },
+
+      "2": {
+        "_name": "nitrification_wetland",
+        "_description": "NH4 oxidation in aerobic zones",
+        "_reaction": "NH4 + 2O2 -> NO3",
+        "consumed": "NH4_N",
+        "produced": "NO3_N",
+        "kinetics": [
+          "k_nitrif_wet * NH4_N * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_nitrif_wet", "Ks_O2", "theta"],
+        "parameter_values": {
+          "k_nitrif_wet": 0.2,
+          "Ks_O2": 1.0,
+          "theta": 1.08
+        }
+      },
+
+      "3": {
+        "_name": "n_plant_uptake",
+        "_description": "Nitrogen uptake by emergent vegetation",
+        "_notes": "Typha, Phragmites, Scirpus uptake 200-300 kg N/ha/yr",
+        "consumed": "NO3_N",
+        "produced": "PLANT_N",
+        "kinetics": [
+          "k_uptake_N * (NO3_N + NH4_N) / (Ks_N + NO3_N + NH4_N) * f_veg * f_season",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_uptake_N", "Ks_N", "f_veg", "f_season"],
+        "parameter_values": {
+          "k_uptake_N": 0.1,
+          "Ks_N": 0.5,
+          "f_veg": 1.0,
+          "f_season": 1.0
+        }
+      },
+
+      "4": {
+        "_name": "n_sedimentation",
+        "_description": "Particulate organic N settling",
+        "consumed": "N_ORG",
+        "produced": "N_SED",
+        "kinetics": [
+          "v_settle * N_ORG / depth",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["v_settle", "depth"],
+        "parameter_values": {
+          "v_settle": 0.5,
+          "depth": 0.5
+        }
+      },
+
+      "5": {
+        "_name": "n_mineralization",
+        "_description": "Organic N mineralization to NH4",
+        "consumed": "N_ORG",
+        "produced": "NH4_N",
+        "kinetics": [
+          "k_min_N * N_ORG * theta^(Treach_K - 293)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_min_N", "theta"],
+        "parameter_values": {
+          "k_min_N": 0.05,
+          "theta": 1.07
+        }
+      },
+
+      "6": {
+        "_name": "n_plant_senescence",
+        "_description": "N release from senescing vegetation",
+        "_notes": "Late season return of N to system",
+        "consumed": "PLANT_N",
+        "produced": "N_ORG",
+        "kinetics": [
+          "k_senes * PLANT_N * f_senescence",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_senes", "f_senescence"],
+        "parameter_values": {
+          "k_senes": 0.01,
+          "f_senescence": 0.0
+        }
+      }
+    },
+
+    "PHOSPHORUS_WETLAND": {
+      "_description": "Wetland phosphorus cycling and retention",
+      "_notes": [
+        "P removal via sedimentation, sorption, and plant uptake",
+        "Sorption capacity may saturate over time",
+        "Typical removal: 5-50 kg P/ha/yr"
+      ],
+
+      "list_transformations": {
+        "1": "p_sedimentation",
+        "2": "p_sorption",
+        "3": "p_plant_uptake",
+        "4": "p_desorption",
+        "5": "p_mineralization"
+      },
+
+      "1": {
+        "_name": "p_sedimentation",
+        "_description": "Particulate P settling",
+        "consumed": "P_ORG",
+        "produced": "P_SED",
+        "kinetics": [
+          "v_settle_P * P_ORG / depth",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["v_settle_P", "depth"],
+        "parameter_values": {
+          "v_settle_P": 0.3,
+          "depth": 0.5
+        }
+      },
+
+      "2": {
+        "_name": "p_sorption",
+        "_description": "PO4 adsorption to sediments and Fe/Al oxides",
+        "_notes": "Langmuir isotherm - finite capacity",
+        "consumed": "PO4_P",
+        "produced": "P_SED",
+        "kinetics": [
+          "k_sorp_P * PO4_P * (1 - P_SED / Smax_P)",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_sorp_P", "Smax_P"],
+        "parameter_values": {
+          "k_sorp_P": 0.2,
+          "Smax_P": 100
+        },
+        "_parameter_ranges": {
+          "Smax_P": {"min": 10, "max": 500, "units": "mg-P/L equiv", "source": "Depends on soil type"}
+        }
+      },
+
+      "3": {
+        "_name": "p_plant_uptake",
+        "_description": "P uptake by wetland vegetation",
+        "consumed": "PO4_P",
+        "produced": "PLANT_P",
+        "kinetics": [
+          "k_uptake_P * PO4_P / (Ks_P + PO4_P) * f_veg * f_season",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_uptake_P", "Ks_P", "f_veg", "f_season"],
+        "parameter_values": {
+          "k_uptake_P": 0.05,
+          "Ks_P": 0.1,
+          "f_veg": 1.0,
+          "f_season": 1.0
+        }
+      },
+
+      "4": {
+        "_name": "p_desorption",
+        "_description": "P release from saturated sediments",
+        "_notes": "Can occur under anoxic conditions or high loading",
+        "consumed": "P_SED",
+        "produced": "PO4_P",
+        "kinetics": [
+          "k_desorp * P_SED * (Ks_O2 / (Ks_O2 + DO))",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_desorp", "Ks_O2"],
+        "parameter_values": {
+          "k_desorp": 0.01,
+          "Ks_O2": 0.5
+        }
+      },
+
+      "5": {
+        "_name": "p_mineralization",
+        "_description": "Organic P mineralization",
+        "consumed": "P_ORG",
+        "produced": "PO4_P",
+        "kinetics": [
+          "k_min_P * P_ORG * theta^(Treach_K - 293)",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_min_P", "theta"],
+        "parameter_values": {
+          "k_min_P": 0.03,
+          "theta": 1.07
+        }
+      }
+    },
+
+    "TSS_REMOVAL": {
+      "_description": "Suspended solids removal in wetlands",
+      "_notes": "Filtration by vegetation and settling are main mechanisms",
+
+      "list_transformations": {
+        "1": "tss_settling",
+        "2": "tss_filtration",
+        "3": "tss_resuspension"
+      },
+
+      "1": {
+        "_name": "tss_settling",
+        "_description": "Gravitational settling of suspended solids",
+        "consumed": "TSS",
+        "produced": "TSS_SED",
+        "kinetics": [
+          "v_settle_TSS * TSS / depth",
+          "mg/L/day"
+        ],
+        "parameter_names": ["v_settle_TSS", "depth"],
+        "parameter_values": {
+          "v_settle_TSS": 1.0,
+          "depth": 0.5
+        }
+      },
+
+      "2": {
+        "_name": "tss_filtration",
+        "_description": "Filtration by emergent vegetation stems",
+        "consumed": "TSS",
+        "produced": "TSS_SED",
+        "kinetics": [
+          "k_filt * TSS * f_veg_density",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_filt", "f_veg_density"],
+        "parameter_values": {
+          "k_filt": 0.3,
+          "f_veg_density": 1.0
+        }
+      },
+
+      "3": {
+        "_name": "tss_resuspension",
+        "_description": "Wind-driven or bioturbation resuspension",
+        "consumed": "TSS_SED",
+        "produced": "TSS",
+        "kinetics": [
+          "k_resusp * TSS_SED * f_wind",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_resusp", "f_wind"],
+        "parameter_values": {
+          "k_resusp": 0.01,
+          "f_wind": 0.0
+        }
+      }
+    },
+
+    "BOD_WETLAND": {
+      "_description": "BOD removal in treatment wetlands",
+
+      "list_transformations": {
+        "1": "bod_decay",
+        "2": "bod_settling"
+      },
+
+      "1": {
+        "_name": "bod_decay",
+        "_description": "Microbial BOD decomposition",
+        "consumed": "BOD",
+        "produced": "CO2",
+        "kinetics": [
+          "k_BOD * BOD * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_BOD", "Ks_O2", "theta"],
+        "parameter_values": {
+          "k_BOD": 0.2,
+          "Ks_O2": 0.5,
+          "theta": 1.06
+        }
+      },
+
+      "2": {
+        "_name": "bod_settling",
+        "_description": "Particulate BOD settling",
+        "consumed": "BOD",
+        "produced": "BOD_SED",
+        "kinetics": [
+          "f_part * v_settle * BOD / depth",
+          "mg/L/day"
+        ],
+        "parameter_names": ["f_part", "v_settle", "depth"],
+        "parameter_values": {
+          "f_part": 0.4,
+          "v_settle": 0.5,
+          "depth": 0.5
+        }
+      }
+    },
+
+    "PATHOGEN_WETLAND": {
+      "_description": "Pathogen removal in wetlands",
+      "_notes": "UV exposure, sedimentation, predation, die-off",
+
+      "list_transformations": {
+        "1": "pathogen_dieoff",
+        "2": "pathogen_uv",
+        "3": "pathogen_settling"
+      },
+
+      "1": {
+        "_name": "pathogen_dieoff",
+        "_description": "Natural pathogen die-off",
+        "consumed": "PATHOGEN",
+        "produced": "PATHOGEN_dead",
+        "kinetics": [
+          "k_dieoff * PATHOGEN * theta^(Treach_K - 293)",
+          "MPN/100mL/day"
+        ],
+        "parameter_names": ["k_dieoff", "theta"],
+        "parameter_values": {
+          "k_dieoff": 0.5,
+          "theta": 1.07
+        }
+      },
+
+      "2": {
+        "_name": "pathogen_uv",
+        "_description": "UV inactivation of pathogens",
+        "consumed": "PATHOGEN",
+        "produced": "PATHOGEN_dead",
+        "kinetics": [
+          "k_uv * PATHOGEN * (SWrad_Wm2 / 500) * f_depth",
+          "MPN/100mL/day"
+        ],
+        "parameter_names": ["k_uv", "f_depth"],
+        "parameter_values": {
+          "k_uv": 1.0,
+          "f_depth": 0.3
+        }
+      },
+
+      "3": {
+        "_name": "pathogen_settling",
+        "_description": "Pathogen attachment to particles and settling",
+        "consumed": "PATHOGEN",
+        "produced": "PATHOGEN_sed",
+        "kinetics": [
+          "k_attach * PATHOGEN * TSS * v_settle / depth",
+          "MPN/100mL/day"
+        ],
+        "parameter_names": ["k_attach", "v_settle", "depth"],
+        "parameter_values": {
+          "k_attach": 0.001,
+          "v_settle": 0.5,
+          "depth": 0.5
+        }
+      }
+    },
+
+    "KC_STAR_MODEL": {
+      "_description": "First-order k-C* model for wetland design",
+      "_reference": "Kadlec & Knight (1996); Kadlec & Wallace (2009)",
+      "_notes": [
+        "Cout = C* + (Cin - C*) * exp(-k * HRT)",
+        "C* = background concentration (irreducible)",
+        "k = first-order rate constant (m/day)",
+        "HRT = hydraulic retention time (days)"
+      ],
+
+      "list_transformations": {
+        "1": "generic_removal"
+      },
+
+      "1": {
+        "_name": "generic_removal",
+        "_description": "Generic first-order removal with background",
+        "consumed": "POLLUTANT",
+        "produced": "POLLUTANT_removed",
+        "kinetics": [
+          "k_removal * (POLLUTANT - C_star)",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_removal", "C_star"],
+        "parameter_values": {
+          "k_removal": 0.1,
+          "C_star": 0.5
+        },
+        "_notes": "Adjust k_removal and C_star for specific pollutants"
+      }
+    }
+  }
+}
