@@ -1,0 +1,289 @@
+{
+  "_DESCRIPTION": "Phytoplankton/Algae Dynamics Module",
+  "_REFERENCE": "WASP8 Eutrophication Model; Chapra (2008) Surface Water Quality Modeling; Bowie et al. (1985) QUAL2E",
+  "_PROCESSES": {
+    "PHOTOSYNTHESIS": "Light-limited and nutrient-limited algal growth",
+    "RESPIRATION": "Algal dark respiration consuming oxygen",
+    "GRAZING": "Zooplankton predation on phytoplankton",
+    "SETTLING": "Gravitational settling of algal cells",
+    "MORTALITY": "Natural death and lysis releasing nutrients"
+  },
+  "_NOTES": [
+    "Chlorophyll-a (Chla) is a proxy for algal biomass",
+    "Typical Chla:C ratio is 1:50 (2% of carbon is Chla)",
+    "Light attenuation follows Beer-Lambert law",
+    "Nutrient limitation uses Michaelis-Menten or minimum law (Liebig)"
+  ],
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "PHYTO",
+      "2": "DO",
+      "3": "NO3_N",
+      "4": "NH4_N",
+      "5": "PO4_P",
+      "6": "ZOO",
+      "7": "DOC",
+      "8": "Chla"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": ["PHYTO", "DO", "NO3_N", "NH4_N", "PO4_P", "DOC", "Chla"]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+    "PHYTOPLANKTON_DYNAMICS": {
+      "_description": "Multi-nutrient phytoplankton growth model with light limitation",
+
+      "list_transformations": {
+        "1": "phyto_growth_NO3",
+        "2": "phyto_growth_NH4",
+        "3": "phyto_P_uptake",
+        "4": "phyto_respiration",
+        "5": "phyto_mortality",
+        "6": "phyto_settling",
+        "7": "zoo_grazing",
+        "8": "zoo_respiration",
+        "9": "zoo_mortality",
+        "10": "chla_production",
+        "11": "chla_loss"
+      },
+
+      "_LIGHT_LIMITATION": {
+        "DESCRIPTION": "Steele (1962) photoinhibition model: f(I) = (I/Iopt) * exp(1 - I/Iopt)",
+        "SIMPLIFIED": "For depth-averaged: f_light = (Io/Iopt) * exp(1 - Io/Iopt) * (1 - exp(-Ke*H)) / (Ke*H)",
+        "NOTES": [
+          "Io = surface PAR (typically 40-50% of total solar radiation)",
+          "Iopt = optimal light intensity for growth (typically 200-400 µE/m²/s)",
+          "Ke = light extinction coefficient (0.1-3.0 /m depending on turbidity)",
+          "H = water depth (m)"
+        ]
+      },
+
+      "_NUTRIENT_LIMITATION": {
+        "DESCRIPTION": "Michaelis-Menten kinetics with multiplicative or minimum limitation",
+        "NITROGEN": "f_N = (NO3_N + NH4_N) / (Ks_N + NO3_N + NH4_N)",
+        "PHOSPHORUS": "f_P = PO4_P / (Ks_P + PO4_P)",
+        "COMBINED": "Use min(f_N, f_P) for Liebig's law or f_N * f_P for multiplicative"
+      },
+
+      "1": {
+        "_name": "phyto_growth_NO3",
+        "_description": "Phytoplankton growth using nitrate as N source (with O2 production)",
+        "_reaction": "CO2 + NO3 + PO4 + light -> PHYTO + O2",
+        "_stoichiometry": "106 CO2 + 16 NO3 + 1 PO4 -> C106H263O110N16P (Redfield)",
+        "consumed": "NO3_N",
+        "produced": "PHYTO",
+        "kinetics": [
+          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3_N+NH4_N)/(Ks_N+NO3_N+NH4_N), PO4_P/(Ks_P+PO4_P)) * (NO3_N/(NO3_N+NH4_N+0.001)) * theta_growth^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["mu_max", "Iopt", "Ks_N", "Ks_P", "theta_growth"],
+        "parameter_values": {
+          "mu_max": 2.0,
+          "Iopt": 300.0,
+          "Ks_N": 0.025,
+          "Ks_P": 0.005,
+          "theta_growth": 1.068
+        },
+        "_parameter_ranges": {
+          "mu_max": {"min": 0.5, "max": 3.5, "units": "1/day", "source": "Bowie et al. 1985"},
+          "Iopt": {"min": 100, "max": 500, "units": "W/m2", "source": "Chapra 2008"},
+          "Ks_N": {"min": 0.01, "max": 0.15, "units": "mg-N/L", "source": "WASP8"},
+          "Ks_P": {"min": 0.001, "max": 0.05, "units": "mg-P/L", "source": "WASP8"}
+        }
+      },
+
+      "2": {
+        "_name": "phyto_growth_NH4",
+        "_description": "Phytoplankton growth using ammonium (preferred N source)",
+        "_reaction": "CO2 + NH4 + PO4 + light -> PHYTO + O2",
+        "consumed": "NH4_N",
+        "produced": "PHYTO",
+        "kinetics": [
+          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3_N+NH4_N)/(Ks_N+NO3_N+NH4_N), PO4_P/(Ks_P+PO4_P)) * (NH4_N/(NO3_N+NH4_N+0.001)) * Pref_NH4 * theta_growth^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["mu_max", "Iopt", "Ks_N", "Ks_P", "Pref_NH4", "theta_growth"],
+        "parameter_values": {
+          "mu_max": 2.0,
+          "Iopt": 300.0,
+          "Ks_N": 0.025,
+          "Ks_P": 0.005,
+          "Pref_NH4": 1.5,
+          "theta_growth": 1.068
+        },
+        "_notes": "NH4 is preferred over NO3 (less energy required for assimilation)"
+      },
+
+      "3": {
+        "_name": "phyto_P_uptake",
+        "_description": "Phosphorus uptake by phytoplankton",
+        "consumed": "PO4_P",
+        "produced": "PHYTO",
+        "kinetics": [
+          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3_N+NH4_N)/(Ks_N+NO3_N+NH4_N), PO4_P/(Ks_P+PO4_P)) * (1/rCP) * theta_growth^(Treach_K - 293)",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["mu_max", "Iopt", "Ks_N", "Ks_P", "rCP", "theta_growth"],
+        "parameter_values": {
+          "mu_max": 2.0,
+          "Iopt": 300.0,
+          "Ks_N": 0.025,
+          "Ks_P": 0.005,
+          "rCP": 106.0,
+          "theta_growth": 1.068
+        },
+        "_notes": "rCP is C:P Redfield ratio (106:1 molar, ~41:1 mass)"
+      },
+
+      "4": {
+        "_name": "phyto_respiration",
+        "_description": "Algal dark respiration (basal metabolism)",
+        "_reaction": "PHYTO + O2 -> CO2 + NH4 + PO4",
+        "consumed": "PHYTO",
+        "produced": "NH4_N",
+        "kinetics": [
+          "k_resp * PHYTO * theta_resp^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_resp", "theta_resp"],
+        "parameter_values": {
+          "k_resp": 0.1,
+          "theta_resp": 1.045
+        },
+        "_parameter_ranges": {
+          "k_resp": {"min": 0.02, "max": 0.2, "units": "1/day", "source": "Chapra 2008"}
+        }
+      },
+
+      "5": {
+        "_name": "phyto_mortality",
+        "_description": "Non-predatory mortality (disease, senescence, lysis)",
+        "consumed": "PHYTO",
+        "produced": "DOC",
+        "kinetics": [
+          "k_mort * PHYTO",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_mort"],
+        "parameter_values": {
+          "k_mort": 0.02
+        },
+        "_parameter_ranges": {
+          "k_mort": {"min": 0.01, "max": 0.1, "units": "1/day"}
+        }
+      },
+
+      "6": {
+        "_name": "phyto_settling",
+        "_description": "Gravitational settling of phytoplankton",
+        "_notes": "Settling flux = v_s * PHYTO / H, where H is depth",
+        "consumed": "PHYTO",
+        "produced": "PHYTO_SED",
+        "kinetics": [
+          "v_settle * PHYTO / depth",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["v_settle", "depth"],
+        "parameter_values": {
+          "v_settle": 0.5,
+          "depth": 2.0
+        },
+        "_parameter_ranges": {
+          "v_settle": {"min": 0.05, "max": 2.0, "units": "m/day", "source": "Diatoms: 0.5-2, Greens: 0.1-0.5"}
+        }
+      },
+
+      "7": {
+        "_name": "zoo_grazing",
+        "_description": "Zooplankton grazing on phytoplankton (Ivlev formulation)",
+        "consumed": "PHYTO",
+        "produced": "ZOO",
+        "kinetics": [
+          "g_max * ZOO * (1 - exp(-lambda_g * PHYTO)) * theta_zoo^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["g_max", "lambda_g", "theta_zoo"],
+        "parameter_values": {
+          "g_max": 1.5,
+          "lambda_g": 0.5,
+          "theta_zoo": 1.08
+        },
+        "_notes": "Ivlev: G = Gmax * (1 - exp(-λ*P)); alternative: Holling Type II or III"
+      },
+
+      "8": {
+        "_name": "zoo_respiration",
+        "_description": "Zooplankton respiration",
+        "consumed": "ZOO",
+        "produced": "NH4_N",
+        "kinetics": [
+          "k_resp_zoo * ZOO * theta_zoo^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_resp_zoo", "theta_zoo"],
+        "parameter_values": {
+          "k_resp_zoo": 0.15,
+          "theta_zoo": 1.08
+        }
+      },
+
+      "9": {
+        "_name": "zoo_mortality",
+        "_description": "Zooplankton mortality (includes fish predation as density-dependent term)",
+        "consumed": "ZOO",
+        "produced": "DOC",
+        "kinetics": [
+          "k_mort_zoo * ZOO + k_mort2_zoo * ZOO * ZOO",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_mort_zoo", "k_mort2_zoo"],
+        "parameter_values": {
+          "k_mort_zoo": 0.02,
+          "k_mort2_zoo": 0.01
+        },
+        "_notes": "Quadratic term represents density-dependent predation pressure"
+      },
+
+      "10": {
+        "_name": "chla_production",
+        "_description": "Chlorophyll-a synthesis proportional to phytoplankton growth",
+        "consumed": "PHYTO",
+        "produced": "Chla",
+        "kinetics": [
+          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3_N+NH4_N)/(Ks_N+NO3_N+NH4_N), PO4_P/(Ks_P+PO4_P)) * ratio_Chla_C * theta_growth^(Treach_K - 293)",
+          "ug-Chla/L/day"
+        ],
+        "parameter_names": ["mu_max", "Iopt", "Ks_N", "Ks_P", "ratio_Chla_C", "theta_growth"],
+        "parameter_values": {
+          "mu_max": 2.0,
+          "Iopt": 300.0,
+          "Ks_N": 0.025,
+          "Ks_P": 0.005,
+          "ratio_Chla_C": 20.0,
+          "theta_growth": 1.068
+        },
+        "_notes": "ratio_Chla_C = Chla:C in µg Chla / mg C (typically 10-50, varies with light)"
+      },
+
+      "11": {
+        "_name": "chla_loss",
+        "_description": "Chlorophyll-a loss from respiration, mortality, and grazing",
+        "consumed": "Chla",
+        "produced": "DOC",
+        "kinetics": [
+          "(k_resp + k_mort + g_max * ZOO * (1 - exp(-lambda_g * PHYTO)) / (PHYTO + 0.001)) * Chla",
+          "ug-Chla/L/day"
+        ],
+        "parameter_names": ["k_resp", "k_mort", "g_max", "lambda_g"],
+        "parameter_values": {
+          "k_resp": 0.1,
+          "k_mort": 0.02,
+          "g_max": 1.5,
+          "lambda_g": 0.5
+        }
+      }
+    }
+  }
+}

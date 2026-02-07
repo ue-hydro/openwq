@@ -183,7 +183,11 @@ The ``NATIVE_BGC_FLEX/`` folder contains templates organized by category:
 +------------------------------+----------------------------------------------------------+
 | ``phosphorus_full.json``     | Full P cycle with redox-dependent release                |
 +------------------------------+----------------------------------------------------------+
-| ``dissolved_oxygen.json``    | Streeter-Phelps DO-BOD dynamics                          |
+| ``dissolved_oxygen.json``    | Complete DO budget with reaeration, BOD, SOD, NOD        |
++------------------------------+----------------------------------------------------------+
+| ``phytoplankton_algae.json`` | Multi-nutrient algal growth with zooplankton grazing     |
++------------------------------+----------------------------------------------------------+
+| ``plant_uptake.json``        | Vegetation N/P uptake with litter cycling                |
 +------------------------------+----------------------------------------------------------+
 | ``carbon_organic.json``      | DOC/POC cycling with mineralization                      |
 +------------------------------+----------------------------------------------------------+
@@ -255,21 +259,87 @@ Example thermodynamic kinetics expression:
    "KINETICS": ["k * X * (NO3/(Km+NO3)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((119-45)/(2*0.008314*(T+273)))))", "mg/L/day"]
 
 
+New Advanced Templates (v2.0)
+""""""""""""""""""""""""""""""
+
+**Dissolved Oxygen Balance** (``dissolved_oxygen.json``):
+
+Complete dissolved oxygen budget for streams and rivers, including:
+
+* **Reaeration** — Atmospheric oxygen exchange with multiple empirical formulas (Owens, O'Connor-Dobbins, Churchill, Tsivoglou)
+* **Photosynthesis** — Oxygen production by phytoplankton (Steele photoinhibition model)
+* **Algal respiration** — 24-hour oxygen consumption by algae
+* **BOD decay** — Fast and slow carbonaceous BOD fractions with Michaelis-Menten O2 limitation
+* **BOD settling** — Particulate BOD removal to sediments
+* **Nitrification NOD** — Nitrogenous oxygen demand (4.57 mg O2/mg NH4-N)
+* **Sediment oxygen demand** — Benthic respiration (SOD)
+* **COD oxidation** — Chemical oxygen demand from reduced substances
+
+Also includes a simplified ``DO_BALANCE_SIMPLE`` framework for Streeter-Phelps screening analysis.
+
+**Phytoplankton/Algae Dynamics** (``phytoplankton_algae.json``):
+
+Multi-nutrient phytoplankton growth model based on WASP8 eutrophication framework:
+
+* **Phytoplankton growth** — Light-limited (Steele model) and nutrient-limited (Michaelis-Menten)
+* **Nitrogen uptake** — Preferential NH4 uptake, NO3 as secondary source
+* **Phosphorus uptake** — Redfield stoichiometry (C:N:P = 106:16:1)
+* **Respiration** — Basal metabolism with temperature dependence
+* **Mortality** — Non-predatory death and cell lysis
+* **Settling** — Gravitational settling of algal biomass
+* **Zooplankton grazing** — Ivlev grazing formulation with predation on phytoplankton
+* **Zooplankton dynamics** — Respiration and density-dependent mortality
+* **Chlorophyll-a tracking** — Biomass proxy with variable Chla:C ratio
+
+**Plant Uptake Module** (``plant_uptake.json``):
+
+Vegetation nutrient cycling based on SWAT/HYPE frameworks:
+
+* **NO3 uptake** — Nitrate uptake with seasonal growth modulation
+* **NH4 uptake** — Preferential ammonium uptake (less energy required)
+* **PO4 uptake** — Phosphorus uptake with Michaelis-Menten kinetics
+* **Senescence** — Nutrient release during litterfall with retranslocation
+* **Litter mineralization** — Decomposition of litter N, P, C to mineral forms
+* **Riparian buffer** — Enhanced uptake and denitrification in riparian zones
+
+Each template includes ``PLANT_UPTAKE_FULL``, ``PLANT_UPTAKE_SIMPLE``, and ``RIPARIAN_BUFFER`` cycling frameworks.
+
+
 **PHREEQC Templates:**
 
-The ``PHREEQC/templates/`` folder contains geochemical equilibrium templates:
+The ``PHREEQC/templates/`` folder contains geochemical equilibrium and kinetic templates:
+
+*Equilibrium Templates:*
 
 +----------------------------------+----------------------------------------------------------+
 | Template                         | Description                                              |
 +==================================+==========================================================+
 | ``major_ions_equilibrium.pqi``   | Ca, Mg, Na, K, Cl, SO4, HCO3 speciation                  |
 +----------------------------------+----------------------------------------------------------+
-| ``nitrogen_speciation.pqi``      | NH4/NH3, NO2, NO3 aqueous speciation                     |
+| ``nitrogen_speciation.pqi``      | NH4/NH3, NO2, NO3 aqueous speciation with redox          |
 +----------------------------------+----------------------------------------------------------+
 | ``phosphorus_minerals.pqi``      | PO4 speciation with mineral saturation                   |
 +----------------------------------+----------------------------------------------------------+
 | ``trace_metals.pqi``             | Fe, Mn, Cu, Zn complexation and redox                    |
 +----------------------------------+----------------------------------------------------------+
+
+*Kinetic Templates (v2.0):*
+
++--------------------------------------+----------------------------------------------------------+
+| Template                             | Description                                              |
++======================================+==========================================================+
+| ``dissolved_oxygen_kinetics.pqi``    | DO balance with BOD decay, nitrification NOD, SOD        |
++--------------------------------------+----------------------------------------------------------+
+| ``phytoplankton_kinetics.pqi``       | Algal growth, respiration, mortality, zooplankton        |
++--------------------------------------+----------------------------------------------------------+
+| ``plant_uptake_kinetics.pqi``        | Vegetation N/P uptake, litter mineralization             |
++--------------------------------------+----------------------------------------------------------+
+
+The kinetic templates use PHREEQC's RATES and KINETICS blocks with BASIC-language rate expressions. They complement the equilibrium templates by adding biological and biogeochemical processes.
+
+.. note::
+
+   **PHREEQC vs NATIVE_BGC_FLEX for biological processes:** PHREEQC is optimized for geochemical equilibrium calculations. For complex biological processes (phytoplankton dynamics, plant uptake), NATIVE_BGC_FLEX is generally more efficient and flexible. The PHREEQC kinetic templates are provided for users who need to couple biological processes with geochemical equilibrium in a single engine.
 
 
 PHREEQC
