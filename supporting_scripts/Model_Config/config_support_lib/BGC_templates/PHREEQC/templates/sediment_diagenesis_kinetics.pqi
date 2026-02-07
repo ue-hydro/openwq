@@ -1,0 +1,402 @@
+# PHREEQC Template: Sediment Diagenesis Kinetics
+# Description: Multi-G organic matter, redox cascade, P/N cycling in lake/reservoir sediments
+# Reference: Berner (1980) Early Diagenesis; DiToro (2001) Sediment Flux Modeling
+# ================================================================
+#
+# NOTE: This template models organic matter decomposition through
+# the thermodynamic sequence of electron acceptors (O2 > NO3 > Mn > Fe > SO4)
+# and associated nutrient/metal cycling.
+#
+# ================================================================
+
+DATABASE phreeqc.dat
+
+TITLE Sediment Diagenesis - Multi-G Organic Matter and Redox Cascade
+
+# ================================================================
+# SOLUTION 1: Overlying water (oxic lake bottom water)
+# ================================================================
+SOLUTION 1  Overlying Water Column
+    temp      10.0
+    pH        7.5
+    pe        12.0       # Oxic conditions
+    units     mg/L
+
+    Ca        40.0
+    Mg        10.0
+    Na        15.0
+    K         3.0
+    Cl        20.0
+    C(4)      60 as HCO3
+    S(6)      15 as SO4
+    N(5)      1.0        # Nitrate
+    N(-3)     0.05       # Ammonium (low in oxic water)
+    P         0.02       # Phosphate
+    O(0)      8.0        # DO at saturation
+    Fe        0.01       # Low Fe in oxic water
+    Mn        0.005      # Low Mn in oxic water
+
+END
+
+# ================================================================
+# SOLUTION 2: Porewater (anoxic sediment porewater)
+# ================================================================
+SOLUTION 2  Sediment Porewater
+    temp      8.0
+    pH        7.0
+    pe        -2.0       # Reducing conditions
+    units     mg/L
+
+    Ca        80.0       # Higher from mineral dissolution
+    Mg        20.0
+    Na        20.0
+    K         5.0
+    Cl        25.0
+    C(4)      150 as HCO3  # Elevated from OM decomposition
+    S(6)      10 as SO4    # Depleted by sulfate reduction
+    S(-2)     2.0 as H2S   # Sulfide present
+    N(5)      0.1          # Low NO3 (denitrified)
+    N(-3)     5.0          # High NH4 from mineralization
+    P         0.5          # High P from diagenesis
+    O(0)      0.0          # Anoxic
+    Fe        5.0          # High dissolved Fe2+
+    Mn        2.0          # High dissolved Mn2+
+
+END
+
+# ================================================================
+# EQUILIBRIUM_PHASES: Mineral phases in sediments
+# ================================================================
+EQUILIBRIUM_PHASES 1
+    Calcite      0.0   0.0     # Carbonate equilibrium
+    ite          0.0   0.0     # P mineral
+    Pyrite       0.0   0.0     # Sulfide mineral
+    Fe(OH)3(a)   0.0   0.0     # Ferric hydroxide
+    MnO2         0.0   0.0     # Manganese oxide
+
+END
+
+# ================================================================
+# KINETICS 1: Multi-G organic matter decomposition
+# ================================================================
+KINETICS 1
+
+# Labile organic matter (G1): fast decay, k ~ 0.1-1 /day
+-om_labile_decay
+    -formula  H2O 0
+    -m0       10.0         # Initial labile OM (mg-C/L porewater equiv)
+    -parms    0.3 1.07     # k_labile (1/day), theta (temp coeff)
+    -tol      1e-8
+
+# Intermediate organic matter (G2): medium decay, k ~ 0.01-0.1 /day
+-om_intermediate_decay
+    -formula  H2O 0
+    -m0       20.0
+    -parms    0.05 1.07
+    -tol      1e-8
+
+# Refractory organic matter (G3): slow decay, k ~ 0.001 /day
+-om_refractory_decay
+    -formula  H2O 0
+    -m0       50.0
+    -parms    0.002 1.05
+    -tol      1e-8
+
+# Aerobic respiration
+-aerobic_respiration
+    -formula  O2 -1 CO2 1
+    -m0       0.0
+    -parms    0.5 0.5      # k_aero, Ks_O2 (mg/L)
+    -tol      1e-8
+
+# Denitrification
+-denitrification
+    -formula  NO3 -0.8 N2 0.4 CO2 1
+    -m0       0.0
+    -parms    0.3 0.5 0.5  # k_denit, Ks_NO3, Ks_O2_inhib
+    -tol      1e-8
+
+# Manganese reduction
+-mn_reduction
+    -formula  Mn 0.5 CO2 1
+    -m0       0.0
+    -parms    0.2 1.0 0.5 0.5  # k_Mn, Ks_MnO2, Ks_O2_inhib, Ks_NO3_inhib
+    -tol      1e-8
+
+# Iron reduction
+-fe_reduction
+    -formula  Fe 0.5 CO2 1
+    -m0       0.0
+    -parms    0.15 2.0 0.5 0.5 0.5  # k_Fe, Ks_FeOH3, Ks_O2, Ks_NO3, Ks_Mn
+    -tol      1e-8
+
+# Sulfate reduction
+-sulfate_reduction
+    -formula  SO4 -0.5 HS 0.5 CO2 1
+    -m0       0.0
+    -parms    0.1 1.0 0.5 0.5  # k_SR, Ks_SO4, Ks_O2_inhib, Ks_NO3_inhib
+    -tol      1e-8
+
+# Methanogenesis
+-methanogenesis
+    -formula  CO2 -0.5 CH4 0.5
+    -m0       0.0
+    -parms    0.05 0.5 0.5 1.0  # k_meth, Ks_O2_inhib, Ks_SO4_inhib, Ks_Ac
+    -tol      1e-8
+
+# Methane ebullition
+-methane_ebullition
+    -formula  H2O 0
+    -m0       0.0
+    -parms    0.1 2.0      # k_ebull, CH4_threshold (mM)
+    -tol      1e-8
+
+# Phosphorus release from Fe reduction
+-p_release_fe
+    -formula  H2O 0
+    -m0       0.0
+    -parms    0.1 0.1      # P:Fe ratio, k_release
+    -tol      1e-8
+
+# Ammonia release from OM mineralization
+-nh4_release
+    -formula  N(-3) 1
+    -m0       0.0
+    -parms    0.07         # N:C ratio in organic matter
+    -tol      1e-8
+
+END
+
+# ================================================================
+# RATES: Kinetic rate expressions
+# ================================================================
+RATES
+
+om_labile_decay
+-start
+10 REM Labile OM decay - first-order
+20 k = PARM(1) / 86400            # Convert 1/day to 1/s
+30 theta = PARM(2)
+40 T = TC
+50 f_temp = theta^(T - 20)
+60 OM = M
+70 rate = k * OM * f_temp
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+om_intermediate_decay
+-start
+10 REM Intermediate OM decay
+20 k = PARM(1) / 86400
+30 theta = PARM(2)
+40 T = TC
+50 f_temp = theta^(T - 20)
+60 OM = M
+70 rate = k * OM * f_temp
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+om_refractory_decay
+-start
+10 REM Refractory OM decay - very slow
+20 k = PARM(1) / 86400
+30 theta = PARM(2)
+40 T = TC
+50 f_temp = theta^(T - 20)
+60 OM = M
+70 rate = k * OM * f_temp
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+aerobic_respiration
+-start
+10 REM Aerobic respiration: CH2O + O2 -> CO2 + H2O
+20 k = PARM(1) / 86400
+30 Ks_O2 = PARM(2) / 32000         # Convert mg/L to mol/L
+40 O2 = MOL("O2")
+50 OM_total = KIN("om_labile_decay") + KIN("om_intermediate_decay") + KIN("om_refractory_decay")
+60 f_O2 = O2 / (Ks_O2 + O2)
+70 rate = k * OM_total * f_O2
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+denitrification
+-start
+10 REM Denitrification: 5CH2O + 4NO3- + 4H+ -> 5CO2 + 2N2 + 7H2O
+20 k = PARM(1) / 86400
+30 Ks_NO3 = PARM(2) / 14000        # Convert mg-N/L to mol/L
+40 Ks_O2_inhib = PARM(3) / 32000
+50 NO3 = TOT("N(5)")
+60 O2 = MOL("O2")
+70 OM_total = KIN("om_labile_decay") + KIN("om_intermediate_decay")
+80 f_NO3 = NO3 / (Ks_NO3 + NO3)
+90 f_inhib = Ks_O2_inhib / (Ks_O2_inhib + O2)
+100 rate = k * OM_total * f_NO3 * f_inhib
+110 moles = rate * TIME
+120 SAVE moles
+130 END
+-end
+
+mn_reduction
+-start
+10 REM Mn(IV) reduction: CH2O + 2MnO2 + 4H+ -> CO2 + 2Mn2+ + 3H2O
+20 k = PARM(1) / 86400
+30 Ks_MnO2 = PARM(2)
+40 Ks_O2_inhib = PARM(3) / 32000
+50 Ks_NO3_inhib = PARM(4) / 14000
+60 MnO2 = EQUI("MnO2")
+70 O2 = MOL("O2")
+80 NO3 = TOT("N(5)")
+90 OM = KIN("om_labile_decay") + KIN("om_intermediate_decay")
+100 f_MnO2 = MnO2 / (Ks_MnO2 + MnO2)
+110 f_inhib = (Ks_O2_inhib / (Ks_O2_inhib + O2)) * (Ks_NO3_inhib / (Ks_NO3_inhib + NO3))
+120 rate = k * OM * f_MnO2 * f_inhib
+130 moles = rate * TIME
+140 SAVE moles
+150 END
+-end
+
+fe_reduction
+-start
+10 REM Fe(III) reduction: CH2O + 4Fe(OH)3 + 8H+ -> CO2 + 4Fe2+ + 11H2O
+20 k = PARM(1) / 86400
+30 Ks_FeOH3 = PARM(2)
+40 Ks_O2 = PARM(3) / 32000
+50 Ks_NO3 = PARM(4) / 14000
+60 Ks_Mn = PARM(5)
+70 FeOH3 = EQUI("Fe(OH)3(a)")
+80 O2 = MOL("O2")
+90 NO3 = TOT("N(5)")
+100 OM = KIN("om_labile_decay") + KIN("om_intermediate_decay")
+110 f_Fe = FeOH3 / (Ks_FeOH3 + FeOH3)
+120 f_inhib = (Ks_O2 / (Ks_O2 + O2)) * (Ks_NO3 / (Ks_NO3 + NO3))
+130 rate = k * OM * f_Fe * f_inhib
+140 moles = rate * TIME
+150 SAVE moles
+160 END
+-end
+
+sulfate_reduction
+-start
+10 REM Sulfate reduction: 2CH2O + SO4-- + 2H+ -> 2CO2 + H2S + 2H2O
+20 k = PARM(1) / 86400
+30 Ks_SO4 = PARM(2) / 96000        # Convert mg/L to mol/L
+40 Ks_O2_inhib = PARM(3) / 32000
+50 Ks_NO3_inhib = PARM(4) / 14000
+60 SO4 = TOT("S(6)")
+70 O2 = MOL("O2")
+80 NO3 = TOT("N(5)")
+90 OM = KIN("om_labile_decay") + KIN("om_intermediate_decay") + KIN("om_refractory_decay")
+100 f_SO4 = SO4 / (Ks_SO4 + SO4)
+110 f_inhib = (Ks_O2_inhib / (Ks_O2_inhib + O2)) * (Ks_NO3_inhib / (Ks_NO3_inhib + NO3))
+120 rate = k * OM * f_SO4 * f_inhib
+130 moles = rate * TIME
+140 SAVE moles
+150 END
+-end
+
+methanogenesis
+-start
+10 REM Methanogenesis: 2CH2O -> CO2 + CH4
+20 k = PARM(1) / 86400
+30 Ks_O2_inhib = PARM(2) / 32000
+40 Ks_SO4_inhib = PARM(3) / 96000
+50 Ks_Ac = PARM(4)
+60 O2 = MOL("O2")
+70 SO4 = TOT("S(6)")
+80 OM = KIN("om_refractory_decay")
+90 f_inhib = (Ks_O2_inhib / (Ks_O2_inhib + O2)) * (Ks_SO4_inhib / (Ks_SO4_inhib + SO4))
+100 rate = k * OM * f_inhib
+110 moles = rate * TIME
+120 SAVE moles
+130 END
+-end
+
+methane_ebullition
+-start
+10 REM Methane ebullition when CH4 exceeds solubility
+20 k_ebull = PARM(1) / 86400
+30 CH4_threshold = PARM(2) / 1000  # mM to M
+40 CH4 = KIN("methanogenesis")     # Accumulated CH4
+50 IF CH4 < CH4_threshold THEN GOTO 90
+60 excess = CH4 - CH4_threshold
+70 rate = k_ebull * excess
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+p_release_fe
+-start
+10 REM P release associated with Fe(III) reduction
+20 P_Fe_ratio = PARM(1)            # mol P per mol Fe
+30 k_release = PARM(2) / 86400
+40 Fe_reduced = KIN("fe_reduction")
+50 P_released = P_Fe_ratio * Fe_reduced
+60 SAVE P_released
+70 END
+-end
+
+nh4_release
+-start
+10 REM NH4 release from organic matter mineralization
+20 N_C_ratio = PARM(1)             # mol N per mol C
+30 OM_mineralized = KIN("om_labile_decay") + KIN("om_intermediate_decay") + KIN("om_refractory_decay")
+40 NH4_released = N_C_ratio * OM_mineralized
+50 SAVE NH4_released
+60 END
+-end
+
+END
+
+# ================================================================
+# SELECTED_OUTPUT
+# ================================================================
+SELECTED_OUTPUT
+    -file         sediment_diagenesis_results.txt
+    -reset        false
+    -pH           true
+    -pe           true
+    -temperature  true
+    -totals       N(5) N(-3) P S(6) S(-2) Fe Mn O(0)
+    -kinetic_reactants  om_labile_decay om_intermediate_decay om_refractory_decay
+    -kinetic_reactants  aerobic_respiration denitrification mn_reduction fe_reduction
+    -kinetic_reactants  sulfate_reduction methanogenesis methane_ebullition
+
+END
+
+# ================================================================
+# Notes on Sediment Diagenesis
+# ================================================================
+#
+# MULTI-G MODEL:
+#   - G1 (Labile): Fresh OM, k = 0.1-1.0 /day
+#   - G2 (Intermediate): Partially degraded, k = 0.01-0.1 /day
+#   - G3 (Refractory): Humified OM, k = 0.0001-0.01 /day
+#
+# THERMODYNAMIC SEQUENCE (by deltaG):
+#   1. O2 reduction: -125 kJ/mol (most favorable)
+#   2. NO3 reduction: -119 kJ/mol
+#   3. Mn(IV) reduction: -85 kJ/mol
+#   4. Fe(III) reduction: -27 kJ/mol
+#   5. SO4 reduction: -25 kJ/mol
+#   6. Methanogenesis: -23 kJ/mol (least favorable)
+#
+# P CYCLING:
+#   - P bound to Fe(OH)3 released under reducing conditions
+#   - Internal loading major P source in eutrophic lakes
+#   - Redox-dependent P release can exceed external loads
+#
+# METHANE:
+#   - Ebullition when CH4 > solubility (~1.3 mM at 10C)
+#   - Can bypass oxidation, direct GHG emission
+#
+# ================================================================

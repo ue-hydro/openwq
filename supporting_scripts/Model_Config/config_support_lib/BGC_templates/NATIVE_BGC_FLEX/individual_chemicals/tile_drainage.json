@@ -1,0 +1,400 @@
+{
+  "_DESCRIPTION": "Tile Drainage Nutrient Export Module for Agricultural Watersheds",
+  "_REFERENCE": "Skaggs et al. (2012) DRAINMOD; Williams et al. (2015) SWAT tile",
+  "_VERSION": "1.0",
+  "_PROCESSES": {
+    "PREFERENTIAL_FLOW": "Rapid transport via macropores to tile drains",
+    "MATRIX_FLOW": "Slow transport through soil matrix",
+    "N_LEACHING": "Nitrate leaching to tiles (highly mobile)",
+    "P_TRANSPORT": "Dissolved and particulate P via macropores",
+    "SEASONAL_DYNAMICS": "Snowmelt flush, spring drainage peaks"
+  },
+  "_NOTES": [
+    "Tile drainage can contribute 50-90% of annual N load in drained watersheds",
+    "NO3 is highly mobile and moves readily to tiles",
+    "P transport via preferential flow/macropores can be significant",
+    "Peak loads during snowmelt and spring drainage events",
+    "DRAINMOD-style water table dynamics affect nutrient export"
+  ],
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "NO3_N_soil",
+      "2": "NO3_N_tile",
+      "3": "NH4_N_soil",
+      "4": "N_ORG_soil",
+      "5": "PO4_P_soil",
+      "6": "PO4_P_tile",
+      "7": "P_PART",
+      "8": "DOC_soil",
+      "9": "DOC_tile",
+      "10": "TSS_tile",
+      "11": "TRACER_conservative"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": [
+      "NO3_N_tile", "PO4_P_tile", "DOC_tile", "TSS_tile", "TRACER_conservative"
+    ]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+
+    "NITRATE_LEACHING": {
+      "_description": "Nitrate transport from soil to tile drains",
+      "_notes": [
+        "NO3 is highly mobile - moves with water",
+        "Concentration in tile outflow depends on soil N and drainage intensity",
+        "Peak exports during high drainage periods (spring, post-rain)"
+      ],
+
+      "list_transformations": {
+        "1": "no3_matrix_leaching",
+        "2": "no3_preferential_flow",
+        "3": "no3_tile_export",
+        "4": "no3_denitrification_sat"
+      },
+
+      "1": {
+        "_name": "no3_matrix_leaching",
+        "_description": "Slow NO3 transport through soil matrix",
+        "_notes": "Proportional to drainage rate and soil NO3 concentration",
+        "consumed": "NO3_N_soil",
+        "produced": "NO3_N_tile",
+        "kinetics": [
+          "k_matrix * NO3_N_soil * q_drain / (theta_sat * depth)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_matrix", "q_drain", "theta_sat", "depth"],
+        "parameter_values": {
+          "k_matrix": 0.8,
+          "q_drain": 5.0,
+          "theta_sat": 0.45,
+          "depth": 1.0
+        },
+        "_parameter_ranges": {
+          "q_drain": {"min": 0, "max": 50, "units": "mm/day", "source": "Drainage rate from DRAINMOD"}
+        }
+      },
+
+      "2": {
+        "_name": "no3_preferential_flow",
+        "_description": "Rapid NO3 transport via macropores",
+        "_notes": "Bypasses soil matrix during intense drainage",
+        "consumed": "NO3_N_soil",
+        "produced": "NO3_N_tile",
+        "kinetics": [
+          "k_pref * NO3_N_soil * f_macropore * q_drain_intense",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_pref", "f_macropore", "q_drain_intense"],
+        "parameter_values": {
+          "k_pref": 0.5,
+          "f_macropore": 0.1,
+          "q_drain_intense": 0.0
+        },
+        "_parameter_ranges": {
+          "f_macropore": {"min": 0.05, "max": 0.3, "units": "fraction", "source": "Soil-dependent"}
+        }
+      },
+
+      "3": {
+        "_name": "no3_tile_export",
+        "_description": "NO3 export from tile drain to stream",
+        "_notes": "Tile outflow concentration",
+        "consumed": "NO3_N_tile",
+        "produced": "NO3_N_stream",
+        "kinetics": [
+          "q_tile * NO3_N_tile",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["q_tile"],
+        "parameter_values": {
+          "q_tile": 1.0
+        }
+      },
+
+      "4": {
+        "_name": "no3_denitrification_sat",
+        "_description": "Denitrification in saturated zone near tiles",
+        "_notes": "Can remove 10-50% of NO3 before reaching tiles",
+        "consumed": "NO3_N_soil",
+        "produced": "N2_gas",
+        "kinetics": [
+          "k_denit_tile * NO3_N_soil * (DOC_soil / (Ks_C + DOC_soil)) * f_sat * theta^(Treach_K - 293)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_denit_tile", "Ks_C", "f_sat", "theta"],
+        "parameter_values": {
+          "k_denit_tile": 0.1,
+          "Ks_C": 5.0,
+          "f_sat": 0.5,
+          "theta": 1.08
+        }
+      }
+    },
+
+    "PHOSPHORUS_TILE": {
+      "_description": "Phosphorus transport via tile drains",
+      "_notes": [
+        "Historically P transport via tiles was underestimated",
+        "Preferential flow can transport dissolved and particulate P",
+        "Legacy P in soils can maintain elevated tile P for decades"
+      ],
+
+      "list_transformations": {
+        "1": "p_dissolved_leaching",
+        "2": "p_preferential_flow",
+        "3": "p_particulate_macropore",
+        "4": "p_legacy_release"
+      },
+
+      "1": {
+        "_name": "p_dissolved_leaching",
+        "_description": "Dissolved P leaching through soil matrix",
+        "_notes": "Usually low due to P sorption, but can occur in P-saturated soils",
+        "consumed": "PO4_P_soil",
+        "produced": "PO4_P_tile",
+        "kinetics": [
+          "k_leach_P * PO4_P_soil * q_drain / (theta_sat * depth) * f_P_sat",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_leach_P", "q_drain", "theta_sat", "depth", "f_P_sat"],
+        "parameter_values": {
+          "k_leach_P": 0.1,
+          "q_drain": 5.0,
+          "theta_sat": 0.45,
+          "depth": 1.0,
+          "f_P_sat": 0.5
+        },
+        "_parameter_ranges": {
+          "f_P_sat": {"min": 0, "max": 1, "units": "fraction", "source": "P saturation ratio"}
+        }
+      },
+
+      "2": {
+        "_name": "p_preferential_flow",
+        "_description": "Rapid dissolved P transport via macropores",
+        "_notes": "Bypasses soil P sorption capacity",
+        "consumed": "PO4_P_soil",
+        "produced": "PO4_P_tile",
+        "kinetics": [
+          "k_pref_P * PO4_P_soil * f_macropore * q_drain_intense",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_pref_P", "f_macropore", "q_drain_intense"],
+        "parameter_values": {
+          "k_pref_P": 0.3,
+          "f_macropore": 0.1,
+          "q_drain_intense": 0.0
+        }
+      },
+
+      "3": {
+        "_name": "p_particulate_macropore",
+        "_description": "Particulate P transport through macropores",
+        "_notes": "P-enriched particles can move through macropores",
+        "consumed": "P_PART",
+        "produced": "P_PART_tile",
+        "kinetics": [
+          "k_part_P * P_PART * f_macropore * q_drain_intense",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_part_P", "f_macropore", "q_drain_intense"],
+        "parameter_values": {
+          "k_part_P": 0.2,
+          "f_macropore": 0.1,
+          "q_drain_intense": 0.0
+        }
+      },
+
+      "4": {
+        "_name": "p_legacy_release",
+        "_description": "Slow release of legacy P from enriched soils",
+        "_notes": "Decades of P application create legacy P reservoir",
+        "consumed": "P_LEGACY",
+        "produced": "PO4_P_soil",
+        "kinetics": [
+          "k_legacy * P_LEGACY * (1 - PO4_P_soil / EPC0)",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_legacy", "EPC0"],
+        "parameter_values": {
+          "k_legacy": 0.001,
+          "EPC0": 0.1
+        },
+        "_parameter_ranges": {
+          "EPC0": {"min": 0.01, "max": 0.5, "units": "mg-P/L", "source": "Equilibrium P concentration"}
+        }
+      }
+    },
+
+    "SNOWMELT_FLUSH": {
+      "_description": "Enhanced nutrient export during snowmelt",
+      "_notes": [
+        "Snowmelt can flush accumulated surface nutrients",
+        "Frozen soil reduces infiltration, increases runoff",
+        "Peak N and P exports often occur during snowmelt"
+      ],
+
+      "list_transformations": {
+        "1": "snowmelt_no3_flush",
+        "2": "snowmelt_p_flush",
+        "3": "frozen_soil_bypass"
+      },
+
+      "1": {
+        "_name": "snowmelt_no3_flush",
+        "_description": "NO3 flush during snowmelt events",
+        "consumed": "NO3_N_snow",
+        "produced": "NO3_N_tile",
+        "kinetics": [
+          "k_flush_N * NO3_N_snow * q_melt",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_flush_N", "q_melt"],
+        "parameter_values": {
+          "k_flush_N": 1.0,
+          "q_melt": 0.0
+        },
+        "_notes": "q_melt = snowmelt rate (mm/day)"
+      },
+
+      "2": {
+        "_name": "snowmelt_p_flush",
+        "_description": "P flush during snowmelt",
+        "_notes": "P release from frozen vegetation contributes",
+        "consumed": "PO4_P_snow",
+        "produced": "PO4_P_tile",
+        "kinetics": [
+          "k_flush_P * PO4_P_snow * q_melt",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_flush_P", "q_melt"],
+        "parameter_values": {
+          "k_flush_P": 1.0,
+          "q_melt": 0.0
+        }
+      },
+
+      "3": {
+        "_name": "frozen_soil_bypass",
+        "_description": "Preferential flow over frozen soil",
+        "_notes": "Frozen conditions increase macropore connectivity",
+        "consumed": "NUTRIENT_surface",
+        "produced": "NUTRIENT_tile",
+        "kinetics": [
+          "k_bypass * NUTRIENT_surface * f_frozen * q_runoff",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_bypass", "f_frozen", "q_runoff"],
+        "parameter_values": {
+          "k_bypass": 0.5,
+          "f_frozen": 0.0,
+          "q_runoff": 0.0
+        }
+      }
+    },
+
+    "CONTROLLED_DRAINAGE": {
+      "_description": "Controlled drainage for nutrient reduction",
+      "_reference": "Skaggs et al. (2012)",
+      "_notes": [
+        "Raising outlet level reduces drainage and N export",
+        "Can reduce N loads by 20-50%",
+        "Trade-off with crop water stress"
+      ],
+
+      "list_transformations": {
+        "1": "reduced_drainage",
+        "2": "enhanced_denitrification"
+      },
+
+      "1": {
+        "_name": "reduced_drainage",
+        "_description": "Reduced tile flow under controlled drainage",
+        "_notes": "Drainage reduction factor based on control structure",
+        "consumed": "NO3_N_tile",
+        "produced": "NO3_N_tile",
+        "kinetics": [
+          "NO3_N_tile * (1 - f_control)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["f_control"],
+        "parameter_values": {
+          "f_control": 0.0
+        },
+        "_parameter_ranges": {
+          "f_control": {"min": 0, "max": 0.5, "units": "fraction", "source": "Drainage reduction 0-50%"}
+        }
+      },
+
+      "2": {
+        "_name": "enhanced_denitrification",
+        "_description": "Enhanced denitrification under wetter conditions",
+        "_notes": "Higher water table increases anoxic volume",
+        "consumed": "NO3_N_soil",
+        "produced": "N2_gas",
+        "kinetics": [
+          "k_denit_enhanced * NO3_N_soil * f_control * (DOC_soil / (Ks_C + DOC_soil))",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_denit_enhanced", "f_control", "Ks_C"],
+        "parameter_values": {
+          "k_denit_enhanced": 0.2,
+          "f_control": 0.0,
+          "Ks_C": 5.0
+        }
+      }
+    },
+
+    "SATURATED_BUFFER": {
+      "_description": "Saturated buffer zone for tile outflow treatment",
+      "_notes": [
+        "Diverts tile flow through vegetated buffer zone",
+        "Promotes denitrification and plant uptake",
+        "Can remove 40-90% of tile N"
+      ],
+
+      "list_transformations": {
+        "1": "buffer_denitrification",
+        "2": "buffer_plant_uptake"
+      },
+
+      "1": {
+        "_name": "buffer_denitrification",
+        "_description": "Denitrification in saturated buffer",
+        "consumed": "NO3_N_tile",
+        "produced": "N2_gas",
+        "kinetics": [
+          "k_denit_buffer * NO3_N_tile * (DOC_buffer / (Ks_C + DOC_buffer)) * HRT_buffer / HRT_ref",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_denit_buffer", "Ks_C", "HRT_buffer", "HRT_ref", "DOC_buffer"],
+        "parameter_values": {
+          "k_denit_buffer": 0.5,
+          "Ks_C": 5.0,
+          "HRT_buffer": 2.0,
+          "HRT_ref": 1.0,
+          "DOC_buffer": 10.0
+        }
+      },
+
+      "2": {
+        "_name": "buffer_plant_uptake",
+        "_description": "Plant uptake in buffer zone",
+        "consumed": "NO3_N_tile",
+        "produced": "PLANT_N",
+        "kinetics": [
+          "k_uptake_buffer * NO3_N_tile * f_season_buffer",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_uptake_buffer", "f_season_buffer"],
+        "parameter_values": {
+          "k_uptake_buffer": 0.1,
+          "f_season_buffer": 1.0
+        }
+      }
+    }
+  }
+}

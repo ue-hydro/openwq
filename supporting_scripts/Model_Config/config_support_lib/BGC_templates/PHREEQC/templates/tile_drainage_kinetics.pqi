@@ -1,0 +1,513 @@
+# PHREEQC Template: Tile Drainage Nutrient Export
+# Description: NO3 leaching, P transport, snowmelt flush in agricultural watersheds
+# Reference: Skaggs et al. (2012) DRAINMOD; Williams et al. (2015) SWAT tile
+# ================================================================
+#
+# NOTE: This template models nutrient transport from agricultural soils
+# to tile drains, including preferential flow and seasonal dynamics.
+#
+# ================================================================
+
+DATABASE phreeqc.dat
+
+TITLE Tile Drainage - Agricultural Nutrient Export
+
+# ================================================================
+# SOLUTION 1: Soil porewater (agricultural field)
+# ================================================================
+SOLUTION 1  Soil Porewater
+    temp      12.0
+    pH        6.8
+    pe        6.0        # Moderately oxic
+    units     mg/L
+
+    Ca        80.0
+    Mg        25.0
+    Na        15.0
+    K         10.0
+    Cl        30.0
+    C(4)      150 as HCO3
+    S(6)      25 as SO4
+    N(5)      15.0       # Elevated NO3 from fertilizer
+    N(-3)     2.0        # NH4 from recent application
+    P         0.5        # Soil solution P
+    O(0)      4.0        # Some DO
+
+END
+
+# ================================================================
+# SOLUTION 2: Tile drain outflow
+# ================================================================
+SOLUTION 2  Tile Drain Outflow
+    temp      10.0
+    pH        7.0
+    pe        8.0
+    units     mg/L
+
+    Ca        70.0
+    Mg        20.0
+    Na        12.0
+    K         8.0
+    Cl        25.0
+    C(4)      120 as HCO3
+    S(6)      20 as SO4
+    N(5)      10.0       # Leached NO3
+    N(-3)     0.5        # Low NH4 (sorbed)
+    P         0.2        # Some P via preferential flow
+    O(0)      6.0
+
+END
+
+# ================================================================
+# SOLUTION 3: Snowmelt water
+# ================================================================
+SOLUTION 3  Snowmelt Water
+    temp      0.5
+    pH        5.5
+    pe        12.0
+    units     mg/L
+
+    Ca        5.0
+    Mg        1.0
+    Na        2.0
+    K         0.5
+    Cl        3.0
+    C(4)      10 as HCO3
+    S(6)      3 as SO4
+    N(5)      1.0        # Atmospheric deposition
+    N(-3)     0.2
+    P         0.05
+    O(0)      12.0       # High DO in cold water
+
+END
+
+# ================================================================
+# KINETICS: Tile drainage nutrient transport
+# ================================================================
+KINETICS 1
+
+# ================================================================
+# NITRATE TRANSPORT TO TILES
+# ================================================================
+
+# Matrix flow NO3 leaching (slow, diffusion-dominated)
+-no3_matrix_leaching
+    -formula  N(5) -1
+    -m0       15.0         # Soil NO3-N (mg/L)
+    -parms    0.8 5.0 0.45 1.0  # k_matrix, q_drain (mm/d), theta_sat, depth (m)
+    -tol      1e-8
+
+# Preferential flow NO3 (fast, bypass flow)
+-no3_preferential
+    -formula  N(5) -1
+    -m0       0.0
+    -parms    0.5 0.1 0.0  # k_pref, f_macropore, q_drain_intense
+    -tol      1e-8
+
+# Denitrification in saturated zone near tiles
+-no3_denitrification_tile
+    -formula  N(5) -1
+    -m0       0.0
+    -parms    0.1 5.0 0.5 1.08  # k_denit, Ks_C (mg-C/L), f_sat, theta
+    -tol      1e-8
+
+# NO3 export to stream
+-no3_tile_export
+    -formula  N(5) -1
+    -m0       0.0
+    -parms    1.0          # q_tile scaling
+    -tol      1e-8
+
+# ================================================================
+# PHOSPHORUS TRANSPORT TO TILES
+# ================================================================
+
+# Dissolved P leaching through matrix
+-p_dissolved_leaching
+    -formula  P -1
+    -m0       0.5          # Soil solution P (mg/L)
+    -parms    0.1 5.0 0.45 1.0 0.5  # k_leach_P, q_drain, theta_sat, depth, f_P_sat
+    -tol      1e-8
+
+# Preferential flow dissolved P
+-p_preferential
+    -formula  P -1
+    -m0       0.0
+    -parms    0.3 0.1 0.0  # k_pref_P, f_macropore, q_drain_intense
+    -tol      1e-8
+
+# Particulate P via macropores
+-p_particulate_macropore
+    -formula  H2O 0
+    -m0       0.3          # Particulate P (mg/L)
+    -parms    0.2 0.1 0.0  # k_part_P, f_macropore, q_drain_intense
+    -tol      1e-8
+
+# Legacy P release from soil
+-p_legacy_release
+    -formula  P 1
+    -m0       0.0
+    -parms    0.001 0.1    # k_legacy, EPC0 (mg-P/L)
+    -tol      1e-8
+
+# ================================================================
+# SNOWMELT FLUSH
+# ================================================================
+
+# Snowmelt NO3 flush
+-snowmelt_no3_flush
+    -formula  N(5) -1
+    -m0       0.0
+    -parms    1.0 0.0      # k_flush_N, q_melt (mm/day)
+    -tol      1e-8
+
+# Snowmelt P flush
+-snowmelt_p_flush
+    -formula  P -1
+    -m0       0.0
+    -parms    1.0 0.0      # k_flush_P, q_melt
+    -tol      1e-8
+
+# Frozen soil bypass
+-frozen_soil_bypass
+    -formula  H2O 0
+    -m0       0.0
+    -parms    0.5 0.0 0.0  # k_bypass, f_frozen, q_runoff
+    -tol      1e-8
+
+# ================================================================
+# CONTROLLED DRAINAGE
+# ================================================================
+
+# Reduced drainage (controlled outlet)
+-controlled_drainage
+    -formula  N(5) -1
+    -m0       0.0
+    -parms    0.0          # f_control (0-0.5)
+    -tol      1e-8
+
+# Enhanced denitrification under controlled drainage
+-enhanced_denitrification
+    -formula  N(5) -1
+    -m0       0.0
+    -parms    0.2 0.0 5.0  # k_denit_enhanced, f_control, Ks_C
+    -tol      1e-8
+
+# ================================================================
+# SATURATED BUFFER
+# ================================================================
+
+# Buffer denitrification
+-buffer_denitrification
+    -formula  N(5) -1
+    -m0       0.0
+    -parms    0.5 5.0 2.0 1.0 10.0  # k_denit_buf, Ks_C, HRT_buf, HRT_ref, DOC_buf
+    -tol      1e-8
+
+# Buffer plant uptake
+-buffer_plant_uptake
+    -formula  N(5) -1
+    -m0       0.0
+    -parms    0.1 1.0      # k_uptake_buffer, f_season
+    -tol      1e-8
+
+END
+
+# ================================================================
+# RATES: Kinetic rate expressions
+# ================================================================
+RATES
+
+no3_matrix_leaching
+-start
+10 REM NO3 transport through soil matrix to tile drain
+20 k = PARM(1) / 86400
+30 q_drain = PARM(2) / 1000 / 86400   # mm/day to m/s
+40 theta_sat = PARM(3)
+50 depth = PARM(4)
+60 NO3 = M
+70 rate = k * NO3 * q_drain / (theta_sat * depth)
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+no3_preferential
+-start
+10 REM NO3 preferential flow via macropores
+20 k = PARM(1) / 86400
+30 f_macro = PARM(2)
+40 q_intense = PARM(3) / 1000 / 86400
+50 NO3 = TOT("N(5)") * 14000           # mg-N/L
+60 rate = k * NO3 * f_macro * q_intense
+70 moles = rate * TIME / 14000          # Convert back to mol
+80 SAVE moles
+90 END
+-end
+
+no3_denitrification_tile
+-start
+10 REM Denitrification in saturated zone near tile drains
+20 k = PARM(1) / 86400
+30 Ks_C = PARM(2)                       # mg-C/L
+40 f_sat = PARM(3)
+50 theta = PARM(4)
+60 T = TC
+70 f_temp = theta^(T - 20)
+80 NO3 = TOT("N(5)") * 14000
+90 DOC = 5.0                            # Assumed DOC (mg-C/L)
+100 f_C = DOC / (Ks_C + DOC)
+110 rate = k * NO3 * f_C * f_sat * f_temp
+120 moles = rate * TIME / 14000
+130 SAVE moles
+140 END
+-end
+
+no3_tile_export
+-start
+10 REM NO3 export from tile to receiving water
+20 q_scale = PARM(1)
+30 NO3_tile = KIN("no3_matrix_leaching") + KIN("no3_preferential")
+40 rate = q_scale * NO3_tile
+50 moles = rate * TIME
+60 SAVE moles
+70 END
+-end
+
+p_dissolved_leaching
+-start
+10 REM Dissolved P leaching (limited by sorption)
+20 k = PARM(1) / 86400
+30 q_drain = PARM(2) / 1000 / 86400
+40 theta_sat = PARM(3)
+50 depth = PARM(4)
+60 f_P_sat = PARM(5)                    # P saturation ratio
+70 P = M
+80 rate = k * P * q_drain / (theta_sat * depth) * f_P_sat
+90 moles = rate * TIME
+100 SAVE moles
+110 END
+-end
+
+p_preferential
+-start
+10 REM Dissolved P preferential flow
+20 k = PARM(1) / 86400
+30 f_macro = PARM(2)
+40 q_intense = PARM(3) / 1000 / 86400
+50 P = TOT("P") * 31000
+60 rate = k * P * f_macro * q_intense
+70 moles = rate * TIME / 31000
+80 SAVE moles
+90 END
+-end
+
+p_particulate_macropore
+-start
+10 REM Particulate P through macropores
+20 k = PARM(1) / 86400
+30 f_macro = PARM(2)
+40 q_intense = PARM(3) / 1000 / 86400
+50 PP = M
+60 rate = k * PP * f_macro * q_intense
+70 moles = rate * TIME
+80 SAVE moles
+90 END
+-end
+
+p_legacy_release
+-start
+10 REM Legacy P release from P-enriched soils
+20 k = PARM(1) / 86400
+30 EPC0 = PARM(2) / 31000               # Equilibrium P concentration
+40 P = TOT("P")
+50 IF P > EPC0 THEN rate = 0 ELSE rate = k * (EPC0 - P)
+60 moles = rate * TIME
+70 SAVE moles
+80 END
+-end
+
+snowmelt_no3_flush
+-start
+10 REM NO3 flush during snowmelt
+20 k = PARM(1) / 86400
+30 q_melt = PARM(2) / 1000 / 86400      # mm/day to m/s
+40 NO3_snow = 1.0 / 14000               # Assumed snow NO3 (mol/L)
+50 rate = k * NO3_snow * q_melt
+60 moles = rate * TIME
+70 SAVE moles
+80 END
+-end
+
+snowmelt_p_flush
+-start
+10 REM P flush during snowmelt (vegetation P release)
+20 k = PARM(1) / 86400
+30 q_melt = PARM(2) / 1000 / 86400
+40 P_veg = 0.5 / 31000                  # P from frozen vegetation
+50 rate = k * P_veg * q_melt
+60 moles = rate * TIME
+70 SAVE moles
+80 END
+-end
+
+frozen_soil_bypass
+-start
+10 REM Preferential flow over frozen soil
+20 k = PARM(1) / 86400
+30 f_frozen = PARM(2)
+40 q_runoff = PARM(3) / 1000 / 86400
+50 nutrient = TOT("N(5)") + TOT("P")
+60 rate = k * nutrient * f_frozen * q_runoff
+70 moles = rate * TIME
+80 SAVE moles
+90 END
+-end
+
+controlled_drainage
+-start
+10 REM Reduced tile flow under controlled drainage
+20 f_control = PARM(1)
+30 NO3_tile = KIN("no3_tile_export")
+40 reduction = NO3_tile * f_control
+50 SAVE reduction
+60 END
+-end
+
+enhanced_denitrification
+-start
+10 REM Enhanced denitrification with higher water table
+20 k = PARM(1) / 86400
+30 f_control = PARM(2)
+40 Ks_C = PARM(3)
+50 NO3 = TOT("N(5)") * 14000
+60 DOC = 5.0
+70 f_C = DOC / (Ks_C + DOC)
+80 rate = k * NO3 * f_control * f_C
+90 moles = rate * TIME / 14000
+100 SAVE moles
+110 END
+-end
+
+buffer_denitrification
+-start
+10 REM Denitrification in saturated buffer zone
+20 k = PARM(1) / 86400
+30 Ks_C = PARM(2)
+40 HRT_buffer = PARM(3)
+50 HRT_ref = PARM(4)
+60 DOC_buffer = PARM(5)
+70 NO3_tile = KIN("no3_tile_export") * 14000
+80 f_C = DOC_buffer / (Ks_C + DOC_buffer)
+90 f_HRT = HRT_buffer / HRT_ref
+100 rate = k * NO3_tile * f_C * f_HRT
+110 moles = rate * TIME / 14000
+120 SAVE moles
+130 END
+-end
+
+buffer_plant_uptake
+-start
+10 REM Plant uptake in buffer zone
+20 k = PARM(1) / 86400
+30 f_season = PARM(2)
+40 NO3_tile = KIN("no3_tile_export") * 14000
+50 rate = k * NO3_tile * f_season
+60 moles = rate * TIME / 14000
+70 SAVE moles
+80 END
+-end
+
+END
+
+# ================================================================
+# SELECTED_OUTPUT
+# ================================================================
+SELECTED_OUTPUT
+    -file         tile_drainage_results.txt
+    -reset        false
+    -pH           true
+    -pe           true
+    -temperature  true
+    -totals       N(5) N(-3) P O(0)
+    -kinetic_reactants  no3_matrix_leaching no3_preferential no3_denitrification_tile
+    -kinetic_reactants  p_dissolved_leaching p_preferential p_particulate_macropore
+    -kinetic_reactants  snowmelt_no3_flush snowmelt_p_flush
+    -kinetic_reactants  buffer_denitrification buffer_plant_uptake
+
+END
+
+# ================================================================
+# USER_PUNCH: Tile drain nutrient loads
+# ================================================================
+USER_PUNCH
+    -headings  NO3_load_kg  P_load_kg  Denit_removal_pct  Buffer_removal_pct
+
+    # NO3 load calculation (assuming area and flow)
+    10 NO3_matrix = KIN("no3_matrix_leaching") * 14000
+    20 NO3_pref = KIN("no3_preferential") * 14000
+    30 NO3_total = NO3_matrix + NO3_pref
+    40 NO3_load = NO3_total * 0.001     # Convert to kg/ha/day (assumed)
+    50 PUNCH NO3_load
+
+    # P load
+    60 P_diss = KIN("p_dissolved_leaching") * 31000
+    70 P_pref = KIN("p_preferential") * 31000
+    80 P_part = KIN("p_particulate_macropore") * 31000
+    90 P_total = P_diss + P_pref + P_part
+    100 P_load = P_total * 0.001
+    110 PUNCH P_load
+
+    # Denitrification removal percentage
+    120 NO3_denit = KIN("no3_denitrification_tile") * 14000
+    130 IF NO3_total > 0 THEN denit_pct = NO3_denit / NO3_total * 100 ELSE denit_pct = 0
+    140 PUNCH denit_pct
+
+    # Buffer removal percentage
+    150 buffer_denit = KIN("buffer_denitrification") * 14000
+    160 buffer_uptake = KIN("buffer_plant_uptake") * 14000
+    170 buffer_total = buffer_denit + buffer_uptake
+    180 IF NO3_total > 0 THEN buffer_pct = buffer_total / NO3_total * 100 ELSE buffer_pct = 0
+    190 PUNCH buffer_pct
+
+END
+
+# ================================================================
+# Notes on Tile Drainage Nutrient Export
+# ================================================================
+#
+# TRANSPORT MECHANISMS:
+#   Matrix Flow: Slow, diffusion-dominated, NO3 moves with water
+#   Preferential Flow: Rapid bypass via macropores, cracks, root channels
+#   - Can contribute 50-90% of tile N load during storm events
+#   - P transport via macropores increasingly recognized
+#
+# SEASONAL PATTERNS:
+#   - Peak loads during spring drainage (March-May)
+#   - Snowmelt flush: 30-50% of annual load in 1-2 weeks
+#   - Fall drainage after harvest
+#   - Summer: low drainage, high denitrification
+#
+# MANAGEMENT PRACTICES:
+#   Controlled Drainage:
+#   - Raise outlet level during non-growing season
+#   - Reduces drainage volume 20-50%
+#   - Reduces N load 20-50%
+#   - Trade-off: crop water stress if managed poorly
+#
+#   Saturated Buffers:
+#   - Divert tile flow through vegetated buffer
+#   - N removal 40-90% (denitrification + uptake)
+#   - Most effective with high DOC, long HRT
+#
+#   Bioreactors:
+#   - Woodchip-filled trenches
+#   - N removal 20-90% depending on HRT, temperature
+#   - Carbon source for denitrification
+#
+# LEGACY P:
+#   - Decades of P application create legacy P reservoir
+#   - EPC0 (equilibrium P concentration) controls release
+#   - P-saturated soils can export P for decades
+#
+# ================================================================

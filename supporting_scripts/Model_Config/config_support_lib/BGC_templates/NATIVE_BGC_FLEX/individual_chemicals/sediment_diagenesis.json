@@ -1,0 +1,546 @@
+{
+  "_DESCRIPTION": "Sediment Diagenesis Module for Lakes and Reservoirs",
+  "_REFERENCE": "DiToro (2001) Sediment Flux Modeling; Canavan et al. (2006) Limnol. Oceanogr.",
+  "_VERSION": "1.0",
+  "_PROCESSES": {
+    "ORGANIC_MATTER_DECAY": "Multi-G model for OM mineralization",
+    "NUTRIENT_RELEASE": "Sediment-water nutrient fluxes",
+    "REDOX_SEQUENCE": "Sequential electron acceptor utilization",
+    "METHANE_DYNAMICS": "CH4 production and ebullition",
+    "PHOSPHORUS_BINDING": "Fe-P binding and release under anoxia"
+  },
+  "_NOTES": [
+    "Sediment diagenesis controls internal nutrient loading in lakes",
+    "Multi-G model: 3 organic matter pools (labile, semi-labile, refractory)",
+    "Redox sequence: O2 > NO3 > Mn > Fe > SO4 > CO2",
+    "P release enhanced under anoxic conditions due to Fe-P dissolution",
+    "Temperature strongly affects reaction rates (Q10 ~ 2)"
+  ],
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "OM_labile",
+      "2": "OM_semilabile",
+      "3": "OM_refractory",
+      "4": "DO",
+      "5": "NO3_N",
+      "6": "NH4_N",
+      "7": "Mn_IV",
+      "8": "Mn_II",
+      "9": "Fe_III",
+      "10": "Fe_II",
+      "11": "SO4_S",
+      "12": "H2S",
+      "13": "CH4",
+      "14": "CO2",
+      "15": "PO4_P",
+      "16": "Fe_P",
+      "17": "DIC",
+      "18": "ALK"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": [
+      "DO", "NO3_N", "NH4_N", "Mn_II", "Fe_II",
+      "SO4_S", "H2S", "CH4", "CO2", "PO4_P", "DIC", "ALK"
+    ]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+
+    "MULTI_G_ORGANIC_MATTER": {
+      "_description": "Multi-G model for organic matter degradation",
+      "_reference": "Westrich & Berner (1984); Boudreau (1997)",
+      "_notes": [
+        "G1 (labile): k ~ 10-100 /yr, marine plankton",
+        "G2 (semi-labile): k ~ 0.1-10 /yr, terrestrial OM",
+        "G3 (refractory): k ~ 0.001-0.01 /yr, humic substances"
+      ],
+
+      "list_transformations": {
+        "1": "om_labile_decay",
+        "2": "om_semilabile_decay",
+        "3": "om_refractory_decay",
+        "4": "om_burial"
+      },
+
+      "1": {
+        "_name": "om_labile_decay",
+        "_description": "Rapid decay of labile organic matter (plankton-derived)",
+        "_reaction": "CH2O (labile) -> CO2 + e-",
+        "consumed": "OM_labile",
+        "produced": "CO2",
+        "kinetics": [
+          "k_G1 * OM_labile * theta_om^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_G1", "theta_om"],
+        "parameter_values": {
+          "k_G1": 0.1,
+          "theta_om": 1.08
+        },
+        "_parameter_ranges": {
+          "k_G1": {"min": 0.03, "max": 0.3, "units": "1/day", "source": "10-100/yr"}
+        }
+      },
+
+      "2": {
+        "_name": "om_semilabile_decay",
+        "_description": "Moderate decay of semi-labile OM",
+        "consumed": "OM_semilabile",
+        "produced": "CO2",
+        "kinetics": [
+          "k_G2 * OM_semilabile * theta_om^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_G2", "theta_om"],
+        "parameter_values": {
+          "k_G2": 0.01,
+          "theta_om": 1.08
+        },
+        "_parameter_ranges": {
+          "k_G2": {"min": 0.0003, "max": 0.03, "units": "1/day", "source": "0.1-10/yr"}
+        }
+      },
+
+      "3": {
+        "_name": "om_refractory_decay",
+        "_description": "Slow decay of refractory OM (humic)",
+        "consumed": "OM_refractory",
+        "produced": "CO2",
+        "kinetics": [
+          "k_G3 * OM_refractory * theta_om^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_G3", "theta_om"],
+        "parameter_values": {
+          "k_G3": 0.0001,
+          "theta_om": 1.08
+        }
+      },
+
+      "4": {
+        "_name": "om_burial",
+        "_description": "Permanent burial of organic matter",
+        "consumed": "OM_refractory",
+        "produced": "OM_buried",
+        "kinetics": [
+          "k_burial * OM_refractory",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_burial"],
+        "parameter_values": {
+          "k_burial": 0.00001
+        }
+      }
+    },
+
+    "REDOX_CASCADE": {
+      "_description": "Sequential terminal electron acceptor processes (TEAPs)",
+      "_reference": "Van Cappellen & Wang (1996); DiToro (2001)",
+
+      "list_transformations": {
+        "1": "aerobic_respiration",
+        "2": "denitrification",
+        "3": "mn_reduction",
+        "4": "fe_reduction",
+        "5": "sulfate_reduction",
+        "6": "methanogenesis",
+        "7": "mn_oxidation",
+        "8": "fe_oxidation",
+        "9": "sulfide_oxidation",
+        "10": "methane_oxidation"
+      },
+
+      "1": {
+        "_name": "aerobic_respiration",
+        "_description": "Organic matter oxidation with O2",
+        "_reaction": "CH2O + O2 -> CO2 + H2O",
+        "_deltaG": "-125 kJ/mol",
+        "consumed": "OM_labile",
+        "produced": "CO2",
+        "kinetics": [
+          "k_aero * OM_labile * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_aero", "Ks_O2", "theta"],
+        "parameter_values": {
+          "k_aero": 0.2,
+          "Ks_O2": 0.5,
+          "theta": 1.08
+        }
+      },
+
+      "2": {
+        "_name": "denitrification",
+        "_description": "OM oxidation with nitrate",
+        "_reaction": "5CH2O + 4NO3- + 4H+ -> 5CO2 + 2N2 + 7H2O",
+        "_deltaG": "-119 kJ/mol",
+        "consumed": "OM_labile",
+        "produced": "CO2",
+        "kinetics": [
+          "k_denit * OM_labile * (NO3_N / (Ks_NO3 + NO3_N)) * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_denit", "Ks_NO3", "Ks_O2_inhib", "theta"],
+        "parameter_values": {
+          "k_denit": 0.15,
+          "Ks_NO3": 0.5,
+          "Ks_O2_inhib": 0.5,
+          "theta": 1.08
+        }
+      },
+
+      "3": {
+        "_name": "mn_reduction",
+        "_description": "OM oxidation with Mn(IV) oxides",
+        "_reaction": "CH2O + 2MnO2 + 4H+ -> CO2 + 2Mn2+ + 3H2O",
+        "_deltaG": "-95 kJ/mol",
+        "consumed": "OM_labile",
+        "produced": "CO2",
+        "kinetics": [
+          "k_mn * OM_labile * (Mn_IV / (Ks_Mn + Mn_IV)) * f_anoxic * theta^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_mn", "Ks_Mn", "f_anoxic", "theta"],
+        "parameter_values": {
+          "k_mn": 0.1,
+          "Ks_Mn": 1.0,
+          "f_anoxic": 1.0,
+          "theta": 1.08
+        }
+      },
+
+      "4": {
+        "_name": "fe_reduction",
+        "_description": "OM oxidation with Fe(III) oxides, releases P",
+        "_reaction": "CH2O + 4Fe(OH)3 + 8H+ -> CO2 + 4Fe2+ + 11H2O",
+        "_deltaG": "-50 kJ/mol",
+        "_notes": "Critical for P release in eutrophic lakes",
+        "consumed": "OM_labile",
+        "produced": "CO2",
+        "kinetics": [
+          "k_fe * OM_labile * (Fe_III / (Ks_Fe + Fe_III)) * f_anoxic * theta^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_fe", "Ks_Fe", "f_anoxic", "theta"],
+        "parameter_values": {
+          "k_fe": 0.08,
+          "Ks_Fe": 2.0,
+          "f_anoxic": 1.0,
+          "theta": 1.08
+        }
+      },
+
+      "5": {
+        "_name": "sulfate_reduction",
+        "_description": "OM oxidation with sulfate",
+        "_reaction": "2CH2O + SO4^2- + 2H+ -> 2CO2 + H2S + 2H2O",
+        "_deltaG": "-25 kJ/mol",
+        "consumed": "OM_labile",
+        "produced": "CO2",
+        "kinetics": [
+          "k_so4 * OM_labile * (SO4_S / (Ks_SO4 + SO4_S)) * f_anoxic * theta^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_so4", "Ks_SO4", "f_anoxic", "theta"],
+        "parameter_values": {
+          "k_so4": 0.05,
+          "Ks_SO4": 1.0,
+          "f_anoxic": 1.0,
+          "theta": 1.08
+        }
+      },
+
+      "6": {
+        "_name": "methanogenesis",
+        "_description": "Methanogenic OM decomposition",
+        "_reaction": "2CH2O -> CH4 + CO2",
+        "_deltaG": "-20 kJ/mol",
+        "consumed": "OM_labile",
+        "produced": "CH4",
+        "kinetics": [
+          "k_meth * OM_labile * f_anoxic * (Ks_SO4_inhib / (Ks_SO4_inhib + SO4_S)) * theta^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_meth", "f_anoxic", "Ks_SO4_inhib", "theta"],
+        "parameter_values": {
+          "k_meth": 0.02,
+          "f_anoxic": 1.0,
+          "Ks_SO4_inhib": 0.5,
+          "theta": 1.10
+        }
+      },
+
+      "7": {
+        "_name": "mn_oxidation",
+        "_description": "Reoxidation of Mn(II) at oxic-anoxic interface",
+        "consumed": "Mn_II",
+        "produced": "Mn_IV",
+        "kinetics": [
+          "k_mn_ox * Mn_II * (DO / (Ks_O2 + DO))",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_mn_ox", "Ks_O2"],
+        "parameter_values": {
+          "k_mn_ox": 0.5,
+          "Ks_O2": 0.5
+        }
+      },
+
+      "8": {
+        "_name": "fe_oxidation",
+        "_description": "Reoxidation of Fe(II), precipitates P",
+        "consumed": "Fe_II",
+        "produced": "Fe_III",
+        "kinetics": [
+          "k_fe_ox * Fe_II * (DO / (Ks_O2 + DO))",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_fe_ox", "Ks_O2"],
+        "parameter_values": {
+          "k_fe_ox": 1.0,
+          "Ks_O2": 0.5
+        }
+      },
+
+      "9": {
+        "_name": "sulfide_oxidation",
+        "_description": "Oxidation of H2S",
+        "consumed": "H2S",
+        "produced": "SO4_S",
+        "kinetics": [
+          "k_h2s_ox * H2S * (DO / (Ks_O2 + DO))",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_h2s_ox", "Ks_O2"],
+        "parameter_values": {
+          "k_h2s_ox": 2.0,
+          "Ks_O2": 0.5
+        }
+      },
+
+      "10": {
+        "_name": "methane_oxidation",
+        "_description": "Aerobic methane oxidation",
+        "_reaction": "CH4 + 2O2 -> CO2 + 2H2O",
+        "consumed": "CH4",
+        "produced": "CO2",
+        "kinetics": [
+          "k_ch4_ox * CH4 * (DO / (Ks_O2 + DO))",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_ch4_ox", "Ks_O2"],
+        "parameter_values": {
+          "k_ch4_ox": 0.5,
+          "Ks_O2": 0.5
+        }
+      }
+    },
+
+    "PHOSPHORUS_CYCLING": {
+      "_description": "Sediment phosphorus dynamics with Fe coupling",
+      "_notes": [
+        "P binds to Fe(III) oxides under oxic conditions",
+        "P released when Fe(III) reduced to Fe(II) under anoxia",
+        "This is the main driver of internal P loading in lakes"
+      ],
+
+      "list_transformations": {
+        "1": "p_binding_to_fe",
+        "2": "p_release_from_fe",
+        "3": "p_diffusive_flux",
+        "4": "p_adsorption"
+      },
+
+      "1": {
+        "_name": "p_binding_to_fe",
+        "_description": "PO4 adsorption to Fe(III) oxides",
+        "consumed": "PO4_P",
+        "produced": "Fe_P",
+        "kinetics": [
+          "k_p_ads * PO4_P * Fe_III / (Ks_Fe_ads + Fe_III) * (DO / (Ks_O2 + DO))",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_p_ads", "Ks_Fe_ads", "Ks_O2"],
+        "parameter_values": {
+          "k_p_ads": 0.5,
+          "Ks_Fe_ads": 1.0,
+          "Ks_O2": 0.5
+        }
+      },
+
+      "2": {
+        "_name": "p_release_from_fe",
+        "_description": "PO4 release during Fe(III) reduction",
+        "_notes": "Main driver of internal P loading",
+        "consumed": "Fe_P",
+        "produced": "PO4_P",
+        "kinetics": [
+          "k_p_rel * Fe_P * (Ks_O2_rel / (Ks_O2_rel + DO))",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_p_rel", "Ks_O2_rel"],
+        "parameter_values": {
+          "k_p_rel": 0.1,
+          "Ks_O2_rel": 0.5
+        },
+        "_parameter_ranges": {
+          "k_p_rel": {"min": 0.01, "max": 0.5, "units": "1/day", "source": "Critical for eutrophication"}
+        }
+      },
+
+      "3": {
+        "_name": "p_diffusive_flux",
+        "_description": "Diffusive flux of PO4 from sediment porewater",
+        "consumed": "PO4_P_porewater",
+        "produced": "PO4_P",
+        "kinetics": [
+          "D_p * (PO4_P_porewater - PO4_P) / dz",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["D_p", "dz"],
+        "parameter_values": {
+          "D_p": 0.01,
+          "dz": 0.01
+        }
+      },
+
+      "4": {
+        "_name": "p_adsorption",
+        "_description": "General P adsorption to sediments",
+        "consumed": "PO4_P",
+        "produced": "P_adsorbed",
+        "kinetics": [
+          "k_ads * PO4_P * (1 - P_adsorbed/Smax)",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_ads", "Smax"],
+        "parameter_values": {
+          "k_ads": 0.1,
+          "Smax": 10.0
+        }
+      }
+    },
+
+    "NITROGEN_CYCLING": {
+      "_description": "Sediment nitrogen dynamics",
+
+      "list_transformations": {
+        "1": "ammonification",
+        "2": "nitrification_sed",
+        "3": "denitrification_sed",
+        "4": "n_diffusive_flux"
+      },
+
+      "1": {
+        "_name": "ammonification",
+        "_description": "OM mineralization releasing NH4",
+        "consumed": "OM_labile",
+        "produced": "NH4_N",
+        "kinetics": [
+          "k_ammon * OM_labile * rN_C * theta^(Treach_K - 293)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_ammon", "rN_C", "theta"],
+        "parameter_values": {
+          "k_ammon": 0.1,
+          "rN_C": 0.15,
+          "theta": 1.08
+        }
+      },
+
+      "2": {
+        "_name": "nitrification_sed",
+        "_description": "NH4 oxidation to NO3 in oxic sediments",
+        "consumed": "NH4_N",
+        "produced": "NO3_N",
+        "kinetics": [
+          "k_nitrif * NH4_N * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_nitrif", "Ks_O2", "theta"],
+        "parameter_values": {
+          "k_nitrif": 0.2,
+          "Ks_O2": 0.5,
+          "theta": 1.08
+        }
+      },
+
+      "3": {
+        "_name": "denitrification_sed",
+        "_description": "NO3 reduction to N2 in anoxic sediments",
+        "consumed": "NO3_N",
+        "produced": "N2_gas",
+        "kinetics": [
+          "k_denit_sed * NO3_N * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_denit_sed", "Ks_O2_inhib", "theta"],
+        "parameter_values": {
+          "k_denit_sed": 0.3,
+          "Ks_O2_inhib": 0.5,
+          "theta": 1.08
+        }
+      },
+
+      "4": {
+        "_name": "n_diffusive_flux",
+        "_description": "NH4 diffusive flux from sediments",
+        "consumed": "NH4_N_porewater",
+        "produced": "NH4_N",
+        "kinetics": [
+          "D_n * (NH4_N_porewater - NH4_N) / dz",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["D_n", "dz"],
+        "parameter_values": {
+          "D_n": 0.02,
+          "dz": 0.01
+        }
+      }
+    },
+
+    "METHANE_EBULLITION": {
+      "_description": "Methane bubble flux from sediments",
+      "_notes": "CH4 bubbles escape when concentration exceeds solubility",
+
+      "list_transformations": {
+        "1": "ch4_ebullition",
+        "2": "ch4_dissolution"
+      },
+
+      "1": {
+        "_name": "ch4_ebullition",
+        "_description": "CH4 bubble release when supersaturated",
+        "consumed": "CH4",
+        "produced": "CH4_atm",
+        "kinetics": [
+          "k_ebull * max(0, CH4 - CH4_sat)",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_ebull", "CH4_sat"],
+        "parameter_values": {
+          "k_ebull": 1.0,
+          "CH4_sat": 20.0
+        }
+      },
+
+      "2": {
+        "_name": "ch4_dissolution",
+        "_description": "CH4 bubble dissolution during rise",
+        "consumed": "CH4_bubble",
+        "produced": "CH4",
+        "kinetics": [
+          "k_diss * CH4_bubble * (CH4_sat - CH4) / CH4_sat",
+          "mg/L/day"
+        ],
+        "parameter_names": ["k_diss", "CH4_sat"],
+        "parameter_values": {
+          "k_diss": 0.5,
+          "CH4_sat": 20.0
+        }
+      }
+    }
+  }
+}

@@ -205,6 +205,14 @@ The ``NATIVE_BGC_FLEX/`` folder contains templates organized by category:
 +------------------------------+----------------------------------------------------------+
 | ``groundwater_age.json``     | Age tracers: Tritium-3He, 14C, CFCs, SF6                 |
 +------------------------------+----------------------------------------------------------+
+| ``sediment_diagenesis.json`` | Lake/reservoir diagenesis: Multi-G OM, redox cascade    |
++------------------------------+----------------------------------------------------------+
+| ``wetland_processing.json``  | BMP effectiveness: N/P removal, TSS, pathogens           |
++------------------------------+----------------------------------------------------------+
+| ``tile_drainage.json``       | Agricultural drainage: NO3 leaching, P transport         |
++------------------------------+----------------------------------------------------------+
+| ``pH_alkalinity.json``       | Explicit pH/ALK dynamics, carbonate system, AMD          |
++------------------------------+----------------------------------------------------------+
 
 *Popular Model Frameworks* (``popular_models/``):
 
@@ -342,6 +350,56 @@ Environmental tracer framework for groundwater residence time estimation:
 
 Includes ``MEAN_AGE_TRACKING``, ``CFC_TRACERS``, ``SF6_TRACER``, ``TRITIUM_HELIUM``, ``CARBON14``, and ``CONSERVATIVE_TRACERS`` cycling frameworks.
 
+**Sediment Diagenesis** (``sediment_diagenesis.json``):
+
+Lake and reservoir sediment diagenesis based on DiToro (2001) and Berner (1980):
+
+* **Multi-G Organic Matter** — Labile (G1), intermediate (G2), and refractory (G3) fractions with different decay rates
+* **Redox Cascade** — Thermodynamic sequence: O2 → NO3 → Mn(IV) → Fe(III) → SO4 → methanogenesis
+* **Phosphorus Cycling** — Redox-dependent P release from Fe(OH)3, internal loading
+* **Nitrogen Cycling** — Coupled nitrification-denitrification, NH4 flux, anammox
+* **Methane Ebullition** — CH4 bubble release when exceeding solubility
+
+Includes ``MULTI_G_ORGANIC_MATTER``, ``REDOX_CASCADE``, ``PHOSPHORUS_CYCLING``, ``NITROGEN_CYCLING``, and ``METHANE_EBULLITION`` cycling frameworks.
+
+**Wetland Processing Module** (``wetland_processing.json``):
+
+Treatment wetland effectiveness based on Kadlec & Wallace (2009):
+
+* **Nitrogen Removal** — Denitrification, plant uptake, algal assimilation (40-70% removal)
+* **Phosphorus Removal** — Sorption, sedimentation, accretion (30-60% removal)
+* **TSS Removal** — Settling, vegetation filtration (70-95% removal)
+* **BOD Decay** — Aerobic and anaerobic degradation
+* **Pathogen Removal** — E. coli and fecal coliform die-off, UV inactivation
+* **k-C* Design Model** — First-order areal removal with background concentration
+
+Includes ``NITROGEN_WETLAND``, ``PHOSPHORUS_WETLAND``, ``TSS_REMOVAL``, ``BOD_WETLAND``, ``PATHOGEN_WETLAND``, and ``KC_STAR_MODEL`` cycling frameworks.
+
+**Tile Drainage Nutrient Export** (``tile_drainage.json``):
+
+Agricultural watershed tile drainage based on DRAINMOD and SWAT:
+
+* **Nitrate Leaching** — Matrix flow and preferential flow to tile drains
+* **Phosphorus Transport** — Dissolved P leaching, particulate P via macropores, legacy P release
+* **Snowmelt Flush** — Enhanced nutrient export during snowmelt (30-50% of annual load)
+* **Controlled Drainage** — Reduced drainage and enhanced denitrification
+* **Saturated Buffers** — Denitrification and plant uptake treatment (40-90% N removal)
+
+Includes ``NITRATE_LEACHING``, ``PHOSPHORUS_TILE``, ``SNOWMELT_FLUSH``, ``CONTROLLED_DRAINAGE``, and ``SATURATED_BUFFER`` cycling frameworks.
+
+**pH and Alkalinity Dynamics** (``pH_alkalinity.json``):
+
+Explicit pH/alkalinity tracking for NATIVE_BGC_FLEX:
+
+* **Carbonate Equilibrium** — CO2-HCO3-CO3 system with gas exchange
+* **Alkalinity Production** — Weathering, denitrification, sulfate reduction, ammonification
+* **Alkalinity Consumption** — Nitrification, sulfide oxidation, calcification
+* **Acid Mine Drainage** — Pyrite oxidation, Fe/Al hydrolysis, limestone neutralization
+* **Organic Acids** — DOC contribution to acidity, photodegradation
+* **Buffer Intensity** — Acid Neutralizing Capacity (ANC) tracking
+
+Includes ``CARBONATE_EQUILIBRIUM``, ``ALKALINITY_PRODUCTION``, ``ALKALINITY_CONSUMPTION``, ``ACID_MINE_DRAINAGE``, ``ORGANIC_ACIDS``, and ``BUFFER_INTENSITY`` cycling frameworks.
+
 
 **PHREEQC Templates:**
 
@@ -375,6 +433,14 @@ The ``PHREEQC/templates/`` folder contains geochemical equilibrium and kinetic t
 | ``emerging_contaminants_kinetics.pqi``| Pharmaceuticals, PFAS, EDCs with decay rates            |
 +--------------------------------------+----------------------------------------------------------+
 | ``groundwater_age_kinetics.pqi``     | Tritium-3He, 14C, CFCs, SF6 age tracers                 |
++--------------------------------------+----------------------------------------------------------+
+| ``sediment_diagenesis_kinetics.pqi`` | Multi-G OM, redox cascade, P/N cycling, methane          |
++--------------------------------------+----------------------------------------------------------+
+| ``wetland_processing_kinetics.pqi``  | N/P removal, TSS, BOD, pathogens in treatment wetlands   |
++--------------------------------------+----------------------------------------------------------+
+| ``tile_drainage_kinetics.pqi``       | NO3 leaching, P transport, snowmelt, controlled drainage |
++--------------------------------------+----------------------------------------------------------+
+| ``pH_alkalinity_kinetics.pqi``       | Carbonate system, ALK sources/sinks, AMD, organic acids  |
 +--------------------------------------+----------------------------------------------------------+
 
 The kinetic templates use PHREEQC's RATES and KINETICS blocks with BASIC-language rate expressions. They complement the equilibrium templates by adding biological and biogeochemical processes.
