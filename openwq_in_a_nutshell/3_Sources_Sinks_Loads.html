@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWQ - Sources, Sinks & Loads</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004499;
+            --secondary: #00a86b;
+            --accent: #ff6b35;
+            --purple: #7c3aed;
+            --teal: #0891b2;
+            --dark: #1a1a2e;
+            --light: #f8f9fa;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #000; overflow: hidden; }
+        .presentation { height: 100vh; width: 100vw; position: relative; }
+
+        .slide {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; padding: 60px 80px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%); overflow: hidden;
+        }
+        .slide.active { display: flex; }
+
+        .slide.title-slide {
+            background: linear-gradient(135deg, var(--dark) 0%, #16213e 50%, #0f3460 100%);
+            justify-content: center; align-items: center; text-align: center; color: white;
+        }
+        .slide.title-slide h1 { font-size: 4rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .slide.title-slide h1 span { color: var(--accent); }
+        .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
+        .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
+
+        .slide.section-slide {
+            background: linear-gradient(135deg, var(--accent) 0%, #ea580c 100%);
+            justify-content: center; align-items: center; color: white;
+        }
+        .slide.section-slide.teal { background: linear-gradient(135deg, var(--teal) 0%, #0e7490 100%); }
+        .slide.section-slide.purple { background: linear-gradient(135deg, var(--purple) 0%, #5b21b6 100%); }
+        .slide.section-slide h2 { font-size: 3.5rem; font-weight: 600; }
+        .slide.section-slide .section-number { font-size: 10rem; font-weight: 700; opacity: 0.15; position: absolute; top: 40px; right: 80px; }
+
+        .slide-header { margin-bottom: 35px; }
+        .slide-header h2 { font-size: 2.6rem; font-weight: 600; color: var(--dark); border-left: 6px solid var(--accent); padding-left: 24px; }
+        .slide-content { flex: 1; display: flex; flex-direction: column; }
+
+        .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; height: 100%; }
+        .three-column { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; }
+        .column { display: flex; flex-direction: column; }
+
+        .card {
+            background: white; border-radius: 16px; padding: 25px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08); margin-bottom: 18px;
+        }
+        .card.primary { border-left: 5px solid var(--primary); }
+        .card.secondary { border-left: 5px solid var(--secondary); }
+        .card.accent { border-left: 5px solid var(--accent); }
+        .card.purple { border-left: 5px solid var(--purple); }
+        .card.teal { border-left: 5px solid var(--teal); }
+        .card h3 { font-size: 1.35rem; color: var(--dark); margin-bottom: 12px; }
+        .card h4 { font-size: 1.15rem; color: var(--primary-dark); margin-bottom: 10px; }
+        .card p, .card li { font-size: 1.05rem; color: var(--text); line-height: 1.5; }
+
+        ul, ol { margin-left: 22px; }
+        li { font-size: 1.3rem; color: var(--text); margin-bottom: 12px; line-height: 1.4; }
+        li strong { color: var(--primary-dark); }
+
+        pre {
+            background: var(--dark); color: #e2e8f0; padding: 20px; border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.4; overflow-x: auto;
+        }
+        pre .comment { color: #68d391; }
+        pre .string { color: #fbd38d; }
+        pre .keyword { color: #63b3ed; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 1rem; background: white; border-radius: 12px; overflow: hidden; }
+        th { background: var(--dark); color: white; padding: 12px 16px; text-align: left; font-weight: 600; }
+        td { padding: 10px 16px; border-bottom: 1px solid #e2e8f0; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #fff7ed, #ffedd5);
+            border-left: 5px solid var(--accent); padding: 20px 25px; border-radius: 0 12px 12px 0; margin: 15px 0;
+        }
+        .highlight-box.info { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-left-color: var(--primary); }
+        .highlight-box.success { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-left-color: var(--secondary); }
+        .highlight-box.teal { background: linear-gradient(135deg, #ecfeff, #cffafe); border-left-color: var(--teal); }
+
+        .slide-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 15px; border-top: 1px solid #e2e8f0; margin-top: auto;
+        }
+        .slide-footer .logo { font-weight: 700; font-size: 1.2rem; color: var(--dark); }
+        .slide-footer .logo span { color: var(--accent); }
+        .slide-footer .page-number {
+            background: var(--dark); color: white; width: 40px; height: 40px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;
+        }
+
+        .method-card {
+            background: white; border-radius: 16px; padding: 22px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06); text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .method-card:hover { transform: translateY(-5px); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+        .method-card .icon { font-size: 2.5rem; margin-bottom: 12px; }
+        .method-card h4 { font-size: 1.15rem; color: var(--dark); margin-bottom: 8px; }
+        .method-card p { font-size: 0.95rem; color: var(--text-light); }
+
+        .nav-hint {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 12px 24px; border-radius: 30px;
+            font-size: 0.9rem; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+        }
+        .nav-hint.visible { opacity: 1; }
+
+        .diagram { background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 25px; text-align: center; }
+        .diagram pre { background: transparent; color: var(--text); display: inline-block; text-align: left; }
+
+        .five-column { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
+
+        .badge {
+            display: inline-block; padding: 4px 12px; border-radius: 20px;
+            font-size: 0.85rem; font-weight: 600; margin-right: 8px;
+        }
+        .badge.json { background: #dbeafe; color: #1e40af; }
+        .badge.csv { background: #d1fae5; color: #065f46; }
+        .badge.hdf5 { background: #fce7f3; color: #9d174d; }
+        .badge.lulc { background: #fef3c7; color: #92400e; }
+        .badge.ml { background: #ede9fe; color: #5b21b6; }
+    </style>
+</head>
+<body>
+    <div class="presentation" id="presentation">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1>Sources, <span>Sinks</span> & Loads</h1>
+            <div class="subtitle">OpenWQ Input Options</div>
+            <div class="tagline">
+                Five methods for defining chemical loading — from simple CSV files<br>
+                to land-use calculations and machine learning predictions
+            </div>
+        </div>
+
+        <!-- Slide 2: Overview -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Loading Options Overview</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.25rem; margin-bottom: 25px;">
+                    OpenWQ supports <strong>five methods</strong> for defining sources/sinks and external fluxes:
+                </p>
+                <div class="five-column">
+                    <div class="method-card">
+                        <div class="icon">📋</div>
+                        <h4>JSON Inline</h4>
+                        <p>Data embedded directly in config files</p>
+                    </div>
+                    <div class="method-card">
+                        <div class="icon">📄</div>
+                        <h4>CSV/ASCII</h4>
+                        <p>External time series files</p>
+                    </div>
+                    <div class="method-card">
+                        <div class="icon">📦</div>
+                        <h4>HDF5</h4>
+                        <p>Upstream model coupling</p>
+                    </div>
+                    <div class="method-card">
+                        <div class="icon">🛰️</div>
+                        <h4>LULC-Based</h4>
+                        <p>Copernicus land use export coefficients</p>
+                    </div>
+                    <div class="method-card">
+                        <div class="icon">🤖</div>
+                        <h4>ML Model</h4>
+                        <p>XGBoost/RF predictions from monitoring data</p>
+                    </div>
+                </div>
+                <div class="highlight-box info" style="margin-top: 25px; text-align: center;">
+                    <strong>Two Load Types:</strong> <em>Sources/Sinks</em> (add/remove mass) and <em>External Water Fluxes</em> (concentration in incoming water)
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: SS vs EWF -->
+        <div class="slide" data-slide="3">
+            <div class="slide-header">
+                <h2>Sources/Sinks vs External Fluxes</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card accent" style="height: 100%;">
+                            <h3>📥 Sources & Sinks (SS)</h3>
+                            <p style="margin-bottom: 15px;">Direct mass addition or removal from a compartment</p>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1.05rem;"><strong>Sources</strong> — Add mass (fertilizer, point discharge)</li>
+                                <li style="font-size: 1.05rem;"><strong>Sinks</strong> — Remove mass (uptake, abstraction)</li>
+                                <li style="font-size: 1.05rem;">Units: mass or mass/time (kg, kg/day)</li>
+                                <li style="font-size: 1.05rem;">Supports discrete or continuous loads</li>
+                            </ul>
+                            <div class="highlight-box" style="margin-top: 15px; padding: 12px;">
+                                <strong>Example:</strong> 50 kg N fertilizer applied on April 15
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card teal" style="height: 100%;">
+                            <h3>🌧️ External Water Fluxes (EWF)</h3>
+                            <p style="margin-bottom: 15px;">Concentration in water entering from external sources</p>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1.05rem;">Tied to water flux from host model</li>
+                                <li style="font-size: 1.05rem;">Precipitation, irrigation, inflows</li>
+                                <li style="font-size: 1.05rem;">Units: concentration (mg/L)</li>
+                                <li style="font-size: 1.05rem;">Mass = concentration × water volume</li>
+                            </ul>
+                            <div class="highlight-box teal" style="margin-top: 15px; padding: 12px;">
+                                <strong>Example:</strong> 2.5 mg/L NO₃ in precipitation
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">3</div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Section - Method 1 -->
+        <div class="slide section-slide" data-slide="4">
+            <div class="section-number">01</div>
+            <h2>JSON Inline Format</h2>
+        </div>
+
+        <!-- Slide 5: JSON Format -->
+        <div class="slide" data-slide="5">
+            <div class="slide-header">
+                <h2>Method 1: JSON Inline Data</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.2rem; margin-bottom: 20px;">
+                    <span class="badge json">JSON</span> Embed time series directly in the configuration file
+                </p>
+                <pre style="font-size: 0.88rem;">
+{
+    <span class="string">"1"</span>: {
+        <span class="string">"CHEMICAL_NAME"</span>: <span class="string">"NO3_N"</span>,
+        <span class="string">"COMPARTMENT_NAME"</span>: <span class="string">"SOIL"</span>,
+        <span class="string">"TYPE"</span>: <span class="string">"source"</span>,
+        <span class="string">"UNITS"</span>: <span class="string">"kg"</span>,
+        <span class="string">"DATA_FORMAT"</span>: <span class="string">"JSON"</span>,
+        <span class="string">"DATA"</span>: {
+            <span class="comment">// [YYYY, MM, DD, HH, MIN, SEC, ix, iy, iz, load, load_type, time_units]</span>
+            <span class="string">"1"</span>: [<span class="keyword">2020</span>, <span class="keyword">4</span>, <span class="keyword">15</span>, <span class="keyword">8</span>, <span class="keyword">0</span>, <span class="keyword">0</span>, <span class="string">"all"</span>, <span class="string">"all"</span>, <span class="keyword">1</span>, <span class="keyword">50.0</span>, <span class="string">"discrete"</span>],
+            <span class="string">"2"</span>: [<span class="keyword">2020</span>, <span class="string">"all"</span>, <span class="string">"all"</span>, <span class="string">"all"</span>, <span class="string">"all"</span>, <span class="string">"all"</span>, <span class="string">"all"</span>, <span class="string">"all"</span>, <span class="keyword">1</span>, <span class="keyword">0.5</span>, <span class="string">"continuous"</span>, <span class="string">"day"</span>]
+        }
+    }
+}
+                </pre>
+                <div class="two-column" style="gap: 30px; margin-top: 20px;">
+                    <div class="card primary">
+                        <h4>Data Row Fields</h4>
+                        <table style="font-size: 0.9rem;">
+                            <tr><td>YYYY, MM, DD...</td><td>Date/time (or "all")</td></tr>
+                            <tr><td>ix, iy, iz</td><td>Spatial indices (or "all")</td></tr>
+                            <tr><td>load</td><td>Value in specified units</td></tr>
+                            <tr><td>load_type</td><td>"discrete" or "continuous"</td></tr>
+                        </table>
+                    </div>
+                    <div class="card secondary">
+                        <h4>Wildcards</h4>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.95rem;"><code>"all"</code> for time → recurring pattern</li>
+                            <li style="font-size: 0.95rem;"><code>"all"</code> for space → entire dimension</li>
+                            <li style="font-size: 0.95rem;">Cell ID strings supported (e.g., "1200014181")</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">5</div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Section - Method 2 -->
+        <div class="slide section-slide teal" data-slide="6">
+            <div class="section-number">02</div>
+            <h2>CSV/ASCII Files</h2>
+        </div>
+
+        <!-- Slide 7: CSV Format -->
+        <div class="slide" data-slide="7">
+            <div class="slide-header">
+                <h2>Method 2: External CSV Files</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.2rem; margin-bottom: 20px;">
+                    <span class="badge csv">CSV</span> Reference external time series files for large datasets
+                </p>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <h4 style="margin-bottom: 15px;">JSON Configuration</h4>
+                        <pre style="font-size: 0.9rem;">
+{
+    <span class="string">"1"</span>: {
+        <span class="string">"CHEMICAL_NAME"</span>: <span class="string">"NO3_N"</span>,
+        <span class="string">"COMPARTMENT_NAME"</span>: <span class="string">"RIVER"</span>,
+        <span class="string">"TYPE"</span>: <span class="string">"source"</span>,
+        <span class="string">"UNITS"</span>: <span class="string">"kg/day"</span>,
+        <span class="string">"DATA_FORMAT"</span>: <span class="string">"ASCII"</span>,
+        <span class="string">"DATA"</span>: {
+            <span class="string">"FILEPATH"</span>: <span class="string">"loads.csv"</span>,
+            <span class="string">"DELIMITER"</span>: <span class="string">","</span>
+        }
+    }
+}
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <h4 style="margin-bottom: 15px;">CSV File Format</h4>
+                        <pre style="font-size: 0.85rem;">
+<span class="comment"># Loading data for point source</span>
+YYYY,MM,DD,HH,MIN,SEC,ix,iy,iz,load,load_type
+2020,1,1,0,0,0,1,1,1,10.5,continuous
+2020,1,2,0,0,0,1,1,1,11.2,continuous
+2020,1,3,0,0,0,1,1,1,9.8,continuous
+...
+                        </pre>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>Tip:</strong> Header row auto-detected by scanning for "YYYY" column
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">7</div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Section - Method 3 -->
+        <div class="slide section-slide purple" data-slide="8">
+            <div class="section-number">03</div>
+            <h2>HDF5 Coupling</h2>
+        </div>
+
+        <!-- Slide 9: HDF5 Format -->
+        <div class="slide" data-slide="9">
+            <div class="slide-header">
+                <h2>Method 3: HDF5 Model Coupling</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.2rem; margin-bottom: 20px;">
+                    <span class="badge hdf5">HDF5</span> Couple with upstream model output (External Water Fluxes only)
+                </p>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <pre style="font-size: 0.88rem;">
+{
+    <span class="string">"1"</span>: {
+        <span class="string">"DATA_FORMAT"</span>: <span class="string">"HDF5"</span>,
+        <span class="string">"UNITS"</span>: <span class="string">"mg/L"</span>,
+        <span class="string">"CHEMICAL_NAME"</span>: <span class="string">"NO3_N"</span>,
+
+        <span class="comment">// Upstream model info</span>
+        <span class="string">"EXTERNAL_COMPARTMENT_NAME"</span>: <span class="string">"ATMOSPHERE"</span>,
+        <span class="string">"EXTERNAL_INPUTFLUX_NAME"</span>: <span class="string">"PRECIP"</span>,
+
+        <span class="comment">// Spatial interface</span>
+        <span class="string">"INTERACTION_INTERFACE"</span>: [<span class="string">"all"</span>, <span class="string">"all"</span>, <span class="keyword">1</span>],
+
+        <span class="comment">// Time interpolation</span>
+        <span class="string">"INTERPOLATION"</span>: <span class="string">"LINEAR"</span>,
+
+        <span class="string">"FOLDERPATH"</span>: <span class="string">"upstream_output/"</span>
+    }
+}
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card purple">
+                            <h3>Use Cases</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1rem;">Atmospheric deposition from chemistry model</li>
+                                <li style="font-size: 1rem;">Upstream watershed to river</li>
+                                <li style="font-size: 1rem;">Regional to local downscaling</li>
+                            </ul>
+                        </div>
+                        <div class="card secondary">
+                            <h3>Interpolation Options</h3>
+                            <table style="font-size: 0.95rem;">
+                                <tr><td><strong>STEP</strong></td><td>Previous value (zero-order)</td></tr>
+                                <tr><td><strong>NEAREST</strong></td><td>Closest timestamp</td></tr>
+                                <tr><td><strong>LINEAR</strong></td><td>Linear interpolation</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">9</div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Section - Method 4 -->
+        <div class="slide section-slide" data-slide="10">
+            <div class="section-number">04</div>
+            <h2>Land Use Based Loading</h2>
+        </div>
+
+        <!-- Slide 11: LULC Static -->
+        <div class="slide" data-slide="11">
+            <div class="slide-header">
+                <h2>Method 4a: LULC with Static Coefficients</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.15rem; margin-bottom: 20px;">
+                    <span class="badge lulc">LULC</span> Calculate loads from Copernicus land use data and export coefficients
+                </p>
+                <div class="diagram" style="margin-bottom: 20px;">
+                    <pre style="font-size: 0.95rem;">
+   Copernicus LULC NetCDF          Basin Shapefile           Export Coefficients
+   ┌─────────────────────┐        ┌─────────────────┐       ┌─────────────────────┐
+   │ • Land cover class  │   +    │ • HRU polygons  │   +   │ • Cropland: 15 kg/ha│
+   │ • Annual maps       │        │ • Reach IDs     │       │ • Forest: 2 kg/ha   │
+   │ • 300m resolution   │        │                 │       │ • Urban: 8 kg/ha    │
+   └──────────┬──────────┘        └────────┬────────┘       └──────────┬──────────┘
+              │                            │                           │
+              └──────────────────┬─────────┴───────────────────────────┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────────┐
+                    │  Per-HRU Annual Loads (CSV) │
+                    │  Load = Σ(Area × Coeff)     │
+                    └─────────────────────────────┘
+                    </pre>
+                </div>
+                <div class="two-column" style="gap: 30px;">
+                    <div class="card primary">
+                        <h4>Required Inputs</h4>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.95rem;">Copernicus LULC NetCDF files</li>
+                            <li style="font-size: 0.95rem;">Basin shapefile with HRU polygons</li>
+                            <li style="font-size: 0.95rem;">Export coefficients by land class</li>
+                        </ul>
+                    </div>
+                    <div class="card secondary">
+                        <h4>Output</h4>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.95rem;">Annual CSV load files per HRU</li>
+                            <li style="font-size: 0.95rem;">OpenWQ SS JSON referencing CSVs</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">11</div>
+            </div>
+        </div>
+
+        <!-- Slide 12: LULC Dynamic -->
+        <div class="slide" data-slide="12">
+            <div class="slide-header">
+                <h2>Method 4b: LULC with Dynamic Coefficients</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.15rem; margin-bottom: 20px;">
+                    <span class="badge lulc">LULC+Climate</span> Extend static method with monthly precipitation and temperature scaling
+                </p>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 16px; text-align: center;">
+                            <div style="font-size: 1rem; margin-bottom: 10px;">Monthly Weight Formula (SWAT-inspired)</div>
+                            <div style="font-family: 'JetBrains Mono'; font-size: 1.4rem;">
+                                w<sub>m</sub> = P<sub>m</sub><sup>α</sup> × Q10<sup>(T<sub>m</sub> - T<sub>ref</sub>) / 10</sup>
+                            </div>
+                        </div>
+                        <table style="font-size: 0.95rem; margin-top: 20px;">
+                            <tr><th>Parameter</th><th>Description</th><th>Default</th></tr>
+                            <tr><td>P<sub>m</sub></td><td>Monthly precipitation</td><td>mm</td></tr>
+                            <tr><td>α</td><td>Precip scaling power</td><td>1.0</td></tr>
+                            <tr><td>Q10</td><td>Temperature coefficient</td><td>2.0</td></tr>
+                            <tr><td>T<sub>ref</sub></td><td>Reference temperature</td><td>15°C</td></tr>
+                        </table>
+                    </div>
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>Monthly Distribution</h3>
+                            <p>Annual load is distributed across months based on climate weights:</p>
+                            <ul style="margin: 15px 0 0 15px;">
+                                <li style="font-size: 0.95rem;">Wetter months → higher loads</li>
+                                <li style="font-size: 0.95rem;">Warmer months → higher bio-activity</li>
+                                <li style="font-size: 0.95rem;">Weights normalized to sum to 1</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box" style="margin-top: 15px;">
+                            <strong>Use case:</strong> Diffuse agricultural pollution with seasonal variability
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">12</div>
+            </div>
+        </div>
+
+        <!-- Slide 13: Section - Method 5 -->
+        <div class="slide section-slide purple" data-slide="13">
+            <div class="section-number">05</div>
+            <h2>Machine Learning</h2>
+        </div>
+
+        <!-- Slide 14: ML Method -->
+        <div class="slide" data-slide="14">
+            <div class="slide-header">
+                <h2>Method 5: ML Model Predictions</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.15rem; margin-bottom: 20px;">
+                    <span class="badge ml">ML</span> Train XGBoost or Random Forest on monitoring data to predict loads
+                </p>
+                <div class="diagram" style="margin-bottom: 20px;">
+                    <pre style="font-size: 0.92rem;">
+  Monitoring CSV                    ML Training                     OpenWQ Input
+┌─────────────────────┐         ┌─────────────────────┐         ┌─────────────────────┐
+│ date, discharge,    │         │ • Feature engineer  │         │ • JSON with         │
+│ precip, temp,       │────────▶│ • Train XGBoost/RF  │────────▶│   predicted loads   │
+│ NO3-N, TP, ...      │         │ • Validate (R², RMSE)│        │ • Model files (.txt)│
+└─────────────────────┘         └─────────────────────┘         └─────────────────────┘
+                    </pre>
+                </div>
+                <div class="two-column" style="gap: 30px;">
+                    <div class="column">
+                        <div class="card purple">
+                            <h3>Input Data Format</h3>
+                            <pre style="font-size: 0.8rem; margin-top: 10px;">
+date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
+2018-01-01,15.2,3.5,-2.1,2.3,0.05
+2018-01-02,14.8,0.0,-3.5,2.1,0.04
+...
+                            </pre>
+                        </div>
+                        <div class="card secondary">
+                            <h3>Model Options</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;"><strong>XGBoost</strong> — gradient boosting</li>
+                                <li style="font-size: 0.95rem;"><strong>Random Forest</strong> — ensemble trees</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Output Files</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;"><code>ml_model_NO3-N.txt</code> — trained model</li>
+                                <li style="font-size: 0.95rem;"><code>ml_model_features.json</code> — config</li>
+                                <li style="font-size: 0.95rem;">OpenWQ SS JSON with predictions</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box info">
+                            <strong>FastForest compatible:</strong> Models exported in text format for C++ runtime prediction
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">14</div>
+            </div>
+        </div>
+
+        <!-- Slide 15: Temporal Patterns -->
+        <div class="slide" data-slide="15">
+            <div class="slide-header">
+                <h2>Temporal Patterns & Wildcards</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.2rem; margin-bottom: 20px;">
+                    Use <code>"all"</code> wildcards to create recurring patterns without repeating data:
+                </p>
+                <table style="font-size: 1rem;">
+                    <tr>
+                        <th>Pattern</th>
+                        <th>Data Row</th>
+                        <th>Meaning</th>
+                    </tr>
+                    <tr>
+                        <td>Single event</td>
+                        <td><code>[2020, 4, 15, 8, 0, 0, ...]</code></td>
+                        <td>April 15, 2020 at 8:00 AM</td>
+                    </tr>
+                    <tr>
+                        <td>Every year</td>
+                        <td><code>["all", 4, 15, 8, 0, 0, ...]</code></td>
+                        <td>April 15 at 8:00 AM every year</td>
+                    </tr>
+                    <tr>
+                        <td>Every month</td>
+                        <td><code>[2020, "all", 15, 8, 0, 0, ...]</code></td>
+                        <td>15th of each month in 2020</td>
+                    </tr>
+                    <tr>
+                        <td>Every day</td>
+                        <td><code>[2020, 4, "all", 8, 0, 0, ...]</code></td>
+                        <td>Every day at 8:00 AM in April 2020</td>
+                    </tr>
+                    <tr>
+                        <td>Continuous</td>
+                        <td><code>[2020, "all", "all", "all", "all", "all", ..., "continuous", "day"]</code></td>
+                        <td>Steady load throughout 2020</td>
+                    </tr>
+                </table>
+                <div class="highlight-box success" style="margin-top: 20px;">
+                    <strong>Tip:</strong> Combine temporal wildcards with spatial wildcards (<code>"all"</code> for ix, iy, iz) for watershed-wide loads
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">15</div>
+            </div>
+        </div>
+
+        <!-- Slide 16: Load Types -->
+        <div class="slide" data-slide="16">
+            <div class="slide-header">
+                <h2>Discrete vs Continuous Loads</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 50px;">
+                    <div class="column">
+                        <div class="card accent" style="height: 100%;">
+                            <h3>Discrete Load</h3>
+                            <p style="margin-bottom: 15px;">Applies entire load value at a specific instant</p>
+                            <pre style="font-size: 0.85rem;">
+<span class="comment">// 50 kg applied on April 15 at 8 AM</span>
+[2020, 4, 15, 8, 0, 0, "all", "all", 1,
+ <span class="keyword">50.0</span>, <span class="string">"discrete"</span>]
+                            </pre>
+                            <ul style="margin-top: 15px; margin-left: 15px;">
+                                <li style="font-size: 1rem;">Instantaneous addition</li>
+                                <li style="font-size: 1rem;">Event-based releases</li>
+                                <li style="font-size: 1rem;">Fertilizer application</li>
+                                <li style="font-size: 1rem;">Spill events</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card teal" style="height: 100%;">
+                            <h3>Continuous Load</h3>
+                            <p style="margin-bottom: 15px;">Distributes load evenly over a time period</p>
+                            <pre style="font-size: 0.85rem;">
+<span class="comment">// 0.5 kg/day throughout April</span>
+[2020, 4, "all", "all", "all", "all",
+ "all", "all", 1, <span class="keyword">0.5</span>, <span class="string">"continuous"</span>, <span class="string">"day"</span>]
+                            </pre>
+                            <ul style="margin-top: 15px; margin-left: 15px;">
+                                <li style="font-size: 1rem;">Steady emission rate</li>
+                                <li style="font-size: 1rem;">Background loading</li>
+                                <li style="font-size: 1rem;">WWTP discharges</li>
+                                <li style="font-size: 1rem;">Atmospheric deposition</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">16</div>
+            </div>
+        </div>
+
+        <!-- Slide 17: Master Configuration -->
+        <div class="slide" data-slide="17">
+            <div class="slide-header">
+                <h2>Master Configuration</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.2rem; margin-bottom: 20px;">
+                    Register loading files in the master JSON under <code>OPENWQ_INPUT</code>:
+                </p>
+                <pre style="font-size: 0.95rem;">
+{
+    <span class="string">"OPENWQ_INPUT"</span>: {
+        <span class="string">"CONFIG_FILEPATH"</span>: <span class="string">"openwq_config.json"</span>,
+
+        <span class="string">"SINK_SOURCE"</span>: {
+            <span class="string">"1"</span>: { <span class="string">"LABEL"</span>: <span class="string">"Fertilizer"</span>, <span class="string">"FILEPATH"</span>: <span class="string">"fertilizer_loads.json"</span> },
+            <span class="string">"2"</span>: { <span class="string">"LABEL"</span>: <span class="string">"WWTP"</span>, <span class="string">"FILEPATH"</span>: <span class="string">"point_sources.json"</span> },
+            <span class="string">"3"</span>: { <span class="string">"LABEL"</span>: <span class="string">"Diffuse"</span>, <span class="string">"FILEPATH"</span>: <span class="string">"lulc_loads.json"</span> }
+        },
+
+        <span class="string">"EXTERNAL_WATER_FLUXES"</span>: {
+            <span class="string">"1"</span>: { <span class="string">"LABEL"</span>: <span class="string">"Precipitation"</span>, <span class="string">"FILEPATH"</span>: <span class="string">"precip_conc.json"</span> },
+            <span class="string">"2"</span>: { <span class="string">"LABEL"</span>: <span class="string">"Upstream"</span>, <span class="string">"FILEPATH"</span>: <span class="string">"upstream_hdf5.json"</span> }
+        }
+    }
+}
+                </pre>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">17</div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Summary -->
+        <div class="slide" data-slide="18">
+            <div class="slide-header">
+                <h2>Summary</h2>
+            </div>
+            <div class="slide-content">
+                <table style="font-size: 1rem;">
+                    <tr>
+                        <th>Method</th>
+                        <th>Format</th>
+                        <th>Best For</th>
+                        <th>Complexity</th>
+                    </tr>
+                    <tr>
+                        <td><span class="badge json">JSON</span></td>
+                        <td>Inline data</td>
+                        <td>Small datasets, quick setup</td>
+                        <td>Low</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge csv">CSV</span></td>
+                        <td>External files</td>
+                        <td>Long time series, existing data</td>
+                        <td>Low</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge hdf5">HDF5</span></td>
+                        <td>Binary arrays</td>
+                        <td>Model coupling, large grids</td>
+                        <td>Medium</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge lulc">LULC</span></td>
+                        <td>Satellite + coeffs</td>
+                        <td>Diffuse sources, scenarios</td>
+                        <td>Medium</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge ml">ML</span></td>
+                        <td>Trained model</td>
+                        <td>Data-rich sites, gap-filling</td>
+                        <td>High</td>
+                    </tr>
+                </table>
+                <div class="highlight-box success" style="margin-top: 25px; text-align: center;">
+                    <strong>All methods produce the same internal format</strong> — mix and match as needed!
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">18</div>
+            </div>
+        </div>
+
+        <!-- Slide 19: Thank You -->
+        <div class="slide title-slide" data-slide="19">
+            <h1 style="font-size: 3.5rem;">Thank You</h1>
+            <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
+        </div>
+
+    </div>
+
+    <div class="nav-hint" id="navHint">Use ← → arrows | Press F for fullscreen</div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            history.replaceState(null, null, `#${currentSlide}`);
+        }
+
+        function nextSlide() { currentSlide++; showSlide(currentSlide); }
+        function prevSlide() { currentSlide--; showSlide(currentSlide); }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
+                case 'Home': currentSlide = 1; showSlide(currentSlide); break;
+                case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
+                case 'f': case 'F':
+                    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                    else document.exitFullscreen();
+                    break;
+            }
+        });
+
+        document.querySelector('.presentation').addEventListener('click', (e) => {
+            const rect = e.target.getBoundingClientRect();
+            if (e.clientX - rect.left > rect.width / 2) nextSlide(); else prevSlide();
+        });
+
+        const navHint = document.getElementById('navHint');
+        navHint.classList.add('visible');
+        setTimeout(() => navHint.classList.remove('visible'), 4000);
+
+        let hintTimeout;
+        document.addEventListener('mousemove', () => {
+            navHint.classList.add('visible');
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => navHint.classList.remove('visible'), 2000);
+        });
+
+        if (window.location.hash) {
+            const slideNum = parseInt(window.location.hash.substring(1));
+            if (slideNum >= 1 && slideNum <= totalSlides) currentSlide = slideNum;
+        }
+        showSlide(currentSlide);
+
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', (e) => {
+            const diff = touchStartX - e.changedTouches[0].screenX;
+            if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
+        });
+    </script>
+</body>
+</html>

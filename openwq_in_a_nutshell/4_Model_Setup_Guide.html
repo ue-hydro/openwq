@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWQ - Model Setup Guide</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004499;
+            --secondary: #00a86b;
+            --accent: #ff6b35;
+            --purple: #7c3aed;
+            --teal: #0891b2;
+            --dark: #1a1a2e;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #000; overflow: hidden; }
+        .presentation { height: 100vh; width: 100vw; position: relative; }
+
+        .slide {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; padding: 55px 75px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%); overflow: hidden;
+        }
+        .slide.active { display: flex; }
+
+        .slide.title-slide {
+            background: linear-gradient(135deg, var(--dark) 0%, #16213e 50%, #0f3460 100%);
+            justify-content: center; align-items: center; text-align: center; color: white;
+        }
+        .slide.title-slide h1 { font-size: 4rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .slide.title-slide h1 span { color: var(--secondary); }
+        .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
+        .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
+
+        .slide.section-slide {
+            background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%);
+            justify-content: center; align-items: center; color: white;
+        }
+        .slide.section-slide.blue { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
+        .slide.section-slide.purple { background: linear-gradient(135deg, var(--purple) 0%, #5b21b6 100%); }
+        .slide.section-slide.teal { background: linear-gradient(135deg, var(--teal) 0%, #0e7490 100%); }
+        .slide.section-slide h2 { font-size: 3.5rem; font-weight: 600; }
+        .slide.section-slide .section-number { font-size: 10rem; font-weight: 700; opacity: 0.15; position: absolute; top: 40px; right: 80px; }
+
+        .slide-header { margin-bottom: 30px; }
+        .slide-header h2 { font-size: 2.5rem; font-weight: 600; color: var(--dark); border-left: 6px solid var(--secondary); padding-left: 22px; }
+        .slide-content { flex: 1; display: flex; flex-direction: column; }
+
+        .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 45px; height: 100%; }
+        .three-column { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 25px; }
+        .column { display: flex; flex-direction: column; }
+
+        .card {
+            background: white; border-radius: 14px; padding: 22px;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.07); margin-bottom: 15px;
+        }
+        .card.primary { border-left: 5px solid var(--primary); }
+        .card.secondary { border-left: 5px solid var(--secondary); }
+        .card.accent { border-left: 5px solid var(--accent); }
+        .card.purple { border-left: 5px solid var(--purple); }
+        .card.teal { border-left: 5px solid var(--teal); }
+        .card h3 { font-size: 1.25rem; color: var(--dark); margin-bottom: 10px; }
+        .card h4 { font-size: 1.1rem; color: var(--primary-dark); margin-bottom: 8px; }
+        .card p, .card li { font-size: 1rem; color: var(--text); line-height: 1.45; }
+
+        ul, ol { margin-left: 20px; }
+        li { font-size: 1.25rem; color: var(--text); margin-bottom: 10px; line-height: 1.35; }
+        li strong { color: var(--primary-dark); }
+
+        pre {
+            background: var(--dark); color: #e2e8f0; padding: 18px; border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.35; overflow-x: auto;
+        }
+        pre .comment { color: #68d391; }
+        pre .string { color: #fbd38d; }
+        pre .keyword { color: #63b3ed; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; background: white; border-radius: 10px; overflow: hidden; }
+        th { background: var(--dark); color: white; padding: 10px 14px; text-align: left; font-weight: 600; }
+        td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border-left: 5px solid var(--secondary); padding: 18px 22px; border-radius: 0 10px 10px 0; margin: 12px 0;
+        }
+        .highlight-box.info { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-left-color: var(--primary); }
+        .highlight-box.warning { background: linear-gradient(135deg, #fff7ed, #ffedd5); border-left-color: var(--accent); }
+
+        .slide-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 12px; border-top: 1px solid #e2e8f0; margin-top: auto;
+        }
+        .slide-footer .logo { font-weight: 700; font-size: 1.1rem; color: var(--dark); }
+        .slide-footer .logo span { color: var(--secondary); }
+        .slide-footer .page-number {
+            background: var(--dark); color: white; width: 36px; height: 36px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;
+        }
+
+        .step-indicator {
+            display: flex; align-items: center; gap: 15px; margin-bottom: 25px;
+        }
+        .step-circle {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: var(--secondary); color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; font-weight: 700;
+        }
+        .step-circle.blue { background: var(--primary); }
+        .step-circle.purple { background: var(--purple); }
+        .step-circle.teal { background: var(--teal); }
+        .step-title { font-size: 1.8rem; font-weight: 600; color: var(--dark); }
+
+        .file-tree {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+        }
+        .file-tree .folder { color: var(--primary); font-weight: 600; }
+        .file-tree .file { color: var(--text); }
+        .file-tree .required { color: var(--secondary); font-weight: 500; }
+
+        .nav-hint {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 10px 22px; border-radius: 25px;
+            font-size: 0.85rem; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+        }
+        .nav-hint.visible { opacity: 1; }
+
+        .checklist { list-style: none; margin-left: 0; }
+        .checklist li { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; font-size: 1.1rem; }
+        .checklist li::before { content: "✓"; color: var(--secondary); font-weight: bold; font-size: 1.2rem; }
+
+        .diagram { background: white; border: 2px solid #e2e8f0; border-radius: 14px; padding: 20px; text-align: center; }
+        .diagram pre { background: transparent; color: var(--text); display: inline-block; text-align: left; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="presentation" id="presentation">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1>Model <span>Setup</span> Guide</h1>
+            <div class="subtitle">OpenWQ Configuration</div>
+            <div class="tagline">
+                Step-by-step instructions for setting up an OpenWQ water quality model<br>
+                from scratch — configuration files, directory structure, and execution
+            </div>
+        </div>
+
+        <!-- Slide 2: Overview -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Setup Overview</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <p style="font-size: 1.2rem; margin-bottom: 20px;">
+                            OpenWQ uses <strong>JSON configuration files</strong> organized in a hierarchical structure:
+                        </p>
+                        <div class="diagram">
+                            <pre>
+          ┌──────────────────────┐
+          │    Master JSON       │ ← Entry point
+          │  (project settings)  │
+          └──────────┬───────────┘
+                     │
+       ┌─────────────┼─────────────┐
+       ▼             ▼             ▼
+┌────────────┐ ┌────────────┐ ┌────────────┐
+│  Config    │ │    BGC     │ │ Transport  │
+│  (IC, compartments) │ │  Module    │ │  Module    │
+└────────────┘ └────────────┘ └────────────┘
+       │
+       ▼
+┌────────────────────────────────┐
+│  Sources/Sinks & External Fluxes  │
+└────────────────────────────────┘
+                            </pre>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Required Files</h3>
+                            <ol style="margin-left: 15px;">
+                                <li style="font-size: 1.05rem;">Master JSON (entry point)</li>
+                                <li style="font-size: 1.05rem;">Configuration file (compartments)</li>
+                                <li style="font-size: 1.05rem;">BGC module config</li>
+                                <li style="font-size: 1.05rem;">Transport module config</li>
+                            </ol>
+                        </div>
+                        <div class="card primary">
+                            <h3>Optional Files</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1.05rem;">Source/sink loading files</li>
+                                <li style="font-size: 1.05rem;">External water flux files</li>
+                                <li style="font-size: 1.05rem;">HDF5 initial conditions</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Directory Structure -->
+        <div class="slide" data-slide="3">
+            <div class="slide-header">
+                <h2>Recommended Directory Structure</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="file-tree">
+<span class="folder">my_openwq_project/</span>
+├── <span class="folder">openwq_in/</span>
+│   ├── <span class="required">master_config.json</span>      ← Entry point
+│   ├── <span class="required">openwq_config.json</span>      ← Compartments & IC
+│   ├── <span class="required">bgc_cycling.json</span>        ← BGC module
+│   ├── <span class="required">transport_config.json</span>   ← Transport
+│   ├── <span class="file">sources_fertilizer.json</span>  ← Optional
+│   ├── <span class="file">sources_wwtp.json</span>        ← Optional
+│   └── <span class="file">precip_chemistry.json</span>    ← Optional
+│
+├── <span class="folder">openwq_out/</span>                   ← Output folder
+│   └── (generated HDF5/CSV files)
+│
+├── <span class="folder">hostmodel_files/</span>             ← Host model inputs
+│
+└── <span class="file">run_model.sh</span>                  ← Execution script
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="highlight-box">
+                            <strong>Key Points:</strong>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 1rem;">Keep OpenWQ files in <code>openwq_in/</code></li>
+                                <li style="font-size: 1rem;">Output goes to <code>openwq_out/</code></li>
+                                <li style="font-size: 1rem;">Paths in JSON are relative to master file</li>
+                            </ul>
+                        </div>
+                        <div class="card teal" style="margin-top: 15px;">
+                            <h3>File Naming Convention</h3>
+                            <p>Use descriptive names that indicate content:</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.95rem;"><code>bgc_nitrogen_cycle.json</code></li>
+                                <li style="font-size: 0.95rem;"><code>sources_agriculture.json</code></li>
+                                <li style="font-size: 0.95rem;"><code>ewf_precipitation.json</code></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">3</div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Section - Step 1 -->
+        <div class="slide section-slide" data-slide="4">
+            <div class="section-number">01</div>
+            <h2>Master JSON Configuration</h2>
+        </div>
+
+        <!-- Slide 5: Master JSON -->
+        <div class="slide" data-slide="5">
+            <div class="slide-header">
+                <h2>Step 1: Create Master JSON</h2>
+            </div>
+            <div class="slide-content">
+                <pre style="font-size: 0.78rem;">
+{
+    <span class="comment">// Project metadata</span>
+    <span class="string">"PROJECT_NAME"</span>: <span class="string">"My_Watershed_WQ"</span>,
+    <span class="string">"GEOGRAPHICAL_LOCATION"</span>: <span class="string">"Saskatchewan, Canada"</span>,
+    <span class="string">"AUTHORS"</span>: <span class="string">"Your Name"</span>,
+    <span class="string">"DATE"</span>: <span class="string">"Feb_2026"</span>,
+
+    <span class="comment">// Computational settings</span>
+    <span class="string">"COMPUTATIONAL_SETTINGS"</span>: {
+        <span class="string">"RUN_MODE_DEBUG"</span>: <span class="keyword">false</span>,
+        <span class="string">"USE_NUM_THREADS"</span>: <span class="string">"all"</span>     <span class="comment">// or integer (e.g., 8)</span>
+    },
+
+    <span class="comment">// Input file references</span>
+    <span class="string">"OPENWQ_INPUT"</span>: {
+        <span class="string">"CONFIG_FILEPATH"</span>: <span class="string">"openwq_config.json"</span>,
+        <span class="string">"SINK_SOURCE"</span>: {
+            <span class="string">"1"</span>: { <span class="string">"LABEL"</span>: <span class="string">"Fertilizer"</span>, <span class="string">"FILEPATH"</span>: <span class="string">"sources_fertilizer.json"</span> }
+        },
+        <span class="string">"EXTERNAL_WATER_FLUXES"</span>: {
+            <span class="string">"1"</span>: { <span class="string">"LABEL"</span>: <span class="string">"Precipitation"</span>, <span class="string">"FILEPATH"</span>: <span class="string">"precip_chemistry.json"</span> }
+        }
+    },
+
+    <span class="comment">// Module selection</span>
+    <span class="string">"MODULES"</span>: {
+        <span class="string">"BIOGEOCHEMISTRY"</span>: { <span class="string">"MODULE_NAME"</span>: <span class="string">"NATIVE_BGC_FLEX"</span>, <span class="string">"MODULE_CONFIG_FILEPATH"</span>: <span class="string">"bgc_cycling.json"</span> },
+        <span class="string">"TRANSPORT_EROSION"</span>: { <span class="string">"MODULE_NAME"</span>: <span class="string">"OPENWQ_NATIVE_TRANSP_DISS_ADVDISP"</span>, <span class="string">"MODULE_CONFIG_FILEPATH"</span>: <span class="string">"transport.json"</span> }
+    },
+
+    <span class="comment">// Output configuration</span>
+    <span class="string">"OPENWQ_OUTPUT"</span>: {
+        <span class="string">"RESULTS_FOLDERPATH"</span>: <span class="string">"../openwq_out"</span>,
+        <span class="string">"FORMAT"</span>: <span class="string">"HDF5"</span>,
+        <span class="string">"CHEMICAL_SPECIES"</span>: [<span class="string">"NO3_N"</span>, <span class="string">"NH4_N"</span>],
+        <span class="string">"UNITS"</span>: <span class="string">"mg/L"</span>,
+        <span class="string">"TIMESTEP"</span>: [<span class="keyword">1</span>, <span class="string">"day"</span>]
+    }
+}
+                </pre>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">5</div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Section - Step 2 -->
+        <div class="slide section-slide blue" data-slide="6">
+            <div class="section-number">02</div>
+            <h2>Configuration File</h2>
+        </div>
+
+        <!-- Slide 7: Config File -->
+        <div class="slide" data-slide="7">
+            <div class="slide-header">
+                <h2>Step 2: Define Compartments & Initial Conditions</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.78rem;">
+{
+  <span class="string">"BIOGEOCHEMISTRY_CONFIGURATION"</span>: {
+
+    <span class="comment">// River compartment</span>
+    <span class="string">"RIVER_NETWORK_REACHES"</span>: {
+      <span class="string">"CYCLING_FRAMEWORK"</span>: [<span class="string">"N_CYCLE"</span>],
+      <span class="string">"INITIAL_CONDITIONS"</span>: {
+        <span class="string">"DATA_FORMAT"</span>: <span class="string">"JSON"</span>,
+        <span class="string">"NO3_N"</span>: {
+          <span class="string">"1"</span>: [<span class="string">"all"</span>, <span class="string">"all"</span>, <span class="string">"all"</span>, <span class="keyword">2.0</span>, <span class="string">"mg/L"</span>]
+        },
+        <span class="string">"NH4_N"</span>: {
+          <span class="string">"1"</span>: [<span class="string">"all"</span>, <span class="string">"all"</span>, <span class="string">"all"</span>, <span class="keyword">0.1</span>, <span class="string">"mg/L"</span>]
+        }
+      }
+    },
+
+    <span class="comment">// Soil compartment (from HDF5)</span>
+    <span class="string">"SOIL"</span>: {
+      <span class="string">"CYCLING_FRAMEWORK"</span>: [<span class="string">"N_CYCLE"</span>, <span class="string">"P_CYCLE"</span>],
+      <span class="string">"INITIAL_CONDITIONS"</span>: {
+        <span class="string">"DATA_FORMAT"</span>: <span class="string">"HDF5"</span>,
+        <span class="string">"FOLDERPATH"</span>: <span class="string">"ic_hdf5/"</span>,
+        <span class="string">"UNITS"</span>: <span class="string">"mg"</span>
+      }
+    }
+  }
+}
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Compartment Names</h3>
+                            <p>Must match host model compartments:</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.95rem;">RIVER_NETWORK_REACHES</li>
+                                <li style="font-size: 0.95rem;">SCALARAQUIFER</li>
+                                <li style="font-size: 0.95rem;">SOIL (layer 1, 2, ...)</li>
+                                <li style="font-size: 0.95rem;">LAKE</li>
+                            </ul>
+                        </div>
+                        <div class="card secondary">
+                            <h3>Initial Conditions</h3>
+                            <p>Two formats supported:</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.95rem;"><strong>JSON</strong> — [ix, iy, iz, value, units]</li>
+                                <li style="font-size: 0.95rem;"><strong>HDF5</strong> — from previous run or external</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 10px;">
+                            <strong>Tip:</strong> Use <code>"all"</code> for uniform IC across entire compartment
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">7</div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Section - Step 3 -->
+        <div class="slide section-slide purple" data-slide="8">
+            <div class="section-number">03</div>
+            <h2>BGC Module Configuration</h2>
+        </div>
+
+        <!-- Slide 9: BGC Config -->
+        <div class="slide" data-slide="9">
+            <div class="slide-header">
+                <h2>Step 3: Configure Biogeochemistry</h2>
+            </div>
+            <div class="slide-content">
+                <pre style="font-size: 0.75rem;">
+{
+  <span class="string">"MODULE_NAME"</span>: <span class="string">"NATIVE_BGC_FLEX"</span>,
+
+  <span class="comment">// Define chemical species</span>
+  <span class="string">"CHEMICAL_SPECIES"</span>: {
+    <span class="string">"list"</span>: { <span class="string">"1"</span>: <span class="string">"NO3_N"</span>, <span class="string">"2"</span>: <span class="string">"NH4_N"</span>, <span class="string">"3"</span>: <span class="string">"DOC"</span>, <span class="string">"4"</span>: <span class="string">"DO"</span> },
+    <span class="string">"BGC_GENERAL_MOBILE_SPECIES"</span>: [<span class="string">"NO3_N"</span>, <span class="string">"NH4_N"</span>, <span class="string">"DOC"</span>, <span class="string">"DO"</span>]
+  },
+
+  <span class="comment">// Define cycling frameworks</span>
+  <span class="string">"CYCLING_FRAMEWORKS"</span>: {
+    <span class="string">"N_CYCLE"</span>: {
+      <span class="string">"list_transformations"</span>: { <span class="string">"1"</span>: <span class="string">"nitrification"</span>, <span class="string">"2"</span>: <span class="string">"denitrification"</span> },
+
+      <span class="string">"1"</span>: {
+        <span class="string">"_name"</span>: <span class="string">"nitrification"</span>,
+        <span class="string">"consumed"</span>: <span class="string">"NH4_N"</span>, <span class="string">"produced"</span>: <span class="string">"NO3_N"</span>,
+        <span class="string">"kinetics"</span>: [<span class="string">"k_nitrif * NH4_N * (DO/(Km_DO+DO)) * 1.047^(T-20)"</span>, <span class="string">"mg-N/L/day"</span>],
+        <span class="string">"parameter_names"</span>: [<span class="string">"k_nitrif"</span>, <span class="string">"Km_DO"</span>],
+        <span class="string">"parameter_values"</span>: { <span class="string">"k_nitrif"</span>: <span class="keyword">0.1</span>, <span class="string">"Km_DO"</span>: <span class="keyword">0.5</span> }
+      },
+
+      <span class="string">"2"</span>: {
+        <span class="string">"_name"</span>: <span class="string">"denitrification"</span>,
+        <span class="string">"consumed"</span>: <span class="string">"NO3_N"</span>, <span class="string">"produced"</span>: <span class="string">"N2_loss"</span>,
+        <span class="string">"kinetics"</span>: [<span class="string">"k_denit * NO3_N * (DOC/(Km_DOC+DOC)) * (Ki_DO/(Ki_DO+DO))"</span>, <span class="string">"mg-N/L/day"</span>],
+        <span class="string">"parameter_values"</span>: { <span class="string">"k_denit"</span>: <span class="keyword">0.5</span>, <span class="string">"Km_DOC"</span>: <span class="keyword">2.0</span>, <span class="string">"Ki_DO"</span>: <span class="keyword">0.5</span> }
+      }
+    }
+  }
+}
+                </pre>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">9</div>
+            </div>
+        </div>
+
+        <!-- Slide 10: BGC Templates -->
+        <div class="slide" data-slide="10">
+            <div class="slide-header">
+                <h2>Use Pre-Built Templates</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.2rem; margin-bottom: 20px;">
+                    Start from existing templates instead of writing from scratch:
+                </p>
+                <div class="three-column">
+                    <div class="card primary">
+                        <h3>Individual Chemicals</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.95rem;">nitrogen_inorganic.json</li>
+                            <li style="font-size: 0.95rem;">nitrogen_organic.json</li>
+                            <li style="font-size: 0.95rem;">phosphorus.json</li>
+                            <li style="font-size: 0.95rem;">dissolved_oxygen.json</li>
+                            <li style="font-size: 0.95rem;">carbon.json</li>
+                            <li style="font-size: 0.95rem;">heavy_metals.json</li>
+                        </ul>
+                    </div>
+                    <div class="card secondary">
+                        <h3>Model Frameworks</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.95rem;">SWAT_nutrients.json</li>
+                            <li style="font-size: 0.95rem;">QUAL2E_stream.json</li>
+                            <li style="font-size: 0.95rem;">HYPE_nitrogen.json</li>
+                            <li style="font-size: 0.95rem;">WASP8_lakes.json</li>
+                            <li style="font-size: 0.95rem;">INCA_carbon.json</li>
+                        </ul>
+                    </div>
+                    <div class="card purple">
+                        <h3>PHREEQC Templates</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.95rem;">major_ions.pqi</li>
+                            <li style="font-size: 0.95rem;">nitrogen_speciation.pqi</li>
+                            <li style="font-size: 0.95rem;">phosphorus_minerals.pqi</li>
+                            <li style="font-size: 0.95rem;">trace_metals.pqi</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="highlight-box" style="margin-top: 20px; text-align: center;">
+                    <strong>Location:</strong> <code>supporting_scripts/Model_Config/config_support_lib/BGC_templates/</code>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">10</div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Section - Step 4 -->
+        <div class="slide section-slide teal" data-slide="11">
+            <div class="section-number">04</div>
+            <h2>Transport Configuration</h2>
+        </div>
+
+        <!-- Slide 12: Transport Config -->
+        <div class="slide" data-slide="12">
+            <div class="slide-header">
+                <h2>Step 4: Configure Transport</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <pre style="font-size: 0.82rem;">
+{
+  <span class="string">"MODULE_NAME"</span>: <span class="string">"OPENWQ_NATIVE_TRANSP_DISS_ADVDISP"</span>,
+
+  <span class="comment">// Dispersion coefficients</span>
+  <span class="string">"ADVDISP_CONFIGURATION"</span>: {
+    <span class="string">"dispersion_x"</span>: <span class="keyword">10.0</span>,  <span class="comment">// m²/s</span>
+    <span class="string">"dispersion_y"</span>: <span class="keyword">1.0</span>,
+    <span class="string">"dispersion_z"</span>: <span class="keyword">0.1</span>,
+    <span class="string">"characteristic_length_m"</span>: <span class="keyword">100.0</span>
+  },
+
+  <span class="comment">// Lateral exchange between compartments</span>
+  <span class="string">"BOUNDMIX_CONFIGURATION"</span>: {
+    <span class="string">"1"</span>: {
+      <span class="string">"DIRECTION"</span>: <span class="string">"z"</span>,
+      <span class="string">"UPPER_COMPARTMENT"</span>: <span class="string">"RUNOFF"</span>,
+      <span class="string">"LOWER_COMPARTMENT"</span>: <span class="string">"SOIL"</span>,
+      <span class="string">"K_VAL"</span>: <span class="keyword">0.001</span>
+    },
+    <span class="string">"2"</span>: {
+      <span class="string">"DIRECTION"</span>: <span class="string">"z"</span>,
+      <span class="string">"UPPER_COMPARTMENT"</span>: <span class="string">"SOIL"</span>,
+      <span class="string">"LOWER_COMPARTMENT"</span>: <span class="string">"GROUNDWATER"</span>,
+      <span class="string">"K_VAL"</span>: <span class="keyword">0.0001</span>
+    }
+  }
+}
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>Transport Module Options</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>ADVDISP</strong></td><td>Advection + Dispersion</td></tr>
+                                <tr><td><strong>ADV</strong></td><td>Advection only</td></tr>
+                                <tr><td><strong>NONE</strong></td><td>No transport</td></tr>
+                            </table>
+                        </div>
+                        <div class="card primary">
+                            <h3>Lateral Exchange</h3>
+                            <p>K_VAL controls mixing rate between adjacent compartments (1/s)</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">Higher K → faster exchange</li>
+                                <li style="font-size: 0.9rem;">Direction: x, y, or z</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">12</div>
+            </div>
+        </div>
+
+        <!-- Slide 13: Section - Step 5 -->
+        <div class="slide section-slide" data-slide="13">
+            <div class="section-number">05</div>
+            <h2>Build & Execute</h2>
+        </div>
+
+        <!-- Slide 14: Build -->
+        <div class="slide" data-slide="14">
+            <div class="slide-header">
+                <h2>Step 5: Build OpenWQ</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Build Requirements</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1rem;">CMake (>= 3.10)</li>
+                                <li style="font-size: 1rem;">C++ compiler (GCC, Clang)</li>
+                                <li style="font-size: 1rem;">Fortran compiler (for SUMMA/mizuRoute)</li>
+                                <li style="font-size: 1rem;">Libraries: Armadillo, HDF5, NetCDF</li>
+                            </ul>
+                        </div>
+                        <pre style="font-size: 0.85rem;">
+<span class="comment"># Build with CMake</span>
+cd openwq/build/
+cmake -DHOST_MODEL_TARGET=mizuroute_openwq \
+      -DCMAKE_BUILD_TYPE=fast ..
+make -j 4
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Available Host Models</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><code>openwq</code></td><td>Standalone</td></tr>
+                                <tr><td><code>summa_openwq</code></td><td>SUMMA coupled</td></tr>
+                                <tr><td><code>mizuroute_openwq</code></td><td>mizuRoute coupled</td></tr>
+                                <tr><td><code>crhm_openwq</code></td><td>CRHM coupled</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box info">
+                            <strong>Docker/Apptainer:</strong> Pre-built containers available for quick deployment without compilation
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">14</div>
+            </div>
+        </div>
+
+        <!-- Slide 15: Execute -->
+        <div class="slide" data-slide="15">
+            <div class="slide-header">
+                <h2>Step 6: Run the Model</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>Command Line Execution</h3>
+                            <pre style="font-size: 0.9rem; margin-top: 10px;">
+<span class="comment"># Native execution</span>
+./mizuroute_openwq \
+    -c hostmodel_config.txt \
+    -w openwq_in/master_config.json
+
+<span class="comment"># Docker execution</span>
+docker run -v $(pwd):/data openwq:latest \
+    -c /data/hostmodel_config.txt \
+    -w /data/openwq_in/master_config.json
+                            </pre>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Expected Output</h3>
+                            <p>In <code>openwq_out/</code> folder:</p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.95rem;"><code>RIVER@NO3_N#mg_L.h5</code></li>
+                                <li style="font-size: 0.95rem;"><code>RIVER@NH4_N#mg_L.h5</code></li>
+                                <li style="font-size: 0.95rem;"><code>Log_OpenWQ.txt</code></li>
+                            </ul>
+                        </div>
+                        <div class="card primary">
+                            <h3>Output Format</h3>
+                            <p>HDF5 naming convention:</p>
+                            <code style="font-size: 0.9rem;">{COMPARTMENT}@{SPECIES}#{UNITS}.h5</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">15</div>
+            </div>
+        </div>
+
+        <!-- Slide 16: Checklist -->
+        <div class="slide" data-slide="16">
+            <div class="slide-header">
+                <h2>Setup Checklist</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 50px;">
+                    <div class="column">
+                        <h3 style="margin-bottom: 20px; color: var(--secondary);">Configuration Files</h3>
+                        <ul class="checklist">
+                            <li>Create master JSON with project metadata</li>
+                            <li>Configure computational settings (threads)</li>
+                            <li>Define compartments and cycling frameworks</li>
+                            <li>Set initial conditions (JSON or HDF5)</li>
+                            <li>Configure BGC module with species and reactions</li>
+                            <li>Set up transport parameters</li>
+                            <li>Configure output settings (format, species, timestep)</li>
+                        </ul>
+                    </div>
+                    <div class="column">
+                        <h3 style="margin-bottom: 20px; color: var(--primary);">Optional Components</h3>
+                        <ul class="checklist">
+                            <li>Add source/sink loading files</li>
+                            <li>Configure external water flux chemistry</li>
+                            <li>Set up PHREEQC if using geochemistry</li>
+                            <li>Configure sediment transport module</li>
+                            <li>Add sorption isotherms</li>
+                        </ul>
+                        <h3 style="margin: 25px 0 20px; color: var(--accent);">Execution</h3>
+                        <ul class="checklist">
+                            <li>Compile or use Docker container</li>
+                            <li>Verify paths in configuration files</li>
+                            <li>Run model and check log file</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">16</div>
+            </div>
+        </div>
+
+        <!-- Slide 17: Common Issues -->
+        <div class="slide" data-slide="17">
+            <div class="slide-header">
+                <h2>Common Issues & Solutions</h2>
+            </div>
+            <div class="slide-content">
+                <table style="font-size: 0.95rem;">
+                    <tr>
+                        <th style="width: 35%;">Issue</th>
+                        <th>Solution</th>
+                    </tr>
+                    <tr>
+                        <td>File not found errors</td>
+                        <td>Check paths are relative to master JSON location</td>
+                    </tr>
+                    <tr>
+                        <td>Unknown compartment name</td>
+                        <td>Ensure compartment names match host model exactly</td>
+                    </tr>
+                    <tr>
+                        <td>Species not defined</td>
+                        <td>Add species to CHEMICAL_SPECIES list before referencing</td>
+                    </tr>
+                    <tr>
+                        <td>Kinetics expression error</td>
+                        <td>Check exprtk syntax — use ^ for power, not **</td>
+                    </tr>
+                    <tr>
+                        <td>Negative concentrations</td>
+                        <td>Reduce timestep or check reaction rates</td>
+                    </tr>
+                    <tr>
+                        <td>No output produced</td>
+                        <td>Check OPENWQ_OUTPUT species list matches defined species</td>
+                    </tr>
+                </table>
+                <div class="highlight-box warning" style="margin-top: 20px;">
+                    <strong>Debugging Tip:</strong> Set <code>"RUN_MODE_DEBUG": true</code> for verbose logging
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">17</div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Summary -->
+        <div class="slide" data-slide="18">
+            <div class="slide-header">
+                <h2>Summary</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column">
+                    <div class="card secondary" style="text-align: center;">
+                        <h3 style="justify-content: center;">📁 Organize</h3>
+                        <p>Create directory structure with openwq_in/ and openwq_out/ folders</p>
+                    </div>
+                    <div class="card primary" style="text-align: center;">
+                        <h3 style="justify-content: center;">📝 Configure</h3>
+                        <p>Create 4 JSON files: Master, Config, BGC, Transport</p>
+                    </div>
+                    <div class="card accent" style="text-align: center;">
+                        <h3 style="justify-content: center;">🚀 Execute</h3>
+                        <p>Build or use Docker, run with config paths, check output</p>
+                    </div>
+                </div>
+                <div class="highlight-box" style="margin-top: 30px; text-align: center; font-size: 1.15rem;">
+                    <strong>Start from templates!</strong> Copy and modify existing configurations from the BGC_templates folder
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">18</div>
+            </div>
+        </div>
+
+        <!-- Slide 19: Thank You -->
+        <div class="slide title-slide" data-slide="19">
+            <h1 style="font-size: 3.5rem;">Thank You</h1>
+            <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
+            <div style="margin-top: 2rem;">
+                <p style="font-size: 1.2rem; color: #a0aec0;">
+                    <strong>Documentation:</strong> openwq.readthedocs.io
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="nav-hint" id="navHint">Use ← → arrows | Press F for fullscreen</div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            history.replaceState(null, null, `#${currentSlide}`);
+        }
+
+        function nextSlide() { currentSlide++; showSlide(currentSlide); }
+        function prevSlide() { currentSlide--; showSlide(currentSlide); }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
+                case 'Home': currentSlide = 1; showSlide(currentSlide); break;
+                case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
+                case 'f': case 'F':
+                    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                    else document.exitFullscreen();
+                    break;
+            }
+        });
+
+        document.querySelector('.presentation').addEventListener('click', (e) => {
+            const rect = e.target.getBoundingClientRect();
+            if (e.clientX - rect.left > rect.width / 2) nextSlide(); else prevSlide();
+        });
+
+        const navHint = document.getElementById('navHint');
+        navHint.classList.add('visible');
+        setTimeout(() => navHint.classList.remove('visible'), 4000);
+
+        let hintTimeout;
+        document.addEventListener('mousemove', () => {
+            navHint.classList.add('visible');
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => navHint.classList.remove('visible'), 2000);
+        });
+
+        if (window.location.hash) {
+            const slideNum = parseInt(window.location.hash.substring(1));
+            if (slideNum >= 1 && slideNum <= totalSlides) currentSlide = slideNum;
+        }
+        showSlide(currentSlide);
+
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', (e) => {
+            const diff = touchStartX - e.changedTouches[0].screenX;
+            if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
+        });
+    </script>
+</body>
+</html>
