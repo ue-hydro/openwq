@@ -88,12 +88,13 @@ Native macOS compilation is currently not supported. Please use Docker.
   7. `./build.pc.cmake`
 
 #### Docker
-There is a dockerfile provided in OpenWQ repository. 
+Container files (Dockerfile, docker-compose.yml) are located in the `containers/` folder.
+
  1. cd into the OpenWQ repository (if following the common steps, this would be `summa/build/source/openwq/openwq`)
- 2. run `docker build -t openwq .`
- 3. cd back up to the summa directory
- 4. run `docker run -itd -v $(pwd):/code openwq`
- 5. Connect to the container with `docker attach <container_id>` or VSCode's Remote-Containers extension
+ 2. cd into containers: `cd containers`
+ 3. Build using docker-compose: `docker-compose build`
+ 4. Start the container: `docker-compose up -d`
+ 5. Connect to the container with `docker attach docker_openwq` or VSCode's Remote-Containers extension
  6. cd into `/code/build/cmake` and adjust the `build.pc.cmake` file to include the OpenWQ library with `-DUSE_OPENWQ=ON`
  7. run `./build.pc.cmake` to compile SUMMA with OpenWQ
  8. Alternatively, you can `cd /code/build/source/openwq/openwq`
@@ -104,13 +105,20 @@ There is a dockerfile provided in OpenWQ repository.
  11. cmake ..
  12. make -j 2
 
+Alternative (without docker-compose):
+ 1. `cd containers`
+ 2. `docker build -t openwq .`
+ 3. cd back up to the parent directory (e.g., summa)
+ 4. `docker run -itd -v $(pwd):/code openwq`
+ 5. Connect to the container with `docker attach <container_id>`
+
 #### Apptainer
-Inside the repository is an Apptainer definition file `Apptainerfile.def`. This file can be used to build an Apptainer (Singularity) container. NOTE: You will need sudo access to build the container. Once the container is built you can transfer the container to a system with Apptainer to run the container. Running the container does not require sudo access.
+The Apptainer definition file `openwq_apptainer.def` is located in the `containers/` folder. This file can be used to build an Apptainer (Singularity) container. NOTE: You will need sudo access to build the container. Once the container is built you can transfer the container to a system with Apptainer to run the container. Running the container does not require sudo access.
 
 TO BUILD THE CONTAINER:
  1. Follow the common steps above to obtain the source code
- 2. `cd summa/build/source/openwq/openwq`
- 3. `sudo apptainer build openwq.sif Apptainerfile.def`
+ 2. `cd summa/build/source/openwq/openwq/containers`
+ 3. `sudo apptainer build openwq.sif openwq_apptainer.def`
 
 COMPILE SUMMA-OPENWQ WITH THE CONTAINER:
  1. There is a script in `utils/` called `compile_summa_apptainer.sh` that will compile SUMMA-OpenWQ using the container.

@@ -44,7 +44,7 @@ pip install SALib
 docker ps | grep openwq
 
 # If not running, start it:
-cd /path/to/docker/setup
+cd /path/to/openwq/containers
 docker-compose up -d
 ```
 
@@ -169,7 +169,7 @@ observation_data_path = "/path/to/calibration_workspace/observations.csv"
 ```python
 container_runtime = "docker"
 docker_container_name = "docker_openwq"
-docker_compose_path = "/path/to/docker-compose.yml"
+docker_compose_path = "/path/to/openwq/containers/docker-compose.yml"
 ```
 
 **For Apptainer (HPC):**
@@ -471,7 +471,7 @@ Copy the best parameters to your model configuration:
 **Docker:**
 ```bash
 # Start the container
-cd /path/to/docker/setup
+cd /path/to/openwq/containers
 docker-compose up -d
 
 # Verify it's running

@@ -4,7 +4,7 @@ Apptainer/Singularity (HPC)
 Apptainer (formerly Singularity) is the recommended containerization solution for High-Performance Computing (HPC) environments.
 Unlike Docker, Apptainer is designed for multi-user HPC systems where root privileges are not available.
 
-The OpenWQ repository includes a pre-configured definition file (``openwq_apptainer.def``) that builds a complete environment with all dependencies.
+The OpenWQ repository includes a pre-configured definition file (``containers/openwq_apptainer.def``) that builds a complete environment with all dependencies.
 
 
 Building the container
@@ -14,9 +14,9 @@ Building the container
 
     module load apptainer    # or: module load singularity
 
-2. Navigate to the OpenWQ directory containing the definition file::
+2. Navigate to the containers directory inside the OpenWQ repository::
 
-    cd /path/to/openwq/
+    cd /path/to/openwq/containers/
 
 3. Build the container image (.sif file)::
 

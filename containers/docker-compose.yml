@@ -1,0 +1,9 @@
+services:
+  openwq:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    tty: true
+    container_name: docker_openwq
+    volumes:
+      - ../../../../../../../:/code:Z
