@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWQ - Biogeochemistry Engines</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004499;
+            --secondary: #00a86b;
+            --accent: #ff6b35;
+            --purple: #7c3aed;
+            --dark: #1a1a2e;
+            --light: #f8f9fa;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #000; overflow: hidden; }
+        .presentation { height: 100vh; width: 100vw; position: relative; }
+
+        .slide {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; padding: 60px 80px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%); overflow: hidden;
+        }
+        .slide.active { display: flex; }
+
+        .slide.title-slide {
+            background: linear-gradient(135deg, var(--dark) 0%, #16213e 50%, #0f3460 100%);
+            justify-content: center; align-items: center; text-align: center; color: white;
+        }
+        .slide.title-slide h1 { font-size: 4rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .slide.title-slide h1 span { color: var(--primary); }
+        .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
+        .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
+
+        .slide.section-slide {
+            background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%);
+            justify-content: center; align-items: center; color: white;
+        }
+        .slide.section-slide.purple { background: linear-gradient(135deg, var(--purple) 0%, #5b21b6 100%); }
+        .slide.section-slide h2 { font-size: 4rem; font-weight: 600; }
+        .slide.section-slide .section-number { font-size: 10rem; font-weight: 700; opacity: 0.15; position: absolute; top: 40px; right: 80px; }
+
+        .slide-header { margin-bottom: 40px; }
+        .slide-header h2 { font-size: 2.8rem; font-weight: 600; color: var(--dark); border-left: 6px solid var(--primary); padding-left: 24px; }
+        .slide-content { flex: 1; display: flex; flex-direction: column; }
+
+        .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; height: 100%; }
+        .three-column { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 35px; }
+        .column { display: flex; flex-direction: column; }
+
+        .card {
+            background: white; border-radius: 16px; padding: 28px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }
+        .card.primary { border-left: 5px solid var(--primary); }
+        .card.secondary { border-left: 5px solid var(--secondary); }
+        .card.accent { border-left: 5px solid var(--accent); }
+        .card.purple { border-left: 5px solid var(--purple); }
+        .card h3 { font-size: 1.4rem; color: var(--dark); margin-bottom: 12px; }
+        .card p, .card li { font-size: 1.1rem; color: var(--text); line-height: 1.5; }
+
+        ul, ol { margin-left: 25px; }
+        li { font-size: 1.35rem; color: var(--text); margin-bottom: 14px; line-height: 1.4; }
+        li strong { color: var(--primary-dark); }
+
+        .equation-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 30px 40px; border-radius: 16px; margin: 15px 0; text-align: center;
+        }
+        .equation-box .equation { font-family: 'JetBrains Mono', monospace; font-size: 1.6rem; margin: 10px 0; }
+        .equation-box .label { font-size: 1rem; opacity: 0.9; }
+        .equation-box.green { background: linear-gradient(135deg, #00b894 0%, #00cec9 100%); }
+        .equation-box.orange { background: linear-gradient(135deg, #e17055 0%, #d63031 100%); }
+
+        pre {
+            background: var(--dark); color: #e2e8f0; padding: 22px; border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; line-height: 1.45; overflow-x: auto;
+        }
+        pre .comment { color: #68d391; }
+        pre .string { color: #fbd38d; }
+        pre .keyword { color: #63b3ed; }
+
+        .diagram { background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 25px; text-align: center; }
+        .diagram pre { background: transparent; color: var(--text); display: inline-block; text-align: left; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 1.05rem; background: white; border-radius: 12px; overflow: hidden; }
+        th { background: var(--dark); color: white; padding: 14px 18px; text-align: left; font-weight: 600; }
+        td { padding: 12px 18px; border-bottom: 1px solid #e2e8f0; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #fff7ed, #ffedd5);
+            border-left: 5px solid var(--accent); padding: 22px 28px; border-radius: 0 12px 12px 0; margin: 18px 0;
+        }
+        .highlight-box.info { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-left-color: var(--primary); }
+        .highlight-box.success { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-left-color: var(--secondary); }
+        .highlight-box.purple { background: linear-gradient(135deg, #f5f3ff, #ede9fe); border-left-color: var(--purple); }
+
+        .slide-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 18px; border-top: 1px solid #e2e8f0; margin-top: auto;
+        }
+        .slide-footer .logo { font-weight: 700; font-size: 1.2rem; color: var(--dark); }
+        .slide-footer .logo span { color: var(--primary); }
+        .slide-footer .page-number {
+            background: var(--dark); color: white; width: 40px; height: 40px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;
+        }
+
+        .redox-ladder { display: flex; flex-direction: column; gap: 6px; }
+        .redox-step {
+            display: grid; grid-template-columns: 90px 1fr 110px 90px; align-items: center;
+            padding: 12px 20px; border-radius: 8px; font-size: 1rem; font-weight: 500;
+        }
+        .redox-step.level-1 { background: linear-gradient(90deg, #dbeafe, #bfdbfe); }
+        .redox-step.level-2 { background: linear-gradient(90deg, #d1fae5, #a7f3d0); }
+        .redox-step.level-3 { background: linear-gradient(90deg, #fef3c7, #fde68a); }
+        .redox-step.level-4 { background: linear-gradient(90deg, #fee2e2, #fecaca); }
+
+        .nav-hint {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 12px 24px; border-radius: 30px;
+            font-size: 0.9rem; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+        }
+        .nav-hint.visible { opacity: 1; }
+
+        .comparison-box { background: white; border-radius: 16px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+        .comparison-box h4 { font-size: 1.3rem; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 3px solid; }
+        .comparison-box.blue h4 { border-color: var(--primary); color: var(--primary); }
+        .comparison-box.green h4 { border-color: var(--secondary); color: var(--secondary); }
+        .comparison-box.purple h4 { border-color: var(--purple); color: var(--purple); }
+        .comparison-box li { font-size: 1.05rem; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="presentation" id="presentation">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1>Open<span>WQ</span></h1>
+            <div class="subtitle">Biogeochemistry Engines</div>
+            <div class="tagline">
+                From empirical kinetics to thermodynamic equilibrium geochemistry<br>
+                — flexible frameworks for any water quality application
+            </div>
+        </div>
+
+        <!-- Slide 2: Overview -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Three Biogeochemistry Approaches</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column">
+                    <div class="card primary" style="height: 100%;">
+                        <h3>🧪 NATIVE_BGC_FLEX</h3>
+                        <p><strong>Kinetic Reactions</strong></p>
+                        <ul style="margin-top: 15px; margin-left: 15px;">
+                            <li style="font-size: 1rem;">User-defined rate expressions</li>
+                            <li style="font-size: 1rem;">SWAT/HYPE/INCA style</li>
+                            <li style="font-size: 1rem;">exprtk math parser</li>
+                            <li style="font-size: 1rem;">Flexible and transparent</li>
+                        </ul>
+                        <div class="highlight-box info" style="margin-top: auto; padding: 12px;">
+                            <strong>Best for:</strong> Watersheds, nutrient cycling
+                        </div>
+                    </div>
+                    <div class="card secondary" style="height: 100%;">
+                        <h3>⚡ Thermodynamic Extension</h3>
+                        <p><strong>F<sub>T</sub> Factor</strong></p>
+                        <ul style="margin-top: 15px; margin-left: 15px;">
+                            <li style="font-size: 1rem;">Gibbs energy constraints</li>
+                            <li style="font-size: 1rem;">Automatic redox ladder</li>
+                            <li style="font-size: 1rem;">Jin & Bethke (2003)</li>
+                            <li style="font-size: 1rem;">Fewer calibration params</li>
+                        </ul>
+                        <div class="highlight-box success" style="margin-top: auto; padding: 12px;">
+                            <strong>Best for:</strong> Sediment diagenesis, redox
+                        </div>
+                    </div>
+                    <div class="card purple" style="height: 100%;">
+                        <h3>⚗️ PHREEQC</h3>
+                        <p><strong>Equilibrium Geochemistry</strong></p>
+                        <ul style="margin-top: 15px; margin-left: 15px;">
+                            <li style="font-size: 1rem;">Automatic speciation</li>
+                            <li style="font-size: 1rem;">Mineral reactions</li>
+                            <li style="font-size: 1rem;">100+ mineral database</li>
+                            <li style="font-size: 1rem;">pH/pe calculation</li>
+                        </ul>
+                        <div class="highlight-box purple" style="margin-top: auto; padding: 12px;">
+                            <strong>Best for:</strong> Groundwater, AMD
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Section - BGC_FLEX -->
+        <div class="slide section-slide" data-slide="3">
+            <div class="section-number">01</div>
+            <h2>NATIVE_BGC_FLEX</h2>
+        </div>
+
+        <!-- Slide 4: BGC_FLEX Concept -->
+        <div class="slide" data-slide="4">
+            <div class="slide-header">
+                <h2>Reaction Network Paradigm</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <p style="font-size: 1.3rem; margin-bottom: 25px;">
+                            Each transformation is defined by four elements:
+                        </p>
+                        <ul>
+                            <li><strong>Consumed species</strong> — reactant being transformed</li>
+                            <li><strong>Produced species</strong> — product being created</li>
+                            <li><strong>Kinetics expression</strong> — rate formula</li>
+                            <li><strong>Parameters</strong> — rate constants, K<sub>m</sub>, etc.</li>
+                        </ul>
+                        <div class="highlight-box info" style="margin-top: 25px;">
+                            <strong>Expression Parser:</strong> Uses <strong>exprtk</strong> — any mathematical expression is valid!
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="diagram">
+                            <pre style="font-size: 1.05rem;">
+    ┌────────┐   nitrification   ┌────────┐
+    │  NH₄⁺  │ ───────────────▶ │  NO₃⁻  │
+    └────────┘                   └────────┘
+           Rate = k × [NH₄] × f(O₂) × f(T)
+
+
+    ┌────────┐   denitrification ┌────────┐
+    │  NO₃⁻  │ ───────────────▶ │   N₂   │
+    └────────┘                   └────────┘
+           Rate = k × [NO₃] × f(DOC) × g(O₂)
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">4</div>
+            </div>
+        </div>
+
+        <!-- Slide 5: Rate Laws -->
+        <div class="slide" data-slide="5">
+            <div class="slide-header">
+                <h2>Supported Rate Laws</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="equation-box">
+                            <div class="label">First-Order Kinetics</div>
+                            <div class="equation">Rate = k × C</div>
+                        </div>
+                        <div class="equation-box green">
+                            <div class="label">Monod / Michaelis-Menten</div>
+                            <div class="equation">Rate = k<sub>max</sub> × C / (K<sub>m</sub> + C)</div>
+                        </div>
+                        <div class="equation-box orange">
+                            <div class="label">Temperature Correction (Q10)</div>
+                            <div class="equation">Rate = k<sub>20</sub> × θ<sup>(T-20)</sup> × C</div>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Available Functions</h3>
+                            <table style="font-size: 0.95rem; margin-top: 10px;">
+                                <tr><td><strong>Math</strong></td><td>exp, log, sqrt, abs, pow</td></tr>
+                                <tr><td><strong>Trig</strong></td><td>sin, cos, tan</td></tr>
+                                <tr><td><strong>Compare</strong></td><td>min, max, clamp</td></tr>
+                                <tr><td><strong>Logic</strong></td><td>if(cond, true, false)</td></tr>
+                            </table>
+                        </div>
+                        <div class="card secondary">
+                            <h3>Available Variables</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1rem;"><code>T</code> — Temperature (°C)</li>
+                                <li style="font-size: 1rem;"><code>[species]</code> — Any defined species</li>
+                                <li style="font-size: 1rem;">Host model variables (DO, pH...)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">5</div>
+            </div>
+        </div>
+
+        <!-- Slide 6: JSON Example -->
+        <div class="slide" data-slide="6">
+            <div class="slide-header">
+                <h2>JSON Configuration</h2>
+            </div>
+            <div class="slide-content">
+                <pre style="font-size: 0.92rem;">
+<span class="comment">// Define chemical species</span>
+<span class="string">"CHEMICAL_SPECIES"</span>: {
+    <span class="string">"list"</span>: { <span class="string">"1"</span>: <span class="string">"NO3_N"</span>, <span class="string">"2"</span>: <span class="string">"NH4_N"</span>, <span class="string">"3"</span>: <span class="string">"DOC"</span>, <span class="string">"4"</span>: <span class="string">"DO"</span> },
+    <span class="string">"BGC_GENERAL_MOBILE_SPECIES"</span>: [<span class="string">"NO3_N"</span>, <span class="string">"NH4_N"</span>, <span class="string">"DOC"</span>, <span class="string">"DO"</span>]
+}
+
+<span class="comment">// Define transformation</span>
+<span class="string">"CYCLING_FRAMEWORKS"</span>: {
+    <span class="string">"NITROGEN_CYCLE"</span>: {
+        <span class="string">"1"</span>: {
+            <span class="string">"_name"</span>: <span class="string">"nitrification"</span>,
+            <span class="string">"consumed"</span>: <span class="string">"NH4_N"</span>,
+            <span class="string">"produced"</span>: <span class="string">"NO3_N"</span>,
+            <span class="string">"kinetics"</span>: [<span class="keyword">"k_nitrif * NH4_N * (DO/(Km_DO+DO)) * 1.047^(T-20)"</span>, <span class="string">"mg-N/L/day"</span>],
+            <span class="string">"parameter_values"</span>: { <span class="string">"k_nitrif"</span>: <span class="keyword">0.1</span>, <span class="string">"Km_DO"</span>: <span class="keyword">0.5</span> }
+        }
+    }
+}
+                </pre>
+                <div class="highlight-box success" style="margin-top: 20px; text-align: center;">
+                    <strong>No recompilation needed!</strong> Change reactions by editing JSON files.
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">6</div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Section - Thermodynamic -->
+        <div class="slide section-slide" data-slide="7">
+            <div class="section-number">02</div>
+            <h2>Thermodynamic Extension</h2>
+        </div>
+
+        <!-- Slide 8: The Problem -->
+        <div class="slide" data-slide="8">
+            <div class="slide-header">
+                <h2>Why Thermodynamics?</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>Traditional Kinetic Approach</h3>
+                            <p>Uses inhibition terms (K<sub>i</sub>) to suppress reactions:</p>
+                            <div style="font-family: 'JetBrains Mono'; background: #f1f5f9; padding: 12px; border-radius: 8px; margin: 12px 0;">
+                                F<sub>inhibit</sub> = K<sub>i</sub> / (K<sub>i</sub> + [O₂])
+                            </div>
+                            <p style="color: var(--accent);">⚠️ Empirical — requires calibration of K<sub>i</sub></p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Nature's Reality</h3>
+                            <p>Microbes use electron acceptors in order of <strong>energy yield</strong>:</p>
+                            <ol style="margin: 15px 0 15px 20px;">
+                                <li style="font-size: 1.05rem;">O₂ → most energy</li>
+                                <li style="font-size: 1.05rem;">NO₃⁻</li>
+                                <li style="font-size: 1.05rem;">Mn(IV), Fe(III)</li>
+                                <li style="font-size: 1.05rem;">SO₄²⁻</li>
+                                <li style="font-size: 1.05rem;">CO₂ → least energy</li>
+                            </ol>
+                            <p style="color: var(--secondary);">✓ The "redox ladder" — thermodynamically controlled</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="highlight-box info" style="margin-top: 20px; text-align: center;">
+                    <strong>Solution:</strong> Add a thermodynamic potential factor (F<sub>T</sub>) that automatically enforces the redox sequence
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">8</div>
+            </div>
+        </div>
+
+        <!-- Slide 9: F_T Factor -->
+        <div class="slide" data-slide="9">
+            <div class="slide-header">
+                <h2>The F<sub>T</sub> Factor</h2>
+            </div>
+            <div class="slide-content">
+                <div class="equation-box" style="margin-bottom: 25px;">
+                    <div class="label">Jin & Bethke (2003, 2007)</div>
+                    <div class="equation" style="font-size: 2rem;">
+                        F<sub>T</sub> = 1 − exp( −(ΔG<sub>avail</sub> − ΔG<sub>min</sub>) / (χ × R × T) )
+                    </div>
+                </div>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <table style="font-size: 1rem;">
+                            <tr><th>Symbol</th><th>Description</th><th>Value</th></tr>
+                            <tr><td>ΔG<sub>avail</sub></td><td>Free energy from reaction</td><td>Varies by reaction</td></tr>
+                            <tr><td>ΔG<sub>min</sub></td><td>Min. for ATP synthesis</td><td>~45 kJ/mol</td></tr>
+                            <tr><td>χ</td><td>Stoichiometric number</td><td>1-4</td></tr>
+                            <tr><td>R</td><td>Gas constant</td><td>0.008314 kJ/mol·K</td></tr>
+                        </table>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>F<sub>T</sub> Behavior</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1.05rem;">ΔG >> ΔG<sub>min</sub> → F<sub>T</sub> ≈ 1.0</li>
+                                <li style="font-size: 1.05rem;">ΔG ≈ ΔG<sub>min</sub> → F<sub>T</sub> ≈ 0.5</li>
+                                <li style="font-size: 1.05rem;">ΔG < ΔG<sub>min</sub> → F<sub>T</sub> → 0</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">9</div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Redox Ladder -->
+        <div class="slide" data-slide="10">
+            <div class="slide-header">
+                <h2>The Redox Ladder</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.2rem; margin-bottom: 20px; text-align: center;">
+                    F<sub>T</sub> automatically enforces electron acceptor sequence based on energy yield
+                </p>
+                <div class="redox-ladder">
+                    <div class="redox-step level-1">
+                        <span><strong>O₂</strong></span>
+                        <span>Aerobic respiration</span>
+                        <span>ΔG° = −125 kJ/mol</span>
+                        <span>F<sub>T</sub> ≈ 1.0</span>
+                    </div>
+                    <div class="redox-step level-1">
+                        <span><strong>NO₃⁻</strong></span>
+                        <span>Denitrification</span>
+                        <span>ΔG° = −119 kJ/mol</span>
+                        <span>F<sub>T</sub> ≈ 1.0</span>
+                    </div>
+                    <div class="redox-step level-2">
+                        <span><strong>Mn(IV)</strong></span>
+                        <span>Manganese reduction</span>
+                        <span>ΔG° = −95 kJ/mol</span>
+                        <span>F<sub>T</sub> ≈ 1.0</span>
+                    </div>
+                    <div class="redox-step level-2">
+                        <span><strong>Fe(III)</strong></span>
+                        <span>Iron reduction</span>
+                        <span>ΔG° = −50 kJ/mol</span>
+                        <span>F<sub>T</sub> ≈ 0.64</span>
+                    </div>
+                    <div class="redox-step level-3">
+                        <span><strong>SO₄²⁻</strong></span>
+                        <span>Sulfate reduction</span>
+                        <span>ΔG° = −25 kJ/mol</span>
+                        <span>F<sub>T</sub> → 0*</span>
+                    </div>
+                    <div class="redox-step level-4">
+                        <span><strong>CO₂</strong></span>
+                        <span>Methanogenesis</span>
+                        <span>ΔG° = −20 kJ/mol</span>
+                        <span>F<sub>T</sub> → 0*</span>
+                    </div>
+                </div>
+                <p style="text-align: center; color: var(--text-light); margin-top: 12px; font-size: 0.95rem;">
+                    * Requires concentration-dependent ΔG adjustment to proceed
+                </p>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">10</div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Implementation -->
+        <div class="slide" data-slide="11">
+            <div class="slide-header">
+                <h2>Implementation</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.25rem; margin-bottom: 20px;">
+                    Simply append the F<sub>T</sub> term to your kinetic expression — <strong>no code changes!</strong>
+                </p>
+                <pre style="font-size: 0.95rem;">
+<span class="comment">// Standard kinetic expression:</span>
+<span class="string">"kinetics"</span>: [<span class="string">"k_denit * NO3_N * (DOC/(Km+DOC)) * (Ki/(Ki+DO))"</span>]
+
+<span class="comment">// With thermodynamic constraint (add F_T term):</span>
+<span class="string">"kinetics"</span>: [
+    <span class="string">"k_denit * NO3_N * (DOC/(Km+DOC)) * (Ki/(Ki+DO)) * </span><span class="keyword">(1 - exp(-((119-45)/(2*0.008314*(T+273)))))</span><span class="string">"</span>
+]
+
+<span class="comment">// F_T breakdown:</span>
+<span class="comment">//   119 = ΔG° for denitrification [kJ/mol]</span>
+<span class="comment">//   45  = ΔG_min (ATP synthesis) [kJ/mol]</span>
+<span class="comment">//   2   = χ (stoichiometric number)</span>
+<span class="comment">//   0.008314 = R [kJ/mol·K]</span>
+<span class="comment">//   T+273 = temperature in Kelvin</span>
+                </pre>
+                <div class="highlight-box success" style="margin-top: 20px;">
+                    <strong>Advantage:</strong> ΔG° values are known from literature — reduces calibration parameters!
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">11</div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Section - PHREEQC -->
+        <div class="slide section-slide purple" data-slide="12">
+            <div class="section-number">03</div>
+            <h2>PHREEQC</h2>
+        </div>
+
+        <!-- Slide 13: PHREEQC Concept -->
+        <div class="slide" data-slide="13">
+            <div class="slide-header">
+                <h2>Equilibrium Geochemistry</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <p style="font-size: 1.2rem; margin-bottom: 20px;">
+                            A different paradigm: compute speciation based on <strong>thermodynamic equilibrium</strong>
+                        </p>
+                        <div class="equation-box green">
+                            <div class="label">Law of Mass Action</div>
+                            <div class="equation">K = [C]<sup>c</sup>[D]<sup>d</sup> / [A]<sup>a</sup>[B]<sup>b</sup></div>
+                        </div>
+                        <ul style="margin-top: 20px;">
+                            <li><strong>Automatic speciation</strong> — N → NO₃⁻, NH₄⁺, N₂...</li>
+                            <li><strong>Mineral reactions</strong> — precipitation/dissolution</li>
+                            <li><strong>pe-based redox</strong> — electron activity</li>
+                        </ul>
+                    </div>
+                    <div class="column">
+                        <div class="card purple">
+                            <h3>What PHREEQC Computes</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1.05rem;">Ion speciation & complexation</li>
+                                <li style="font-size: 1.05rem;">Saturation indices (SI)</li>
+                                <li style="font-size: 1.05rem;">pH, pe, alkalinity</li>
+                                <li style="font-size: 1.05rem;">Gas-water equilibria</li>
+                                <li style="font-size: 1.05rem;">Mineral saturation states</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box purple" style="margin-top: 15px;">
+                            <strong>Database:</strong> 100+ minerals, extensive thermodynamic data (USGS phreeqc.dat)
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">13</div>
+            </div>
+        </div>
+
+        <!-- Slide 14: PHREEQC Integration -->
+        <div class="slide" data-slide="14">
+            <div class="slide-header">
+                <h2>OpenWQ-PHREEQC Integration</h2>
+            </div>
+            <div class="slide-content">
+                <div class="diagram" style="padding: 30px;">
+                    <pre style="font-size: 0.95rem;">
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          Each Timestep                                    │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                           │
+│  ┌─────────────────┐           ┌─────────────────┐                        │
+│  │     OpenWQ      │  Convert  │    PhreeqcRM    │                        │
+│  │  chemass [g]    │──────────▶│  conc [mol/kgw] │                        │
+│  │  T, volume      │   Units   │  T, P, volume   │                        │
+│  └─────────────────┘           └────────┬────────┘                        │
+│                                         │                                 │
+│                                         ▼                                 │
+│                              ┌─────────────────────┐                      │
+│                              │    RunCells()       │                      │
+│                              │  • Equilibrate      │                      │
+│                              │  • React            │                      │
+│                              │  • Speciate         │                      │
+│                              └────────┬────────────┘                      │
+│                                       │                                   │
+│  ┌─────────────────┐           ┌──────▼──────────┐                        │
+│  │     OpenWQ      │◀──────────│    PhreeqcRM    │                        │
+│  │ Δmass = new-old │  Convert  │  updated conc   │                        │
+│  └─────────────────┘   Units   └─────────────────┘                        │
+└──────────────────────────────────────────────────────────────────────────┘
+                    </pre>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">14</div>
+            </div>
+        </div>
+
+        <!-- Slide 15: PHREEQC Input -->
+        <div class="slide" data-slide="15">
+            <div class="slide-header">
+                <h2>PHREEQC Input (.pqi)</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <pre style="font-size: 0.88rem;">
+<span class="keyword">SOLUTION</span> 1  Surface Water
+    temp      20.0
+    pH        7.5
+    pe        12.0     <span class="comment"># Redox (high=oxic)</span>
+    units     mg/L
+
+    <span class="comment"># Elements (NOT species!)</span>
+    N(5)      5.0      <span class="comment"># Nitrate</span>
+    N(-3)     0.2      <span class="comment"># Ammonium</span>
+    Ca        40.0
+    C(4)      100 as HCO3
+
+<span class="keyword">EQUILIBRIUM_PHASES</span> 1
+    O2(g)     -0.7  10.0
+    Calcite   0.0   10.0
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card purple">
+                            <h3>Key Blocks</h3>
+                            <table style="font-size: 0.95rem; margin-top: 10px;">
+                                <tr><td><strong>SOLUTION</strong></td><td>Initial chemistry</td></tr>
+                                <tr><td><strong>EQUILIBRIUM_PHASES</strong></td><td>Minerals/gases</td></tr>
+                                <tr><td><strong>KINETICS</strong></td><td>User kinetics (optional)</td></tr>
+                                <tr><td><strong>RATES</strong></td><td>Rate expressions</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box" style="margin-top: 15px;">
+                            <strong>Important:</strong> Use <em>element names</em> (Ca, N, S), not species (Ca²⁺, NO₃⁻). PHREEQC computes speciation!
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">15</div>
+            </div>
+        </div>
+
+        <!-- Slide 16: Comparison -->
+        <div class="slide" data-slide="16">
+            <div class="slide-header">
+                <h2>Comparison</h2>
+            </div>
+            <div class="slide-content">
+                <table style="font-size: 1rem;">
+                    <tr>
+                        <th>Feature</th>
+                        <th>BGC_FLEX (Kinetic)</th>
+                        <th>BGC_FLEX + F<sub>T</sub></th>
+                        <th>PHREEQC</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Approach</strong></td>
+                        <td>User-defined kinetics</td>
+                        <td>Kinetics + ΔG constraint</td>
+                        <td>Thermodynamic equilibrium</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Speciation</strong></td>
+                        <td>Manual</td>
+                        <td>Manual</td>
+                        <td>Automatic</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Minerals</strong></td>
+                        <td>Not supported</td>
+                        <td>Not supported</td>
+                        <td>Full database</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Redox</strong></td>
+                        <td>Manual K<sub>i</sub> terms</td>
+                        <td>Automatic via F<sub>T</sub></td>
+                        <td>Automatic via pe</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Parameters</strong></td>
+                        <td>Many (calibrate)</td>
+                        <td>Fewer (ΔG° known)</td>
+                        <td>Fewest (database)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Best for</strong></td>
+                        <td>Watersheds, SWAT-style</td>
+                        <td>Sediment diagenesis</td>
+                        <td>Groundwater, AMD</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">16</div>
+            </div>
+        </div>
+
+        <!-- Slide 17: When to Use -->
+        <div class="slide" data-slide="17">
+            <div class="slide-header">
+                <h2>When to Use Each Approach</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column" style="gap: 30px;">
+                    <div class="comparison-box blue">
+                        <h4>BGC_FLEX (Kinetic)</h4>
+                        <ul style="margin-left: 15px;">
+                            <li>Nutrient cycling in watersheds</li>
+                            <li>SWAT, HYPE, INCA methods</li>
+                            <li>Calibrating against obs.</li>
+                            <li>Computational efficiency</li>
+                            <li>Simple, transparent</li>
+                        </ul>
+                    </div>
+                    <div class="comparison-box green">
+                        <h4>Thermodynamic + F<sub>T</sub></h4>
+                        <ul style="margin-left: 15px;">
+                            <li>Sediment diagenesis</li>
+                            <li>Multiple electron acceptors</li>
+                            <li>Redox ladder enforcement</li>
+                            <li>Research applications</li>
+                            <li>Reduce calibration params</li>
+                        </ul>
+                    </div>
+                    <div class="comparison-box purple">
+                        <h4>PHREEQC</h4>
+                        <ul style="margin-left: 15px;">
+                            <li>Detailed speciation needed</li>
+                            <li>Mineral reactions matter</li>
+                            <li>Acid mine drainage</li>
+                            <li>Carbonate chemistry</li>
+                            <li>pH calculation critical</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">17</div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Templates -->
+        <div class="slide" data-slide="18">
+            <div class="slide-header">
+                <h2>Available Templates</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Individual Chemicals</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1rem;">Inorganic nitrogen (NO₃, NH₄)</li>
+                                <li style="font-size: 1rem;">Organic nitrogen (active, stable)</li>
+                                <li style="font-size: 1rem;">Phosphorus (PO₄, sediment-P)</li>
+                                <li style="font-size: 1rem;">Carbon (DOC, POC, DIC)</li>
+                                <li style="font-size: 1rem;">Dissolved oxygen</li>
+                                <li style="font-size: 1rem;">Heavy metals (Zn, Cu, Pb)</li>
+                                <li style="font-size: 1rem;">Pathogens, pesticides</li>
+                            </ul>
+                        </div>
+                        <div class="card secondary">
+                            <h3>Thermodynamic Templates</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1rem;">Aerobic respiration</li>
+                                <li style="font-size: 1rem;">Denitrification, nitrification</li>
+                                <li style="font-size: 1rem;">Fe/Mn reduction</li>
+                                <li style="font-size: 1rem;">Sulfate reduction</li>
+                                <li style="font-size: 1rem;">Methanogenesis</li>
+                                <li style="font-size: 1rem;">Full sediment diagenesis</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>Popular Model Frameworks</h3>
+                            <table style="font-size: 1rem; margin-top: 10px;">
+                                <tr><td><strong>SWAT</strong></td><td>N & P with erosion</td></tr>
+                                <tr><td><strong>QUAL2E/2K</strong></td><td>Stream WQ</td></tr>
+                                <tr><td><strong>HYPE</strong></td><td>Large-scale nutrients</td></tr>
+                                <tr><td><strong>WASP8</strong></td><td>Lakes & estuaries</td></tr>
+                                <tr><td><strong>INCA</strong></td><td>Integrated catchment</td></tr>
+                                <tr><td><strong>SPARROW</strong></td><td>Regional export</td></tr>
+                            </table>
+                        </div>
+                        <div class="card purple">
+                            <h3>PHREEQC Templates</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1rem;">Major ions equilibrium</li>
+                                <li style="font-size: 1rem;">Nitrogen speciation</li>
+                                <li style="font-size: 1rem;">Phosphorus minerals</li>
+                                <li style="font-size: 1rem;">Trace metals</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">18</div>
+            </div>
+        </div>
+
+        <!-- Slide 19: Summary -->
+        <div class="slide" data-slide="19">
+            <div class="slide-header">
+                <h2>Summary</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column" style="gap: 30px; margin-bottom: 30px;">
+                    <div class="card primary" style="text-align: center;">
+                        <h3 style="justify-content: center;">🧪 BGC_FLEX</h3>
+                        <p>Flexible kinetic expressions for any reaction. JSON-based, no recompilation.</p>
+                    </div>
+                    <div class="card secondary" style="text-align: center;">
+                        <h3 style="justify-content: center;">⚡ Thermodynamic</h3>
+                        <p>F<sub>T</sub> factor enforces redox ladder. Fewer parameters, more mechanistic.</p>
+                    </div>
+                    <div class="card purple" style="text-align: center;">
+                        <h3 style="justify-content: center;">⚗️ PHREEQC</h3>
+                        <p>Full equilibrium geochemistry. Automatic speciation and mineral reactions.</p>
+                    </div>
+                </div>
+                <div class="highlight-box success" style="text-align: center; font-size: 1.25rem;">
+                    <strong>Choose the right tool for the job</strong> — all three approaches use the same OpenWQ framework
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">19</div>
+            </div>
+        </div>
+
+        <!-- Slide 20: Thank You -->
+        <div class="slide title-slide" data-slide="20">
+            <h1 style="font-size: 3.5rem;">Thank You</h1>
+            <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
+        </div>
+
+    </div>
+
+    <div class="nav-hint" id="navHint">Use ← → arrows | Press F for fullscreen</div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            history.replaceState(null, null, `#${currentSlide}`);
+        }
+
+        function nextSlide() { currentSlide++; showSlide(currentSlide); }
+        function prevSlide() { currentSlide--; showSlide(currentSlide); }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
+                case 'Home': currentSlide = 1; showSlide(currentSlide); break;
+                case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
+                case 'f': case 'F':
+                    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                    else document.exitFullscreen();
+                    break;
+            }
+        });
+
+        document.querySelector('.presentation').addEventListener('click', (e) => {
+            const rect = e.target.getBoundingClientRect();
+            if (e.clientX - rect.left > rect.width / 2) nextSlide(); else prevSlide();
+        });
+
+        const navHint = document.getElementById('navHint');
+        navHint.classList.add('visible');
+        setTimeout(() => navHint.classList.remove('visible'), 4000);
+
+        let hintTimeout;
+        document.addEventListener('mousemove', () => {
+            navHint.classList.add('visible');
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => navHint.classList.remove('visible'), 2000);
+        });
+
+        if (window.location.hash) {
+            const slideNum = parseInt(window.location.hash.substring(1));
+            if (slideNum >= 1 && slideNum <= totalSlides) currentSlide = slideNum;
+        }
+        showSlide(currentSlide);
+
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', (e) => {
+            const diff = touchStartX - e.changedTouches[0].screenX;
+            if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWQ - Calibration Guide</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004499;
+            --secondary: #00a86b;
+            --accent: #ff6b35;
+            --purple: #7c3aed;
+            --teal: #0891b2;
+            --rose: #e11d48;
+            --dark: #1a1a2e;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #000; overflow: hidden; }
+        .presentation { height: 100vh; width: 100vw; position: relative; }
+
+        .slide {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; padding: 55px 75px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%); overflow: hidden;
+        }
+        .slide.active { display: flex; }
+
+        .slide.title-slide {
+            background: linear-gradient(135deg, var(--dark) 0%, #16213e 50%, #0f3460 100%);
+            justify-content: center; align-items: center; text-align: center; color: white;
+        }
+        .slide.title-slide h1 { font-size: 4rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .slide.title-slide h1 span { color: var(--rose); }
+        .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
+        .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
+
+        .slide.section-slide {
+            background: linear-gradient(135deg, var(--rose) 0%, #be123c 100%);
+            justify-content: center; align-items: center; color: white;
+        }
+        .slide.section-slide.blue { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
+        .slide.section-slide.purple { background: linear-gradient(135deg, var(--purple) 0%, #5b21b6 100%); }
+        .slide.section-slide.teal { background: linear-gradient(135deg, var(--teal) 0%, #0e7490 100%); }
+        .slide.section-slide.green { background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%); }
+        .slide.section-slide h2 { font-size: 3.5rem; font-weight: 600; }
+        .slide.section-slide .section-number { font-size: 10rem; font-weight: 700; opacity: 0.15; position: absolute; top: 40px; right: 80px; }
+
+        .slide-header { margin-bottom: 30px; }
+        .slide-header h2 { font-size: 2.5rem; font-weight: 600; color: var(--dark); border-left: 6px solid var(--rose); padding-left: 22px; }
+        .slide-content { flex: 1; display: flex; flex-direction: column; }
+
+        .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 45px; height: 100%; }
+        .three-column { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 25px; }
+        .column { display: flex; flex-direction: column; }
+
+        .card {
+            background: white; border-radius: 14px; padding: 22px;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.07); margin-bottom: 15px;
+        }
+        .card.primary { border-left: 5px solid var(--primary); }
+        .card.secondary { border-left: 5px solid var(--secondary); }
+        .card.accent { border-left: 5px solid var(--accent); }
+        .card.purple { border-left: 5px solid var(--purple); }
+        .card.teal { border-left: 5px solid var(--teal); }
+        .card.rose { border-left: 5px solid var(--rose); }
+        .card h3 { font-size: 1.25rem; color: var(--dark); margin-bottom: 10px; }
+        .card h4 { font-size: 1.1rem; color: var(--primary-dark); margin-bottom: 8px; }
+        .card p, .card li { font-size: 1rem; color: var(--text); line-height: 1.45; }
+
+        ul, ol { margin-left: 20px; }
+        li { font-size: 1.2rem; color: var(--text); margin-bottom: 10px; line-height: 1.35; }
+        li strong { color: var(--primary-dark); }
+
+        pre {
+            background: var(--dark); color: #e2e8f0; padding: 18px; border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.35; overflow-x: auto;
+        }
+        pre .comment { color: #68d391; }
+        pre .string { color: #fbd38d; }
+        pre .keyword { color: #63b3ed; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; background: white; border-radius: 10px; overflow: hidden; }
+        th { background: var(--dark); color: white; padding: 10px 14px; text-align: left; font-weight: 600; }
+        td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #fff1f2, #ffe4e6);
+            border-left: 5px solid var(--rose); padding: 18px 22px; border-radius: 0 10px 10px 0; margin: 12px 0;
+        }
+        .highlight-box.info { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-left-color: var(--primary); }
+        .highlight-box.success { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-left-color: var(--secondary); }
+        .highlight-box.warning { background: linear-gradient(135deg, #fff7ed, #ffedd5); border-left-color: var(--accent); }
+
+        .slide-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 12px; border-top: 1px solid #e2e8f0; margin-top: auto;
+        }
+        .slide-footer .logo { font-weight: 700; font-size: 1.1rem; color: var(--dark); }
+        .slide-footer .logo span { color: var(--rose); }
+        .slide-footer .page-number {
+            background: var(--dark); color: white; width: 36px; height: 36px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;
+        }
+
+        .workflow-step {
+            display: flex; align-items: center; gap: 20px;
+            background: white; padding: 18px 25px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 15px;
+        }
+        .workflow-step .number {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: var(--rose); color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; font-weight: 700; flex-shrink: 0;
+        }
+        .workflow-step .content h4 { font-size: 1.15rem; color: var(--dark); margin-bottom: 5px; }
+        .workflow-step .content p { font-size: 0.95rem; color: var(--text-light); }
+
+        .metric-card {
+            background: white; border-radius: 12px; padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06); text-align: center;
+        }
+        .metric-card .formula {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1rem; color: var(--primary-dark);
+            margin: 10px 0;
+        }
+        .metric-card h4 { font-size: 1.2rem; color: var(--dark); margin-bottom: 8px; }
+        .metric-card .range { font-size: 0.9rem; color: var(--text-light); }
+
+        .param-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;
+        }
+        .param-item {
+            background: #f8fafc; border-radius: 8px; padding: 12px;
+            border-left: 4px solid var(--primary);
+        }
+        .param-item.high { border-left-color: var(--rose); }
+        .param-item.medium { border-left-color: var(--accent); }
+        .param-item.low { border-left-color: var(--secondary); }
+        .param-item h5 { font-size: 0.95rem; color: var(--dark); margin-bottom: 4px; }
+        .param-item p { font-size: 0.85rem; color: var(--text-light); }
+
+        .nav-hint {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 10px 22px; border-radius: 25px;
+            font-size: 0.85rem; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+        }
+        .nav-hint.visible { opacity: 1; }
+
+        .diagram { background: white; border: 2px solid #e2e8f0; border-radius: 14px; padding: 20px; text-align: center; }
+        .diagram pre { background: transparent; color: var(--text); display: inline-block; text-align: left; font-size: 0.85rem; }
+
+        .tier-badge {
+            display: inline-block; padding: 4px 10px; border-radius: 4px;
+            font-size: 0.75rem; font-weight: 600; margin-right: 6px;
+        }
+        .tier-badge.tier1 { background: #fee2e2; color: #991b1b; }
+        .tier-badge.tier2 { background: #fef3c7; color: #92400e; }
+        .tier-badge.tier3 { background: #d1fae5; color: #065f46; }
+    </style>
+</head>
+<body>
+    <div class="presentation" id="presentation">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1>Model <span>Calibration</span></h1>
+            <div class="subtitle">OpenWQ Parameter Optimization</div>
+            <div class="tagline">
+                A comprehensive guide to calibrating OpenWQ models<br>
+                — sensitivity analysis, optimization algorithms, and best practices
+            </div>
+        </div>
+
+        <!-- Slide 2: Overview -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Calibration Framework Overview</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <p style="font-size: 1.15rem; margin-bottom: 20px;">
+                            OpenWQ includes a comprehensive calibration framework with:
+                        </p>
+                        <ul>
+                            <li><strong>106+ calibratable parameters</strong></li>
+                            <li><strong>DDS optimization</strong> algorithm</li>
+                            <li><strong>Morris screening</strong> for sensitivity</li>
+                            <li><strong>Sobol analysis</strong> for detailed SA</li>
+                            <li><strong>Docker/Apptainer</strong> deployment</li>
+                            <li><strong>Checkpoint/restart</strong> capability</li>
+                        </ul>
+                    </div>
+                    <div class="column">
+                        <div class="diagram">
+                            <pre>
+┌─────────────────────────────────────┐
+│     Calibration Workflow            │
+├─────────────────────────────────────┤
+│                                     │
+│  ┌─────────────────────────────┐    │
+│  │ 1. Morris Screening (~200)  │    │
+│  │    → Identify sensitive     │    │
+│  └──────────────┬──────────────┘    │
+│                 ▼                   │
+│  ┌─────────────────────────────┐    │
+│  │ 2. Sobol Analysis (~1000)   │    │
+│  │    → Rank top parameters    │    │
+│  └──────────────┬──────────────┘    │
+│                 ▼                   │
+│  ┌─────────────────────────────┐    │
+│  │ 3. DDS Optimization (~300)  │    │
+│  │    → Optimize top 10-15     │    │
+│  └──────────────┬──────────────┘    │
+│                 ▼                   │
+│  ┌─────────────────────────────┐    │
+│  │ 4. Validation               │    │
+│  │    → Independent period     │    │
+│  └─────────────────────────────┘    │
+│                                     │
+└─────────────────────────────────────┘
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Parameter Categories -->
+        <div class="slide" data-slide="3">
+            <div class="slide-header">
+                <h2>Parameter Categories (106+ total)</h2>
+            </div>
+            <div class="slide-content">
+                <table style="font-size: 0.9rem;">
+                    <tr>
+                        <th>Category</th>
+                        <th>Count</th>
+                        <th>Examples</th>
+                        <th>Typical Range</th>
+                    </tr>
+                    <tr>
+                        <td><strong>BGC (NATIVE_BGC_FLEX)</strong></td>
+                        <td>26</td>
+                        <td>k_nitrification, k_denitrification, theta</td>
+                        <td>0.001 - 1.0 /day</td>
+                    </tr>
+                    <tr>
+                        <td><strong>PHREEQC</strong></td>
+                        <td>22</td>
+                        <td>Initial concentrations, pCO2, SI</td>
+                        <td>Varies</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sorption</strong></td>
+                        <td>16</td>
+                        <td>Kfr, qmax, KL, bulk_density</td>
+                        <td>0.01 - 100 L/kg</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sediment Transport</strong></td>
+                        <td>14</td>
+                        <td>erosion_index, erodibility, cohesion</td>
+                        <td>0.1 - 10</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Transport</strong></td>
+                        <td>5</td>
+                        <td>dispersion_x/y/z, characteristic_length</td>
+                        <td>0.1 - 100 m²/s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Lateral Exchange</strong></td>
+                        <td>4</td>
+                        <td>k_exchange (river-soil, soil-GW)</td>
+                        <td>0.0001 - 0.1 /s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Source/Sink</strong></td>
+                        <td>21</td>
+                        <td>Load scaling, export coefficients</td>
+                        <td>0.1 - 5.0×</td>
+                    </tr>
+                </table>
+                <div class="highlight-box info" style="margin-top: 15px;">
+                    <strong>Key Insight:</strong> Source/sink parameters are typically THE MOST SENSITIVE — start calibration there!
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">3</div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Section - Sensitivity -->
+        <div class="slide section-slide blue" data-slide="4">
+            <div class="section-number">01</div>
+            <h2>Sensitivity Analysis</h2>
+        </div>
+
+        <!-- Slide 5: Morris Screening -->
+        <div class="slide" data-slide="5">
+            <div class="slide-header">
+                <h2>Morris Screening (Elementary Effects)</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <p style="font-size: 1.1rem; margin-bottom: 20px;">
+                            Efficient method to identify influential parameters with minimal model runs.
+                        </p>
+                        <div class="card primary">
+                            <h3>Cost: O(r × (k+1))</h3>
+                            <p>r = 10-20 trajectories, k = parameters</p>
+                            <p style="margin-top: 10px;"><strong>Example:</strong> 30 params × 15 trajectories = ~465 runs</p>
+                        </div>
+                        <div class="card rose">
+                            <h3>Metrics</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>μ*</strong> (mu-star)</td><td>Mean absolute effect → Overall influence</td></tr>
+                                <tr><td><strong>σ</strong> (sigma)</td><td>Standard deviation → Non-linearity</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Interpretation</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr>
+                                    <th>μ*</th>
+                                    <th>σ</th>
+                                    <th>Meaning</th>
+                                </tr>
+                                <tr>
+                                    <td>High</td>
+                                    <td>Low</td>
+                                    <td>Linear influence → Calibrate</td>
+                                </tr>
+                                <tr>
+                                    <td>High</td>
+                                    <td>High</td>
+                                    <td>Non-linear → Calibrate carefully</td>
+                                </tr>
+                                <tr>
+                                    <td>Low</td>
+                                    <td>Low</td>
+                                    <td>Non-influential → Fix at default</td>
+                                </tr>
+                                <tr>
+                                    <td>Low</td>
+                                    <td>High</td>
+                                    <td>Interactive → Investigate</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>Typical result:</strong> Reduces 100+ params to 30-40 for detailed analysis
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">5</div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Sobol Analysis -->
+        <div class="slide" data-slide="6">
+            <div class="slide-header">
+                <h2>Sobol Sensitivity Analysis</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <p style="font-size: 1.1rem; margin-bottom: 20px;">
+                            Variance-based method for detailed sensitivity ranking.
+                        </p>
+                        <div class="card purple">
+                            <h3>Cost: O(N × (2k+2))</h3>
+                            <p>N = 1000-5000 samples, k = parameters</p>
+                            <p style="margin-top: 10px;"><strong>Example:</strong> 30 params × 2000 samples = ~124,000 runs</p>
+                        </div>
+                        <div class="card primary">
+                            <h3>Indices</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>S1</strong></td><td>First-order: Direct parameter effect</td></tr>
+                                <tr><td><strong>ST</strong></td><td>Total-order: Including interactions</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Interpretation</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;"><strong>S1 ≈ ST:</strong> Parameter acts independently</li>
+                                <li style="font-size: 0.95rem;"><strong>ST >> S1:</strong> Strong interactions</li>
+                                <li style="font-size: 0.95rem;"><strong>Sum(S1) < 1:</strong> Significant interactions exist</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box warning" style="margin-top: 15px;">
+                            <strong>Use after Morris:</strong> Apply Sobol only to the ~30 parameters identified as potentially influential
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">6</div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Section - Optimization -->
+        <div class="slide section-slide" data-slide="7">
+            <div class="section-number">02</div>
+            <h2>DDS Optimization</h2>
+        </div>
+
+        <!-- Slide 8: DDS Algorithm -->
+        <div class="slide" data-slide="8">
+            <div class="slide-header">
+                <h2>Dynamically Dimensioned Search (DDS)</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <p style="font-size: 1.1rem; margin-bottom: 20px;">
+                            Derivative-free optimization designed for expensive models.
+                        </p>
+                        <div class="card rose">
+                            <h3>Key Features</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;">Reduces search dimensionality over time</li>
+                                <li style="font-size: 0.95rem;">Early: Explore many parameters</li>
+                                <li style="font-size: 0.95rem;">Late: Focus on few promising ones</li>
+                                <li style="font-size: 0.95rem;">No gradient computation needed</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box info">
+                            <strong>Typical budget:</strong> 200-500 evaluations for 10-15 parameters
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="diagram">
+                            <pre style="font-size: 0.8rem;">
+   DDS Behavior Over Iterations
+
+   Early (exploration)
+   ┌──────────────────────────────┐
+   │ ████████████████████████████ │ Many params
+   │ ██████████████████           │ perturbed
+   │ ████████████                 │
+   └──────────────────────────────┘
+
+   Late (exploitation)
+   ┌──────────────────────────────┐
+   │ ███                          │ Few params
+   │ ██                           │ refined
+   │ █                            │
+   └──────────────────────────────┘
+
+   Probability of perturbation:
+   P(i) = 1 - ln(i)/ln(max_iter)
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">8</div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Objective Functions -->
+        <div class="slide" data-slide="9">
+            <div class="slide-header">
+                <h2>Objective Functions</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column" style="gap: 25px;">
+                    <div class="metric-card">
+                        <h4>RMSE</h4>
+                        <div class="formula">√(Σ(obs - sim)² / n)</div>
+                        <p style="font-size: 0.9rem; margin: 10px 0;">Root Mean Square Error</p>
+                        <div class="range">Range: 0 → ∞ (lower is better)</div>
+                        <p style="font-size: 0.85rem; color: var(--text-light); margin-top: 8px;">Sensitive to outliers</p>
+                    </div>
+                    <div class="metric-card" style="border: 2px solid var(--secondary);">
+                        <h4>NSE</h4>
+                        <div class="formula">1 - Σ(obs-sim)² / Σ(obs-mean)²</div>
+                        <p style="font-size: 0.9rem; margin: 10px 0;">Nash-Sutcliffe Efficiency</p>
+                        <div class="range">Range: -∞ → 1 (1 is perfect)</div>
+                        <p style="font-size: 0.85rem; color: var(--text-light); margin-top: 8px;">Classic hydrology metric</p>
+                    </div>
+                    <div class="metric-card" style="border: 2px solid var(--rose);">
+                        <h4>KGE ⭐</h4>
+                        <div class="formula">1 - √((r-1)² + (α-1)² + (β-1)²)</div>
+                        <p style="font-size: 0.9rem; margin: 10px 0;">Kling-Gupta Efficiency</p>
+                        <div class="range">Range: -∞ → 1 (1 is perfect)</div>
+                        <p style="font-size: 0.85rem; color: var(--secondary); margin-top: 8px;"><strong>Recommended!</strong></p>
+                    </div>
+                </div>
+                <div class="highlight-box" style="margin-top: 25px;">
+                    <strong>KGE advantages:</strong> Balances correlation (r), variability ratio (α), and bias ratio (β) — better for multi-species calibration
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">9</div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Section - Workflow -->
+        <div class="slide section-slide green" data-slide="10">
+            <div class="section-number">03</div>
+            <h2>Calibration Workflow</h2>
+        </div>
+
+        <!-- Slide 11: Workflow Steps -->
+        <div class="slide" data-slide="11">
+            <div class="slide-header">
+                <h2>Step-by-Step Workflow</h2>
+            </div>
+            <div class="slide-content">
+                <div class="workflow-step">
+                    <div class="number">1</div>
+                    <div class="content">
+                        <h4>Prepare Observation Data</h4>
+                        <p>CSV with datetime, reach_id, species, value, units columns</p>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="number" style="background: var(--primary);">2</div>
+                    <div class="content">
+                        <h4>Morris Screening (~200 runs)</h4>
+                        <p>Test all 100+ parameters → identify ~30-40 influential ones</p>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="number" style="background: var(--purple);">3</div>
+                    <div class="content">
+                        <h4>Sobol Analysis (~1000 runs)</h4>
+                        <p>Detailed SA on 30 params → rank and select top 10-15</p>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="number" style="background: var(--secondary);">4</div>
+                    <div class="content">
+                        <h4>DDS Optimization (~300-500 runs)</h4>
+                        <p>Optimize top 10-15 parameters, fix others at defaults</p>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="number" style="background: var(--teal);">5</div>
+                    <div class="content">
+                        <h4>Validation</h4>
+                        <p>Test calibrated parameters on independent time period</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">11</div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Observation Data -->
+        <div class="slide" data-slide="12">
+            <div class="slide-header">
+                <h2>Observation Data Format</h2>
+            </div>
+            <div class="slide-content">
+                <pre style="font-size: 0.9rem; margin-bottom: 20px;">
+<span class="comment"># observations.csv</span>
+datetime,reach_id,species,value,units,source,uncertainty,quality_flag
+2018-01-15 10:00:00,1200014181,NO3-N,2.50,mg/l,USGS_station_A,0.25,GOOD
+2018-01-15 10:00:00,1200014181,NH4-N,0.15,mg/l,USGS_station_A,0.02,GOOD
+2018-02-01 10:00:00,1200014181,NO3-N,3.10,mg/l,USGS_station_A,0.31,GOOD
+2018-02-01 10:00:00,1200014181,TP,0.08,mg/l,USGS_station_A,0.01,GOOD
+...
+                </pre>
+                <div class="two-column" style="gap: 30px;">
+                    <div class="card primary">
+                        <h3>Required Columns</h3>
+                        <table style="font-size: 0.85rem;">
+                            <tr><td><strong>datetime</strong></td><td>YYYY-MM-DD HH:MM:SS</td></tr>
+                            <tr><td><strong>reach_id</strong></td><td>Matching model output</td></tr>
+                            <tr><td><strong>species</strong></td><td>Case-sensitive name</td></tr>
+                            <tr><td><strong>value</strong></td><td>Measured concentration</td></tr>
+                            <tr><td><strong>units</strong></td><td>mg/l, ug/l, etc.</td></tr>
+                        </table>
+                    </div>
+                    <div class="card secondary">
+                        <h3>Optional Columns</h3>
+                        <table style="font-size: 0.85rem;">
+                            <tr><td><strong>source</strong></td><td>Data provider ID</td></tr>
+                            <tr><td><strong>uncertainty</strong></td><td>Measurement error</td></tr>
+                            <tr><td><strong>quality_flag</strong></td><td>GOOD, SUSPECT, BAD</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">12</div>
+            </div>
+        </div>
+
+        <!-- Slide 13: Priority Parameters -->
+        <div class="slide" data-slide="13">
+            <div class="slide-header">
+                <h2>Priority-Based Calibration</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.1rem; margin-bottom: 20px;">
+                    When resources are limited, focus on the most influential parameters:
+                </p>
+                <div class="three-column" style="gap: 25px;">
+                    <div class="card rose">
+                        <h3><span class="tier-badge tier1">TIER 1</span> Must Calibrate</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.9rem;">Source/sink scaling factors</li>
+                            <li style="font-size: 0.9rem;">k_nitrification</li>
+                            <li style="font-size: 0.9rem;">k_denitrification</li>
+                            <li style="font-size: 0.9rem;">Kfr_PO4 or qmax_PO4</li>
+                            <li style="font-size: 0.9rem;">dispersion_x</li>
+                        </ul>
+                        <p style="margin-top: 10px; font-size: 0.85rem; color: var(--text-light);">5-8 parameters</p>
+                    </div>
+                    <div class="card accent">
+                        <h3><span class="tier-badge tier2">TIER 2</span> Important</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.9rem;">Temperature coefficients (θ)</li>
+                            <li style="font-size: 0.9rem;">k_mineralization</li>
+                            <li style="font-size: 0.9rem;">k_P_adsorption</li>
+                            <li style="font-size: 0.9rem;">erosion_index</li>
+                            <li style="font-size: 0.9rem;">Secondary sorption params</li>
+                        </ul>
+                        <p style="margin-top: 10px; font-size: 0.85rem; color: var(--text-light);">Next 5-8 parameters</p>
+                    </div>
+                    <div class="card secondary">
+                        <h3><span class="tier-badge tier3">TIER 3</span> Refinement</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.9rem;">Half-saturation constants</li>
+                            <li style="font-size: 0.9rem;">Lateral exchange rates</li>
+                            <li style="font-size: 0.9rem;">Volatilization rates</li>
+                            <li style="font-size: 0.9rem;">Langmuir exponents</li>
+                        </ul>
+                        <p style="margin-top: 10px; font-size: 0.85rem; color: var(--text-light);">Remaining parameters</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">13</div>
+            </div>
+        </div>
+
+        <!-- Slide 14: Running Calibration -->
+        <div class="slide" data-slide="14">
+            <div class="slide-header">
+                <h2>Running Calibration</h2>
+            </div>
+            <div class="slide-content">
+                <pre style="font-size: 0.8rem;">
+<span class="comment"># calibration_config.py</span>
+config = {
+    <span class="comment"># Paths</span>
+    <span class="string">"base_model_config_dir"</span>: <span class="string">"openwq_in/"</span>,
+    <span class="string">"observation_data_path"</span>: <span class="string">"observations.csv"</span>,
+    <span class="string">"calibration_work_dir"</span>: <span class="string">"calibration_workspace/"</span>,
+
+    <span class="comment"># Algorithm</span>
+    <span class="string">"algorithm"</span>: <span class="string">"DDS"</span>,
+    <span class="string">"max_evaluations"</span>: <span class="keyword">300</span>,
+    <span class="string">"objective_function"</span>: <span class="string">"KGE"</span>,
+
+    <span class="comment"># Parameters to calibrate</span>
+    <span class="string">"parameters"</span>: [
+        {<span class="string">"name"</span>: <span class="string">"k_nitrification"</span>, <span class="string">"bounds"</span>: [<span class="keyword">0.001</span>, <span class="keyword">0.5</span>], <span class="string">"transform"</span>: <span class="string">"log"</span>},
+        {<span class="string">"name"</span>: <span class="string">"k_denitrification"</span>, <span class="string">"bounds"</span>: [<span class="keyword">1e-8</span>, <span class="keyword">0.01</span>], <span class="string">"transform"</span>: <span class="string">"log"</span>},
+        {<span class="string">"name"</span>: <span class="string">"ss_scale_all"</span>, <span class="string">"bounds"</span>: [<span class="keyword">0.5</span>, <span class="keyword">2.0</span>]}
+    ],
+
+    <span class="comment"># Target species</span>
+    <span class="string">"target_species"</span>: [<span class="string">"NO3-N"</span>, <span class="string">"NH4-N"</span>],
+    <span class="string">"species_weights"</span>: {<span class="string">"NO3-N"</span>: <span class="keyword">1.0</span>, <span class="string">"NH4-N"</span>: <span class="keyword">0.5</span>}
+}
+                </pre>
+                <div class="two-column" style="gap: 30px; margin-top: 15px;">
+                    <pre style="font-size: 0.85rem;">
+<span class="comment"># Run calibration</span>
+python calibration_driver.py
+
+<span class="comment"># With options</span>
+python calibration_driver.py --dry-run     <span class="comment"># Validate only</span>
+python calibration_driver.py --resume      <span class="comment"># From checkpoint</span>
+                    </pre>
+                    <div class="highlight-box success" style="margin: 0;">
+                        <strong>Checkpoint support:</strong> Automatically saves state for restart after interruption
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">14</div>
+            </div>
+        </div>
+
+        <!-- Slide 15: Output Files -->
+        <div class="slide" data-slide="15">
+            <div class="slide-header">
+                <h2>Calibration Output</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Output Files</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td><code>best_parameters.json</code></td><td>Optimal values</td></tr>
+                                <tr><td><code>calibration_history.json</code></td><td>All evaluations</td></tr>
+                                <tr><td><code>convergence.png</code></td><td>Objective vs iteration</td></tr>
+                                <tr><td><code>parameter_evolution.png</code></td><td>Param trajectories</td></tr>
+                                <tr><td><code>sensitivity_results.json</code></td><td>SA results (if run)</td></tr>
+                                <tr><td><code>calibration_report.txt</code></td><td>Summary statistics</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Runtime Estimates</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><th>Model Runtime</th><th>300 Evals</th></tr>
+                                <tr><td>5 min</td><td>~25 hours</td></tr>
+                                <tr><td>15 min</td><td>~75 hours</td></tr>
+                                <tr><td>30 min</td><td>~150 hours</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>HPC Tip:</strong> Use job arrays to run evaluations in parallel on cluster
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">15</div>
+            </div>
+        </div>
+
+        <!-- Slide 16: Best Practices -->
+        <div class="slide" data-slide="16">
+            <div class="slide-header">
+                <h2>Best Practices</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>✅ Do</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;">Start with Morris screening to reduce parameters</li>
+                                <li style="font-size: 0.95rem;">Use log transform for rate constants</li>
+                                <li style="font-size: 0.95rem;">Split data: calibration + validation periods</li>
+                                <li style="font-size: 0.95rem;">Use KGE for multi-species calibration</li>
+                                <li style="font-size: 0.95rem;">Document parameter choices</li>
+                                <li style="font-size: 0.95rem;">Check physical plausibility of results</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card rose">
+                            <h3>❌ Don't</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;">Calibrate all 100+ parameters at once</li>
+                                <li style="font-size: 0.95rem;">Ignore parameter correlations</li>
+                                <li style="font-size: 0.95rem;">Use entire dataset for calibration</li>
+                                <li style="font-size: 0.95rem;">Accept physically unrealistic values</li>
+                                <li style="font-size: 0.95rem;">Skip sensitivity analysis</li>
+                                <li style="font-size: 0.95rem;">Overfit to noisy observations</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="highlight-box warning" style="margin-top: 20px;">
+                    <strong>Golden Rule:</strong> Fewer well-chosen parameters beats many poorly constrained ones
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">16</div>
+            </div>
+        </div>
+
+        <!-- Slide 17: Summary -->
+        <div class="slide" data-slide="17">
+            <div class="slide-header">
+                <h2>Summary</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column">
+                    <div class="card primary" style="text-align: center;">
+                        <h3 style="justify-content: center;">🔍 Screen</h3>
+                        <p>Morris screening to identify influential parameters (106 → 30)</p>
+                    </div>
+                    <div class="card purple" style="text-align: center;">
+                        <h3 style="justify-content: center;">📊 Rank</h3>
+                        <p>Sobol analysis for detailed sensitivity ranking (30 → 10-15)</p>
+                    </div>
+                    <div class="card rose" style="text-align: center;">
+                        <h3 style="justify-content: center;">🎯 Optimize</h3>
+                        <p>DDS calibration of top parameters (200-500 evaluations)</p>
+                    </div>
+                </div>
+                <div class="highlight-box success" style="margin-top: 25px; text-align: center; font-size: 1.1rem;">
+                    <strong>Key Message:</strong> Hierarchical approach (Screen → Rank → Optimize) is more efficient<br>
+                    than blindly optimizing all parameters
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">17</div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Thank You -->
+        <div class="slide title-slide" data-slide="18">
+            <h1 style="font-size: 3.5rem;">Thank You</h1>
+            <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
+            <div style="margin-top: 2rem;">
+                <p style="font-size: 1.2rem; color: #a0aec0;">
+                    <strong>Calibration scripts:</strong> supporting_scripts/Calibration/
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="nav-hint" id="navHint">Use ← → arrows | Press F for fullscreen</div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            history.replaceState(null, null, `#${currentSlide}`);
+        }
+
+        function nextSlide() { currentSlide++; showSlide(currentSlide); }
+        function prevSlide() { currentSlide--; showSlide(currentSlide); }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
+                case 'Home': currentSlide = 1; showSlide(currentSlide); break;
+                case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
+                case 'f': case 'F':
+                    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                    else document.exitFullscreen();
+                    break;
+            }
+        });
+
+        document.querySelector('.presentation').addEventListener('click', (e) => {
+            const rect = e.target.getBoundingClientRect();
+            if (e.clientX - rect.left > rect.width / 2) nextSlide(); else prevSlide();
+        });
+
+        const navHint = document.getElementById('navHint');
+        navHint.classList.add('visible');
+        setTimeout(() => navHint.classList.remove('visible'), 4000);
+
+        let hintTimeout;
+        document.addEventListener('mousemove', () => {
+            navHint.classList.add('visible');
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => navHint.classList.remove('visible'), 2000);
+        });
+
+        if (window.location.hash) {
+            const slideNum = parseInt(window.location.hash.substring(1));
+            if (slideNum >= 1 && slideNum <= totalSlides) currentSlide = slideNum;
+        }
+        showSlide(currentSlide);
+
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', (e) => {
+            const diff = touchStartX - e.changedTouches[0].screenX;
+            if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
+        });
+    </script>
+</body>
+</html>

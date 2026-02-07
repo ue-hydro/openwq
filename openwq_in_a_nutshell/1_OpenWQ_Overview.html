@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWQ - General Overview</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004499;
+            --secondary: #00a86b;
+            --accent: #ff6b35;
+            --dark: #1a1a2e;
+            --light: #f8f9fa;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            height: 100%;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .presentation { height: 100vh; width: 100vw; position: relative; }
+
+        .slide {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: none;
+            flex-direction: column;
+            padding: 60px 80px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%);
+            overflow: hidden;
+        }
+
+        .slide.active { display: flex; }
+
+        /* Title Slide */
+        .slide.title-slide {
+            background: linear-gradient(135deg, var(--dark) 0%, #16213e 50%, #0f3460 100%);
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: white;
+        }
+
+        .slide.title-slide h1 {
+            font-size: 5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: -2px;
+        }
+
+        .slide.title-slide h1 span { color: var(--primary); }
+
+        .slide.title-slide .subtitle {
+            font-size: 2.2rem;
+            font-weight: 300;
+            color: #a0aec0;
+            margin-bottom: 2rem;
+        }
+
+        .slide.title-slide .tagline {
+            font-size: 1.4rem;
+            color: #718096;
+            max-width: 800px;
+        }
+
+        .slide.title-slide .author {
+            font-size: 1.4rem;
+            color: #cbd5e0;
+            margin-top: 3rem;
+        }
+
+        .slide.title-slide .affiliation {
+            font-size: 1.1rem;
+            color: #718096;
+            margin-top: 0.5rem;
+        }
+
+        /* Section Slides */
+        .slide.section-slide {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        .slide.section-slide h2 { font-size: 4rem; font-weight: 600; }
+
+        .slide.section-slide .section-number {
+            font-size: 10rem;
+            font-weight: 700;
+            opacity: 0.15;
+            position: absolute;
+            top: 40px;
+            right: 80px;
+        }
+
+        /* Content Slides */
+        .slide-header { margin-bottom: 40px; }
+
+        .slide-header h2 {
+            font-size: 2.8rem;
+            font-weight: 600;
+            color: var(--dark);
+            border-left: 6px solid var(--primary);
+            padding-left: 24px;
+        }
+
+        .slide-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            height: 100%;
+        }
+
+        .three-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 40px;
+        }
+
+        .column { display: flex; flex-direction: column; }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+
+        .card.primary { border-left: 5px solid var(--primary); }
+        .card.secondary { border-left: 5px solid var(--secondary); }
+        .card.accent { border-left: 5px solid var(--accent); }
+
+        .card h3 {
+            font-size: 1.5rem;
+            color: var(--dark);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .card p, .card li {
+            font-size: 1.15rem;
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Feature cards */
+        .feature-card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .feature-card .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .feature-card h4 {
+            font-size: 1.3rem;
+            color: var(--dark);
+            margin-bottom: 10px;
+        }
+
+        .feature-card p {
+            font-size: 1rem;
+            color: var(--text-light);
+        }
+
+        /* Lists */
+        ul, ol { margin-left: 30px; }
+
+        li {
+            font-size: 1.4rem;
+            color: var(--text);
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        li strong { color: var(--primary-dark); }
+
+        /* Equations */
+        .equation-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 40px;
+            border-radius: 16px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .equation-box .equation {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.8rem;
+            margin: 10px 0;
+        }
+
+        .equation-box .label {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        /* Code blocks */
+        pre {
+            background: var(--dark);
+            color: #e2e8f0;
+            padding: 25px;
+            border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+
+        /* Diagram */
+        .diagram {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .diagram pre {
+            background: transparent;
+            color: var(--text);
+            display: inline-block;
+            text-align: left;
+        }
+
+        /* Highlights */
+        .highlight-box {
+            background: linear-gradient(135deg, #fff7ed, #ffedd5);
+            border-left: 5px solid var(--accent);
+            padding: 25px 30px;
+            border-radius: 0 12px 12px 0;
+            margin: 20px 0;
+        }
+
+        .highlight-box.info {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            border-left-color: var(--primary);
+        }
+
+        .highlight-box.success {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border-left-color: var(--secondary);
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 1.1rem;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        th {
+            background: var(--dark);
+            color: white;
+            padding: 16px 20px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 14px 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        tr:nth-child(even) { background: #f8fafc; }
+
+        /* Footer */
+        .slide-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            margin-top: auto;
+        }
+
+        .slide-footer .logo {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--dark);
+        }
+
+        .slide-footer .logo span { color: var(--primary); }
+
+        .slide-footer .page-number {
+            background: var(--dark);
+            color: white;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        /* Flow diagram */
+        .flow-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .flow-box {
+            background: var(--primary);
+            color: white;
+            padding: 18px 35px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .flow-box.secondary { background: var(--secondary); }
+        .flow-box.accent { background: var(--accent); }
+        .flow-box.light {
+            background: white;
+            color: var(--dark);
+            border: 2px solid #e2e8f0;
+        }
+
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: var(--text-light);
+        }
+
+        /* Navigation hint */
+        .nav-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .nav-hint.visible { opacity: 1; }
+
+        /* Center content */
+        .center-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+        }
+
+        .large-text {
+            font-size: 1.8rem;
+            color: var(--text);
+            max-width: 900px;
+            line-height: 1.6;
+        }
+
+        /* Process icons */
+        .process-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 25px;
+            margin: 30px 0;
+        }
+
+        .process-item {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .process-item .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .process-item h4 {
+            font-size: 1.2rem;
+            color: var(--dark);
+            margin-bottom: 8px;
+        }
+
+        .process-item p {
+            font-size: 0.95rem;
+            color: var(--text-light);
+        }
+
+        @media print {
+            .slide {
+                page-break-after: always;
+                display: flex !important;
+            }
+            .nav-hint { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="presentation" id="presentation">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1>Open<span>WQ</span></h1>
+            <div class="subtitle">Open-Source Water Quality Modeling Framework</div>
+            <div class="tagline">
+                A flexible, modular platform for simulating biogeochemical processes<br>
+                coupled with any hydrological model
+            </div>
+            <div class="author">Diogo Costa</div>
+            <div class="affiliation">University of Evora, Portugal</div>
+        </div>
+
+        <!-- Slide 2: What is OpenWQ -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>What is OpenWQ?</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <p style="font-size: 1.4rem; margin-bottom: 30px;">
+                            OpenWQ is an <strong>open-source water quality modeling framework</strong> designed to simulate the transport and transformation of chemical species in aquatic environments.
+                        </p>
+                        <div class="highlight-box info">
+                            <strong>Key Innovation:</strong><br>
+                            Biogeochemistry is defined in <strong>JSON configuration files</strong>, not hardcoded. Users can modify reactions without recompiling!
+                        </div>
+                        <ul style="margin-top: 25px;">
+                            <li><strong>Modular</strong> — Couples with any hydrological model</li>
+                            <li><strong>Flexible</strong> — User-defined reaction networks</li>
+                            <li><strong>Scalable</strong> — From hillslope to continental</li>
+                            <li><strong>Open</strong> — Community-driven development</li>
+                        </ul>
+                    </div>
+                    <div class="column">
+                        <div class="diagram">
+                            <pre style="font-size: 1rem;">
+┌─────────────────────────────────┐
+│        HOST MODEL               │
+│  (SUMMA, mizuRoute, CRHM, ...)  │
+│                                 │
+│   Provides:                     │
+│   • Water fluxes                │
+│   • Storage volumes             │
+│   • Temperature                 │
+└───────────────┬─────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│          OpenWQ                 │
+│                                 │
+│   Computes:                     │
+│   • Chemical transport          │
+│   • Biogeochemical reactions    │
+│   • Source/sink dynamics        │
+│   • Concentrations & loads      │
+└─────────────────────────────────┘
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Core Capabilities -->
+        <div class="slide" data-slide="3">
+            <div class="slide-header">
+                <h2>Core Capabilities</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column">
+                    <div class="feature-card">
+                        <div class="icon">🧪</div>
+                        <h4>Biogeochemistry</h4>
+                        <p>User-defined reaction networks with flexible kinetic expressions. Supports SWAT, HYPE, INCA-style models.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">🌊</div>
+                        <h4>Transport</h4>
+                        <p>Advection, dispersion, and lateral exchange between compartments. Follows water movement from host model.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">⚗️</div>
+                        <h4>Geochemistry</h4>
+                        <p>PHREEQC integration for thermodynamic equilibrium, mineral reactions, and speciation.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">📊</div>
+                        <h4>Sources & Sinks</h4>
+                        <p>Flexible loading from CSV, JSON, HDF5, or land-use based calculations with ML support.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">🔧</div>
+                        <h4>Calibration</h4>
+                        <p>106+ parameters with DDS optimizer, Morris screening, and Sobol sensitivity analysis.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">📈</div>
+                        <h4>Output</h4>
+                        <p>HDF5, CSV, or VTU formats. Visualization tools for time series and spatial maps.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">3</div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Coupled Host Models -->
+        <div class="slide" data-slide="4">
+            <div class="slide-header">
+                <h2>Coupled Host Models</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.3rem; margin-bottom: 30px;">
+                    OpenWQ integrates with established hydrological models via C++/Fortran wrappers:
+                </p>
+                <table>
+                    <tr>
+                        <th>Model</th>
+                        <th>Domain</th>
+                        <th>Description</th>
+                    </tr>
+                    <tr>
+                        <td><strong>SUMMA</strong></td>
+                        <td>Land Surface</td>
+                        <td>Structure for Unifying Multiple Modeling Alternatives — multi-physics land model</td>
+                    </tr>
+                    <tr>
+                        <td><strong>mizuRoute</strong></td>
+                        <td>River Routing</td>
+                        <td>Continental-scale river routing with lakes and reservoirs</td>
+                    </tr>
+                    <tr>
+                        <td><strong>CRHM</strong></td>
+                        <td>Cold Regions</td>
+                        <td>Cold Regions Hydrological Model — snow, frozen soils, prairie hydrology</td>
+                    </tr>
+                    <tr>
+                        <td><strong>MESH</strong></td>
+                        <td>Land-Atmosphere</td>
+                        <td>Modélisation Environnementale Surface et Hydrologie</td>
+                    </tr>
+                    <tr>
+                        <td><strong>CHM</strong></td>
+                        <td>Mountain Hydrology</td>
+                        <td>Canadian Hydrological Model — complex terrain processes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Custom</strong></td>
+                        <td>Any</td>
+                        <td>Straightforward API for coupling with any model</td>
+                    </tr>
+                </table>
+                <div class="highlight-box success" style="margin-top: 25px;">
+                    <strong>Coupling Approach:</strong> OpenWQ receives water fluxes and volumes from the host model, then computes solute mass balance and returns updated concentrations.
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">4</div>
+            </div>
+        </div>
+
+        <!-- Slide 5: Theoretical Framework -->
+        <div class="slide section-slide" data-slide="5">
+            <div class="section-number">01</div>
+            <h2>Theoretical Framework</h2>
+        </div>
+
+        <!-- Slide 6: Mass Balance -->
+        <div class="slide" data-slide="6">
+            <div class="slide-header">
+                <h2>Governing Equation: Mass Balance</h2>
+            </div>
+            <div class="slide-content">
+                <div class="equation-box" style="margin-bottom: 30px;">
+                    <div class="label">Mass Conservation for Species i in Compartment j</div>
+                    <div class="equation" style="font-size: 2rem;">
+                        dM<sub>ij</sub>/dt = Σ(Q<sub>in</sub>·C<sub>in</sub>) - Σ(Q<sub>out</sub>·C<sub>ij</sub>) + S<sub>ij</sub> + R<sub>ij</sub>
+                    </div>
+                </div>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <table style="font-size: 1rem;">
+                            <tr>
+                                <th>Term</th>
+                                <th>Description</th>
+                            </tr>
+                            <tr>
+                                <td>M<sub>ij</sub></td>
+                                <td>Mass of species i in compartment j [g]</td>
+                            </tr>
+                            <tr>
+                                <td>Q<sub>in</sub>, Q<sub>out</sub></td>
+                                <td>Water fluxes from host model [L/s]</td>
+                            </tr>
+                            <tr>
+                                <td>C<sub>in</sub>, C<sub>ij</sub></td>
+                                <td>Concentrations [mg/L]</td>
+                            </tr>
+                            <tr>
+                                <td>S<sub>ij</sub></td>
+                                <td>External sources/sinks [g/s]</td>
+                            </tr>
+                            <tr>
+                                <td>R<sub>ij</sub></td>
+                                <td>Biogeochemical reactions [g/s]</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Key Processes</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1.1rem;"><strong>Advection</strong> — Transport with water flow</li>
+                                <li style="font-size: 1.1rem;"><strong>Dispersion</strong> — Spreading due to velocity gradients</li>
+                                <li style="font-size: 1.1rem;"><strong>Reactions</strong> — Chemical transformations</li>
+                                <li style="font-size: 1.1rem;"><strong>Exchange</strong> — Lateral mixing between compartments</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">6</div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Compartment Structure -->
+        <div class="slide" data-slide="7">
+            <div class="slide-header">
+                <h2>Compartment Structure</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <p style="font-size: 1.25rem; margin-bottom: 25px;">
+                            OpenWQ organizes the domain into <strong>compartments</strong> — hydrological units that store and transport water.
+                        </p>
+                        <div class="card secondary">
+                            <h3>Example Compartments</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1.1rem;">SOIL (multiple layers)</li>
+                                <li style="font-size: 1.1rem;">RUNOFF (surface flow)</li>
+                                <li style="font-size: 1.1rem;">GROUNDWATER (aquifers)</li>
+                                <li style="font-size: 1.1rem;">RIVER_REACHES</li>
+                                <li style="font-size: 1.1rem;">LAKES / RESERVOIRS</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box" style="margin-top: 20px;">
+                            Each compartment has its own <strong>cycling framework</strong> — the set of biogeochemical reactions active within it.
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="diagram">
+                            <pre style="font-size: 0.95rem;">
+     PRECIPITATION
+          ↓ (External Flux)
+    ┌─────────────┐
+    │   CANOPY    │
+    └──────┬──────┘
+           ↓
+    ┌─────────────┐
+    │   RUNOFF    │────→ RIVER
+    └──────┬──────┘        ↓
+           ↓            LAKE
+    ┌─────────────┐
+    │  SOIL_L1    │
+    └──────┬──────┘
+           ↓ (Exchange)
+    ┌─────────────┐
+    │  SOIL_L2    │
+    └──────┬──────┘
+           ↓
+    ┌─────────────┐
+    │ GROUNDWATER │
+    └─────────────┘
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">7</div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Module Architecture -->
+        <div class="slide" data-slide="8">
+            <div class="slide-header">
+                <h2>Module Architecture</h2>
+            </div>
+            <div class="slide-content">
+                <div class="diagram" style="padding: 40px;">
+                    <pre style="font-size: 1rem;">
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    OpenWQ MODULES                                       │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                         │
+│   ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐        │
+│   │   BIOGEOCHEMISTRY   │    │      TRANSPORT      │    │   SOURCES/SINKS     │        │
+│   │                     │    │                     │    │                     │        │
+│   │ • NATIVE_BGC_FLEX   │    │ • Advection         │    │ • JSON/CSV/HDF5     │        │
+│   │   (user kinetics)   │    │ • Dispersion        │    │ • Land-use based    │        │
+│   │                     │    │ • Lateral exchange  │    │ • ML predictions    │        │
+│   │ • PHREEQC           │    │                     │    │                     │        │
+│   │   (equilibrium)     │    │                     │    │                     │        │
+│   └─────────────────────┘    └─────────────────────┘    └─────────────────────┘        │
+│                                                                                         │
+│   ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐        │
+│   │     SORPTION        │    │  SEDIMENT TRANSPORT │    │      OUTPUT         │        │
+│   │                     │    │                     │    │                     │        │
+│   │ • Freundlich        │    │ • HYPE_HBVSED       │    │ • HDF5              │        │
+│   │ • Langmuir          │    │ • HYPE_MMF          │    │ • CSV               │        │
+│   │                     │    │                     │    │ • VTU (ParaView)    │        │
+│   └─────────────────────┘    └─────────────────────┘    └─────────────────────┘        │
+│                                                                                         │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+                    </pre>
+                </div>
+                <div class="highlight-box info" style="margin-top: 20px; text-align: center;">
+                    All modules are configured via <strong>JSON files</strong> — swap modules by changing configuration, not code!
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">8</div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Supported Processes -->
+        <div class="slide section-slide" data-slide="9">
+            <div class="section-number">02</div>
+            <h2>Supported Processes</h2>
+        </div>
+
+        <!-- Slide 10: Biogeochemical Processes -->
+        <div class="slide" data-slide="10">
+            <div class="slide-header">
+                <h2>Biogeochemical Processes</h2>
+            </div>
+            <div class="slide-content">
+                <div class="process-grid">
+                    <div class="process-item">
+                        <div class="icon">🌿</div>
+                        <h4>Nitrogen Cycle</h4>
+                        <p>Nitrification, denitrification, mineralization, immobilization, volatilization</p>
+                    </div>
+                    <div class="process-item">
+                        <div class="icon">🧫</div>
+                        <h4>Phosphorus Cycle</h4>
+                        <p>Sorption, desorption, mineralization, sediment binding</p>
+                    </div>
+                    <div class="process-item">
+                        <div class="icon">🍂</div>
+                        <h4>Carbon Cycle</h4>
+                        <p>DOC production, BOD decay, organic matter decomposition</p>
+                    </div>
+                    <div class="process-item">
+                        <div class="icon">💨</div>
+                        <h4>Dissolved Oxygen</h4>
+                        <p>Reaeration, respiration, photosynthesis, SOD</p>
+                    </div>
+                    <div class="process-item">
+                        <div class="icon">🔩</div>
+                        <h4>Heavy Metals</h4>
+                        <p>Sorption isotherms, complexation, precipitation</p>
+                    </div>
+                    <div class="process-item">
+                        <div class="icon">🦠</div>
+                        <h4>Pathogens</h4>
+                        <p>Die-off, settling, resuspension, UV inactivation</p>
+                    </div>
+                    <div class="process-item">
+                        <div class="icon">🧴</div>
+                        <h4>Pesticides</h4>
+                        <p>Degradation, volatilization, sorption, hydrolysis</p>
+                    </div>
+                    <div class="process-item">
+                        <div class="icon">⚗️</div>
+                        <h4>Geochemistry</h4>
+                        <p>pH, speciation, mineral equilibria (PHREEQC)</p>
+                    </div>
+                </div>
+                <div class="highlight-box success" style="margin-top: 20px; text-align: center;">
+                    <strong>All processes use the same framework</strong> — define consumed/produced species + kinetic expression
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">10</div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Available Templates -->
+        <div class="slide" data-slide="11">
+            <div class="slide-header">
+                <h2>Pre-Built Model Templates</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Popular Model Frameworks</h3>
+                            <table style="font-size: 1rem; margin-top: 15px;">
+                                <tr>
+                                    <td><strong>SWAT</strong></td>
+                                    <td>N & P cycling with erosion</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>QUAL2E/QUAL2K</strong></td>
+                                    <td>Stream water quality</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>HYPE</strong></td>
+                                    <td>Large-scale nutrient modeling</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>WASP8</strong></td>
+                                    <td>Lakes and estuaries</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>INCA</strong></td>
+                                    <td>Integrated catchment N & C</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>SPARROW</strong></td>
+                                    <td>Regional nutrient export</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Individual Process Templates</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 1.05rem;">Inorganic nitrogen (NO₃, NH₄)</li>
+                                <li style="font-size: 1.05rem;">Organic nitrogen (active, stable)</li>
+                                <li style="font-size: 1.05rem;">Phosphorus (PO₄, sediment-P)</li>
+                                <li style="font-size: 1.05rem;">Carbon (DOC, POC, DIC)</li>
+                                <li style="font-size: 1.05rem;">Dissolved oxygen</li>
+                                <li style="font-size: 1.05rem;">Heavy metals (Zn, Cu, Pb, Cd)</li>
+                                <li style="font-size: 1.05rem;">Pathogens (E. coli)</li>
+                                <li style="font-size: 1.05rem;">Conservative tracers</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box" style="margin-top: 15px;">
+                            Mix and match templates to build custom models!
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">11</div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Applications -->
+        <div class="slide section-slide" data-slide="12">
+            <div class="section-number">03</div>
+            <h2>Applications</h2>
+        </div>
+
+        <!-- Slide 13: Application Areas -->
+        <div class="slide" data-slide="13">
+            <div class="slide-header">
+                <h2>Application Areas</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column" style="gap: 30px;">
+                    <div class="card primary" style="height: 100%;">
+                        <h3>🌾 Agricultural Watersheds</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 1rem;">Nutrient export from croplands</li>
+                            <li style="font-size: 1rem;">Fertilizer management</li>
+                            <li style="font-size: 1rem;">Best management practices</li>
+                            <li style="font-size: 1rem;">Tile drainage impacts</li>
+                        </ul>
+                    </div>
+                    <div class="card secondary" style="height: 100%;">
+                        <h3>🏔️ Cold Regions</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 1rem;">Snowmelt-driven transport</li>
+                            <li style="font-size: 1rem;">Freeze-thaw effects</li>
+                            <li style="font-size: 1rem;">Permafrost dynamics</li>
+                            <li style="font-size: 1rem;">Spring freshet loading</li>
+                        </ul>
+                    </div>
+                    <div class="card accent" style="height: 100%;">
+                        <h3>🏙️ Urban Systems</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 1rem;">Stormwater quality</li>
+                            <li style="font-size: 1rem;">Point source impacts</li>
+                            <li style="font-size: 1rem;">Green infrastructure</li>
+                            <li style="font-size: 1rem;">Combined sewer overflows</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="three-column" style="gap: 30px; margin-top: 20px;">
+                    <div class="card" style="border-left: 5px solid #9333ea; height: 100%;">
+                        <h3>🌊 Lakes & Reservoirs</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 1rem;">Eutrophication</li>
+                            <li style="font-size: 1rem;">Algal blooms</li>
+                            <li style="font-size: 1rem;">Stratification effects</li>
+                            <li style="font-size: 1rem;">Reservoir operations</li>
+                        </ul>
+                    </div>
+                    <div class="card" style="border-left: 5px solid #0891b2; height: 100%;">
+                        <h3>⛏️ Mining Impacts</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 1rem;">Acid mine drainage</li>
+                            <li style="font-size: 1rem;">Metal contamination</li>
+                            <li style="font-size: 1rem;">Tailings pond seepage</li>
+                            <li style="font-size: 1rem;">Remediation modeling</li>
+                        </ul>
+                    </div>
+                    <div class="card" style="border-left: 5px solid #ca8a04; height: 100%;">
+                        <h3>🌍 Large-Scale Studies</h3>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 1rem;">Continental nutrient budgets</li>
+                            <li style="font-size: 1rem;">Climate change impacts</li>
+                            <li style="font-size: 1rem;">Land-use scenarios</li>
+                            <li style="font-size: 1rem;">Policy evaluation</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">13</div>
+            </div>
+        </div>
+
+        <!-- Slide 14: Technical Stack -->
+        <div class="slide" data-slide="14">
+            <div class="slide-header">
+                <h2>Technical Stack</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 50px;">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Languages & Libraries</h3>
+                            <table style="font-size: 1rem; margin-top: 10px;">
+                                <tr>
+                                    <td><strong>C++</strong></td>
+                                    <td>Core simulation engine</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Fortran</strong></td>
+                                    <td>Host model coupling (SUMMA, mizuRoute)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Python</strong></td>
+                                    <td>Configuration, calibration, post-processing</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Armadillo</strong></td>
+                                    <td>Linear algebra</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>exprtk</strong></td>
+                                    <td>Mathematical expression parsing</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>PhreeqcRM</strong></td>
+                                    <td>Geochemical reactions</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>I/O & Deployment</h3>
+                            <table style="font-size: 1rem; margin-top: 10px;">
+                                <tr>
+                                    <td><strong>NetCDF/HDF5</strong></td>
+                                    <td>Input/output data</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>JSON</strong></td>
+                                    <td>Configuration files</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>VTK</strong></td>
+                                    <td>3D visualization output</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>CMake</strong></td>
+                                    <td>Build system</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Docker</strong></td>
+                                    <td>Container deployment</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Apptainer</strong></td>
+                                    <td>HPC deployment</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            OpenMP parallelization for multi-core performance
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">14</div>
+            </div>
+        </div>
+
+        <!-- Slide 15: Summary -->
+        <div class="slide" data-slide="15">
+            <div class="slide-header">
+                <h2>Summary</h2>
+            </div>
+            <div class="slide-content">
+                <div class="center-content">
+                    <div style="max-width: 1000px;">
+                        <div class="three-column" style="gap: 30px; margin-bottom: 40px;">
+                            <div class="card primary" style="text-align: center;">
+                                <h3 style="justify-content: center;">🔧 Flexible</h3>
+                                <p>User-defined reactions without recompiling. JSON-based configuration.</p>
+                            </div>
+                            <div class="card secondary" style="text-align: center;">
+                                <h3 style="justify-content: center;">🔗 Coupled</h3>
+                                <p>Works with SUMMA, mizuRoute, CRHM, and custom hydrological models.</p>
+                            </div>
+                            <div class="card accent" style="text-align: center;">
+                                <h3 style="justify-content: center;">🌐 Open</h3>
+                                <p>Open-source, community-driven, actively developed.</p>
+                            </div>
+                        </div>
+                        <div class="highlight-box success" style="text-align: center; font-size: 1.3rem;">
+                            <strong>OpenWQ bridges the gap between hydrological modeling and water quality science</strong><br>
+                            — bringing flexible biogeochemistry to any water model
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">15</div>
+            </div>
+        </div>
+
+        <!-- Slide 16: Resources -->
+        <div class="slide title-slide" data-slide="16">
+            <h1 style="font-size: 3.5rem;">Thank You</h1>
+            <div class="subtitle" style="font-size: 1.8rem;">Questions & Resources</div>
+            <div style="margin-top: 3rem;">
+                <p style="font-size: 1.4rem; color: #a0aec0; margin-bottom: 15px;">
+                    <strong>GitHub:</strong> github.com/ue-hydro/openwq
+                </p>
+                <p style="font-size: 1.4rem; color: #a0aec0; margin-bottom: 15px;">
+                    <strong>Documentation:</strong> openwq.readthedocs.io
+                </p>
+                <p style="font-size: 1.4rem; color: #a0aec0;">
+                    <strong>Contact:</strong> diogo.costa@uevora.pt
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="nav-hint" id="navHint">Use ← → arrows or click to navigate | Press F for fullscreen</div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            history.replaceState(null, null, `#${currentSlide}`);
+        }
+
+        function nextSlide() { currentSlide++; showSlide(currentSlide); }
+        function prevSlide() { currentSlide--; showSlide(currentSlide); }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
+                case 'Home': currentSlide = 1; showSlide(currentSlide); break;
+                case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
+                case 'f': case 'F': toggleFullscreen(); break;
+            }
+        });
+
+        document.querySelector('.presentation').addEventListener('click', (e) => {
+            const rect = e.target.getBoundingClientRect();
+            if (e.clientX - rect.left > rect.width / 2) nextSlide(); else prevSlide();
+        });
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+            else document.exitFullscreen();
+        }
+
+        const navHint = document.getElementById('navHint');
+        navHint.classList.add('visible');
+        setTimeout(() => navHint.classList.remove('visible'), 4000);
+
+        let hintTimeout;
+        document.addEventListener('mousemove', () => {
+            navHint.classList.add('visible');
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => navHint.classList.remove('visible'), 2000);
+        });
+
+        if (window.location.hash) {
+            const slideNum = parseInt(window.location.hash.substring(1));
+            if (slideNum >= 1 && slideNum <= totalSlides) currentSlide = slideNum;
+        }
+        showSlide(currentSlide);
+
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', (e) => {
+            const diff = touchStartX - e.changedTouches[0].screenX;
+            if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
+        });
+    </script>
+</body>
+</html>
