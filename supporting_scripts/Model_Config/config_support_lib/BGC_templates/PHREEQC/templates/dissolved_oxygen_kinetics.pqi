@@ -1,0 +1,258 @@
+# PHREEQC Template: Dissolved Oxygen Balance with Kinetics
+# Description: Complete DO budget - reaeration, BOD decay, nitrification, SOD
+# Reference: Chapra (2008) Surface Water Quality Modeling; Streeter-Phelps (1925)
+# ================================================================
+
+DATABASE phreeqc.dat
+
+TITLE Dissolved Oxygen Balance - Stream/River Water Quality
+
+# ================================================================
+# SOLUTION 1: Stream water with organic matter loading
+# ================================================================
+SOLUTION 1  Stream Water - Moderate Pollution
+    temp      20.0
+    pH        7.5
+    pe        12.0       # Oxic conditions
+    units     mg/L
+
+    # Dissolved oxygen
+    O(0)      7.0        # DO below saturation (9.1 at 20C)
+
+    # Nitrogen species (for nitrification NOD)
+    N(5)      3.0        # Nitrate as mg/L N
+    N(-3)     2.0        # Ammonium as mg/L N (will consume O2)
+
+    # Carbon for BOD proxy (as organic C)
+    # Note: PHREEQC doesn't have BOD directly, use C(4) equilibrium
+    C(4)      50 as HCO3
+
+    # Supporting ions
+    Ca        40.0
+    Mg        15.0
+    Na        25.0
+    K         5.0
+    Cl        30.0
+    S(6)      15 as SO4
+
+END
+
+# ================================================================
+# SOLUTION 2: Clean reference water (upstream)
+# ================================================================
+SOLUTION 2  Clean Stream Water
+    temp      18.0
+    pH        7.8
+    pe        13.5       # Well-oxygenated
+    units     mg/L
+
+    O(0)      9.5        # Near saturation at 18C
+    N(5)      1.0
+    N(-3)     0.1
+    C(4)      30 as HCO3
+    Ca        35.0
+    Mg        12.0
+    Na        15.0
+    K         3.0
+    Cl        20.0
+    S(6)      10 as SO4
+
+END
+
+# ================================================================
+# EQUILIBRIUM_PHASES: Atmospheric gas equilibrium
+# ================================================================
+EQUILIBRIUM_PHASES 1
+    # Reaeration - equilibrium with atmospheric O2
+    O2(g)       -0.678  10.0   # pO2 = 0.21 atm (log10(0.21) = -0.678)
+    CO2(g)      -3.5    10.0   # Atmospheric CO2
+    N2(g)       -0.11   10.0   # pN2 = 0.78 atm
+
+END
+
+# ================================================================
+# KINETICS 1: DO consumption processes
+# ================================================================
+KINETICS 1
+
+# BOD decay (carbonaceous oxygen demand)
+# CBOD + O2 -> CO2 + H2O (simplified)
+-bod_decay
+    -formula  O(0) -1  C(4) 1
+    -m0       0.005           # Initial BOD (mol equivalent)
+    -parms    0.3 0.5         # kd (1/day), Ks_O2 (mg/L)
+    -tol      1e-8
+
+# Nitrification (nitrogenous oxygen demand)
+# NH4+ + 2O2 -> NO3- + 2H+ + H2O
+-nitrification_nod
+    -formula  N(-3) -1 N(5) 1 O(0) -2
+    -m0       0.001
+    -parms    0.1 1.0 4.57    # k_nitrif (1/day), Ks_O2 (mg/L), rO2_N
+    -tol      1e-8
+
+# Sediment oxygen demand (SOD)
+# Benthic respiration consuming O2
+-sediment_od
+    -formula  O(0) -1 C(4) 1
+    -m0       0.01
+    -parms    1.5 2.0 1.0     # SOD_20 (g/m2/day), depth (m), Ks_O2 (mg/L)
+    -tol      1e-8
+
+# Algal respiration (dark respiration)
+# CH2O + O2 -> CO2 + H2O
+-algal_respiration
+    -formula  O(0) -1 C(4) 1
+    -m0       0.0005
+    -parms    0.1 2.67        # k_resp (1/day), rO2_C (mg O2/mg C)
+    -tol      1e-8
+
+END
+
+# ================================================================
+# RATES: Kinetic rate expressions
+# ================================================================
+RATES
+
+bod_decay
+-start
+10 REM CBOD decay with O2 limitation (Monod kinetics)
+20 kd = PARM(1) / 86400                  # Convert 1/day to 1/s
+30 Ks_O2 = PARM(2) / 32000               # Convert mg/L to mol/L
+40 O2_mol = TOT("O(0)")
+50 BOD_mol = M                           # Current BOD (moles remaining)
+60 IF O2_mol <= 1e-10 THEN GOTO 100
+70 f_O2 = O2_mol / (Ks_O2 + O2_mol)      # O2 limitation
+80 rate = kd * BOD_mol * f_O2
+90 moles = rate * TIME
+95 SAVE moles
+100 END
+-end
+
+nitrification_nod
+-start
+10 REM Nitrification - NH4 oxidation consuming O2
+20 REM Stoichiometry: 4.57 mg O2 per mg NH4-N
+30 k_nitrif = PARM(1) / 86400
+40 Ks_O2 = PARM(2) / 32000
+50 rO2_N = PARM(3)                       # O2:N ratio (mass)
+60 O2_mol = TOT("O(0)")
+70 NH4_mol = MOL("NH4+")
+80 IF O2_mol <= 1e-10 THEN GOTO 120
+90 IF NH4_mol <= 1e-10 THEN GOTO 120
+100 f_O2 = O2_mol / (Ks_O2 + O2_mol)
+110 rate = k_nitrif * NH4_mol * f_O2
+115 moles = rate * TIME
+118 SAVE moles
+120 END
+-end
+
+sediment_od
+-start
+10 REM Sediment oxygen demand (areal flux / depth)
+20 SOD_20 = PARM(1)                      # g O2/m2/day at 20C
+30 depth = PARM(2)                       # Water depth (m)
+40 Ks_O2 = PARM(3) / 32000
+50 O2_mol = TOT("O(0)")
+60 T = TC                                # Temperature in Celsius
+70 theta = 1.065                         # Temperature coefficient
+80 SOD_T = SOD_20 * theta^(T - 20)       # Temperature-corrected SOD
+90 IF O2_mol <= 1e-10 THEN GOTO 130
+100 f_O2 = O2_mol / (Ks_O2 + O2_mol)
+110 rate_gL = SOD_T / depth / 86400      # Convert to g/L/s
+120 rate_mol = rate_gL / 32              # Convert to mol/L/s
+125 moles = rate_mol * f_O2 * TIME
+128 SAVE moles
+130 END
+-end
+
+algal_respiration
+-start
+10 REM Algal dark respiration consuming O2
+20 k_resp = PARM(1) / 86400
+30 rO2_C = PARM(2)                       # 2.67 mg O2 / mg C fixed
+40 O2_mol = TOT("O(0)")
+50 algae_mol = M                         # Algal biomass (mol C equiv)
+60 IF O2_mol <= 1e-10 THEN GOTO 100
+70 rate = k_resp * algae_mol
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+END
+
+# ================================================================
+# SELECTED_OUTPUT
+# ================================================================
+SELECTED_OUTPUT
+    -file         do_balance_results.txt
+    -reset        false
+    -pH           true
+    -pe           true
+    -temperature  true
+    -totals       O(0) N(5) N(-3) C(4)
+    -molalities   O2 NO3- NH4+
+    -saturation_indices  O2(g) CO2(g)
+
+END
+
+# ================================================================
+# USER_PUNCH: DO balance summary
+# ================================================================
+USER_PUNCH
+    -headings  DO_mgL  DO_sat_mgL  DO_deficit  NH4_mgL  NO3_mgL  T_C
+
+    # Dissolved oxygen in mg/L
+    10 DO = TOT("O(0)") * 32000
+    20 PUNCH DO
+
+    # DO saturation (simplified Benson-Krause)
+    30 T = TC
+    40 DOsat = 14.652 - 0.41022*T + 0.007991*T^2 - 0.000078*T^3
+    50 PUNCH DOsat
+
+    # DO deficit
+    60 deficit = DOsat - DO
+    70 PUNCH deficit
+
+    # NH4-N in mg/L
+    80 NH4_N = TOT("N(-3)") * 14000
+    90 PUNCH NH4_N
+
+    # NO3-N in mg/L
+    100 NO3_N = TOT("N(5)") * 14000
+    110 PUNCH NO3_N
+
+    # Temperature
+    120 PUNCH TC
+
+END
+
+# ================================================================
+# Notes on Dissolved Oxygen Balance
+# ================================================================
+#
+# DO Sources:
+#   - Reaeration (atmospheric exchange): ka * (DOsat - DO)
+#   - Photosynthesis (algae): P_max * PHYTO * f(light)
+#
+# DO Sinks:
+#   - CBOD decay (carbonaceous BOD): kd * CBOD * (DO / (Ks + DO))
+#   - NBOD (nitrification): k_nitrif * NH4 * 4.57
+#   - SOD (sediment): SOD / depth
+#   - Respiration: k_resp * PHYTO
+#   - COD (chemical): k_cod * COD
+#
+# Typical DO values:
+#   - Saturation at 20C: 9.1 mg/L
+#   - Healthy streams: > 5 mg/L
+#   - Hypoxia: < 2 mg/L
+#   - Anoxia: ~ 0 mg/L
+#
+# Temperature effects:
+#   - DOsat decreases with temperature
+#   - Reaction rates increase with temperature (Arrhenius)
+#   - Net effect: warmer = lower DO capacity, higher demand
+#
+# ================================================================

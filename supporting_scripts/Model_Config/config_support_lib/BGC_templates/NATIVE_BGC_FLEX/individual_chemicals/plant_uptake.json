@@ -1,0 +1,405 @@
+{
+  "_DESCRIPTION": "Plant/Vegetation Nutrient Uptake Module",
+  "_REFERENCE": "SWAT (Neitsch et al. 2011); HYPE (Lindstrom et al. 2010); INCA-N (Wade et al. 2002); EPIC crop model",
+  "_VERSION": "1.0",
+  "_PROCESSES": {
+    "N_UPTAKE": "Nitrogen uptake by vegetation (NO3 preferentially, then NH4)",
+    "P_UPTAKE": "Phosphorus uptake by vegetation",
+    "GROWTH_LIMITATION": "Nutrient and water stress effects on uptake",
+    "SEASONAL_DYNAMICS": "Temperature and day-length effects on plant activity",
+    "LITTER_FALL": "Organic matter return to soil from senescence"
+  },
+  "_NOTES": [
+    "Plant uptake is a major sink for N and P in agricultural and natural catchments",
+    "Uptake rates depend on plant growth stage, temperature, and soil moisture",
+    "SWAT uses crop-specific growth curves; simplified here with generic parameters",
+    "Riparian vegetation is critical for stream buffer nutrient removal",
+    "Growing season typically March-October in temperate regions"
+  ],
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "NO3_N",
+      "2": "NH4_N",
+      "3": "PO4_P",
+      "4": "N_ORG_active",
+      "5": "P_ORG_active",
+      "6": "PLANT_N",
+      "7": "PLANT_P",
+      "8": "LITTER_C",
+      "9": "LITTER_N",
+      "10": "LITTER_P"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": ["NO3_N", "NH4_N", "PO4_P", "N_ORG_active", "P_ORG_active"]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+    "PLANT_UPTAKE_FULL": {
+      "_description": "Complete plant-soil nutrient cycling with uptake and litter return",
+
+      "list_transformations": {
+        "1": "no3_uptake",
+        "2": "nh4_uptake",
+        "3": "po4_uptake",
+        "4": "plant_n_senescence",
+        "5": "plant_p_senescence",
+        "6": "litter_n_mineralization",
+        "7": "litter_p_mineralization",
+        "8": "litter_c_decomposition"
+      },
+
+      "_GROWTH_FUNCTIONS": {
+        "DESCRIPTION": "Plant growth and uptake limitation functions",
+        "TEMPERATURE": "f_T = max(0, (T - T_base) / (T_opt - T_base)) for T < T_opt",
+        "MOISTURE": "f_W = min(1, theta / theta_fc) for theta < theta_fc",
+        "LIGHT": "f_L = 1 - exp(-k_ext * LAI) (Beer-Lambert canopy extinction)",
+        "GROWTH_STAGE": "f_G = sin(pi * (DOY - DOY_start) / (DOY_end - DOY_start)) during growing season",
+        "NOTES": [
+          "T_base = minimum temperature for growth (typically 5-10C)",
+          "T_opt = optimal temperature for growth (typically 20-30C)",
+          "theta_fc = field capacity soil moisture",
+          "LAI = Leaf Area Index (0-8 typical range)"
+        ]
+      },
+
+      "_UPTAKE_STOICHIOMETRY": {
+        "DESCRIPTION": "Typical plant tissue composition",
+        "CN_RATIO": "C:N = 40-80 for leaves, 100-200 for wood",
+        "CP_RATIO": "C:P = 400-800 for leaves",
+        "NP_RATIO": "N:P = 10-20 (Redfield-like for vegetation)"
+      },
+
+      "1": {
+        "_name": "no3_uptake",
+        "_description": "Nitrate uptake by plant roots",
+        "_reaction": "NO3(soil) -> PLANT_N",
+        "_notes": "NO3 is mobile and easily taken up but requires reduction (energy cost)",
+        "consumed": "NO3_N",
+        "produced": "PLANT_N",
+        "kinetics": [
+          "k_uptake_no3 * NO3_N / (Ks_N + NO3_N + NH4_N) * f_growth * f_temp * f_moisture",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_uptake_no3", "Ks_N", "f_growth", "f_temp", "f_moisture"],
+        "parameter_values": {
+          "k_uptake_no3": 0.5,
+          "Ks_N": 0.5,
+          "f_growth": 1.0,
+          "f_temp": 1.0,
+          "f_moisture": 1.0
+        },
+        "_parameter_ranges": {
+          "k_uptake_no3": {"min": 0.1, "max": 2.0, "units": "1/day", "source": "SWAT, HYPE"},
+          "Ks_N": {"min": 0.1, "max": 2.0, "units": "mg-N/L", "source": "Michaelis-Menten half-saturation"}
+        },
+        "_seasonal_modulation": {
+          "DESCRIPTION": "Multiply by seasonal factor based on temperature and day-of-year",
+          "FORMULA": "f_season = max(0, sin(pi * (DOY - 60) / 240)) for DOY in [60, 300]",
+          "NOTES": "Growing season roughly March (DOY 60) to October (DOY 300) in Northern Hemisphere"
+        }
+      },
+
+      "2": {
+        "_name": "nh4_uptake",
+        "_description": "Ammonium uptake by plant roots (preferred N source)",
+        "_reaction": "NH4(soil) -> PLANT_N",
+        "_notes": "NH4 is preferred because it requires less energy to assimilate than NO3",
+        "consumed": "NH4_N",
+        "produced": "PLANT_N",
+        "kinetics": [
+          "k_uptake_nh4 * NH4_N / (Ks_N + NO3_N + NH4_N) * Pref_NH4 * f_growth * f_temp * f_moisture",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_uptake_nh4", "Ks_N", "Pref_NH4", "f_growth", "f_temp", "f_moisture"],
+        "parameter_values": {
+          "k_uptake_nh4": 0.5,
+          "Ks_N": 0.5,
+          "Pref_NH4": 1.5,
+          "f_growth": 1.0,
+          "f_temp": 1.0,
+          "f_moisture": 1.0
+        },
+        "_parameter_ranges": {
+          "k_uptake_nh4": {"min": 0.1, "max": 2.0, "units": "1/day"},
+          "Pref_NH4": {"min": 1.0, "max": 3.0, "units": "dimensionless", "source": "NH4 preference factor"}
+        }
+      },
+
+      "3": {
+        "_name": "po4_uptake",
+        "_description": "Phosphate uptake by plant roots",
+        "_reaction": "PO4(soil) -> PLANT_P",
+        "_notes": "P uptake is often diffusion-limited in soil; mycorrhizae enhance uptake",
+        "consumed": "PO4_P",
+        "produced": "PLANT_P",
+        "kinetics": [
+          "k_uptake_p * PO4_P / (Ks_P + PO4_P) * f_growth * f_temp * f_moisture",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_uptake_p", "Ks_P", "f_growth", "f_temp", "f_moisture"],
+        "parameter_values": {
+          "k_uptake_p": 0.3,
+          "Ks_P": 0.05,
+          "f_growth": 1.0,
+          "f_temp": 1.0,
+          "f_moisture": 1.0
+        },
+        "_parameter_ranges": {
+          "k_uptake_p": {"min": 0.05, "max": 1.0, "units": "1/day", "source": "SWAT, INCA-P"},
+          "Ks_P": {"min": 0.01, "max": 0.2, "units": "mg-P/L", "source": "Typically lower than N"}
+        }
+      },
+
+      "4": {
+        "_name": "plant_n_senescence",
+        "_description": "Plant nitrogen release during senescence and litterfall",
+        "_reaction": "PLANT_N -> LITTER_N",
+        "_notes": "Seasonal process, peaks in autumn; some N is retranslocated before leaf fall",
+        "consumed": "PLANT_N",
+        "produced": "LITTER_N",
+        "kinetics": [
+          "k_senescence * PLANT_N * (1 - f_retrans_N) * f_senescence",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_senescence", "f_retrans_N", "f_senescence"],
+        "parameter_values": {
+          "k_senescence": 0.01,
+          "f_retrans_N": 0.5,
+          "f_senescence": 1.0
+        },
+        "_parameter_ranges": {
+          "k_senescence": {"min": 0.001, "max": 0.05, "units": "1/day"},
+          "f_retrans_N": {"min": 0.3, "max": 0.7, "units": "fraction", "source": "N retranslocation before abscission"}
+        },
+        "_notes": "f_retrans_N = fraction of N retranslocated to perennial tissues before leaf drop"
+      },
+
+      "5": {
+        "_name": "plant_p_senescence",
+        "_description": "Plant phosphorus release during senescence",
+        "_reaction": "PLANT_P -> LITTER_P",
+        "consumed": "PLANT_P",
+        "produced": "LITTER_P",
+        "kinetics": [
+          "k_senescence * PLANT_P * (1 - f_retrans_P) * f_senescence",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_senescence", "f_retrans_P", "f_senescence"],
+        "parameter_values": {
+          "k_senescence": 0.01,
+          "f_retrans_P": 0.6,
+          "f_senescence": 1.0
+        },
+        "_parameter_ranges": {
+          "f_retrans_P": {"min": 0.4, "max": 0.8, "units": "fraction", "source": "P retranslocation typically higher than N"}
+        }
+      },
+
+      "6": {
+        "_name": "litter_n_mineralization",
+        "_description": "Decomposition of litter organic N to mineral N (NH4)",
+        "_reaction": "LITTER_N -> NH4_N",
+        "_notes": "Microbially-mediated; rate depends on litter C:N ratio and moisture",
+        "consumed": "LITTER_N",
+        "produced": "NH4_N",
+        "kinetics": [
+          "k_litter_N * LITTER_N * theta_litter^(Treach_K - 293)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_litter_N", "theta_litter"],
+        "parameter_values": {
+          "k_litter_N": 0.005,
+          "theta_litter": 1.07
+        },
+        "_parameter_ranges": {
+          "k_litter_N": {"min": 0.001, "max": 0.02, "units": "1/day", "source": "Depends on litter quality"},
+          "theta_litter": {"min": 1.04, "max": 1.10, "units": "dimensionless", "source": "Temperature coefficient"}
+        }
+      },
+
+      "7": {
+        "_name": "litter_p_mineralization",
+        "_description": "Decomposition of litter organic P to mineral P (PO4)",
+        "_reaction": "LITTER_P -> PO4_P",
+        "consumed": "LITTER_P",
+        "produced": "PO4_P",
+        "kinetics": [
+          "k_litter_P * LITTER_P * theta_litter^(Treach_K - 293)",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_litter_P", "theta_litter"],
+        "parameter_values": {
+          "k_litter_P": 0.003,
+          "theta_litter": 1.07
+        },
+        "_parameter_ranges": {
+          "k_litter_P": {"min": 0.001, "max": 0.015, "units": "1/day"}
+        }
+      },
+
+      "8": {
+        "_name": "litter_c_decomposition",
+        "_description": "Decomposition of litter carbon (CO2 release)",
+        "_reaction": "LITTER_C -> CO2",
+        "_notes": "Drives overall litter decomposition; produces CO2 and microbial biomass",
+        "consumed": "LITTER_C",
+        "produced": "CO2",
+        "kinetics": [
+          "k_litter_C * LITTER_C * theta_litter^(Treach_K - 293)",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_litter_C", "theta_litter"],
+        "parameter_values": {
+          "k_litter_C": 0.01,
+          "theta_litter": 1.07
+        },
+        "_parameter_ranges": {
+          "k_litter_C": {"min": 0.002, "max": 0.03, "units": "1/day", "source": "CENTURY, RothC models"}
+        }
+      }
+    },
+
+    "PLANT_UPTAKE_SIMPLE": {
+      "_description": "Simplified plant uptake for screening models (lumped N and P)",
+
+      "list_transformations": {
+        "1": "total_n_uptake",
+        "2": "total_p_uptake",
+        "3": "organic_n_return",
+        "4": "organic_p_return"
+      },
+
+      "1": {
+        "_name": "total_n_uptake",
+        "_description": "Lumped N uptake from all mineral N pools",
+        "consumed": "NO3_N",
+        "produced": "N_ORG_active",
+        "kinetics": ["k_uptake_N * (NO3_N + NH4_N) * f_season", "mg-N/L/day"],
+        "parameter_names": ["k_uptake_N", "f_season"],
+        "parameter_values": {
+          "k_uptake_N": 0.3,
+          "f_season": 1.0
+        },
+        "_notes": "f_season = seasonal growth factor (0-1), typically sin curve for growing season"
+      },
+
+      "2": {
+        "_name": "total_p_uptake",
+        "_description": "Lumped P uptake",
+        "consumed": "PO4_P",
+        "produced": "P_ORG_active",
+        "kinetics": ["k_uptake_P * PO4_P * f_season", "mg-P/L/day"],
+        "parameter_names": ["k_uptake_P", "f_season"],
+        "parameter_values": {
+          "k_uptake_P": 0.2,
+          "f_season": 1.0
+        }
+      },
+
+      "3": {
+        "_name": "organic_n_return",
+        "_description": "Return of organic N to soil from plant turnover",
+        "consumed": "N_ORG_active",
+        "produced": "NH4_N",
+        "kinetics": ["k_return_N * N_ORG_active", "mg-N/L/day"],
+        "parameter_names": ["k_return_N"],
+        "parameter_values": {
+          "k_return_N": 0.02
+        }
+      },
+
+      "4": {
+        "_name": "organic_p_return",
+        "_description": "Return of organic P to soil from plant turnover",
+        "consumed": "P_ORG_active",
+        "produced": "PO4_P",
+        "kinetics": ["k_return_P * P_ORG_active", "mg-P/L/day"],
+        "parameter_names": ["k_return_P"],
+        "parameter_values": {
+          "k_return_P": 0.015
+        }
+      }
+    },
+
+    "RIPARIAN_BUFFER": {
+      "_description": "Riparian zone nutrient uptake and denitrification",
+      "_notes": [
+        "Riparian buffers are critical for stream water quality protection",
+        "Combine plant uptake with enhanced denitrification in saturated zone",
+        "Buffer width of 10-30m typically required for effectiveness"
+      ],
+
+      "list_transformations": {
+        "1": "riparian_no3_uptake",
+        "2": "riparian_denitrification",
+        "3": "riparian_p_retention"
+      },
+
+      "1": {
+        "_name": "riparian_no3_uptake",
+        "_description": "Enhanced NO3 uptake in riparian vegetation zone",
+        "consumed": "NO3_N",
+        "produced": "PLANT_N",
+        "kinetics": [
+          "k_riparian_uptake * NO3_N * f_buffer_width * f_season",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_riparian_uptake", "f_buffer_width", "f_season"],
+        "parameter_values": {
+          "k_riparian_uptake": 0.8,
+          "f_buffer_width": 1.0,
+          "f_season": 1.0
+        },
+        "_parameter_ranges": {
+          "k_riparian_uptake": {"min": 0.3, "max": 2.0, "units": "1/day", "source": "Higher than upland due to water availability"},
+          "f_buffer_width": {"value": "buffer_width / 30", "units": "fraction", "source": "Normalized to 30m reference width"}
+        }
+      },
+
+      "2": {
+        "_name": "riparian_denitrification",
+        "_description": "Denitrification in saturated riparian zone",
+        "_reaction": "NO3 -> N2 (under anoxic conditions)",
+        "_notes": "Major N sink in riparian buffers; requires organic C and anoxic conditions",
+        "consumed": "NO3_N",
+        "produced": "N2_gas",
+        "kinetics": [
+          "k_denit_riparian * NO3_N * (DOC / (Ks_DOC + DOC)) * f_anoxic * theta_denit^(Treach_K - 293)",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_denit_riparian", "Ks_DOC", "f_anoxic", "theta_denit"],
+        "parameter_values": {
+          "k_denit_riparian": 0.5,
+          "Ks_DOC": 5.0,
+          "f_anoxic": 0.8,
+          "theta_denit": 1.07
+        },
+        "_parameter_ranges": {
+          "k_denit_riparian": {"min": 0.1, "max": 2.0, "units": "1/day"},
+          "f_anoxic": {"min": 0.0, "max": 1.0, "units": "fraction", "source": "Fraction of riparian zone that is anoxic"}
+        }
+      },
+
+      "3": {
+        "_name": "riparian_p_retention",
+        "_description": "Phosphorus retention through sedimentation and sorption in riparian zone",
+        "consumed": "PO4_P",
+        "produced": "P_SED",
+        "kinetics": [
+          "k_p_retention * PO4_P * f_buffer_width",
+          "mg-P/L/day"
+        ],
+        "parameter_names": ["k_p_retention", "f_buffer_width"],
+        "parameter_values": {
+          "k_p_retention": 0.1,
+          "f_buffer_width": 1.0
+        },
+        "_parameter_ranges": {
+          "k_p_retention": {"min": 0.02, "max": 0.5, "units": "1/day", "source": "Sedimentation + sorption"}
+        }
+      }
+    }
+  }
+}

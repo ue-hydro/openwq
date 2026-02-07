@@ -1,0 +1,371 @@
+# PHREEQC Template: Plant/Vegetation Nutrient Uptake Kinetics
+# Description: Terrestrial plant uptake of N and P from soil solution
+# Reference: SWAT (Neitsch et al. 2011); HYPE; INCA-N
+# ================================================================
+#
+# NOTE: Terrestrial plant processes are typically handled better
+# in NATIVE_BGC_FLEX. This template demonstrates soil-plant
+# nutrient cycling using PHREEQC KINETICS for coupled applications.
+#
+# ================================================================
+
+DATABASE phreeqc.dat
+
+TITLE Plant Nutrient Uptake - Soil-Vegetation Interactions
+
+# ================================================================
+# SOLUTION 1: Agricultural soil solution (high nutrients)
+# ================================================================
+SOLUTION 1  Agricultural Soil Solution
+    temp      15.0
+    pH        6.5
+    pe        8.0        # Mildly oxidizing
+    units     mg/L
+
+    # Nitrogen species
+    N(5)      20.0       # Nitrate - mobile, easily taken up
+    N(-3)     5.0        # Ammonium - retained by soil exchange
+
+    # Phosphorus
+    P         0.5        # Soluble reactive P (often limiting)
+
+    # Base cations
+    Ca        80.0
+    Mg        25.0
+    Na        15.0
+    K         20.0       # Important plant nutrient
+
+    # Anions
+    Cl        30.0
+    C(4)      100 as HCO3
+    S(6)      25 as SO4
+
+    # Micronutrients
+    Fe        0.5
+    Mn        0.2
+
+END
+
+# ================================================================
+# SOLUTION 2: Forest soil solution (lower nutrients)
+# ================================================================
+SOLUTION 2  Forest Soil Solution
+    temp      12.0
+    pH        5.8        # More acidic under conifers
+    pe        6.0
+    units     mg/L
+
+    N(5)      2.0        # Low N - efficient forest recycling
+    N(-3)     0.8
+    P         0.05       # Very low available P
+    Ca        20.0
+    Mg        8.0
+    Na        5.0
+    K         5.0
+    Cl        8.0
+    C(4)      30 as HCO3
+    S(6)      8 as SO4
+    Fe        1.0
+    Mn        0.3
+    Al        0.5        # Elevated Al in acidic forest soils
+
+END
+
+# ================================================================
+# SOLUTION 3: Riparian zone (saturated, reducing)
+# ================================================================
+SOLUTION 3  Riparian Zone Groundwater
+    temp      14.0
+    pH        6.8
+    pe        2.0        # Reducing - denitrification zone
+    units     mg/L
+
+    N(5)      0.5        # Low due to denitrification
+    N(-3)     3.0        # NH4 stable under reducing conditions
+    P         0.3
+    Ca        50.0
+    Mg        15.0
+    Na        20.0
+    K         8.0
+    Cl        25.0
+    C(4)      150 as HCO3
+    S(6)      5 as SO4
+    Fe        5.0        # Elevated Fe(II)
+
+END
+
+# ================================================================
+# EQUILIBRIUM_PHASES: Mineral equilibria
+# ================================================================
+EQUILIBRIUM_PHASES 1
+    # Soil gas phase
+    O2(g)       -1.0    0.5    # Soil pO2 lower than atmospheric
+    CO2(g)      -2.0    1.0    # Elevated soil CO2 from respiration
+    N2(g)       -0.11   10.0
+
+    # P minerals (control dissolved P)
+    # Hydroxyapatite  0.0  0.0   # Ca5(PO4)3OH - too slow to reach eqm
+
+END
+
+# ================================================================
+# EXCHANGE: Soil cation exchange
+# ================================================================
+EXCHANGE 1
+    # Cation exchange sites (typical soil CEC)
+    X       0.1            # Exchange sites (mol)
+    -equilibrate 1
+
+END
+
+# ================================================================
+# KINETICS 1: Plant uptake processes
+# ================================================================
+KINETICS 1
+
+# Nitrate uptake by plants
+# NO3 is mobile and easily transported to roots
+-no3_uptake
+    -formula  N(5) -1
+    -m0       0.01            # Plant N demand (mol)
+    -parms    0.5 0.5 1.0 1.0 1.0
+    # k_uptake (1/day), Ks_N (mg/L), f_growth, f_temp, f_moisture
+    -tol      1e-8
+
+# Ammonium uptake by plants (preferred N source)
+-nh4_uptake
+    -formula  N(-3) -1
+    -m0       0.01
+    -parms    0.5 0.5 1.5 1.0 1.0
+    # k_uptake, Ks_N, Pref_NH4, f_temp, f_moisture
+    -tol      1e-8
+
+# Phosphate uptake by plants
+-po4_uptake
+    -formula  P -1
+    -m0       0.005           # Plant P demand (lower than N)
+    -parms    0.3 0.05 1.0 1.0
+    # k_uptake, Ks_P, f_temp, f_moisture
+    -tol      1e-8
+
+# Litter decomposition (organic N mineralization)
+# Returns N to soil solution
+-litter_n_mineralization
+    -formula  N(-3) 1
+    -m0       0.002           # Litter N pool (mol)
+    -parms    0.005 1.07      # k_litter (1/day), theta
+    -tol      1e-8
+
+# Litter P mineralization
+-litter_p_mineralization
+    -formula  P 1
+    -m0       0.0002          # Litter P pool (mol)
+    -parms    0.003 1.07
+    -tol      1e-8
+
+# Riparian denitrification (in reducing zones)
+-riparian_denitrification
+    -formula  N(5) -2 N(0) 1
+    -m0       0.001
+    -parms    0.5 0.2 1.07    # k_denit, Ks_O2_inhib, theta
+    -tol      1e-8
+
+END
+
+# ================================================================
+# RATES: Kinetic rate expressions
+# ================================================================
+RATES
+
+no3_uptake
+-start
+10 REM Plant NO3 uptake with seasonal/environmental modulation
+20 k_uptake = PARM(1) / 86400
+30 Ks_N = PARM(2) / 14000             # mg/L to mol/L
+40 f_growth = PARM(3)                  # Growth stage factor (0-1)
+50 f_temp = PARM(4)                    # Temperature factor
+60 f_moist = PARM(5)                   # Soil moisture factor
+
+70 NO3_mol = TOT("N(5)")
+80 NH4_mol = TOT("N(-3)")
+90 TIN = NO3_mol + NH4_mol
+
+100 IF TIN <= 1e-10 THEN GOTO 150
+110 f_N = NO3_mol / (Ks_N + TIN)       # NO3 fraction of uptake
+120 plant_demand = M                    # Current plant N demand
+
+130 rate = k_uptake * plant_demand * f_N * f_growth * f_temp * f_moist
+140 moles = rate * TIME
+145 SAVE moles
+150 END
+-end
+
+nh4_uptake
+-start
+10 REM Plant NH4 uptake (preferred N source)
+20 k_uptake = PARM(1) / 86400
+30 Ks_N = PARM(2) / 14000
+40 Pref_NH4 = PARM(3)                  # NH4 preference factor (>1)
+50 f_temp = PARM(4)
+60 f_moist = PARM(5)
+
+70 NO3_mol = TOT("N(5)")
+80 NH4_mol = TOT("N(-3)")
+90 TIN = NO3_mol + NH4_mol
+
+100 IF NH4_mol <= 1e-10 THEN GOTO 150
+110 f_N = NH4_mol / (Ks_N + TIN)
+120 plant_demand = M
+
+130 rate = k_uptake * plant_demand * f_N * Pref_NH4 * f_temp * f_moist
+140 moles = rate * TIME
+145 SAVE moles
+150 END
+-end
+
+po4_uptake
+-start
+10 REM Plant PO4 uptake (often diffusion-limited)
+20 k_uptake = PARM(1) / 86400
+30 Ks_P = PARM(2) / 31000              # mg/L to mol/L
+40 f_temp = PARM(3)
+50 f_moist = PARM(4)
+
+60 PO4_mol = TOT("P")
+70 IF PO4_mol <= 1e-10 THEN GOTO 110
+80 f_P = PO4_mol / (Ks_P + PO4_mol)
+90 plant_demand = M
+
+100 rate = k_uptake * plant_demand * f_P * f_temp * f_moist
+105 moles = rate * TIME
+108 SAVE moles
+110 END
+-end
+
+litter_n_mineralization
+-start
+10 REM Litter N mineralization -> NH4
+20 k_litter = PARM(1) / 86400
+30 theta = PARM(2)
+40 T = TC
+50 f_temp = theta^(T - 15)             # Reference temp 15C
+60 litter_N = M
+
+70 rate = k_litter * litter_N * f_temp
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+litter_p_mineralization
+-start
+10 REM Litter P mineralization -> PO4
+20 k_litter = PARM(1) / 86400
+30 theta = PARM(2)
+40 T = TC
+50 f_temp = theta^(T - 15)
+60 litter_P = M
+
+70 rate = k_litter * litter_P * f_temp
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+riparian_denitrification
+-start
+10 REM Enhanced denitrification in saturated riparian zone
+20 k_denit = PARM(1) / 86400
+30 Ks_O2_inhib = PARM(2) / 32000
+40 theta = PARM(3)
+50 T = TC
+60 f_temp = theta^(T - 20)
+
+70 O2_mol = TOT("O(0)")
+80 NO3_mol = TOT("N(5)")
+
+90 IF NO3_mol <= 1e-10 THEN GOTO 140
+100 REM O2 inhibition of denitrification
+110 f_inhib = Ks_O2_inhib / (Ks_O2_inhib + O2_mol + 1e-10)
+
+120 rate = k_denit * NO3_mol * f_inhib * f_temp
+130 moles = rate * TIME
+135 SAVE moles
+140 END
+-end
+
+END
+
+# ================================================================
+# SELECTED_OUTPUT
+# ================================================================
+SELECTED_OUTPUT
+    -file         plant_uptake_results.txt
+    -reset        false
+    -pH           true
+    -pe           true
+    -temperature  true
+    -totals       N(5) N(-3) P O(0) K
+    -molalities   NO3- NH4+ PO4-3 K+
+
+END
+
+# ================================================================
+# USER_PUNCH: Plant-soil summary
+# ================================================================
+USER_PUNCH
+    -headings  NO3_mgL  NH4_mgL  SRP_mgL  N_P_mass  TIN_mgL
+
+    # Nitrate (mg/L as N)
+    10 NO3_N = TOT("N(5)") * 14000
+    20 PUNCH NO3_N
+
+    # Ammonium (mg/L as N)
+    30 NH4_N = TOT("N(-3)") * 14000
+    40 PUNCH NH4_N
+
+    # Soluble reactive P (mg/L as P)
+    50 SRP = TOT("P") * 31000
+    60 PUNCH SRP
+
+    # N:P mass ratio (optimal plant uptake ~7:1)
+    70 TIN_mass = (TOT("N(5)") + TOT("N(-3)")) * 14000
+    80 P_mass = TOT("P") * 31000
+    90 IF P_mass > 0.001 THEN NP = TIN_mass / P_mass ELSE NP = 999
+    100 PUNCH NP
+
+    # Total inorganic N
+    110 PUNCH TIN_mass
+
+END
+
+# ================================================================
+# Notes on Plant Nutrient Uptake
+# ================================================================
+#
+# Nitrogen uptake:
+#   - NH4+ preferred (less energy to assimilate than NO3-)
+#   - NO3- is more mobile in soil, reaches roots faster
+#   - Total uptake = k * Plant_demand * f(N) * f(season) * f(T) * f(moisture)
+#
+# Phosphorus uptake:
+#   - Often diffusion-limited (P moves slowly in soil)
+#   - Mycorrhizae enhance P uptake 2-10x
+#   - P is often the limiting nutrient in freshwater systems
+#
+# Seasonal patterns:
+#   - Growing season: March-October (Northern Hemisphere)
+#   - Peak uptake: May-July (rapid growth phase)
+#   - Senescence: Sept-Nov (nutrient return to soil)
+#
+# Typical uptake rates:
+#   - Agricultural crops: 100-250 kg N/ha/yr, 15-40 kg P/ha/yr
+#   - Forests: 20-80 kg N/ha/yr, 3-10 kg P/ha/yr
+#   - Grasslands: 50-150 kg N/ha/yr, 5-20 kg P/ha/yr
+#
+# Riparian buffers:
+#   - Enhance denitrification (0.5-5 kg N/ha/day in saturated zone)
+#   - Plant uptake 2-3x higher than upland due to water availability
+#   - 10-30 m buffer width typically needed for effectiveness
+#
+# ================================================================

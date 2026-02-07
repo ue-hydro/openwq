@@ -1,231 +1,331 @@
 {
-  "_DESCRIPTION": "Dissolved Oxygen Dynamics - Streeter-Phelps with extensions",
-  "_REFERENCE": "Streeter-Phelps (1925), Chapra (2008), QUAL2E",
-  "_VERSION": "1.0",
+  "_DESCRIPTION": "Dissolved Oxygen Balance Module - Complete DO Budget",
+  "_REFERENCE": "Chapra (2008) Surface Water Quality Modeling; Streeter-Phelps (1925); QUAL2K; WASP8",
+  "_VERSION": "2.0",
+  "_PROCESSES": {
+    "REAERATION": "Atmospheric oxygen exchange at water surface",
+    "PHOTOSYNTHESIS": "Oxygen production by algae and aquatic plants",
+    "RESPIRATION": "Oxygen consumption by aquatic organisms",
+    "BOD_DECAY": "Carbonaceous biochemical oxygen demand",
+    "NITRIFICATION": "Nitrogenous oxygen demand (NOD)",
+    "SOD": "Sediment oxygen demand",
+    "COD": "Chemical oxygen demand (reduced substances)"
+  },
+  "_NOTES": [
+    "DO saturation depends on temperature, salinity, and altitude",
+    "Reaeration depends on hydraulic characteristics (depth, velocity, slope)",
+    "Critical DO typically > 5 mg/L for healthy aquatic ecosystems",
+    "Hypoxia defined as DO < 2 mg/L, anoxia as DO ≈ 0"
+  ],
 
-  "BIOGEOCHEMISTRY_CONFIGURATION": {
-    "CHEMICAL_SPECIES": {
-      "DO": {
-        "DESCRIPTION": "Dissolved oxygen",
-        "UNITS": "mg/L",
-        "INITIAL_CONDITION": 8.0
-      },
-      "BOD_fast": {
-        "DESCRIPTION": "Fast-decaying (labile) BOD",
-        "UNITS": "mg/L",
-        "INITIAL_CONDITION": 5.0
-      },
-      "BOD_slow": {
-        "DESCRIPTION": "Slow-decaying (refractory) BOD",
-        "UNITS": "mg/L",
-        "INITIAL_CONDITION": 2.0
-      },
-      "CBOD": {
-        "DESCRIPTION": "Carbonaceous BOD (total)",
-        "UNITS": "mg/L",
-        "INITIAL_CONDITION": 7.0
-      },
-      "NBOD": {
-        "DESCRIPTION": "Nitrogenous BOD",
-        "UNITS": "mg/L",
-        "INITIAL_CONDITION": 2.0
-      }
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "DO",
+      "2": "BOD_fast",
+      "3": "BOD_slow",
+      "4": "NH4_N",
+      "5": "NO3_N",
+      "6": "PHYTO",
+      "7": "COD"
     },
+    "BGC_GENERAL_MOBILE_SPECIES": ["DO", "BOD_fast", "BOD_slow", "NH4_N", "NO3_N", "COD"]
+  },
 
-    "CYCLING_FRAMEWORKS": {
-      "DO_DYNAMICS": {
-        "_DESCRIPTION": "Complete DO mass balance including all sources and sinks",
+  "CYCLING_FRAMEWORKS": {
+    "DO_BALANCE": {
+      "_description": "Complete dissolved oxygen budget for streams and rivers",
 
-        "REAERATION": {
-          "CONSUMED": "NONE",
-          "PRODUCED": "DO",
-          "KINETICS": "k_a * (DO_sat - DO)",
-          "PARAMETERS": {
-            "k_a": {
-              "VALUE": 3.0,
-              "UNITS": "1/day",
-              "RANGE": [0.5, 20.0],
-              "DESCRIPTION": "Reaeration coefficient (depth/velocity dependent)"
+      "list_transformations": {
+        "1": "reaeration",
+        "2": "photosynthesis",
+        "3": "algal_respiration",
+        "4": "bod_decay_fast",
+        "5": "bod_decay_slow",
+        "6": "bod_settling",
+        "7": "nitrification_NOD",
+        "8": "sediment_oxygen_demand",
+        "9": "cod_oxidation"
+      },
+
+      "_DO_SATURATION": {
+        "DESCRIPTION": "Temperature-dependent DO saturation (Benson & Krause 1984)",
+        "FORMULA": "DOsat = exp(-139.34 + 1.576e5/T - 6.642e7/T² + 1.244e10/T³ - 8.622e11/T⁴)",
+        "SIMPLIFIED": "DOsat ≈ 14.652 - 0.41022*T + 0.007991*T² - 0.000078*T³ (T in °C)",
+        "VALUES": {
+          "0C": 14.6,
+          "10C": 11.3,
+          "20C": 9.1,
+          "25C": 8.3,
+          "30C": 7.6
+        }
+      },
+
+      "_REAERATION_FORMULAS": {
+        "DESCRIPTION": "Multiple empirical formulas for reaeration coefficient (ka)",
+        "OWENS_1964": "ka = 5.34 * v^0.67 * H^(-1.85) (slow streams)",
+        "OCONNOR_DOBBINS_1958": "ka = 3.93 * v^0.5 * H^(-1.5) (deep rivers)",
+        "CHURCHILL_1962": "ka = 5.026 * v * H^(-1.67) (large rivers)",
+        "TSIVOGLOU_1972": "ka = 31.6 * S * v (small streams, S=slope)",
+        "NOTES": [
+          "v = velocity (m/s), H = depth (m), S = slope (m/m)",
+          "ka units: 1/day at 20°C",
+          "Temperature correction: ka(T) = ka(20) * 1.024^(T-20)"
+        ]
+      },
+
+      "1": {
+        "_name": "reaeration",
+        "_description": "Oxygen exchange with atmosphere (deficit-driven flux)",
+        "_reaction": "O2(atm) <-> O2(aq)",
+        "_formula": "Flux = ka * (DOsat - DO)",
+        "consumed": "DO_DEFICIT",
+        "produced": "DO",
+        "kinetics": [
+          "ka_20 * 1.024^(Treach_K - 293) * (DOsat_20 * (1 - 0.0035*(Treach_K - 293)) - DO)",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["ka_20", "DOsat_20"],
+        "parameter_values": {
+          "ka_20": 3.0,
+          "DOsat_20": 9.1
+        },
+        "_parameter_ranges": {
+          "ka_20": {"min": 0.1, "max": 50.0, "units": "1/day", "source": "Depends on stream type"},
+          "DOsat_20": {"value": 9.1, "units": "mg/L", "source": "At 20°C, sea level"}
+        },
+        "_notes": [
+          "For shallow turbulent streams: ka = 10-50/day",
+          "For deep slow rivers: ka = 0.1-1.0/day",
+          "Lakes and reservoirs: ka = 0.1-0.5/day (wind-driven)"
+        ]
+      },
+
+      "2": {
+        "_name": "photosynthesis",
+        "_description": "Oxygen production by phytoplankton photosynthesis",
+        "_reaction": "CO2 + H2O + light -> CH2O + O2",
+        "_stoichiometry": "1.0 mg C fixed produces ~2.67 mg O2 (32/12 mass ratio)",
+        "consumed": "LIGHT_ENERGY",
+        "produced": "DO",
+        "kinetics": [
+          "P_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * rO2_C * theta_p^(Treach_K - 293)",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["P_max", "Iopt", "rO2_C", "theta_p"],
+        "parameter_values": {
+          "P_max": 2.0,
+          "Iopt": 300.0,
+          "rO2_C": 2.67,
+          "theta_p": 1.066
+        },
+        "_notes": [
+          "P_max = maximum photosynthetic rate (same as mu_max for algae)",
+          "rO2_C = O2:C mass ratio from photosynthesis (32/12 = 2.67)",
+          "Only during daylight hours - consider diel variation"
+        ]
+      },
+
+      "3": {
+        "_name": "algal_respiration",
+        "_description": "Oxygen consumption by algal dark respiration",
+        "_reaction": "CH2O + O2 -> CO2 + H2O",
+        "consumed": "DO",
+        "produced": "CO2",
+        "kinetics": [
+          "k_resp_algae * PHYTO * rO2_C * theta_r^(Treach_K - 293)",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["k_resp_algae", "rO2_C", "theta_r"],
+        "parameter_values": {
+          "k_resp_algae": 0.1,
+          "rO2_C": 2.67,
+          "theta_r": 1.045
+        },
+        "_notes": "Occurs 24 hours/day unlike photosynthesis"
+      },
+
+      "4": {
+        "_name": "bod_decay_fast",
+        "_description": "Oxidation of rapidly degradable organic matter (CBOD)",
+        "_reaction": "BOD + O2 -> CO2 + H2O (microbial)",
+        "consumed": "DO",
+        "produced": "CO2",
+        "kinetics": [
+          "kd_fast * BOD_fast * (DO / (Ks_DO + DO)) * theta_bod^(Treach_K - 293)",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["kd_fast", "Ks_DO", "theta_bod"],
+        "parameter_values": {
+          "kd_fast": 0.3,
+          "Ks_DO": 0.5,
+          "theta_bod": 1.047
+        },
+        "_parameter_ranges": {
+          "kd_fast": {"min": 0.1, "max": 1.0, "units": "1/day", "source": "Chapra 2008"},
+          "Ks_DO": {"min": 0.1, "max": 2.0, "units": "mg/L", "source": "Half-saturation for O2"}
+        },
+        "_notes": "Labile BOD fraction (typically 60-80% of total BOD5)"
+      },
+
+      "5": {
+        "_name": "bod_decay_slow",
+        "_description": "Oxidation of slowly degradable organic matter",
+        "consumed": "DO",
+        "produced": "CO2",
+        "kinetics": [
+          "kd_slow * BOD_slow * (DO / (Ks_DO + DO)) * theta_bod^(Treach_K - 293)",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["kd_slow", "Ks_DO", "theta_bod"],
+        "parameter_values": {
+          "kd_slow": 0.02,
+          "Ks_DO": 0.5,
+          "theta_bod": 1.047
+        },
+        "_notes": "Refractory BOD fraction - decays 10-20x slower than fast BOD"
+      },
+
+      "6": {
+        "_name": "bod_settling",
+        "_description": "Particulate BOD settling to sediments",
+        "_notes": "Removes BOD from water column but contributes to SOD",
+        "consumed": "BOD_fast",
+        "produced": "BOD_SED",
+        "kinetics": [
+          "v_s_bod * BOD_fast / depth",
+          "mg/L/day"
+        ],
+        "parameter_names": ["v_s_bod", "depth"],
+        "parameter_values": {
+          "v_s_bod": 0.5,
+          "depth": 2.0
+        },
+        "_parameter_ranges": {
+          "v_s_bod": {"min": 0.1, "max": 2.0, "units": "m/day"}
+        }
+      },
+
+      "7": {
+        "_name": "nitrification_NOD",
+        "_description": "Nitrogenous oxygen demand from ammonia oxidation",
+        "_reaction": "NH4+ + 2O2 -> NO3- + H2O + 2H+",
+        "_stoichiometry": "4.57 mg O2 consumed per mg NH4-N oxidized",
+        "consumed": "DO",
+        "produced": "NO3_N",
+        "kinetics": [
+          "k_nitrif * NH4_N * (DO / (Ks_DO_nitrif + DO)) * rO2_N * theta_nitrif^(Treach_K - 293)",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["k_nitrif", "Ks_DO_nitrif", "rO2_N", "theta_nitrif"],
+        "parameter_values": {
+          "k_nitrif": 0.1,
+          "Ks_DO_nitrif": 1.0,
+          "rO2_N": 4.57,
+          "theta_nitrif": 1.08
+        },
+        "_notes": [
+          "rO2_N = 4.57 mg O2/mg N (stoichiometric)",
+          "Nitrification is inhibited at low DO (< 1-2 mg/L)",
+          "Major O2 sink below wastewater outfalls"
+        ]
+      },
+
+      "8": {
+        "_name": "sediment_oxygen_demand",
+        "_description": "Benthic oxygen consumption from sediment respiration",
+        "_reaction": "Sediment organic matter + O2 -> CO2 + nutrients",
+        "consumed": "DO",
+        "produced": "CO2",
+        "kinetics": [
+          "SOD_20 / depth * (DO / (Ks_DO_sed + DO)) * theta_sod^(Treach_K - 293)",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["SOD_20", "depth", "Ks_DO_sed", "theta_sod"],
+        "parameter_values": {
+          "SOD_20": 1.5,
+          "depth": 2.0,
+          "Ks_DO_sed": 1.0,
+          "theta_sod": 1.065
+        },
+        "_parameter_ranges": {
+          "SOD_20": {
+            "min": 0.1, "max": 10.0,
+            "units": "g-O2/m2/day",
+            "typical_values": {
+              "clean_sandy": "0.2-0.5",
+              "organic_rich": "1.0-4.0",
+              "polluted": "4.0-10.0"
             },
-            "DO_sat": {
-              "VALUE": 9.0,
-              "UNITS": "mg/L",
-              "RANGE": [7.0, 14.0],
-              "DESCRIPTION": "DO saturation (temperature dependent)"
-            }
-          },
-          "NOTES": "DO_sat should be calculated from T: DO_sat = 14.652 - 0.41022*T + 0.007991*T^2 - 0.000077774*T^3"
-        },
-
-        "REAERATION_TEMP_CORRECTED": {
-          "CONSUMED": "NONE",
-          "PRODUCED": "DO",
-          "KINETICS": "k_a_20 * 1.024^(T - 20) * (DO_sat - DO)",
-          "PARAMETERS": {
-            "k_a_20": {
-              "VALUE": 3.0,
-              "UNITS": "1/day",
-              "DESCRIPTION": "Reaeration at 20C"
-            },
-            "DO_sat": {"VALUE": 9.0, "UNITS": "mg/L"}
-          },
-          "NOTES": "Alternative with explicit temperature correction"
-        },
-
-        "BOD_FAST_DECAY": {
-          "CONSUMED": "BOD_fast",
-          "PRODUCED": "NONE",
-          "KINETICS": "k_d_fast * BOD_fast * 1.047^(T - 20)",
-          "PARAMETERS": {
-            "k_d_fast": {
-              "VALUE": 0.3,
-              "UNITS": "1/day",
-              "RANGE": [0.1, 1.0],
-              "DESCRIPTION": "Fast BOD decay rate at 20C"
-            }
-          }
-        },
-
-        "BOD_SLOW_DECAY": {
-          "CONSUMED": "BOD_slow",
-          "PRODUCED": "NONE",
-          "KINETICS": "k_d_slow * BOD_slow * 1.047^(T - 20)",
-          "PARAMETERS": {
-            "k_d_slow": {
-              "VALUE": 0.05,
-              "UNITS": "1/day",
-              "RANGE": [0.01, 0.15],
-              "DESCRIPTION": "Slow BOD decay rate at 20C"
-            }
-          }
-        },
-
-        "CBOD_O2_CONSUMPTION": {
-          "CONSUMED": "DO",
-          "PRODUCED": "NONE",
-          "KINETICS": "(k_d_fast * BOD_fast + k_d_slow * BOD_slow) * 1.047^(T - 20)",
-          "PARAMETERS": {
-            "k_d_fast": {"VALUE": 0.3, "UNITS": "1/day"},
-            "k_d_slow": {"VALUE": 0.05, "UNITS": "1/day"}
-          },
-          "NOTES": "1:1 stoichiometry assumed for CBOD:O2"
-        },
-
-        "NBOD_O2_CONSUMPTION": {
-          "CONSUMED": "DO",
-          "PRODUCED": "NONE",
-          "KINETICS": "k_n * NBOD * 1.08^(T - 20)",
-          "PARAMETERS": {
-            "k_n": {
-              "VALUE": 0.2,
-              "UNITS": "1/day",
-              "RANGE": [0.1, 0.5],
-              "DESCRIPTION": "NBOD oxidation rate"
-            }
-          },
-          "NOTES": "NBOD represents nitrification O2 demand"
-        },
-
-        "NBOD_DECAY": {
-          "CONSUMED": "NBOD",
-          "PRODUCED": "NONE",
-          "KINETICS": "k_n * NBOD * 1.08^(T - 20)",
-          "PARAMETERS": {
-            "k_n": {"VALUE": 0.2, "UNITS": "1/day"}
-          }
-        },
-
-        "SEDIMENT_O2_DEMAND": {
-          "CONSUMED": "DO",
-          "PRODUCED": "NONE",
-          "KINETICS": "SOD / depth * 1.065^(T - 20)",
-          "PARAMETERS": {
-            "SOD": {
-              "VALUE": 1.5,
-              "UNITS": "g/m2/day",
-              "RANGE": [0.2, 10.0],
-              "DESCRIPTION": "Sediment oxygen demand at 20C"
-            },
-            "depth": {
-              "VALUE": 2.0,
-              "UNITS": "m",
-              "DESCRIPTION": "Water depth"
-            }
-          }
-        },
-
-        "PHOTOSYNTHESIS": {
-          "CONSUMED": "NONE",
-          "PRODUCED": "DO",
-          "KINETICS": "P_max * f_light * 1.066^(T - 20)",
-          "PARAMETERS": {
-            "P_max": {
-              "VALUE": 5.0,
-              "UNITS": "mg/L/day",
-              "RANGE": [0.0, 20.0],
-              "DESCRIPTION": "Maximum photosynthetic O2 production"
-            },
-            "f_light": {
-              "VALUE": 0.5,
-              "DESCRIPTION": "Light availability factor (0-1, diurnal average)"
-            }
-          },
-          "NOTES": "Significant in eutrophic systems with algae"
-        },
-
-        "RESPIRATION": {
-          "CONSUMED": "DO",
-          "PRODUCED": "NONE",
-          "KINETICS": "R_max * 1.08^(T - 20)",
-          "PARAMETERS": {
-            "R_max": {
-              "VALUE": 2.0,
-              "UNITS": "mg/L/day",
-              "RANGE": [0.0, 10.0],
-              "DESCRIPTION": "Community respiration rate"
-            }
-          }
-        },
-
-        "BOD_SETTLING": {
-          "CONSUMED": "BOD_fast",
-          "PRODUCED": "SED_BOD",
-          "KINETICS": "k_s * BOD_fast",
-          "PARAMETERS": {
-            "k_s": {
-              "VALUE": 0.1,
-              "UNITS": "1/day",
-              "RANGE": [0.0, 0.5],
-              "DESCRIPTION": "BOD settling rate (particulate fraction)"
-            }
+            "source": "Chapra 2008"
           }
         }
       },
 
-      "DO_SAT_FORMULAS": {
-        "_DESCRIPTION": "Reference formulas for DO saturation (not reactions)",
-
-        "APHA_1992": {
-          "FORMULA": "exp(-139.34411 + 1.575701e5/T_K - 6.642308e7/T_K^2 + 1.2438e10/T_K^3 - 8.621949e11/T_K^4)",
-          "NOTES": "T_K = T(C) + 273.15; most accurate"
+      "9": {
+        "_name": "cod_oxidation",
+        "_description": "Immediate chemical oxygen demand from reduced substances",
+        "_reaction": "Reduced compounds + O2 -> Oxidized compounds",
+        "_examples": "Fe2+ -> Fe3+, S2- -> SO4, Mn2+ -> Mn4+",
+        "consumed": "DO",
+        "produced": "OXIDIZED",
+        "kinetics": [
+          "k_cod * COD * (DO / (Ks_DO + DO))",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["k_cod", "Ks_DO"],
+        "parameter_values": {
+          "k_cod": 5.0,
+          "Ks_DO": 0.5
         },
-
-        "SIMPLIFIED": {
-          "FORMULA": "14.652 - 0.41022*T + 0.007991*T^2 - 0.000077774*T^3",
-          "NOTES": "T in Celsius; valid 0-40C"
-        },
-
-        "ALTITUDE_CORRECTION": {
-          "FORMULA": "DO_sat_0 * (1 - elevation/9450)",
-          "NOTES": "elevation in meters"
-        }
+        "_notes": "COD typically fast - often instantaneous oxygen demand"
       }
     },
 
-    "COMPARTMENT_ASSIGNMENT": {
-      "RIVER": ["DO_DYNAMICS"],
-      "LAKE": ["DO_DYNAMICS"],
-      "STREAM": ["DO_DYNAMICS"]
+    "DO_BALANCE_SIMPLE": {
+      "_description": "Simplified Streeter-Phelps model for screening analysis",
+
+      "list_transformations": {
+        "1": "reaeration_simple",
+        "2": "bod_decay_simple",
+        "3": "sod_simple"
+      },
+
+      "1": {
+        "_name": "reaeration_simple",
+        "consumed": "DO_DEFICIT",
+        "produced": "DO",
+        "kinetics": ["ka * (DOsat - DO)", "mg-O2/L/day"],
+        "parameter_names": ["ka", "DOsat"],
+        "parameter_values": {
+          "ka": 2.0,
+          "DOsat": 9.0
+        }
+      },
+
+      "2": {
+        "_name": "bod_decay_simple",
+        "consumed": "DO",
+        "produced": "CO2",
+        "kinetics": ["kd * BOD_fast", "mg-O2/L/day"],
+        "parameter_names": ["kd"],
+        "parameter_values": {
+          "kd": 0.3
+        }
+      },
+
+      "3": {
+        "_name": "sod_simple",
+        "consumed": "DO",
+        "produced": "CO2",
+        "kinetics": ["SOD / depth", "mg-O2/L/day"],
+        "parameter_names": ["SOD", "depth"],
+        "parameter_values": {
+          "SOD": 1.5,
+          "depth": 2.0
+        }
+      }
     }
   }
 }
