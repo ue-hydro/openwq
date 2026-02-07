@@ -1,0 +1,307 @@
+{
+    "MODULE_NAME": "NATIVE_BGC_FLEX",
+    "CHEMICAL_SPECIES": {
+        "list": {
+            "1": "E_coli",
+            "2": "Fecal_coliform",
+            "3": "Enterococci",
+            "4": "Total_coliform",
+            "5": "Virus",
+            "6": "Cryptosporidium",
+            "7": "Giardia"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "E_coli",
+            "Fecal_coliform",
+            "Enterococci"
+        ]
+    },
+    "CYCLING_FRAMEWORKS": {
+        "ECOLI_DYNAMICS": {
+            "list_transformations": {
+                "1": "ECOLI_DIEOFF_BASE",
+                "2": "ECOLI_SOLAR_INACTIVATION",
+                "3": "ECOLI_SETTLING",
+                "4": "ECOLI_RESUSPENSION"
+            },
+            "1": {
+                "consumed": "E_coli",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_die_base * E_coli * theta^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_die_base",
+                    "theta"
+                ],
+                "parameter_values": {
+                    "k_die_base": 1.0,
+                    "theta": 1.07
+                }
+            },
+            "2": {
+                "consumed": "E_coli",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_solar * I_avg * E_coli",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_solar",
+                    "I_avg"
+                ],
+                "parameter_values": {
+                    "k_solar": 0.02,
+                    "I_avg": 200
+                }
+            },
+            "3": {
+                "consumed": "E_coli",
+                "produced": "SED_Ecoli",
+                "kinetics": [
+                    "v_s_bact / depth * E_coli",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s_bact",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s_bact": 0.5,
+                    "depth": 2.0
+                }
+            },
+            "4": {
+                "consumed": "NONE",
+                "produced": "E_coli",
+                "kinetics": [
+                    "k_resus * SED_Ecoli / depth",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_resus",
+                    "SED_Ecoli",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "k_resus": 0.1,
+                    "SED_Ecoli": 10000,
+                    "depth": 2.0
+                }
+            }
+        },
+        "FECAL_COLIFORM_DYNAMICS": {
+            "list_transformations": {
+                "1": "FC_DIEOFF",
+                "2": "FC_SOLAR",
+                "3": "FC_SETTLING"
+            },
+            "1": {
+                "consumed": "Fecal_coliform",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_die_FC * Fecal_coliform * 1.07^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_die_FC"
+                ],
+                "parameter_values": {
+                    "k_die_FC": 0.8
+                }
+            },
+            "2": {
+                "consumed": "Fecal_coliform",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_solar_FC * I_avg * Fecal_coliform",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_solar_FC",
+                    "I_avg"
+                ],
+                "parameter_values": {
+                    "k_solar_FC": 0.015,
+                    "I_avg": 200
+                }
+            },
+            "3": {
+                "consumed": "Fecal_coliform",
+                "produced": "SED_FC",
+                "kinetics": [
+                    "v_s_bact / depth * Fecal_coliform",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s_bact",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s_bact": 0.5,
+                    "depth": 2.0
+                }
+            }
+        },
+        "ENTEROCOCCI_DYNAMICS": {
+            "list_transformations": {
+                "1": "ENT_DIEOFF",
+                "2": "ENT_SOLAR"
+            },
+            "1": {
+                "consumed": "Enterococci",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_die_ENT * Enterococci * 1.05^(T - 20) * (1 + 0.1 * salinity)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_die_ENT",
+                    "salinity"
+                ],
+                "parameter_values": {
+                    "k_die_ENT": 1.2,
+                    "salinity": 0
+                }
+            },
+            "2": {
+                "consumed": "Enterococci",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_solar_ENT * I_avg * Enterococci",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_solar_ENT",
+                    "I_avg"
+                ],
+                "parameter_values": {
+                    "k_solar_ENT": 0.03,
+                    "I_avg": 200
+                }
+            }
+        },
+        "VIRUS_DYNAMICS": {
+            "list_transformations": {
+                "1": "VIRUS_INACTIVATION",
+                "2": "VIRUS_SOLAR",
+                "3": "VIRUS_ADSORPTION"
+            },
+            "1": {
+                "consumed": "Virus",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_inact_V * Virus * 1.03^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_inact_V"
+                ],
+                "parameter_values": {
+                    "k_inact_V": 0.3
+                }
+            },
+            "2": {
+                "consumed": "Virus",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_solar_V * I_avg * Virus",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_solar_V",
+                    "I_avg"
+                ],
+                "parameter_values": {
+                    "k_solar_V": 0.01,
+                    "I_avg": 200
+                }
+            },
+            "3": {
+                "consumed": "Virus",
+                "produced": "Virus_part",
+                "kinetics": [
+                    "k_ads_V * Virus * TSS / 1000",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ads_V",
+                    "TSS"
+                ],
+                "parameter_values": {
+                    "k_ads_V": 0.1,
+                    "TSS": 20
+                }
+            }
+        },
+        "PROTOZOA_DYNAMICS": {
+            "list_transformations": {
+                "1": "CRYPTO_INACTIVATION",
+                "2": "CRYPTO_SETTLING",
+                "3": "GIARDIA_INACTIVATION",
+                "4": "GIARDIA_SETTLING"
+            },
+            "1": {
+                "consumed": "Cryptosporidium",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_inact_C * Cryptosporidium * 1.02^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_inact_C"
+                ],
+                "parameter_values": {
+                    "k_inact_C": 0.05
+                }
+            },
+            "2": {
+                "consumed": "Cryptosporidium",
+                "produced": "SED_Crypto",
+                "kinetics": [
+                    "v_s_oocyst / depth * Cryptosporidium",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s_oocyst",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s_oocyst": 0.3,
+                    "depth": 2.0
+                }
+            },
+            "3": {
+                "consumed": "Giardia",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_inact_G * Giardia * 1.04^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_inact_G"
+                ],
+                "parameter_values": {
+                    "k_inact_G": 0.1
+                }
+            },
+            "4": {
+                "consumed": "Giardia",
+                "produced": "SED_Giardia",
+                "kinetics": [
+                    "v_s_cyst / depth * Giardia",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s_cyst",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s_cyst": 1.0,
+                    "depth": 2.0
+                }
+            }
+        }
+    }
+}

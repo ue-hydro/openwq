@@ -1,0 +1,461 @@
+{
+  "_DESCRIPTION": "QUAL2E Stream Water Quality Model",
+  "_REFERENCE": "Brown & Barnwell (1987) QUAL2E Documentation",
+  "_MODEL": "EPA QUAL2E Enhanced Stream Water Quality Model",
+  "_VERSION": "1.0",
+  "_NOTES": "Classic stream water quality model with DO-BOD, nutrients, and algae",
+
+  "BIOGEOCHEMISTRY_CONFIGURATION": {
+    "CHEMICAL_SPECIES": {
+      "_DO_BOD_SYSTEM": "Core Streeter-Phelps variables",
+      "DO": {
+        "DESCRIPTION": "Dissolved oxygen",
+        "UNITS": "mg/L",
+        "INITIAL_CONDITION": 8.0
+      },
+      "CBOD": {
+        "DESCRIPTION": "Carbonaceous biochemical oxygen demand",
+        "UNITS": "mg/L",
+        "INITIAL_CONDITION": 5.0
+      },
+
+      "_NITROGEN": "Nitrogen species",
+      "ORG_N": {
+        "DESCRIPTION": "Organic nitrogen",
+        "UNITS": "mg/L as N",
+        "INITIAL_CONDITION": 1.0
+      },
+      "NH4_N": {
+        "DESCRIPTION": "Ammonia nitrogen",
+        "UNITS": "mg/L as N",
+        "INITIAL_CONDITION": 0.5
+      },
+      "NO2_N": {
+        "DESCRIPTION": "Nitrite nitrogen",
+        "UNITS": "mg/L as N",
+        "INITIAL_CONDITION": 0.05
+      },
+      "NO3_N": {
+        "DESCRIPTION": "Nitrate nitrogen",
+        "UNITS": "mg/L as N",
+        "INITIAL_CONDITION": 2.0
+      },
+
+      "_PHOSPHORUS": "Phosphorus species",
+      "ORG_P": {
+        "DESCRIPTION": "Organic phosphorus",
+        "UNITS": "mg/L as P",
+        "INITIAL_CONDITION": 0.2
+      },
+      "DISS_P": {
+        "DESCRIPTION": "Dissolved phosphorus (orthophosphate)",
+        "UNITS": "mg/L as P",
+        "INITIAL_CONDITION": 0.1
+      },
+
+      "_ALGAE": "Algal biomass",
+      "ALGAE": {
+        "DESCRIPTION": "Algal biomass (chlorophyll-a proxy)",
+        "UNITS": "mg/L as Chl-a",
+        "INITIAL_CONDITION": 10.0
+      },
+
+      "_COLIFORMS": "Pathogen indicator",
+      "FECAL_COLIFORM": {
+        "DESCRIPTION": "Fecal coliform bacteria",
+        "UNITS": "CFU/100mL",
+        "INITIAL_CONDITION": 1000
+      }
+    },
+
+    "CYCLING_FRAMEWORKS": {
+      "QUAL2E_DO_BOD": {
+        "_DESCRIPTION": "Dissolved oxygen and BOD dynamics",
+
+        "REAERATION": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "DO",
+          "KINETICS": "K2 * (DO_sat - DO)",
+          "PARAMETERS": {
+            "K2": {
+              "VALUE": 3.0,
+              "UNITS": "1/day",
+              "RANGE": [0.5, 20.0],
+              "DESCRIPTION": "Reaeration coefficient",
+              "TEMP_COEFF": 1.024
+            },
+            "DO_sat": {
+              "VALUE": 9.0,
+              "UNITS": "mg/L",
+              "DESCRIPTION": "DO saturation"
+            }
+          },
+          "NOTES": "K2 can be calculated from O'Connor-Dobbins, Churchill, or Owens-Gibbs"
+        },
+
+        "CBOD_OXIDATION": {
+          "CONSUMED": "CBOD",
+          "PRODUCED": "NONE",
+          "KINETICS": "K1 * CBOD",
+          "PARAMETERS": {
+            "K1": {
+              "VALUE": 0.23,
+              "UNITS": "1/day",
+              "RANGE": [0.1, 1.0],
+              "DESCRIPTION": "BOD deoxygenation rate",
+              "TEMP_COEFF": 1.047
+            }
+          }
+        },
+
+        "CBOD_O2_DEMAND": {
+          "CONSUMED": "DO",
+          "PRODUCED": "NONE",
+          "KINETICS": "K1 * CBOD",
+          "PARAMETERS": {
+            "K1": {"VALUE": 0.23, "UNITS": "1/day"}
+          }
+        },
+
+        "CBOD_SETTLING": {
+          "CONSUMED": "CBOD",
+          "PRODUCED": "SED_CBOD",
+          "KINETICS": "K3 * CBOD",
+          "PARAMETERS": {
+            "K3": {
+              "VALUE": 0.1,
+              "UNITS": "1/day",
+              "RANGE": [0.0, 0.5],
+              "DESCRIPTION": "BOD settling rate"
+            }
+          }
+        },
+
+        "SOD": {
+          "CONSUMED": "DO",
+          "PRODUCED": "NONE",
+          "KINETICS": "K4 / depth",
+          "PARAMETERS": {
+            "K4": {
+              "VALUE": 1.5,
+              "UNITS": "g O2/m2/day",
+              "RANGE": [0.5, 10.0],
+              "DESCRIPTION": "Sediment oxygen demand",
+              "TEMP_COEFF": 1.060
+            },
+            "depth": {"VALUE": 1.0, "UNITS": "m"}
+          }
+        }
+      },
+
+      "QUAL2E_NITROGEN": {
+        "_DESCRIPTION": "Nitrogen transformation cycle",
+
+        "ORG_N_SETTLING": {
+          "CONSUMED": "ORG_N",
+          "PRODUCED": "SED_N",
+          "KINETICS": "sigma_4 * ORG_N",
+          "PARAMETERS": {
+            "sigma_4": {
+              "VALUE": 0.3,
+              "UNITS": "1/day",
+              "RANGE": [0.0, 1.0],
+              "DESCRIPTION": "Organic N settling rate",
+              "TEMP_COEFF": 1.024
+            }
+          }
+        },
+
+        "ORG_N_HYDROLYSIS": {
+          "CONSUMED": "ORG_N",
+          "PRODUCED": "NH4_N",
+          "KINETICS": "beta_1 * ORG_N",
+          "PARAMETERS": {
+            "beta_1": {
+              "VALUE": 0.2,
+              "UNITS": "1/day",
+              "RANGE": [0.02, 0.5],
+              "DESCRIPTION": "Organic N hydrolysis rate",
+              "TEMP_COEFF": 1.047
+            }
+          }
+        },
+
+        "NITRIFICATION_STEP1": {
+          "CONSUMED": "NH4_N",
+          "PRODUCED": "NO2_N",
+          "KINETICS": "beta_2 * NH4_N",
+          "PARAMETERS": {
+            "beta_2": {
+              "VALUE": 0.3,
+              "UNITS": "1/day",
+              "RANGE": [0.1, 1.0],
+              "DESCRIPTION": "Ammonia oxidation rate",
+              "TEMP_COEFF": 1.083
+            }
+          }
+        },
+
+        "NITRIFICATION_STEP2": {
+          "CONSUMED": "NO2_N",
+          "PRODUCED": "NO3_N",
+          "KINETICS": "beta_3 * NO2_N",
+          "PARAMETERS": {
+            "beta_3": {
+              "VALUE": 1.0,
+              "UNITS": "1/day",
+              "RANGE": [0.2, 2.0],
+              "DESCRIPTION": "Nitrite oxidation rate",
+              "TEMP_COEFF": 1.047
+            }
+          }
+        },
+
+        "NITRIFICATION_O2_STEP1": {
+          "CONSUMED": "DO",
+          "PRODUCED": "NONE",
+          "KINETICS": "3.43 * beta_2 * NH4_N",
+          "PARAMETERS": {
+            "beta_2": {"VALUE": 0.3, "UNITS": "1/day"}
+          },
+          "NOTES": "3.43 g O2 / g NH4-N oxidized to NO2"
+        },
+
+        "NITRIFICATION_O2_STEP2": {
+          "CONSUMED": "DO",
+          "PRODUCED": "NONE",
+          "KINETICS": "1.14 * beta_3 * NO2_N",
+          "PARAMETERS": {
+            "beta_3": {"VALUE": 1.0, "UNITS": "1/day"}
+          },
+          "NOTES": "1.14 g O2 / g NO2-N oxidized to NO3"
+        },
+
+        "BENTHIC_NH4": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "NH4_N",
+          "KINETICS": "sigma_3 / depth",
+          "PARAMETERS": {
+            "sigma_3": {
+              "VALUE": 0.5,
+              "UNITS": "mg/m2/day",
+              "RANGE": [0.0, 5.0],
+              "DESCRIPTION": "Benthic ammonia release",
+              "TEMP_COEFF": 1.074
+            },
+            "depth": {"VALUE": 1.0, "UNITS": "m"}
+          }
+        }
+      },
+
+      "QUAL2E_PHOSPHORUS": {
+        "_DESCRIPTION": "Phosphorus cycling",
+
+        "ORG_P_SETTLING": {
+          "CONSUMED": "ORG_P",
+          "PRODUCED": "SED_P",
+          "KINETICS": "sigma_5 * ORG_P",
+          "PARAMETERS": {
+            "sigma_5": {
+              "VALUE": 0.3,
+              "UNITS": "1/day",
+              "RANGE": [0.0, 1.0],
+              "DESCRIPTION": "Organic P settling rate",
+              "TEMP_COEFF": 1.024
+            }
+          }
+        },
+
+        "ORG_P_DECAY": {
+          "CONSUMED": "ORG_P",
+          "PRODUCED": "DISS_P",
+          "KINETICS": "beta_4 * ORG_P",
+          "PARAMETERS": {
+            "beta_4": {
+              "VALUE": 0.2,
+              "UNITS": "1/day",
+              "RANGE": [0.02, 0.5],
+              "DESCRIPTION": "Organic P decay rate",
+              "TEMP_COEFF": 1.047
+            }
+          }
+        },
+
+        "BENTHIC_P": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "DISS_P",
+          "KINETICS": "sigma_2 / depth",
+          "PARAMETERS": {
+            "sigma_2": {
+              "VALUE": 0.05,
+              "UNITS": "mg/m2/day",
+              "RANGE": [0.0, 0.5],
+              "DESCRIPTION": "Benthic P release",
+              "TEMP_COEFF": 1.074
+            },
+            "depth": {"VALUE": 1.0, "UNITS": "m"}
+          }
+        }
+      },
+
+      "QUAL2E_ALGAE": {
+        "_DESCRIPTION": "Algal growth and respiration",
+
+        "ALGAE_GROWTH": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "ALGAE",
+          "KINETICS": "mu * ALGAE",
+          "PARAMETERS": {
+            "mu": {
+              "VALUE": 2.0,
+              "UNITS": "1/day",
+              "RANGE": [0.5, 3.0],
+              "DESCRIPTION": "Maximum algal growth rate",
+              "FORMULA": "mu_max * FL * FN * FP",
+              "FL": "Light limitation factor",
+              "FN": "min(N/(KN+N), P/(KP+P))",
+              "TEMP_COEFF": 1.047
+            }
+          }
+        },
+
+        "ALGAE_RESPIRATION": {
+          "CONSUMED": "ALGAE",
+          "PRODUCED": "NONE",
+          "KINETICS": "rho * ALGAE",
+          "PARAMETERS": {
+            "rho": {
+              "VALUE": 0.1,
+              "UNITS": "1/day",
+              "RANGE": [0.05, 0.3],
+              "DESCRIPTION": "Algal respiration rate",
+              "TEMP_COEFF": 1.047
+            }
+          }
+        },
+
+        "ALGAE_DEATH": {
+          "CONSUMED": "ALGAE",
+          "PRODUCED": "ORG_N",
+          "KINETICS": "sigma_1 * ALGAE * alpha_1",
+          "PARAMETERS": {
+            "sigma_1": {
+              "VALUE": 0.2,
+              "UNITS": "1/day",
+              "DESCRIPTION": "Algal settling/death rate"
+            },
+            "alpha_1": {
+              "VALUE": 0.08,
+              "UNITS": "mg N/mg Chl-a",
+              "DESCRIPTION": "N content of algae"
+            }
+          }
+        },
+
+        "ALGAE_O2_PRODUCTION": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "DO",
+          "KINETICS": "alpha_3 * mu * ALGAE",
+          "PARAMETERS": {
+            "mu": {"VALUE": 2.0, "UNITS": "1/day"},
+            "alpha_3": {
+              "VALUE": 1.6,
+              "UNITS": "mg O2/mg Chl-a",
+              "DESCRIPTION": "O2 production per unit algae"
+            }
+          }
+        },
+
+        "ALGAE_O2_RESPIRATION": {
+          "CONSUMED": "DO",
+          "PRODUCED": "NONE",
+          "KINETICS": "alpha_4 * rho * ALGAE",
+          "PARAMETERS": {
+            "rho": {"VALUE": 0.1, "UNITS": "1/day"},
+            "alpha_4": {
+              "VALUE": 2.0,
+              "UNITS": "mg O2/mg Chl-a",
+              "DESCRIPTION": "O2 consumption per unit respiration"
+            }
+          }
+        },
+
+        "ALGAE_N_UPTAKE": {
+          "CONSUMED": "NH4_N",
+          "PRODUCED": "NONE",
+          "KINETICS": "alpha_1 * mu * ALGAE * P_NH4",
+          "PARAMETERS": {
+            "alpha_1": {"VALUE": 0.08, "UNITS": "mg N/mg Chl-a"},
+            "mu": {"VALUE": 2.0, "UNITS": "1/day"},
+            "P_NH4": {
+              "VALUE": 0.5,
+              "DESCRIPTION": "Preference for NH4 over NO3"
+            }
+          }
+        },
+
+        "ALGAE_P_UPTAKE": {
+          "CONSUMED": "DISS_P",
+          "PRODUCED": "NONE",
+          "KINETICS": "alpha_2 * mu * ALGAE",
+          "PARAMETERS": {
+            "alpha_2": {
+              "VALUE": 0.015,
+              "UNITS": "mg P/mg Chl-a",
+              "DESCRIPTION": "P content of algae"
+            },
+            "mu": {"VALUE": 2.0, "UNITS": "1/day"}
+          }
+        }
+      },
+
+      "QUAL2E_COLIFORM": {
+        "_DESCRIPTION": "Coliform bacteria die-off",
+
+        "COLIFORM_DIEOFF": {
+          "CONSUMED": "FECAL_COLIFORM",
+          "PRODUCED": "NONE",
+          "KINETICS": "Kb * FECAL_COLIFORM",
+          "PARAMETERS": {
+            "Kb": {
+              "VALUE": 2.0,
+              "UNITS": "1/day",
+              "RANGE": [0.5, 10.0],
+              "DESCRIPTION": "Coliform die-off rate",
+              "TEMP_COEFF": 1.047
+            }
+          }
+        }
+      },
+
+      "QUAL2E_REAERATION_FORMULAS": {
+        "_DESCRIPTION": "Alternative K2 calculation methods",
+
+        "OCONNOR_DOBBINS": {
+          "FORMULA": "K2 = 3.93 * U^0.5 / H^1.5",
+          "NOTES": "U = velocity (m/s), H = depth (m); for moderate streams"
+        },
+
+        "CHURCHILL": {
+          "FORMULA": "K2 = 5.03 * U^0.969 / H^1.673",
+          "NOTES": "For large streams and rivers"
+        },
+
+        "OWENS_GIBBS": {
+          "FORMULA": "K2 = 5.34 * U^0.67 / H^1.85",
+          "NOTES": "For shallow streams (H < 0.6m)"
+        },
+
+        "TSIVOGLOU": {
+          "FORMULA": "K2 = 31.6 * C * S * U",
+          "NOTES": "C = escape coeff, S = slope, U = velocity"
+        }
+      }
+    },
+
+    "COMPARTMENT_ASSIGNMENT": {
+      "STREAM": ["QUAL2E_DO_BOD", "QUAL2E_NITROGEN", "QUAL2E_PHOSPHORUS", "QUAL2E_ALGAE", "QUAL2E_COLIFORM"],
+      "RIVER": ["QUAL2E_DO_BOD", "QUAL2E_NITROGEN", "QUAL2E_PHOSPHORUS", "QUAL2E_ALGAE", "QUAL2E_COLIFORM"]
+    }
+  }
+}

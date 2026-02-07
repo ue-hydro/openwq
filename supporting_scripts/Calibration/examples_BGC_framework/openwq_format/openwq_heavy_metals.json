@@ -1,0 +1,329 @@
+{
+    "MODULE_NAME": "NATIVE_BGC_FLEX",
+    "CHEMICAL_SPECIES": {
+        "list": {
+            "1": "Cu_diss",
+            "2": "Cu_part",
+            "3": "Zn_diss",
+            "4": "Zn_part",
+            "5": "Pb_diss",
+            "6": "Pb_part",
+            "7": "Cd_diss",
+            "8": "Cd_part",
+            "9": "Hg_diss",
+            "10": "Hg_part",
+            "11": "MeHg",
+            "12": "TSS",
+            "13": "DOC"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "Cu_diss",
+            "Cu_part",
+            "Zn_diss"
+        ]
+    },
+    "CYCLING_FRAMEWORKS": {
+        "COPPER_CYCLE": {
+            "list_transformations": {
+                "1": "CU_SORPTION",
+                "2": "CU_DESORPTION",
+                "3": "CU_SETTLING"
+            },
+            "1": {
+                "consumed": "Cu_diss",
+                "produced": "Cu_part",
+                "kinetics": [
+                    "k_ads_Cu * Cu_diss * TSS / 1000",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ads_Cu"
+                ],
+                "parameter_values": {
+                    "k_ads_Cu": 1.0
+                }
+            },
+            "2": {
+                "consumed": "Cu_part",
+                "produced": "Cu_diss",
+                "kinetics": [
+                    "k_des_Cu * Cu_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_des_Cu"
+                ],
+                "parameter_values": {
+                    "k_des_Cu": 0.1
+                }
+            },
+            "3": {
+                "consumed": "Cu_part",
+                "produced": "SED_Cu_loss",
+                "kinetics": [
+                    "v_s / depth * Cu_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s": 1.0,
+                    "depth": 2.0
+                }
+            }
+        },
+        "ZINC_CYCLE": {
+            "list_transformations": {
+                "1": "ZN_SORPTION",
+                "2": "ZN_DESORPTION",
+                "3": "ZN_SETTLING"
+            },
+            "1": {
+                "consumed": "Zn_diss",
+                "produced": "Zn_part",
+                "kinetics": [
+                    "k_ads_Zn * Zn_diss * TSS / 1000",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ads_Zn"
+                ],
+                "parameter_values": {
+                    "k_ads_Zn": 0.5
+                }
+            },
+            "2": {
+                "consumed": "Zn_part",
+                "produced": "Zn_diss",
+                "kinetics": [
+                    "k_des_Zn * Zn_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_des_Zn"
+                ],
+                "parameter_values": {
+                    "k_des_Zn": 0.2
+                }
+            },
+            "3": {
+                "consumed": "Zn_part",
+                "produced": "SED_Zn_loss",
+                "kinetics": [
+                    "v_s / depth * Zn_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s": 1.0,
+                    "depth": 2.0
+                }
+            }
+        },
+        "LEAD_CYCLE": {
+            "list_transformations": {
+                "1": "PB_SORPTION",
+                "2": "PB_DESORPTION",
+                "3": "PB_SETTLING"
+            },
+            "1": {
+                "consumed": "Pb_diss",
+                "produced": "Pb_part",
+                "kinetics": [
+                    "k_ads_Pb * Pb_diss * TSS / 1000",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ads_Pb"
+                ],
+                "parameter_values": {
+                    "k_ads_Pb": 5.0
+                }
+            },
+            "2": {
+                "consumed": "Pb_part",
+                "produced": "Pb_diss",
+                "kinetics": [
+                    "k_des_Pb * Pb_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_des_Pb"
+                ],
+                "parameter_values": {
+                    "k_des_Pb": 0.02
+                }
+            },
+            "3": {
+                "consumed": "Pb_part",
+                "produced": "SED_Pb_loss",
+                "kinetics": [
+                    "v_s / depth * Pb_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s": 1.0,
+                    "depth": 2.0
+                }
+            }
+        },
+        "CADMIUM_CYCLE": {
+            "list_transformations": {
+                "1": "CD_SORPTION",
+                "2": "CD_DESORPTION",
+                "3": "CD_SETTLING"
+            },
+            "1": {
+                "consumed": "Cd_diss",
+                "produced": "Cd_part",
+                "kinetics": [
+                    "k_ads_Cd * Cd_diss * TSS / 1000",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ads_Cd"
+                ],
+                "parameter_values": {
+                    "k_ads_Cd": 0.8
+                }
+            },
+            "2": {
+                "consumed": "Cd_part",
+                "produced": "Cd_diss",
+                "kinetics": [
+                    "k_des_Cd * Cd_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_des_Cd"
+                ],
+                "parameter_values": {
+                    "k_des_Cd": 0.15
+                }
+            },
+            "3": {
+                "consumed": "Cd_part",
+                "produced": "SED_Cd_loss",
+                "kinetics": [
+                    "v_s / depth * Cd_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s": 1.0,
+                    "depth": 2.0
+                }
+            }
+        },
+        "MERCURY_CYCLE": {
+            "list_transformations": {
+                "1": "HG_SORPTION",
+                "2": "HG_DESORPTION",
+                "3": "HG_METHYLATION",
+                "4": "MEHG_DEMETHYLATION",
+                "5": "HG_VOLATILIZATION",
+                "6": "HG_SETTLING"
+            },
+            "1": {
+                "consumed": "Hg_diss",
+                "produced": "Hg_part",
+                "kinetics": [
+                    "k_ads_Hg * Hg_diss * TSS / 1000",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ads_Hg"
+                ],
+                "parameter_values": {
+                    "k_ads_Hg": 2.0
+                }
+            },
+            "2": {
+                "consumed": "Hg_part",
+                "produced": "Hg_diss",
+                "kinetics": [
+                    "k_des_Hg * Hg_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_des_Hg"
+                ],
+                "parameter_values": {
+                    "k_des_Hg": 0.05
+                }
+            },
+            "3": {
+                "consumed": "Hg_diss",
+                "produced": "MeHg",
+                "kinetics": [
+                    "k_meth_Hg * Hg_diss * DOC / (K_DOC + DOC)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_meth_Hg",
+                    "K_DOC"
+                ],
+                "parameter_values": {
+                    "k_meth_Hg": 0.01,
+                    "K_DOC": 2.0
+                }
+            },
+            "4": {
+                "consumed": "MeHg",
+                "produced": "Hg_diss",
+                "kinetics": [
+                    "k_demeth * MeHg",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_demeth"
+                ],
+                "parameter_values": {
+                    "k_demeth": 0.05
+                }
+            },
+            "5": {
+                "consumed": "Hg_diss",
+                "produced": "Hg0_loss",
+                "kinetics": [
+                    "k_vol_Hg * Hg_diss",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_vol_Hg"
+                ],
+                "parameter_values": {
+                    "k_vol_Hg": 0.001
+                }
+            },
+            "6": {
+                "consumed": "Hg_part",
+                "produced": "SED_Hg_loss",
+                "kinetics": [
+                    "v_s / depth * Hg_part",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s": 1.0,
+                    "depth": 2.0
+                }
+            }
+        }
+    }
+}

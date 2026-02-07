@@ -1,0 +1,177 @@
+{
+    "MODULE_NAME": "NATIVE_BGC_FLEX",
+    "CHEMICAL_SPECIES": {
+        "list": {
+            "1": "DSi",
+            "2": "BSi",
+            "3": "DIATOM",
+            "4": "PO4_P",
+            "5": "NO3_N"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "DSi",
+            "BSi",
+            "DIATOM"
+        ]
+    },
+    "CYCLING_FRAMEWORKS": {
+        "SILICA_CYCLE": {
+            "list_transformations": {
+                "1": "DIATOM_GROWTH",
+                "2": "SI_UPTAKE_STOICH",
+                "3": "DIATOM_RESPIRATION",
+                "4": "DIATOM_DEATH",
+                "5": "BSI_DISSOLUTION",
+                "6": "BSI_SETTLING",
+                "7": "DIATOM_SETTLING",
+                "8": "SEDIMENT_SI_FLUX"
+            },
+            "1": {
+                "consumed": "DSi",
+                "produced": "DIATOM",
+                "kinetics": [
+                    "mu_max * DIATOM * f_Si * f_N * f_P * f_light * f_temp",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "mu_max",
+                    "f_Si",
+                    "f_N",
+                    "f_P",
+                    "f_light",
+                    "f_temp"
+                ],
+                "parameter_values": {
+                    "mu_max": 2.0,
+                    "f_Si": 0.0,
+                    "f_N": 0.0,
+                    "f_P": 0.0,
+                    "f_light": 0.5,
+                    "f_temp": 1.0
+                }
+            },
+            "2": {
+                "consumed": "DSi",
+                "produced": "NONE",
+                "kinetics": [
+                    "r_Si_C * mu_max * DIATOM * f_Si * f_N * f_P * f_light * f_temp",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "r_Si_C",
+                    "mu_max",
+                    "f_Si",
+                    "f_N",
+                    "f_P",
+                    "f_light",
+                    "f_temp"
+                ],
+                "parameter_values": {
+                    "r_Si_C": 0.5,
+                    "mu_max": 2.0,
+                    "f_Si": 1.0,
+                    "f_N": 1.0,
+                    "f_P": 1.0,
+                    "f_light": 0.5,
+                    "f_temp": 1.0
+                }
+            },
+            "3": {
+                "consumed": "DIATOM",
+                "produced": "CO2",
+                "kinetics": [
+                    "k_resp * DIATOM * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_resp"
+                ],
+                "parameter_values": {
+                    "k_resp": 0.1
+                }
+            },
+            "4": {
+                "consumed": "DIATOM",
+                "produced": "BSi",
+                "kinetics": [
+                    "k_death * DIATOM * r_Si_C",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_death",
+                    "r_Si_C"
+                ],
+                "parameter_values": {
+                    "k_death": 0.05,
+                    "r_Si_C": 0.5
+                }
+            },
+            "5": {
+                "consumed": "BSi",
+                "produced": "DSi",
+                "kinetics": [
+                    "k_diss * BSi * (1 - DSi / DSi_sat) * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_diss",
+                    "DSi_sat"
+                ],
+                "parameter_values": {
+                    "k_diss": 0.02,
+                    "DSi_sat": 60
+                }
+            },
+            "6": {
+                "consumed": "BSi",
+                "produced": "SED_Si",
+                "kinetics": [
+                    "v_s_diatom / depth * BSi",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s_diatom",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s_diatom": 0.5,
+                    "depth": 5.0
+                }
+            },
+            "7": {
+                "consumed": "DIATOM",
+                "produced": "SED_DIATOM",
+                "kinetics": [
+                    "v_s_diatom / depth * DIATOM",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s_diatom",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s_diatom": 0.5,
+                    "depth": 5.0
+                }
+            },
+            "8": {
+                "consumed": "NONE",
+                "produced": "DSi",
+                "kinetics": [
+                    "J_Si / depth * (1 - DSi / DSi_sat)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "J_Si",
+                    "depth",
+                    "DSi_sat"
+                ],
+                "parameter_values": {
+                    "J_Si": 10.0,
+                    "depth": 5.0,
+                    "DSi_sat": 60
+                }
+            }
+        }
+    }
+}

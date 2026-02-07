@@ -1,0 +1,208 @@
+{
+    "MODULE_NAME": "NATIVE_BGC_FLEX",
+    "CHEMICAL_SPECIES": {
+        "list": {
+            "1": "PO4_P",
+            "2": "DOP",
+            "3": "POP",
+            "4": "PIP",
+            "5": "ALGAE_P",
+            "6": "DO",
+            "7": "Fe_II"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "PO4_P",
+            "DOP",
+            "POP"
+        ]
+    },
+    "CYCLING_FRAMEWORKS": {
+        "FULL_P_CYCLE": {
+            "list_transformations": {
+                "1": "POP_HYDROLYSIS",
+                "2": "DOP_MINERALIZATION",
+                "3": "P_ADSORPTION",
+                "4": "P_DESORPTION",
+                "5": "REDOX_P_RELEASE",
+                "6": "ALGAE_P_UPTAKE",
+                "7": "ALGAE_RESPIRATION",
+                "8": "ALGAE_DEATH",
+                "9": "POP_SETTLING",
+                "10": "PIP_SETTLING",
+                "11": "SEDIMENT_P_FLUX"
+            },
+            "1": {
+                "consumed": "POP",
+                "produced": "DOP",
+                "kinetics": [
+                    "k_hydrol_P * POP * 1.05^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_hydrol_P"
+                ],
+                "parameter_values": {
+                    "k_hydrol_P": 0.05
+                }
+            },
+            "2": {
+                "consumed": "DOP",
+                "produced": "PO4_P",
+                "kinetics": [
+                    "k_min_P * DOP * 1.06^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_min_P"
+                ],
+                "parameter_values": {
+                    "k_min_P": 0.03
+                }
+            },
+            "3": {
+                "consumed": "PO4_P",
+                "produced": "PIP",
+                "kinetics": [
+                    "k_ads_P * PO4_P * (PIP_max - PIP) / PIP_max",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ads_P",
+                    "PIP_max"
+                ],
+                "parameter_values": {
+                    "k_ads_P": 1.0,
+                    "PIP_max": 1.0
+                }
+            },
+            "4": {
+                "consumed": "PIP",
+                "produced": "PO4_P",
+                "kinetics": [
+                    "k_des_P * PIP * 1.04^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_des_P"
+                ],
+                "parameter_values": {
+                    "k_des_P": 0.02
+                }
+            },
+            "5": {
+                "consumed": "PIP",
+                "produced": "PO4_P",
+                "kinetics": [
+                    "k_redox_P * PIP * (K_O2_P / (K_O2_P + DO)) * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_redox_P",
+                    "K_O2_P"
+                ],
+                "parameter_values": {
+                    "k_redox_P": 0.1,
+                    "K_O2_P": 1.0
+                }
+            },
+            "6": {
+                "consumed": "PO4_P",
+                "produced": "ALGAE_P",
+                "kinetics": [
+                    "mu_max * ALGAE_P * (PO4_P / (K_P + PO4_P)) * f_light * f_temp",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "mu_max",
+                    "K_P",
+                    "f_light",
+                    "f_temp"
+                ],
+                "parameter_values": {
+                    "mu_max": 1.5,
+                    "K_P": 0.01,
+                    "f_light": 1.0,
+                    "f_temp": 1.0
+                }
+            },
+            "7": {
+                "consumed": "ALGAE_P",
+                "produced": "PO4_P",
+                "kinetics": [
+                    "k_resp * ALGAE_P * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_resp"
+                ],
+                "parameter_values": {
+                    "k_resp": 0.1
+                }
+            },
+            "8": {
+                "consumed": "ALGAE_P",
+                "produced": "POP",
+                "kinetics": [
+                    "k_death * ALGAE_P",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_death"
+                ],
+                "parameter_values": {
+                    "k_death": 0.05
+                }
+            },
+            "9": {
+                "consumed": "POP",
+                "produced": "SED_P_loss",
+                "kinetics": [
+                    "v_s_POP / depth * POP",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s_POP",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s_POP": 0.5,
+                    "depth": 2.0
+                }
+            },
+            "10": {
+                "consumed": "PIP",
+                "produced": "SED_P_loss",
+                "kinetics": [
+                    "v_s_PIP / depth * PIP",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s_PIP",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s_PIP": 1.0,
+                    "depth": 2.0
+                }
+            },
+            "11": {
+                "consumed": "NONE",
+                "produced": "PO4_P",
+                "kinetics": [
+                    "J_P / depth * (K_O2_sed / (K_O2_sed + DO))",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "J_P",
+                    "K_O2_sed",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "J_P": 5.0,
+                    "K_O2_sed": 2.0,
+                    "depth": 2.0
+                }
+            }
+        }
+    }
+}
