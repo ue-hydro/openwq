@@ -270,10 +270,10 @@ def Gen_Input_Driver(
     if running_on_docker:
         # Locate docker-compose.yml relative to this script
         # This script is in: .../supporting_scripts/Model_Config/config_support_lib/
-        # docker-compose.yml is in: .../  (openwq root)
+        # docker-compose.yml is in: .../containers/
         script_dir = os.path.dirname(os.path.abspath(__file__))
         docker_compose_path = os.path.normpath(
-            os.path.join(script_dir, '..', '..', '..', 'docker-compose.yml'))
+            os.path.join(script_dir, '..', '..', '..', 'containers', 'docker-compose.yml'))
 
         _docker_host_root, _docker_container_root = _parse_docker_volume_mount(docker_compose_path)
 

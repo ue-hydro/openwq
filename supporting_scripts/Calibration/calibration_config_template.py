@@ -81,7 +81,7 @@ container_runtime = "docker"
 
 # --- Docker settings ---
 docker_container_name = "docker_openwq"
-docker_compose_path = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/docker-compose.yml"
+docker_compose_path = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/containers/docker-compose.yml"
 
 # --- Apptainer settings (for HPC) ---
 apptainer_sif_path = "/path/to/openwq.sif"
