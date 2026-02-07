@@ -1,0 +1,269 @@
+{
+    "MODULE_NAME": "NATIVE_BGC_FLEX",
+    "CHEMICAL_SPECIES": {
+        "list": {
+            "1": "Fe_II",
+            "2": "Fe_III",
+            "3": "Fe_oxy",
+            "4": "Mn_II",
+            "5": "Mn_IV",
+            "6": "MnO2",
+            "7": "DO",
+            "8": "H2S",
+            "9": "PO4_P"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "Fe_II",
+            "Fe_III",
+            "Fe_oxy"
+        ]
+    },
+    "CYCLING_FRAMEWORKS": {
+        "IRON_REDOX": {
+            "list_transformations": {
+                "1": "FE_OXIDATION_ABIOTIC",
+                "2": "FE_OXIDATION_SIMPLIFIED",
+                "3": "FE_III_PRECIPITATION",
+                "4": "FE_REDUCTION_MICROBIAL",
+                "5": "FE_REDUCTION_SULFIDE",
+                "6": "FE_OXY_SETTLING",
+                "7": "FE_SEDIMENT_FLUX"
+            },
+            "1": {
+                "consumed": "Fe_II",
+                "produced": "Fe_III",
+                "kinetics": [
+                    "k_ox_Fe * Fe_II * DO * (OH)^2",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ox_Fe",
+                    "OH"
+                ],
+                "parameter_values": {
+                    "k_ox_Fe": 8000000000000.0,
+                    "OH": 1e-07
+                }
+            },
+            "2": {
+                "consumed": "Fe_II",
+                "produced": "Fe_III",
+                "kinetics": [
+                    "k_ox_Fe_simple * Fe_II * (DO / (K_O2 + DO)) * 1.1^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ox_Fe_simple",
+                    "K_O2"
+                ],
+                "parameter_values": {
+                    "k_ox_Fe_simple": 5.0,
+                    "K_O2": 0.5
+                }
+            },
+            "3": {
+                "consumed": "Fe_III",
+                "produced": "Fe_oxy",
+                "kinetics": [
+                    "k_precip_Fe * Fe_III",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_precip_Fe"
+                ],
+                "parameter_values": {
+                    "k_precip_Fe": 10.0
+                }
+            },
+            "4": {
+                "consumed": "Fe_oxy",
+                "produced": "Fe_II",
+                "kinetics": [
+                    "k_red_Fe * Fe_oxy * (K_O2_inhib / (K_O2_inhib + DO)) * 1.1^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_red_Fe",
+                    "K_O2_inhib"
+                ],
+                "parameter_values": {
+                    "k_red_Fe": 0.1,
+                    "K_O2_inhib": 0.5
+                }
+            },
+            "5": {
+                "consumed": "Fe_oxy",
+                "produced": "Fe_II",
+                "kinetics": [
+                    "k_FeS * Fe_oxy * H2S",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_FeS"
+                ],
+                "parameter_values": {
+                    "k_FeS": 100.0
+                }
+            },
+            "6": {
+                "consumed": "Fe_oxy",
+                "produced": "SED_Fe",
+                "kinetics": [
+                    "v_s / depth * Fe_oxy",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s": 2.0,
+                    "depth": 5.0
+                }
+            },
+            "7": {
+                "consumed": "NONE",
+                "produced": "Fe_II",
+                "kinetics": [
+                    "J_Fe / depth * (K_O2_sed / (K_O2_sed + DO))",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "J_Fe",
+                    "K_O2_sed",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "J_Fe": 20.0,
+                    "K_O2_sed": 2.0,
+                    "depth": 5.0
+                }
+            }
+        },
+        "MANGANESE_REDOX": {
+            "list_transformations": {
+                "1": "MN_OXIDATION",
+                "2": "MN_PRECIPITATION",
+                "3": "MN_REDUCTION",
+                "4": "MNO2_SETTLING",
+                "5": "MN_SEDIMENT_FLUX"
+            },
+            "1": {
+                "consumed": "Mn_II",
+                "produced": "Mn_IV",
+                "kinetics": [
+                    "k_ox_Mn * Mn_II * (DO / (K_O2 + DO)) * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ox_Mn",
+                    "K_O2"
+                ],
+                "parameter_values": {
+                    "k_ox_Mn": 0.5,
+                    "K_O2": 1.0
+                }
+            },
+            "2": {
+                "consumed": "Mn_IV",
+                "produced": "MnO2",
+                "kinetics": [
+                    "k_precip_Mn * Mn_IV",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_precip_Mn"
+                ],
+                "parameter_values": {
+                    "k_precip_Mn": 5.0
+                }
+            },
+            "3": {
+                "consumed": "MnO2",
+                "produced": "Mn_II",
+                "kinetics": [
+                    "k_red_Mn * MnO2 * (K_O2_inhib / (K_O2_inhib + DO)) * 1.1^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_red_Mn",
+                    "K_O2_inhib"
+                ],
+                "parameter_values": {
+                    "k_red_Mn": 0.2,
+                    "K_O2_inhib": 0.5
+                }
+            },
+            "4": {
+                "consumed": "MnO2",
+                "produced": "SED_Mn",
+                "kinetics": [
+                    "v_s / depth * MnO2",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s": 2.0,
+                    "depth": 5.0
+                }
+            },
+            "5": {
+                "consumed": "NONE",
+                "produced": "Mn_II",
+                "kinetics": [
+                    "J_Mn / depth * (K_O2_sed / (K_O2_sed + DO))",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "J_Mn",
+                    "K_O2_sed",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "J_Mn": 10.0,
+                    "K_O2_sed": 2.0,
+                    "depth": 5.0
+                }
+            }
+        },
+        "FE_P_COUPLING": {
+            "list_transformations": {
+                "1": "P_SORPTION_TO_FE",
+                "2": "P_RELEASE_FROM_FE"
+            },
+            "1": {
+                "consumed": "PO4_P",
+                "produced": "Fe_P",
+                "kinetics": [
+                    "k_ads_P_Fe * PO4_P * Fe_oxy",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ads_P_Fe"
+                ],
+                "parameter_values": {
+                    "k_ads_P_Fe": 0.5
+                }
+            },
+            "2": {
+                "consumed": "Fe_P",
+                "produced": "PO4_P",
+                "kinetics": [
+                    "k_des_P_Fe * Fe_P * (K_O2_inhib / (K_O2_inhib + DO))",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_des_P_Fe",
+                    "K_O2_inhib"
+                ],
+                "parameter_values": {
+                    "k_des_P_Fe": 0.2,
+                    "K_O2_inhib": 0.5
+                }
+            }
+        }
+    }
+}

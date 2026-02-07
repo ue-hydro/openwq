@@ -1,0 +1,198 @@
+{
+    "MODULE_NAME": "NATIVE_BGC_FLEX",
+    "CHEMICAL_SPECIES": {
+        "list": {
+            "1": "DO",
+            "2": "BOD_fast",
+            "3": "BOD_slow",
+            "4": "CBOD",
+            "5": "NBOD"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "DO",
+            "BOD_fast",
+            "BOD_slow"
+        ]
+    },
+    "CYCLING_FRAMEWORKS": {
+        "DO_DYNAMICS": {
+            "list_transformations": {
+                "1": "REAERATION",
+                "2": "REAERATION_TEMP_CORRECTED",
+                "3": "BOD_FAST_DECAY",
+                "4": "BOD_SLOW_DECAY",
+                "5": "CBOD_O2_CONSUMPTION",
+                "6": "NBOD_O2_CONSUMPTION",
+                "7": "NBOD_DECAY",
+                "8": "SEDIMENT_O2_DEMAND",
+                "9": "PHOTOSYNTHESIS",
+                "10": "RESPIRATION",
+                "11": "BOD_SETTLING"
+            },
+            "1": {
+                "consumed": "NONE",
+                "produced": "DO",
+                "kinetics": [
+                    "k_a * (DO_sat - DO)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_a",
+                    "DO_sat"
+                ],
+                "parameter_values": {
+                    "k_a": 3.0,
+                    "DO_sat": 9.0
+                }
+            },
+            "2": {
+                "consumed": "NONE",
+                "produced": "DO",
+                "kinetics": [
+                    "k_a_20 * 1.024^(T - 20) * (DO_sat - DO)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_a_20",
+                    "DO_sat"
+                ],
+                "parameter_values": {
+                    "k_a_20": 3.0,
+                    "DO_sat": 9.0
+                }
+            },
+            "3": {
+                "consumed": "BOD_fast",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_d_fast * BOD_fast * 1.047^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_d_fast"
+                ],
+                "parameter_values": {
+                    "k_d_fast": 0.3
+                }
+            },
+            "4": {
+                "consumed": "BOD_slow",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_d_slow * BOD_slow * 1.047^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_d_slow"
+                ],
+                "parameter_values": {
+                    "k_d_slow": 0.05
+                }
+            },
+            "5": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "(k_d_fast * BOD_fast + k_d_slow * BOD_slow) * 1.047^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_d_fast",
+                    "k_d_slow"
+                ],
+                "parameter_values": {
+                    "k_d_fast": 0.3,
+                    "k_d_slow": 0.05
+                }
+            },
+            "6": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_n * NBOD * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_n"
+                ],
+                "parameter_values": {
+                    "k_n": 0.2
+                }
+            },
+            "7": {
+                "consumed": "NBOD",
+                "produced": "NONE",
+                "kinetics": [
+                    "k_n * NBOD * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_n"
+                ],
+                "parameter_values": {
+                    "k_n": 0.2
+                }
+            },
+            "8": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "SOD / depth * 1.065^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "SOD",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "SOD": 1.5,
+                    "depth": 2.0
+                }
+            },
+            "9": {
+                "consumed": "NONE",
+                "produced": "DO",
+                "kinetics": [
+                    "P_max * f_light * 1.066^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "P_max",
+                    "f_light"
+                ],
+                "parameter_values": {
+                    "P_max": 5.0,
+                    "f_light": 0.5
+                }
+            },
+            "10": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "R_max * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "R_max"
+                ],
+                "parameter_values": {
+                    "R_max": 2.0
+                }
+            },
+            "11": {
+                "consumed": "BOD_fast",
+                "produced": "SED_BOD",
+                "kinetics": [
+                    "k_s * BOD_fast",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_s"
+                ],
+                "parameter_values": {
+                    "k_s": 0.1
+                }
+            }
+        }
+    }
+}

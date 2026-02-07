@@ -1,0 +1,264 @@
+{
+    "MODULE_NAME": "NATIVE_BGC_FLEX",
+    "CHEMICAL_SPECIES": {
+        "list": {
+            "1": "DOC_labile",
+            "2": "DOC_refrac",
+            "3": "POC_labile",
+            "4": "POC_refrac",
+            "5": "DIC",
+            "6": "CH4",
+            "7": "DO",
+            "8": "ALGAE_C"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "DOC_labile",
+            "DOC_refrac",
+            "POC_labile"
+        ]
+    },
+    "CYCLING_FRAMEWORKS": {
+        "CARBON_CYCLE": {
+            "list_transformations": {
+                "1": "POC_LABILE_HYDROLYSIS",
+                "2": "POC_REFRAC_HYDROLYSIS",
+                "3": "DOC_LABILE_RESPIRATION",
+                "4": "DOC_REFRAC_RESPIRATION",
+                "5": "RESPIRATION_O2_CONSUMPTION",
+                "6": "METHANOGENESIS",
+                "7": "METHANE_OXIDATION",
+                "8": "METHANE_EBULLITION",
+                "9": "PHOTOSYNTHESIS",
+                "10": "ALGAL_RESPIRATION",
+                "11": "ALGAL_DEATH",
+                "12": "POC_SETTLING",
+                "13": "POC_REFRAC_SETTLING",
+                "14": "CO2_EXCHANGE"
+            },
+            "1": {
+                "consumed": "POC_labile",
+                "produced": "DOC_labile",
+                "kinetics": [
+                    "k_hydrol_L * POC_labile * 1.05^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_hydrol_L"
+                ],
+                "parameter_values": {
+                    "k_hydrol_L": 0.15
+                }
+            },
+            "2": {
+                "consumed": "POC_refrac",
+                "produced": "DOC_refrac",
+                "kinetics": [
+                    "k_hydrol_R * POC_refrac * 1.03^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_hydrol_R"
+                ],
+                "parameter_values": {
+                    "k_hydrol_R": 0.01
+                }
+            },
+            "3": {
+                "consumed": "DOC_labile",
+                "produced": "DIC",
+                "kinetics": [
+                    "k_resp_L * DOC_labile * (DO / (K_O2 + DO)) * 1.07^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_resp_L",
+                    "K_O2"
+                ],
+                "parameter_values": {
+                    "k_resp_L": 0.2,
+                    "K_O2": 0.5
+                }
+            },
+            "4": {
+                "consumed": "DOC_refrac",
+                "produced": "DIC",
+                "kinetics": [
+                    "k_resp_R * DOC_refrac * (DO / (K_O2 + DO)) * 1.05^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_resp_R",
+                    "K_O2"
+                ],
+                "parameter_values": {
+                    "k_resp_R": 0.01,
+                    "K_O2": 0.5
+                }
+            },
+            "5": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "2.67 * (k_resp_L * DOC_labile + k_resp_R * DOC_refrac) * (DO / (K_O2 + DO)) * 1.07^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_resp_L",
+                    "k_resp_R",
+                    "K_O2"
+                ],
+                "parameter_values": {
+                    "k_resp_L": 0.2,
+                    "k_resp_R": 0.01,
+                    "K_O2": 0.5
+                }
+            },
+            "6": {
+                "consumed": "DOC_labile",
+                "produced": "CH4",
+                "kinetics": [
+                    "k_meth * DOC_labile * (K_O2_inhib / (K_O2_inhib + DO)) * 1.10^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_meth",
+                    "K_O2_inhib"
+                ],
+                "parameter_values": {
+                    "k_meth": 0.05,
+                    "K_O2_inhib": 0.2
+                }
+            },
+            "7": {
+                "consumed": "CH4",
+                "produced": "DIC",
+                "kinetics": [
+                    "k_CH4_ox * CH4 * (DO / (K_O2_CH4 + DO)) * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_CH4_ox",
+                    "K_O2_CH4"
+                ],
+                "parameter_values": {
+                    "k_CH4_ox": 0.5,
+                    "K_O2_CH4": 0.5
+                }
+            },
+            "8": {
+                "consumed": "CH4",
+                "produced": "CH4_atm_loss",
+                "kinetics": [
+                    "k_ebull * max(0, CH4 - CH4_sat)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_ebull",
+                    "CH4_sat"
+                ],
+                "parameter_values": {
+                    "k_ebull": 10.0,
+                    "CH4_sat": 0.02
+                }
+            },
+            "9": {
+                "consumed": "DIC",
+                "produced": "ALGAE_C",
+                "kinetics": [
+                    "mu_max * ALGAE_C * (DIC / (K_DIC + DIC)) * f_light * f_nutrient * 1.066^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "mu_max",
+                    "K_DIC",
+                    "f_light",
+                    "f_nutrient"
+                ],
+                "parameter_values": {
+                    "mu_max": 2.0,
+                    "K_DIC": 1.0,
+                    "f_light": 0.5,
+                    "f_nutrient": 0.8
+                }
+            },
+            "10": {
+                "consumed": "ALGAE_C",
+                "produced": "DOC_labile",
+                "kinetics": [
+                    "k_resp_A * ALGAE_C * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_resp_A"
+                ],
+                "parameter_values": {
+                    "k_resp_A": 0.1
+                }
+            },
+            "11": {
+                "consumed": "ALGAE_C",
+                "produced": "POC_labile",
+                "kinetics": [
+                    "k_death * ALGAE_C",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_death"
+                ],
+                "parameter_values": {
+                    "k_death": 0.05
+                }
+            },
+            "12": {
+                "consumed": "POC_labile",
+                "produced": "SED_C_loss",
+                "kinetics": [
+                    "v_s / depth * POC_labile",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s": 0.5,
+                    "depth": 2.0
+                }
+            },
+            "13": {
+                "consumed": "POC_refrac",
+                "produced": "SED_C_loss",
+                "kinetics": [
+                    "v_s / depth * POC_refrac",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "v_s",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "v_s": 0.5,
+                    "depth": 2.0
+                }
+            },
+            "14": {
+                "consumed": "DIC",
+                "produced": "CO2_atm",
+                "kinetics": [
+                    "k_CO2 * (DIC * f_CO2 - CO2_sat)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "k_CO2",
+                    "f_CO2",
+                    "CO2_sat"
+                ],
+                "parameter_values": {
+                    "k_CO2": 0.5,
+                    "f_CO2": 0.01,
+                    "CO2_sat": 0.5
+                }
+            }
+        }
+    }
+}

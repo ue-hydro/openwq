@@ -1,0 +1,238 @@
+# PHREEQC Template: Nitrogen Speciation and Redox
+# Description: NO3, NO2, NH4, N2 with redox-dependent transformations
+# Reference: PHREEQC Manual, Appelo & Postma (2005) Geochemistry
+# ================================================================
+
+DATABASE phreeqc.dat
+
+TITLE Nitrogen Species and Redox Transformations
+
+# ================================================================
+# SOLUTION 1: Oxic surface water
+# ================================================================
+SOLUTION 1  Oxic Surface Water
+    temp      20.0
+    pH        7.5
+    pe        12.0       # Oxic conditions (high pe)
+    units     mg/L
+
+    # Nitrogen species
+    N(5)      5.0        # Nitrate as mg/L N
+    N(3)      0.05       # Nitrite as mg/L N
+    N(-3)     0.2        # Ammonium as mg/L N
+    N(0)      15.0       # Dissolved N2 (at saturation)
+
+    # Supporting ions for charge balance
+    Ca        40.0
+    Mg        10.0
+    Na        20.0
+    K         5.0
+    Cl        25.0       # Adjust for charge balance
+    C(4)      100 as HCO3
+    S(6)      20 as SO4
+
+    # Dissolved oxygen (as O)
+    O(0)      8.0        # mg/L as O2 (converts to mol/L)
+
+END
+
+# ================================================================
+# SOLUTION 2: Anoxic groundwater (reducing conditions)
+# ================================================================
+SOLUTION 2  Anoxic Groundwater
+    temp      12.0
+    pH        6.8
+    pe        -2.0       # Reducing conditions (low pe)
+    units     mg/L
+
+    N(5)      0.5        # Low nitrate (denitrified)
+    N(3)      0.1        # Trace nitrite
+    N(-3)     5.0        # High ammonium
+    N(0)      18.0       # N2 supersaturated from denitrification
+
+    Ca        60.0
+    Mg        20.0
+    Na        30.0
+    K         8.0
+    Cl        45.0
+    C(4)      200 as HCO3
+    S(6)      10 as SO4
+    Fe        2.0        # Elevated Fe(II) in reducing conditions
+
+END
+
+# ================================================================
+# EQUILIBRIUM_PHASES: Gas equilibria
+# ================================================================
+EQUILIBRIUM_PHASES 1
+    # Atmospheric gases
+    O2(g)       -0.7  10.0    # pO2 = 0.21 atm (oxic)
+    N2(g)       -0.1  10.0    # pN2 = 0.78 atm
+    CO2(g)      -3.5  10.0    # pCO2 = 10^-3.5 atm
+
+END
+
+EQUILIBRIUM_PHASES 2
+    # Anoxic conditions - no O2
+    N2(g)       -0.1  10.0
+    CO2(g)      -2.0  10.0    # Elevated pCO2 in anoxic water
+
+END
+
+# ================================================================
+# KINETICS: Nitrogen transformation kinetics
+# ================================================================
+KINETICS 1
+
+# Nitrification: NH4+ -> NO2- -> NO3-
+# Rate = k * [NH4+] * [O2] / (Km_O2 + [O2])
+-nitrification
+    -formula  N(-3) -1 N(5) 1
+    -m0       0.001           # Initial moles of "catalyst"
+    -parms    0.1 0.5         # k (1/day), Km_O2 (mg/L)
+    -tol      1e-8
+
+# Denitrification: NO3- -> N2
+# Rate = k * [NO3-] * Km_O2 / (Km_O2 + [O2]) * [DOC]
+-denitrification
+    -formula  N(5) -2 N(0) 1
+    -m0       0.001
+    -parms    0.05 0.2 2.0    # k, Km_O2_inhib, Km_DOC
+    -tol      1e-8
+
+# DNRA: Dissimilatory Nitrate Reduction to Ammonium
+# NO3- -> NH4+ (alternative to denitrification in some conditions)
+-dnra
+    -formula  N(5) -1 N(-3) 1
+    -m0       0.0001
+    -parms    0.01            # k (slower than denitrification)
+    -tol      1e-8
+
+END
+
+# ================================================================
+# RATES: Define kinetic rate expressions
+# ================================================================
+RATES
+
+nitrification
+-start
+10 REM Nitrification rate: NH4 -> NO3
+20 k = PARM(1) / 86400        # Convert 1/day to 1/s
+30 Km_O2 = PARM(2) / 32000    # Convert mg/L to mol/L
+40 O2_mol = TOT("O(0)")
+50 NH4_mol = MOL("NH4+")
+60 IF O2_mol <= 0 THEN GOTO 100
+70 rate = k * NH4_mol * O2_mol / (Km_O2 + O2_mol)
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+denitrification
+-start
+10 REM Denitrification rate: NO3 -> N2
+20 k = PARM(1) / 86400
+30 Km_O2_inhib = PARM(2) / 32000
+40 O2_mol = TOT("O(0)")
+50 NO3_mol = MOL("NO3-")
+60 f_inhib = Km_O2_inhib / (Km_O2_inhib + O2_mol + 1e-10)
+70 rate = k * NO3_mol * f_inhib
+80 moles = rate * TIME
+90 SAVE moles
+100 END
+-end
+
+dnra
+-start
+10 REM DNRA rate: NO3 -> NH4 (alternative pathway)
+20 k = PARM(1) / 86400
+30 NO3_mol = MOL("NO3-")
+40 rate = k * NO3_mol
+50 moles = rate * TIME
+60 SAVE moles
+70 END
+-end
+
+END
+
+# ================================================================
+# SELECTED_OUTPUT
+# ================================================================
+SELECTED_OUTPUT
+    -file         nitrogen_results.txt
+    -reset        false
+    -pH           true
+    -pe           true
+    -temperature  true
+    -totals       N(5) N(3) N(-3) N(0) O(0)
+    -molalities   NO3- NO2- NH4+ NH3 N2
+    -saturation_indices  N2(g) O2(g)
+
+END
+
+# ================================================================
+# USER_PUNCH: Nitrogen mass balance
+# ================================================================
+USER_PUNCH
+    -headings  TN_mgL  NO3_mgN  NH4_mgN  N2_mgN  pe  Eh_mV
+
+    # Total N in mg/L as N
+    10 TN = (TOT("N(5)") + TOT("N(3)") + TOT("N(-3)") + TOT("N(0)")*2) * 14000
+    20 PUNCH TN
+
+    # Individual N species in mg/L as N
+    30 NO3_N = TOT("N(5)") * 14000
+    40 PUNCH NO3_N
+
+    50 NH4_N = TOT("N(-3)") * 14000
+    60 PUNCH NH4_N
+
+    70 N2_N = TOT("N(0)") * 28000
+    80 PUNCH N2_N
+
+    # pe and Eh
+    90 PUNCH LA("e-") * (-1)    # pe
+    100 Eh = LA("e-") * (-1) * 8.314 * (TC + 273.15) * 2.303 / 96485
+    110 PUNCH Eh * 1000          # Eh in mV
+
+END
+
+# ================================================================
+# INVERSE_MODELING (optional): Identify processes
+# ================================================================
+# INVERSE_MODELING 1
+#     -solutions     1 2
+#     -phases
+#         N2(g)
+#         O2(g)
+#         Calcite
+#     -balances
+#         N
+#         O
+#         C
+# END
+
+# ================================================================
+# Notes on Nitrogen Redox
+# ================================================================
+#
+# Redox States of Nitrogen:
+#   N(5)  = Nitrate (NO3-)    : Oxidized, stable in oxic water
+#   N(3)  = Nitrite (NO2-)    : Intermediate, usually transient
+#   N(0)  = N2 gas            : Inert, product of denitrification
+#   N(-3) = Ammonium (NH4+)   : Reduced, stable in anoxic water
+#
+# Typical pe ranges:
+#   Oxic (O2 present):     pe > 10
+#   Nitrate reduction:     pe 5-10
+#   Mn(IV)/Fe(III) reduction: pe 0-5
+#   Sulfate reduction:     pe -3 to 0
+#   Methanogenesis:        pe < -3
+#
+# Key reactions:
+#   Nitrification:   NH4+ + 2O2 -> NO3- + 2H+ + H2O
+#   Denitrification: 5CH2O + 4NO3- -> 2N2 + 4HCO3- + CO2 + 3H2O
+#   DNRA:            NO3- + 2CH2O + 2H+ -> NH4+ + 2CO2 + H2O
+#
+# ================================================================

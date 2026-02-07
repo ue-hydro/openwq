@@ -1,0 +1,409 @@
+{
+    "MODULE_NAME": "NATIVE_BGC_FLEX",
+    "CHEMICAL_SPECIES": {
+        "list": {
+            "1": "DO",
+            "2": "CBOD",
+            "3": "ORG_N",
+            "4": "NH4_N",
+            "5": "NO2_N",
+            "6": "NO3_N",
+            "7": "ORG_P",
+            "8": "DISS_P",
+            "9": "ALGAE",
+            "10": "FECAL_COLIFORM"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "DO",
+            "CBOD",
+            "ORG_N"
+        ]
+    },
+    "CYCLING_FRAMEWORKS": {
+        "QUAL2E_DO_BOD": {
+            "list_transformations": {
+                "1": "REAERATION",
+                "2": "CBOD_OXIDATION",
+                "3": "CBOD_O2_DEMAND",
+                "4": "CBOD_SETTLING",
+                "5": "SOD"
+            },
+            "1": {
+                "consumed": "NONE",
+                "produced": "DO",
+                "kinetics": [
+                    "K2 * (DO_sat - DO)",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "K2",
+                    "DO_sat"
+                ],
+                "parameter_values": {
+                    "K2": 3.0,
+                    "DO_sat": 9.0
+                }
+            },
+            "2": {
+                "consumed": "CBOD",
+                "produced": "NONE",
+                "kinetics": [
+                    "K1 * CBOD",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "K1"
+                ],
+                "parameter_values": {
+                    "K1": 0.23
+                }
+            },
+            "3": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "K1 * CBOD",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "K1"
+                ],
+                "parameter_values": {
+                    "K1": 0.23
+                }
+            },
+            "4": {
+                "consumed": "CBOD",
+                "produced": "SED_CBOD",
+                "kinetics": [
+                    "K3 * CBOD",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "K3"
+                ],
+                "parameter_values": {
+                    "K3": 0.1
+                }
+            },
+            "5": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "K4 / depth",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "K4",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "K4": 1.5,
+                    "depth": 1.0
+                }
+            }
+        },
+        "QUAL2E_NITROGEN": {
+            "list_transformations": {
+                "1": "ORG_N_SETTLING",
+                "2": "ORG_N_HYDROLYSIS",
+                "3": "NITRIFICATION_STEP1",
+                "4": "NITRIFICATION_STEP2",
+                "5": "NITRIFICATION_O2_STEP1",
+                "6": "NITRIFICATION_O2_STEP2",
+                "7": "BENTHIC_NH4"
+            },
+            "1": {
+                "consumed": "ORG_N",
+                "produced": "SED_N",
+                "kinetics": [
+                    "sigma_4 * ORG_N",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "sigma_4"
+                ],
+                "parameter_values": {
+                    "sigma_4": 0.3
+                }
+            },
+            "2": {
+                "consumed": "ORG_N",
+                "produced": "NH4_N",
+                "kinetics": [
+                    "beta_1 * ORG_N",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "beta_1"
+                ],
+                "parameter_values": {
+                    "beta_1": 0.2
+                }
+            },
+            "3": {
+                "consumed": "NH4_N",
+                "produced": "NO2_N",
+                "kinetics": [
+                    "beta_2 * NH4_N",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "beta_2"
+                ],
+                "parameter_values": {
+                    "beta_2": 0.3
+                }
+            },
+            "4": {
+                "consumed": "NO2_N",
+                "produced": "NO3_N",
+                "kinetics": [
+                    "beta_3 * NO2_N",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "beta_3"
+                ],
+                "parameter_values": {
+                    "beta_3": 1.0
+                }
+            },
+            "5": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "3.43 * beta_2 * NH4_N",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "beta_2"
+                ],
+                "parameter_values": {
+                    "beta_2": 0.3
+                }
+            },
+            "6": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "1.14 * beta_3 * NO2_N",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "beta_3"
+                ],
+                "parameter_values": {
+                    "beta_3": 1.0
+                }
+            },
+            "7": {
+                "consumed": "NONE",
+                "produced": "NH4_N",
+                "kinetics": [
+                    "sigma_3 / depth",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "sigma_3",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "sigma_3": 0.5,
+                    "depth": 1.0
+                }
+            }
+        },
+        "QUAL2E_PHOSPHORUS": {
+            "list_transformations": {
+                "1": "ORG_P_SETTLING",
+                "2": "ORG_P_DECAY",
+                "3": "BENTHIC_P"
+            },
+            "1": {
+                "consumed": "ORG_P",
+                "produced": "SED_P",
+                "kinetics": [
+                    "sigma_5 * ORG_P",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "sigma_5"
+                ],
+                "parameter_values": {
+                    "sigma_5": 0.3
+                }
+            },
+            "2": {
+                "consumed": "ORG_P",
+                "produced": "DISS_P",
+                "kinetics": [
+                    "beta_4 * ORG_P",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "beta_4"
+                ],
+                "parameter_values": {
+                    "beta_4": 0.2
+                }
+            },
+            "3": {
+                "consumed": "NONE",
+                "produced": "DISS_P",
+                "kinetics": [
+                    "sigma_2 / depth",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "sigma_2",
+                    "depth"
+                ],
+                "parameter_values": {
+                    "sigma_2": 0.05,
+                    "depth": 1.0
+                }
+            }
+        },
+        "QUAL2E_ALGAE": {
+            "list_transformations": {
+                "1": "ALGAE_GROWTH",
+                "2": "ALGAE_RESPIRATION",
+                "3": "ALGAE_DEATH",
+                "4": "ALGAE_O2_PRODUCTION",
+                "5": "ALGAE_O2_RESPIRATION",
+                "6": "ALGAE_N_UPTAKE",
+                "7": "ALGAE_P_UPTAKE"
+            },
+            "1": {
+                "consumed": "NONE",
+                "produced": "ALGAE",
+                "kinetics": [
+                    "mu * ALGAE",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "mu"
+                ],
+                "parameter_values": {
+                    "mu": 2.0
+                }
+            },
+            "2": {
+                "consumed": "ALGAE",
+                "produced": "NONE",
+                "kinetics": [
+                    "rho * ALGAE",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "rho"
+                ],
+                "parameter_values": {
+                    "rho": 0.1
+                }
+            },
+            "3": {
+                "consumed": "ALGAE",
+                "produced": "ORG_N",
+                "kinetics": [
+                    "sigma_1 * ALGAE * alpha_1",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "sigma_1",
+                    "alpha_1"
+                ],
+                "parameter_values": {
+                    "sigma_1": 0.2,
+                    "alpha_1": 0.08
+                }
+            },
+            "4": {
+                "consumed": "NONE",
+                "produced": "DO",
+                "kinetics": [
+                    "alpha_3 * mu * ALGAE",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "mu",
+                    "alpha_3"
+                ],
+                "parameter_values": {
+                    "mu": 2.0,
+                    "alpha_3": 1.6
+                }
+            },
+            "5": {
+                "consumed": "DO",
+                "produced": "NONE",
+                "kinetics": [
+                    "alpha_4 * rho * ALGAE",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "rho",
+                    "alpha_4"
+                ],
+                "parameter_values": {
+                    "rho": 0.1,
+                    "alpha_4": 2.0
+                }
+            },
+            "6": {
+                "consumed": "NH4_N",
+                "produced": "NONE",
+                "kinetics": [
+                    "alpha_1 * mu * ALGAE * P_NH4",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "alpha_1",
+                    "mu",
+                    "P_NH4"
+                ],
+                "parameter_values": {
+                    "alpha_1": 0.08,
+                    "mu": 2.0,
+                    "P_NH4": 0.5
+                }
+            },
+            "7": {
+                "consumed": "DISS_P",
+                "produced": "NONE",
+                "kinetics": [
+                    "alpha_2 * mu * ALGAE",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "alpha_2",
+                    "mu"
+                ],
+                "parameter_values": {
+                    "alpha_2": 0.015,
+                    "mu": 2.0
+                }
+            }
+        },
+        "QUAL2E_COLIFORM": {
+            "list_transformations": {
+                "1": "COLIFORM_DIEOFF"
+            },
+            "1": {
+                "consumed": "FECAL_COLIFORM",
+                "produced": "NONE",
+                "kinetics": [
+                    "Kb * FECAL_COLIFORM",
+                    "1/day"
+                ],
+                "parameter_names": [
+                    "Kb"
+                ],
+                "parameter_values": {
+                    "Kb": 2.0
+                }
+            }
+        }
+    }
+}

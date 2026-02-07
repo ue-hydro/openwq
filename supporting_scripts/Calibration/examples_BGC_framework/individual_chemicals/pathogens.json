@@ -1,0 +1,347 @@
+{
+  "_DESCRIPTION": "Pathogen Fate and Transport - E. coli, fecal coliforms, viruses",
+  "_REFERENCE": "WASP, Chapra (2008), Thomann & Mueller (1987)",
+  "_VERSION": "1.0",
+
+  "BIOGEOCHEMISTRY_CONFIGURATION": {
+    "CHEMICAL_SPECIES": {
+      "E_coli": {
+        "DESCRIPTION": "Escherichia coli",
+        "UNITS": "CFU/100mL",
+        "INITIAL_CONDITION": 1000
+      },
+      "Fecal_coliform": {
+        "DESCRIPTION": "Fecal coliform bacteria",
+        "UNITS": "CFU/100mL",
+        "INITIAL_CONDITION": 2000
+      },
+      "Enterococci": {
+        "DESCRIPTION": "Enterococcus bacteria",
+        "UNITS": "CFU/100mL",
+        "INITIAL_CONDITION": 500
+      },
+      "Total_coliform": {
+        "DESCRIPTION": "Total coliform bacteria",
+        "UNITS": "CFU/100mL",
+        "INITIAL_CONDITION": 5000
+      },
+      "Virus": {
+        "DESCRIPTION": "Enteric viruses",
+        "UNITS": "PFU/L",
+        "INITIAL_CONDITION": 10
+      },
+      "Cryptosporidium": {
+        "DESCRIPTION": "Cryptosporidium oocysts",
+        "UNITS": "oocysts/L",
+        "INITIAL_CONDITION": 1
+      },
+      "Giardia": {
+        "DESCRIPTION": "Giardia cysts",
+        "UNITS": "cysts/L",
+        "INITIAL_CONDITION": 5
+      }
+    },
+
+    "CYCLING_FRAMEWORKS": {
+      "ECOLI_DYNAMICS": {
+        "_DESCRIPTION": "E. coli die-off with multiple stressors",
+
+        "ECOLI_DIEOFF_BASE": {
+          "CONSUMED": "E_coli",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_die_base * E_coli * theta^(T - 20)",
+          "PARAMETERS": {
+            "k_die_base": {
+              "VALUE": 1.0,
+              "UNITS": "1/day",
+              "RANGE": [0.2, 5.0],
+              "DESCRIPTION": "Base die-off rate at 20C in dark"
+            },
+            "theta": {
+              "VALUE": 1.07,
+              "RANGE": [1.04, 1.10],
+              "DESCRIPTION": "Temperature coefficient"
+            }
+          }
+        },
+
+        "ECOLI_SOLAR_INACTIVATION": {
+          "CONSUMED": "E_coli",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_solar * I_avg * E_coli",
+          "PARAMETERS": {
+            "k_solar": {
+              "VALUE": 0.02,
+              "UNITS": "m2/W/day",
+              "RANGE": [0.01, 0.1],
+              "DESCRIPTION": "Solar inactivation coefficient"
+            },
+            "I_avg": {
+              "VALUE": 200,
+              "UNITS": "W/m2",
+              "DESCRIPTION": "Average solar irradiance in water"
+            }
+          },
+          "NOTES": "UV-B is primary inactivator; attenuated by turbidity"
+        },
+
+        "ECOLI_SETTLING": {
+          "CONSUMED": "E_coli",
+          "PRODUCED": "SED_Ecoli",
+          "KINETICS": "v_s_bact / depth * E_coli",
+          "PARAMETERS": {
+            "v_s_bact": {
+              "VALUE": 0.5,
+              "UNITS": "m/day",
+              "RANGE": [0.1, 2.0],
+              "DESCRIPTION": "Bacterial settling velocity"
+            },
+            "depth": {"VALUE": 2.0, "UNITS": "m"}
+          }
+        },
+
+        "ECOLI_RESUSPENSION": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "E_coli",
+          "KINETICS": "k_resus * SED_Ecoli / depth",
+          "PARAMETERS": {
+            "k_resus": {
+              "VALUE": 0.1,
+              "UNITS": "1/day",
+              "RANGE": [0.0, 1.0],
+              "DESCRIPTION": "Resuspension rate from sediments"
+            },
+            "SED_Ecoli": {
+              "VALUE": 10000,
+              "UNITS": "CFU/m2",
+              "DESCRIPTION": "Sediment E. coli concentration"
+            },
+            "depth": {"VALUE": 2.0, "UNITS": "m"}
+          },
+          "NOTES": "Flow-dependent; increases during storms"
+        }
+      },
+
+      "FECAL_COLIFORM_DYNAMICS": {
+        "_DESCRIPTION": "Fecal coliform decay",
+
+        "FC_DIEOFF": {
+          "CONSUMED": "Fecal_coliform",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_die_FC * Fecal_coliform * 1.07^(T - 20)",
+          "PARAMETERS": {
+            "k_die_FC": {
+              "VALUE": 0.8,
+              "UNITS": "1/day",
+              "RANGE": [0.2, 3.0],
+              "DESCRIPTION": "FC die-off rate at 20C"
+            }
+          }
+        },
+
+        "FC_SOLAR": {
+          "CONSUMED": "Fecal_coliform",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_solar_FC * I_avg * Fecal_coliform",
+          "PARAMETERS": {
+            "k_solar_FC": {
+              "VALUE": 0.015,
+              "UNITS": "m2/W/day"
+            },
+            "I_avg": {"VALUE": 200, "UNITS": "W/m2"}
+          }
+        },
+
+        "FC_SETTLING": {
+          "CONSUMED": "Fecal_coliform",
+          "PRODUCED": "SED_FC",
+          "KINETICS": "v_s_bact / depth * Fecal_coliform",
+          "PARAMETERS": {
+            "v_s_bact": {"VALUE": 0.5, "UNITS": "m/day"},
+            "depth": {"VALUE": 2.0, "UNITS": "m"}
+          }
+        }
+      },
+
+      "ENTEROCOCCI_DYNAMICS": {
+        "_DESCRIPTION": "Enterococcus decay (marine indicator)",
+
+        "ENT_DIEOFF": {
+          "CONSUMED": "Enterococci",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_die_ENT * Enterococci * 1.05^(T - 20) * (1 + 0.1 * salinity)",
+          "PARAMETERS": {
+            "k_die_ENT": {
+              "VALUE": 1.2,
+              "UNITS": "1/day",
+              "RANGE": [0.5, 4.0],
+              "DESCRIPTION": "Enterococcus die-off rate"
+            },
+            "salinity": {
+              "VALUE": 0,
+              "UNITS": "ppt",
+              "DESCRIPTION": "Salinity (enhances die-off)"
+            }
+          },
+          "NOTES": "More resistant than E. coli; primary marine indicator"
+        },
+
+        "ENT_SOLAR": {
+          "CONSUMED": "Enterococci",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_solar_ENT * I_avg * Enterococci",
+          "PARAMETERS": {
+            "k_solar_ENT": {
+              "VALUE": 0.03,
+              "UNITS": "m2/W/day",
+              "DESCRIPTION": "More sensitive to solar than E. coli"
+            },
+            "I_avg": {"VALUE": 200, "UNITS": "W/m2"}
+          }
+        }
+      },
+
+      "VIRUS_DYNAMICS": {
+        "_DESCRIPTION": "Enteric virus persistence",
+
+        "VIRUS_INACTIVATION": {
+          "CONSUMED": "Virus",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_inact_V * Virus * 1.03^(T - 20)",
+          "PARAMETERS": {
+            "k_inact_V": {
+              "VALUE": 0.3,
+              "UNITS": "1/day",
+              "RANGE": [0.05, 1.0],
+              "DESCRIPTION": "Virus inactivation rate"
+            }
+          },
+          "NOTES": "Viruses more persistent than bacteria"
+        },
+
+        "VIRUS_SOLAR": {
+          "CONSUMED": "Virus",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_solar_V * I_avg * Virus",
+          "PARAMETERS": {
+            "k_solar_V": {
+              "VALUE": 0.01,
+              "UNITS": "m2/W/day",
+              "DESCRIPTION": "Virus UV inactivation"
+            },
+            "I_avg": {"VALUE": 200, "UNITS": "W/m2"}
+          }
+        },
+
+        "VIRUS_ADSORPTION": {
+          "CONSUMED": "Virus",
+          "PRODUCED": "Virus_part",
+          "KINETICS": "k_ads_V * Virus * TSS / 1000",
+          "PARAMETERS": {
+            "k_ads_V": {
+              "VALUE": 0.1,
+              "UNITS": "L/mg/day",
+              "DESCRIPTION": "Virus adsorption to particles"
+            },
+            "TSS": {"VALUE": 20, "UNITS": "mg/L"}
+          }
+        }
+      },
+
+      "PROTOZOA_DYNAMICS": {
+        "_DESCRIPTION": "Cryptosporidium and Giardia persistence",
+
+        "CRYPTO_INACTIVATION": {
+          "CONSUMED": "Cryptosporidium",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_inact_C * Cryptosporidium * 1.02^(T - 20)",
+          "PARAMETERS": {
+            "k_inact_C": {
+              "VALUE": 0.05,
+              "UNITS": "1/day",
+              "RANGE": [0.01, 0.2],
+              "DESCRIPTION": "Crypto inactivation rate"
+            }
+          },
+          "NOTES": "Very persistent in environment"
+        },
+
+        "CRYPTO_SETTLING": {
+          "CONSUMED": "Cryptosporidium",
+          "PRODUCED": "SED_Crypto",
+          "KINETICS": "v_s_oocyst / depth * Cryptosporidium",
+          "PARAMETERS": {
+            "v_s_oocyst": {
+              "VALUE": 0.3,
+              "UNITS": "m/day",
+              "DESCRIPTION": "Oocyst settling velocity"
+            },
+            "depth": {"VALUE": 2.0, "UNITS": "m"}
+          }
+        },
+
+        "GIARDIA_INACTIVATION": {
+          "CONSUMED": "Giardia",
+          "PRODUCED": "NONE",
+          "KINETICS": "k_inact_G * Giardia * 1.04^(T - 20)",
+          "PARAMETERS": {
+            "k_inact_G": {
+              "VALUE": 0.1,
+              "UNITS": "1/day",
+              "RANGE": [0.02, 0.3],
+              "DESCRIPTION": "Giardia inactivation rate"
+            }
+          }
+        },
+
+        "GIARDIA_SETTLING": {
+          "CONSUMED": "Giardia",
+          "PRODUCED": "SED_Giardia",
+          "KINETICS": "v_s_cyst / depth * Giardia",
+          "PARAMETERS": {
+            "v_s_cyst": {
+              "VALUE": 1.0,
+              "UNITS": "m/day",
+              "DESCRIPTION": "Cyst settling velocity (larger than oocysts)"
+            },
+            "depth": {"VALUE": 2.0, "UNITS": "m"}
+          }
+        }
+      },
+
+      "DIE_OFF_FORMULAS": {
+        "_DESCRIPTION": "Reference formulas for pathogen die-off",
+
+        "MANCINI_1978": {
+          "FORMULA": "k = 0.8 + 0.006 * (% seawater) at 20C",
+          "NOTES": "Classic relationship for FC in marine waters"
+        },
+
+        "BEAUDEAU_2001": {
+          "FORMULA": "k = k_dark * (1 + alpha * I)",
+          "NOTES": "Separates dark die-off from light inactivation"
+        },
+
+        "T90_CONVERSION": {
+          "FORMULA": "k = 2.303 / T90",
+          "NOTES": "T90 is time for 90% reduction"
+        },
+
+        "TYPICAL_T90_VALUES": {
+          "E_coli_freshwater": "2-3 days",
+          "E_coli_seawater": "1-2 days",
+          "Enterococcus_freshwater": "3-5 days",
+          "Virus_freshwater": "5-20 days",
+          "Cryptosporidium": "50-100 days",
+          "Giardia": "20-50 days"
+        }
+      }
+    },
+
+    "COMPARTMENT_ASSIGNMENT": {
+      "RIVER": ["ECOLI_DYNAMICS", "FECAL_COLIFORM_DYNAMICS", "ENTEROCOCCI_DYNAMICS", "VIRUS_DYNAMICS", "PROTOZOA_DYNAMICS"],
+      "LAKE": ["ECOLI_DYNAMICS", "FECAL_COLIFORM_DYNAMICS", "ENTEROCOCCI_DYNAMICS", "VIRUS_DYNAMICS", "PROTOZOA_DYNAMICS"],
+      "ESTUARY": ["ECOLI_DYNAMICS", "FECAL_COLIFORM_DYNAMICS", "ENTEROCOCCI_DYNAMICS", "VIRUS_DYNAMICS", "PROTOZOA_DYNAMICS"]
+    }
+  }
+}
