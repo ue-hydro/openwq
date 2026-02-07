@@ -1,0 +1,715 @@
+{
+  "_DESCRIPTION": "Emerging Contaminants Framework - Pharmaceuticals, PPCPs, Microplastics, PFAS",
+  "_REFERENCE": "Lapworth et al. (2012) Env. Pollution; Luo et al. (2014) Sci. Total Env.; Koelmans et al. (2019) Nat. Rev. Mat.",
+  "_VERSION": "1.0",
+  "_CONTAMINANT_CLASSES": {
+    "PHARMACEUTICALS": "Antibiotics, analgesics, hormones, psychiatric drugs",
+    "PPCPS": "Personal care products - fragrances, UV filters, antimicrobials",
+    "PFAS": "Per- and polyfluoroalkyl substances - PFOA, PFOS, GenX",
+    "MICROPLASTICS": "Plastic particles < 5mm - fibers, fragments, beads",
+    "ENDOCRINE_DISRUPTORS": "Estrogens, bisphenols, phthalates"
+  },
+  "_NOTES": [
+    "Emerging contaminants are detected at ng/L to ug/L concentrations",
+    "Many are pseudo-persistent due to continuous discharge from WWTPs",
+    "Photolysis and biodegradation are key removal pathways",
+    "Sorption to sediments and organic matter affects transport",
+    "PFAS are extremely persistent (half-lives of years to decades)"
+  ],
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "PHARMA_antibiotic",
+      "2": "PHARMA_analgesic",
+      "3": "PHARMA_hormone",
+      "4": "PHARMA_psychiatric",
+      "5": "PPCP_fragrance",
+      "6": "PPCP_UV_filter",
+      "7": "PPCP_antimicrobial",
+      "8": "PFAS_PFOA",
+      "9": "PFAS_PFOS",
+      "10": "PFAS_GenX",
+      "11": "MP_fiber",
+      "12": "MP_fragment",
+      "13": "MP_bead",
+      "14": "EDC_estrogen",
+      "15": "EDC_bisphenol",
+      "16": "METAB_generic",
+      "17": "CO2",
+      "18": "DOC"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": [
+      "PHARMA_antibiotic", "PHARMA_analgesic", "PHARMA_hormone", "PHARMA_psychiatric",
+      "PPCP_fragrance", "PPCP_UV_filter", "PPCP_antimicrobial",
+      "PFAS_PFOA", "PFAS_PFOS", "PFAS_GenX",
+      "MP_fiber", "MP_fragment", "MP_bead",
+      "EDC_estrogen", "EDC_bisphenol", "METAB_generic"
+    ]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+
+    "PHARMACEUTICALS": {
+      "_description": "Pharmaceutical fate: biodegradation, photolysis, sorption",
+
+      "list_transformations": {
+        "1": "antibiotic_biodegradation",
+        "2": "antibiotic_photolysis",
+        "3": "analgesic_biodegradation",
+        "4": "analgesic_photolysis",
+        "5": "hormone_biodegradation",
+        "6": "hormone_photolysis",
+        "7": "psychiatric_biodegradation",
+        "8": "psychiatric_photolysis"
+      },
+
+      "1": {
+        "_name": "antibiotic_biodegradation",
+        "_description": "Microbial degradation of antibiotics (e.g., sulfamethoxazole, ciprofloxacin)",
+        "_reaction": "Antibiotic -> Metabolites -> CO2",
+        "_notes": "Rate varies widely: sulfonamides t1/2 ~ 5-20 days; fluoroquinolones more persistent",
+        "consumed": "PHARMA_antibiotic",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_bio_antibiotic * PHARMA_antibiotic * theta_bio^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio_antibiotic", "theta_bio"],
+        "parameter_values": {
+          "k_bio_antibiotic": 0.05,
+          "theta_bio": 1.07
+        },
+        "_parameter_ranges": {
+          "k_bio_antibiotic": {"min": 0.01, "max": 0.2, "units": "1/day", "source": "Luo et al. 2014"},
+          "theta_bio": {"min": 1.04, "max": 1.10, "units": "dimensionless"}
+        }
+      },
+
+      "2": {
+        "_name": "antibiotic_photolysis",
+        "_description": "Direct and indirect photolysis of antibiotics",
+        "_reaction": "Antibiotic + hv -> Products",
+        "_notes": "Quantum yields vary; fluoroquinolones highly photosensitive",
+        "consumed": "PHARMA_antibiotic",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_photo_antibiotic * PHARMA_antibiotic * (SWrad_Wm2 / 500) * f_depth",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_photo_antibiotic", "f_depth"],
+        "parameter_values": {
+          "k_photo_antibiotic": 0.1,
+          "f_depth": 0.5
+        },
+        "_parameter_ranges": {
+          "k_photo_antibiotic": {"min": 0.01, "max": 0.5, "units": "1/day at 500 W/m2"},
+          "f_depth": {"min": 0.1, "max": 1.0, "units": "fraction", "source": "Light attenuation factor"}
+        }
+      },
+
+      "3": {
+        "_name": "analgesic_biodegradation",
+        "_description": "Biodegradation of analgesics (e.g., ibuprofen, diclofenac, acetaminophen)",
+        "_notes": "Ibuprofen degrades readily; diclofenac more recalcitrant",
+        "consumed": "PHARMA_analgesic",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_bio_analgesic * PHARMA_analgesic * theta_bio^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio_analgesic", "theta_bio"],
+        "parameter_values": {
+          "k_bio_analgesic": 0.08,
+          "theta_bio": 1.07
+        },
+        "_parameter_ranges": {
+          "k_bio_analgesic": {"min": 0.02, "max": 0.3, "units": "1/day"}
+        }
+      },
+
+      "4": {
+        "_name": "analgesic_photolysis",
+        "_description": "Photodegradation of analgesics",
+        "_notes": "Diclofenac has high photolysis rate; ibuprofen lower",
+        "consumed": "PHARMA_analgesic",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_photo_analgesic * PHARMA_analgesic * (SWrad_Wm2 / 500) * f_depth",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_photo_analgesic", "f_depth"],
+        "parameter_values": {
+          "k_photo_analgesic": 0.15,
+          "f_depth": 0.5
+        }
+      },
+
+      "5": {
+        "_name": "hormone_biodegradation",
+        "_description": "Biodegradation of natural and synthetic hormones (e.g., estradiol, EE2)",
+        "_notes": "Natural estrogens degrade faster than synthetic EE2",
+        "consumed": "PHARMA_hormone",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_bio_hormone * PHARMA_hormone * theta_bio^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio_hormone", "theta_bio"],
+        "parameter_values": {
+          "k_bio_hormone": 0.1,
+          "theta_bio": 1.07
+        },
+        "_parameter_ranges": {
+          "k_bio_hormone": {"min": 0.02, "max": 0.5, "units": "1/day", "source": "E2 faster than EE2"}
+        }
+      },
+
+      "6": {
+        "_name": "hormone_photolysis",
+        "_description": "Photodegradation of hormones",
+        "consumed": "PHARMA_hormone",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_photo_hormone * PHARMA_hormone * (SWrad_Wm2 / 500) * f_depth",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_photo_hormone", "f_depth"],
+        "parameter_values": {
+          "k_photo_hormone": 0.05,
+          "f_depth": 0.5
+        }
+      },
+
+      "7": {
+        "_name": "psychiatric_biodegradation",
+        "_description": "Biodegradation of psychiatric drugs (e.g., carbamazepine, fluoxetine)",
+        "_notes": "Carbamazepine highly persistent; often used as tracer",
+        "consumed": "PHARMA_psychiatric",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_bio_psychiatric * PHARMA_psychiatric * theta_bio^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio_psychiatric", "theta_bio"],
+        "parameter_values": {
+          "k_bio_psychiatric": 0.01,
+          "theta_bio": 1.07
+        },
+        "_parameter_ranges": {
+          "k_bio_psychiatric": {"min": 0.001, "max": 0.05, "units": "1/day", "source": "Very persistent"}
+        }
+      },
+
+      "8": {
+        "_name": "psychiatric_photolysis",
+        "_description": "Photodegradation of psychiatric drugs",
+        "consumed": "PHARMA_psychiatric",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_photo_psychiatric * PHARMA_psychiatric * (SWrad_Wm2 / 500) * f_depth",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_photo_psychiatric", "f_depth"],
+        "parameter_values": {
+          "k_photo_psychiatric": 0.02,
+          "f_depth": 0.5
+        }
+      }
+    },
+
+    "PPCPS": {
+      "_description": "Personal Care Products fate",
+
+      "list_transformations": {
+        "1": "fragrance_volatilization",
+        "2": "fragrance_biodegradation",
+        "3": "uv_filter_photolysis",
+        "4": "uv_filter_biodegradation",
+        "5": "antimicrobial_biodegradation",
+        "6": "antimicrobial_photolysis"
+      },
+
+      "1": {
+        "_name": "fragrance_volatilization",
+        "_description": "Volatilization of synthetic musks and fragrances",
+        "_notes": "Henry's law constant determines air-water exchange",
+        "consumed": "PPCP_fragrance",
+        "produced": "PPCP_fragrance_atm",
+        "kinetics": [
+          "k_vol * PPCP_fragrance * (Treach_K / 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_vol"],
+        "parameter_values": {
+          "k_vol": 0.02
+        },
+        "_parameter_ranges": {
+          "k_vol": {"min": 0.005, "max": 0.1, "units": "1/day"}
+        }
+      },
+
+      "2": {
+        "_name": "fragrance_biodegradation",
+        "_description": "Biodegradation of fragrances",
+        "consumed": "PPCP_fragrance",
+        "produced": "CO2",
+        "kinetics": [
+          "k_bio_fragrance * PPCP_fragrance * theta_bio^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio_fragrance", "theta_bio"],
+        "parameter_values": {
+          "k_bio_fragrance": 0.03,
+          "theta_bio": 1.07
+        }
+      },
+
+      "3": {
+        "_name": "uv_filter_photolysis",
+        "_description": "Photodegradation of UV filters (e.g., oxybenzone, octinoxate)",
+        "_notes": "Paradoxically, UV filters can be photodegraded by UV",
+        "consumed": "PPCP_UV_filter",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_photo_uv * PPCP_UV_filter * (SWrad_Wm2 / 500) * f_depth",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_photo_uv", "f_depth"],
+        "parameter_values": {
+          "k_photo_uv": 0.08,
+          "f_depth": 0.5
+        }
+      },
+
+      "4": {
+        "_name": "uv_filter_biodegradation",
+        "_description": "Biodegradation of UV filters",
+        "consumed": "PPCP_UV_filter",
+        "produced": "CO2",
+        "kinetics": [
+          "k_bio_uv * PPCP_UV_filter * theta_bio^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio_uv", "theta_bio"],
+        "parameter_values": {
+          "k_bio_uv": 0.02,
+          "theta_bio": 1.07
+        }
+      },
+
+      "5": {
+        "_name": "antimicrobial_biodegradation",
+        "_description": "Biodegradation of antimicrobials (e.g., triclosan, triclocarban)",
+        "consumed": "PPCP_antimicrobial",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_bio_antimicrobial * PPCP_antimicrobial * theta_bio^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio_antimicrobial", "theta_bio"],
+        "parameter_values": {
+          "k_bio_antimicrobial": 0.04,
+          "theta_bio": 1.07
+        }
+      },
+
+      "6": {
+        "_name": "antimicrobial_photolysis",
+        "_description": "Photodegradation of antimicrobials",
+        "_notes": "Triclosan undergoes rapid photolysis",
+        "consumed": "PPCP_antimicrobial",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_photo_antimicrobial * PPCP_antimicrobial * (SWrad_Wm2 / 500) * f_depth",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_photo_antimicrobial", "f_depth"],
+        "parameter_values": {
+          "k_photo_antimicrobial": 0.2,
+          "f_depth": 0.5
+        }
+      }
+    },
+
+    "PFAS": {
+      "_description": "Per- and polyfluoroalkyl substances - extremely persistent",
+      "_notes": [
+        "PFAS are called 'forever chemicals' due to extreme persistence",
+        "C-F bond is one of strongest in organic chemistry",
+        "Primary removal: sorption to sediments, dilution, plant uptake",
+        "No significant biodegradation or photolysis under environmental conditions"
+      ],
+
+      "list_transformations": {
+        "1": "pfoa_sorption",
+        "2": "pfos_sorption",
+        "3": "genx_sorption",
+        "4": "pfas_plant_uptake",
+        "5": "pfos_to_pfoa"
+      },
+
+      "1": {
+        "_name": "pfoa_sorption",
+        "_description": "PFOA sorption to sediments and organic matter",
+        "_notes": "Kd ~ 10-100 L/kg depending on organic carbon content",
+        "consumed": "PFAS_PFOA",
+        "produced": "PFAS_PFOA_sorbed",
+        "kinetics": [
+          "k_sorp_pfoa * PFAS_PFOA * (1 - PFAS_PFOA / Smax_pfoa)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_sorp_pfoa", "Smax_pfoa"],
+        "parameter_values": {
+          "k_sorp_pfoa": 0.01,
+          "Smax_pfoa": 100
+        },
+        "_parameter_ranges": {
+          "k_sorp_pfoa": {"min": 0.001, "max": 0.05, "units": "1/day"},
+          "Smax_pfoa": {"min": 10, "max": 500, "units": "ug/L equivalent"}
+        }
+      },
+
+      "2": {
+        "_name": "pfos_sorption",
+        "_description": "PFOS sorption - higher affinity than PFOA",
+        "_notes": "PFOS is more hydrophobic, stronger sorption",
+        "consumed": "PFAS_PFOS",
+        "produced": "PFAS_PFOS_sorbed",
+        "kinetics": [
+          "k_sorp_pfos * PFAS_PFOS * (1 - PFAS_PFOS / Smax_pfos)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_sorp_pfos", "Smax_pfos"],
+        "parameter_values": {
+          "k_sorp_pfos": 0.02,
+          "Smax_pfos": 80
+        }
+      },
+
+      "3": {
+        "_name": "genx_sorption",
+        "_description": "GenX (HFPO-DA) sorption - less sorptive than legacy PFAS",
+        "_notes": "Shorter chain, more mobile in environment",
+        "consumed": "PFAS_GenX",
+        "produced": "PFAS_GenX_sorbed",
+        "kinetics": [
+          "k_sorp_genx * PFAS_GenX",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_sorp_genx"],
+        "parameter_values": {
+          "k_sorp_genx": 0.005
+        }
+      },
+
+      "4": {
+        "_name": "pfas_plant_uptake",
+        "_description": "PFAS uptake by plants (bioaccumulation pathway)",
+        "_notes": "PFAS accumulate in plant tissues, especially leaves",
+        "consumed": "PFAS_PFOA",
+        "produced": "PFAS_plant",
+        "kinetics": [
+          "k_plant_pfas * PFAS_PFOA * f_season",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_plant_pfas", "f_season"],
+        "parameter_values": {
+          "k_plant_pfas": 0.001,
+          "f_season": 1.0
+        }
+      },
+
+      "5": {
+        "_name": "pfos_to_pfoa",
+        "_description": "Very slow transformation of PFOS precursors",
+        "_notes": "Precursor compounds can slowly transform to terminal PFAS",
+        "consumed": "PFAS_PFOS",
+        "produced": "PFAS_PFOA",
+        "kinetics": [
+          "k_transform * PFAS_PFOS",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_transform"],
+        "parameter_values": {
+          "k_transform": 0.0001
+        },
+        "_parameter_ranges": {
+          "k_transform": {"min": 0.00001, "max": 0.001, "units": "1/day", "source": "Extremely slow"}
+        }
+      }
+    },
+
+    "MICROPLASTICS": {
+      "_description": "Microplastic particle fate and transport",
+      "_notes": [
+        "Microplastics: particles < 5mm (fibers, fragments, beads)",
+        "Primary sources: textiles (fibers), fragmentation, cosmetics (beads)",
+        "Main processes: settling, aggregation, fragmentation, biofouling",
+        "Units often particles/L rather than mass concentration"
+      ],
+
+      "list_transformations": {
+        "1": "fiber_settling",
+        "2": "fragment_settling",
+        "3": "bead_settling",
+        "4": "mp_aggregation",
+        "5": "mp_fragmentation",
+        "6": "mp_biofouling"
+      },
+
+      "1": {
+        "_name": "fiber_settling",
+        "_description": "Gravitational settling of microplastic fibers",
+        "_notes": "Fibers settle slowly due to high surface area:volume ratio",
+        "consumed": "MP_fiber",
+        "produced": "MP_fiber_sed",
+        "kinetics": [
+          "v_settle_fiber * MP_fiber / depth",
+          "particles/L/day"
+        ],
+        "parameter_names": ["v_settle_fiber", "depth"],
+        "parameter_values": {
+          "v_settle_fiber": 0.5,
+          "depth": 2.0
+        },
+        "_parameter_ranges": {
+          "v_settle_fiber": {"min": 0.1, "max": 2.0, "units": "m/day", "source": "Koelmans et al. 2019"}
+        }
+      },
+
+      "2": {
+        "_name": "fragment_settling",
+        "_description": "Settling of microplastic fragments",
+        "_notes": "Settling depends on size, shape, density, biofouling",
+        "consumed": "MP_fragment",
+        "produced": "MP_fragment_sed",
+        "kinetics": [
+          "v_settle_fragment * MP_fragment / depth",
+          "particles/L/day"
+        ],
+        "parameter_names": ["v_settle_fragment", "depth"],
+        "parameter_values": {
+          "v_settle_fragment": 1.0,
+          "depth": 2.0
+        }
+      },
+
+      "3": {
+        "_name": "bead_settling",
+        "_description": "Settling of microbeads (spherical)",
+        "_notes": "Beads settle faster due to compact shape",
+        "consumed": "MP_bead",
+        "produced": "MP_bead_sed",
+        "kinetics": [
+          "v_settle_bead * MP_bead / depth",
+          "particles/L/day"
+        ],
+        "parameter_names": ["v_settle_bead", "depth"],
+        "parameter_values": {
+          "v_settle_bead": 2.0,
+          "depth": 2.0
+        }
+      },
+
+      "4": {
+        "_name": "mp_aggregation",
+        "_description": "Aggregation of MPs with suspended sediment and organic matter",
+        "_notes": "Heteroaggregation increases effective settling",
+        "consumed": "MP_fragment",
+        "produced": "MP_aggregate",
+        "kinetics": [
+          "k_agg * MP_fragment * TSS",
+          "particles/L/day"
+        ],
+        "parameter_names": ["k_agg", "TSS"],
+        "parameter_values": {
+          "k_agg": 0.001,
+          "TSS": 20
+        },
+        "_parameter_ranges": {
+          "k_agg": {"min": 0.0001, "max": 0.01, "units": "1/(mg/L)/day"},
+          "TSS": {"min": 5, "max": 100, "units": "mg/L"}
+        }
+      },
+
+      "5": {
+        "_name": "mp_fragmentation",
+        "_description": "UV-induced fragmentation of MPs to smaller particles",
+        "_notes": "Creates secondary microplastics and nanoplastics",
+        "consumed": "MP_fragment",
+        "produced": "MP_nanoplastic",
+        "kinetics": [
+          "k_frag * MP_fragment * (SWrad_Wm2 / 500)",
+          "particles/L/day"
+        ],
+        "parameter_names": ["k_frag"],
+        "parameter_values": {
+          "k_frag": 0.001
+        },
+        "_parameter_ranges": {
+          "k_frag": {"min": 0.0001, "max": 0.01, "units": "1/day", "source": "Very slow process"}
+        }
+      },
+
+      "6": {
+        "_name": "mp_biofouling",
+        "_description": "Biofilm growth on MP surfaces increasing density",
+        "_notes": "Biofouling increases settling by increasing particle density",
+        "consumed": "MP_fragment",
+        "produced": "MP_biofouled",
+        "kinetics": [
+          "k_biofoul * MP_fragment * theta_bio^(Treach_K - 293)",
+          "particles/L/day"
+        ],
+        "parameter_names": ["k_biofoul", "theta_bio"],
+        "parameter_values": {
+          "k_biofoul": 0.05,
+          "theta_bio": 1.07
+        }
+      }
+    },
+
+    "ENDOCRINE_DISRUPTORS": {
+      "_description": "Endocrine disrupting compounds (EDCs) fate",
+
+      "list_transformations": {
+        "1": "estrogen_biodegradation",
+        "2": "estrogen_photolysis",
+        "3": "bisphenol_biodegradation",
+        "4": "bisphenol_photolysis"
+      },
+
+      "1": {
+        "_name": "estrogen_biodegradation",
+        "_description": "Biodegradation of natural and synthetic estrogens",
+        "_notes": "E1, E2 degrade faster than EE2 (synthetic)",
+        "consumed": "EDC_estrogen",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_bio_estrogen * EDC_estrogen * theta_bio^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio_estrogen", "theta_bio"],
+        "parameter_values": {
+          "k_bio_estrogen": 0.1,
+          "theta_bio": 1.07
+        },
+        "_parameter_ranges": {
+          "k_bio_estrogen": {"min": 0.02, "max": 0.5, "units": "1/day"}
+        }
+      },
+
+      "2": {
+        "_name": "estrogen_photolysis",
+        "_description": "Photodegradation of estrogens",
+        "consumed": "EDC_estrogen",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_photo_estrogen * EDC_estrogen * (SWrad_Wm2 / 500) * f_depth",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_photo_estrogen", "f_depth"],
+        "parameter_values": {
+          "k_photo_estrogen": 0.05,
+          "f_depth": 0.5
+        }
+      },
+
+      "3": {
+        "_name": "bisphenol_biodegradation",
+        "_description": "Biodegradation of bisphenol A (BPA) and alternatives",
+        "_notes": "BPA degrades relatively quickly; BPS/BPF similar rates",
+        "consumed": "EDC_bisphenol",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_bio_bpa * EDC_bisphenol * theta_bio^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio_bpa", "theta_bio"],
+        "parameter_values": {
+          "k_bio_bpa": 0.15,
+          "theta_bio": 1.07
+        }
+      },
+
+      "4": {
+        "_name": "bisphenol_photolysis",
+        "_description": "Photodegradation of bisphenols",
+        "consumed": "EDC_bisphenol",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_photo_bpa * EDC_bisphenol * (SWrad_Wm2 / 500) * f_depth",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_photo_bpa", "f_depth"],
+        "parameter_values": {
+          "k_photo_bpa": 0.1,
+          "f_depth": 0.5
+        }
+      }
+    },
+
+    "EMERGING_SIMPLE": {
+      "_description": "Simplified emerging contaminants with generic decay",
+      "_notes": "For screening-level assessment when specific compound data unavailable",
+
+      "list_transformations": {
+        "1": "generic_biodegradation",
+        "2": "generic_photolysis",
+        "3": "generic_sorption"
+      },
+
+      "1": {
+        "_name": "generic_biodegradation",
+        "_description": "Generic first-order biodegradation",
+        "consumed": "EC_generic",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_bio * EC_generic * theta^(Treach_K - 293)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_bio", "theta"],
+        "parameter_values": {
+          "k_bio": 0.05,
+          "theta": 1.07
+        },
+        "_parameter_ranges": {
+          "k_bio": {"min": 0.001, "max": 0.5, "units": "1/day", "source": "Wide range for ECs"}
+        }
+      },
+
+      "2": {
+        "_name": "generic_photolysis",
+        "_description": "Generic photolysis",
+        "consumed": "EC_generic",
+        "produced": "METAB_generic",
+        "kinetics": [
+          "k_photo * EC_generic * (SWrad_Wm2 / 500)",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_photo"],
+        "parameter_values": {
+          "k_photo": 0.05
+        }
+      },
+
+      "3": {
+        "_name": "generic_sorption",
+        "_description": "Generic sorption to sediments",
+        "consumed": "EC_generic",
+        "produced": "EC_sorbed",
+        "kinetics": [
+          "k_sorp * EC_generic * Kd_norm",
+          "ug/L/day"
+        ],
+        "parameter_names": ["k_sorp", "Kd_norm"],
+        "parameter_values": {
+          "k_sorp": 0.01,
+          "Kd_norm": 1.0
+        }
+      }
+    }
+  }
+}

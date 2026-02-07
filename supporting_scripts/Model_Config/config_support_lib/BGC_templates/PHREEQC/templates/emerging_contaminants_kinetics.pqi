@@ -1,0 +1,423 @@
+# PHREEQC Template: Emerging Contaminants Kinetics
+# Description: Pharmaceuticals, PPCPs, PFAS, EDCs - fate and transport
+# Reference: Lapworth et al. (2012); Luo et al. (2014); USEPA PFAS guidance
+# ================================================================
+#
+# NOTE: Emerging contaminants are typically organic compounds not in
+# standard PHREEQC databases. This template uses KINETICS blocks
+# to model their fate. For actual simulations, define these as
+# user-defined species or use NATIVE_BGC_FLEX instead.
+#
+# ================================================================
+
+DATABASE phreeqc.dat
+
+TITLE Emerging Contaminants - Pharmaceuticals, PFAS, EDCs
+
+# ================================================================
+# SOLUTION 1: WWTP effluent-impacted stream
+# ================================================================
+SOLUTION 1  WWTP Effluent-Impacted Water
+    temp      18.0
+    pH        7.5
+    pe        10.0
+    units     mg/L
+
+    # Standard water chemistry
+    Ca        60.0
+    Mg        15.0
+    Na        80.0       # Elevated from WWTP
+    K         10.0
+    Cl        100.0      # Elevated from WWTP
+    C(4)      120 as HCO3
+    S(6)      40 as SO4
+    N(5)      5.0        # Nitrate
+    N(-3)     2.0        # Ammonia from WWTP
+    P         1.0        # Phosphate from WWTP
+    O(0)      7.0        # DO
+
+    # Note: Emerging contaminants modeled via KINETICS
+    # Typical concentrations: ng/L to ug/L
+    # PHREEQC uses mol/L; convert accordingly
+
+END
+
+# ================================================================
+# SOLUTION 2: Pristine upstream water
+# ================================================================
+SOLUTION 2  Pristine Upstream Water
+    temp      15.0
+    pH        7.8
+    pe        12.0
+    units     mg/L
+
+    Ca        40.0
+    Mg        10.0
+    Na        15.0
+    K         3.0
+    Cl        20.0
+    C(4)      60 as HCO3
+    S(6)      15 as SO4
+    N(5)      0.5
+    N(-3)     0.05
+    P         0.02
+    O(0)      9.5
+
+END
+
+# ================================================================
+# EQUILIBRIUM_PHASES
+# ================================================================
+EQUILIBRIUM_PHASES 1
+    O2(g)       -0.7   10.0
+    CO2(g)      -3.5   10.0
+
+END
+
+# ================================================================
+# KINETICS: Pharmaceutical degradation
+# ================================================================
+KINETICS 1
+
+# Antibiotic (e.g., sulfamethoxazole) degradation
+# Combined biodegradation and photolysis
+-antibiotic_decay
+    -formula  H2O 0        # Placeholder - no actual PHREEQC species change
+    -m0       1e-6          # Initial concentration (mol) ~ 0.25 ug/L SMX
+    -parms    0.05 0.1 500  # k_bio (1/day), k_photo (1/day at I0), I0 (W/m2)
+    -tol      1e-10
+
+# Analgesic (e.g., ibuprofen, diclofenac) degradation
+-analgesic_decay
+    -formula  H2O 0
+    -m0       5e-6          # ~ 1 ug/L
+    -parms    0.08 0.15 500
+    -tol      1e-10
+
+# Hormone (e.g., estradiol, EE2) degradation
+-hormone_decay
+    -formula  H2O 0
+    -m0       1e-8          # ~ 3 ng/L (very low concentrations)
+    -parms    0.1 0.05 500
+    -tol      1e-10
+
+# Carbamazepine (psychiatric - persistent tracer)
+-carbamazepine_decay
+    -formula  H2O 0
+    -m0       2e-6          # ~ 0.5 ug/L
+    -parms    0.01 0.02 500 # Very slow decay
+    -tol      1e-10
+
+# PFOS (perfluorooctane sulfonate) - essentially no decay
+-pfos_persistence
+    -formula  H2O 0
+    -m0       1e-7          # ~ 50 ng/L
+    -parms    0.0001 0.01   # k_decay (nearly zero), k_sorption
+    -tol      1e-10
+
+# PFOA (perfluorooctanoic acid)
+-pfoa_persistence
+    -formula  H2O 0
+    -m0       2e-7          # ~ 80 ng/L
+    -parms    0.0001 0.008
+    -tol      1e-10
+
+# Triclosan (antimicrobial) - rapid photolysis
+-triclosan_decay
+    -formula  H2O 0
+    -m0       5e-7          # ~ 150 ng/L
+    -parms    0.04 0.2 500  # Moderate bio, rapid photo
+    -tol      1e-10
+
+# Bisphenol A (BPA) - moderate degradation
+-bpa_decay
+    -formula  H2O 0
+    -m0       1e-6          # ~ 0.2 ug/L
+    -parms    0.15 0.1 500
+    -tol      1e-10
+
+END
+
+# ================================================================
+# RATES: Kinetic rate expressions for emerging contaminants
+# ================================================================
+RATES
+
+antibiotic_decay
+-start
+10 REM Antibiotic degradation: biodegradation + photolysis
+20 k_bio = PARM(1) / 86400           # Convert 1/day to 1/s
+30 k_photo_ref = PARM(2) / 86400
+40 I_ref = PARM(3)                   # Reference irradiance (W/m2)
+50 T = TC
+60 theta = 1.07
+70 f_temp = theta^(T - 20)           # Temperature correction
+
+80 REM Assume irradiance = 300 W/m2 average (can be coupled to model)
+90 I = 300
+100 k_photo = k_photo_ref * (I / I_ref)
+
+110 REM Light attenuation in water column (Beer-Lambert)
+120 depth = 1.5                       # Water depth (m)
+130 Kd_light = 0.5                    # Light extinction coefficient (1/m)
+140 f_depth = (1 - EXP(-Kd_light * depth)) / (Kd_light * depth)
+
+150 conc = M                          # Current concentration
+160 rate_bio = k_bio * conc * f_temp
+170 rate_photo = k_photo * conc * f_depth
+
+180 total_rate = rate_bio + rate_photo
+190 moles = total_rate * TIME
+200 SAVE moles
+210 END
+-end
+
+analgesic_decay
+-start
+10 REM Analgesic degradation (ibuprofen degrades faster than diclofenac)
+20 k_bio = PARM(1) / 86400
+30 k_photo_ref = PARM(2) / 86400
+40 I_ref = PARM(3)
+50 T = TC
+60 theta = 1.07
+70 f_temp = theta^(T - 20)
+80 I = 300
+90 k_photo = k_photo_ref * (I / I_ref)
+100 depth = 1.5
+110 Kd_light = 0.5
+120 f_depth = (1 - EXP(-Kd_light * depth)) / (Kd_light * depth)
+130 conc = M
+140 rate = (k_bio * f_temp + k_photo * f_depth) * conc
+150 moles = rate * TIME
+160 SAVE moles
+170 END
+-end
+
+hormone_decay
+-start
+10 REM Hormone degradation (estrogens)
+20 REM Natural estrogens (E1, E2) degrade faster than synthetic EE2
+30 k_bio = PARM(1) / 86400
+40 k_photo_ref = PARM(2) / 86400
+50 I_ref = PARM(3)
+60 T = TC
+70 f_temp = 1.07^(T - 20)
+80 I = 300
+90 k_photo = k_photo_ref * (I / I_ref)
+100 depth = 1.5
+110 f_depth = (1 - EXP(-0.5 * depth)) / (0.5 * depth)
+120 conc = M
+130 rate = (k_bio * f_temp + k_photo * f_depth) * conc
+140 moles = rate * TIME
+150 SAVE moles
+160 END
+-end
+
+carbamazepine_decay
+-start
+10 REM Carbamazepine - very persistent, often used as wastewater tracer
+20 k_bio = PARM(1) / 86400
+30 k_photo_ref = PARM(2) / 86400
+40 I_ref = PARM(3)
+50 T = TC
+60 f_temp = 1.07^(T - 20)
+70 I = 300
+80 k_photo = k_photo_ref * (I / I_ref)
+90 f_depth = 0.5
+100 conc = M
+110 rate = (k_bio * f_temp + k_photo * f_depth) * conc
+120 moles = rate * TIME
+130 SAVE moles
+140 END
+-end
+
+pfos_persistence
+-start
+10 REM PFOS - extremely persistent "forever chemical"
+20 REM Only removal is via sorption; no biodegradation or photolysis
+30 k_decay = PARM(1) / 86400         # Essentially zero
+40 k_sorp = PARM(2) / 86400          # Sorption rate
+50 conc = M
+
+60 REM Sorption depends on organic carbon content
+70 foc = 0.02                         # Fraction organic carbon in sediment
+80 Koc = 2000                         # Organic carbon partition coefficient (L/kg)
+90 rho_sed = 1500                     # Sediment density (kg/m3)
+100 depth = 1.5
+
+110 REM Simplified sorption to sediments
+120 rate_sorp = k_sorp * conc * foc * Koc / 1000
+130 rate_decay = k_decay * conc
+
+140 total_rate = rate_decay + rate_sorp
+150 moles = total_rate * TIME
+160 SAVE moles
+170 END
+-end
+
+pfoa_persistence
+-start
+10 REM PFOA - similar to PFOS but slightly less sorptive
+20 k_decay = PARM(1) / 86400
+30 k_sorp = PARM(2) / 86400
+40 conc = M
+50 foc = 0.02
+60 Koc = 1500                         # Lower than PFOS
+70 rate_sorp = k_sorp * conc * foc * Koc / 1000
+80 rate_decay = k_decay * conc
+90 total_rate = rate_decay + rate_sorp
+100 moles = total_rate * TIME
+110 SAVE moles
+120 END
+-end
+
+triclosan_decay
+-start
+10 REM Triclosan - antimicrobial with rapid photolysis
+20 k_bio = PARM(1) / 86400
+30 k_photo_ref = PARM(2) / 86400
+40 I_ref = PARM(3)
+50 T = TC
+60 f_temp = 1.07^(T - 20)
+70 I = 300
+80 k_photo = k_photo_ref * (I / I_ref)
+90 f_depth = 0.5
+100 conc = M
+
+110 REM Triclosan has high photolysis rate
+120 rate = (k_bio * f_temp + k_photo * f_depth) * conc
+130 moles = rate * TIME
+140 SAVE moles
+150 END
+-end
+
+bpa_decay
+-start
+10 REM Bisphenol A - moderate biodegradation
+20 k_bio = PARM(1) / 86400
+30 k_photo_ref = PARM(2) / 86400
+40 I_ref = PARM(3)
+50 T = TC
+60 f_temp = 1.07^(T - 20)
+70 I = 300
+80 k_photo = k_photo_ref * (I / I_ref)
+90 f_depth = 0.5
+100 conc = M
+110 rate = (k_bio * f_temp + k_photo * f_depth) * conc
+120 moles = rate * TIME
+130 SAVE moles
+140 END
+-end
+
+END
+
+# ================================================================
+# SELECTED_OUTPUT
+# ================================================================
+SELECTED_OUTPUT
+    -file         emerging_contaminants_results.txt
+    -reset        false
+    -pH           true
+    -pe           true
+    -temperature  true
+    -totals       N(5) N(-3) P O(0)
+    -kinetic_reactants  antibiotic_decay analgesic_decay hormone_decay
+    -kinetic_reactants  carbamazepine_decay pfos_persistence pfoa_persistence
+    -kinetic_reactants  triclosan_decay bpa_decay
+
+END
+
+# ================================================================
+# USER_PUNCH: Emerging contaminant summary
+# ================================================================
+USER_PUNCH
+    -headings  Antibiotic_ug  Analgesic_ug  Hormone_ng  CBZ_ug  PFOS_ng  PFOA_ng  BPA_ug
+
+    # Convert mol to ug/L or ng/L for common reporting units
+    # Approximate molecular weights used
+
+    # Antibiotics (e.g., SMX MW ~253)
+    10 antibiotic_ug = KIN("antibiotic_decay") * 253e6
+    20 PUNCH antibiotic_ug
+
+    # Analgesics (e.g., ibuprofen MW ~206)
+    30 analgesic_ug = KIN("analgesic_decay") * 206e6
+    40 PUNCH analgesic_ug
+
+    # Hormones (e.g., E2 MW ~272) - report in ng/L
+    50 hormone_ng = KIN("hormone_decay") * 272e9
+    60 PUNCH hormone_ng
+
+    # Carbamazepine (MW ~236)
+    70 cbz_ug = KIN("carbamazepine_decay") * 236e6
+    80 PUNCH cbz_ug
+
+    # PFOS (MW ~500) - report in ng/L
+    90 pfos_ng = KIN("pfos_persistence") * 500e9
+    100 PUNCH pfos_ng
+
+    # PFOA (MW ~414) - report in ng/L
+    110 pfoa_ng = KIN("pfoa_persistence") * 414e9
+    120 PUNCH pfoa_ng
+
+    # BPA (MW ~228)
+    130 bpa_ug = KIN("bpa_decay") * 228e6
+    140 PUNCH bpa_ug
+
+END
+
+# ================================================================
+# Notes on Emerging Contaminants
+# ================================================================
+#
+# Compound Classes and Typical Half-Lives:
+#
+# PHARMACEUTICALS:
+#   Antibiotics:
+#     - Sulfamethoxazole: t1/2 = 5-20 days (moderate persistence)
+#     - Ciprofloxacin: t1/2 = 10-50 days (more persistent)
+#     - Trimethoprim: t1/2 = 5-15 days
+#
+#   Analgesics:
+#     - Ibuprofen: t1/2 = 1-5 days (rapidly degraded)
+#     - Diclofenac: t1/2 = 5-20 days (photolysis important)
+#     - Acetaminophen: t1/2 = 1-3 days
+#
+#   Psychiatric:
+#     - Carbamazepine: t1/2 = 50-500+ days (very persistent)
+#     - Fluoxetine: t1/2 = 20-100 days
+#
+#   Hormones:
+#     - 17β-Estradiol (E2): t1/2 = 2-10 days
+#     - 17α-Ethinylestradiol (EE2): t1/2 = 10-50 days (synthetic, more persistent)
+#
+# PFAS (Per- and Polyfluoroalkyl Substances):
+#   - PFOS: t1/2 = years to decades (essentially non-degradable)
+#   - PFOA: t1/2 = years to decades
+#   - GenX: t1/2 = years (shorter chain, still persistent)
+#   - Only removal via sorption, dilution, plant uptake
+#
+# PERSONAL CARE PRODUCTS:
+#   - Triclosan: t1/2 = 1-10 days (rapid photolysis)
+#   - UV filters (oxybenzone): t1/2 = 5-30 days
+#   - Synthetic musks: t1/2 = 10-100 days
+#
+# ENDOCRINE DISRUPTORS:
+#   - Bisphenol A: t1/2 = 2-10 days
+#   - Phthalates: t1/2 = 1-30 days (varies by compound)
+#   - Nonylphenol: t1/2 = 10-50 days
+#
+# Key Removal Processes:
+#   1. Biodegradation - microbial metabolism (temperature-dependent)
+#   2. Photolysis - direct and indirect UV degradation
+#   3. Sorption - binding to sediments/organic matter
+#   4. Volatilization - air-water exchange (fragrances)
+#   5. Hydrolysis - chemical breakdown (pH-dependent)
+#
+# Typical Environmental Concentrations:
+#   - WWTP effluent: 0.01 - 10 ug/L per compound
+#   - Surface water: 0.001 - 1 ug/L
+#   - Groundwater: 0.0001 - 0.1 ug/L
+#   - PFAS (drinking water limit): 70 ng/L (USEPA advisory)
+#
+# ================================================================
