@@ -1,0 +1,618 @@
+{
+  "_DESCRIPTION": "WASP8 Eutrophication Model - Advanced DO/Nutrients/Algae/Sediment Diagenesis",
+  "_REFERENCE": "EPA WASP8 Documentation (Wool et al., 2020)",
+  "_MODEL": "Water Quality Analysis Simulation Program Version 8",
+  "_VERSION": "1.0",
+  "_NOTES": "State-of-the-art eutrophication model with multiple algae groups and sediment diagenesis",
+
+  "BIOGEOCHEMISTRY_CONFIGURATION": {
+    "CHEMICAL_SPECIES": {
+      "_DISSOLVED_OXYGEN": "DO system",
+      "DO": {
+        "DESCRIPTION": "Dissolved oxygen",
+        "UNITS": "mg/L",
+        "INITIAL_CONDITION": 8.0
+      },
+
+      "_CBOD": "Carbonaceous BOD (multiple pools)",
+      "CBOD_fast": {
+        "DESCRIPTION": "Fast-reacting CBOD (labile)",
+        "UNITS": "mg/L",
+        "INITIAL_CONDITION": 3.0
+      },
+      "CBOD_slow": {
+        "DESCRIPTION": "Slow-reacting CBOD (refractory)",
+        "UNITS": "mg/L",
+        "INITIAL_CONDITION": 5.0
+      },
+
+      "_NITROGEN": "Nitrogen species",
+      "NH4": {
+        "DESCRIPTION": "Ammonia nitrogen",
+        "UNITS": "mg/L as N",
+        "INITIAL_CONDITION": 0.3
+      },
+      "NO3": {
+        "DESCRIPTION": "Nitrate nitrogen",
+        "UNITS": "mg/L as N",
+        "INITIAL_CONDITION": 1.5
+      },
+      "ON_labile": {
+        "DESCRIPTION": "Labile organic nitrogen",
+        "UNITS": "mg/L as N",
+        "INITIAL_CONDITION": 0.5
+      },
+      "ON_refrac": {
+        "DESCRIPTION": "Refractory organic nitrogen",
+        "UNITS": "mg/L as N",
+        "INITIAL_CONDITION": 0.3
+      },
+
+      "_PHOSPHORUS": "Phosphorus species",
+      "PO4": {
+        "DESCRIPTION": "Orthophosphate",
+        "UNITS": "mg/L as P",
+        "INITIAL_CONDITION": 0.05
+      },
+      "OP_labile": {
+        "DESCRIPTION": "Labile organic phosphorus",
+        "UNITS": "mg/L as P",
+        "INITIAL_CONDITION": 0.03
+      },
+      "OP_refrac": {
+        "DESCRIPTION": "Refractory organic phosphorus",
+        "UNITS": "mg/L as P",
+        "INITIAL_CONDITION": 0.02
+      },
+
+      "_PHYTOPLANKTON": "Multiple algae groups",
+      "DIATOM": {
+        "DESCRIPTION": "Diatom biomass",
+        "UNITS": "mg C/L",
+        "INITIAL_CONDITION": 0.5
+      },
+      "GREEN": {
+        "DESCRIPTION": "Green algae biomass",
+        "UNITS": "mg C/L",
+        "INITIAL_CONDITION": 0.3
+      },
+      "CYANO": {
+        "DESCRIPTION": "Cyanobacteria biomass",
+        "UNITS": "mg C/L",
+        "INITIAL_CONDITION": 0.1
+      },
+
+      "_SILICA": "For diatoms",
+      "DSi": {
+        "DESCRIPTION": "Dissolved silica",
+        "UNITS": "mg/L as SiO2",
+        "INITIAL_CONDITION": 5.0
+      },
+      "PSi": {
+        "DESCRIPTION": "Particulate biogenic silica",
+        "UNITS": "mg/L as SiO2",
+        "INITIAL_CONDITION": 1.0
+      },
+
+      "_CARBON": "Carbon species",
+      "DOC": {
+        "DESCRIPTION": "Dissolved organic carbon",
+        "UNITS": "mg/L as C",
+        "INITIAL_CONDITION": 5.0
+      },
+      "POC_labile": {
+        "DESCRIPTION": "Labile particulate organic carbon",
+        "UNITS": "mg/L as C",
+        "INITIAL_CONDITION": 2.0
+      },
+      "POC_refrac": {
+        "DESCRIPTION": "Refractory particulate organic carbon",
+        "UNITS": "mg/L as C",
+        "INITIAL_CONDITION": 3.0
+      },
+
+      "_SEDIMENT_DIAGENESIS": "Sediment layers",
+      "SED_PON1": {
+        "DESCRIPTION": "Sediment labile PON (layer 1)",
+        "UNITS": "g/m2",
+        "INITIAL_CONDITION": 50
+      },
+      "SED_PON2": {
+        "DESCRIPTION": "Sediment refractory PON (layer 2)",
+        "UNITS": "g/m2",
+        "INITIAL_CONDITION": 200
+      },
+      "SED_NH4": {
+        "DESCRIPTION": "Sediment porewater NH4",
+        "UNITS": "mg/L",
+        "INITIAL_CONDITION": 5.0
+      }
+    },
+
+    "CYCLING_FRAMEWORKS": {
+      "WASP_DO_SYSTEM": {
+        "_DESCRIPTION": "Dissolved oxygen dynamics",
+
+        "REAERATION": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "DO",
+          "KINETICS": "Ka * (DOsat - DO)",
+          "PARAMETERS": {
+            "Ka": {
+              "VALUE": 2.5,
+              "UNITS": "1/day",
+              "RANGE": [0.5, 15.0],
+              "DESCRIPTION": "Reaeration coefficient",
+              "TEMP_COEFF": 1.024
+            },
+            "DOsat": {
+              "VALUE": 9.0,
+              "UNITS": "mg/L",
+              "DESCRIPTION": "DO saturation (temp dependent)"
+            }
+          }
+        },
+
+        "CBOD_FAST_OXIDATION": {
+          "CONSUMED": "CBOD_fast",
+          "PRODUCED": "NONE",
+          "KINETICS": "Kd1 * CBOD_fast * (DO / (Ksod + DO))",
+          "PARAMETERS": {
+            "Kd1": {
+              "VALUE": 0.3,
+              "UNITS": "1/day",
+              "RANGE": [0.1, 1.0],
+              "DESCRIPTION": "Fast CBOD decay rate",
+              "TEMP_COEFF": 1.047
+            },
+            "Ksod": {
+              "VALUE": 0.5,
+              "UNITS": "mg/L",
+              "DESCRIPTION": "Half-sat DO for oxidation"
+            }
+          }
+        },
+
+        "CBOD_FAST_O2": {
+          "CONSUMED": "DO",
+          "PRODUCED": "NONE",
+          "KINETICS": "Kd1 * CBOD_fast * (DO / (Ksod + DO))",
+          "PARAMETERS": {
+            "Kd1": {"VALUE": 0.3, "UNITS": "1/day"},
+            "Ksod": {"VALUE": 0.5, "UNITS": "mg/L"}
+          }
+        },
+
+        "CBOD_SLOW_OXIDATION": {
+          "CONSUMED": "CBOD_slow",
+          "PRODUCED": "NONE",
+          "KINETICS": "Kd2 * CBOD_slow * (DO / (Ksod + DO))",
+          "PARAMETERS": {
+            "Kd2": {
+              "VALUE": 0.03,
+              "UNITS": "1/day",
+              "RANGE": [0.01, 0.1],
+              "DESCRIPTION": "Slow CBOD decay rate"
+            }
+          }
+        },
+
+        "NITRIFICATION_O2": {
+          "CONSUMED": "DO",
+          "PRODUCED": "NONE",
+          "KINETICS": "4.57 * Kn * NH4 * (DO / (Kno2 + DO))",
+          "PARAMETERS": {
+            "Kn": {"VALUE": 0.2, "UNITS": "1/day"},
+            "Kno2": {"VALUE": 0.5, "UNITS": "mg/L"}
+          },
+          "NOTES": "4.57 mg O2 per mg NH4-N oxidized"
+        },
+
+        "SOD_FLUX": {
+          "CONSUMED": "DO",
+          "PRODUCED": "NONE",
+          "KINETICS": "SOD * (DO / (Ksod2 + DO)) / depth",
+          "PARAMETERS": {
+            "SOD": {
+              "VALUE": 2.0,
+              "UNITS": "g O2/m2/day",
+              "RANGE": [0.5, 10.0],
+              "DESCRIPTION": "Sediment oxygen demand"
+            },
+            "Ksod2": {"VALUE": 1.0, "UNITS": "mg/L"},
+            "depth": {"VALUE": 2.0, "UNITS": "m"}
+          }
+        }
+      },
+
+      "WASP_NITROGEN": {
+        "_DESCRIPTION": "Nitrogen cycling",
+
+        "ON_LABILE_MINERALIZATION": {
+          "CONSUMED": "ON_labile",
+          "PRODUCED": "NH4",
+          "KINETICS": "K71 * ON_labile",
+          "PARAMETERS": {
+            "K71": {
+              "VALUE": 0.1,
+              "UNITS": "1/day",
+              "RANGE": [0.02, 0.4],
+              "DESCRIPTION": "Labile ON mineralization rate",
+              "TEMP_COEFF": 1.08
+            }
+          }
+        },
+
+        "ON_REFRAC_MINERALIZATION": {
+          "CONSUMED": "ON_refrac",
+          "PRODUCED": "NH4",
+          "KINETICS": "K72 * ON_refrac",
+          "PARAMETERS": {
+            "K72": {
+              "VALUE": 0.01,
+              "UNITS": "1/day",
+              "RANGE": [0.001, 0.05],
+              "DESCRIPTION": "Refractory ON mineralization rate"
+            }
+          }
+        },
+
+        "NITRIFICATION": {
+          "CONSUMED": "NH4",
+          "PRODUCED": "NO3",
+          "KINETICS": "Kn * NH4 * (DO / (Kno2 + DO))",
+          "PARAMETERS": {
+            "Kn": {
+              "VALUE": 0.2,
+              "UNITS": "1/day",
+              "RANGE": [0.05, 1.0],
+              "DESCRIPTION": "Nitrification rate",
+              "TEMP_COEFF": 1.08
+            },
+            "Kno2": {
+              "VALUE": 0.5,
+              "UNITS": "mg/L",
+              "DESCRIPTION": "Half-sat DO for nitrification"
+            }
+          }
+        },
+
+        "DENITRIFICATION": {
+          "CONSUMED": "NO3",
+          "PRODUCED": "N2_loss",
+          "KINETICS": "Kdn * NO3 * (Kdno2 / (Kdno2 + DO))",
+          "PARAMETERS": {
+            "Kdn": {
+              "VALUE": 0.1,
+              "UNITS": "1/day",
+              "RANGE": [0.02, 0.5],
+              "DESCRIPTION": "Denitrification rate",
+              "TEMP_COEFF": 1.07
+            },
+            "Kdno2": {
+              "VALUE": 0.1,
+              "UNITS": "mg/L",
+              "DESCRIPTION": "DO inhibition constant"
+            }
+          }
+        },
+
+        "BENTHIC_NH4_FLUX": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "NH4",
+          "KINETICS": "JNH4 * (Kdno2_sed / (Kdno2_sed + DO)) / depth",
+          "PARAMETERS": {
+            "JNH4": {
+              "VALUE": 10.0,
+              "UNITS": "mg N/m2/day",
+              "RANGE": [1.0, 100.0],
+              "DESCRIPTION": "Sediment NH4 flux"
+            },
+            "Kdno2_sed": {"VALUE": 2.0, "UNITS": "mg/L"},
+            "depth": {"VALUE": 2.0, "UNITS": "m"}
+          }
+        }
+      },
+
+      "WASP_PHOSPHORUS": {
+        "_DESCRIPTION": "Phosphorus cycling",
+
+        "OP_LABILE_MINERALIZATION": {
+          "CONSUMED": "OP_labile",
+          "PRODUCED": "PO4",
+          "KINETICS": "K81 * OP_labile",
+          "PARAMETERS": {
+            "K81": {
+              "VALUE": 0.1,
+              "UNITS": "1/day",
+              "RANGE": [0.02, 0.4],
+              "DESCRIPTION": "Labile OP mineralization rate",
+              "TEMP_COEFF": 1.08
+            }
+          }
+        },
+
+        "OP_REFRAC_MINERALIZATION": {
+          "CONSUMED": "OP_refrac",
+          "PRODUCED": "PO4",
+          "KINETICS": "K82 * OP_refrac",
+          "PARAMETERS": {
+            "K82": {
+              "VALUE": 0.005,
+              "UNITS": "1/day",
+              "DESCRIPTION": "Refractory OP mineralization rate"
+            }
+          }
+        },
+
+        "BENTHIC_PO4_FLUX": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "PO4",
+          "KINETICS": "JPO4 * (Kdp / (Kdp + DO)) / depth",
+          "PARAMETERS": {
+            "JPO4": {
+              "VALUE": 2.0,
+              "UNITS": "mg P/m2/day",
+              "RANGE": [0.5, 20.0],
+              "DESCRIPTION": "Sediment PO4 flux"
+            },
+            "Kdp": {
+              "VALUE": 1.0,
+              "UNITS": "mg/L",
+              "DESCRIPTION": "DO threshold for P release"
+            },
+            "depth": {"VALUE": 2.0, "UNITS": "m"}
+          },
+          "NOTES": "P release increases under anoxia"
+        }
+      },
+
+      "WASP_PHYTOPLANKTON": {
+        "_DESCRIPTION": "Multiple phytoplankton groups",
+
+        "DIATOM_GROWTH": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "DIATOM",
+          "KINETICS": "mu_max_D * DIATOM * f_L * f_N * f_P * f_Si * f_T",
+          "PARAMETERS": {
+            "mu_max_D": {
+              "VALUE": 2.5,
+              "UNITS": "1/day",
+              "DESCRIPTION": "Max diatom growth rate"
+            },
+            "f_L": {"FORMULA": "I / (Ik + I) * exp(1 - I/Ik)"},
+            "f_N": {"FORMULA": "min(NH4+NO3, DSi/rSiN) / (Kn + min(...))"},
+            "f_P": {"FORMULA": "PO4 / (Kp + PO4)"},
+            "f_Si": {"FORMULA": "DSi / (KSi + DSi)"},
+            "Ik": {"VALUE": 150, "UNITS": "W/m2"},
+            "Kn": {"VALUE": 0.025, "UNITS": "mg N/L"},
+            "Kp": {"VALUE": 0.005, "UNITS": "mg P/L"},
+            "KSi": {"VALUE": 0.1, "UNITS": "mg Si/L"}
+          }
+        },
+
+        "DIATOM_RESPIRATION": {
+          "CONSUMED": "DIATOM",
+          "PRODUCED": "NH4",
+          "KINETICS": "Kr_D * DIATOM * aNc",
+          "PARAMETERS": {
+            "Kr_D": {
+              "VALUE": 0.1,
+              "UNITS": "1/day",
+              "DESCRIPTION": "Diatom respiration rate"
+            },
+            "aNc": {
+              "VALUE": 0.16,
+              "UNITS": "mg N/mg C",
+              "DESCRIPTION": "N:C ratio in algae"
+            }
+          }
+        },
+
+        "GREEN_GROWTH": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "GREEN",
+          "KINETICS": "mu_max_G * GREEN * f_L * f_N * f_P * f_T",
+          "PARAMETERS": {
+            "mu_max_G": {
+              "VALUE": 2.0,
+              "UNITS": "1/day",
+              "DESCRIPTION": "Max green algae growth rate"
+            }
+          }
+        },
+
+        "GREEN_RESPIRATION": {
+          "CONSUMED": "GREEN",
+          "PRODUCED": "NH4",
+          "KINETICS": "Kr_G * GREEN * aNc",
+          "PARAMETERS": {
+            "Kr_G": {"VALUE": 0.1, "UNITS": "1/day"},
+            "aNc": {"VALUE": 0.16, "UNITS": "mg N/mg C"}
+          }
+        },
+
+        "CYANO_GROWTH": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "CYANO",
+          "KINETICS": "mu_max_C * CYANO * f_L * f_N_fix * f_P * f_T",
+          "PARAMETERS": {
+            "mu_max_C": {
+              "VALUE": 1.0,
+              "UNITS": "1/day",
+              "DESCRIPTION": "Max cyanobacteria growth rate"
+            },
+            "f_N_fix": {
+              "VALUE": 1.0,
+              "DESCRIPTION": "Can fix N when NO3 is limiting"
+            }
+          },
+          "NOTES": "Cyanobacteria can fix N2 when N is limiting"
+        },
+
+        "CYANO_RESPIRATION": {
+          "CONSUMED": "CYANO",
+          "PRODUCED": "NH4",
+          "KINETICS": "Kr_C * CYANO * aNc",
+          "PARAMETERS": {
+            "Kr_C": {"VALUE": 0.08, "UNITS": "1/day"},
+            "aNc": {"VALUE": 0.16, "UNITS": "mg N/mg C"}
+          }
+        },
+
+        "ALGAE_O2_PRODUCTION": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "DO",
+          "KINETICS": "(mu_D * DIATOM + mu_G * GREEN + mu_C * CYANO) * aOc * PQ",
+          "PARAMETERS": {
+            "aOc": {
+              "VALUE": 2.67,
+              "UNITS": "mg O2/mg C",
+              "DESCRIPTION": "O2:C ratio photosynthesis"
+            },
+            "PQ": {
+              "VALUE": 1.0,
+              "DESCRIPTION": "Photosynthetic quotient"
+            }
+          }
+        },
+
+        "ALGAE_SETTLING": {
+          "CONSUMED": "DIATOM",
+          "PRODUCED": "POC_labile",
+          "KINETICS": "vs_D / depth * DIATOM",
+          "PARAMETERS": {
+            "vs_D": {
+              "VALUE": 0.5,
+              "UNITS": "m/day",
+              "DESCRIPTION": "Diatom settling velocity"
+            },
+            "depth": {"VALUE": 5.0, "UNITS": "m"}
+          }
+        }
+      },
+
+      "WASP_SILICA": {
+        "_DESCRIPTION": "Silica cycling for diatoms",
+
+        "SI_UPTAKE": {
+          "CONSUMED": "DSi",
+          "PRODUCED": "NONE",
+          "KINETICS": "mu_D * DIATOM * aSic",
+          "PARAMETERS": {
+            "aSic": {
+              "VALUE": 0.4,
+              "UNITS": "mg Si/mg C",
+              "DESCRIPTION": "Si:C ratio in diatoms"
+            }
+          }
+        },
+
+        "PSI_DISSOLUTION": {
+          "CONSUMED": "PSi",
+          "PRODUCED": "DSi",
+          "KINETICS": "Ksi * PSi * (1 - DSi/DSi_sat)",
+          "PARAMETERS": {
+            "Ksi": {
+              "VALUE": 0.03,
+              "UNITS": "1/day",
+              "DESCRIPTION": "Biogenic silica dissolution rate"
+            },
+            "DSi_sat": {
+              "VALUE": 60,
+              "UNITS": "mg/L",
+              "DESCRIPTION": "Amorphous silica saturation"
+            }
+          }
+        },
+
+        "BENTHIC_SI_FLUX": {
+          "CONSUMED": "NONE",
+          "PRODUCED": "DSi",
+          "KINETICS": "JSi / depth",
+          "PARAMETERS": {
+            "JSi": {
+              "VALUE": 20.0,
+              "UNITS": "mg Si/m2/day",
+              "DESCRIPTION": "Sediment Si flux"
+            },
+            "depth": {"VALUE": 5.0, "UNITS": "m"}
+          }
+        }
+      },
+
+      "WASP_SEDIMENT_DIAGENESIS": {
+        "_DESCRIPTION": "Sediment nutrient diagenesis (DiToro et al.)",
+
+        "PON_DEPOSITION": {
+          "CONSUMED": "ON_labile",
+          "PRODUCED": "SED_PON1",
+          "KINETICS": "vs_on * ON_labile",
+          "PARAMETERS": {
+            "vs_on": {
+              "VALUE": 0.5,
+              "UNITS": "m/day",
+              "DESCRIPTION": "ON settling velocity"
+            }
+          }
+        },
+
+        "SED_PON1_DECAY": {
+          "CONSUMED": "SED_PON1",
+          "PRODUCED": "SED_NH4",
+          "KINETICS": "KPON1 * SED_PON1 * theta^(T_sed - 20)",
+          "PARAMETERS": {
+            "KPON1": {
+              "VALUE": 0.035,
+              "UNITS": "1/day",
+              "DESCRIPTION": "Layer 1 PON mineralization rate"
+            },
+            "theta": {"VALUE": 1.1},
+            "T_sed": {"VALUE": 15, "UNITS": "degC"}
+          }
+        },
+
+        "SED_PON2_DECAY": {
+          "CONSUMED": "SED_PON2",
+          "PRODUCED": "SED_NH4",
+          "KINETICS": "KPON2 * SED_PON2 * theta^(T_sed - 20)",
+          "PARAMETERS": {
+            "KPON2": {
+              "VALUE": 0.001,
+              "UNITS": "1/day",
+              "DESCRIPTION": "Layer 2 PON mineralization rate"
+            }
+          }
+        },
+
+        "SED_NH4_FLUX": {
+          "CONSUMED": "SED_NH4",
+          "PRODUCED": "NH4",
+          "KINETICS": "s * (SED_NH4 - NH4 * fd) / H2",
+          "PARAMETERS": {
+            "s": {
+              "VALUE": 0.1,
+              "UNITS": "m/day",
+              "DESCRIPTION": "Sediment diffusion coefficient"
+            },
+            "fd": {
+              "VALUE": 0.9,
+              "DESCRIPTION": "Dissolved fraction"
+            },
+            "H2": {
+              "VALUE": 0.1,
+              "UNITS": "m",
+              "DESCRIPTION": "Aerobic layer thickness"
+            }
+          }
+        }
+      }
+    },
+
+    "COMPARTMENT_ASSIGNMENT": {
+      "EPILIMNION": ["WASP_DO_SYSTEM", "WASP_NITROGEN", "WASP_PHOSPHORUS", "WASP_PHYTOPLANKTON", "WASP_SILICA"],
+      "HYPOLIMNION": ["WASP_DO_SYSTEM", "WASP_NITROGEN", "WASP_PHOSPHORUS"],
+      "SEDIMENT": ["WASP_SEDIMENT_DIAGENESIS"]
+    }
+  }
+}

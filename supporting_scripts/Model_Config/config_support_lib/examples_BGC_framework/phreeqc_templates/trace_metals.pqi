@@ -1,0 +1,221 @@
+# PHREEQC Template: Trace Metal Speciation
+# Description: Cu, Zn, Pb, Cd, As, Cr speciation and mineral equilibria
+# Reference: PHREEQC Manual, Stumm & Morgan (1996)
+# ================================================================
+
+DATABASE wateq4f.dat   # Comprehensive trace metal data
+
+TITLE Trace Metal Speciation and Toxicity Assessment
+
+# ================================================================
+# SOLUTION 1: Impacted stream water
+# ================================================================
+SOLUTION 1  Mine-Impacted Stream
+    temp      15.0
+    pH        6.5
+    pe        10.0       # Oxic
+    units     ug/L       # Note: micrograms per liter for trace metals
+
+    # Trace metals
+    Cu        50         # Copper
+    Zn        200        # Zinc
+    Pb        20         # Lead
+    Cd        5          # Cadmium
+    As        10         # Arsenic
+    Cr        15         # Chromium
+    Ni        30         # Nickel
+    Hg        0.5        # Mercury
+
+    # Major ions (in mg/L)
+    units     mg/L
+    Ca        40.0
+    Mg        15.0
+    Na        25.0
+    K         5.0
+    Fe        0.5
+    Mn        0.2
+    Cl        35.0
+    S(6)      80 as SO4  # Elevated sulfate common in AMD
+    C(4)      50 as HCO3
+
+    # DOC for metal complexation
+    Doc       5.0        # Dissolved organic carbon (if database supports)
+
+END
+
+# ================================================================
+# SOLUTION 2: Acid mine drainage
+# ================================================================
+SOLUTION 2  Acid Mine Drainage
+    temp      12.0
+    pH        3.5        # Acidic
+    pe        12.0       # Highly oxidizing
+    units     mg/L
+
+    # Elevated metals
+    Cu        2          # mg/L
+    Zn        50
+    Pb        0.5
+    Cd        0.2
+    As        1.0
+    Fe        100        # Very high
+    Al        50         # High Al at low pH
+    Mn        10
+
+    # Major ions
+    Ca        100
+    Mg        50
+    Na        30
+    K         5
+    Cl        20
+    S(6)      1000 as SO4  # Very high sulfate
+
+END
+
+# ================================================================
+# EQUILIBRIUM_PHASES: Metal minerals
+# ================================================================
+EQUILIBRIUM_PHASES 1
+    # Copper minerals
+    Tenorite         0.0  0.0    # CuO
+    Malachite       -1.0  0.0    # Cu2CO3(OH)2
+    Cuprite         -5.0  0.0    # Cu2O (reducing only)
+
+    # Zinc minerals
+    Zincite          0.0  0.0    # ZnO
+    Smithsonite     -0.5  0.0    # ZnCO3
+    Sphalerite      -5.0  0.0    # ZnS (reducing)
+
+    # Lead minerals
+    Cerussite        0.0  0.0    # PbCO3
+    Anglesite        0.0  0.0    # PbSO4
+    Galena          -5.0  0.0    # PbS (reducing)
+
+    # Cadmium minerals
+    Otavite          0.0  0.0    # CdCO3
+    Greenockite     -5.0  0.0    # CdS (reducing)
+
+    # Iron/Manganese (control metal solubility)
+    Fe(OH)3(a)       0.0  10.0   # Ferrihydrite
+    Manganite        0.0  10.0   # MnOOH
+
+    # Carbonates
+    Calcite          0.0  10.0
+
+END
+
+# ================================================================
+# EQUILIBRIUM_PHASES 2: Arsenic minerals
+# ================================================================
+EQUILIBRIUM_PHASES 2
+    # Arsenic minerals
+    Scorodite        0.0  0.0    # FeAsO4:2H2O
+    Arsenolite      -2.0  0.0    # As2O3
+
+    # Fe oxides (As sorption)
+    Ferrihydrite     0.0  10.0
+
+END
+
+# ================================================================
+# SURFACE: Metal sorption to Fe oxides
+# ================================================================
+SURFACE 1
+    # Hydrous ferric oxide surface
+    Hfo_s  2.5e-5  600  10       # Strong sites: mol, m2/g, g
+    Hfo_w  0.001                 # Weak sites: mol
+
+    -equilibrate 1
+
+END
+
+# ================================================================
+# SELECTED_OUTPUT
+# ================================================================
+SELECTED_OUTPUT
+    -file         trace_metals_results.txt
+    -reset        false
+    -pH           true
+    -pe           true
+    -ionic_strength  true
+
+    -totals       Cu Zn Pb Cd As Cr Ni Hg Fe Mn
+    -molalities   Cu+2 CuOH+ Cu(OH)2 CuCO3 CuSO4
+    -molalities   Zn+2 ZnOH+ Zn(OH)2 ZnCO3 ZnSO4
+    -molalities   Pb+2 PbOH+ Pb(OH)2 PbCO3 PbSO4
+    -molalities   Cd+2 CdOH+ CdCl+ CdSO4
+    -molalities   H3AsO4 H2AsO4- HAsO4-2 AsO4-3
+    -molalities   CrO4-2 HCrO4-
+
+    -saturation_indices  Tenorite Malachite Smithsonite Cerussite Anglesite
+
+END
+
+# ================================================================
+# USER_PUNCH: Metal bioavailability and toxicity
+# ================================================================
+USER_PUNCH
+    -headings  Cu_free_pct  Zn_free_pct  Pb_free_pct  Cd_free_pct
+    -headings  Cu_toxic_ug  Zn_toxic_ug  Hardness
+
+    # Free metal ion percentages (bioavailable fraction)
+    10 IF TOT("Cu") > 0 THEN Cu_free = MOL("Cu+2") / TOT("Cu") * 100 ELSE Cu_free = 0
+    20 PUNCH Cu_free
+
+    30 IF TOT("Zn") > 0 THEN Zn_free = MOL("Zn+2") / TOT("Zn") * 100 ELSE Zn_free = 0
+    40 PUNCH Zn_free
+
+    50 IF TOT("Pb") > 0 THEN Pb_free = MOL("Pb+2") / TOT("Pb") * 100 ELSE Pb_free = 0
+    60 PUNCH Pb_free
+
+    70 IF TOT("Cd") > 0 THEN Cd_free = MOL("Cd+2") / TOT("Cd") * 100 ELSE Cd_free = 0
+    80 PUNCH Cd_free
+
+    # Toxic free ion concentrations (ug/L)
+    90 Cu_toxic = MOL("Cu+2") * 63.55 * 1e9   # Convert mol/L to ug/L
+    100 PUNCH Cu_toxic
+
+    110 Zn_toxic = MOL("Zn+2") * 65.38 * 1e9
+    120 PUNCH Zn_toxic
+
+    # Hardness (for BLM calculations) in mg/L CaCO3
+    130 Hardness = (TOT("Ca")/40.08 + TOT("Mg")/24.31) * 100.09 * 1000
+    140 PUNCH Hardness
+
+END
+
+# ================================================================
+# Notes on Trace Metal Chemistry
+# ================================================================
+#
+# Typical Water Quality Criteria (EPA, ug/L):
+# Metal    Freshwater Acute  Freshwater Chronic  Drinking Water
+# Cu       13 (at 100 mg/L)  9                   1300
+# Zn       120               120                 5000 (secondary)
+# Pb       65 (at 100 mg/L)  2.5                 15 (action level)
+# Cd       2.0               0.25                5
+# As       340               150                 10
+# Cr(VI)   16                11                  100 (total Cr)
+# Hg       1.4               0.77                2
+#
+# Hardness-dependent criteria (many metals):
+#   CMC = exp(mA * ln(hardness) + bA)
+#   CCC = exp(mC * ln(hardness) + bC)
+#
+# Key factors controlling metal speciation:
+#   1. pH: Higher pH = more hydrolysis, less free metal
+#   2. Alkalinity: Carbonate complexes
+#   3. Hardness: Ca/Mg compete for binding sites
+#   4. DOC: Organic complexation (reduces toxicity)
+#   5. Sulfate/Chloride: Inorganic complexation
+#   6. Redox: Sulfide precipitation under reducing conditions
+#
+# Metal toxicity (Biotic Ligand Model):
+#   - Free metal ion (Me+2) is usually most toxic
+#   - Complexed metal is less bioavailable
+#   - Ca, Mg, Na, H+ compete at biotic ligand
+#
+# Sorption affinity to Fe/Mn oxides:
+#   Pb > Cu > Zn > Cd > Ni
+#
+# ================================================================
