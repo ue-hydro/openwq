@@ -1,0 +1,125 @@
+{
+  "_DESCRIPTION": "Denitrification with Thermodynamic-Kinetic Coupling",
+  "_REFERENCE": "Jin & Bethke (2003) Appl Environ Microbiol 69:2340-2348",
+  "_VERSION": "1.0",
+  "_APPROACH": "Reaction rate controlled by both substrate availability AND thermodynamic feasibility",
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "NO3_N",
+      "2": "DOC",
+      "3": "N2_loss",
+      "4": "CO2",
+      "5": "X_denit"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": ["NO3_N", "DOC", "CO2"]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+    "DENITRIFICATION_THERMODYNAMIC": {
+      "list_transformations": {
+        "1": "denitrification",
+        "2": "denitrifier_growth",
+        "3": "denitrifier_decay"
+      },
+
+      "_DOCUMENTATION": {
+        "REACTION": "NO3- + 1.25 CH2O + H+ -> 0.5 N2 + 1.25 CO2 + 1.75 H2O",
+        "DELTA_G0": "-112.6 kJ/mol NO3 at pH 7, 25C",
+        "DELTA_G_ATP": "~45-50 kJ/mol (minimum energy for ATP synthesis)",
+        "CHI": "2 (average stoichiometric number)",
+
+        "F_T_FORMULA": "1 - exp(-(deltaG_available - deltaG_ATP) / (chi * R * T))",
+        "F_T_SIMPLIFIED": "At standard conditions with excess reactants, F_T ≈ 1",
+        "F_T_NOTE": "F_T approaches 0 when deltaG_available approaches deltaG_ATP (reaction stalls)"
+      },
+
+      "1": {
+        "_name": "denitrification",
+        "_description": "NO3 reduction to N2 with organic carbon as electron donor",
+        "consumed": "NO3_N",
+        "produced": "N2_loss",
+        "kinetics": [
+          "k_max * X_denit * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_max", "Km_NO3", "Km_DOC"],
+        "parameter_values": {
+          "k_max": 15.0,
+          "Km_NO3": 0.5,
+          "Km_DOC": 2.0
+        },
+        "_parameter_docs": {
+          "k_max": "Maximum specific denitrification rate (1/day) - literature: 5-25",
+          "Km_NO3": "Half-saturation for NO3 (mg-N/L) - literature: 0.1-2.0",
+          "Km_DOC": "Half-saturation for DOC (mg-C/L) - literature: 1-5",
+          "F_T_term": "(1 - exp(-67.6/(2*0.008314*T_K))) ≈ 0.99 at 20C - thermodynamics not limiting under standard conditions"
+        }
+      },
+
+      "2": {
+        "_name": "denitrifier_growth",
+        "_description": "Denitrifier biomass growth coupled to denitrification",
+        "consumed": "DOC",
+        "produced": "X_denit",
+        "kinetics": [
+          "Y_denit * k_max * X_denit * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
+          "mg/L/day"
+        ],
+        "parameter_names": ["Y_denit", "k_max", "Km_NO3", "Km_DOC"],
+        "parameter_values": {
+          "Y_denit": 0.3,
+          "k_max": 15.0,
+          "Km_NO3": 0.5,
+          "Km_DOC": 2.0
+        },
+        "_parameter_docs": {
+          "Y_denit": "Yield coefficient (mg biomass / mg DOC consumed) - literature: 0.2-0.5"
+        }
+      },
+
+      "3": {
+        "_name": "denitrifier_decay",
+        "_description": "First-order decay of denitrifier biomass",
+        "consumed": "X_denit",
+        "produced": "DOC",
+        "kinetics": ["k_decay * X_denit", "mg/L/day"],
+        "parameter_names": ["k_decay"],
+        "parameter_values": {
+          "k_decay": 0.05
+        },
+        "_parameter_docs": {
+          "k_decay": "Biomass decay rate (1/day) - literature: 0.02-0.1"
+        }
+      }
+    }
+  },
+
+  "_THERMODYNAMIC_EXPLANATION": {
+    "WHAT_F_T_DOES": [
+      "F_T = thermodynamic potential factor, ranges from 0 to 1",
+      "F_T = 1 when plenty of energy available (reaction proceeds at max rate)",
+      "F_T = 0 when energy available equals minimum for ATP synthesis (reaction stops)",
+      "F_T accounts for the fact that microbes need NET energy gain to drive metabolism"
+    ],
+    "WHY_IT_MATTERS": [
+      "Pure kinetic models: reaction proceeds as long as substrates exist",
+      "Thermodynamic models: reaction slows/stops as products accumulate",
+      "This captures the 'redox ladder' - reactions proceed in order of energy yield",
+      "Denitrification (ΔG°=-113) outcompetes sulfate reduction (ΔG°=-25)"
+    ],
+    "WHEN_F_T_IS_IMPORTANT": [
+      "Low substrate concentrations (ΔG approaches ΔG_min)",
+      "High product concentrations (reaction quotient Q increases)",
+      "Competition between electron acceptors (O2 vs NO3 vs SO4)",
+      "Sediments and anoxic zones where redox gradients matter"
+    ],
+    "WHEN_F_T_CAN_BE_IGNORED": [
+      "Well-mixed surface waters with excess substrates",
+      "Reactions with very negative ΔG° (aerobic respiration)",
+      "When simplified first-order kinetics are sufficient"
+    ]
+  }
+}

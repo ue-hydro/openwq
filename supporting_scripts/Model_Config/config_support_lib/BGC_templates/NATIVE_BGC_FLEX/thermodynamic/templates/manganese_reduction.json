@@ -1,0 +1,108 @@
+{
+  "_DESCRIPTION": "Manganese Reduction with Thermodynamic Control",
+  "_REFERENCE": "Jin & Bethke (2007); Thamdrup (2000)",
+  "_REACTION": "CH2O + 2 MnO2 + 4 H+ -> CO2 + 2 Mn2+ + 3 H2O",
+  "_DELTA_G0": "-95 kJ/mol e- (between NO3 and Fe(III) in redox ladder)",
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "Mn_IV",
+      "2": "Mn_II",
+      "3": "DOC",
+      "4": "CO2",
+      "5": "DO",
+      "6": "NO3_N",
+      "7": "X_mrb"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": ["Mn_II", "DOC", "CO2"]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+    "MANGANESE_REDUCTION_THERMO": {
+      "list_transformations": {
+        "1": "manganese_reduction",
+        "2": "mrb_growth",
+        "3": "mrb_decay",
+        "4": "manganese_oxidation"
+      },
+
+      "_THERMODYNAMIC_CONSTANTS": {
+        "deltaG0": -95.0,
+        "deltaG_ATP": 45.0,
+        "chi": 2,
+        "R_kJ": 0.008314,
+        "NOTES": [
+          "Mn(IV) reduction is energetically favorable (ΔG° = -95)",
+          "Proceeds after O2 and NO3 depletion",
+          "Often limited by Mn oxide availability (solid phase)",
+          "Important in coastal/marine sediments"
+        ]
+      },
+
+      "1": {
+        "_name": "manganese_reduction",
+        "_description": "Dissimilatory Mn(IV) reduction to Mn(II)",
+        "consumed": "Mn_IV",
+        "produced": "Mn_II",
+        "kinetics": [
+          "k_mrb * X_mrb * (Mn_IV/(Km_Mn4+Mn_IV)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((95-45)/(2*0.008314*(T+273)))))",
+          "mg-Mn/L/day"
+        ],
+        "parameter_names": ["k_mrb", "Km_Mn4", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_values": {
+          "k_mrb": 12.0,
+          "Km_Mn4": 5.0,
+          "Km_DOC": 2.0,
+          "Ki_O2": 0.2,
+          "Ki_NO3": 0.3
+        },
+        "_notes": [
+          "F_T = 1 - exp(-50/(2*0.008314*293)) = 1 - exp(-10.3) ≈ 1.0",
+          "Mn reduction is thermodynamically favorable",
+          "Usually limited by Mn oxide availability, not thermodynamics"
+        ]
+      },
+
+      "2": {
+        "_name": "mrb_growth",
+        "consumed": "DOC",
+        "produced": "X_mrb",
+        "kinetics": [
+          "Y_mrb * k_mrb * X_mrb * (Mn_IV/(Km_Mn4+Mn_IV)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((95-45)/(2*0.008314*(T+273)))))",
+          "mg/L/day"
+        ],
+        "parameter_names": ["Y_mrb", "k_mrb", "Km_Mn4", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_values": {
+          "Y_mrb": 0.3,
+          "k_mrb": 12.0,
+          "Km_Mn4": 5.0,
+          "Km_DOC": 2.0,
+          "Ki_O2": 0.2,
+          "Ki_NO3": 0.3
+        }
+      },
+
+      "3": {
+        "_name": "mrb_decay",
+        "consumed": "X_mrb",
+        "produced": "DOC",
+        "kinetics": ["k_decay * X_mrb", "mg/L/day"],
+        "parameter_names": ["k_decay"],
+        "parameter_values": {"k_decay": 0.05}
+      },
+
+      "4": {
+        "_name": "manganese_oxidation",
+        "_description": "Abiotic/biotic Mn(II) oxidation by O2",
+        "consumed": "Mn_II",
+        "produced": "Mn_IV",
+        "kinetics": ["k_mnox * Mn_II * DO", "mg-Mn/L/day"],
+        "parameter_names": ["k_mnox"],
+        "parameter_values": {"k_mnox": 10.0},
+        "_notes": "Slower than Fe oxidation, often microbially mediated"
+      }
+    }
+  }
+}

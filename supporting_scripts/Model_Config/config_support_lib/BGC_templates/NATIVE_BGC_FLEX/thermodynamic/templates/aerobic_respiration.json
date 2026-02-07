@@ -1,0 +1,93 @@
+{
+  "_DESCRIPTION": "Aerobic Respiration with Thermodynamic Control",
+  "_REFERENCE": "Jin & Bethke (2003, 2007); Regnier et al. (2011)",
+  "_REACTION": "CH2O + O2 -> CO2 + H2O",
+  "_DELTA_G0": "-125 kJ/mol e- (most favorable electron acceptor)",
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "DO",
+      "2": "DOC",
+      "3": "CO2",
+      "4": "X_aer"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": ["DO", "DOC", "CO2"]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+    "AEROBIC_RESPIRATION_THERMO": {
+      "list_transformations": {
+        "1": "aerobic_respiration",
+        "2": "aerobe_growth",
+        "3": "aerobe_decay",
+        "4": "reaeration"
+      },
+
+      "_THERMODYNAMIC_CONSTANTS": {
+        "deltaG0": -125.0,
+        "deltaG_ATP": 45.0,
+        "chi": 2,
+        "R_kJ": 0.008314,
+        "F_T_at_20C": "1 - exp(-80/(2*0.008314*293)) = 1 - exp(-16.4) ≈ 1.0"
+      },
+
+      "1": {
+        "_name": "aerobic_respiration",
+        "consumed": "DO",
+        "produced": "CO2",
+        "kinetics": [
+          "k_resp * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((125-45)/(2*0.008314*(T+273)))))",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["k_resp", "Km_O2", "Km_DOC"],
+        "parameter_values": {
+          "k_resp": 25.0,
+          "Km_O2": 0.5,
+          "Km_DOC": 2.0
+        },
+        "_notes": "F_T ≈ 1.0 - aerobic respiration is always thermodynamically favorable"
+      },
+
+      "2": {
+        "_name": "aerobe_growth",
+        "consumed": "DOC",
+        "produced": "X_aer",
+        "kinetics": [
+          "Y_aer * k_resp * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((125-45)/(2*0.008314*(T+273)))))",
+          "mg/L/day"
+        ],
+        "parameter_names": ["Y_aer", "k_resp", "Km_O2", "Km_DOC"],
+        "parameter_values": {
+          "Y_aer": 0.4,
+          "k_resp": 25.0,
+          "Km_O2": 0.5,
+          "Km_DOC": 2.0
+        }
+      },
+
+      "3": {
+        "_name": "aerobe_decay",
+        "consumed": "X_aer",
+        "produced": "DOC",
+        "kinetics": ["k_decay * X_aer", "mg/L/day"],
+        "parameter_names": ["k_decay"],
+        "parameter_values": {"k_decay": 0.1}
+      },
+
+      "4": {
+        "_name": "reaeration",
+        "_description": "Gas exchange with atmosphere",
+        "consumed": "ATMOSPHERE",
+        "produced": "DO",
+        "kinetics": ["k_reaer * (DO_sat - DO)", "mg-O2/L/day"],
+        "parameter_names": ["k_reaer", "DO_sat"],
+        "parameter_values": {
+          "k_reaer": 2.0,
+          "DO_sat": 9.0
+        }
+      }
+    }
+  }
+}

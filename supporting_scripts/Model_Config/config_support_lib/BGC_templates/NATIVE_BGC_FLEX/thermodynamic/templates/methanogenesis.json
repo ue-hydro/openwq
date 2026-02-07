@@ -1,0 +1,130 @@
+{
+  "_DESCRIPTION": "Methanogenesis with Thermodynamic Control",
+  "_REFERENCE": "Jin & Bethke (2007); Conrad (1999)",
+  "_PATHWAYS": {
+    "ACETOCLASTIC": "CH3COOH -> CH4 + CO2 (ΔG° = -31 kJ/mol)",
+    "HYDROGENOTROPHIC": "4 H2 + CO2 -> CH4 + 2 H2O (ΔG° = -131 kJ/mol at standard, but H2 is limiting)"
+  },
+  "_DELTA_G0": "-20 kJ/mol e- (lowest in redox ladder - most thermodynamically constrained)",
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "DOC",
+      "2": "CH4",
+      "3": "CO2",
+      "4": "DO",
+      "5": "NO3_N",
+      "6": "SO4",
+      "7": "X_meth"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": ["DOC", "CH4", "CO2"]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+    "METHANOGENESIS_THERMO": {
+      "list_transformations": {
+        "1": "acetoclastic_methanogenesis",
+        "2": "methanogen_growth",
+        "3": "methanogen_decay",
+        "4": "methane_oxidation",
+        "5": "methane_ebullition"
+      },
+
+      "_THERMODYNAMIC_CONSTANTS": {
+        "deltaG0_acetoclastic": -31.0,
+        "deltaG0_per_electron": -20.0,
+        "deltaG_min": 10.6,
+        "chi": 2,
+        "R_kJ": 0.008314,
+        "NOTES": [
+          "Methanogenesis has the lowest ΔG° in the redox ladder",
+          "Only proceeds when all other electron acceptors depleted",
+          "Very sensitive to H2S accumulation (sulfate reducers compete)",
+          "ΔG_min for methanogens is lower (~10-15 kJ/mol) than other microbes"
+        ]
+      },
+
+      "1": {
+        "_name": "acetoclastic_methanogenesis",
+        "_description": "Acetate fermentation to CH4 and CO2",
+        "_reaction": "CH3COOH -> CH4 + CO2",
+        "consumed": "DOC",
+        "produced": "CH4",
+        "kinetics": [
+          "k_meth * X_meth * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (Ki_SO4/(Ki_SO4+SO4)) * max(0, (1 - exp(-(max(0, 31 + 15*log10(max(0.001,(DOC/12)/(CH4/16+0.001)))) - 11)/(2*0.008314*(T+273)))))",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_meth", "Km_DOC", "Ki_O2", "Ki_NO3", "Ki_SO4"],
+        "parameter_values": {
+          "k_meth": 3.0,
+          "Km_DOC": 5.0,
+          "Ki_O2": 0.05,
+          "Ki_NO3": 0.1,
+          "Ki_SO4": 1.0
+        },
+        "_notes": [
+          "Triple inhibition: O2, NO3, and SO4 all suppress methanogenesis",
+          "Lower ΔG_min (11 kJ/mol) reflects methanogen physiology",
+          "Slow rate constant reflects slow growth of methanogens"
+        ]
+      },
+
+      "2": {
+        "_name": "methanogen_growth",
+        "consumed": "DOC",
+        "produced": "X_meth",
+        "kinetics": [
+          "Y_meth * k_meth * X_meth * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (Ki_SO4/(Ki_SO4+SO4)) * max(0, (1 - exp(-(max(0, 31 + 15*log10(max(0.001,(DOC/12)/(CH4/16+0.001)))) - 11)/(2*0.008314*(T+273)))))",
+          "mg/L/day"
+        ],
+        "parameter_names": ["Y_meth", "k_meth", "Km_DOC", "Ki_O2", "Ki_NO3", "Ki_SO4"],
+        "parameter_values": {
+          "Y_meth": 0.1,
+          "k_meth": 3.0,
+          "Km_DOC": 5.0,
+          "Ki_O2": 0.05,
+          "Ki_NO3": 0.1,
+          "Ki_SO4": 1.0
+        },
+        "_notes": "Low yield reflects low energy gain from methanogenesis"
+      },
+
+      "3": {
+        "_name": "methanogen_decay",
+        "consumed": "X_meth",
+        "produced": "DOC",
+        "kinetics": ["k_decay * X_meth", "mg/L/day"],
+        "parameter_names": ["k_decay"],
+        "parameter_values": {"k_decay": 0.02}
+      },
+
+      "4": {
+        "_name": "methane_oxidation",
+        "_description": "Aerobic methane oxidation when O2 available",
+        "consumed": "CH4",
+        "produced": "CO2",
+        "kinetics": ["k_mox * CH4 * (DO/(Km_O2_mox+DO))", "mg-C/L/day"],
+        "parameter_names": ["k_mox", "Km_O2_mox"],
+        "parameter_values": {
+          "k_mox": 10.0,
+          "Km_O2_mox": 0.5
+        }
+      },
+
+      "5": {
+        "_name": "methane_ebullition",
+        "_description": "Bubble loss when CH4 exceeds saturation",
+        "consumed": "CH4",
+        "produced": "CH4_loss",
+        "kinetics": ["k_ebull * max(0, CH4 - CH4_sat)", "mg-C/L/day"],
+        "parameter_names": ["k_ebull", "CH4_sat"],
+        "parameter_values": {
+          "k_ebull": 1.0,
+          "CH4_sat": 20.0
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,220 @@
+{
+  "_DESCRIPTION": "Complete Sediment Diagenesis Model with Full Redox Cascade",
+  "_REFERENCE": "Van Cappellen & Wang (1996); Boudreau (1997); Regnier et al. (2011)",
+  "_PURPOSE": "Comprehensive model for sediment biogeochemistry with thermodynamic control",
+  "_VERSION": "1.0",
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "DO",
+      "2": "NO3_N",
+      "3": "Mn_IV",
+      "4": "Fe_III",
+      "5": "SO4",
+      "6": "DOC",
+      "7": "POC",
+      "8": "NH4_N",
+      "9": "Mn_II",
+      "10": "Fe_II",
+      "11": "H2S",
+      "12": "CH4",
+      "13": "CO2",
+      "14": "N2_loss",
+      "15": "FeS"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": ["DO", "NO3_N", "SO4", "DOC", "NH4_N", "Mn_II", "Fe_II", "H2S", "CH4", "CO2"]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+    "SEDIMENT_DIAGENESIS": {
+      "list_transformations": {
+        "1": "poc_hydrolysis",
+        "2": "aerobic_respiration",
+        "3": "denitrification",
+        "4": "mn_reduction",
+        "5": "fe_reduction",
+        "6": "sulfate_reduction",
+        "7": "methanogenesis",
+        "8": "mn_oxidation",
+        "9": "fe_oxidation",
+        "10": "sulfide_oxidation",
+        "11": "methane_oxidation",
+        "12": "fes_precipitation",
+        "13": "fes_oxidation"
+      },
+
+      "_REDOX_LADDER": {
+        "1_O2": {"deltaG0": -125, "process": "aerobic_respiration"},
+        "2_NO3": {"deltaG0": -119, "process": "denitrification"},
+        "3_Mn_IV": {"deltaG0": -95, "process": "mn_reduction"},
+        "4_Fe_III": {"deltaG0": -50, "process": "fe_reduction"},
+        "5_SO4": {"deltaG0": -25, "process": "sulfate_reduction"},
+        "6_CO2": {"deltaG0": -20, "process": "methanogenesis"}
+      },
+
+      "1": {
+        "_name": "poc_hydrolysis",
+        "_description": "Enzymatic breakdown of POC to DOC",
+        "consumed": "POC",
+        "produced": "DOC",
+        "kinetics": ["k_hyd * POC * 1.05^(T-20)", "mg-C/L/day"],
+        "parameter_names": ["k_hyd"],
+        "parameter_values": {"k_hyd": 0.01}
+      },
+
+      "2": {
+        "_name": "aerobic_respiration",
+        "_reaction": "CH2O + O2 -> CO2 + H2O",
+        "_deltaG0": -125,
+        "consumed": "DO",
+        "produced": "CO2",
+        "kinetics": [
+          "k_aer * (DO/(Km_O2+DO)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((125-45)/(2*0.008314*(T+273)))))",
+          "mg-O2/L/day"
+        ],
+        "parameter_names": ["k_aer", "Km_O2", "Km_DOC"],
+        "parameter_values": {"k_aer": 50.0, "Km_O2": 0.02, "Km_DOC": 1.0}
+      },
+
+      "3": {
+        "_name": "denitrification",
+        "_reaction": "5 CH2O + 4 NO3- -> 5 CO2 + 2 N2 + 4 OH-",
+        "_deltaG0": -119,
+        "consumed": "NO3_N",
+        "produced": "N2_loss",
+        "kinetics": [
+          "k_denit * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119-45)/(2*0.008314*(T+273)))))",
+          "mg-N/L/day"
+        ],
+        "parameter_names": ["k_denit", "Km_NO3", "Km_DOC", "Ki_O2"],
+        "parameter_values": {"k_denit": 30.0, "Km_NO3": 0.01, "Km_DOC": 1.0, "Ki_O2": 0.02}
+      },
+
+      "4": {
+        "_name": "mn_reduction",
+        "_reaction": "CH2O + 2 MnO2 + 4 H+ -> CO2 + 2 Mn2+ + 3 H2O",
+        "_deltaG0": -95,
+        "consumed": "Mn_IV",
+        "produced": "Mn_II",
+        "kinetics": [
+          "k_mn * (Mn_IV/(Km_Mn4+Mn_IV)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((95-45)/(2*0.008314*(T+273)))))",
+          "mg-Mn/L/day"
+        ],
+        "parameter_names": ["k_mn", "Km_Mn4", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_values": {"k_mn": 20.0, "Km_Mn4": 1.0, "Km_DOC": 1.0, "Ki_O2": 0.02, "Ki_NO3": 0.01}
+      },
+
+      "5": {
+        "_name": "fe_reduction",
+        "_reaction": "CH2O + 4 Fe(OH)3 + 8 H+ -> CO2 + 4 Fe2+ + 11 H2O",
+        "_deltaG0": -50,
+        "consumed": "Fe_III",
+        "produced": "Fe_II",
+        "kinetics": [
+          "k_fe * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
+          "mg-Fe/L/day"
+        ],
+        "parameter_names": ["k_fe", "Km_Fe3", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_values": {"k_fe": 10.0, "Km_Fe3": 5.0, "Km_DOC": 1.0, "Ki_O2": 0.02, "Ki_NO3": 0.01},
+        "_notes": "F_T ≈ 0.64 at standard conditions - moderately thermodynamically limited"
+      },
+
+      "6": {
+        "_name": "sulfate_reduction",
+        "_reaction": "2 CH2O + SO4-- -> 2 CO2 + H2S + 2 OH-",
+        "_deltaG0": -25,
+        "consumed": "SO4",
+        "produced": "H2S",
+        "kinetics": [
+          "k_so4 * (SO4/(Km_SO4+SO4)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (Ki_Fe3/(Ki_Fe3+Fe_III)) * max(0, (1 - exp(-(max(0, 25 - 20 + 10*log10(max(0.001,DOC)/(max(0.001,H2S)+0.001)))/(2*0.008314*(T+273))))))",
+          "mg-S/L/day"
+        ],
+        "parameter_names": ["k_so4", "Km_SO4", "Km_DOC", "Ki_O2", "Ki_NO3", "Ki_Fe3"],
+        "parameter_values": {"k_so4": 5.0, "Km_SO4": 1.0, "Km_DOC": 1.0, "Ki_O2": 0.02, "Ki_NO3": 0.01, "Ki_Fe3": 1.0}
+      },
+
+      "7": {
+        "_name": "methanogenesis",
+        "_reaction": "2 CH2O -> CH4 + CO2",
+        "_deltaG0": -20,
+        "consumed": "DOC",
+        "produced": "CH4",
+        "kinetics": [
+          "k_meth * (DOC/(Km_DOC_meth+DOC)) * (Ki_O2_m/(Ki_O2_m+DO)) * (Ki_NO3_m/(Ki_NO3_m+NO3_N)) * (Ki_SO4/(Ki_SO4+SO4)) * max(0, (1 - exp(-(max(0, 20 - 11 + 8*log10(max(0.001,DOC)/(max(0.001,CH4)+0.001)))/(2*0.008314*(T+273))))))",
+          "mg-C/L/day"
+        ],
+        "parameter_names": ["k_meth", "Km_DOC_meth", "Ki_O2_m", "Ki_NO3_m", "Ki_SO4"],
+        "parameter_values": {"k_meth": 1.0, "Km_DOC_meth": 2.0, "Ki_O2_m": 0.01, "Ki_NO3_m": 0.01, "Ki_SO4": 0.5}
+      },
+
+      "8": {
+        "_name": "mn_oxidation",
+        "_description": "Abiotic Mn(II) oxidation by O2",
+        "consumed": "Mn_II",
+        "produced": "Mn_IV",
+        "kinetics": ["k_mnox * Mn_II * DO", "mg-Mn/L/day"],
+        "parameter_names": ["k_mnox"],
+        "parameter_values": {"k_mnox": 10.0}
+      },
+
+      "9": {
+        "_name": "fe_oxidation",
+        "_description": "Abiotic Fe(II) oxidation by O2",
+        "consumed": "Fe_II",
+        "produced": "Fe_III",
+        "kinetics": ["k_feox * Fe_II * DO", "mg-Fe/L/day"],
+        "parameter_names": ["k_feox"],
+        "parameter_values": {"k_feox": 100.0}
+      },
+
+      "10": {
+        "_name": "sulfide_oxidation",
+        "_description": "Chemical and biological H2S oxidation",
+        "consumed": "H2S",
+        "produced": "SO4",
+        "kinetics": ["k_sox * H2S * DO", "mg-S/L/day"],
+        "parameter_names": ["k_sox"],
+        "parameter_values": {"k_sox": 50.0}
+      },
+
+      "11": {
+        "_name": "methane_oxidation",
+        "_description": "Aerobic methane oxidation",
+        "consumed": "CH4",
+        "produced": "CO2",
+        "kinetics": ["k_mox * CH4 * (DO/(Km_O2_mox+DO))", "mg-C/L/day"],
+        "parameter_names": ["k_mox", "Km_O2_mox"],
+        "parameter_values": {"k_mox": 20.0, "Km_O2_mox": 0.1}
+      },
+
+      "12": {
+        "_name": "fes_precipitation",
+        "_description": "Iron sulfide mineral formation",
+        "consumed": "Fe_II",
+        "produced": "FeS",
+        "kinetics": ["k_fes * Fe_II * H2S", "mg/L/day"],
+        "parameter_names": ["k_fes"],
+        "parameter_values": {"k_fes": 100.0}
+      },
+
+      "13": {
+        "_name": "fes_oxidation",
+        "_description": "FeS oxidation when O2 present",
+        "consumed": "FeS",
+        "produced": "Fe_III",
+        "kinetics": ["k_fesox * FeS * DO", "mg/L/day"],
+        "parameter_names": ["k_fesox"],
+        "parameter_values": {"k_fesox": 10.0}
+      }
+    }
+  },
+
+  "_EXPECTED_BEHAVIOR": {
+    "OXIC_LAYER": "O2 > 0.1 mg/L: Aerobic respiration dominates",
+    "SUBOXIC_LAYER": "O2 depleted: Denitrification, Mn and Fe reduction",
+    "ANOXIC_LAYER": "All metal oxides depleted: Sulfate reduction",
+    "METHANOGENIC_LAYER": "SO4 depleted: Methanogenesis"
+  }
+}

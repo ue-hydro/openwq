@@ -1,0 +1,108 @@
+{
+  "_DESCRIPTION": "Iron Reduction with Thermodynamic Control",
+  "_REFERENCE": "Jin & Bethke (2007); Roden (2003)",
+  "_REACTION": "CH2O + 4 Fe(OH)3 + 8 H+ -> CO2 + 4 Fe2+ + 11 H2O",
+  "_DELTA_G0": "-50 kJ/mol e- (intermediate in redox ladder)",
+
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+
+  "CHEMICAL_SPECIES": {
+    "list": {
+      "1": "Fe_III",
+      "2": "Fe_II",
+      "3": "DOC",
+      "4": "CO2",
+      "5": "DO",
+      "6": "NO3_N",
+      "7": "X_irb"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": ["Fe_II", "DOC", "CO2"]
+  },
+
+  "CYCLING_FRAMEWORKS": {
+    "IRON_REDUCTION_THERMO": {
+      "list_transformations": {
+        "1": "iron_reduction",
+        "2": "irb_growth",
+        "3": "irb_decay",
+        "4": "iron_oxidation"
+      },
+
+      "_THERMODYNAMIC_CONSTANTS": {
+        "deltaG0": -50.0,
+        "deltaG_ATP": 45.0,
+        "chi": 2,
+        "R_kJ": 0.008314,
+        "NOTES": [
+          "Fe(III) reduction is intermediate in the redox ladder",
+          "Proceeds after O2 and NO3 depletion, before SO4 reduction",
+          "Fe(III) is often solid phase (ferrihydrite, goethite)",
+          "Surface area limitation important for solid Fe(III)"
+        ]
+      },
+
+      "1": {
+        "_name": "iron_reduction",
+        "_description": "Dissimilatory Fe(III) reduction to Fe(II)",
+        "consumed": "Fe_III",
+        "produced": "Fe_II",
+        "kinetics": [
+          "k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
+          "mg-Fe/L/day"
+        ],
+        "parameter_names": ["k_irb", "Km_Fe3", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_values": {
+          "k_irb": 10.0,
+          "Km_Fe3": 10.0,
+          "Km_DOC": 2.0,
+          "Ki_O2": 0.2,
+          "Ki_NO3": 0.5
+        },
+        "_notes": [
+          "F_T = 1 - exp(-5/(2*0.008314*293)) = 1 - exp(-1.03) ≈ 0.64",
+          "Iron reduction is moderately thermodynamically limited",
+          "More sensitive to conditions than denitrification"
+        ]
+      },
+
+      "2": {
+        "_name": "irb_growth",
+        "consumed": "DOC",
+        "produced": "X_irb",
+        "kinetics": [
+          "Y_irb * k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
+          "mg/L/day"
+        ],
+        "parameter_names": ["Y_irb", "k_irb", "Km_Fe3", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_values": {
+          "Y_irb": 0.25,
+          "k_irb": 10.0,
+          "Km_Fe3": 10.0,
+          "Km_DOC": 2.0,
+          "Ki_O2": 0.2,
+          "Ki_NO3": 0.5
+        }
+      },
+
+      "3": {
+        "_name": "irb_decay",
+        "consumed": "X_irb",
+        "produced": "DOC",
+        "kinetics": ["k_decay * X_irb", "mg/L/day"],
+        "parameter_names": ["k_decay"],
+        "parameter_values": {"k_decay": 0.05}
+      },
+
+      "4": {
+        "_name": "iron_oxidation",
+        "_description": "Abiotic Fe(II) oxidation by O2",
+        "consumed": "Fe_II",
+        "produced": "Fe_III",
+        "kinetics": ["k_feox * Fe_II * DO", "mg-Fe/L/day"],
+        "parameter_names": ["k_feox"],
+        "parameter_values": {"k_feox": 50.0},
+        "_notes": "Fast abiotic reaction, pH dependent in reality"
+      }
+    }
+  }
+}
