@@ -1,4 +1,4 @@
-<p align="right">
+<p align="left">
   <img src="uevora_logo.png" alt="University of Évora" height="80">
 </p>
 
