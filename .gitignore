@@ -3,3 +3,25 @@ utils/armadillo*
 openwq.sif
 bin/summa_openwq*
 testing/
+
+# IDE/Editor files
+*.code-workspace
+.vscode/
+.idea/
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+
+# Sphinx build output (ReadTheDocs builds this automatically)
+wikipage/build/
