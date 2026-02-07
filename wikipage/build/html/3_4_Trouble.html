@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Troubleshooting &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Troubleshooting &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -22,19 +23,20 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Coupling OpenWQ" href="5_3_base_Hydro_models.html" />
-    <link rel="prev" title="MacOS" href="3_3_3MacOS.html" /> 
+    <link rel="prev" title="Apptainer/Singularity (HPC)" href="3_3_4Apptainer.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -48,14 +50,22 @@
 <li class="toctree-l1"><a class="reference internal" href="1_0_Home.html">Home</a></li>
 <li class="toctree-l1"><a class="reference internal" href="2_0_Documentation.html">Documentation</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="3_0_Installation.html">Installation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="3_0_1Repository_Structure.html">Repository Structure</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3_1_Download.html">Get OpenWQ</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3_2_Build.html">Building requirement</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3_3_Compile.html">Build and Compile</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Troubleshooting</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Troubleshooting</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#build-issues">Build Issues</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#runtime-issues">Runtime Issues</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#json-configuration-issues">JSON Configuration Issues</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="5_3_base_Hydro_models.html">Coupling OpenWQ</a></li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -64,7 +74,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -87,20 +97,96 @@
              
   <section id="troubleshooting">
 <h1>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permalink to this heading"></a></h1>
+<p>This section covers common issues encountered when building and running OpenWQ.</p>
+<section id="build-issues">
+<h2>Build Issues<a class="headerlink" href="#build-issues" title="Permalink to this heading"></a></h2>
+<p><strong>CMake cannot find Armadillo</strong></p>
+<p>Ensure Armadillo is installed and that CMake can locate it. On Linux:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">libarmadillo</span><span class="o">-</span><span class="n">dev</span>
+</pre></div>
+</div>
+<p>On macOS:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brew</span> <span class="n">install</span> <span class="n">armadillo</span>
+</pre></div>
+</div>
+<p>If installed in a non-standard location, set the <code class="docutils literal notranslate"><span class="pre">ARMADILLO_ROOT</span></code> environment variable.</p>
+<p><strong>CMake cannot find SUNDIALS</strong></p>
+<p>SUNDIALS is only required if you plan to use the SUNDIALS CVode solver. Install it via your package manager:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Linux</span>
+<span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">libsundials</span><span class="o">-</span><span class="n">dev</span>
+
+<span class="c1"># macOS</span>
+<span class="n">brew</span> <span class="n">install</span> <span class="n">sundials</span>
+</pre></div>
+</div>
+<p><strong>CMake cannot find PhreeqcRM</strong></p>
+<p>PhreeqcRM is only required if you plan to use the PHREEQC geochemistry module. Follow the installation instructions from the <a class="reference external" href="https://www.usgs.gov/software/phreeqcrm">USGS PhreeqcRM repository</a>.</p>
+<p><strong>Linker errors with HDF5</strong></p>
+<p>Ensure HDF5 is compiled with C++ support. On some systems, you may need to specify the HDF5 path explicitly:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cmake</span> <span class="o">-</span><span class="n">DHDF5_ROOT</span><span class="o">=/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">hdf5</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p><strong>Fortran compiler mismatch (mizuRoute coupling)</strong></p>
+<p>When building the mizuRoute-coupled version, ensure that the Fortran and C++ compilers are compatible. Mixing compiler vendors (e.g., Intel Fortran with GNU C++) can cause linking errors.</p>
+</section>
+<section id="runtime-issues">
+<h2>Runtime Issues<a class="headerlink" href="#runtime-issues" title="Permalink to this heading"></a></h2>
+<p><strong>“Number of components does not match” error</strong></p>
+<p>When using PHREEQC, this error means the number of chemical species defined in the OpenWQ configuration does not match the number of components discovered by PhreeqcRM’s <code class="docutils literal notranslate"><span class="pre">FindComponents()</span></code>. Enable <code class="docutils literal notranslate"><span class="pre">RUN_MODE_DEBUG</span></code> in the master config to see the full component list and adjust your configuration accordingly.</p>
+<p><strong>NaN or Inf values in output</strong></p>
+<p>This typically indicates numerical instability. Try:</p>
+<ul class="simple">
+<li><p>Reducing the simulation time step</p></li>
+<li><p>Switching to the SUNDIALS solver (which uses adaptive time stepping)</p></li>
+<li><p>Checking that initial conditions are physically reasonable</p></li>
+<li><p>Verifying that source/sink magnitudes are not excessively large</p></li>
+</ul>
+<p><strong>Segmentation fault at startup</strong></p>
+<p>Common causes:</p>
+<ul class="simple">
+<li><p>Missing or incorrectly formatted JSON configuration files</p></li>
+<li><p>File paths in JSON that do not exist</p></li>
+<li><p>Mismatched compartment names between the host model and OpenWQ configuration</p></li>
+</ul>
+<p><strong>Output files are empty</strong></p>
+<p>Verify that:</p>
+<ul class="simple">
+<li><p>The <code class="docutils literal notranslate"><span class="pre">RESULTS_FOLDERPATH</span></code> directory exists and is writable</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">CHEMICAL_SPECIES</span></code> list in the master config contains valid species names</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">COMPARTMENTS_AND_CELLS</span></code> section references valid compartment names</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">TIMESTEP</span></code> output interval is not larger than the simulation duration</p></li>
+</ul>
+<p><strong>OpenMP thread count warning</strong></p>
+<p>If <code class="docutils literal notranslate"><span class="pre">USE_NUM_THREADS</span></code> is set higher than the number of available cores, OpenMP may produce warnings. Set it to <code class="docutils literal notranslate"><span class="pre">&quot;all&quot;</span></code> to automatically use all available cores, or specify a reasonable integer value.</p>
+</section>
+<section id="json-configuration-issues">
+<h2>JSON Configuration Issues<a class="headerlink" href="#json-configuration-issues" title="Permalink to this heading"></a></h2>
+<p><strong>JSON parse error</strong></p>
+<p>OpenWQ’s JSON parser supports C/C++ style comments (<code class="docutils literal notranslate"><span class="pre">//</span></code> and <code class="docutils literal notranslate"><span class="pre">/*</span> <span class="pre">*/</span></code>), but the JSON structure must be valid. Common issues:</p>
+<ul class="simple">
+<li><p>Missing commas between key-value pairs</p></li>
+<li><p>Trailing commas after the last element in an object or array</p></li>
+<li><p>Unquoted string values</p></li>
+<li><p>Mismatched brackets or braces</p></li>
+</ul>
+<p>Use a JSON validator to check your configuration files before running.</p>
+<p><strong>“Unknown compartment name” error</strong></p>
+<p>Compartment names in OpenWQ configuration files must exactly match the names exported by the host hydrological model. These are case-sensitive. Enable <code class="docutils literal notranslate"><span class="pre">RUN_MODE_DEBUG</span></code> to see the list of available compartment names.</p>
+</section>
 </section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="3_3_3MacOS.html" class="btn btn-neutral float-left" title="MacOS" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="3_3_4Apptainer.html" class="btn btn-neutral float-left" title="Apptainer/Singularity (HPC)" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="5_3_base_Hydro_models.html" class="btn btn-neutral float-right" title="Coupling OpenWQ" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

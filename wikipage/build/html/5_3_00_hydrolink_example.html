@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Example of OpenWQ_hydrolink files &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Example of OpenWQ_hydrolink files &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -29,12 +30,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -66,6 +68,8 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -74,7 +78,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -469,14 +473,14 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">        </span><span class="cp">#pragma omp parallel for private(Sub_mob) num_threads(OpenWQ_wqconfig.num_threads_requested)</span>
 <span class="w">        </span><span class="k">for</span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">hru</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">hru</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">nhru</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">hru</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 
-<span class="w">            </span><span class="k">for</span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">Sub_i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">Sub_i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">OpenWQ_wqconfig</span><span class="p">.</span><span class="n">BGC_general_mobile_species</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">Sub_i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">for</span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">Sub_i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">Sub_i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">OpenWQ_wqconfig</span><span class="p">.</span><span class="n">CH_model</span><span class="o">-&gt;</span><span class="n">BGC_general_mobile_species</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">Sub_i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 
 <span class="w">                </span><span class="c1">// ################################</span>
 <span class="w">                </span><span class="c1">// Adv-Disp directly from CRHM&#39;s modules</span>
 
 <span class="w">                </span><span class="c1">// Get mobile species indexes</span>
 <span class="w">                </span><span class="c1">// Only update mass/concentrations using CRHM&#39;s water for mobile species</span>
-<span class="w">                </span><span class="n">Sub_mob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OpenWQ_wqconfig</span><span class="p">.</span><span class="n">BGC_general_mobile_species</span><span class="p">[</span><span class="n">Sub_i</span><span class="p">];</span>
+<span class="w">                </span><span class="n">Sub_mob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OpenWQ_wqconfig</span><span class="p">.</span><span class="n">CH_model</span><span class="o">-&gt;</span><span class="n">BGC_general_mobile_species</span><span class="p">[</span><span class="n">Sub_i</span><span class="p">];</span>
 
 <span class="w">                </span><span class="c1">// SWE</span>
 <span class="w">                </span><span class="p">(</span><span class="o">*</span><span class="n">OpenWQ_vars</span><span class="p">.</span><span class="n">d_chemass_dt_transp</span><span class="p">)(</span><span class="mi">0</span><span class="p">)(</span><span class="n">Sub_mob</span><span class="p">)(</span><span class="n">hru</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">=</span>
@@ -633,11 +637,11 @@ However, you should be able to clearly identify the calls to the different OpenW
 <span class="w">    </span><span class="cp">#pragma omp parallel for private(Sub_mob) collapse(2) num_threads(OpenWQ_wqconfig.num_threads_requested)</span>
 <span class="w">    </span><span class="k">for</span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">hru</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">hru</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">nhru</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">hru</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 
-<span class="w">        </span><span class="k">for</span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">Sub_i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">Sub_i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">OpenWQ_wqconfig</span><span class="p">.</span><span class="n">BGC_general_mobile_species</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">Sub_i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">for</span><span class="p">(</span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">Sub_i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">Sub_i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">OpenWQ_wqconfig</span><span class="p">.</span><span class="n">CH_model</span><span class="o">-&gt;</span><span class="n">BGC_general_mobile_species</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">Sub_i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 
 <span class="w">                </span><span class="c1">// Get mobile species indexes</span>
 <span class="w">                </span><span class="c1">// Only update mass/concentrations using CRHM&#39;s water for mobile species</span>
-<span class="w">                </span><span class="n">Sub_mob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OpenWQ_wqconfig</span><span class="p">.</span><span class="n">BGC_general_mobile_species</span><span class="p">[</span><span class="n">Sub_i</span><span class="p">];</span>
+<span class="w">                </span><span class="n">Sub_mob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OpenWQ_wqconfig</span><span class="p">.</span><span class="n">CH_model</span><span class="o">-&gt;</span><span class="n">BGC_general_mobile_species</span><span class="p">[</span><span class="n">Sub_i</span><span class="p">];</span>
 
 <span class="w">            </span><span class="c1">// SWE</span>
 <span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">((</span><span class="o">*</span><span class="n">OpenWQ_hostModelconfig</span><span class="p">.</span><span class="n">waterVol_hydromodel</span><span class="p">)[</span><span class="mi">0</span><span class="p">](</span><span class="n">hru</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
@@ -748,7 +752,7 @@ However, you should be able to clearly identify the calls to the different OpenW
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

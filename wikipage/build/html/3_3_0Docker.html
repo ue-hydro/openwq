@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Docker &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Docker &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -29,12 +30,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -48,6 +50,7 @@
 <li class="toctree-l1"><a class="reference internal" href="1_0_Home.html">Home</a></li>
 <li class="toctree-l1"><a class="reference internal" href="2_0_Documentation.html">Documentation</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="3_0_Installation.html">Installation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="3_0_1Repository_Structure.html">Repository Structure</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3_1_Download.html">Get OpenWQ</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3_2_Build.html">Building requirement</a></li>
 <li class="toctree-l2 current"><a class="reference internal" href="3_3_Compile.html">Build and Compile</a><ul class="current">
@@ -55,6 +58,7 @@
 <li class="toctree-l3"><a class="reference internal" href="3_3_1Linux.html">Linux</a></li>
 <li class="toctree-l3"><a class="reference internal" href="3_3_2Windows.html">Windows</a></li>
 <li class="toctree-l3"><a class="reference internal" href="3_3_3MacOS.html">MacOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="3_3_4Apptainer.html">Apptainer/Singularity (HPC)</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="3_4_Trouble.html">Troubleshooting</a></li>
@@ -62,6 +66,8 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="5_3_base_Hydro_models.html">Coupling OpenWQ</a></li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -70,7 +76,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -100,10 +106,10 @@
 (only needs to be set up once)</p>
 <ol class="arabic simple">
 <li><p>Start Docker</p></li>
-<li><p>Go to the main OpenWQ folder that contains the files <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> and <code class="docutils literal notranslate"><span class="pre">`Dockerfile</span></code></p></li>
+<li><p>Go to the <code class="docutils literal notranslate"><span class="pre">containers/</span></code> folder inside the OpenWQ repository (contains <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> and <code class="docutils literal notranslate"><span class="pre">Dockerfile</span></code>)</p></li>
 <li><p>If needed, clear all images and containers with <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">system</span> <span class="pre">prune</span> <span class="pre">-a</span></code></p></li>
 <li><p>Check if <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> file is good with <code class="docutils literal notranslate"><span class="pre">docker-compose</span> <span class="pre">config</span></code></p></li>
-<li><p>Create the Docker image (set up for <code class="docutils literal notranslate"><span class="pre">ubuntu:20.04</span></code>) that contains all the necessary packages with <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span> <span class="pre">up</span> <span class="pre">-d</span></code></p></li>
+<li><p>Create the Docker image (set up for <code class="docutils literal notranslate"><span class="pre">ubuntu:24.04</span></code>) that contains all the necessary packages with <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span> <span class="pre">up</span> <span class="pre">-d</span></code></p></li>
 <li><p>If you need to stop the container: <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span> <span class="pre">down</span></code></p></li>
 </ol>
 <p><strong>Compile your coupled OpenWQ model</strong></p>
@@ -115,7 +121,7 @@
 <li><p>Check the containers that are running with <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">ps</span></code> (exports container IDs)</p></li>
 <li><p>Get the appropriate container ID and use it in the command below</p></li>
 <li><p>Run a shell inside the container with <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">exec</span> <span class="pre">-it</span> <span class="pre">&lt;container</span> <span class="pre">id&gt;</span> <span class="pre">/bin/bash</span></code></p></li>
-<li><p>Armadillo now disables default <code class="docutils literal notranslate"><span class="pre">hdf5</span></code> support for save/load, so run <code class="docutils literal notranslate"><span class="pre">nano</span> <span class="pre">“/usr/include/armadillo_bits/config.hpp”</span></code></p></li>
+<li><p>Armadillo now disables default <code class="docutils literal notranslate"><span class="pre">hdf5</span></code> support for save/load, so run <code class="docutils literal notranslate"><span class="pre">nano</span> <span class="pre">&quot;/usr/include/armadillo_bits/config.hpp&quot;</span></code></p></li>
 <li><p>You are now inside the <code class="docutils literal notranslate"><span class="pre">config.hpp</span></code> file, so locate and uncomment <code class="docutils literal notranslate"><span class="pre">#define</span> <span class="pre">ARMA_USE_HDF5</span></code></p></li>
 <li><p>Go to the main OpenWQ folder that contains the <code class="docutils literal notranslate"><span class="pre">CMakeLists.txt</span></code> file</p></li>
 <li><p>Compile with: <code class="docutils literal notranslate"><span class="pre">rm</span> <span class="pre">CMakeCache.txt;</span> <span class="pre">rm</span> <span class="pre">-r</span> <span class="pre">CMakeFiles;</span> <span class="pre">cmake</span> <span class="pre">.</span> <span class="pre">;</span> <span class="pre">make</span> <span class="pre">-B;</span> <span class="pre">rm</span> <span class="pre">*.mod</span></code></p></li>
@@ -134,7 +140,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

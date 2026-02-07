@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Motivation &amp; Innovation &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Motivation &amp; Innovation &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -29,12 +30,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -47,7 +49,12 @@
               <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="1_0_Home.html">Home</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="1_1_Overview.html">Overview</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Motivation &amp; Innovation</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Motivation &amp; Innovation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#structural-rigidity">Structural rigidity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#hydro-flux-calculations">Hydro-flux calculations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#uncertainty-and-modelling-hypothesis-testing">Uncertainty and modelling hypothesis testing</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="1_3_Credits.html">Credits</a></li>
 <li class="toctree-l2"><a class="reference internal" href="1_4_License.html">License</a></li>
 </ul>
@@ -56,6 +63,8 @@
 <li class="toctree-l1"><a class="reference internal" href="3_0_Installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_3_base_Hydro_models.html">Coupling OpenWQ</a></li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -64,7 +73,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -87,13 +96,47 @@
              
   <section id="motivation-innovation">
 <h1>Motivation &amp; Innovation<a class="headerlink" href="#motivation-innovation" title="Permalink to this heading"></a></h1>
-<p>openWQ aims to enable a more flexible representation of local and global nuances in terrestrial biogeochemical cycling across regions, climate zones, and aquatic ecosystems through an adaptative reaction-network design. This concept was developed based on 10 years of experience with the development of hydro-biogeochemical models at ECCC’s Research Branch and the UofS.</p>
+<p>OpenWQ aims to enable a more flexible representation of local and global nuances in terrestrial biogeochemical cycling across regions, climate zones, and aquatic ecosystems through an adaptive reaction-network design. This concept was developed based on 10 years of experience with the development of hydro-biogeochemical models at ECCC’s Research Branch and the University of Saskatchewan.</p>
 <p>OpenWQ addresses three main challenges with existing biogeochemical and water quality models:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Structural</span> <span class="pre">rigidity</span></code> that hinders the effective use of models across landscapes and in complex, diverse environments (permafrost, peatlands, variable contributing areas) that require more investigative, open-ended, and interactive simulation approaches;</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Hydro-flux</span> <span class="pre">calculations</span></code> embedded in these modelling tools are often outdated or limited when compared to dedicated, disciplinary hydro-models (e.g., hydrological or hydrodynamic modelling tools); and</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Uncertainty</span></code> in model structure, process representation, and future scenarios (e.g., climate change) cannot be properly addressed because the current models are not suitable for adequate testing of modelling hypotheses.</p></li>
 </ul>
+<section id="structural-rigidity">
+<h2>Structural rigidity<a class="headerlink" href="#structural-rigidity" title="Permalink to this heading"></a></h2>
+<p>Water quality models have improved significantly over the last decades. There are now more water quality models than ever before, many of them quite well established.
+However, a common limitation across most of these models is their rigid internal structure: the biogeochemical process representations are hard-coded, making it difficult to test alternative hypotheses or adapt the model to new environments without modifying the source code.</p>
+<p>OpenWQ overcomes this with two complementary approaches:</p>
+<ol class="arabic simple">
+<li><p><strong>JSON-based flexible reaction networks (BGC-Flex)</strong>: Users define arbitrary kinetic rate expressions using the ExprTk mathematical expression library. Reactions can depend on hydrological variables (soil moisture, temperature, etc.) provided by the host model. No recompilation is needed to change the chemistry.</p></li>
+<li><p><strong>PHREEQC geochemical engine</strong>: For advanced geochemistry, OpenWQ integrates the PhreeqcRM library, enabling equilibrium speciation, mineral dissolution/precipitation, surface complexation, ion exchange, and user-defined kinetic reactions. This is particularly useful for problems involving acid mine drainage, nutrient cycling with pH effects, or contaminant fate in complex aqueous systems.</p></li>
+</ol>
+<a class="reference internal image-reference" href="_images/inca.png"><img alt="_images/inca.png" src="_images/inca.png" style="width: 250px;" /></a>
+<a class="reference internal image-reference" href="_images/SWAT.png"><img alt="_images/SWAT.png" src="_images/SWAT.png" style="width: 250px;" /></a>
+<a class="reference internal image-reference" href="_images/myLake.jpg"><img alt="_images/myLake.jpg" src="_images/myLake.jpg" style="width: 250px;" /></a>
+</section>
+<section id="hydro-flux-calculations">
+<h2>Hydro-flux calculations<a class="headerlink" href="#hydro-flux-calculations" title="Permalink to this heading"></a></h2>
+<p>Many water quality models implement their own simplified hydrological routines, which often lag behind the state of the art in dedicated hydro-models.
+OpenWQ takes a fundamentally different approach: it does not compute its own hydrology. Instead, it <strong>couples to existing, well-tested hydrological models</strong> that provide water volumes, fluxes, and state variables.</p>
+<p>This means that users benefit from the latest advances in hydrological science (e.g., advanced snow processes in CRHM, flexible model structures in SUMMA, continental routing in mizuRoute, 2D hydrodynamics in FLUXOS) without sacrificing water quality modeling capabilities.</p>
+<p>The coupling architecture is designed to be host-model agnostic, requiring only four API calls to integrate OpenWQ with any hydrological model. See the <a class="reference internal" href="5_3_Coupler_guide.html"><span class="doc">Coupler Guide</span></a> for details.</p>
+<a class="reference internal image-reference" href="_images/review_paper_process_representation.jpg"><img alt="_images/review_paper_process_representation.jpg" src="_images/review_paper_process_representation.jpg" style="width: 350px;" /></a>
+<a class="reference internal image-reference" href="_images/1-3D.png"><img alt="_images/1-3D.png" src="_images/1-3D.png" style="width: 350px;" /></a>
+</section>
+<section id="uncertainty-and-modelling-hypothesis-testing">
+<h2>Uncertainty and modelling hypothesis testing<a class="headerlink" href="#uncertainty-and-modelling-hypothesis-testing" title="Permalink to this heading"></a></h2>
+<p>The structural flexibility of OpenWQ enables systematic exploration of modeling hypotheses and uncertainty quantification:</p>
+<ul class="simple">
+<li><p><strong>Reaction network uncertainty</strong>: Users can test different biogeochemical formulations (e.g., first-order vs. Michaelis-Menten kinetics for nutrient cycling) by simply modifying the JSON configuration files.</p></li>
+<li><p><strong>Parameter uncertainty</strong>: The JSON-based configuration makes it straightforward to script ensemble simulations with varying parameter values for sensitivity analysis.</p></li>
+<li><p><strong>Structural uncertainty</strong>: By coupling to different host models (e.g., SUMMA vs. CRHM vs. mizuRoute), users can assess how the choice of hydrological model affects water quality predictions.</p></li>
+<li><p><strong>Chemistry module comparison</strong>: Users can compare flexible BGC-Flex reactions against PHREEQC-based geochemical calculations to evaluate the importance of detailed speciation.</p></li>
+<li><p><strong>Solver uncertainty</strong>: Users can compare results between the Forward Euler and SUNDIALS CVode solvers to assess numerical accuracy.</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/OpenWQ_structure.png"><img alt="_images/OpenWQ_structure.png" src="_images/OpenWQ_structure.png" style="width: 350px;" /></a>
+</section>
 </section>
 
 
@@ -107,7 +150,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

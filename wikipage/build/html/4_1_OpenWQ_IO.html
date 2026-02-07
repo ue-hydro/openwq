@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OpenWQ I/O &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>OpenWQ I/O &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -29,12 +30,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -54,9 +56,10 @@
 <li class="toctree-l2"><a class="reference internal" href="4_1_In.html">Input files</a></li>
 <li class="toctree-l2"><a class="reference internal" href="4_2_out.html">Output files</a></li>
 <li class="toctree-l2"><a class="reference internal" href="4_3_units.html">Units</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_2_2support_scripts.html">Supporting scripts</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -65,7 +68,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -95,29 +98,22 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_In.html">Input files</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="4_1_1Master.html">Master</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_1_1Master.html">Master Configuration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="4_1_2Config.html">Configuration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_1_3BGC.html">Biogeochemistry</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_1_4TE.html">Transport and Erosion/Mobilization</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_1_5Source.html">Source/Sink &amp; External Fluxes (<em>Optional</em>)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_1_3Modules.html">Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_1_4SS.html">Source/Sink &amp; External Fluxes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_1_5Solvers.html">Numerical Solvers</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="4_2_out.html">Output files</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="4_2_1file.html">Output formats</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_2_2support.html">Read outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2support.html">Reading Outputs</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="4_3_units.html">Units</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="4_3_units.html#mass-l">Mass (<span class="math notranslate nohighlight">\(L\)</span>)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="4_3_units.html#volume-l-3">Volume (<span class="math notranslate nohighlight">\(L^3\)</span>)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="4_3_units.html#time-t">Time (<span class="math notranslate nohighlight">\(T\)</span>)</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting scripts</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html">Biogeochemisty JSON Generator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html">Configuration JSON Generator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_2_2_SSjsonGenerator.html">Sink-Source JSON Generator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_2_2_OutputReadScript.html">Reading model outputs</a></li>
 </ul>
 </li>
 </ul>
@@ -135,7 +131,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

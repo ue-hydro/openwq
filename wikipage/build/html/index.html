@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to OpenWQ’s documentation! &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Welcome to OpenWQ’s documentation! &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -28,12 +29,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="#" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -49,6 +51,8 @@
 <li class="toctree-l1"><a class="reference internal" href="3_0_Installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_3_base_Hydro_models.html">Coupling OpenWQ</a></li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -57,7 +61,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="#">OpenWQ</a>
       </nav>
@@ -83,26 +87,74 @@
 It was designed as a coupler for integration with existing hydro-models to enable flexible, multi-scale, multi-chemistry simulations.
 OpenWQ adapts to the host hydro-model spatial and temporal configurations, which can include 1D, 2D or 3D spatial discretizations based on structured or unstructured meshes.
 It aims to be flexible, fast, free, and extendable.</p>
+<p>Key capabilities:</p>
+<ul class="simple">
+<li><p><strong>Flexible biogeochemistry</strong>: User-defined reaction networks via JSON configuration, powered by the ExprTk expression engine</p></li>
+<li><p><strong>PHREEQC geochemistry</strong>: Full geochemical modeling (speciation, mineral reactions, ion exchange, kinetics) via the PhreeqcRM library</p></li>
+<li><p><strong>Multiple solvers</strong>: Forward Euler (explicit) and SUNDIALS CVode (adaptive multi-step) ODE solvers</p></li>
+<li><p><strong>Transport modules</strong>: Advection-only or advection-dispersion transport of dissolved constituents</p></li>
+<li><p><strong>Sorption isotherms</strong>: Freundlich and Langmuir isotherm models for dissolved-sorbed partitioning</p></li>
+<li><p><strong>Sediment transport</strong>: HBV-based erosion and mobile-immobile fractionation models</p></li>
+<li><p><strong>Multi-model coupling</strong>: Already coupled to SUMMA, CRHM, mizuRoute, and FLUXOS</p></li>
+<li><p><strong>High performance</strong>: OpenMP parallelization with SIMD vectorization, MPI support for distributed computing</p></li>
+</ul>
 <div class="toctree-wrapper compound">
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="1_0_Home.html">Home</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="1_1_Overview.html">Overview</a></li>
-<li class="toctree-l2"><a class="reference internal" href="1_2_Innovation.html">Motivation &amp; Innovation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="1_3_Credits.html">Credits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="1_2_Innovation.html">Motivation &amp; Innovation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="1_2_Innovation.html#structural-rigidity">Structural rigidity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="1_2_Innovation.html#hydro-flux-calculations">Hydro-flux calculations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="1_2_Innovation.html#uncertainty-and-modelling-hypothesis-testing">Uncertainty and modelling hypothesis testing</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="1_3_Credits.html">Credits</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="1_3_Credits.html#core-development">Core Development</a></li>
+<li class="toctree-l3"><a class="reference internal" href="1_3_Credits.html#contributing-organizations">Contributing Organizations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="1_3_Credits.html#predecessor-models">Predecessor Models</a></li>
+<li class="toctree-l3"><a class="reference internal" href="1_3_Credits.html#third-party-libraries">Third-Party Libraries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="1_3_Credits.html#license">License</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="1_4_License.html">License</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="2_0_Documentation.html">Documentation</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="2_1_Theoretical.html">Theoretical Foundation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="2_1_Theoretical.html#conservation-equations">Conservation Equations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="2_1_Theoretical.html#biogeochemistry-reaction-networks">Biogeochemistry: Reaction networks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_1_Theoretical.html#conservation-equations">Conservation Equations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="2_1_Theoretical.html#advection">Advection</a></li>
+<li class="toctree-l4"><a class="reference internal" href="2_1_Theoretical.html#dispersion-fickian-approximation">Dispersion (Fickian approximation)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="2_1_Theoretical.html#total-transport-flux">Total transport flux</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="2_2_Example.html">Example of Case Studies</a></li>
-<li class="toctree-l2"><a class="reference internal" href="2_3_Software.html">Software Documentation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_1_Theoretical.html#biogeochemistry-reaction-networks">Biogeochemistry: Reaction networks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_1_Theoretical.html#phreeqc-geochemistry">PHREEQC Geochemistry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_1_Theoretical.html#sorption-isotherms">Sorption Isotherms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_1_Theoretical.html#sediment-transport">Sediment Transport</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_1_Theoretical.html#numerical-solvers">Numerical Solvers</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="2_2_Example.html">Example of Case Studies</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="2_2_Example.html#synthetic-test-cases">Synthetic Test Cases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_2_Example.html#phreeqc-river-geochemistry">PHREEQC River Geochemistry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_2_Example.html#nutrient-cycling-bgc-flex">Nutrient Cycling (BGC-Flex)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="2_3_Software.html">Software Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="2_3_Software.html#architecture-overview">Architecture Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_3_Software.html#build-system">Build System</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_3_Software.html#dependencies">Dependencies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="2_3_Software.html#api-reference">API Reference</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="3_0_Installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="3_0_1Repository_Structure.html">Repository Structure</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="3_0_1Repository_Structure.html#folder-descriptions">Folder Descriptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="3_0_1Repository_Structure.html#key-files">Key Files</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="3_1_Download.html">Get OpenWQ</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="3_1_Download.html#step-1-locate-host-model-source-code-folder">STEP 1: Locate host-model source code folder</a></li>
 <li class="toctree-l3"><a class="reference internal" href="3_1_Download.html#step-2-clone-openwq">STEP 2: Clone OpenWQ</a></li>
@@ -115,9 +167,23 @@ It aims to be flexible, fast, free, and extendable.</p>
 <li class="toctree-l3"><a class="reference internal" href="3_3_1Linux.html">Linux</a></li>
 <li class="toctree-l3"><a class="reference internal" href="3_3_2Windows.html">Windows</a></li>
 <li class="toctree-l3"><a class="reference internal" href="3_3_3MacOS.html">MacOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="3_3_4Apptainer.html">Apptainer/Singularity (HPC)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="3_3_4Apptainer.html#building-the-container">Building the container</a></li>
+<li class="toctree-l4"><a class="reference internal" href="3_3_4Apptainer.html#what-s-included-in-the-container">What’s included in the container</a></li>
+<li class="toctree-l4"><a class="reference internal" href="3_3_4Apptainer.html#running-with-apptainer">Running with Apptainer</a></li>
+<li class="toctree-l4"><a class="reference internal" href="3_3_4Apptainer.html#compiling-inside-the-container">Compiling inside the container</a></li>
+<li class="toctree-l4"><a class="reference internal" href="3_3_4Apptainer.html#hpc-job-submission">HPC job submission</a></li>
+<li class="toctree-l4"><a class="reference internal" href="3_3_4Apptainer.html#troubleshooting">Troubleshooting</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="3_4_Trouble.html">Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="3_4_Trouble.html">Troubleshooting</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="3_4_Trouble.html#build-issues">Build Issues</a></li>
+<li class="toctree-l3"><a class="reference internal" href="3_4_Trouble.html#runtime-issues">Runtime Issues</a></li>
+<li class="toctree-l3"><a class="reference internal" href="3_4_Trouble.html#json-configuration-issues">JSON Configuration Issues</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="5_3_base_Hydro_models.html">Coupling OpenWQ</a><ul>
@@ -125,7 +191,7 @@ It aims to be flexible, fast, free, and extendable.</p>
 <li class="toctree-l3"><a class="reference internal" href="5_3_0_Hydro_coupled_models.html#summa"><strong>SUMMA</strong></a></li>
 <li class="toctree-l3"><a class="reference internal" href="5_3_0_Hydro_coupled_models.html#crhm"><strong>CRHM</strong></a></li>
 <li class="toctree-l3"><a class="reference internal" href="5_3_0_Hydro_coupled_models.html#mizuroute"><strong>MizuRoute</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="5_3_0_Hydro_coupled_models.html#fluxos-overland"><strong>FLUXOS-OVERLAND</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="5_3_0_Hydro_coupled_models.html#fluxos"><strong>FLUXOS</strong></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="5_3_Coupler_guide.html">How to couple OpenWQ?</a><ul>
@@ -170,16 +236,52 @@ It aims to be flexible, fast, free, and extendable.</p>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="4_1_In.html">Input files</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="4_1_1Master.html">Master</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_1_1Master.html">Master Configuration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="4_1_1Master.html#general-project-information">General Project Information</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_1Master.html#computational-settings"><code class="docutils literal notranslate"><span class="pre">COMPUTATIONAL_SETTINGS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_1Master.html#solver"><code class="docutils literal notranslate"><span class="pre">SOLVER</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_1Master.html#openwq-input"><code class="docutils literal notranslate"><span class="pre">OPENWQ_INPUT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_1Master.html#modules"><code class="docutils literal notranslate"><span class="pre">MODULES</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_1Master.html#openwq-output"><code class="docutils literal notranslate"><span class="pre">OPENWQ_OUTPUT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_1Master.html#example">Example</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="4_1_2Config.html">Configuration</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_1_3BGC.html">Biogeochemistry</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_1_4TE.html">Transport and Erosion/Mobilization</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_1_5Source.html">Source/Sink &amp; External Fluxes (<em>Optional</em>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_1_3Modules.html">Modules</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="4_1_3Modules.html#biogeochemistry">BIOGEOCHEMISTRY</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_3Modules.html#transport-dissolved">TRANSPORT_DISSOLVED</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_3Modules.html#lateral-exchange">LATERAL_EXCHANGE</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_3Modules.html#transport-sediments">TRANSPORT_SEDIMENTS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_3Modules.html#sorption-isotherm">SORPTION_ISOTHERM</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="4_1_4SS.html">Source/Sink &amp; External Fluxes</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="4_1_4SS.html#common-structure">Common Structure</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_4SS.html#method-1-json-inline-data">Method 1: JSON (inline data)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_4SS.html#method-2-csv-ascii-external-file">Method 2: CSV/ASCII (external file)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_4SS.html#method-3-copernicus-lulc-with-static-coefficients">Method 3: Copernicus LULC with static coefficients</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_4SS.html#method-4-copernicus-lulc-with-dynamic-coefficients">Method 4: Copernicus LULC with dynamic coefficients</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_4SS.html#method-5-ml-model-xgboost-random-forest">Method 5: ML Model (XGBoost / Random Forest)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_4SS.html#hdf5-external-fluxes-inter-model-coupling">HDF5 External Fluxes (inter-model coupling)</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="4_1_5Solvers.html">Numerical Solvers</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="4_1_5Solvers.html#solver-selection">Solver selection</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_5Solvers.html#forward-euler-forward-euler">Forward Euler (FORWARD_EULER)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_5Solvers.html#sundials-cvode">SUNDIALS CVode</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_5Solvers.html#performance-optimizations">Performance optimizations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_1_5Solvers.html#solver-choice-guidelines">Solver choice guidelines</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="4_2_out.html">Output files</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="4_2_1file.html">Output formats</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_2_2support.html">Read outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2support.html">Reading Outputs</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="4_2_2support.html#supporting-scripts">Supporting scripts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="4_2_2support.html#quick-read-with-python">Quick read with Python</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="4_3_units.html">Units</a><ul>
@@ -188,22 +290,69 @@ It aims to be flexible, fast, free, and extendable.</p>
 <li class="toctree-l3"><a class="reference internal" href="4_3_units.html#time-t">Time (<span class="math notranslate nohighlight">\(T\)</span>)</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="4_2_2support_scripts.html">Supporting scripts</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html">Biogeochemisty JSON Generator</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html#step-1-identify-the-chemical-pools">Step 1: Identify the chemical pools</a></li>
-<li class="toctree-l4"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html#step-2-identify-reactions">Step 2: Identify reactions</a></li>
-<li class="toctree-l4"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html#step-3-characterize-the-reaction-kinetics">Step 3: Characterize the reaction kinetics</a></li>
-<li class="toctree-l4"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html#step-4-convert-diagram-to-openwq-input-file">Step 4: Convert diagram to OpenWQ input file</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html">Configuration JSON Generator</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_2_2_SSjsonGenerator.html">Sink-Source JSON Generator</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html">Reading model outputs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html">Biogeochemisty JSON Generator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html#step-1-identify-the-chemical-pools">Step 1: Identify the chemical pools</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html#step-2-identify-reactions">Step 2: Identify reactions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html#step-3-characterize-the-reaction-kinetics">Step 3: Characterize the reaction kinetics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html#step-4-convert-diagram-to-openwq-input-file">Step 4: Convert diagram to OpenWQ input file</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html">Automatic Model Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html#location">Location</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html#quick-start">Quick start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html#configuration-parameters">Configuration parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html#module-configuration">Module configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html#source-sink-configuration">Source/sink configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html#output-configuration">Output configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html#generated-files">Generated files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html#docker-support">Docker support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_ConfigjsonGenerator.html#tips">Tips</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_SSjsonGenerator.html">Sink-Source JSON Generator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_SSjsonGenerator.html#manual-creation">Manual creation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_OutputReadScript.html">Reading and Visualizing Model Outputs</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html#location">Location</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html#quick-start">Quick start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html#reading-hdf5-outputs">Reading HDF5 outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html#creating-time-series-plots">Creating time-series plots</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html#creating-spatial-maps">Creating spatial maps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html#gif-creation-requirements">GIF creation requirements</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html#complete-example">Complete example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html#troubleshooting">Troubleshooting</a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#location">Location</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#quick-start">Quick Start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#configuration-overview">Configuration Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#supported-parameter-types">Supported Parameter Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#parameter-options">Parameter Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#objective-functions">Objective Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#observation-data-format">Observation Data Format</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#dds-optimization-algorithm">DDS Optimization Algorithm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#sensitivity-analysis">Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#recommended-hpc-workflow">Recommended HPC Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#hpc-configuration-slurm">HPC Configuration (SLURM)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#checkpointing-and-resume">Checkpointing and Resume</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#results-and-outputs">Results and Outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#complete-configuration-example">Complete Configuration Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#dependencies">Dependencies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_Calibration.html#troubleshooting">Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="5_0_Developer.html#how-to-contribute">How to contribute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="5_0_Developer.html#development-setup">Development setup</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
 </div>
@@ -219,7 +368,7 @@ It aims to be flexible, fast, free, and extendable.</p>
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Theoretical Foundation &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Theoretical Foundation &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -30,12 +31,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -49,8 +51,17 @@
 <li class="toctree-l1"><a class="reference internal" href="1_0_Home.html">Home</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="2_0_Documentation.html">Documentation</a><ul class="current">
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Theoretical Foundation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#conservation-equations">Conservation Equations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#conservation-equations">Conservation Equations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#advection">Advection</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dispersion-fickian-approximation">Dispersion (Fickian approximation)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#total-transport-flux">Total transport flux</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="#biogeochemistry-reaction-networks">Biogeochemistry: Reaction networks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#phreeqc-geochemistry">PHREEQC Geochemistry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sorption-isotherms">Sorption Isotherms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sediment-transport">Sediment Transport</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#numerical-solvers">Numerical Solvers</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="2_2_Example.html">Example of Case Studies</a></li>
@@ -60,6 +71,8 @@
 <li class="toctree-l1"><a class="reference internal" href="3_0_Installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_3_base_Hydro_models.html">Coupling OpenWQ</a></li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -68,7 +81,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -93,34 +106,43 @@
 <h1>Theoretical Foundation<a class="headerlink" href="#theoretical-foundation" title="Permalink to this heading"></a></h1>
 <section id="conservation-equations">
 <h2>Conservation Equations<a class="headerlink" href="#conservation-equations" title="Permalink to this heading"></a></h2>
-<p>There are two options available for computing the conservative transport of solutes (dissolved in water) or fully suspended sediments.
-The first option accounts for transport through both advection and dispersion processes. It solves the hyperbolic-parabolic advection-dispersion PDE, which takes 1D-3D forms depending on the characteristics of the host hydro-model:</p>
+<p>There are two options available for computing the conservative transport of solutes (dissolved in water) or fully suspended sediments.</p>
+<p>Since OpenWQ operates as a plug-in water quality module coupled to external host hydrological models, it does not have direct access to the spatial grid topology or neighbouring cells. Instead, the host model provides pairwise water flux exchanges between source and recipient cells. The transport equations are therefore formulated in terms of <strong>discrete mass fluxes between cell pairs</strong> rather than continuous PDEs.</p>
+<section id="advection">
+<h3>Advection<a class="headerlink" href="#advection" title="Permalink to this heading"></a></h3>
+<p>The advective mass flux of a dissolved species from a source cell to a recipient cell is:</p>
 <div class="math notranslate nohighlight">
-\begin{equation}
-\begin{split}
-\dfrac{\partial (h \cdot c_s)}{\partial t} + \nabla( h \cdot \vec{v} \cdot c_s) = \nabla (h \cdot D \cdot \nabla c_s) + S  \\
-\text{extended up to 3D} \rightarrow \frac{\partial{(h \cdot c_s)}}{\partial t}+\frac{\partial{(h \cdot u_x \cdot c_s)}}{\partial x}+\frac{\partial{(h \cdot u_y \cdot c_s)}}{\partial y} + \frac{\partial{(h \cdot u_z \cdot c_s)}}{\partial z} = \\ \frac{\partial}{\partial x}\Bigl( h \cdot E_x \frac{\partial c_s}{\partial x} \Bigr)+
-\frac{\partial}{\partial y}\Bigl( h \cdot E_y \frac{\partial c_s}{\partial y} \Bigr) +
-\frac{\partial}{\partial z}\Bigl( h \cdot E_z \frac{\partial c_s}{\partial z} \Bigr) + S
-\end{split}
-\label{ADE_option1}
-\end{equation}</div><p>The second option only accounts for transport through advection:</p>
+\[F_{adv} = \frac{Q_{s \rightarrow r}}{W_s} \cdot m_s\]</div>
+<p>where <span class="math notranslate nohighlight">\(Q_{s \rightarrow r}\)</span> is the water flux from source to recipient <span class="math notranslate nohighlight">\([MT^{-1}]\)</span>, <span class="math notranslate nohighlight">\(W_s\)</span> is the water mass in the source cell <span class="math notranslate nohighlight">\([M]\)</span>, and <span class="math notranslate nohighlight">\(m_s\)</span> is the chemical mass in the source cell <span class="math notranslate nohighlight">\([M]\)</span>. This is equivalent to transporting mass at the source cell concentration: <span class="math notranslate nohighlight">\(F_{adv} = Q_{s \rightarrow r} \cdot C_s\)</span>.</p>
+</section>
+<section id="dispersion-fickian-approximation">
+<h3>Dispersion (Fickian approximation)<a class="headerlink" href="#dispersion-fickian-approximation" title="Permalink to this heading"></a></h3>
+<p>Since only pairwise source-recipient cell connections are available (without access to neighbouring cells for computing second-order spatial derivatives), the dispersion term is approximated using a <strong>Fickian dispersive flux between cell pairs</strong>:</p>
 <div class="math notranslate nohighlight">
-\begin{equation}
-\begin{split}
-\dfrac{\partial (h \cdot c_s)}{\partial t} + \nabla( h \cdot \vec{v} \cdot c_s) = S  \\
-\text{extended up to 3D} \rightarrow \frac{\partial{(h \cdot c_s)}}{\partial t}+\frac{\partial{(h \cdot u_x \cdot c_s)}}{\partial x}+\frac{\partial{(h \cdot u_y \cdot c_s)}}{\partial y} + \\ \frac{\partial{(h \cdot u_z \cdot c_s)}}{\partial z} = S
-\end{split}
-\label{AE_option2}
-\end{equation}</div><p>where <span class="math notranslate nohighlight">\(c_s\)</span> is the concentration of a given dissolved substance <span class="math notranslate nohighlight">\([ML^{-3}]\)</span>; <span class="math notranslate nohighlight">\(u\)</span> is the velocity in the x, y and z direction <span class="math notranslate nohighlight">\([LT^{-1}]\)</span> <span class="math notranslate nohighlight">\(E\)</span> is the horizontal diffusivity <span class="math notranslate nohighlight">\([L^2T^{-1}]\)</span>; and <span class="math notranslate nohighlight">\(S\)</span> is a source term <span class="math notranslate nohighlight">\([ML^{-2}T^{-1}]\)</span> that is linked to the chemistry modules. The <span class="math notranslate nohighlight">\(E\)</span> term accounts for the combined effect of different mixing phenomena:</p>
+\[F_{disp} = D_{eff} \cdot (C_s - C_r) \cdot W_s\]</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(F_{disp}\)</span> is the dispersive mass flux <span class="math notranslate nohighlight">\([MT^{-1}]\)</span></p></li>
+<li><p><span class="math notranslate nohighlight">\(C_s = m_s / W_s\)</span> is the concentration in the source cell</p></li>
+<li><p><span class="math notranslate nohighlight">\(C_r = m_r / W_r\)</span> is the concentration in the recipient cell</p></li>
+<li><p><span class="math notranslate nohighlight">\(W_s\)</span> is the water mass in the source cell <span class="math notranslate nohighlight">\([M]\)</span></p></li>
+<li><p><span class="math notranslate nohighlight">\(D_{eff}\)</span> is the effective dispersion rate <span class="math notranslate nohighlight">\([T^{-1}]\)</span></p></li>
+</ul>
+<p>The effective dispersion rate is pre-computed from user-provided parameters:</p>
 <div class="math notranslate nohighlight">
-\[\begin{equation}
-E=E^{turb}+E^{tsd}+E^{sgt}+E_d
-\label{SW_eq5}
-\end{equation}\]</div>
-<p>where <span class="math notranslate nohighlight">\(E^{turb}\)</span> is the turbulent or eddy diffusivity, which is a complex phenomena with multifractal behaviour dominated by friction forcess, <span class="math notranslate nohighlight">\(E^{tsd}\)</span> is the so-called Taylor-shear dispersion that arises from the unresolved vertical variation of the horizontal flow, <span class="math notranslate nohighlight">\(E^{sgt}\)</span> accounts for the sub-grid eddy viscosity and diffusivity arising from unresolved mixing occurring at sub-grid scale, and <span class="math notranslate nohighlight">\(E\)</span> is the background molecular diffusion resulting from the probabilistic Brownian motion concept occurring at particle scales.
-<span class="math notranslate nohighlight">\(E\)</span> is approximated to the dominant turbulent dispersion based on the eddy viscosity concept: <span class="math notranslate nohighlight">\(E^{turb} = \nu_t / \sigma\)</span>, where <span class="math notranslate nohighlight">\(\sigma\)</span> is the Prandtl-Schmidt number. Turbulent viscosity (<span class="math notranslate nohighlight">\(\nu_t\)</span>) depends on shear velocity (<span class="math notranslate nohighlight">\(u^*\)</span>) and on a turbulent length scale (<span class="math notranslate nohighlight">\(l_t=0.07h\)</span>).
-In this model, this relationship is approximated by an algebraic expression: <span class="math notranslate nohighlight">\(\nu_t \approx k u^* l_t\)</span>, where <span class="math notranslate nohighlight">\(k\)</span> is a user-defined scaling factor to account for sub-grid scale eddies.</p>
+\[D_{eff} = \frac{D_{avg}}{L^2}\]</div>
+<p>where <span class="math notranslate nohighlight">\(D_{avg} = (D_x + D_y + D_z) / 3\)</span> is the average of the directional dispersion coefficients <span class="math notranslate nohighlight">\([L^2T^{-1}]\)</span> (averaged because the orientation of each source-recipient connection is not known), and <span class="math notranslate nohighlight">\(L\)</span> is the user-provided characteristic length <span class="math notranslate nohighlight">\([L]\)</span> representing the distance between cell centers.</p>
+<p>This formulation is <strong>bidirectional</strong>: the dispersive flux can move mass in either direction depending on the concentration gradient, smoothing concentration differences regardless of flow direction.</p>
+</section>
+<section id="total-transport-flux">
+<h3>Total transport flux<a class="headerlink" href="#total-transport-flux" title="Permalink to this heading"></a></h3>
+<p>The first option (<code class="docutils literal notranslate"><span class="pre">OPENWQ_NATIVE_TD_ADVDISP</span></code>) computes the total transport as the sum of advective and dispersive fluxes:</p>
+<div class="math notranslate nohighlight">
+\[F_{total} = F_{adv} + F_{disp}\]</div>
+<p>The second option (<code class="docutils literal notranslate"><span class="pre">NATIVE_TD_ADV</span></code>) accounts for transport through advection only:</p>
+<div class="math notranslate nohighlight">
+\[F_{total} = F_{adv}\]</div>
+</section>
 </section>
 <section id="biogeochemistry-reaction-networks">
 <h2>Biogeochemistry: Reaction networks<a class="headerlink" href="#biogeochemistry-reaction-networks" title="Permalink to this heading"></a></h2>
@@ -142,6 +164,91 @@ The implementation of <code class="docutils literal notranslate"><span class="pr
 \label{3rdorder_eq}
 \end{equation}</div><p>where <span class="math notranslate nohighlight">\(c_a\)</span> and <span class="math notranslate nohighlight">\(c_b\)</span> <span class="math notranslate nohighlight">\([ML^{-3}]\)</span> are the concentrations of chemical species <span class="math notranslate nohighlight">\(a\)</span> and <span class="math notranslate nohighlight">\(b\)</span>, parameter/variable <span class="math notranslate nohighlight">\(B\)</span> represents weather/hydrological dependencies (such as soil moisture and temperature) and <span class="math notranslate nohighlight">\(k\)</span> is the reaction rate <span class="math notranslate nohighlight">\([ML^{-3}T^{-1}]\)</span>. The reaction rate <span class="math notranslate nohighlight">\(k\)</span> can be provided as the reaction rate (usually using standard maximum at a reference temperature, often <span class="math notranslate nohighlight">\(20^oC\)</span>) or using expressions that can include relationships with the hydrological/weather dependency variables/parameters.</p>
 </section>
+<section id="phreeqc-geochemistry">
+<h2>PHREEQC Geochemistry<a class="headerlink" href="#phreeqc-geochemistry" title="Permalink to this heading"></a></h2>
+<p>As an alternative to the flexible BGC reaction networks, OpenWQ integrates the PHREEQC geochemical engine via PhreeqcRM.
+PHREEQC computes equilibrium speciation and kinetic reactions based on thermodynamic databases, solving the full set of mass-action equations for aqueous species, minerals, surfaces, and exchangers.</p>
+<p>For a given solution, PHREEQC solves:</p>
+<div class="math notranslate nohighlight">
+\[K_i = \prod_j a_j^{\nu_{ij}}\]</div>
+<p>where <span class="math notranslate nohighlight">\(K_i\)</span> is the equilibrium constant for reaction <span class="math notranslate nohighlight">\(i\)</span>, <span class="math notranslate nohighlight">\(a_j\)</span> is the activity of species <span class="math notranslate nohighlight">\(j\)</span>, and <span class="math notranslate nohighlight">\(\nu_{ij}\)</span> is the stoichiometric coefficient.</p>
+<p>This approach is more computationally expensive than the BGC-Flex approach, but provides thermodynamically consistent speciation calculations, which are essential for problems involving pH-dependent reactions, mineral interactions, or complex aqueous chemistry. See <a class="reference internal" href="4_1_3Modules.html"><span class="doc">PHREEQC configuration</span></a> for setup details.</p>
+</section>
+<section id="sorption-isotherms">
+<h2>Sorption Isotherms<a class="headerlink" href="#sorption-isotherms" title="Permalink to this heading"></a></h2>
+<p>OpenWQ includes two sorption isotherm models for simulating partitioning between dissolved and sorbed phases. Both use a <strong>kinetic approach</strong>: the equilibrium sorbed concentration is computed from the isotherm equation, and mass is transferred at a user-defined kinetic rate.</p>
+<p><strong>Freundlich isotherm</strong> – Models nonlinear sorption:</p>
+<div class="math notranslate nohighlight">
+\[q = K_{fr} \cdot C^{N_{fr}}\]</div>
+<p>where <span class="math notranslate nohighlight">\(q\)</span> is the sorbed concentration <span class="math notranslate nohighlight">\([ML^{-3}_{soil}]\)</span>, <span class="math notranslate nohighlight">\(C\)</span> is the dissolved concentration <span class="math notranslate nohighlight">\([ML^{-3}]\)</span>, <span class="math notranslate nohighlight">\(K_{fr}\)</span> is the Freundlich coefficient, and <span class="math notranslate nohighlight">\(N_{fr}\)</span> is the Freundlich exponent. The equilibrium dissolved concentration is found via Newton-Raphson iteration on the mass conservation equation <span class="math notranslate nohighlight">\(C_{eq} \cdot V + K_{fr} \cdot C_{eq}^{N_{fr}} \cdot \rho \cdot L = m_{total}\)</span>.</p>
+<p><strong>Langmuir isotherm</strong> – Models sorption with a finite number of binding sites:</p>
+<div class="math notranslate nohighlight">
+\[q = \frac{q_{max} \cdot K_L \cdot C}{1 + K_L \cdot C}\]</div>
+<p>where <span class="math notranslate nohighlight">\(q_{max}\)</span> is the maximum adsorption capacity <span class="math notranslate nohighlight">\([MM^{-1}_{soil}]\)</span> and <span class="math notranslate nohighlight">\(K_L\)</span> is the Langmuir equilibrium constant <span class="math notranslate nohighlight">\([L^3M^{-1}]\)</span>. The equilibrium concentration is solved analytically via the quadratic formula.</p>
+<p><strong>Kinetic adsorption/desorption</strong> – For both isotherms, the mass flux from dissolved to sorbed phase is:</p>
+<div class="math notranslate nohighlight">
+\[\Delta q = (q_{eq} - q_{current}) \cdot (1 - e^{-K_{adsdes} \cdot \Delta t})\]</div>
+<div class="math notranslate nohighlight">
+\[F_{sorption} = \Delta q \cdot \rho \cdot L\]</div>
+<p>where <span class="math notranslate nohighlight">\(K_{adsdes}\)</span> is the kinetic adsorption/desorption rate <span class="math notranslate nohighlight">\([T^{-1}]\)</span>, <span class="math notranslate nohighlight">\(\rho\)</span> is bulk density <span class="math notranslate nohighlight">\([ML^{-3}]\)</span>, and <span class="math notranslate nohighlight">\(L\)</span> is layer thickness <span class="math notranslate nohighlight">\([L]\)</span>. This flux is applied as a sink/source on the dissolved mass. See <a class="reference internal" href="4_1_3Modules.html"><span class="doc">Sorption Isotherm configuration</span></a> for setup details.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The Freundlich/Langmuir SI module is intended for use with NATIVE_BGC_FLEX. When PHREEQC is the active biogeochemistry engine, sorption should be handled through PHREEQC’s <code class="docutils literal notranslate"><span class="pre">SURFACE</span></code> and <code class="docutils literal notranslate"><span class="pre">EXCHANGE</span></code> blocks, which provide mechanistically richer surface complexation and ion exchange models. See <a class="reference internal" href="4_1_3Modules.html#phreeqc-process-overlap"><span class="std std-ref">Process overlap with other OpenWQ modules</span></a>.</p>
+</div>
+</section>
+<section id="sediment-transport">
+<h2>Sediment Transport<a class="headerlink" href="#sediment-transport" title="Permalink to this heading"></a></h2>
+<p>OpenWQ includes two sediment transport erosion models based on the HYPE hydrological model framework. Both models compute erosion rates and transport sediments between compartments along a user-defined direction.</p>
+<p><strong>HYPE_HBVSED</strong> – HBV-based sediment erosion model</p>
+<p>This model computes soil erosion as a function of precipitation, slope, soil properties, and land use. The erosion rate is computed as:</p>
+<div class="math notranslate nohighlight">
+\[\text{erosion} = \text{eroindex} \cdot \text{eroindexpar} \cdot \text{lusepar} \cdot \text{soilpar} \cdot \text{slope}^{\text{slopepar}} \cdot \text{precip}^{\text{precexppar}} \cdot \text{erodmonth}\]</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\text{eroindex}\)</span> – erosion index (spatially varying)</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{eroindexpar}\)</span> – scaling parameter for the erosion index</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{lusepar}\)</span> – land-use dependent soil erosion factor</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{soilpar}\)</span> – soil-type dependent erosion factor</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{slope}\)</span> – basin slope</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{slopepar}\)</span> – slope erosion exponent</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{precip}\)</span> – precipitation intensity</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{precexppar}\)</span> – precipitation erosion exponent</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{erodmonth} = 1 + \text{monthpar}(m)\)</span> – monthly erosion factor, where <span class="math notranslate nohighlight">\(\text{monthpar}\)</span> is a 12-value array (Jan–Dec) allowing seasonal variation</p></li>
+</ul>
+<p>Erosion only occurs when precipitation exceeds zero and the inhibiting compartment (e.g., snow layer) has no water. Sediments are removed from the source compartment and added to the recipient compartment.</p>
+<p><strong>HYPE_MMF</strong> – Morgan-Morgan-Finney erosion model</p>
+<p>This model uses the MMF approach to compute erosion based on kinetic energy from rainfall, soil cohesion, erodibility, and ground cover fractions. The erosion rate depends on:</p>
+<div class="math notranslate nohighlight">
+\[F = K \cdot KE \cdot 10^{-3}\]</div>
+<div class="math notranslate nohighlight">
+\[H = \text{cohesion}^{0.5} \cdot \text{cropcover} \cdot e^{-\text{erodibility} \cdot SR^{\text{sreroexp}}}\]</div>
+<div class="math notranslate nohighlight">
+\[TC = \text{trans}_1 \cdot (SR)^{\text{trans}_2} \cdot \sin(\text{slope}) \cdot (1 - \text{groundcover})\]</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(F\)</span> – soil particle detachment by raindrop impact</p></li>
+<li><p><span class="math notranslate nohighlight">\(H\)</span> – resistance to erosion (soil cohesion and crop cover)</p></li>
+<li><p><span class="math notranslate nohighlight">\(TC\)</span> – transport capacity of overland flow</p></li>
+<li><p><span class="math notranslate nohighlight">\(KE\)</span> – total kinetic energy of rainfall (direct throughfall + leaf drainage)</p></li>
+<li><p><span class="math notranslate nohighlight">\(SR\)</span> – surface runoff depth</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{cohesion}\)</span> – soil cohesion (kPa)</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{erodibility}\)</span> – soil erodibility (g/J)</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{sreroexp}\)</span> – surface runoff erosion exponent</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{cropcover}\)</span> + <span class="math notranslate nohighlight">\(\text{groundcover}\)</span> – must sum to 1.0</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{trans}_1\)</span>, <span class="math notranslate nohighlight">\(\text{trans}_2\)</span> – transport capacity factors</p></li>
+<li><p><span class="math notranslate nohighlight">\(\text{slope}\)</span> – basin slope</p></li>
+</ul>
+<p>The pseudo day-of-year is dynamically computed from the simulation time and used to estimate kinetic energy from rainfall. Erosion only occurs when the inhibiting compartment has no water and crop/ground cover fractions are valid.</p>
+<p>Both models support spatially-varying parameters via JSON or ASCII input formats, allowing cell-by-cell parameter overrides over the default values.</p>
+</section>
+<section id="numerical-solvers">
+<h2>Numerical Solvers<a class="headerlink" href="#numerical-solvers" title="Permalink to this heading"></a></h2>
+<p>OpenWQ provides two numerical solvers for integrating the water quality ODEs:</p>
+<ul class="simple">
+<li><p><strong>Forward Euler</strong>: A first-order explicit method. Simple and fast. See <a class="reference internal" href="4_1_5Solvers.html"><span class="doc">Solvers</span></a>.</p></li>
+<li><p><strong>SUNDIALS CVode</strong>: An adaptive multi-step method (Adams or BDF) with variable order and automatic step-size control. Provides higher-order accuracy for stiff and non-stiff problems. See <a class="reference internal" href="4_1_5Solvers.html"><span class="doc">Solvers</span></a>.</p></li>
+</ul>
+</section>
 </section>
 
 
@@ -155,7 +262,7 @@ The implementation of <code class="docutils literal notranslate"><span class="pr
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

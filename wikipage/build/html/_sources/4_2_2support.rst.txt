@@ -1,10 +1,10 @@
 Reading Outputs
 ========================================
 
-OpenWQ outputs can be saved in three standard scientific formats: `CSV <https://en.wikipedia.org/wiki/Comma-separated_values>`_, `HDF5 <https://en.wikipedia.org/wiki/Hierarchical_Data_Format>`_, and `VTU <https://people.math.sc.edu/Burkardt/data/vtu/vtu.html>`_.
+OpenWQ outputs can be saved in two standard scientific formats: `HDF5 <https://en.wikipedia.org/wiki/Hierarchical_Data_Format>`_ and `CSV <https://en.wikipedia.org/wiki/Comma-separated_values>`_.
 These formats are supported by widely used programming languages including C++, R, Python, and MATLAB.
 
-**HDF5 is recommended** for most applications due to its efficient handling of large datasets and support for structured data.
+**HDF5 is the preferred output format** as it is the only format with full support, including the post-processing supporting scripts for reading, plotting, and mapping results.
 
 Supporting scripts
 ~~~~~~~~~~~~~~~~~~

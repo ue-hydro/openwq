@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Read outputs &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Reading Outputs &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -29,12 +30,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -54,13 +56,18 @@
 <li class="toctree-l2"><a class="reference internal" href="4_1_In.html">Input files</a></li>
 <li class="toctree-l2 current"><a class="reference internal" href="4_2_out.html">Output files</a><ul class="current">
 <li class="toctree-l3"><a class="reference internal" href="4_2_1file.html">Output formats</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">Read outputs</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Reading Outputs</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#supporting-scripts">Supporting scripts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#quick-read-with-python">Quick read with Python</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="4_3_units.html">Units</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_2_2support_scripts.html">Supporting scripts</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -69,7 +76,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -81,7 +88,7 @@
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
           <li class="breadcrumb-item"><a href="4_2_out.html">Output files</a></li>
-      <li class="breadcrumb-item active">Read outputs</li>
+      <li class="breadcrumb-item active">Reading Outputs</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/4_2_2support.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -91,12 +98,42 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="read-outputs">
-<h1>Read outputs<a class="headerlink" href="#read-outputs" title="Permalink to this heading"></a></h1>
-<p>The different output file formats enabled in OpenWQ are all fairly well established in the scientific community: <a class="reference external" href="https://en.wikipedia.org/wiki/Comma-separated_values">CSV</a>, <a class="reference external" href="https://en.wikipedia.org/wiki/Hierarchical_Data_Format">HDF5</a>, and <a class="reference external" href="https://people.math.sc.edu/Burkardt/data/vtu/vtu.html">VTU</a>.
-Widely used programming languages such as C++, R, Python and MATLAB have support for reading, editing and creating such files.</p>
-<p>However, we developed a suite of supporting scripts specifically tailored to read OpenWQ’s outputs.
-Check them <a class="reference external" href="https://openwq.readthedocs.io/en/latest/4_2_2support_scripts">here</a>.</p>
+  <section id="reading-outputs">
+<h1>Reading Outputs<a class="headerlink" href="#reading-outputs" title="Permalink to this heading"></a></h1>
+<p>OpenWQ outputs can be saved in two standard scientific formats: <a class="reference external" href="https://en.wikipedia.org/wiki/Hierarchical_Data_Format">HDF5</a> and <a class="reference external" href="https://en.wikipedia.org/wiki/Comma-separated_values">CSV</a>.
+These formats are supported by widely used programming languages including C++, R, Python, and MATLAB.</p>
+<p><strong>HDF5 is the preferred output format</strong> as it is the only format with full support, including the post-processing supporting scripts for reading, plotting, and mapping results.</p>
+<section id="supporting-scripts">
+<h2>Supporting scripts<a class="headerlink" href="#supporting-scripts" title="Permalink to this heading"></a></h2>
+<p>OpenWQ provides a comprehensive Python toolkit for reading, analyzing, and visualizing model outputs. The toolkit includes:</p>
+<ul class="simple">
+<li><p><strong>Read_h5_driver</strong>: Reads HDF5 files into pandas DataFrames</p></li>
+<li><p><strong>Plot_h5_driver</strong>: Creates time-series plots for selected features</p></li>
+<li><p><strong>Map_h5_driver</strong>: Creates spatial maps and animated GIFs</p></li>
+</ul>
+<p>For detailed documentation on using these scripts, see the <a class="reference internal" href="4_2_2support_scripts.html"><span class="doc">Supporting scripts</span></a> section.</p>
+</section>
+<section id="quick-read-with-python">
+<h2>Quick read with Python<a class="headerlink" href="#quick-read-with-python" title="Permalink to this heading"></a></h2>
+<p>For simple data extraction, you can read HDF5 files directly with <code class="docutils literal notranslate"><span class="pre">h5py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">h5py</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="c1"># Open the output file</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="s1">&#39;openwq_out/HDF5/COMPARTMENT@SPECIES#UNITS-main.h5&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span>
+
+<span class="c1"># List available timestamps</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+
+<span class="c1"># Read data for a specific timestamp</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;2020Jan01-12:00:00&#39;</span><span class="p">][:]</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+<span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>For more advanced analysis including time-series extraction, spatial mapping, and animated visualizations, use the provided <a class="reference internal" href="4_2_2support_scripts.html"><span class="doc">supporting scripts</span></a>.</p>
+</section>
 </section>
 
 
@@ -110,7 +147,7 @@ Check them <a class="reference external" href="https://openwq.readthedocs.io/en/
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

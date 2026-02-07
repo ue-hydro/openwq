@@ -32,13 +32,13 @@ A river network routing tool for continental domain water resources applications
 MizuRoute provides five numerical routing methods (IRF, KWT, KWE, Muskingum-Cunge, Diffusive Wave) for computing streamflow through river networks. The mizuRoute-OpenWQ coupling enables reactive transport of dissolved and particulate constituents through continental-scale river networks, with optional PHREEQC geochemistry and CSLM lake energy balance.
 
 - mizuroute: https://mizuroute.readthedocs.io/en/main/
-- mizuroute-openwq: https://github.com/ue-hydro/mizuRoute
+- mizuroute-openwq: https://github.com/ue-hydro/mizuRoute-OpenWQ
 
-**FLUXOS-OVERLAND**
-~~~~~~~~~~~~~~~~~~~
+**FLUXOS**
+~~~~~~~~~~
 A hydrodynamic-solute transport modelling tool suitable for basin-scale, event-based simulations
 
 FLUXOS solves the 2D shallow water equations coupled with solute transport for event-based simulations of runoff, flooding, and contaminant transport in Prairie landscapes.
 
-- fluxos: https://fluxos-cpp.readthedocs.io/en/latest/
+- fluxos: https://fluxos.readthedocs.io
 - fluxos-openwq: https://github.com/ue-hydro/FLUXOS_cpp

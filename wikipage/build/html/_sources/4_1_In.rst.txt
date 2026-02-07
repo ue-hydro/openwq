@@ -1,14 +1,14 @@
 Input files
 ==================================
 
-The model requires 4 input files or groups of files.
+The model requires several input files, depending on which modules are enabled.
+The structure below follows the major blocks in the master JSON configuration file.
 
 .. toctree::
    :maxdepth: 2
 
    4_1_1Master
    4_1_2Config
-   4_1_3BGC
-   4_1_4TE
-   4_1_5Source
-
+   4_1_3Modules
+   4_1_4SS
+   4_1_5Solvers
