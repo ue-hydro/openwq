@@ -161,6 +161,117 @@ Example:
     }
 
 
+BGC Templates Library
+""""""""""""""""""""""
+
+OpenWQ provides a library of pre-built BGC templates in ``supporting_scripts/Model_Config/config_support_lib/BGC_templates/``. These templates can be used as starting points or directly in your simulations.
+
+**NATIVE_BGC_FLEX Templates:**
+
+The ``NATIVE_BGC_FLEX/`` folder contains templates organized by category:
+
+*Individual Chemicals* (``individual_chemicals/``):
+
++------------------------------+----------------------------------------------------------+
+| Template                     | Description                                              |
++==============================+==========================================================+
+| ``nitrogen_simple.json``     | Basic NH4/NO3/Org-N transformations                      |
++------------------------------+----------------------------------------------------------+
+| ``nitrogen_full.json``       | Complete N cycle with O2 limitation, N2O, plant uptake   |
++------------------------------+----------------------------------------------------------+
+| ``phosphorus_simple.json``   | Basic SRP/Org-P/Part-P cycling                           |
++------------------------------+----------------------------------------------------------+
+| ``phosphorus_full.json``     | Full P cycle with redox-dependent release                |
++------------------------------+----------------------------------------------------------+
+| ``dissolved_oxygen.json``    | Streeter-Phelps DO-BOD dynamics                          |
++------------------------------+----------------------------------------------------------+
+| ``carbon_organic.json``      | DOC/POC cycling with mineralization                      |
++------------------------------+----------------------------------------------------------+
+| ``heavy_metals.json``        | Cu, Zn, Pb, Cd, Hg speciation and sorption               |
++------------------------------+----------------------------------------------------------+
+| ``pathogens.json``           | E. coli, fecal coliforms, viruses decay                  |
++------------------------------+----------------------------------------------------------+
+| ``pesticides.json``          | Generic pesticide fate with degradation                  |
++------------------------------+----------------------------------------------------------+
+| ``silica.json``              | Dissolved silica for diatom modeling                     |
++------------------------------+----------------------------------------------------------+
+| ``iron_manganese.json``      | Fe/Mn redox cycling                                      |
++------------------------------+----------------------------------------------------------+
+
+*Popular Model Frameworks* (``popular_models/``):
+
++------------------------------+----------------------------------------------------------+
+| Template                     | Description                                              |
++==============================+==========================================================+
+| ``SWAT_full_nutrients.json`` | SWAT-style N/P/C cycling with soil processes             |
++------------------------------+----------------------------------------------------------+
+| ``QUAL2E_stream.json``       | Classic stream DO-BOD-nutrients-algae model              |
++------------------------------+----------------------------------------------------------+
+| ``HYPE_nutrients.json``      | Nordic-style N/P cycling with wetland retention          |
++------------------------------+----------------------------------------------------------+
+| ``WASP8_eutrophication.json``| Multi-algae groups with sediment diagenesis              |
++------------------------------+----------------------------------------------------------+
+
+*Thermodynamic-Kinetic Templates* (``thermodynamic/templates/``):
+
+These advanced templates include thermodynamic control of reaction rates using the F_T factor from Jin & Bethke (2003, 2007). The thermodynamic potential factor (F_T) ranges from 0 to 1 and modifies reaction rates based on Gibbs free energy availability.
+
++----------------------------------------+----------------------------------------------------------+
+| Template                               | Description                                              |
++========================================+==========================================================+
+| ``aerobic_respiration.json``           | O2 respiration (ΔG° = -125 kJ/mol e-)                    |
++----------------------------------------+----------------------------------------------------------+
+| ``nitrification.json``                 | Two-step NH4 → NO2 → NO3 oxidation                       |
++----------------------------------------+----------------------------------------------------------+
+| ``denitrification_thermodynamic.json`` | NO3 → N2 reduction (ΔG° = -119 kJ/mol e-)                |
++----------------------------------------+----------------------------------------------------------+
+| ``anammox.json``                       | Anaerobic NH4 + NO2 → N2 (ΔG° = -357 kJ/mol)             |
++----------------------------------------+----------------------------------------------------------+
+| ``manganese_reduction.json``           | Mn(IV) → Mn(II) reduction (ΔG° = -95 kJ/mol e-)          |
++----------------------------------------+----------------------------------------------------------+
+| ``iron_reduction.json``                | Fe(III) → Fe(II) reduction (ΔG° = -50 kJ/mol e-)         |
++----------------------------------------+----------------------------------------------------------+
+| ``sulfate_reduction.json``             | SO4 → H2S reduction (ΔG° = -25 kJ/mol e-)                |
++----------------------------------------+----------------------------------------------------------+
+| ``methanogenesis.json``                | CO2 → CH4 (ΔG° = -20 kJ/mol e-)                          |
++----------------------------------------+----------------------------------------------------------+
+| ``redox_cascade_thermodynamic.json``   | O2, NO3, SO4 competition model                           |
++----------------------------------------+----------------------------------------------------------+
+| ``full_sediment_diagenesis.json``      | Complete redox ladder with 13 reactions                  |
++----------------------------------------+----------------------------------------------------------+
+
+The thermodynamic approach automatically enforces the **redox ladder** - reactions with higher energy yield suppress lower-energy pathways. This is achieved through the F_T term:
+
+.. code-block:: none
+
+   F_T = 1 - exp(-(ΔG_available - ΔG_min) / (χ × R × T))
+
+where ΔG_available is the Gibbs free energy from the reaction, ΔG_min is the minimum energy for ATP synthesis (~45 kJ/mol), χ is the stoichiometric number, R is the gas constant, and T is temperature in Kelvin.
+
+Example thermodynamic kinetics expression:
+
+.. code-block:: json
+
+   "KINETICS": ["k * X * (NO3/(Km+NO3)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((119-45)/(2*0.008314*(T+273)))))", "mg/L/day"]
+
+
+**PHREEQC Templates:**
+
+The ``PHREEQC/templates/`` folder contains geochemical equilibrium templates:
+
++----------------------------------+----------------------------------------------------------+
+| Template                         | Description                                              |
++==================================+==========================================================+
+| ``major_ions_equilibrium.pqi``   | Ca, Mg, Na, K, Cl, SO4, HCO3 speciation                  |
++----------------------------------+----------------------------------------------------------+
+| ``nitrogen_speciation.pqi``      | NH4/NH3, NO2, NO3 aqueous speciation                     |
++----------------------------------+----------------------------------------------------------+
+| ``phosphorus_minerals.pqi``      | PO4 speciation with mineral saturation                   |
++----------------------------------+----------------------------------------------------------+
+| ``trace_metals.pqi``             | Fe, Mn, Cu, Zn complexation and redox                    |
++----------------------------------+----------------------------------------------------------+
+
+
 PHREEQC
 ^^^^^^^^^^^^^^^^
 
