@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Credits &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Credits &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -29,12 +30,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -48,7 +50,14 @@
 <li class="toctree-l1 current"><a class="reference internal" href="1_0_Home.html">Home</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="1_1_Overview.html">Overview</a></li>
 <li class="toctree-l2"><a class="reference internal" href="1_2_Innovation.html">Motivation &amp; Innovation</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Credits</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Credits</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#core-development">Core Development</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#contributing-organizations">Contributing Organizations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#predecessor-models">Predecessor Models</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#third-party-libraries">Third-Party Libraries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#license">License</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="1_4_License.html">License</a></li>
 </ul>
 </li>
@@ -56,6 +65,8 @@
 <li class="toctree-l1"><a class="reference internal" href="3_0_Installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_3_base_Hydro_models.html">Coupling OpenWQ</a></li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -64,7 +75,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -87,7 +98,47 @@
              
   <section id="credits">
 <h1>Credits<a class="headerlink" href="#credits" title="Permalink to this heading"></a></h1>
-<p>Coming soon!</p>
+<section id="core-development">
+<h2>Core Development<a class="headerlink" href="#core-development" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Diogo Costa</strong> – Lead developer, framework design, and implementation (University of Saskatchewan / University of Evora)</p></li>
+</ul>
+</section>
+<section id="contributing-organizations">
+<h2>Contributing Organizations<a class="headerlink" href="#contributing-organizations" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p><a class="reference external" href="https://github.com/ue-hydro">University of Evora (ue-hydro)</a> – Current development home</p></li>
+<li><p><a class="reference external" href="https://www.usask.ca/">University of Saskatchewan</a> – Original development and testing</p></li>
+<li><p><a class="reference external" href="https://www.canada.ca/en/environment-climate-change.html">Environment and Climate Change Canada (ECCC)</a> – Research support and foundational model development</p></li>
+</ul>
+</section>
+<section id="predecessor-models">
+<h2>Predecessor Models<a class="headerlink" href="#predecessor-models" title="Permalink to this heading"></a></h2>
+<p>OpenWQ builds upon experience and code from several predecessor models:</p>
+<ul class="simple">
+<li><p><strong>CRHM-WQ</strong> – Cold Regions Hydrological Model - Water Quality</p></li>
+<li><p><strong>WINTRA</strong> – Winter nutrient transport framework</p></li>
+<li><p><strong>PULSE</strong> – Multiphase multilayer snow hydrochemistry model</p></li>
+<li><p><strong>FLUXOS</strong> – Watershed hydrodynamic-water quality model</p></li>
+</ul>
+</section>
+<section id="third-party-libraries">
+<h2>Third-Party Libraries<a class="headerlink" href="#third-party-libraries" title="Permalink to this heading"></a></h2>
+<p>OpenWQ gratefully uses the following open-source libraries:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://arma.sourceforge.net/">Armadillo</a> – C++ linear algebra library (Sanderson and Curtin, 2016)</p></li>
+<li><p><a class="reference external" href="http://www.partow.net/programming/exprtk/index.html">ExprTk</a> – C++ Mathematical Expression Toolkit (Arash Partow)</p></li>
+<li><p><a class="reference external" href="https://www.usgs.gov/software/phreeqc-version-3">PHREEQC / PhreeqcRM</a> – Geochemical reaction module (USGS)</p></li>
+<li><p><a class="reference external" href="https://computing.llnl.gov/projects/sundials">SUNDIALS</a> – Suite of Nonlinear and Differential/Algebraic Equation Solvers (LLNL)</p></li>
+<li><p><a class="reference external" href="https://www.hdfgroup.org/solutions/hdf5/">HDF5</a> – Hierarchical Data Format library</p></li>
+<li><p><a class="reference external" href="https://vtk.org/">VTK</a> – Visualization Toolkit</p></li>
+</ul>
+</section>
+<section id="license">
+<h2>License<a class="headerlink" href="#license" title="Permalink to this heading"></a></h2>
+<p>OpenWQ is distributed under the GNU General Public License v3.0 (GPL-3.0).
+See the <a class="reference internal" href="1_4_License.html"><span class="doc">License</span></a> section for details.</p>
+</section>
 </section>
 
 
@@ -101,7 +152,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

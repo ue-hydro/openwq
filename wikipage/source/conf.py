@@ -53,7 +53,22 @@ exclude_patterns = []
 html_theme = 'sphinx_rtd_theme'
 #html_theme = "classic"
 
+# Logo - University of Évora
+html_logo = '_static/uevora_logo.png'
+
+# Theme options for sphinx_rtd_theme
+html_theme_options = {
+    'logo_only': False,  # Show both logo and project name
+    'display_version': True,
+    'style_nav_header_background': '#1a1a2e',  # Dark background to match logo
+}
+
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# Custom CSS file
+html_css_files = [
+    'custom.css',
+]

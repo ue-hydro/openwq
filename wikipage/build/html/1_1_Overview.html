@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Overview &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Overview &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -29,12 +30,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -56,6 +58,8 @@
 <li class="toctree-l1"><a class="reference internal" href="3_0_Installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_3_base_Hydro_models.html">Coupling OpenWQ</a></li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -64,7 +68,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -88,7 +92,7 @@
   <section id="overview">
 <h1>Overview<a class="headerlink" href="#overview" title="Permalink to this heading"></a></h1>
 <p>OpenWQ was specifically designed to promote flexible collaboration between modellers, scientists and stakeholders in the design and implementation of biogeochemical reaction networks (easily customizable via <a class="reference external" href="https://en.wikipedia.org/wiki/JSON#:~:text=JSON%20(JavaScript%20Object%20Notation%2C%20pronounced,(or%20other%20serializable%20values).">rich JSON-based files</a>) in existing hydrological, hydrodynamic and groundwater models (1D to 3D models). The model is written in C++ and benefits from the powerful Armadillo template-based CC library for linear algebra  <a class="reference external" href="https://joss.theoj.org/papers/10.21105/joss.00026">(Sanderson and Curtin, 2016)</a> that enables the use of modern, flexible, efficient and compact data structures.</p>
-<p>The OpenWQ system stems from previous models developed by <a class="reference external" href="https://www.canada.ca/en/environment-climate-change.html">Environment and Climate Change Canada</a> and the <a class="reference external" href="https://www.usask.ca/">University of Saskatchewan</a>, particularly <a class="reference external" href="https://www.sciencedirect.com/science/article/abs/pii/S0022169421009513">CRHM-WQ</a> (Cold Regions Hydrological Model - Water Quality) that extends the original <a class="reference external" href="https://onlinelibrary.wiley.com/doi/10.1002/hyp.6787">CRHM platform</a> (hydrology) model to nitrogen and phosphorus simulations, the <a class="reference external" href="https://onlinelibrary.wiley.com/doi/10.1002/hyp.11346">WINTRA</a> framework, the multiphase multilayer <a class="reference external" href="https://www.sciencedirect.com/science/article/abs/pii/S0309170818300095">PULSE</a> snow hydrochemistry model, and the <a class="reference external" href="agupubs.onlinelibrary.wiley.com/doi/abs/10.1029/2020WR027984">FLUXOS-OVERLAND</a> model for watershed hydrodynamic-water quality simulations suitable for Prairie regions.</p>
+<p>The OpenWQ system stems from previous models developed by <a class="reference external" href="https://www.canada.ca/en/environment-climate-change.html">Environment and Climate Change Canada</a> and the <a class="reference external" href="https://www.usask.ca/">University of Saskatchewan</a>, particularly <a class="reference external" href="https://www.sciencedirect.com/science/article/abs/pii/S0022169421009513">CRHM-WQ</a> (Cold Regions Hydrological Model - Water Quality) that extends the original <a class="reference external" href="https://onlinelibrary.wiley.com/doi/10.1002/hyp.6787">CRHM platform</a> (hydrology) model to nitrogen and phosphorus simulations, the <a class="reference external" href="https://onlinelibrary.wiley.com/doi/10.1002/hyp.11346">WINTRA</a> framework, the multiphase multilayer <a class="reference external" href="https://www.sciencedirect.com/science/article/abs/pii/S0309170818300095">PULSE</a> snow hydrochemistry model, and the <a class="reference external" href="agupubs.onlinelibrary.wiley.com/doi/abs/10.1029/2020WR027984">FLUXOS</a> model for watershed hydrodynamic-water quality simulations suitable for Prairie regions.</p>
 <p>Our vision is to provide a customizable, multi-scale, multi-chemistry modelling framework suitable for flexible model hypothesis testing and uncertainty analysis.
 This is extremely important in a time of great climate uncertainty.</p>
 <p>OpenWQ does not run standalone. It runs coupled to existing hydro-models, which makes it ideal for scientists and engineers that want to enable biogeochemical modelling capabilities in their preferred modelling systems.
@@ -108,7 +112,7 @@ OpenWQ has has been coupled to several models. Explore the <a class="reference e
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

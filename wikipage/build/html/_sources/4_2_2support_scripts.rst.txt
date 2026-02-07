@@ -1,4 +1,4 @@
-Supporting scripts
+Supporting Scripts
 ========================================
 
 .. toctree::

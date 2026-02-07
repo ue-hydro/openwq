@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Configuration &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Configuration &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -21,20 +22,21 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Biogeochemistry" href="4_1_3BGC.html" />
-    <link rel="prev" title="Master" href="4_1_1Master.html" /> 
+    <link rel="next" title="Modules" href="4_1_3Modules.html" />
+    <link rel="prev" title="Master Configuration" href="4_1_1Master.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -52,18 +54,19 @@
 <li class="toctree-l1 current"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="4_1_0JSON_format.html">Overview</a></li>
 <li class="toctree-l2 current"><a class="reference internal" href="4_1_In.html">Input files</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="4_1_1Master.html">Master</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_1_1Master.html">Master Configuration</a></li>
 <li class="toctree-l3 current"><a class="current reference internal" href="#">Configuration</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_1_3BGC.html">Biogeochemistry</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_1_4TE.html">Transport and Erosion/Mobilization</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_1_5Source.html">Source/Sink &amp; External Fluxes (<em>Optional</em>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_1_3Modules.html">Modules</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_1_4SS.html">Source/Sink &amp; External Fluxes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="4_1_5Solvers.html">Numerical Solvers</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="4_2_out.html">Output files</a></li>
 <li class="toctree-l2"><a class="reference internal" href="4_3_units.html">Units</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_2_2support_scripts.html">Supporting scripts</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -72,7 +75,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -103,7 +106,7 @@
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&lt;Compt_Name&gt;</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">CYCLING_FRAMEWORK</span></code></p></td>
 <td><ul class="simple">
 <li><p>List of cycling frameworks</p></li>
-<li><p>As defined in <a class="reference external" href="https://openwq.readthedocs.io/en/latest/4_1_3BGC.html#">Biogeochemical cycling configuration file</a></p></li>
+<li><p>As defined in <a class="reference internal" href="4_1_3Modules.html"><span class="doc">Modules — Biogeochemistry</span></a></p></li>
 <li><p>Format: <code class="docutils literal notranslate"><span class="pre">[&lt;s#&gt;,</span> <span class="pre">&lt;s#&gt;,</span> <span class="pre">...]</span></code></p></li>
 <li><p>Example: <code class="docutils literal notranslate"><span class="pre">[&quot;N_org&quot;,</span> <span class="pre">&quot;N_inorg&quot;,</span> <span class="pre">&quot;P_org&quot;,</span> <span class="pre">&quot;P_inorg&quot;]</span></code></p></li>
 </ul>
@@ -172,7 +175,7 @@ The following additional json-keys need be included.</p>
 </table>
 <p>The JSON file supports C/C++ syntax for comments: single-line comment (<code class="docutils literal notranslate"><span class="pre">//</span></code>) or comment blocks (<code class="docutils literal notranslate"><span class="pre">/*</span></code> and <code class="docutils literal notranslate"><span class="pre">*/</span></code>).</p>
 <p>The symbol <code class="docutils literal notranslate"><span class="pre">&lt;Compt_Name&gt;</span></code> refers to compartment names as defined by the host model. We can add as many of such compartment json-key blocks as desired (see example below). The compartment names should match those defined in the hostmodel.</p>
-<p>The symbol <code class="docutils literal notranslate"><span class="pre">&lt;Chem_Name&gt;</span></code> refers to chemical species names as defined in the <a class="reference external" href="https://openwq.readthedocs.io/en/latest/4_1_3BGC.html#">Biogeochemical cycling configuration file</a>.</p>
+<p>The symbol <code class="docutils literal notranslate"><span class="pre">&lt;Chem_Name&gt;</span></code> refers to chemical species names as defined in <a class="reference internal" href="4_1_3Modules.html"><span class="doc">Modules — Biogeochemistry</span></a>.</p>
 <p>The symbol <code class="docutils literal notranslate"><span class="pre">(i#)</span></code> refers to a integer number sequence.. The symbol <code class="docutils literal notranslate"><span class="pre">(s#)</span></code> refers to a string input. The symbol <code class="docutils literal notranslate"><span class="pre">&lt;f#&gt;</span></code> refers to a float input value.</p>
 <p>Example:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
@@ -192,7 +195,7 @@ The following additional json-keys need be included.</p>
 <span class="w">        </span><span class="nt">&quot;SOIL_RECHR&quot;</span><span class="p">:{</span>
 <span class="w">            </span><span class="nt">&quot;CYCLING_FRAMEWORK&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;N_inorg&quot;</span><span class="p">,</span><span class="s2">&quot;P_inorg&quot;</span><span class="p">,</span><span class="s2">&quot;N_soil_org&quot;</span><span class="p">,</span><span class="s2">&quot;P_soil_org&quot;</span><span class="p">],</span>
 <span class="w">            </span><span class="nt">&quot;INITIAL_CONDITIONS&quot;</span><span class="p">:{</span>
-<span class="w">                  </span><span class="nt">&quot;Data_Format&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;HDF5&quot;</span><span class="p">,</span>
+<span class="w">                  </span><span class="nt">&quot;DATA_FORMAT&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;HDF5&quot;</span><span class="p">,</span>
 <span class="w">                  </span><span class="nt">&quot;FOLDERPATH&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;openwq_ic_h5&quot;</span><span class="p">,</span>
 <span class="w">                  </span><span class="nt">&quot;TIMESTAMP&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1950Apr01-12:00:00&quot;</span><span class="p">,</span>
 <span class="w">                  </span><span class="nt">&quot;UNITS&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;mg&quot;</span>
@@ -208,14 +211,14 @@ The following additional json-keys need be included.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="4_1_1Master.html" class="btn btn-neutral float-left" title="Master" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="4_1_3BGC.html" class="btn btn-neutral float-right" title="Biogeochemistry" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="4_1_1Master.html" class="btn btn-neutral float-left" title="Master Configuration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="4_1_3Modules.html" class="btn btn-neutral float-right" title="Modules" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

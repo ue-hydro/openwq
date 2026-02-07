@@ -7,6 +7,7 @@
   <title>Existing couplings &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -29,12 +30,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -53,7 +55,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#summa"><strong>SUMMA</strong></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#crhm"><strong>CRHM</strong></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#mizuroute"><strong>MizuRoute</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#fluxos-overland"><strong>FLUXOS-OVERLAND</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fluxos"><strong>FLUXOS</strong></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="5_3_Coupler_guide.html">How to couple OpenWQ?</a></li>
@@ -61,6 +63,8 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -69,7 +73,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -119,15 +123,15 @@ Each coupling follows the same general architecture: the host model provides wat
 <p>MizuRoute provides five numerical routing methods (IRF, KWT, KWE, Muskingum-Cunge, Diffusive Wave) for computing streamflow through river networks. The mizuRoute-OpenWQ coupling enables reactive transport of dissolved and particulate constituents through continental-scale river networks, with optional PHREEQC geochemistry and CSLM lake energy balance.</p>
 <ul class="simple">
 <li><p>mizuroute: <a class="reference external" href="https://mizuroute.readthedocs.io/en/main/">https://mizuroute.readthedocs.io/en/main/</a></p></li>
-<li><p>mizuroute-openwq: <a class="reference external" href="https://github.com/ue-hydro/mizuRoute">https://github.com/ue-hydro/mizuRoute</a></p></li>
+<li><p>mizuroute-openwq: <a class="reference external" href="https://github.com/ue-hydro/mizuRoute-OpenWQ">https://github.com/ue-hydro/mizuRoute-OpenWQ</a></p></li>
 </ul>
 </section>
-<section id="fluxos-overland">
-<h2><strong>FLUXOS-OVERLAND</strong><a class="headerlink" href="#fluxos-overland" title="Permalink to this heading"></a></h2>
+<section id="fluxos">
+<h2><strong>FLUXOS</strong><a class="headerlink" href="#fluxos" title="Permalink to this heading"></a></h2>
 <p>A hydrodynamic-solute transport modelling tool suitable for basin-scale, event-based simulations</p>
 <p>FLUXOS solves the 2D shallow water equations coupled with solute transport for event-based simulations of runoff, flooding, and contaminant transport in Prairie landscapes.</p>
 <ul class="simple">
-<li><p>fluxos: <a class="reference external" href="https://fluxos-cpp.readthedocs.io/en/latest/">https://fluxos-cpp.readthedocs.io/en/latest/</a></p></li>
+<li><p>fluxos: <a class="reference external" href="https://fluxos.readthedocs.io">https://fluxos.readthedocs.io</a></p></li>
 <li><p>fluxos-openwq: <a class="reference external" href="https://github.com/ue-hydro/FLUXOS_cpp">https://github.com/ue-hydro/FLUXOS_cpp</a></p></li>
 </ul>
 </section>

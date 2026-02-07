@@ -9,10 +9,10 @@ Install Docker in your machine.
 (only needs to be set up once)
 
 1. Start Docker
-2. Go to the main OpenWQ folder that contains the files ``docker-compose.yml`` and ```Dockerfile``
+2. Go to the ``containers/`` folder inside the OpenWQ repository (contains ``docker-compose.yml`` and ``Dockerfile``)
 3. If needed, clear all images and containers with ``docker system prune -a``
 4. Check if ``docker-compose.yml`` file is good with ``docker-compose config``
-5. Create the Docker image (set up for ``ubuntu:20.04``) that contains all the necessary packages with ``docker compose up -d``
+5. Create the Docker image (set up for ``ubuntu:24.04``) that contains all the necessary packages with ``docker compose up -d``
 6. If you need to stop the container: ``docker compose down``
 
 **Compile your coupled OpenWQ model**
@@ -24,7 +24,7 @@ Install Docker in your machine.
 5. Check the containers that are running with ``docker ps`` (exports container IDs)
 6. Get the appropriate container ID and use it in the command below
 7. Run a shell inside the container with ``docker exec -it <container id> /bin/bash``
-8. Armadillo now disables default ``hdf5`` support for save/load, so run ``nano “/usr/include/armadillo_bits/config.hpp”``
+8. Armadillo now disables default ``hdf5`` support for save/load, so run ``nano "/usr/include/armadillo_bits/config.hpp"``
 9. You are now inside the ``config.hpp`` file, so locate and uncomment ``#define ARMA_USE_HDF5``
 10. Go to the main OpenWQ folder that contains the ``CMakeLists.txt`` file
 11. Compile with: ``rm CMakeCache.txt; rm -r CMakeFiles; cmake . ; make -B; rm *.mod``

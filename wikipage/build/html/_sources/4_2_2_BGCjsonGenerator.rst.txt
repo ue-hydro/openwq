@@ -1,7 +1,7 @@
 Biogeochemisty JSON Generator
 ========================================
 
-The `biogeochemistry JSON file <https://openwq.readthedocs.io/en/latest/4_1_3BGC.html>`_ is used to prescribe the biogeochemical cycling frameworks we want to simulate.
+The biogeochemistry JSON file (see :doc:`Modules — Biogeochemistry <4_1_3Modules>`) is used to prescribe the biogeochemical cycling frameworks we want to simulate.
 It characterizes the reactions we want to simulate, and how we want them to work.
 
 This JSON file can be prepared manually, which is extremely easy to do once you understand how its JSON blocks look like.

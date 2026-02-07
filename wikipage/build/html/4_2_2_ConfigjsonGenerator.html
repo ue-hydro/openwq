@@ -4,9 +4,10 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Configuration JSON Generator &mdash; OpenWQ 0.0.2 documentation</title>
+  <title>Automatic Model Configuration &mdash; OpenWQ 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css" />
 
   
   <!--[if lt IE 9]>
@@ -29,12 +30,13 @@
   <div class="wy-grid-for-nav">
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+        <div class="wy-side-nav-search"  style="background: #1a1a2e" >
 
           
           
           <a href="index.html" class="icon icon-home">
             OpenWQ
+              <img src="_static/uevora_logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -49,20 +51,26 @@
 <li class="toctree-l1"><a class="reference internal" href="2_0_Documentation.html">Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="3_0_Installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_3_base_Hydro_models.html">Coupling OpenWQ</a></li>
-<li class="toctree-l1 current"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="4_1_0JSON_format.html">Overview</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_1_In.html">Input files</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_2_out.html">Output files</a></li>
-<li class="toctree-l2"><a class="reference internal" href="4_3_units.html">Units</a></li>
-<li class="toctree-l2 current"><a class="reference internal" href="4_2_2support_scripts.html">Supporting scripts</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html">Biogeochemisty JSON Generator</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">Configuration JSON Generator</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_2_2_SSjsonGenerator.html">Sink-Source JSON Generator</a></li>
-<li class="toctree-l3"><a class="reference internal" href="4_2_2_OutputReadScript.html">Reading model outputs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="4_2_2support_scripts.html">Supporting Scripts</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_BGCjsonGenerator.html">Biogeochemisty JSON Generator</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Automatic Model Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#location">Location</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#quick-start">Quick start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuration-parameters">Configuration parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-configuration">Module configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#source-sink-configuration">Source/sink configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#output-configuration">Output configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#generated-files">Generated files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#docker-support">Docker support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#tips">Tips</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_SSjsonGenerator.html">Sink-Source JSON Generator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="4_2_2_OutputReadScript.html">Reading and Visualizing Model Outputs</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="4_2_2_Calibration.html">Model Calibration Framework</a></li>
 <li class="toctree-l1"><a class="reference internal" href="5_0_Developer.html">Join us!</a></li>
 <li class="toctree-l1"><a class="reference internal" href="6_0_Contact.html">Contact</a></li>
 </ul>
@@ -71,7 +79,7 @@
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #1a1a2e" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="index.html">OpenWQ</a>
       </nav>
@@ -81,9 +89,8 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-          <li class="breadcrumb-item"><a href="4_1_OpenWQ_IO.html">OpenWQ I/O</a></li>
-          <li class="breadcrumb-item"><a href="4_2_2support_scripts.html">Supporting scripts</a></li>
-      <li class="breadcrumb-item active">Configuration JSON Generator</li>
+          <li class="breadcrumb-item"><a href="4_2_2support_scripts.html">Supporting Scripts</a></li>
+      <li class="breadcrumb-item active">Automatic Model Configuration</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/4_2_2_ConfigjsonGenerator.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -93,9 +100,309 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="configuration-json-generator">
-<h1>Configuration JSON Generator<a class="headerlink" href="#configuration-json-generator" title="Permalink to this heading"></a></h1>
-<p>Coming soon!</p>
+  <section id="automatic-model-configuration">
+<h1>Automatic Model Configuration<a class="headerlink" href="#automatic-model-configuration" title="Permalink to this heading"></a></h1>
+<p>OpenWQ provides a Python-based configuration generator that automates the creation of all input JSON files from a single template script. This approach ensures consistency across configuration files and simplifies the setup of complex simulations.</p>
+<section id="location">
+<h2>Location<a class="headerlink" href="#location" title="Permalink to this heading"></a></h2>
+<p>The configuration scripts are located at:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">openwq</span><span class="o">/</span><span class="n">supporting_scripts</span><span class="o">/</span><span class="n">Model_Config</span><span class="o">/</span>
+</pre></div>
+</div>
+<p>Key files:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">template_model_config.py</span></code> - Main template script (edit this file)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config_support_lib/Gen_Input_Driver.py</span></code> - Core generation engine</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config_support_lib/Gen_Master_file.py</span></code> - Master JSON generator</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config_support_lib/Gen_TSmodule_file.py</span></code> - Transport Sediments module JSON generator</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config_support_lib/Gen_LEmodule_file.py</span></code> - Lateral Exchange module JSON generator</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config_support_lib/examples_BGC_frameworks/</span></code> - Example biogeochemistry configurations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config_support_lib/examples_PHREEQC/</span></code> - Example PHREEQC configurations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config_support_lib/examples_SS_in_cvs/</span></code> - Example source/sink CSV files</p></li>
+</ul>
+</section>
+<section id="quick-start">
+<h2>Quick start<a class="headerlink" href="#quick-start" title="Permalink to this heading"></a></h2>
+<ol class="arabic">
+<li><p>Copy the template script:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cp</span> <span class="n">template_model_config</span><span class="o">.</span><span class="n">py</span> <span class="n">my_project_config</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+</li>
+<li><p>Edit the configuration parameters in <code class="docutils literal notranslate"><span class="pre">my_project_config.py</span></code></p></li>
+<li><p>Run the script:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">my_project_config</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+</li>
+<li><p>The script generates all OpenWQ input files in the specified output directory</p></li>
+</ol>
+</section>
+<section id="configuration-parameters">
+<h2>Configuration parameters<a class="headerlink" href="#configuration-parameters" title="Permalink to this heading"></a></h2>
+<p><strong>General information:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">project_name</span> <span class="o">=</span> <span class="s2">&quot;My Project&quot;</span>
+<span class="n">geographical_location</span> <span class="o">=</span> <span class="s2">&quot;Study Area&quot;</span>
+<span class="n">authors</span> <span class="o">=</span> <span class="s2">&quot;Your Name&quot;</span>
+<span class="n">date</span> <span class="o">=</span> <span class="s2">&quot;January, 2026&quot;</span>
+<span class="n">comment</span> <span class="o">=</span> <span class="s2">&quot;Project description&quot;</span>
+
+<span class="n">hostmodel</span> <span class="o">=</span> <span class="s2">&quot;mizuroute&quot;</span>  <span class="c1"># &quot;mizuroute&quot; or &quot;summa&quot;</span>
+<span class="n">dir2save_input_files</span> <span class="o">=</span> <span class="s2">&quot;/path/to/output/&quot;</span>
+
+<span class="c1"># Docker support (see Docker section below)</span>
+<span class="n">running_on_docker</span> <span class="o">=</span> <span class="kc">False</span>
+</pre></div>
+</div>
+<p><strong>Computational settings:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">solver</span> <span class="o">=</span> <span class="s2">&quot;FORWARD_EULER&quot;</span>           <span class="c1"># &quot;FORWARD_EULER&quot; (Forward Euler) or &quot;SUNDIALS&quot; (CVode)</span>
+<span class="n">run_mode_debug</span> <span class="o">=</span> <span class="kc">True</span>   <span class="c1"># Enable debug output</span>
+<span class="n">use_num_threads</span> <span class="o">=</span> <span class="mi">4</span>     <span class="c1"># Number of threads (or &quot;all&quot;)</span>
+</pre></div>
+</div>
+<p><strong>Initial conditions:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ic_all_value</span> <span class="o">=</span> <span class="mf">2.0</span>        <span class="c1"># Initial concentration value</span>
+<span class="n">ic_all_units</span> <span class="o">=</span> <span class="s2">&quot;mg/l&quot;</span>     <span class="c1"># Units for initial conditions</span>
+</pre></div>
+</div>
+</section>
+<section id="module-configuration">
+<h2>Module configuration<a class="headerlink" href="#module-configuration" title="Permalink to this heading"></a></h2>
+<p><strong>Biogeochemistry module:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Option 1: User-defined kinetic expressions</span>
+<span class="n">bgc_module_name</span> <span class="o">=</span> <span class="s2">&quot;NATIVE_BGC_FLEX&quot;</span>
+<span class="n">path2selected_NATIVE_BGC_FLEX_framework</span> <span class="o">=</span> <span class="s2">&quot;config_support_lib/examples_BGC_frameworks/openWQ_Ncycling_example.json&quot;</span>
+
+<span class="c1"># Option 2: PHREEQC geochemical engine</span>
+<span class="n">bgc_module_name</span> <span class="o">=</span> <span class="s2">&quot;PHREEQC&quot;</span>
+<span class="n">phreeqc_input_filepath</span> <span class="o">=</span> <span class="s2">&quot;config_support_lib/examples_PHREEQC/phreeqc_river.pqi&quot;</span>
+<span class="n">phreeqc_database_filepath</span> <span class="o">=</span> <span class="s2">&quot;config_support_lib/examples_PHREEQC/phreeqc.dat&quot;</span>
+<span class="n">phreeqc_mobile_species</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;H&quot;</span><span class="p">,</span> <span class="s2">&quot;O&quot;</span><span class="p">,</span> <span class="s2">&quot;Charge&quot;</span><span class="p">,</span> <span class="s2">&quot;Ca&quot;</span><span class="p">]</span>
+<span class="n">phreeqc_component_h2o</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">phreeqc_temperature_mapping</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;RIVER_NETWORK_REACHES&quot;</span><span class="p">:</span> <span class="s2">&quot;air_temperature&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>Transport module:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Advection only</span>
+<span class="n">td_module_name</span> <span class="o">=</span> <span class="s2">&quot;NATIVE_TD_ADV&quot;</span>
+
+<span class="c1"># Advection-dispersion</span>
+<span class="n">td_module_name</span> <span class="o">=</span> <span class="s2">&quot;OPENWQ_NATIVE_TD_ADVDISP&quot;</span>
+<span class="n">td_module_dispersion_xyz</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">]</span>  <span class="c1"># Dispersion coefficients [Dx, Dy, Dz] in m2/s</span>
+<span class="n">td_module_characteristic_length_m</span> <span class="o">=</span> <span class="mf">100.0</span>     <span class="c1"># Distance between cell centers [m]</span>
+
+<span class="c1"># No transport</span>
+<span class="n">td_module_name</span> <span class="o">=</span> <span class="s2">&quot;NONE&quot;</span>
+</pre></div>
+</div>
+<p><strong>Lateral exchange module:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">le_module_name</span> <span class="o">=</span> <span class="s2">&quot;NATIVE_LE_BOUNDMIX&quot;</span>
+<span class="n">le_module_config</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;direction&quot;</span><span class="p">:</span> <span class="s2">&quot;z&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;upper_compartment&quot;</span><span class="p">:</span> <span class="s2">&quot;RUNOFF&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;lower_compartment&quot;</span><span class="p">:</span> <span class="s2">&quot;ILAYERVOLFRACWAT_SOIL&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;K_val&quot;</span><span class="p">:</span> <span class="mf">0.000000001</span>
+    <span class="p">}</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p><strong>Sediment transport module:</strong></p>
+<p>Three options are available: <code class="docutils literal notranslate"><span class="pre">HYPE_MMF</span></code> (Morgan-Morgan-Finney), <code class="docutils literal notranslate"><span class="pre">HYPE_HBVSED</span></code> (HBV-sed), or <code class="docutils literal notranslate"><span class="pre">NONE</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ts_module_name</span> <span class="o">=</span> <span class="s2">&quot;HYPE_HBVSED&quot;</span>  <span class="c1"># or &quot;HYPE_MMF&quot;, &quot;NONE&quot;</span>
+<span class="n">ts_sediment_compartment</span> <span class="o">=</span> <span class="s2">&quot;RIVER_NETWORK_REACHES&quot;</span>
+<span class="n">ts_transport_compartment</span> <span class="o">=</span> <span class="s2">&quot;RIVER_NETWORK_REACHES&quot;</span>
+
+<span class="c1"># Common configuration</span>
+<span class="n">ts_direction</span> <span class="o">=</span> <span class="s2">&quot;z&quot;</span>                                        <span class="c1"># Exchange direction: &quot;x&quot;, &quot;y&quot;, or &quot;z&quot;</span>
+<span class="n">ts_erosion_inhibit_compartment</span> <span class="o">=</span> <span class="s2">&quot;ILAYERVOLFRACWAT_SNOW&quot;</span>  <span class="c1"># Compartment inhibiting erosion (e.g., snow)</span>
+<span class="n">ts_data_format</span> <span class="o">=</span> <span class="s2">&quot;JSON&quot;</span>                                   <span class="c1"># &quot;JSON&quot; or &quot;ASCII&quot;</span>
+</pre></div>
+</div>
+<p>HYPE_MMF settings (Morgan-Morgan-Finney):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Default parameter values (applied to all cells unless overridden)</span>
+<span class="c1"># IMPORTANT: CROPCOVER + GROUNDCOVER must sum to 1.0</span>
+<span class="n">ts_mmf_defaults</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;COHESION&quot;</span><span class="p">:</span> <span class="mf">7.5</span><span class="p">,</span>              <span class="c1"># Soil cohesion (kPa)</span>
+    <span class="s2">&quot;ERODIBILITY&quot;</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">,</span>           <span class="c1"># Soil erodibility (g/J)</span>
+    <span class="s2">&quot;SREROEXP&quot;</span><span class="p">:</span> <span class="mf">1.2</span><span class="p">,</span>              <span class="c1"># Surface runoff erosion exponent (-)</span>
+    <span class="s2">&quot;CROPCOVER&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>             <span class="c1"># Crop cover fraction (0-1)</span>
+    <span class="s2">&quot;GROUNDCOVER&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>           <span class="c1"># Ground cover fraction (0-1)</span>
+    <span class="s2">&quot;SLOPE&quot;</span><span class="p">:</span> <span class="mf">0.4</span><span class="p">,</span>                 <span class="c1"># Basin slope</span>
+    <span class="s2">&quot;TRANSPORT_FACTOR_1&quot;</span><span class="p">:</span> <span class="mf">0.2</span><span class="p">,</span>    <span class="c1"># Transport capacity factor 1</span>
+    <span class="s2">&quot;TRANSPORT_FACTOR_2&quot;</span><span class="p">:</span> <span class="mf">0.5</span>     <span class="c1"># Transport capacity factor 2</span>
+<span class="p">}</span>
+
+<span class="c1"># Spatially-varying parameters (cell-specific overrides)</span>
+<span class="c1"># Row &quot;0&quot; is the header; rows &quot;1&quot;,&quot;2&quot;,... are data entries</span>
+<span class="c1"># Use &quot;ALL&quot; for ix/iy/iz to apply to all cells in that dimension</span>
+<span class="n">ts_mmf_parameters</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;COHESION&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;0&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;IX&quot;</span><span class="p">,</span> <span class="s2">&quot;IY&quot;</span><span class="p">,</span> <span class="s2">&quot;IZ&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;1&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;ALL&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">7.5</span><span class="p">]</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;ERODIBILITY&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;0&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;IX&quot;</span><span class="p">,</span> <span class="s2">&quot;IY&quot;</span><span class="p">,</span> <span class="s2">&quot;IZ&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;1&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;ALL&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">]</span>
+    <span class="p">},</span>
+    <span class="c1"># ... repeat for all parameters</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>HYPE_HBVSED settings (HBV-sed):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Default parameter values</span>
+<span class="n">ts_hbvsed_defaults</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;SLOPE&quot;</span><span class="p">:</span> <span class="mf">0.4</span><span class="p">,</span>                                   <span class="c1"># Basin slope</span>
+    <span class="s2">&quot;EROSION_INDEX&quot;</span><span class="p">:</span> <span class="mf">0.4</span><span class="p">,</span>                           <span class="c1"># Erosion index</span>
+    <span class="s2">&quot;SOIL_EROSION_FACTOR_LAND_DEPENDENCE&quot;</span><span class="p">:</span> <span class="mf">0.4</span><span class="p">,</span>     <span class="c1"># Land use factor (lusepar)</span>
+    <span class="s2">&quot;SOIL_EROSION_FACTOR_SOIL_DEPENDENCE&quot;</span><span class="p">:</span> <span class="mf">0.4</span><span class="p">,</span>     <span class="c1"># Soil factor (soilpar)</span>
+    <span class="s2">&quot;SLOPE_EROSION_FACTOR_EXPONENT&quot;</span><span class="p">:</span> <span class="mf">1.5</span><span class="p">,</span>           <span class="c1"># Slope exponent (slopepar)</span>
+    <span class="s2">&quot;PRECIP_EROSION_FACTOR_EXPONENT&quot;</span><span class="p">:</span> <span class="mf">1.5</span><span class="p">,</span>          <span class="c1"># Precipitation exponent (precexppar)</span>
+    <span class="s2">&quot;PARAM_SCALING_EROSION_INDEX&quot;</span><span class="p">:</span> <span class="mf">0.5</span>              <span class="c1"># Erosion index scaling (eroindexpar)</span>
+<span class="p">}</span>
+
+<span class="c1"># Spatially-varying parameters (same format as HYPE_MMF)</span>
+<span class="n">ts_hbvsed_parameters</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;SLOPE&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;0&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;IX&quot;</span><span class="p">,</span> <span class="s2">&quot;IY&quot;</span><span class="p">,</span> <span class="s2">&quot;IZ&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;1&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;ALL&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">]</span>
+    <span class="p">},</span>
+    <span class="c1"># ... repeat for all parameters</span>
+<span class="p">}</span>
+
+<span class="c1"># Monthly erosion factor (12 values, Jan-Dec)</span>
+<span class="c1"># Used as: erodmonth = 1.0 + MONTHLY_EROSION_FACTOR[month]</span>
+<span class="n">ts_hbvsed_monthly_erosion_factor</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span>
+                                    <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">PARAMETERS</span></code> section provides spatially-varying overrides. If a parameter is not specified
+in <code class="docutils literal notranslate"><span class="pre">PARAMETERS</span></code>, the value from <code class="docutils literal notranslate"><span class="pre">PARAMETER_DEFAULTS</span></code> is used for all cells.
+The pseudo day-of-year (MMF) and monthly erosion factor (HBVSED) are dynamically
+computed from the simulation time at runtime.</p>
+</div>
+<p><strong>Sorption isotherm module:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">si_module_name</span> <span class="o">=</span> <span class="s2">&quot;NONE&quot;</span>  <span class="c1"># or &quot;FREUNDLICH&quot;, &quot;LANGMUIR&quot;</span>
+<span class="n">si_sediment_compartment</span> <span class="o">=</span> <span class="s2">&quot;SUMMA_RUNOFF&quot;</span>
+
+<span class="c1"># Soil/medium properties (used by both Freundlich and Langmuir)</span>
+<span class="n">si_bulk_density_kg_m3</span> <span class="o">=</span> <span class="mf">1500.0</span>   <span class="c1"># Bulk density [kg/m3]</span>
+<span class="n">si_layer_thickness_m</span> <span class="o">=</span> <span class="mf">1.0</span>       <span class="c1"># Representative layer thickness [m]</span>
+
+<span class="c1"># Per-species isotherm parameters</span>
+<span class="c1"># For FREUNDLICH:</span>
+<span class="n">si_species_params</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;NH4-N&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Kfr&quot;</span><span class="p">:</span> <span class="mf">1.2</span><span class="p">,</span> <span class="s2">&quot;Nfr&quot;</span><span class="p">:</span> <span class="mf">0.8</span><span class="p">,</span> <span class="s2">&quot;Kadsdes_1_per_s&quot;</span><span class="p">:</span> <span class="mf">0.001</span><span class="p">}</span>
+<span class="p">}</span>
+<span class="c1"># For LANGMUIR:</span>
+<span class="n">si_species_params</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;NH4-N&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;qmax_mg_per_kg&quot;</span><span class="p">:</span> <span class="mf">200.0</span><span class="p">,</span> <span class="s2">&quot;KL_L_per_mg&quot;</span><span class="p">:</span> <span class="mf">0.05</span><span class="p">,</span> <span class="s2">&quot;Kadsdes_1_per_s&quot;</span><span class="p">:</span> <span class="mf">0.002</span><span class="p">}</span>
+<span class="p">}</span>
+<span class="c1"># Set to None when si_module_name = &quot;NONE&quot;</span>
+<span class="n">si_species_params</span> <span class="o">=</span> <span class="kc">None</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="4_1_3Modules.html"><span class="doc">Sorption Isotherms</span></a> for detailed parameter descriptions and JSON format.</p>
+</section>
+<section id="source-sink-configuration">
+<h2>Source/sink configuration<a class="headerlink" href="#source-sink-configuration" title="Permalink to this heading"></a></h2>
+<p><strong>Method 1: Load from CSV files:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ss_method</span> <span class="o">=</span> <span class="s2">&quot;load_from_csv&quot;</span>
+<span class="n">ss_method_csv_config</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;Chemical_name&quot;</span><span class="p">:</span> <span class="s2">&quot;NO3-N&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Compartment_name&quot;</span><span class="p">:</span> <span class="s2">&quot;RIVER_NETWORK_REACHES&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="s2">&quot;source&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Units&quot;</span><span class="p">:</span> <span class="s2">&quot;kg&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Filepath&quot;</span><span class="p">:</span> <span class="s2">&quot;/path/to/source_data.csv&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Delimiter&quot;</span><span class="p">:</span> <span class="s2">&quot;,&quot;</span>
+    <span class="p">}</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>The header row is auto-detected by scanning for the <code class="docutils literal notranslate"><span class="pre">YYYY</span></code> column.
+The CSV must contain a row with columns: <code class="docutils literal notranslate"><span class="pre">YYYY,</span> <span class="pre">MM,</span> <span class="pre">DD,</span> <span class="pre">HH,</span> <span class="pre">MIN,</span> <span class="pre">SEC,</span> <span class="pre">ix,</span> <span class="pre">iy,</span> <span class="pre">iz,</span> <span class="pre">load,</span> <span class="pre">load_type,</span> <span class="pre">time_units</span></code>.</p>
+<p><strong>Method 2: Load from Copernicus land use data:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ss_method</span> <span class="o">=</span> <span class="s2">&quot;using_copernicus_lulc_with_static_coeff&quot;</span>
+<span class="n">ss_method_copernicus_nc_lc_dir</span> <span class="o">=</span> <span class="s1">&#39;/path/to/ESACCI-LC/&#39;</span>
+<span class="n">ss_method_copernicus_period</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1993</span><span class="p">,</span> <span class="mi">2020</span><span class="p">]</span>
+<span class="n">ss_method_copernicus_default_loads_bool</span> <span class="o">=</span> <span class="kc">True</span>
+</pre></div>
+</div>
+</section>
+<section id="output-configuration">
+<h2>Output configuration<a class="headerlink" href="#output-configuration" title="Permalink to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">output_format</span> <span class="o">=</span> <span class="s2">&quot;HDF5&quot;</span>              <span class="c1"># &quot;HDF5&quot; or &quot;CSV&quot;</span>
+<span class="n">chemical_species</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;NO3-N&quot;</span><span class="p">,</span> <span class="s2">&quot;NH4-N&quot;</span><span class="p">,</span> <span class="s2">&quot;N_ORG_fresh&quot;</span><span class="p">,</span> <span class="s2">&quot;N_ORG_stable&quot;</span><span class="p">]</span>  <span class="c1"># Species names to export</span>
+<span class="n">units</span> <span class="o">=</span> <span class="s2">&quot;MG/L&quot;</span>                      <span class="c1"># Output units</span>
+<span class="n">no_water_conc_flag</span> <span class="o">=</span> <span class="o">-</span><span class="mi">9999</span>          <span class="c1"># No-data flag</span>
+<span class="n">export_sediment</span> <span class="o">=</span> <span class="kc">False</span>             <span class="c1"># Export sediment results</span>
+<span class="n">timestep</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;hour&quot;</span><span class="p">]</span>              <span class="c1"># Output timestep</span>
+<span class="n">compartments_and_cells</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;RIVER_NETWORK_REACHES&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;1&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;all&quot;</span><span class="p">,</span> <span class="s2">&quot;all&quot;</span><span class="p">,</span> <span class="s2">&quot;all&quot;</span><span class="p">]</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="generated-files">
+<h2>Generated files<a class="headerlink" href="#generated-files" title="Permalink to this heading"></a></h2>
+<p>The configuration generator creates the following files in your output directory:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">openWQ_master.json</span></code> – Master configuration file (references all module files)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">openwq_in/openWQ_config.json</span></code> – Initial conditions and compartment mapping</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">openwq_in/openWQ_MODULE_&lt;BGC&gt;.json</span></code> – Biogeochemistry module configuration (NATIVE_BGC_FLEX or PHREEQC)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">openwq_in/openWQ_MODULE_&lt;TD&gt;.json</span></code> – Transport dissolved module configuration</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">openwq_in/openWQ_MODULE_&lt;LE&gt;.json</span></code> – Lateral exchange module configuration</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">openwq_in/openWQ_MODULE_&lt;TS&gt;.json</span></code> – Transport sediments module configuration (HYPE_MMF or HYPE_HBVSED)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">openwq_in/openWQ_MODULE_&lt;SI&gt;.json</span></code> – Sorption isotherm module configuration</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">openwq_in/openWQ_SS_&lt;method&gt;.json</span></code> – Source/sink configuration (if applicable)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">openwq_in/openWQ_EWF_fixed_value.json</span></code> – External water flux configuration (if applicable)</p></li>
+</ul>
+</section>
+<section id="docker-support">
+<h2>Docker support<a class="headerlink" href="#docker-support" title="Permalink to this heading"></a></h2>
+<p>When running OpenWQ inside a Docker container, file paths in the generated JSON files must reference the container filesystem rather than the host filesystem. The <code class="docutils literal notranslate"><span class="pre">running_on_docker</span></code> flag automates this path correction.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">running_on_docker</span> <span class="o">=</span> <span class="kc">True</span>   <span class="c1"># Set to True when model runs inside Docker</span>
+</pre></div>
+</div>
+<p>When enabled, the generator:</p>
+<ol class="arabic simple">
+<li><p>Reads <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> (located at the openwq root) to determine the volume mount mapping</p></li>
+<li><p>Resolves the relative host path from the compose file location</p></li>
+<li><p>Replaces host path prefixes with container path prefixes in all JSON content</p></li>
+</ol>
+<p>For example, with the default volume mount <code class="docutils literal notranslate"><span class="pre">../../../../../../:/code:Z</span></code>:</p>
+<ul class="simple">
+<li><p><strong>Host path</strong>: <code class="docutils literal notranslate"><span class="pre">/Users/username/Documents/project/test_case/</span></code></p></li>
+<li><p><strong>Container path</strong>: <code class="docutils literal notranslate"><span class="pre">/code/project/test_case/</span></code></p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The path correction only applies to paths <strong>embedded inside generated JSON files</strong>
+(which OpenWQ reads at runtime inside the container). The files themselves are still
+written to the host filesystem so the script can create them on disk.
+Paths used for file I/O during generation (e.g., BGC framework files, PHREEQC database,
+shapefiles) are <strong>not</strong> corrected since the script runs on the host.</p>
+</div>
+</section>
+<section id="tips">
+<h2>Tips<a class="headerlink" href="#tips" title="Permalink to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>PHREEQC species discovery</strong>: Run once with <code class="docutils literal notranslate"><span class="pre">phreeqc_chemical_species_names</span> <span class="pre">=</span> <span class="pre">[]</span></code> to see the component list in the log, then update accordingly</p></li>
+<li><p><strong>Debug mode</strong>: Set <code class="docutils literal notranslate"><span class="pre">run_mode_debug</span> <span class="pre">=</span> <span class="pre">True</span></code> during development to get detailed solver output</p></li>
+<li><p><strong>Compartment names</strong>: Enable debug mode to see the exact compartment names exported by the host model</p></li>
+<li><p><strong>Units consistency</strong>: Ensure initial condition units match the expected units in the biogeochemistry module</p></li>
+<li><p><strong>Sediment parameters</strong>: When <code class="docutils literal notranslate"><span class="pre">PARAMETERS</span></code> is left empty (<code class="docutils literal notranslate"><span class="pre">{}</span></code>), warnings are shown but the model uses <code class="docutils literal notranslate"><span class="pre">PARAMETER_DEFAULTS</span></code> for all cells. Populate <code class="docutils literal notranslate"><span class="pre">PARAMETERS</span></code> with at least one entry per parameter to suppress warnings</p></li>
+<li><p><strong>Docker paths</strong>: When <code class="docutils literal notranslate"><span class="pre">running_on_docker</span> <span class="pre">=</span> <span class="pre">True</span></code>, verify the generated master JSON contains container paths (e.g., <code class="docutils literal notranslate"><span class="pre">/code/...</span></code>) rather than host paths</p></li>
+<li><p><strong>Spatially-varying overrides</strong>: Use <code class="docutils literal notranslate"><span class="pre">&quot;ALL&quot;</span></code> in the IX/IY/IZ fields to apply a value to all cells in that dimension. Add multiple rows (<code class="docutils literal notranslate"><span class="pre">&quot;2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;3&quot;</span></code>, …) for cell-specific overrides</p></li>
+</ol>
+</section>
 </section>
 
 
@@ -109,7 +416,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2022, Diogo Costa.</p>
+    <p>&#169; Copyright 2022-2025, Diogo Costa and contributors.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
