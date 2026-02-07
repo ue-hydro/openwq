@@ -40,7 +40,7 @@
         .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
         .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
 
-        /* University Logo */
+        /* University Logo - Only on title and section slides */
         .university-logo {
             position: absolute;
             bottom: 30px;
@@ -49,6 +49,7 @@
             opacity: 0.9;
         }
         .slide.title-slide .university-logo { height: 70px; }
+        .slide.section-slide .university-logo { height: 55px; opacity: 0.85; }
 
         .slide.section-slide {
             background: linear-gradient(135deg, var(--teal) 0%, #0e7490 100%);
@@ -234,6 +235,7 @@
         <div class="slide section-slide" data-slide="3">
             <div class="section-number">01</div>
             <h2>Model Configuration</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 4: Configuration Template -->
@@ -432,6 +434,7 @@ ss_ml_training_data_csv = \
         <div class="slide section-slide blue" data-slide="7">
             <div class="section-number">02</div>
             <h2>Reading Model Results</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 8: Read_h5_driver -->
@@ -495,6 +498,7 @@ results = h5_rlib.Read_h5_driver(
         <div class="slide section-slide purple" data-slide="9">
             <div class="section-number">03</div>
             <h2>Plotting Time Series</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 10: Plot_h5_driver -->
@@ -570,6 +574,7 @@ h5_plib.Plot_h5_driver(
         <div class="slide section-slide green" data-slide="11">
             <div class="section-number">04</div>
             <h2>Spatial Mapping & GIFs</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 12: Map_h5_driver -->
@@ -873,6 +878,7 @@ pip install SALib    <span class="comment"># sensitivity analysis</span>
                     <strong>Scripts:</strong> supporting_scripts/
                 </p>
             </div>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
     </div>
