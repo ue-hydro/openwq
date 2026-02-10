@@ -164,12 +164,18 @@ void OpenWQ_CH_model::phreeqc_run(
     //         = chemass_g / (volume_L * GFW)
     // ########################################################
 
-    unsigned int num_chem_to_use = std::min((unsigned int)nc, OpenWQ_wqconfig.CH_model->PHREEQC->num_chem);
+    // Use number of mobile species from OpenWQ
+    unsigned int num_mobile = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.size();
+    unsigned int num_chem_to_use = std::min(num_mobile, OpenWQ_wqconfig.CH_model->PHREEQC->num_chem);
+
     for (unsigned int chemi=0;chemi<num_chem_to_use;chemi++){
         indx = 0;
 
-        // Get GFW for this component (default to 1.0 if not available)
-        double component_gfw = (has_gfw && chemi < gfw.size()) ? gfw[chemi] : 1.0;
+        // Get the PHREEQC component index for this OpenWQ chemical
+        unsigned int phreeqc_idx = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species[chemi];
+
+        // Get GFW for this PHREEQC component (default to 1.0 if not available)
+        double component_gfw = (has_gfw && phreeqc_idx < gfw.size()) ? gfw[phreeqc_idx] : 1.0;
 
         // Protect against invalid GFW
         if (component_gfw <= 0 || std::isnan(component_gfw) || std::isinf(component_gfw)) {
@@ -197,7 +203,8 @@ void OpenWQ_CH_model::phreeqc_run(
                             conc_mol_kgw = 0.0;
                         }
 
-                        c[chemi*nxyz+indx] = conc_mol_kgw;
+                        // Use PHREEQC component index for concentration array
+                        c[phreeqc_idx*nxyz+indx] = conc_mol_kgw;
                         indx++;
                     }
                 }
@@ -236,7 +243,13 @@ void OpenWQ_CH_model::phreeqc_run(
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetPressure(pressures);
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTemperature(temperatures);
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetConcentrations(c);
-    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetRepresentativeVolume(volumes);
+    // NOTE: Do NOT call SetRepresentativeVolume here!
+    // The representative volume is set to 1.0 L during setup (phreeqc_setup.cpp).
+    // We pass concentrations (mol/kgw) to PHREEQC, computed from mass/volume.
+    // After PHREEQC returns updated concentrations, we convert back to mass
+    // using the actual hydrological volumes. Calling SetRepresentativeVolume
+    // with actual volumes (millions of liters) causes PHREEQC convergence failures.
+    // OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetRepresentativeVolume(volumes);
 
     // Set fixed density and saturation to avoid calc_dens() crash
     std::vector<double> density(nxyz, 1.0);  // 1.0 kg/L
@@ -260,7 +273,12 @@ void OpenWQ_CH_model::phreeqc_run(
 
     // Get updated concentrations from PHREEQC (in mol/kgw)
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetConcentrations(c);
-    msg_string = "<OpenWQ> PHREEQC: GetConcentrations succeeded";
+    msg_string = "<OpenWQ> PHREEQC: GetConcentrations succeeded, c.size()=" + std::to_string(c.size());
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+    msg_string = "<OpenWQ> PHREEQC DEBUG: mobile_species.size()=" + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.size())
+        + ", num_chem=" + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->num_chem)
+        + ", num_chem_to_use=" + std::to_string(num_chem_to_use);
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
     // ########################################################
@@ -275,8 +293,14 @@ void OpenWQ_CH_model::phreeqc_run(
     for (unsigned int chemi=0;chemi<num_chem_to_use;chemi++){
         indx = 0;
 
-        // Get GFW for this component
-        double component_gfw = (has_gfw && chemi < gfw.size()) ? gfw[chemi] : 1.0;
+        // Get the PHREEQC component index for this OpenWQ chemical
+        unsigned int phreeqc_idx = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species[chemi];
+        msg_string = "<OpenWQ> PHREEQC DEBUG: chemi=" + std::to_string(chemi)
+            + ", phreeqc_idx=" + std::to_string(phreeqc_idx);
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+        // Get GFW for this PHREEQC component
+        double component_gfw = (has_gfw && phreeqc_idx < gfw.size()) ? gfw[phreeqc_idx] : 1.0;
 
         // Protect against invalid GFW
         if (component_gfw <= 0 || std::isnan(component_gfw) || std::isinf(component_gfw)) {
@@ -291,8 +315,8 @@ void OpenWQ_CH_model::phreeqc_run(
             for (int ix=0; ix<nx; ix++) {
                 for (int iy = 0; iy<ny;iy++) {
                     for (int iz=0; iz<nz; iz++) {
-                        // PHREEQC concentration in mol/kgw
-                        double conc_mol_kgw = c[chemi*nxyz+indx];
+                        // PHREEQC concentration in mol/kgw - use PHREEQC component index
+                        double conc_mol_kgw = c[phreeqc_idx*nxyz+indx];
 
                         // Validate concentration
                         if (std::isnan(conc_mol_kgw) || std::isinf(conc_mol_kgw)) {
