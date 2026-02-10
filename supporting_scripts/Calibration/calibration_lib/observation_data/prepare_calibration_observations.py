@@ -562,11 +562,275 @@ def prepare_calibration_observations(
     # Generate summary
     _generate_summary(calibration_df, output_path)
 
+    # Generate calibration stations shapefile
+    generate_calibration_stations_shapefile(
+        calibration_df=calibration_df,
+        stations_gdf=stations_gdf,
+        station_reach_mapping=station_reach_mapping,
+        output_path=output_path,
+        station_id_column=site_col
+    )
+
     print("\n" + "=" * 60)
     print("COMPLETE")
     print("=" * 60)
 
     return calibration_df
+
+
+def generate_calibration_stations_shapefile(
+    calibration_df: pd.DataFrame,
+    stations_gdf: gpd.GeoDataFrame,
+    station_reach_mapping: pd.DataFrame,
+    output_path: Path,
+    station_id_column: str = 'site_id'
+) -> gpd.GeoDataFrame:
+    """
+    Generate a shapefile of calibration stations with metadata.
+
+    Creates a shapefile containing all stations used in calibration with:
+    - Station name/ID
+    - Corresponding reach_id (for OpenWQ/host model mapping)
+    - Parameters available at each station
+    - Number of observations per parameter
+    - Total observations
+    - Distance to matched reach
+
+    Parameters
+    ----------
+    calibration_df : pd.DataFrame
+        Calibration observations dataframe
+    stations_gdf : gpd.GeoDataFrame
+        Original stations GeoDataFrame with geometries
+    station_reach_mapping : pd.DataFrame
+        Mapping of stations to reaches
+    output_path : Path
+        Output path for the shapefile
+    station_id_column : str
+        Column name for station IDs in stations_gdf
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Stations shapefile with metadata
+    """
+    print("\nGenerating calibration stations shapefile...")
+
+    # Get unique stations from calibration observations
+    station_stats = calibration_df.groupby('source').agg({
+        'reach_id': 'first',
+        'species': lambda x: ','.join(sorted(x.unique())),
+        'value': 'count'
+    }).reset_index()
+
+    station_stats.columns = ['station_id', 'reach_id', 'parameters', 'total_obs']
+
+    # Count observations per parameter for each station
+    param_counts = calibration_df.groupby(['source', 'species']).size().unstack(fill_value=0)
+    param_counts = param_counts.reset_index()
+    param_counts.columns = ['station_id'] + [f'n_{col}' for col in param_counts.columns[1:]]
+
+    # Merge parameter counts with station stats
+    station_stats = station_stats.merge(param_counts, on='station_id', how='left')
+
+    # Get distance from station-reach mapping
+    distance_df = station_reach_mapping[['station_id', 'distance_m']].copy()
+    station_stats = station_stats.merge(distance_df, on='station_id', how='left')
+
+    # Count number of parameters
+    station_stats['n_params'] = station_stats['parameters'].apply(lambda x: len(x.split(',')))
+
+    # Merge with station geometries
+    # First, find the matching column in stations_gdf
+    if station_id_column in stations_gdf.columns:
+        id_col = station_id_column
+    else:
+        # Try to find a matching column
+        id_col = next((c for c in stations_gdf.columns
+                      if c.lower() in ['site_id', 'station_id', 'site_no']), None)
+        if id_col is None:
+            print("  WARNING: Could not find station ID column in stations shapefile")
+            return None
+
+    # Convert station_id to same type for merge
+    stations_gdf[id_col] = stations_gdf[id_col].astype(str)
+    station_stats['station_id'] = station_stats['station_id'].astype(str)
+
+    # Merge geometry
+    calibration_stations = stations_gdf[[id_col, 'geometry']].merge(
+        station_stats,
+        left_on=id_col,
+        right_on='station_id',
+        how='inner'
+    )
+
+    if len(calibration_stations) == 0:
+        print("  WARNING: No stations matched between observations and shapefile")
+        return None
+
+    # Create GeoDataFrame
+    calibration_stations_gdf = gpd.GeoDataFrame(
+        calibration_stations,
+        geometry='geometry',
+        crs=stations_gdf.crs
+    )
+
+    # Rename columns for shapefile compatibility (max 10 chars)
+    column_renames = {
+        'station_id': 'stn_id',
+        'reach_id': 'reach_id',
+        'parameters': 'params',
+        'total_obs': 'total_obs',
+        'distance_m': 'dist_m',
+        'n_params': 'n_params'
+    }
+
+    # Rename observation count columns (shorten species names)
+    for col in calibration_stations_gdf.columns:
+        if col.startswith('n_') and col not in column_renames:
+            # Shorten to max 10 chars for shapefile
+            short_name = col[:10]
+            column_renames[col] = short_name
+
+    calibration_stations_gdf = calibration_stations_gdf.rename(columns=column_renames)
+
+    # Drop the duplicate id column if present
+    if id_col in calibration_stations_gdf.columns and 'stn_id' in calibration_stations_gdf.columns:
+        if id_col != 'stn_id':
+            calibration_stations_gdf = calibration_stations_gdf.drop(columns=[id_col])
+
+    # Save shapefile
+    shp_output = output_path.parent / f"{output_path.stem}_stations.shp"
+    calibration_stations_gdf.to_file(shp_output)
+    print(f"  Saved calibration stations shapefile: {shp_output}")
+    print(f"  Total stations: {len(calibration_stations_gdf)}")
+    print(f"  Attributes: {list(calibration_stations_gdf.columns)}")
+
+    # Also save as GeoJSON for easier inspection
+    geojson_output = output_path.parent / f"{output_path.stem}_stations.geojson"
+    calibration_stations_gdf.to_file(geojson_output, driver='GeoJSON')
+    print(f"  Saved GeoJSON: {geojson_output}")
+
+    return calibration_stations_gdf
+
+
+def generate_stations_from_csv(
+    calibration_csv_path: str,
+    river_network_path: str,
+    output_path: str,
+    reach_id_column: str = 'seg_id'
+) -> gpd.GeoDataFrame:
+    """
+    Generate calibration stations shapefile from a user-provided CSV.
+
+    When users provide their own CSV observations (not GRQA), this function
+    creates a stations shapefile by extracting unique stations and matching
+    them to reach centroids.
+
+    Parameters
+    ----------
+    calibration_csv_path : str
+        Path to user-provided calibration CSV
+    river_network_path : str
+        Path to river network shapefile
+    output_path : str
+        Output path for the stations shapefile
+    reach_id_column : str
+        Column in river network containing reach IDs
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Stations shapefile with metadata
+    """
+    print("\nGenerating stations shapefile from CSV observations...")
+
+    # Load calibration CSV
+    calibration_df = pd.read_csv(calibration_csv_path)
+    print(f"  Loaded {len(calibration_df)} observations from CSV")
+
+    # Load river network
+    river_gdf = gpd.read_file(river_network_path)
+    print(f"  Loaded {len(river_gdf)} reaches from river network")
+
+    # Get station statistics
+    station_stats = calibration_df.groupby('source').agg({
+        'reach_id': 'first',
+        'species': lambda x: ','.join(sorted(x.unique())),
+        'value': 'count'
+    }).reset_index()
+
+    station_stats.columns = ['station_id', 'reach_id', 'parameters', 'total_obs']
+
+    # Count observations per parameter
+    param_counts = calibration_df.groupby(['source', 'species']).size().unstack(fill_value=0)
+    param_counts = param_counts.reset_index()
+    param_counts.columns = ['station_id'] + [f'n_{col}' for col in param_counts.columns[1:]]
+
+    station_stats = station_stats.merge(param_counts, on='station_id', how='left')
+    station_stats['n_params'] = station_stats['parameters'].apply(lambda x: len(x.split(',')))
+
+    # Get geometry from reach centroids (since we don't have original station locations)
+    # Match reach_id to get centroid
+    reach_centroids = river_gdf.copy()
+    reach_centroids['centroid'] = reach_centroids.geometry.centroid
+    reach_centroids = reach_centroids[[reach_id_column, 'centroid']].rename(
+        columns={reach_id_column: 'reach_id', 'centroid': 'geometry'}
+    )
+
+    # Merge with station stats
+    stations_with_geom = station_stats.merge(
+        reach_centroids,
+        on='reach_id',
+        how='left'
+    )
+
+    # Filter out stations without geometry (unmatched reaches)
+    stations_with_geom = stations_with_geom.dropna(subset=['geometry'])
+
+    if len(stations_with_geom) == 0:
+        print("  WARNING: No stations could be matched to reach geometries")
+        return None
+
+    # Create GeoDataFrame
+    stations_gdf = gpd.GeoDataFrame(
+        stations_with_geom,
+        geometry='geometry',
+        crs=river_gdf.crs
+    )
+
+    # Rename for shapefile compatibility
+    column_renames = {
+        'station_id': 'stn_id',
+        'reach_id': 'reach_id',
+        'parameters': 'params',
+        'total_obs': 'total_obs',
+        'n_params': 'n_params'
+    }
+
+    for col in stations_gdf.columns:
+        if col.startswith('n_') and col not in column_renames:
+            column_renames[col] = col[:10]
+
+    stations_gdf = stations_gdf.rename(columns=column_renames)
+
+    # Save shapefile
+    output_path = Path(output_path)
+    shp_output = output_path.parent / f"{output_path.stem}_stations.shp"
+    stations_gdf.to_file(shp_output)
+    print(f"  Saved stations shapefile: {shp_output}")
+    print(f"  Total stations: {len(stations_gdf)}")
+
+    # Also save as GeoJSON
+    geojson_output = output_path.parent / f"{output_path.stem}_stations.geojson"
+    stations_gdf.to_file(geojson_output, driver='GeoJSON')
+    print(f"  Saved GeoJSON: {geojson_output}")
+
+    # Note about geometry source
+    print("\n  NOTE: Station locations are based on reach centroids (not original")
+    print("        station coordinates) since original locations were not provided.")
+
+    return stations_gdf
 
 
 def _generate_summary(calibration_df: pd.DataFrame, output_path: Path):
