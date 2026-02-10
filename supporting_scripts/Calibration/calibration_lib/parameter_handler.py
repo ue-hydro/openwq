@@ -52,7 +52,7 @@ class ParameterHandler:
         Parameters
         ----------
         base_model_config_dir : str
-            Path to the Model_Config directory containing template_model_config.py
+            Path to the Model_Config directory containing model_config_template.py
         test_case_dir : str
             Path to the test case directory (containing openwq_in, mizuroute_in, etc.)
         calibration_work_dir : str
@@ -703,7 +703,7 @@ class ParameterHandler:
         """
         # Climate parameters like ss_climate_precip_scaling_power are in the Python template
         # To properly handle these, we would need to:
-        # 1. Copy template_model_config.py to eval_dir
+        # 1. Copy model_config_template.py to eval_dir
         # 2. Modify the parameter value
         # 3. Run the generator to create new JSONs
         #

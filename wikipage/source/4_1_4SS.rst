@@ -246,7 +246,7 @@ The Python configuration generator can compute spatially distributed source/sink
 4. Generates per-HRU, per-year loading CSV files
 5. Creates the OpenWQ source/sink JSON configuration referencing those CSV files
 
-This is configured in the Python ``template_model_config.py`` using:
+This is configured in the Python ``model_config_template.py`` using:
 
 .. code-block:: python
 
@@ -293,7 +293,7 @@ where:
 
 Weights are normalized so that monthly loads sum to the annual load for each nutrient and HRU.
 
-This is configured in the Python ``template_model_config.py`` using:
+This is configured in the Python ``model_config_template.py`` using:
 
 .. code-block:: python
 
@@ -344,7 +344,7 @@ This method trains a machine learning model on water quality monitoring data and
 6. Generates standard OpenWQ SS JSON with ``DATA_FORMAT: "JSON"`` entries
 7. Saves trained models in XGBoost text format (FastForest-compatible for future C++ runtime inference)
 
-This is configured in the Python ``template_model_config.py`` using:
+This is configured in the Python ``model_config_template.py`` using:
 
 .. code-block:: python
 

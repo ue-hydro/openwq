@@ -17,7 +17,7 @@ The output reading scripts are located at::
 Key files:
 
 * ``example_reading_plotting_results.py`` - Complete usage example
-* ``template_reading_plotting_results.py`` - Template for your projects
+* ``reading_plotting_results_template.py`` - Template for your projects
 * ``hdf5_support_lib/Read_h5_driver.py`` - HDF5 reading engine
 * ``hdf5_support_lib/Plot_h5_driver.py`` - Time-series plotting
 * ``hdf5_support_lib/Map_h5_driver.py`` - Spatial mapping

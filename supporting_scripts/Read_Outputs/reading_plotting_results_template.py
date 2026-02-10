@@ -21,7 +21,7 @@
 #
 # Set sediment_as_well=True to also read, plot and map
 # sediment transport results (requires export_sediment=True
-# in template_model_config.py and TS module enabled).
+# in model_config_template.py and TS module enabled).
 #################################################
 # Loading libraries
 import sys

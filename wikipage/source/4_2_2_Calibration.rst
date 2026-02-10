@@ -21,8 +21,8 @@ The calibration framework is located at::
 Key files:
 
 * ``calibration_config_template.py`` - User configuration template (copy and edit)
-* ``calibration_driver.py`` - Main entry point
-* ``calibration_lib/`` - Core library modules
+* ``calibration_lib/calibration_driver.py`` - Main entry point
+* ``calibration_lib/`` - Core library modules (including observation_data/)
 
 
 Quick Start

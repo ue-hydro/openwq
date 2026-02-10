@@ -38,4 +38,4 @@ Documentation: https://openwq.readthedocs.io
 __version__ = "1.0.0"
 __author__ = "Diogo Costa"
 
-from .calibration_driver import run_calibration, run_sensitivity_analysis
+from .calibration_lib.calibration_driver import run_calibration, run_sensitivity_analysis
