@@ -54,7 +54,8 @@ COMMAND-LINE OPTIONS:
   --resume            Resume calibration from checkpoint
   --sensitivity-only  Run only sensitivity analysis (no calibration)
   --dry-run           Validate configuration without running
-  --extract-grqa-only Extract GRQA observation data only
+  --prepare-obs-only  Prepare observation data only (Section 1B) - generates
+                      calibration CSV and stations shapefile without calibration
 
 SECTIONS:
   1. Path Configuration & Observation Data
@@ -990,9 +991,16 @@ if __name__ == "__main__":
                        help="Run only sensitivity analysis")
     parser.add_argument("--dry-run", action="store_true",
                        help="Validate configuration without running")
+    parser.add_argument("--prepare-obs-only", action="store_true",
+                       help="Only prepare observation data (Section 1B) without running calibration")
     parser.add_argument("--extract-grqa-only", action="store_true",
-                       help="Only extract GRQA data without running calibration")
+                       help="Deprecated: use --prepare-obs-only instead")
     args = parser.parse_args()
+
+    # Handle deprecated flag
+    if args.extract_grqa_only:
+        print("WARNING: --extract-grqa-only is deprecated. Use --prepare-obs-only instead.")
+        args.prepare_obs_only = True
 
     # Collect all configuration into a dictionary
     config = {
@@ -1053,7 +1061,7 @@ if __name__ == "__main__":
     # Observation Data Preparation (based on observation_data_source)
     # ==========================================================================
 
-    if observation_data_source == "grqa" or args.extract_grqa_only:
+    if observation_data_source == "grqa":
         print("Preparing observation data from GRQA database...")
         try:
             obs_path = prepare_grqa_observations(config, grqa_config)
@@ -1061,18 +1069,10 @@ if __name__ == "__main__":
             print(f"\nObservation data ready: {obs_path}")
         except Exception as e:
             print(f"\nERROR: GRQA extraction failed: {e}")
-            if args.extract_grqa_only:
+            if args.prepare_obs_only:
                 sys.exit(1)
             else:
                 print("Falling back to configured observation_data_path...")
-
-        if args.extract_grqa_only:
-            print("\n" + "=" * 60)
-            print("GRQA EXTRACTION COMPLETE")
-            print("=" * 60)
-            print(f"Observation data saved to: {config['observation_data_path']}")
-            print("\nTo run calibration, use: python your_config.py")
-            sys.exit(0)
 
     elif observation_data_source == "csv":
         print(f"Using pre-formatted observation file: {observation_data_path}")
@@ -1094,12 +1094,28 @@ if __name__ == "__main__":
                     print(f"\nGenerated calibration stations shapefile with {len(stations_gdf)} stations")
             except Exception as e:
                 print(f"\nWARNING: Could not generate stations shapefile: {e}")
+                if args.prepare_obs_only:
+                    sys.exit(1)
                 print("Calibration will continue without the shapefile.")
 
     else:
         print(f"WARNING: Unknown observation_data_source '{observation_data_source}'. "
               f"Valid options: 'csv', 'grqa'")
         print(f"Falling back to: {observation_data_path}")
+
+    # Exit if only preparing observations
+    if args.prepare_obs_only:
+        print("\n" + "=" * 60)
+        print("OBSERVATION DATA PREPARATION COMPLETE")
+        print("=" * 60)
+        output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
+        print(f"Output directory: {output_dir}")
+        print("\nGenerated files:")
+        print(f"  - Observation CSV: {config.get('observation_data_path', observation_data_path)}")
+        print(f"  - Stations shapefile: {output_dir}/calibration_observations_stations.shp")
+        print(f"  - Stations GeoJSON: {output_dir}/calibration_observations_stations.geojson")
+        print("\nTo run calibration, use: python your_config.py")
+        sys.exit(0)
 
     if args.dry_run:
         print("=" * 60)
