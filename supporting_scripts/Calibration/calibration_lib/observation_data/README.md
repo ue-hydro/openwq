@@ -63,60 +63,6 @@ python my_calibration.py --extract-grqa-only
 python my_calibration.py
 ```
 
-### Option 3: Copernicus Workflow (`observation_data_source = "copernicus"`)
-
-Generate synthetic observations using **Copernicus land cover data** and export coefficients. Useful for data-sparse regions or testing calibration workflows.
-
-**Scripts:**
-- `copernicus_observations.py` - Generates synthetic observations from land cover data
-
-**Data Source Options:**
-- **Single file**: Point directly to a GeoTIFF or NetCDF file
-- **Directory**: Point to a folder with yearly files (auto-detected by year in filename)
-
-**Usage:**
-
-```python
-# In your calibration configuration:
-observation_data_source = "copernicus"
-
-copernicus_config = {
-    "river_network_shapefile": "/path/to/river_network.shp",
-    "reach_id_column": "seg_id",
-
-    # Land cover: single file or directory with yearly files
-    "land_cover_path": "/data/copernicus/CGLS-LC100_2019.tif",
-    # OR: "land_cover_path": "/data/copernicus/land_cover/"  # directory
-
-    # Climate data (optional): single file or directory
-    "climate_data_path": "/data/era5/era5_daily.nc",
-    # OR: "climate_data_path": "/data/era5/"  # directory with multiple years
-
-    "start_date": "2010-01-01",
-    "end_date": "2020-12-31",
-    "temporal_resolution": "monthly",
-    "target_species": ["TN", "TP", "TSS"],
-    "export_coefficients": {
-        10: {"TN": 25.0, "TP": 2.0, "TSS": 500.0},  # Cropland
-        20: {"TN": 2.0, "TP": 0.2, "TSS": 50.0},    # Forest
-        30: {"TN": 10.0, "TP": 0.8, "TSS": 150.0},  # Grassland
-        80: {"TN": 15.0, "TP": 1.5, "TSS": 300.0},  # Urban
-    },
-}
-```
-
-**Supported file formats:**
-- Land cover: GeoTIFF (`.tif`, `.tiff`) or NetCDF (`.nc`)
-- Climate data: NetCDF (`.nc`)
-
-```bash
-# Generate Copernicus observations only
-python my_calibration.py --generate-copernicus-only
-
-# Or run calibration (generation is automatic)
-python my_calibration.py
-```
-
 ---
 
 ## Required CSV Format
@@ -196,16 +142,4 @@ The calibration framework will:
 
 ```bash
 pip install geopandas requests shapely pandas numpy
-```
-
-### For Copernicus Workflow
-
-```bash
-pip install geopandas rasterio xarray pandas numpy
-```
-
-### For All Features
-
-```bash
-pip install geopandas requests shapely rasterio xarray pandas numpy
 ```
