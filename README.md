@@ -173,6 +173,25 @@ RUNNING SUMMA-OPENWQ WITH THE CONTAINER:
 * Used for post-processing, calibration, and model configuration
 * See [supporting_scripts](supporting_scripts) folder
 
+### Python Environment Setup
+
+The supporting scripts require Python 3.8+ with several dependencies. A virtual environment setup is provided:
+
+```bash
+cd supporting_scripts
+
+# Automated setup (recommended)
+./setup_venv.sh
+
+# Activate
+source .venv/bin/activate
+
+# Or use conda
+conda create -n openwq python=3.10
+conda activate openwq
+pip install -r requirements.txt
+```
+
 ### Calibration and Sensitivity Analysis
 OpenWQ includes a comprehensive calibration framework with:
 - **106+ Calibratable Parameters** across all modules (BGC, sorption, sediment, transport, etc.)
@@ -192,7 +211,7 @@ OpenWQ supports the PHREEQC geochemical engine for advanced water quality simula
 - Ion exchange and surface complexation
 - Kinetic reactions (dissolution, precipitation, redox)
 
-For setup instructions, see the [PHREEQC Setup Guide](supporting_scripts/PHREEQC_SETUP_GUIDE.md).
+For setup instructions, see the [Documentation](https://openwq.readthedocs.io).
 
 ## Working Example
 * Coming soon!
