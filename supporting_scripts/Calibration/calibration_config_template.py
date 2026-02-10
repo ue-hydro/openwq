@@ -175,9 +175,15 @@ grqa_config = {
     # Column in shapefile containing reach IDs
     "reach_id_column": "seg_id",
 
-    # Time period for observations (ISO format)
-    "start_date": "2000-01-01",
-    "end_date": "2020-12-31",
+    # Time period for observations
+    # Option 1: Set to "auto" to extract from host model NetCDF output
+    # Option 2: Provide explicit dates in ISO format (YYYY-MM-DD)
+    "start_date": "auto",  # or e.g., "2000-01-01"
+    "end_date": "auto",    # or e.g., "2020-12-31"
+
+    # Host model output NetCDF file (required if start_date/end_date = "auto")
+    # Used to extract time range for observation filtering
+    "hostmodel_output_nc": "/path/to/hostmodel_output.nc",
 
     # Maximum distance (meters) to match stations to river reaches
     "max_station_distance_m": 500,
@@ -829,6 +835,62 @@ hpc_max_concurrent_jobs = 50
 # 7. RUN CALIBRATION
 # =============================================================================
 
+def get_time_range_from_netcdf(nc_path: str) -> tuple:
+    """
+    Extract time range from host model NetCDF output file.
+
+    Parameters
+    ----------
+    nc_path : str
+        Path to NetCDF file
+
+    Returns
+    -------
+    tuple
+        (start_date, end_date) as ISO format strings
+    """
+    try:
+        import netCDF4 as nc
+        import numpy as np
+        from datetime import datetime
+
+        with nc.Dataset(nc_path, 'r') as ds:
+            # Find time variable (common names)
+            time_var = None
+            for var_name in ['time', 'Time', 'TIME', 't']:
+                if var_name in ds.variables:
+                    time_var = ds.variables[var_name]
+                    break
+
+            if time_var is None:
+                raise ValueError(f"No time variable found in {nc_path}")
+
+            # Get time values and units
+            times = time_var[:]
+            units = time_var.units if hasattr(time_var, 'units') else None
+            calendar = time_var.calendar if hasattr(time_var, 'calendar') else 'standard'
+
+            # Convert to datetime
+            dates = nc.num2date(times, units=units, calendar=calendar)
+
+            start_date = dates[0]
+            end_date = dates[-1]
+
+            # Handle cftime objects
+            if hasattr(start_date, 'strftime'):
+                start_str = start_date.strftime('%Y-%m-%d')
+                end_str = end_date.strftime('%Y-%m-%d')
+            else:
+                # For cftime objects without strftime
+                start_str = f"{start_date.year:04d}-{start_date.month:02d}-{start_date.day:02d}"
+                end_str = f"{end_date.year:04d}-{end_date.month:02d}-{end_date.day:02d}"
+
+            return start_str, end_str
+
+    except ImportError:
+        raise ImportError("netCDF4 required for auto time extraction. Install with: pip install netCDF4")
+
+
 def prepare_grqa_observations(config: dict, grqa_config: dict) -> str:
     """
     Download and process GRQA data for calibration.
@@ -852,6 +914,26 @@ def prepare_grqa_observations(config: dict, grqa_config: dict) -> str:
         output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
     os.makedirs(output_dir, exist_ok=True)
 
+    # Determine time period (auto-extract from NetCDF or use provided dates)
+    start_date = grqa_config.get("start_date")
+    end_date = grqa_config.get("end_date")
+
+    if start_date == "auto" or end_date == "auto":
+        nc_path = grqa_config.get("hostmodel_output_nc")
+        if not nc_path:
+            raise ValueError(
+                "hostmodel_output_nc must be specified when start_date/end_date = 'auto'"
+            )
+        print(f"\nExtracting time range from: {nc_path}")
+        auto_start, auto_end = get_time_range_from_netcdf(nc_path)
+
+        if start_date == "auto":
+            start_date = auto_start
+        if end_date == "auto":
+            end_date = auto_end
+
+        print(f"  Time range: {start_date} to {end_date}")
+
     # Step 1: Extract GRQA stations and observations
     print("\n[1/2] Extracting GRQA stations and observations...")
 
@@ -867,7 +949,7 @@ def prepare_grqa_observations(config: dict, grqa_config: dict) -> str:
         species_mapping=grqa_config["species_mapping"],
         output_dir=output_dir,
         local_data_path=local_data_path,
-        time_period=(grqa_config.get("start_date"), grqa_config.get("end_date"))
+        time_period=(start_date, end_date)
     )
 
     grqa_output = extractor.run_extraction()
