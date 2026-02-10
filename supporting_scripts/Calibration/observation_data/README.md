@@ -1,8 +1,125 @@
-# Observation Data Format
+# Observation Data for OpenWQ Calibration
 
-This directory contains observation data files for OpenWQ calibration.
+This directory contains tools and data for preparing observation data for OpenWQ calibration.
 
-## Required Format
+## Data Sources
+
+### Option 1: Manual CSV File (`observation_data_source = "csv"`)
+
+Prepare observation data manually in CSV format (see format below).
+
+### Option 2: GRQA Database Extraction (`observation_data_source = "grqa"`)
+
+Use the included scripts to automatically extract data from the **Global River Water Quality Archive (GRQA)** database (https://zenodo.org/records/15335450).
+
+**Scripts:**
+- `grqa_extract_stations.py` - Downloads/loads and extracts GRQA data for your study area
+- `prepare_calibration_observations.py` - Converts GRQA data to calibration format
+
+**Data Source Options:**
+- **Download from Zenodo**: Set `local_data_path = None` (default) - data will be downloaded automatically
+- **Use local data**: Set `local_data_path` to your GRQA data folder if already downloaded
+
+**Usage:**
+
+```python
+# In your calibration configuration:
+observation_data_source = "grqa"
+
+grqa_config = {
+    # Use local data (if already downloaded) or None to download
+    "local_data_path": "/data/GRQA",  # or None to download from Zenodo
+
+    "river_network_shapefile": "/path/to/river_network.shp",
+    "reach_id_column": "seg_id",
+    "bounding_box": [-125, 24, -66, 50],
+    "start_date": "2000-01-01",
+    "end_date": "2020-12-31",
+    "max_station_distance_m": 500,
+    "species_mapping": {
+        "NO3": "NO3-N",
+        "NH4": "NH4-N",
+        "TN": "TN",
+        "PO4": "PO4-P",
+    },
+}
+```
+
+**Expected local data structure:**
+```
+local_data_path/
+├── GRQA_data_v1.3/ or GRQA_data_v1.4/
+│   ├── GRQA_data_v1.3_NO3.csv
+│   ├── GRQA_data_v1.3_NH4.csv
+│   └── ... (other parameter files)
+└── GRQA_meta_v1.3.csv (optional)
+```
+
+```bash
+# Extract GRQA data only
+python my_calibration.py --extract-grqa-only
+
+# Or run calibration (extraction is automatic)
+python my_calibration.py
+```
+
+### Option 3: Copernicus Workflow (`observation_data_source = "copernicus"`)
+
+Generate synthetic observations using **Copernicus land cover data** and export coefficients. Useful for data-sparse regions or testing calibration workflows.
+
+**Scripts:**
+- `copernicus_observations.py` - Generates synthetic observations from land cover data
+
+**Data Source Options:**
+- **Single file**: Point directly to a GeoTIFF or NetCDF file
+- **Directory**: Point to a folder with yearly files (auto-detected by year in filename)
+
+**Usage:**
+
+```python
+# In your calibration configuration:
+observation_data_source = "copernicus"
+
+copernicus_config = {
+    "river_network_shapefile": "/path/to/river_network.shp",
+    "reach_id_column": "seg_id",
+
+    # Land cover: single file or directory with yearly files
+    "land_cover_path": "/data/copernicus/CGLS-LC100_2019.tif",
+    # OR: "land_cover_path": "/data/copernicus/land_cover/"  # directory
+
+    # Climate data (optional): single file or directory
+    "climate_data_path": "/data/era5/era5_daily.nc",
+    # OR: "climate_data_path": "/data/era5/"  # directory with multiple years
+
+    "start_date": "2010-01-01",
+    "end_date": "2020-12-31",
+    "temporal_resolution": "monthly",
+    "target_species": ["TN", "TP", "TSS"],
+    "export_coefficients": {
+        10: {"TN": 25.0, "TP": 2.0, "TSS": 500.0},  # Cropland
+        20: {"TN": 2.0, "TP": 0.2, "TSS": 50.0},    # Forest
+        30: {"TN": 10.0, "TP": 0.8, "TSS": 150.0},  # Grassland
+        80: {"TN": 15.0, "TP": 1.5, "TSS": 300.0},  # Urban
+    },
+}
+```
+
+**Supported file formats:**
+- Land cover: GeoTIFF (`.tif`, `.tiff`) or NetCDF (`.nc`)
+- Climate data: NetCDF (`.nc`)
+
+```bash
+# Generate Copernicus observations only
+python my_calibration.py --generate-copernicus-only
+
+# Or run calibration (generation is automatic)
+python my_calibration.py
+```
+
+---
+
+## Required CSV Format
 
 Observation data must be in CSV format with the following columns:
 
@@ -25,6 +142,30 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
 2010-06-01 00:00:00,1200014181,NH4-N,0.15,mg/l,USGS_station_A,0.02,GOOD
 ```
 
+## GRQA Species Mapping
+
+When using GRQA extraction, map GRQA parameter names to your model species names:
+
+| GRQA Parameter | Description | Typical Model Species |
+|----------------|-------------|----------------------|
+| NO3 | Nitrate | NO3-N |
+| NH4 | Ammonium | NH4-N |
+| TN | Total Nitrogen | TN |
+| NO2 | Nitrite | NO2-N |
+| DON | Dissolved Organic Nitrogen | DON |
+| PO4 | Orthophosphate | PO4-P |
+| TP | Total Phosphorus | TP |
+| DP | Dissolved Phosphorus | DP |
+| DO | Dissolved Oxygen | DO |
+| BOD | Biochemical Oxygen Demand | BOD |
+| COD | Chemical Oxygen Demand | COD |
+| DOC | Dissolved Organic Carbon | DOC |
+| TOC | Total Organic Carbon | TOC |
+| TSS | Total Suspended Solids | TSS |
+| Chl-a | Chlorophyll-a | Chla |
+| EC | Electrical Conductivity | EC |
+| pH | pH | pH |
+
 ## Notes
 
 1. **Species names** must match exactly with species defined in your model configuration
@@ -32,9 +173,8 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
 3. **Units** should be consistent with model output units (typically mg/l or MG/L)
 4. **datetime** format must be parseable by pandas (ISO format recommended)
 
-## Supported Species (examples)
+## Common Species Names in OpenWQ
 
-Common species names used in OpenWQ:
 - NO3-N (Nitrate-nitrogen)
 - NH4-N (Ammonium-nitrogen)
 - N_ORG_active (Active organic nitrogen)
@@ -49,3 +189,23 @@ The calibration framework will:
 1. Filter out observations with `quality_flag = 'BAD'` by default
 2. Use uncertainty values for weighted objective functions (if provided)
 3. Match observations to model output based on reach_id, species, and nearest timestamp
+
+## Dependencies
+
+### For GRQA Extraction
+
+```bash
+pip install geopandas requests shapely pandas numpy
+```
+
+### For Copernicus Workflow
+
+```bash
+pip install geopandas rasterio xarray pandas numpy
+```
+
+### For All Features
+
+```bash
+pip install geopandas requests shapely rasterio xarray pandas numpy
+```

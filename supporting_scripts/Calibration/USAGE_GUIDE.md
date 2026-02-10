@@ -121,6 +121,10 @@ cp /path/to/openwq/supporting_scripts/Calibration/calibration_config_template.py
 
 ## 4. Preparing Observation Data
 
+You have two options for preparing observation data:
+
+### Option A: Manual CSV File
+
 Create a CSV file with your observation data. Required columns:
 
 | Column | Description | Example |
@@ -144,6 +148,136 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
 - `reach_id` must match the reach IDs in your model output HDF5 files
 - `species` must match exactly the species names in your BGC configuration
 - Use consistent units throughout (typically `mg/l` or `MG/L`)
+
+### Option B: GRQA Database Extraction (Recommended for Large-Scale Calibration)
+
+The framework can automatically download and process data from the **Global River Water Quality Archive (GRQA)** database. This is ideal for large-scale calibrations.
+
+**Step 4B.1: Enable GRQA in your configuration**
+
+```python
+# Enable automatic GRQA extraction
+use_grqa = True
+```
+
+**Step 4B.2: Configure GRQA settings**
+
+```python
+grqa_config = {
+    # River network shapefile for spatial matching
+    "river_network_shapefile": "/path/to/river_network.shp",
+
+    # Column in shapefile containing reach IDs
+    "reach_id_column": "seg_id",
+
+    # Bounding box [min_lon, min_lat, max_lon, max_lat]
+    "bounding_box": [-125, 24, -66, 50],  # CONUS example
+
+    # Time period
+    "start_date": "2000-01-01",
+    "end_date": "2020-12-31",
+
+    # Maximum distance to match stations to reaches
+    "max_station_distance_m": 500,
+
+    # Map GRQA parameters to model species
+    "species_mapping": {
+        "NO3": "NO3-N",
+        "NH4": "NH4-N",
+        "TN": "TN",
+        "PO4": "PO4-P",
+        "TP": "TP",
+    },
+}
+```
+
+**Step 4B.3: Run GRQA extraction**
+
+```bash
+# Extract only (without calibration)
+python my_calibration.py --extract-grqa-only
+
+# Or run calibration (extraction happens automatically)
+python my_calibration.py
+```
+
+**GRQA Species Mapping Reference:**
+
+| GRQA Parameter | Description | Typical Model Species |
+|----------------|-------------|----------------------|
+| NO3 | Nitrate | NO3-N |
+| NH4 | Ammonium | NH4-N |
+| TN | Total Nitrogen | TN |
+| NO2 | Nitrite | NO2-N |
+| PO4 | Orthophosphate | PO4-P |
+| TP | Total Phosphorus | TP |
+| DO | Dissolved Oxygen | DO |
+| BOD | Biochemical Oxygen Demand | BOD |
+| DOC | Dissolved Organic Carbon | DOC |
+| TSS | Total Suspended Solids | TSS |
+
+**GRQA Dependencies:**
+
+```bash
+pip install geopandas requests shapely
+```
+
+### Option C: Copernicus Workflow (For Data-Sparse Regions)
+
+Generate synthetic observations using Copernicus land cover data and export coefficients. Useful for:
+- Data-sparse regions with limited monitoring stations
+- Sensitivity analysis with controlled uncertainty
+- Testing calibration workflows
+
+**Step 4C.1: Set observation source**
+
+```python
+observation_data_source = "copernicus"
+```
+
+**Step 4C.2: Configure Copernicus settings**
+
+```python
+copernicus_config = {
+    "river_network_shapefile": "/path/to/river_network.shp",
+    "reach_id_column": "seg_id",
+
+    # Copernicus land cover data
+    "land_cover_path": "/path/to/copernicus_land_cover.tif",
+
+    # Time period
+    "start_date": "2010-01-01",
+    "end_date": "2020-12-31",
+    "temporal_resolution": "monthly",
+
+    # Species to generate
+    "target_species": ["TN", "TP", "TSS"],
+
+    # Export coefficients by land cover class (kg/ha/yr)
+    "export_coefficients": {
+        10: {"TN": 25.0, "TP": 2.0, "TSS": 500.0},  # Cropland
+        20: {"TN": 2.0, "TP": 0.2, "TSS": 50.0},    # Forest
+        30: {"TN": 10.0, "TP": 0.8, "TSS": 150.0},  # Grassland
+        80: {"TN": 15.0, "TP": 1.5, "TSS": 300.0},  # Urban
+    },
+}
+```
+
+**Step 4C.3: Generate observations**
+
+```bash
+# Generate only
+python my_calibration.py --generate-copernicus-only
+
+# Or run calibration (generation is automatic)
+python my_calibration.py
+```
+
+**Copernicus Dependencies:**
+
+```bash
+pip install geopandas rasterio xarray
+```
 
 ---
 
@@ -532,10 +666,12 @@ cat slurm_logs/array_*.err
 ### Command Line Options
 
 ```bash
-python my_calibration.py                 # Normal calibration run
-python my_calibration.py --resume        # Resume from checkpoint
-python my_calibration.py --dry-run       # Validate config only
-python my_calibration.py --sensitivity-only  # Run sensitivity analysis only
+python my_calibration.py                          # Normal calibration run
+python my_calibration.py --resume                 # Resume from checkpoint
+python my_calibration.py --dry-run                # Validate config only
+python my_calibration.py --sensitivity-only       # Run sensitivity analysis only
+python my_calibration.py --extract-grqa-only      # Extract GRQA data only
+python my_calibration.py --generate-copernicus-only  # Generate Copernicus observations only
 ```
 
 ### Recommended Workflow
