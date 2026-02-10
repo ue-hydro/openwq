@@ -163,11 +163,11 @@ observation_data/
 | Attribute | Description |
 |-----------|-------------|
 | stn_id | Station identifier |
-| reach_id | Corresponding reach ID in model/river network |
+| spatial_id | Corresponding spatial ID in host model (reach_id for mizuRoute, hruId for SUMMA) |
 | params | Comma-separated list of parameters available |
 | total_obs | Total number of observations |
 | n_params | Number of unique parameters |
-| dist_m | Distance to matched reach (meters) — GRQA only |
+| dist_m | Distance to matched spatial element (meters) — GRQA only |
 | n_<species> | Number of observations per species (e.g., n_NO3-N) |
 
 ### Notes

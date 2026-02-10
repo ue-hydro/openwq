@@ -128,7 +128,7 @@ test_case_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq
 #
 # A calibration stations shapefile will be automatically generated containing:
 #   - Station name/ID
-#   - Corresponding reach_id (for OpenWQ/host model mapping)
+#   - Corresponding spatial ID (reach_id for mizuRoute, hruId for SUMMA)
 #   - Parameters available at each station
 #   - Number of observations per parameter
 #   - Total observations per station
