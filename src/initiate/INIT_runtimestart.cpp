@@ -92,6 +92,9 @@ void OpenWQ_initiate::setIC_phreeqc(
     OpenWQ_units& OpenWQ_units,
     OpenWQ_output& OpenWQ_output){
 
+    std::string msg_string = "<OpenWQ> PHREEQC: Entering setIC_phreeqc...";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     std::string errorMsgIdentifier = " Config file";
     OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
@@ -99,13 +102,25 @@ void OpenWQ_initiate::setIC_phreeqc(
         errorMsgIdentifier,
         true);
 
+    msg_string = "<OpenWQ> PHREEQC: Checking phreeqcrm pointer...";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+    if (!OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm) {
+        msg_string = "<OpenWQ> ERROR: phreeqcrm pointer is NULL!";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        exit(EXIT_FAILURE);
+    }
+
+    msg_string = "<OpenWQ> PHREEQC: phreeqcrm is valid, calling GetGridCellCount...";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     const int nxyz = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetGridCellCount();
     const int nc = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetComponentCount();
     const unsigned int num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
     const unsigned int num_comps = OpenWQ_hostModelconfig.get_num_HydroComp();
 
     // Debug: log grid and component info
-    std::string msg_string = "<OpenWQ> PHREEQC IC setup: nxyz=" + std::to_string(nxyz)
+    msg_string = "<OpenWQ> PHREEQC IC setup: nxyz=" + std::to_string(nxyz)
         + ", nc(GetComponentCount)=" + std::to_string(nc)
         + ", num_chem(stored)=" + std::to_string(num_chem)
         + ", num_comps(hydro)=" + std::to_string(num_comps);
@@ -225,16 +240,21 @@ void OpenWQ_initiate::setIC_phreeqc(
     msg_string = "<OpenWQ> PHREEQC: GetConcentrations succeeded";
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
+    // Get the number of mobile species and their PHREEQC indices
+    const unsigned int num_mobile = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.size();
+
     // Parallelized concentration extraction
+    // NOTE: We iterate over mobile species (N, O, C) which are indexed 0,1,2 in OpenWQ
+    // but map to different PHREEQC component indices (e.g., N=9, O=2, C=4)
     #pragma omp parallel num_threads(OpenWQ_wqconfig.get_num_threads_requested())
     {
         #pragma omp for schedule(static)
         for (unsigned int icmp = 0; icmp < num_comps; icmp++){
-            
+
             const int nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
             const int ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
             const int nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
-            
+
             // Calculate starting index for this compartment
             int comp_start_idx = 0;
             for (unsigned int prev_icmp = 0; prev_icmp < icmp; prev_icmp++){
@@ -243,18 +263,22 @@ void OpenWQ_initiate::setIC_phreeqc(
                                   OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(prev_icmp);
             }
 
-            for (unsigned int chemi = 0; chemi < num_chem; chemi++){
+            // Iterate over mobile species only (num_mobile = 3 for N, O, C)
+            for (unsigned int chemi = 0; chemi < num_mobile; chemi++){
+                // Get the PHREEQC component index for this OpenWQ chemical
+                unsigned int phreeqc_idx = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species[chemi];
                 int local_indx = 0;
-                
+
                 for (int ix = 0; ix < nx; ix++){
                     for (int iy = 0; iy < ny; iy++){
                         for (int iz = 0; iz < nz; iz++){
                             const double den = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
                             const double volume = (den == 0) ? 1.0 : den;
-                            
-                            (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix, iy, iz) = 
-                                c[chemi * nxyz + comp_start_idx + local_indx] * volume;
-                            
+
+                            // Use PHREEQC component index for concentration array access
+                            (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix, iy, iz) =
+                                c[phreeqc_idx * nxyz + comp_start_idx + local_indx] * volume;
+
                             local_indx++;
                         }
                     }
