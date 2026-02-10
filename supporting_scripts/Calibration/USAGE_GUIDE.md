@@ -637,8 +637,7 @@ python my_calibration.py                          # Normal calibration run
 python my_calibration.py --resume                 # Resume from checkpoint
 python my_calibration.py --dry-run                # Validate config only
 python my_calibration.py --sensitivity-only       # Run sensitivity analysis only
-python my_calibration.py --extract-grqa-only      # Extract GRQA data only
-python my_calibration.py --generate-copernicus-only  # Generate Copernicus observations only
+python my_calibration.py --prepare-obs-only       # Prepare observation data only (Section 1B)
 ```
 
 ### Recommended Workflow
