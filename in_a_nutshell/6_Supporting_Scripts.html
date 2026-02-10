@@ -191,14 +191,11 @@
                     <div class="column">
                         <div class="folder-tree">
                             <span class="folder">📁 supporting_scripts/</span><br>
-                            ├── <span class="folder">📁 Model_Config/</span> <span class="comment"># Configuration generation</span><br>
+                            ├── setup_venv.sh <span class="comment"># Environment setup</span><br>
+                            ├── requirements.txt <span class="comment"># Dependencies</span><br>
+                            ├── <span class="folder">📁 Model_Config/</span> <span class="comment"># Configuration</span><br>
                             │   ├── model_config_template.py<br>
                             │   └── <span class="folder">📁 config_support_lib/</span><br>
-                            │       ├── Gen_Master_file.py<br>
-                            │       ├── Gen_Config_file.py<br>
-                            │       ├── Gen_BGQmodule_file.py<br>
-                            │       ├── Gen_SS_Driver.py<br>
-                            │       └── ...<br>
                             ├── <span class="folder">📁 Read_Outputs/</span> <span class="comment"># Post-processing</span><br>
                             │   ├── reading_plotting_results_template.py<br>
                             │   └── <span class="folder">📁 hdf5_support_lib/</span><br>
@@ -208,6 +205,9 @@
                             └── <span class="folder">📁 Calibration/</span> <span class="comment"># Optimization</span><br>
                                 ├── calibration_config_template.py<br>
                                 └── <span class="folder">📁 calibration_lib/</span>
+                        </div>
+                        <div class="highlight-box" style="margin-top: 15px;">
+                            <strong>Quick Start:</strong> <code>./setup_venv.sh</code>
                         </div>
                     </div>
                     <div class="column">
@@ -740,45 +740,47 @@ transport_flux = results[<span class="string">'d_transport'</span>]
         <!-- Slide 15: Dependencies -->
         <div class="slide" data-slide="15">
             <div class="slide-header">
-                <h2>Python Dependencies</h2>
+                <h2>Python Environment Setup</h2>
             </div>
             <div class="slide-content">
                 <div class="two-column" style="gap: 40px;">
                     <div class="column">
                         <div class="card teal">
-                            <h3>Core Requirements</h3>
+                            <h3>Automated Setup (Recommended)</h3>
                             <pre style="font-size: 0.85rem; padding: 12px;">
-<span class="comment"># Install with pip</span>
-pip install numpy pandas h5py
-pip install matplotlib
-pip install geopandas shapely
-pip install imageio   <span class="comment"># for GIF creation</span>
+<span class="comment"># Navigate to scripts folder</span>
+<span class="keyword">cd</span> supporting_scripts
+
+<span class="comment"># Run setup script</span>
+./setup_venv.sh
+
+<span class="comment"># Activate environment</span>
+<span class="keyword">source</span> .venv/bin/activate
                             </pre>
                         </div>
                         <div class="card primary">
-                            <h3>Optional (ML/Calibration)</h3>
+                            <h3>Alternative: Conda</h3>
                             <pre style="font-size: 0.85rem; padding: 12px;">
-pip install scikit-learn
-pip install xgboost
-pip install SALib    <span class="comment"># sensitivity analysis</span>
+conda create -n openwq python=3.10
+conda activate openwq
+pip install -r requirements.txt
                             </pre>
                         </div>
                     </div>
                     <div class="column">
                         <div class="card secondary">
-                            <h3>Version Recommendations</h3>
+                            <h3>Included Dependencies</h3>
                             <table style="font-size: 0.9rem;">
-                                <tr><td>Python</td><td>≥ 3.8</td></tr>
-                                <tr><td>numpy</td><td>≥ 1.20</td></tr>
-                                <tr><td>pandas</td><td>≥ 1.3</td></tr>
-                                <tr><td>h5py</td><td>≥ 3.0</td></tr>
-                                <tr><td>geopandas</td><td>≥ 0.10</td></tr>
-                                <tr><td>matplotlib</td><td>≥ 3.4</td></tr>
+                                <tr><td>numpy, pandas, scipy</td><td>Core</td></tr>
+                                <tr><td>h5py, netCDF4</td><td>File I/O</td></tr>
+                                <tr><td>geopandas, shapely</td><td>Geospatial</td></tr>
+                                <tr><td>matplotlib, tqdm</td><td>Plotting</td></tr>
+                                <tr><td>SALib</td><td>Sensitivity</td></tr>
                             </table>
                         </div>
                         <div class="highlight-box success" style="margin-top: 15px;">
-                            <strong>Conda environment:</strong><br>
-                            <code style="font-size: 0.85rem;">conda env create -f environment.yml</code>
+                            <strong>All dependencies in:</strong><br>
+                            <code style="font-size: 0.85rem;">requirements.txt</code>
                         </div>
                     </div>
                 </div>

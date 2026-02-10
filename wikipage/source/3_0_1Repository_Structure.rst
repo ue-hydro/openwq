@@ -94,7 +94,21 @@ The C++ source code organized by module:
 
 **supporting_scripts/**
 
-Python tools organized into three main categories:
+Python tools organized into three main categories. All scripts require Python 3.8+ with dependencies.
+
+**Environment Setup**::
+
+    cd supporting_scripts
+    ./setup_venv.sh           # Create virtual environment
+    source .venv/bin/activate # Activate environment
+
+Or with conda::
+
+    conda create -n openwq python=3.10
+    conda activate openwq
+    pip install -r requirements.txt
+
+**Available Tools:**
 
 1. **Model_Config/**: Generate all JSON configuration files from a single Python template
 
