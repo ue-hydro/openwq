@@ -12,7 +12,7 @@ The configuration scripts are located at::
 
 Key files:
 
-* ``template_model_config.py`` - Main template script (edit this file)
+* ``model_config_template.py`` - Main template script (edit this file)
 * ``config_support_lib/Gen_Input_Driver.py`` - Core generation engine
 * ``config_support_lib/Gen_Master_file.py`` - Master JSON generator
 * ``config_support_lib/Gen_TSmodule_file.py`` - Transport Sediments module JSON generator
@@ -27,7 +27,7 @@ Quick start
 
 1. Copy the template script::
 
-    cp template_model_config.py my_project_config.py
+    cp model_config_template.py my_project_config.py
 
 2. Edit the configuration parameters in ``my_project_config.py``
 

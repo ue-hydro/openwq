@@ -38,15 +38,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import calibration modules
-from calibration_lib.parameter_handler import ParameterHandler
-from calibration_lib.model_runner import ModelRunner, HPCJobGenerator
-from calibration_lib.objective_functions import ObjectiveFunction
-from calibration_lib.checkpoint import CheckpointManager
-from calibration_lib.optimization.dds import DDS, DDSResult, RandomSearch
-from calibration_lib.sensitivity.morris_screening import MorrisScreening
-from calibration_lib.sensitivity.sobol_analysis import SobolAnalysis
-from calibration_lib.postprocessing.results_analysis import ResultsAnalyzer
+# Import calibration modules (relative imports since we're inside calibration_lib)
+from .parameter_handler import ParameterHandler
+from .model_runner import ModelRunner, HPCJobGenerator
+from .objective_functions import ObjectiveFunction
+from .checkpoint import CheckpointManager
+from .optimization.dds import DDS, DDSResult, RandomSearch
+from .sensitivity.morris_screening import MorrisScreening
+from .sensitivity.sobol_analysis import SobolAnalysis
+from .postprocessing.results_analysis import ResultsAnalyzer
 
 
 def run_calibration(

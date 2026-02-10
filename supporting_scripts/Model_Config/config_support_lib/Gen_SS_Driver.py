@@ -962,9 +962,7 @@ Values below are typical **annual export coefficients** (runoff loads) normalize
 - Export‑coefficient modeling for dissolved nutrients in the Three Gorges Reservoir Region suggests that **dissolved inorganic N (primarily NO3–N) and PO4–P from dryland and paddy agriculture dominate dissolved loads**, consistent with the upper ranges used here for row‑crop NO3–N and PO4–P   (Wang et al., 2015).  
 
 These species‑level coefficients are intended as **order‑of‑magnitude planning values**. For detailed studies, replace them with region‑specific ratios of NO3–N, NO2–N, NH4–N and PO4–P to TN and TP derived from local monitoring or calibrated models.
- 
-_These search results were found and analyzed using Consensus, an AI-powered search engine for research. Try it at https://consensus.app. © 2026 Consensus NLP, Inc. Personal, non-commercial use only; redistribution requires copyright holders’ consent._
- 
+
 ## References
  
 Hopkins, A., Harmel, R., Kleinman, P., Sahoo, D., & Ippolito, J. (2025). Nutrient Runoff From Agricultural Lands in North American Ecoregions. *JAWRA Journal of the American Water Resources Association*, 61. https://doi.org/10.1111/1752-1688.70004

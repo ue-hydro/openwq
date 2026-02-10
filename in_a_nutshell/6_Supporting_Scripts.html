@@ -191,22 +191,23 @@
                     <div class="column">
                         <div class="folder-tree">
                             <span class="folder">📁 supporting_scripts/</span><br>
-                            ├── <span class="folder">📁 Model_Config/</span> <span class="comment"># Configuration generation</span><br>
-                            │   ├── template_model_config.py<br>
+                            ├── setup_venv.sh <span class="comment"># Environment setup</span><br>
+                            ├── requirements.txt <span class="comment"># Dependencies</span><br>
+                            ├── <span class="folder">📁 Model_Config/</span> <span class="comment"># Configuration</span><br>
+                            │   ├── model_config_template.py<br>
                             │   └── <span class="folder">📁 config_support_lib/</span><br>
-                            │       ├── Gen_Master_file.py<br>
-                            │       ├── Gen_Config_file.py<br>
-                            │       ├── Gen_BGQmodule_file.py<br>
-                            │       ├── Gen_SS_Driver.py<br>
-                            │       └── ...<br>
                             ├── <span class="folder">📁 Read_Outputs/</span> <span class="comment"># Post-processing</span><br>
-                            │   ├── template_reading_plotting.py<br>
+                            │   ├── reading_plotting_results_template.py<br>
                             │   └── <span class="folder">📁 hdf5_support_lib/</span><br>
                             │       ├── Read_h5_driver.py<br>
                             │       ├── Plot_h5_driver.py<br>
                             │       └── Map_h5_driver.py<br>
                             └── <span class="folder">📁 Calibration/</span> <span class="comment"># Optimization</span><br>
-                                └── calibration_driver.py
+                                ├── calibration_config_template.py<br>
+                                └── <span class="folder">📁 calibration_lib/</span>
+                        </div>
+                        <div class="highlight-box" style="margin-top: 15px;">
+                            <strong>Quick Start:</strong> <code>./setup_venv.sh</code>
                         </div>
                     </div>
                     <div class="column">
@@ -241,7 +242,7 @@
         <!-- Slide 4: Configuration Template -->
         <div class="slide" data-slide="4">
             <div class="slide-header">
-                <h2>Configuration Template (template_model_config.py)</h2>
+                <h2>Configuration Template (model_config_template.py)</h2>
             </div>
             <div class="slide-content">
                 <p style="font-size: 1.1rem; margin-bottom: 20px;">
@@ -288,7 +289,7 @@ td_module_dispersion_xyz = [<span class="keyword">0.3</span>, <span class="keywo
                         </div>
                         <div class="highlight-box success">
                             <strong>Run once:</strong><br>
-                            <code style="font-size: 0.9rem;">python template_model_config.py</code><br>
+                            <code style="font-size: 0.9rem;">python model_config_template.py</code><br>
                             All JSON files are auto-generated!
                         </div>
                     </div>
@@ -679,7 +680,7 @@ h5_mplib.Map_h5_driver(
                     </div>
                 </div>
                 <div class="highlight-box info" style="margin-top: 15px;">
-                    <strong>Template available:</strong> <code>supporting_scripts/Read_Outputs/template_reading_plotting_results.py</code>
+                    <strong>Template available:</strong> <code>supporting_scripts/Read_Outputs/reading_plotting_results_template.py</code>
                 </div>
             </div>
             <div class="slide-footer">
@@ -739,45 +740,47 @@ transport_flux = results[<span class="string">'d_transport'</span>]
         <!-- Slide 15: Dependencies -->
         <div class="slide" data-slide="15">
             <div class="slide-header">
-                <h2>Python Dependencies</h2>
+                <h2>Python Environment Setup</h2>
             </div>
             <div class="slide-content">
                 <div class="two-column" style="gap: 40px;">
                     <div class="column">
                         <div class="card teal">
-                            <h3>Core Requirements</h3>
+                            <h3>Automated Setup (Recommended)</h3>
                             <pre style="font-size: 0.85rem; padding: 12px;">
-<span class="comment"># Install with pip</span>
-pip install numpy pandas h5py
-pip install matplotlib
-pip install geopandas shapely
-pip install imageio   <span class="comment"># for GIF creation</span>
+<span class="comment"># Navigate to scripts folder</span>
+<span class="keyword">cd</span> supporting_scripts
+
+<span class="comment"># Run setup script</span>
+./setup_venv.sh
+
+<span class="comment"># Activate environment</span>
+<span class="keyword">source</span> .venv/bin/activate
                             </pre>
                         </div>
                         <div class="card primary">
-                            <h3>Optional (ML/Calibration)</h3>
+                            <h3>Alternative: Conda</h3>
                             <pre style="font-size: 0.85rem; padding: 12px;">
-pip install scikit-learn
-pip install xgboost
-pip install SALib    <span class="comment"># sensitivity analysis</span>
+conda create -n openwq python=3.10
+conda activate openwq
+pip install -r requirements.txt
                             </pre>
                         </div>
                     </div>
                     <div class="column">
                         <div class="card secondary">
-                            <h3>Version Recommendations</h3>
+                            <h3>Included Dependencies</h3>
                             <table style="font-size: 0.9rem;">
-                                <tr><td>Python</td><td>≥ 3.8</td></tr>
-                                <tr><td>numpy</td><td>≥ 1.20</td></tr>
-                                <tr><td>pandas</td><td>≥ 1.3</td></tr>
-                                <tr><td>h5py</td><td>≥ 3.0</td></tr>
-                                <tr><td>geopandas</td><td>≥ 0.10</td></tr>
-                                <tr><td>matplotlib</td><td>≥ 3.4</td></tr>
+                                <tr><td>numpy, pandas, scipy</td><td>Core</td></tr>
+                                <tr><td>h5py, netCDF4</td><td>File I/O</td></tr>
+                                <tr><td>geopandas, shapely</td><td>Geospatial</td></tr>
+                                <tr><td>matplotlib, tqdm</td><td>Plotting</td></tr>
+                                <tr><td>SALib</td><td>Sensitivity</td></tr>
                             </table>
                         </div>
                         <div class="highlight-box success" style="margin-top: 15px;">
-                            <strong>Conda environment:</strong><br>
-                            <code style="font-size: 0.85rem;">conda env create -f environment.yml</code>
+                            <strong>All dependencies in:</strong><br>
+                            <code style="font-size: 0.85rem;">requirements.txt</code>
                         </div>
                     </div>
                 </div>
@@ -822,7 +825,7 @@ pip install SALib    <span class="comment"># sensitivity analysis</span>
                     </div>
                 </div>
                 <div class="highlight-box" style="margin-top: 20px;">
-                    <strong>Quick Start:</strong> Copy <code>template_reading_plotting_results.py</code>,
+                    <strong>Quick Start:</strong> Copy <code>reading_plotting_results_template.py</code>,
                     update paths, and run — all plots and maps generated automatically!
                 </div>
             </div>
@@ -841,7 +844,7 @@ pip install SALib    <span class="comment"># sensitivity analysis</span>
                 <div class="three-column">
                     <div class="card teal" style="text-align: center;">
                         <h3 style="justify-content: center;">🔧 Configure</h3>
-                        <p><code>template_model_config.py</code><br>→ All JSON files auto-generated</p>
+                        <p><code>model_config_template.py</code><br>→ All JSON files auto-generated</p>
                     </div>
                     <div class="card primary" style="text-align: center;">
                         <h3 style="justify-content: center;">📊 Read & Plot</h3>

@@ -23,14 +23,14 @@ This page describes the organization of the OpenWQ GitHub repository to help you
     │
     ├── supporting_scripts/      # Python tools for configuration and analysis
     │   ├── Model_Config/        # Configuration file generators
-    │   │   ├── template_model_config.py    # Main configuration template
+    │   │   ├── model_config_template.py    # Main configuration template
     │   │   └── config_support_lib/         # Generator libraries
     │   ├── Read_Outputs/        # Post-processing and visualization
-    │   │   ├── template_reading_plotting_results.py
+    │   │   ├── reading_plotting_results_template.py
     │   │   └── hdf5_support_lib/           # HDF5 reader, plotter, mapper
     │   └── Calibration/         # Calibration and sensitivity analysis
-    │       ├── calibration_driver.py       # Main calibration script
-    │       └── calibration_lib/            # Optimization algorithms
+    │       ├── calibration_config_template.py  # Calibration configuration template
+    │       └── calibration_lib/            # Optimization algorithms and drivers
     │
     ├── openwq_in_a_nutshell/    # Interactive HTML presentations
     │   ├── 1_OpenWQ_Overview.html
@@ -94,11 +94,25 @@ The C++ source code organized by module:
 
 **supporting_scripts/**
 
-Python tools organized into three main categories:
+Python tools organized into three main categories. All scripts require Python 3.8+ with dependencies.
+
+**Environment Setup**::
+
+    cd supporting_scripts
+    ./setup_venv.sh           # Create virtual environment
+    source .venv/bin/activate # Activate environment
+
+Or with conda::
+
+    conda create -n openwq python=3.10
+    conda activate openwq
+    pip install -r requirements.txt
+
+**Available Tools:**
 
 1. **Model_Config/**: Generate all JSON configuration files from a single Python template
 
-   - ``template_model_config.py``: Edit this file to configure your model
+   - ``model_config_template.py``: Edit this file to configure your model
    - Run it to auto-generate all required JSON files
 
 2. **Read_Outputs/**: Post-processing and visualization
