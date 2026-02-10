@@ -44,7 +44,7 @@ import argparse
 # Add calibration library to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from calibration_driver import run_calibration, run_sensitivity_analysis
+from calibration_lib.calibration_driver import run_calibration, run_sensitivity_analysis
 from calibration_lib.parameter_defaults import (
     BGC_PARAMETERS, PHREEQC_PARAMETERS, SORPTION_PARAMETERS,
     SEDIMENT_PARAMETERS, TRANSPORT_PARAMETERS, LATERAL_EXCHANGE_PARAMETERS,
@@ -53,15 +53,15 @@ from calibration_lib.parameter_defaults import (
 
 # GRQA extraction tools (optional - only needed if observation_data_source = "grqa")
 try:
-    from observation_data.grqa_extract_stations import GRQACalibrationExtractor
-    from observation_data.prepare_calibration_observations import CalibrationObservationConverter
+    from calibration_lib.observation_data.grqa_extract_stations import GRQACalibrationExtractor
+    from calibration_lib.observation_data.prepare_calibration_observations import CalibrationObservationConverter
     GRQA_AVAILABLE = True
 except ImportError:
     GRQA_AVAILABLE = False
 
 # Copernicus workflow tools (optional - only needed if observation_data_source = "copernicus")
 try:
-    from observation_data.copernicus_observations import CopernicusObservationGenerator
+    from calibration_lib.observation_data.copernicus_observations import CopernicusObservationGenerator
     COPERNICUS_AVAILABLE = True
 except ImportError:
     COPERNICUS_AVAILABLE = False
@@ -72,7 +72,7 @@ except ImportError:
 # =============================================================================
 
 # Path to the directory containing your model configuration
-# This should be the directory containing template_model_config.py
+# This should be the directory containing model_config_template.py
 base_model_config_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/supporting_scripts/Model_Config"
 
 # Working directory for calibration runs

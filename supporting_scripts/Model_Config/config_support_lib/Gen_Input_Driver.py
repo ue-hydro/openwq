@@ -251,7 +251,7 @@ def Gen_Input_Driver(
         # Optional parameters (MUST be at the end)
         ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class: Optional[Dict[int, Dict[str, float]]] = None,
 
-        # Accept extra kwargs so template_model_config.py can pass locals() cleanly
+        # Accept extra kwargs so model_config_template.py can pass locals() cleanly
         **kwargs
 
 ) -> None:
