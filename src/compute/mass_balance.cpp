@@ -15,7 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "compute/headerfile_compute.hpp"
-#include "output/OpenWQ_output.hpp"
+#include "output/headerfile_OUT.hpp"
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -297,41 +297,50 @@ void OpenWQ_compute::MassBalance_Report(
 
         oss.str(""); oss.clear();
         oss << "<OpenWQ>   Initial mass:     " << OpenWQ_vars.mass_balance.initial_mass[chemi] << " g";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, oss.str(), true, true);
+        msg_string = oss.str();
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
         oss.str(""); oss.clear();
         oss << "<OpenWQ>   Cum. sources:     +" << OpenWQ_vars.mass_balance.cumulative_sources[chemi] << " g";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, oss.str(), true, true);
+        msg_string = oss.str();
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
         oss.str(""); oss.clear();
         oss << "<OpenWQ>   Cum. sinks:       -" << OpenWQ_vars.mass_balance.cumulative_sinks[chemi] << " g";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, oss.str(), true, true);
+        msg_string = oss.str();
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
         oss.str(""); oss.clear();
         oss << "<OpenWQ>   Cum. out-flux:    -" << OpenWQ_vars.mass_balance.cumulative_out_flux[chemi] << " g";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, oss.str(), true, true);
+        msg_string = oss.str();
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
         oss.str(""); oss.clear();
         oss << "<OpenWQ>   Cum. neg. corr:   -" << OpenWQ_vars.mass_balance.cumulative_negative_correction[chemi] << " g";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, oss.str(), true, true);
+        msg_string = oss.str();
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
         oss.str(""); oss.clear();
         oss << "<OpenWQ>   Current dissolved: " << OpenWQ_vars.mass_balance.total_dissolved_mass[chemi] << " g";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, oss.str(), true, true);
+        msg_string = oss.str();
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
         oss.str(""); oss.clear();
         oss << "<OpenWQ>   Current sorbed:    " << OpenWQ_vars.mass_balance.total_sorbed_mass[chemi] << " g";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, oss.str(), true, true);
+        msg_string = oss.str();
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
         oss.str(""); oss.clear();
         oss << "<OpenWQ>   Current total:     " << OpenWQ_vars.mass_balance.total_mass[chemi] << " g";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, oss.str(), true, true);
+        msg_string = oss.str();
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
         oss.str(""); oss.clear();
         oss << std::fixed << std::setprecision(6);
         oss << "<OpenWQ>   MASS BALANCE ERROR: " << OpenWQ_vars.mass_balance.mass_balance_error[chemi] << " g";
         oss << " (" << std::setprecision(4) << OpenWQ_vars.mass_balance.mass_balance_error_pct[chemi] << "%)";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, oss.str(), true, true);
+        msg_string = oss.str();
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
         // Warning if error is significant
         if (std::fabs(OpenWQ_vars.mass_balance.mass_balance_error_pct[chemi]) > 1.0) {

@@ -141,7 +141,7 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_PHREEQC(
         for (unsigned int si = 0; si < OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list.size(); si++){
             // Case-insensitive comparison for species names
             if (iequals(OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list[si], mobile_name)){
-                OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.push_back((int)si);
+                OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.push_back(si);
                 found = true;
                 msg_string =
                     "<OpenWQ> PHREEQC: Mapped mobile species '" + mobile_name
@@ -163,5 +163,10 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_PHREEQC(
         }
 
     }
+
+    // IMPORTANT: Reset the temporary PhreeqcRM instance to avoid double-free issues
+    // when phreeqc_setup creates the real simulation instance with correct nxyz.
+    // The component info is already saved in chem_species_list and mobile_species.
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm.reset();
 
 }

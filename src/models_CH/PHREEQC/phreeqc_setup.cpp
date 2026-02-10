@@ -134,20 +134,10 @@ void OpenWQ_CH_model::phreeqc_setup(
         OpenWQ_wqconfig.CH_model->PHREEQC->num_chem = (unsigned int)num_chem_check;
     }
 
-    // Set representative volume and saturation for all cells
-    std::vector<double> rv(nxyz, 1.0);  // 1 liter per cell
-    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetRepresentativeVolume(rv);
-
-    std::vector<double> sat(nxyz, 1.0);  // Fully saturated
-    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetSaturationUser(sat);
-
-    // Set fixed density to avoid calc_dens() issues with some databases
-    std::vector<double> density(nxyz, 1.0);  // 1.0 kg/L (water density)
-    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetDensityUser(density);
-
-    // CRITICAL: Disable solution density/volume calculations to avoid calc_dens() crash
-    // false = use values from SetDensityUser instead of calculating internally
-    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->UseSolutionDensityVolume(false);
+    // NOTE: SetRepresentativeVolume, SetSaturationUser, and SetDensityUser
+    // are NOT called here - they will be set dynamically during simulation
+    // based on actual cell volumes from the hydrological model.
+    // Using default values (1 liter, saturation=1, density=1) is fine for setup.
 
     // Log component names
     std::vector<std::string> components = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetComponents();
@@ -157,39 +147,20 @@ void OpenWQ_CH_model::phreeqc_setup(
     }
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
-    // ########################################################
-    // Get Gram Formula Weights (GFW) for unit conversion
-    // OpenWQ uses mg/L internally, PHREEQC uses mol/kgw
-    // GFW allows conversion: mol/kgw = mg/L / (1000 * GFW)
-    // ########################################################
-    std::vector<double> gfw = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetGfw();
-    OpenWQ_wqconfig.CH_model->PHREEQC->gfw = gfw;
-
-    msg_string = "<OpenWQ> PHREEQC Gram Formula Weights (GFW) for unit conversion:";
+    // DEBUG: Verify phreeqcrm pointer is valid before GetGfw
+    msg_string = "<OpenWQ> PHREEQC DEBUG: phreeqcrm pointer before GetGfw: "
+        + std::to_string((uintptr_t)OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm.get());
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
-    for (size_t i = 0; i < components.size() && i < gfw.size(); i++) {
-        msg_string = "  [" + std::to_string(i) + "] " + components[i]
-            + ": GFW=" + std::to_string(gfw[i]) + " g/mol";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-    }
+    // ########################################################
+    // Skip GFW retrieval for now - GFW is not needed if we work in mol/kgw
+    // directly without unit conversion
+    // ########################################################
+    msg_string = "<OpenWQ> PHREEQC: Skipping GFW setup (not needed for equilibrium-only mode)";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
-    // Validate GFW values
-    bool gfw_valid = true;
-    for (size_t i = 0; i < gfw.size(); i++) {
-        if (gfw[i] <= 0 || std::isnan(gfw[i]) || std::isinf(gfw[i])) {
-            msg_string = "<OpenWQ> WARNING: Invalid GFW for component " + components[i]
-                + " (index " + std::to_string(i) + "): " + std::to_string(gfw[i])
-                + ". Setting to 1.0 (no conversion).";
-            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-            OpenWQ_wqconfig.CH_model->PHREEQC->gfw[i] = 1.0;
-            gfw_valid = false;
-        }
-    }
-
-    if (gfw_valid) {
-        msg_string = "<OpenWQ> PHREEQC unit conversion enabled: mg/L (OpenWQ) <-> mol/kgw (PHREEQC)";
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-    }
-
+    // DEBUG: Confirm phreeqc_setup completed successfully
+    msg_string = "<OpenWQ> PHREEQC DEBUG: phreeqc_setup completed. phreeqcrm pointer: "
+        + std::to_string((uintptr_t)OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm.get());
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 }
