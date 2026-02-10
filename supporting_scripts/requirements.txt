@@ -19,6 +19,7 @@ pyproj>=3.0.0
 
 # Plotting
 matplotlib>=3.4.0
+tqdm>=4.60.0
 
 # Web requests (for GRQA download)
 requests>=2.25.0
