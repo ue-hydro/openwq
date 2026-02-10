@@ -148,8 +148,6 @@ csv_reach_id_column = "seg_id"  # Column in shapefile containing reach IDs
 
 # --- Option B: Extract from GRQA database (used when observation_data_source = "grqa") ---
 # Automatically downloads and processes data from GRQA (https://zenodo.org/records/15335450)
-use_grqa = False  # Deprecated: use observation_data_source = "grqa" instead
-
 # GRQA Configuration (only used if observation_data_source = "grqa")
 grqa_config = {
     # -------------------------------------------------------------------------
@@ -964,7 +962,6 @@ if __name__ == "__main__":
 
         # Observation data settings
         "observation_data_source": observation_data_source,
-        "use_grqa": use_grqa,  # Deprecated, kept for backwards compatibility
         "grqa_config": grqa_config,
         "csv_river_network_shapefile": csv_river_network_shapefile,
         "csv_reach_id_column": csv_reach_id_column,
@@ -974,12 +971,7 @@ if __name__ == "__main__":
     # Observation Data Preparation (based on observation_data_source)
     # ==========================================================================
 
-    # Determine effective source (handle backwards compatibility with use_grqa)
-    effective_source = observation_data_source
-    if use_grqa and observation_data_source == "csv":
-        effective_source = "grqa"  # Backwards compatibility
-
-    if effective_source == "grqa" or args.extract_grqa_only:
+    if observation_data_source == "grqa" or args.extract_grqa_only:
         print("Preparing observation data from GRQA database...")
         try:
             obs_path = prepare_grqa_observations(config, grqa_config)
@@ -1000,7 +992,7 @@ if __name__ == "__main__":
             print("\nTo run calibration, use: python your_config.py")
             sys.exit(0)
 
-    elif effective_source == "csv":
+    elif observation_data_source == "csv":
         print(f"Using pre-formatted observation file: {observation_data_path}")
 
         # Generate calibration stations shapefile from CSV
@@ -1023,7 +1015,7 @@ if __name__ == "__main__":
                 print("Calibration will continue without the shapefile.")
 
     else:
-        print(f"WARNING: Unknown observation_data_source '{effective_source}'. "
+        print(f"WARNING: Unknown observation_data_source '{observation_data_source}'. "
               f"Valid options: 'csv', 'grqa'")
         print(f"Falling back to: {observation_data_path}")
 
