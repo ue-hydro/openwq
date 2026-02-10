@@ -19,10 +19,45 @@ OpenWQ Calibration Configuration Template
 =========================================
 
 Copy this file to your working directory and modify for your calibration setup.
-Run: python your_calibration_config.py [--resume]
+
+USAGE:
+  cp calibration_config_template.py my_calibration.py
+  # Edit my_calibration.py with your settings
+  python my_calibration.py [options]
+
+RUN MODES:
+  The framework supports three modes of operation:
+
+  1. SENSITIVITY ANALYSIS ONLY (--sensitivity-only flag)
+     python my_calibration.py --sensitivity-only
+     - Runs Morris or Sobol sensitivity analysis
+     - Identifies which parameters are most influential
+     - Does NOT run optimization
+     - Useful for understanding your model before calibrating
+
+  2. CALIBRATION ONLY (default, with run_sensitivity_first = False)
+     # Set in config: run_sensitivity_first = False
+     python my_calibration.py
+     - Skips sensitivity analysis
+     - Runs DDS optimization directly on all specified parameters
+     - Useful when you already know which parameters matter
+
+  3. BOTH: SENSITIVITY → CALIBRATION (with run_sensitivity_first = True)
+     # Set in config: run_sensitivity_first = True
+     python my_calibration.py
+     - First runs sensitivity analysis
+     - Automatically filters to only influential parameters
+     - Then runs DDS calibration on the reduced parameter set
+     - Recommended workflow for 10+ parameters
+
+COMMAND-LINE OPTIONS:
+  --resume            Resume calibration from checkpoint
+  --sensitivity-only  Run only sensitivity analysis (no calibration)
+  --dry-run           Validate configuration without running
+  --extract-grqa-only Extract GRQA observation data only
 
 SECTIONS:
-  1. Path Configuration
+  1. Path Configuration & Observation Data
   2. Container Runtime Configuration
   3. Calibration Parameters (with scientifically-grounded min/max bounds)
   4. Calibration Settings
