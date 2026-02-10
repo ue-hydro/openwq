@@ -600,42 +600,33 @@
             </div>
             <div class="slide-content">
                 <p style="font-size: 1.1rem; margin-bottom: 20px;">
-                    Three flexible options for preparing observation data:
+                    Two options for preparing observation data:
                 </p>
-                <div class="three-column" style="gap: 20px;">
+                <div class="two-column" style="gap: 40px;">
                     <div class="card primary">
                         <h3>📄 Option 1: Manual CSV</h3>
-                        <p style="font-size: 0.9rem; margin-bottom: 10px;"><code>observation_data_source = "csv"</code></p>
+                        <p style="font-size: 0.95rem; margin-bottom: 12px;"><code>observation_data_source = "csv"</code></p>
                         <ul style="margin-left: 15px;">
-                            <li style="font-size: 0.85rem;">Prepare data manually</li>
-                            <li style="font-size: 0.85rem;">Full control over format</li>
-                            <li style="font-size: 0.85rem;">Any data source</li>
+                            <li style="font-size: 0.9rem;">Prepare data manually</li>
+                            <li style="font-size: 0.9rem;">Full control over format</li>
+                            <li style="font-size: 0.9rem;">Use any data source (USGS, EPA, local monitoring, etc.)</li>
                         </ul>
-                        <p style="margin-top: 10px; font-size: 0.8rem; color: var(--text-light);">Best for: Custom datasets, local monitoring</p>
+                        <p style="margin-top: 12px; font-size: 0.85rem; color: var(--text-light);">Best for: Custom datasets, local monitoring networks</p>
                     </div>
                     <div class="card rose">
                         <h3>🌍 Option 2: GRQA Database</h3>
-                        <p style="font-size: 0.9rem; margin-bottom: 10px;"><code>observation_data_source = "grqa"</code></p>
+                        <p style="font-size: 0.95rem; margin-bottom: 12px;"><code>observation_data_source = "grqa"</code></p>
                         <ul style="margin-left: 15px;">
-                            <li style="font-size: 0.85rem;">43 water quality parameters</li>
-                            <li style="font-size: 0.85rem;">Global coverage</li>
-                            <li style="font-size: 0.85rem;">Auto station-reach matching</li>
+                            <li style="font-size: 0.9rem;">43 water quality parameters</li>
+                            <li style="font-size: 0.9rem;">~5 million observations worldwide</li>
+                            <li style="font-size: 0.9rem;">Auto station-to-reach matching</li>
+                            <li style="font-size: 0.9rem;">Local data or Zenodo download</li>
                         </ul>
-                        <p style="margin-top: 10px; font-size: 0.8rem; color: var(--text-light);">Best for: Large-scale studies, data-rich regions</p>
-                    </div>
-                    <div class="card secondary">
-                        <h3>🛰️ Option 3: Copernicus</h3>
-                        <p style="font-size: 0.9rem; margin-bottom: 10px;"><code>observation_data_source = "copernicus"</code></p>
-                        <ul style="margin-left: 15px;">
-                            <li style="font-size: 0.85rem;">Land cover-based loads</li>
-                            <li style="font-size: 0.85rem;">Export coefficients</li>
-                            <li style="font-size: 0.85rem;">Synthetic observations</li>
-                        </ul>
-                        <p style="margin-top: 10px; font-size: 0.8rem; color: var(--text-light);">Best for: Data-sparse regions, testing</p>
+                        <p style="margin-top: 12px; font-size: 0.85rem; color: var(--text-light);">Best for: Large-scale studies, data-rich regions</p>
                     </div>
                 </div>
-                <div class="highlight-box info" style="margin-top: 20px;">
-                    <strong>Local Data Support:</strong> Both GRQA and Copernicus support pointing to local data folders if already downloaded
+                <div class="highlight-box info" style="margin-top: 25px;">
+                    <strong>Local Data Support:</strong> GRQA supports pointing to local data folders if already downloaded from Zenodo
                 </div>
             </div>
             <div class="slide-footer">
@@ -701,58 +692,8 @@ grqa_config = {
             </div>
         </div>
 
-        <!-- Slide 14: Copernicus Workflow -->
+        <!-- Slide 14: CSV Format -->
         <div class="slide" data-slide="14">
-            <div class="slide-header">
-                <h2>Copernicus Land Cover Workflow</h2>
-            </div>
-            <div class="slide-content">
-                <div class="two-column" style="gap: 35px;">
-                    <div class="column">
-                        <p style="font-size: 1.05rem; margin-bottom: 15px;">
-                            Generate synthetic observations using land cover data and export coefficients:
-                        </p>
-                        <div class="card secondary">
-                            <h3>Export Coefficients (kg/ha/yr)</h3>
-                            <table style="font-size: 0.85rem;">
-                                <tr><th>Land Cover</th><th>TN</th><th>TP</th><th>TSS</th></tr>
-                                <tr><td>Cropland</td><td>25.0</td><td>2.0</td><td>500</td></tr>
-                                <tr><td>Forest</td><td>2.0</td><td>0.2</td><td>50</td></tr>
-                                <tr><td>Grassland</td><td>10.0</td><td>0.8</td><td>150</td></tr>
-                                <tr><td>Urban</td><td>15.0</td><td>1.5</td><td>300</td></tr>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="column">
-                        <pre style="font-size: 0.72rem;">
-copernicus_config = {
-    <span class="comment"># Single file or directory</span>
-    <span class="string">"land_cover_path"</span>: <span class="string">"/data/LC.tif"</span>,
-    <span class="string">"climate_data_path"</span>: <span class="string">"/data/era5/"</span>,
-    <span class="string">"temporal_resolution"</span>: <span class="string">"monthly"</span>,
-    <span class="string">"target_species"</span>: [<span class="string">"TN"</span>, <span class="string">"TP"</span>],
-    <span class="string">"export_coefficients"</span>: {
-        <span class="keyword">10</span>: {<span class="string">"TN"</span>: <span class="keyword">25.0</span>},  <span class="comment"># Cropland</span>
-        <span class="keyword">50</span>: {<span class="string">"TN"</span>: <span class="keyword">2.0</span>}   <span class="comment"># Forest</span>
-    }
-}
-                        </pre>
-                        <div class="highlight-box warning" style="margin-top: 12px;">
-                            <strong>File formats:</strong><br>
-                            Land cover: GeoTIFF, NetCDF<br>
-                            Climate: NetCDF (optional)
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
-            </div>
-        </div>
-
-        <!-- Slide 15: CSV Format -->
-        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>Observation Data CSV Format</h2>
             </div>
@@ -789,12 +730,12 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">14</div>
             </div>
         </div>
 
-        <!-- Slide 16: Priority Parameters -->
-        <div class="slide" data-slide="16">
+        <!-- Slide 15: Priority Parameters -->
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>Priority-Based Calibration</h2>
             </div>
@@ -839,12 +780,12 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
-        <!-- Slide 17: Running Calibration -->
-        <div class="slide" data-slide="17">
+        <!-- Slide 16: Running Calibration -->
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Running Calibration</h2>
             </div>
@@ -890,12 +831,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
-        <!-- Slide 18: Output Files -->
-        <div class="slide" data-slide="18">
+        <!-- Slide 17: Output Files -->
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Calibration Output</h2>
             </div>
@@ -932,12 +873,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">18</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
-        <!-- Slide 19: Best Practices -->
-        <div class="slide" data-slide="19">
+        <!-- Slide 18: Best Practices -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Best Practices</h2>
             </div>
@@ -976,12 +917,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">19</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 20: Summary -->
-        <div class="slide" data-slide="20">
+        <!-- Slide 19: Summary -->
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1007,12 +948,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">20</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
-        <!-- Slide 21: Thank You -->
-        <div class="slide title-slide" data-slide="21">
+        <!-- Slide 20: Thank You -->
+        <div class="slide title-slide" data-slide="20">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">
@@ -1020,7 +961,7 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
                     <strong>Calibration scripts:</strong> supporting_scripts/Calibration/
                 </p>
                 <p style="font-size: 1rem; color: #718096; margin-top: 0.5rem;">
-                    Observation data: CSV | GRQA Database | Copernicus Land Cover
+                    Observation data: CSV | GRQA Database
                 </p>
             </div>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">

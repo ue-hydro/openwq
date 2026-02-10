@@ -59,12 +59,6 @@ try:
 except ImportError:
     GRQA_AVAILABLE = False
 
-# Copernicus workflow tools (optional - only needed if observation_data_source = "copernicus")
-try:
-    from calibration_lib.observation_data.copernicus_observations import CopernicusObservationGenerator
-    COPERNICUS_AVAILABLE = True
-except ImportError:
-    COPERNICUS_AVAILABLE = False
 
 
 # =============================================================================
@@ -96,7 +90,7 @@ test_case_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq
 #   datetime, reach_id, species, value, units, source, uncertainty, quality_flag
 
 # --- Select observation data source ---
-# Options: "csv", "grqa", "copernicus"
+# Options: "csv", "grqa"
 observation_data_source = "csv"
 
 # --- Option A: Pre-formatted observation file (used when observation_data_source = "csv") ---
@@ -208,99 +202,6 @@ grqa_config = {
     "accepted_quality_flags": ["GOOD", "ACCEPTABLE", "A", "B", None],
 }
 
-# --- Option C: Copernicus workflow (used when observation_data_source = "copernicus") ---
-# Generate synthetic observations using Copernicus land cover and climate data
-# This uses export coefficients to estimate nutrient loads based on land use
-copernicus_config = {
-    # -------------------------------------------------------------------------
-    # DATA PATHS: Specify paths to Copernicus data files
-    # -------------------------------------------------------------------------
-    # Land Cover Data:
-    #   Download from: https://land.copernicus.eu/global/products/lc
-    #   Supported formats: GeoTIFF (.tif), NetCDF (.nc)
-    #   Resolution: 100m recommended for catchment-scale analysis
-    #
-    # Climate Data (optional):
-    #   Download from: https://cds.climate.copernicus.eu/
-    #   Supported: ERA5 NetCDF files with precipitation (tp) and temperature (t2m)
-    # -------------------------------------------------------------------------
-
-    # River network shapefile for spatial matching
-    "river_network_shapefile": "/path/to/river_network.shp",
-
-    # Column in shapefile containing reach IDs
-    "reach_id_column": "seg_id",
-
-    # Copernicus land cover data path (GeoTIFF or NetCDF)
-    # Can be a single file or directory containing yearly files
-    # Examples:
-    #   Single file: "/data/copernicus/CGLS-LC100_2019.tif"
-    #   Directory:   "/data/copernicus/land_cover/" (will use files matching time period)
-    "land_cover_path": "/path/to/copernicus_land_cover.tif",
-
-    # Climate data for dynamic export coefficients (optional)
-    # ERA5 or other climate reanalysis data in NetCDF format
-    # Set to None to use static export coefficients (no climate adjustment)
-    # Examples:
-    #   Single file: "/data/era5/era5_daily_2010-2020.nc"
-    #   Directory:   "/data/era5/" (will load files matching time period)
-    "climate_data_path": None,  # Set to enable climate-adjusted exports
-
-    # Time period for synthetic observations
-    "start_date": "2000-01-01",
-    "end_date": "2020-12-31",
-
-    # Temporal resolution for synthetic observations
-    # Options: "daily", "weekly", "monthly", "annual"
-    "temporal_resolution": "monthly",
-
-    # Output directory for Copernicus workflow
-    "output_dir": None,  # Default: calibration_work_dir/observation_data
-
-    # Species to generate (must match model species names)
-    "target_species": ["TN", "TP", "TSS"],
-
-    # Export coefficients by land cover class (kg/ha/yr)
-    # Copernicus Global Land Cover classes:
-    #   10: Cropland, 20: Forest, 30: Grassland, 40: Shrubland,
-    #   50: Wetland, 60: Water, 70: Tundra, 80: Artificial,
-    #   90: Bare/sparse vegetation, 100: Snow/Ice
-    "export_coefficients": {
-        # Cropland - highest nutrient exports
-        10: {"TN": 25.0, "TP": 2.0, "TSS": 500.0},
-        # Forest - low background exports
-        20: {"TN": 2.0, "TP": 0.2, "TSS": 50.0},
-        # Grassland - moderate exports
-        30: {"TN": 10.0, "TP": 0.8, "TSS": 150.0},
-        # Shrubland
-        40: {"TN": 5.0, "TP": 0.4, "TSS": 100.0},
-        # Wetland - nutrient sink/source
-        50: {"TN": 3.0, "TP": 0.3, "TSS": 30.0},
-        # Water bodies
-        60: {"TN": 0.5, "TP": 0.05, "TSS": 10.0},
-        # Artificial/Urban - high runoff
-        80: {"TN": 15.0, "TP": 1.5, "TSS": 300.0},
-        # Bare/sparse vegetation
-        90: {"TN": 1.0, "TP": 0.1, "TSS": 200.0},
-    },
-
-    # Climate response parameters (only used if climate_data_path is set)
-    "climate_params": {
-        # Precipitation scaling power (1.0 = linear, >1.0 = nonlinear erosion response)
-        "precip_scaling_power": 1.5,
-        # Temperature Q10 factor for biological processes
-        "temp_q10": 2.0,
-        # Reference temperature (°C)
-        "temp_reference_c": 15.0,
-    },
-
-    # Uncertainty estimation
-    "uncertainty_fraction": 0.3,  # 30% uncertainty on synthetic values
-
-    # Add noise to synthetic observations for realism
-    "add_noise": True,
-    "noise_cv": 0.2,  # Coefficient of variation for noise
-}
 
 
 # =============================================================================
@@ -814,7 +715,7 @@ max_evaluations = 500
 n_parallel = 1
 
 # Objective function: "RMSE", "NSE", "KGE"
-# KGE (Kling-Gupta Efficiency) is recommended for hydrological/WQ models
+# KGE (Kling-Gupta Efficiency) is recommended
 objective_function = "KGE"
 
 # Species weights for multi-species calibration
@@ -957,61 +858,6 @@ def prepare_grqa_observations(config: dict, grqa_config: dict) -> str:
     return calibration_obs_path
 
 
-def prepare_copernicus_observations(config: dict, copernicus_config: dict) -> str:
-    """
-    Generate synthetic observations from Copernicus land cover and climate data.
-
-    Returns path to the generated observation CSV file.
-    """
-    if not COPERNICUS_AVAILABLE:
-        raise ImportError(
-            "Copernicus observation tools not available. Install required dependencies:\n"
-            "  pip install geopandas rasterio xarray\n"
-            "Or provide pre-formatted observation_data_path or use GRQA extraction."
-        )
-
-    print("=" * 60)
-    print("COPERNICUS OBSERVATION GENERATION")
-    print("=" * 60)
-
-    # Set output directory
-    output_dir = copernicus_config.get("output_dir")
-    if output_dir is None:
-        output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Generate observations using Copernicus workflow
-    print("\nGenerating synthetic observations from land cover data...")
-    generator = CopernicusObservationGenerator(
-        river_network_shapefile=copernicus_config["river_network_shapefile"],
-        reach_id_column=copernicus_config.get("reach_id_column", "seg_id"),
-        land_cover_path=copernicus_config["land_cover_path"],
-        climate_data_path=copernicus_config.get("climate_data_path"),
-        output_dir=output_dir
-    )
-
-    result = generator.generate(
-        target_species=copernicus_config["target_species"],
-        export_coefficients=copernicus_config["export_coefficients"],
-        start_date=copernicus_config.get("start_date", "2000-01-01"),
-        end_date=copernicus_config.get("end_date", "2020-12-31"),
-        temporal_resolution=copernicus_config.get("temporal_resolution", "monthly"),
-        climate_params=copernicus_config.get("climate_params"),
-        uncertainty_fraction=copernicus_config.get("uncertainty_fraction", 0.3),
-        add_noise=copernicus_config.get("add_noise", True),
-        noise_cv=copernicus_config.get("noise_cv", 0.2)
-    )
-
-    calibration_obs_path = result.get("calibration_observations_path")
-    print(f"  Generated calibration observations: {calibration_obs_path}")
-    print(f"  Total observations: {result.get('total_observations', 0)}")
-    print(f"  Reaches covered: {result.get('reaches_covered', 0)}")
-    print(f"  Species: {result.get('species_list', [])}")
-    print(f"  Time period: {result.get('start_date')} to {result.get('end_date')}")
-
-    return calibration_obs_path
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="OpenWQ Calibration Framework")
     parser.add_argument("--resume", action="store_true",
@@ -1022,8 +868,6 @@ if __name__ == "__main__":
                        help="Validate configuration without running")
     parser.add_argument("--extract-grqa-only", action="store_true",
                        help="Only extract GRQA data without running calibration")
-    parser.add_argument("--generate-copernicus-only", action="store_true",
-                       help="Only generate Copernicus observations without running calibration")
     args = parser.parse_args()
 
     # Collect all configuration into a dictionary
@@ -1078,7 +922,6 @@ if __name__ == "__main__":
         "observation_data_source": observation_data_source,
         "use_grqa": use_grqa,  # Deprecated, kept for backwards compatibility
         "grqa_config": grqa_config,
-        "copernicus_config": copernicus_config,
     }
 
     # ==========================================================================
@@ -1111,33 +954,12 @@ if __name__ == "__main__":
             print("\nTo run calibration, use: python your_config.py")
             sys.exit(0)
 
-    elif effective_source == "copernicus" or args.generate_copernicus_only:
-        print("Generating synthetic observations from Copernicus data...")
-        try:
-            obs_path = prepare_copernicus_observations(config, copernicus_config)
-            config["observation_data_path"] = obs_path
-            print(f"\nObservation data ready: {obs_path}")
-        except Exception as e:
-            print(f"\nERROR: Copernicus observation generation failed: {e}")
-            if args.generate_copernicus_only:
-                sys.exit(1)
-            else:
-                print("Falling back to configured observation_data_path...")
-
-        if args.generate_copernicus_only:
-            print("\n" + "=" * 60)
-            print("COPERNICUS OBSERVATION GENERATION COMPLETE")
-            print("=" * 60)
-            print(f"Observation data saved to: {config['observation_data_path']}")
-            print("\nTo run calibration, use: python your_config.py")
-            sys.exit(0)
-
     elif effective_source == "csv":
         print(f"Using pre-formatted observation file: {observation_data_path}")
 
     else:
         print(f"WARNING: Unknown observation_data_source '{effective_source}'. "
-              f"Valid options: 'csv', 'grqa', 'copernicus'")
+              f"Valid options: 'csv', 'grqa'")
         print(f"Falling back to: {observation_data_path}")
 
     if args.dry_run:
