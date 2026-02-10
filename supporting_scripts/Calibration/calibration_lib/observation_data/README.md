@@ -30,9 +30,9 @@ grqa_config = {
     # Use local data (if already downloaded) or None to download
     "local_data_path": "/data/GRQA",  # or None to download from Zenodo
 
+    # River network shapefile (bounding box derived from shapefile extent)
     "river_network_shapefile": "/path/to/river_network.shp",
     "reach_id_column": "seg_id",
-    "bounding_box": [-125, 24, -66, 50],
     "start_date": "2000-01-01",
     "end_date": "2020-12-31",
     "max_station_distance_m": 500,

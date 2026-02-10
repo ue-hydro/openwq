@@ -165,13 +165,11 @@ use_grqa = True
 ```python
 grqa_config = {
     # River network shapefile for spatial matching
+    # (bounding box is automatically derived from shapefile extent)
     "river_network_shapefile": "/path/to/river_network.shp",
 
     # Column in shapefile containing reach IDs
     "reach_id_column": "seg_id",
-
-    # Bounding box [min_lon, min_lat, max_lon, max_lat]
-    "bounding_box": [-125, 24, -66, 50],  # CONUS example
 
     # Time period
     "start_date": "2000-01-01",

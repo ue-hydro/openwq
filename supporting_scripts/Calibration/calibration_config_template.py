@@ -128,10 +128,6 @@ grqa_config = {
     # Column in shapefile containing reach IDs
     "reach_id_column": "seg_id",
 
-    # Bounding box to filter stations [min_lon, min_lat, max_lon, max_lat]
-    # Set to None to use shapefile extent
-    "bounding_box": None,  # e.g., [-125, 24, -66, 50] for CONUS
-
     # Time period for observations (ISO format)
     "start_date": "2000-01-01",
     "end_date": "2020-12-31",
@@ -824,7 +820,6 @@ def prepare_grqa_observations(config: dict, grqa_config: dict) -> str:
         species_mapping=grqa_config["species_mapping"],
         output_dir=output_dir,
         local_data_path=local_data_path,
-        bounding_box=grqa_config.get("bounding_box"),
         time_period=(grqa_config.get("start_date"), grqa_config.get("end_date"))
     )
 
