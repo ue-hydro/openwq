@@ -21,8 +21,8 @@ The calibration framework is located at::
 Key files:
 
 * ``calibration_config_template.py`` - User configuration template (copy and edit)
-* ``calibration_driver.py`` - Main entry point
-* ``calibration_lib/`` - Core library modules
+* ``calibration_lib/calibration_driver.py`` - Main entry point
+* ``calibration_lib/`` - Core library modules (including observation_data/)
 
 
 Quick Start
@@ -275,6 +275,94 @@ Optional columns:
 * ``quality_flag`` - Quality flag (GOOD, SUSPECT, BAD)
 
 An example file is provided at ``observation_data/example_observations.csv``.
+
+
+GRQA Database Integration
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The calibration framework can automatically extract observation data from the **Global River Water Quality Archive (GRQA)** database (https://zenodo.org/records/15335450). This is recommended for large-scale calibrations where manually preparing observation data would be impractical.
+
+**Enabling GRQA Extraction**
+
+In your calibration configuration file:
+
+.. code-block:: python
+
+    # Enable GRQA data extraction
+    use_grqa = True
+
+    # Configure GRQA extraction
+    grqa_config = {
+        # River network shapefile for spatial matching
+        "river_network_shapefile": "/path/to/river_network.shp",
+
+        # Column in shapefile containing reach IDs
+        "reach_id_column": "seg_id",
+
+        # Bounding box to filter stations [min_lon, min_lat, max_lon, max_lat]
+        "bounding_box": [-125, 24, -66, 50],  # e.g., CONUS
+
+        # Time period for observations
+        "start_date": "2000-01-01",
+        "end_date": "2020-12-31",
+
+        # Maximum distance (meters) to match stations to river reaches
+        "max_station_distance_m": 500,
+
+        # Species mapping: GRQA parameter names -> Model species names
+        "species_mapping": {
+            "NO3": "NO3-N",      # Nitrate
+            "NH4": "NH4-N",      # Ammonium
+            "TN": "TN",          # Total Nitrogen
+            "PO4": "PO4-P",      # Orthophosphate
+            "TP": "TP",          # Total Phosphorus
+            "DO": "DO",          # Dissolved Oxygen
+        },
+    }
+
+**How GRQA Extraction Works**
+
+1. **Download**: Only required GRQA parameter files are downloaded based on your species mapping
+2. **Filter**: Stations are filtered by bounding box and time period
+3. **Match**: Stations are spatially matched to model river reaches using buffer distance
+4. **Convert**: Units are converted and data is formatted for calibration
+5. **Output**: Calibration-ready CSV file is generated automatically
+
+**Command-Line Options**
+
+.. code-block:: bash
+
+    # Extract GRQA data only (without running calibration)
+    python my_calibration.py --extract-grqa-only
+
+    # Normal run with automatic GRQA extraction
+    python my_calibration.py
+
+**Species Mapping**
+
+The species mapping dictionary maps GRQA parameter names to your model species names. Only parameters listed in this mapping will be downloaded and processed. Available GRQA parameters include:
+
+* **Nitrogen**: NO3, NH4, TN, NO2, DON
+* **Phosphorus**: PO4, TP, DP
+* **Carbon**: DOC, TOC, BOD, COD
+* **Other**: DO, TSS, Chl-a, EC, pH, TDS, Temp
+
+**Dependencies**
+
+GRQA extraction requires additional Python packages:
+
+.. code-block:: bash
+
+    pip install geopandas requests shapely
+
+**Output Files**
+
+GRQA extraction creates the following files in your calibration workspace:
+
+* ``grqa_stations.csv`` - Extracted station metadata
+* ``grqa_observations.csv`` - Raw observations from GRQA
+* ``calibration_observations.csv`` - Formatted for calibration (auto-used)
+* ``station_reach_matching.csv`` - Station-to-reach spatial matches
 
 
 DDS Optimization Algorithm

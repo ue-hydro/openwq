@@ -2,7 +2,54 @@
 
 This folder contains supporting scripts for OpenWQ model configuration, calibration, post-processing, and visualization.
 
-### Contents
+## Quick Start
+
+```bash
+# 1. Create virtual environment
+./setup_venv.sh
+
+# 2. Activate environment
+source .venv/bin/activate
+
+# 3. Run scripts
+cd Model_Config
+python model_config_template.py
+```
+
+## Installation
+
+### Automated Setup (Recommended)
+
+```bash
+cd supporting_scripts
+./setup_venv.sh
+```
+
+This creates a virtual environment in `.venv/` with all dependencies.
+
+### Manual Setup
+
+```bash
+# Create virtual environment
+python3 -m venv .venv
+
+# Activate
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Conda Environment
+
+```bash
+conda create -n openwq python=3.10
+conda activate openwq
+pip install -r requirements.txt
+```
+
+## Contents
 
 #### Calibration Framework
 Location: `Calibration/`
@@ -57,9 +104,52 @@ from Calibration.calibration_lib.parameter_defaults import list_all_parameters
 print(list_all_parameters())
 ```
 
-### Dependencies
+## Dependencies
 
-- Python 3.8+
-- numpy, pandas, h5py, matplotlib
-- SALib (for sensitivity analysis)
-- Optional: scikit-learn (for ML-based surrogate models)
+All dependencies are listed in `requirements.txt`:
+
+| Package | Purpose |
+|---------|---------|
+| numpy | Numerical operations |
+| pandas | Data manipulation |
+| scipy | Optimization, statistics |
+| h5py | HDF5 file reading |
+| netCDF4 | NetCDF file reading |
+| geopandas | Geospatial operations |
+| shapely | Geometry operations |
+| fiona | Shapefile I/O |
+| matplotlib | Plotting |
+| requests | GRQA data download |
+| SALib | Sensitivity analysis (optional) |
+
+## Troubleshooting
+
+### CRS/Projection Errors
+
+If you encounter PROJ database errors when reading shapefiles:
+
+```bash
+pip install --upgrade pyproj
+```
+
+### SALib Not Found
+
+SALib is optional but recommended for sensitivity analysis:
+
+```bash
+pip install SALib
+```
+
+### HDF5 Issues
+
+If h5py fails to install:
+
+```bash
+# macOS
+brew install hdf5
+pip install h5py
+
+# Ubuntu/Debian
+sudo apt-get install libhdf5-dev
+pip install h5py
+```

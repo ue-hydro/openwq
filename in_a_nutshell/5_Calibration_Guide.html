@@ -555,7 +555,7 @@
                     <div class="number">1</div>
                     <div class="content">
                         <h4>Prepare Observation Data</h4>
-                        <p>CSV with datetime, reach_id, species, value, units columns</p>
+                        <p>Choose source: Manual CSV, GRQA database extraction, or Copernicus synthetic generation</p>
                     </div>
                 </div>
                 <div class="workflow-step">
@@ -593,14 +593,113 @@
             </div>
         </div>
 
-        <!-- Slide 12: Observation Data -->
+        <!-- Slide 12: Observation Data Sources -->
         <div class="slide" data-slide="12">
             <div class="slide-header">
-                <h2>Observation Data Format</h2>
+                <h2>Observation Data Sources</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.1rem; margin-bottom: 20px;">
+                    Two options for preparing observation data:
+                </p>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="card primary">
+                        <h3>📄 Option 1: Manual CSV</h3>
+                        <p style="font-size: 0.95rem; margin-bottom: 12px;"><code>observation_data_source = "csv"</code></p>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.9rem;">Prepare data manually</li>
+                            <li style="font-size: 0.9rem;">Full control over format</li>
+                            <li style="font-size: 0.9rem;">Use any data source (USGS, EPA, local monitoring, etc.)</li>
+                        </ul>
+                        <p style="margin-top: 12px; font-size: 0.85rem; color: var(--text-light);">Best for: Custom datasets, local monitoring networks</p>
+                    </div>
+                    <div class="card rose">
+                        <h3>🌍 Option 2: GRQA Database</h3>
+                        <p style="font-size: 0.95rem; margin-bottom: 12px;"><code>observation_data_source = "grqa"</code></p>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.9rem;">43 water quality parameters</li>
+                            <li style="font-size: 0.9rem;">~5 million observations worldwide</li>
+                            <li style="font-size: 0.9rem;">Auto station-to-reach matching</li>
+                            <li style="font-size: 0.9rem;">Local data or Zenodo download</li>
+                        </ul>
+                        <p style="margin-top: 12px; font-size: 0.85rem; color: var(--text-light);">Best for: Large-scale studies, data-rich regions</p>
+                    </div>
+                </div>
+                <div class="highlight-box info" style="margin-top: 25px;">
+                    <strong>Local Data Support:</strong> GRQA supports pointing to local data folders if already downloaded from Zenodo
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">12</div>
+            </div>
+        </div>
+
+        <!-- Slide 13: GRQA Integration -->
+        <div class="slide" data-slide="13">
+            <div class="slide-header">
+                <h2>GRQA Database Integration</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="card rose">
+                            <h3>Global River Water Quality Archive</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;">43 water quality parameters</li>
+                                <li style="font-size: 0.9rem;">~5 million observations worldwide</li>
+                                <li style="font-size: 0.9rem;">Automatic Zenodo download</li>
+                                <li style="font-size: 0.9rem;">Spatial station-reach matching</li>
+                            </ul>
+                        </div>
+                        <pre style="font-size: 0.75rem;">
+grqa_config = {
+    <span class="comment"># Local or download from Zenodo</span>
+    <span class="string">"local_data_path"</span>: <span class="string">"/data/GRQA"</span>,
+    <span class="string">"river_network_shapefile"</span>: <span class="string">"rivers.shp"</span>,
+    <span class="string">"max_station_distance_m"</span>: <span class="keyword">500</span>,
+    <span class="string">"species_mapping"</span>: {
+        <span class="string">"NO3"</span>: <span class="string">"NO3-N"</span>,
+        <span class="string">"NH4"</span>: <span class="string">"NH4-N"</span>
+    }
+}
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Species Mapping (GRQA → Model)</h3>
+                            <table style="font-size: 0.8rem;">
+                                <tr><th>GRQA</th><th>Model Species</th></tr>
+                                <tr><td>NO3</td><td>NO3-N</td></tr>
+                                <tr><td>NH4</td><td>NH4-N</td></tr>
+                                <tr><td>TN</td><td>TN</td></tr>
+                                <tr><td>PO4</td><td>PO4-P</td></tr>
+                                <tr><td>TP</td><td>TP</td></tr>
+                                <tr><td>TSS</td><td>TSS</td></tr>
+                                <tr><td>DOC</td><td>DOC</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>Run extraction:</strong><br>
+                            <code style="font-size: 0.85rem;">python my_calibration.py --extract-grqa-only</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">13</div>
+            </div>
+        </div>
+
+        <!-- Slide 14: CSV Format -->
+        <div class="slide" data-slide="14">
+            <div class="slide-header">
+                <h2>Observation Data CSV Format</h2>
             </div>
             <div class="slide-content">
                 <pre style="font-size: 0.9rem; margin-bottom: 20px;">
-<span class="comment"># observations.csv</span>
+<span class="comment"># observations.csv (all sources produce this format)</span>
 datetime,reach_id,species,value,units,source,uncertainty,quality_flag
 2018-01-15 10:00:00,1200014181,NO3-N,2.50,mg/l,USGS_station_A,0.25,GOOD
 2018-01-15 10:00:00,1200014181,NH4-N,0.15,mg/l,USGS_station_A,0.02,GOOD
@@ -631,12 +730,12 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">12</div>
+                <div class="page-number">14</div>
             </div>
         </div>
 
-        <!-- Slide 13: Priority Parameters -->
-        <div class="slide" data-slide="13">
+        <!-- Slide 15: Priority Parameters -->
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>Priority-Based Calibration</h2>
             </div>
@@ -681,12 +780,12 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">13</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
-        <!-- Slide 14: Running Calibration -->
-        <div class="slide" data-slide="14">
+        <!-- Slide 16: Running Calibration -->
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Running Calibration</h2>
             </div>
@@ -732,12 +831,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
-        <!-- Slide 15: Output Files -->
-        <div class="slide" data-slide="15">
+        <!-- Slide 17: Output Files -->
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Calibration Output</h2>
             </div>
@@ -774,12 +873,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
-        <!-- Slide 16: Best Practices -->
-        <div class="slide" data-slide="16">
+        <!-- Slide 18: Best Practices -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Best Practices</h2>
             </div>
@@ -818,12 +917,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 17: Summary -->
-        <div class="slide" data-slide="17">
+        <!-- Slide 19: Summary -->
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -849,17 +948,20 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
-        <!-- Slide 18: Thank You -->
-        <div class="slide title-slide" data-slide="18">
+        <!-- Slide 20: Thank You -->
+        <div class="slide title-slide" data-slide="20">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">
                 <p style="font-size: 1.2rem; color: #a0aec0;">
                     <strong>Calibration scripts:</strong> supporting_scripts/Calibration/
+                </p>
+                <p style="font-size: 1rem; color: #718096; margin-top: 0.5rem;">
+                    Observation data: CSV | GRQA Database
                 </p>
             </div>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">

@@ -19,12 +19,28 @@ OpenWQ Calibration Configuration Template
 =========================================
 
 Copy this file to your working directory and modify for your calibration setup.
-Run: python your_calibration_config.py [--resume]
+
+USAGE:
+  cp calibration_config_template.py my_calibration.py
+  # Edit my_calibration.py with your settings
+  python my_calibration.py [options]
+
+COMMAND-LINE OPTIONS:
+  python my_calibration.py                     # Run calibration (default)
+  python my_calibration.py --sensitivity-only  # Run sensitivity analysis only
+  python my_calibration.py --prepare-obs-only  # Prepare observation data only
+  python my_calibration.py --dry-run           # Validate configuration
+  python my_calibration.py --resume            # Resume from checkpoint
+
+CONFIGURATION OPTIONS (set in this file):
+  run_sensitivity_first = False  # Calibration only (default)
+  run_sensitivity_first = True   # Sensitivity analysis → Calibration
 
 SECTIONS:
   1. Path Configuration
+  1B. Observation Data Configuration
   2. Container Runtime Configuration
-  3. Calibration Parameters (with scientifically-grounded min/max bounds)
+  3. Calibration Parameters
   4. Calibration Settings
   5. Sensitivity Analysis Settings
   6. HPC Settings (Apptainer)
@@ -44,12 +60,24 @@ import argparse
 # Add calibration library to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from calibration_driver import run_calibration, run_sensitivity_analysis
+from calibration_lib.calibration_driver import run_calibration, run_sensitivity_analysis
 from calibration_lib.parameter_defaults import (
     BGC_PARAMETERS, PHREEQC_PARAMETERS, SORPTION_PARAMETERS,
     SEDIMENT_PARAMETERS, TRANSPORT_PARAMETERS, LATERAL_EXCHANGE_PARAMETERS,
     SOURCE_SINK_PARAMETERS, create_parameter_entry, validate_parameter_bounds
 )
+
+# GRQA extraction tools (optional - only needed if observation_data_source = "grqa")
+try:
+    from calibration_lib.observation_data.grqa_extract_stations import GRQACalibrationExtractor
+    from calibration_lib.observation_data.prepare_calibration_observations import (
+        CalibrationObservationConverter,
+        generate_stations_from_csv
+    )
+    GRQA_AVAILABLE = True
+except ImportError:
+    GRQA_AVAILABLE = False
+
 
 
 # =============================================================================
@@ -57,19 +85,153 @@ from calibration_lib.parameter_defaults import (
 # =============================================================================
 
 # Path to the directory containing your model configuration
-# This should be the directory containing template_model_config.py
+# This should be the directory containing model_config_template.py
 base_model_config_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/supporting_scripts/Model_Config"
 
 # Working directory for calibration runs
 # Each evaluation will create a subdirectory here
 calibration_work_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/calibration_workspace"
 
-# Observation data file (CSV format)
-# Format: datetime,reach_id,species,value,units,source
-observation_data_path = "/path/to/your/observations.csv"
-
 # Path to the test case directory (containing mizuroute_in, etc.)
 test_case_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case_2"
+
+
+# =============================================================================
+# 1B. OBSERVATION DATA CONFIGURATION
+# =============================================================================
+#
+# Two options for observation data:
+#   Option A: "csv" - Provide pre-formatted observation CSV file
+#   Option B: "grqa" - Extract from GRQA database (Global River Water Quality Archive)
+#
+# The calibration framework requires observations in CSV format with columns:
+#   datetime, reach_id, species, value, units, source, uncertainty, quality_flag
+#
+# A calibration stations shapefile will be automatically generated containing:
+#   - Station name/ID
+#   - Corresponding spatial ID (reach_id for mizuRoute, hruId for SUMMA)
+#   - Parameters available at each station
+#   - Number of observations per parameter
+#   - Total observations per station
+
+# --- Select observation data source ---
+# Options: "csv", "grqa"
+observation_data_source = "csv"
+
+# --- Option A: Pre-formatted observation file (used when observation_data_source = "csv") ---
+# Provide path to existing observation CSV file
+observation_data_path = "/path/to/your/observations.csv"
+
+# River network shapefile (required for generating stations shapefile from CSV)
+# This shapefile is used to get reach centroids for station locations
+csv_river_network_shapefile = "/path/to/river_network.shp"
+csv_reach_id_column = "seg_id"  # Column in shapefile containing reach IDs
+
+# --- Option B: Extract from GRQA database (used when observation_data_source = "grqa") ---
+# Automatically downloads and processes data from GRQA (https://zenodo.org/records/15335450)
+# GRQA Configuration (only used if observation_data_source = "grqa")
+grqa_config = {
+    # -------------------------------------------------------------------------
+    # DATA SOURCE: Choose between downloading or using local files
+    # -------------------------------------------------------------------------
+    # Option 1: Download from Zenodo (default)
+    #   Set "local_data_path" to None - data will be downloaded automatically
+    #
+    # Option 2: Use already-downloaded GRQA data
+    #   Set "local_data_path" to the folder containing GRQA CSV files
+    #   Expected structure:
+    #     local_data_path/
+    #       ├── GRQA_data_v1.3/
+    #       │   ├── GRQA_data_v1.3_NO3.csv
+    #       │   ├── GRQA_data_v1.3_NH4.csv
+    #       │   ├── GRQA_data_v1.3_TN.csv
+    #       │   └── ... (other parameter files)
+    #       └── GRQA_meta_v1.3.csv (station metadata)
+    # -------------------------------------------------------------------------
+    "local_data_path": None,  # e.g., "/data/GRQA" or None to download
+
+    # River network shapefile for spatial matching
+    "river_network_shapefile": "/path/to/river_network.shp",
+
+    # Column in shapefile containing reach IDs
+    "reach_id_column": "seg_id",
+
+    # Time period for observations
+    # Option 1: Set to "auto" to extract from host model NetCDF output
+    # Option 2: Provide explicit dates in ISO format (YYYY-MM-DD)
+    "start_date": "auto",  # or e.g., "2000-01-01"
+    "end_date": "auto",    # or e.g., "2020-12-31"
+
+    # Host model output NetCDF file (required if start_date/end_date = "auto")
+    # Used to extract time range for observation filtering
+    "hostmodel_output_nc": "/path/to/hostmodel_output.nc",
+
+    # Maximum distance (meters) to match stations to river reaches
+    "max_station_distance_m": 500,
+
+    # Minimum number of observations required per station
+    "min_observations": 10,
+
+    # Output directory for GRQA extraction
+    "output_dir": None,  # Default: calibration_work_dir/observation_data
+
+    # Species mapping: GRQA parameter names -> Model species names
+    # Only parameters listed here will be downloaded and processed
+    # See GRQA documentation for full parameter list:
+    # https://zenodo.org/records/15335450
+    "species_mapping": {
+        # Nitrogen species
+        "NO3": "NO3-N",      # Nitrate
+        "NH4": "NH4-N",      # Ammonium
+        "TN": "TN",          # Total Nitrogen
+        "NO2": "NO2-N",      # Nitrite
+        "DON": "DON",        # Dissolved Organic Nitrogen
+
+        # Phosphorus species
+        "PO4": "PO4-P",      # Orthophosphate
+        "TP": "TP",          # Total Phosphorus
+        "DP": "DP",          # Dissolved Phosphorus
+
+        # General water quality
+        "DO": "DO",          # Dissolved Oxygen
+        "BOD": "BOD",        # Biochemical Oxygen Demand
+        "COD": "COD",        # Chemical Oxygen Demand
+        "DOC": "DOC",        # Dissolved Organic Carbon
+        "TOC": "TOC",        # Total Organic Carbon
+        "TSS": "TSS",        # Total Suspended Solids
+
+        # Uncomment additional parameters as needed:
+        # "Chl-a": "Chla",   # Chlorophyll-a
+        # "EC": "EC",        # Electrical Conductivity
+        # "pH": "pH",        # pH
+        # "TDS": "TDS",      # Total Dissolved Solids
+        # "Temp": "Temp",    # Temperature
+    },
+
+    # Unit conversions applied during extraction
+    # Format: {grqa_unit: {target_unit: conversion_factor}}
+    "unit_conversions": {
+        "ug/l": {"mg/l": 0.001},
+        "µg/l": {"mg/l": 0.001},
+        "mg/l": {"mg/l": 1.0},
+        "ppm": {"mg/l": 1.0},
+    },
+
+    # Target units for each species (optional)
+    # If not specified, original units are preserved
+    "target_units": {
+        "NO3-N": "mg/l",
+        "NH4-N": "mg/l",
+        "TN": "mg/l",
+        "TP": "mg/l",
+        "DO": "mg/l",
+    },
+
+    # Quality control flags to include (GRQA quality flags)
+    # Good/Acceptable values only
+    "accepted_quality_flags": ["GOOD", "ACCEPTABLE", "A", "B", None],
+}
+
 
 
 # =============================================================================
@@ -583,7 +745,7 @@ max_evaluations = 500
 n_parallel = 1
 
 # Objective function: "RMSE", "NSE", "KGE"
-# KGE (Kling-Gupta Efficiency) is recommended for hydrological/WQ models
+# KGE (Kling-Gupta Efficiency) is recommended
 objective_function = "KGE"
 
 # Species weights for multi-species calibration
@@ -654,6 +816,153 @@ hpc_max_concurrent_jobs = 50
 # 7. RUN CALIBRATION
 # =============================================================================
 
+def get_time_range_from_netcdf(nc_path: str) -> tuple:
+    """
+    Extract time range from host model NetCDF output file.
+
+    Parameters
+    ----------
+    nc_path : str
+        Path to NetCDF file
+
+    Returns
+    -------
+    tuple
+        (start_date, end_date) as ISO format strings
+    """
+    try:
+        import netCDF4 as nc
+        import numpy as np
+        from datetime import datetime
+
+        with nc.Dataset(nc_path, 'r') as ds:
+            # Find time variable (common names)
+            time_var = None
+            for var_name in ['time', 'Time', 'TIME', 't']:
+                if var_name in ds.variables:
+                    time_var = ds.variables[var_name]
+                    break
+
+            if time_var is None:
+                raise ValueError(f"No time variable found in {nc_path}")
+
+            # Get time values and units
+            times = time_var[:]
+            units = time_var.units if hasattr(time_var, 'units') else None
+            calendar = time_var.calendar if hasattr(time_var, 'calendar') else 'standard'
+
+            # Convert to datetime
+            dates = nc.num2date(times, units=units, calendar=calendar)
+
+            start_date = dates[0]
+            end_date = dates[-1]
+
+            # Handle cftime objects
+            if hasattr(start_date, 'strftime'):
+                start_str = start_date.strftime('%Y-%m-%d')
+                end_str = end_date.strftime('%Y-%m-%d')
+            else:
+                # For cftime objects without strftime
+                start_str = f"{start_date.year:04d}-{start_date.month:02d}-{start_date.day:02d}"
+                end_str = f"{end_date.year:04d}-{end_date.month:02d}-{end_date.day:02d}"
+
+            return start_str, end_str
+
+    except ImportError:
+        raise ImportError("netCDF4 required for auto time extraction. Install with: pip install netCDF4")
+
+
+def prepare_grqa_observations(config: dict, grqa_config: dict) -> str:
+    """
+    Download and process GRQA data for calibration.
+
+    Returns path to the prepared observation CSV file.
+    """
+    if not GRQA_AVAILABLE:
+        raise ImportError(
+            "GRQA extraction tools not available. Install required dependencies:\n"
+            "  pip install geopandas requests\n"
+            "Or provide pre-formatted observation_data_path."
+        )
+
+    print("=" * 60)
+    print("GRQA DATA EXTRACTION")
+    print("=" * 60)
+
+    # Set output directory
+    output_dir = grqa_config.get("output_dir")
+    if output_dir is None:
+        output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Determine time period (auto-extract from NetCDF or use provided dates)
+    start_date = grqa_config.get("start_date")
+    end_date = grqa_config.get("end_date")
+
+    if start_date == "auto" or end_date == "auto":
+        nc_path = grqa_config.get("hostmodel_output_nc")
+        if not nc_path:
+            raise ValueError(
+                "hostmodel_output_nc must be specified when start_date/end_date = 'auto'"
+            )
+        print(f"\nExtracting time range from: {nc_path}")
+        auto_start, auto_end = get_time_range_from_netcdf(nc_path)
+
+        if start_date == "auto":
+            start_date = auto_start
+        if end_date == "auto":
+            end_date = auto_end
+
+        print(f"  Time range: {start_date} to {end_date}")
+
+    # Step 1: Extract GRQA stations and observations
+    print("\n[1/2] Extracting GRQA stations and observations...")
+
+    # Check for local data path
+    local_data_path = grqa_config.get("local_data_path")
+    if local_data_path:
+        print(f"  Using local GRQA data: {local_data_path}")
+    else:
+        print("  Will download from Zenodo if needed")
+
+    extractor = GRQACalibrationExtractor(
+        river_network_shapefile=grqa_config["river_network_shapefile"],
+        species_mapping=grqa_config["species_mapping"],
+        output_dir=output_dir,
+        local_data_path=local_data_path,
+        time_period=(start_date, end_date)
+    )
+
+    grqa_output = extractor.run_extraction()
+    print(f"  Extracted {grqa_output.get('total_observations', 0)} observations "
+          f"from {grqa_output.get('total_stations', 0)} stations")
+
+    # Step 2: Convert to calibration format
+    print("\n[2/2] Converting to calibration format...")
+    converter = CalibrationObservationConverter(
+        grqa_stations_path=os.path.join(output_dir, "grqa_stations.csv"),
+        grqa_observations_path=os.path.join(output_dir, "grqa_observations.csv"),
+        river_network_shapefile=grqa_config["river_network_shapefile"],
+        reach_id_column=grqa_config.get("reach_id_column", "seg_id"),
+        output_dir=output_dir
+    )
+
+    result = converter.convert(
+        max_distance_m=grqa_config.get("max_station_distance_m", 500),
+        min_observations=grqa_config.get("min_observations", 10),
+        target_units=grqa_config.get("target_units"),
+        accepted_quality_flags=grqa_config.get("accepted_quality_flags")
+    )
+
+    calibration_obs_path = result.get("calibration_observations_path")
+    print(f"  Generated calibration observations: {calibration_obs_path}")
+    print(f"  Total observations: {result.get('total_observations', 0)}")
+    print(f"  Matched reaches: {result.get('matched_reaches', 0)}")
+    print(f"  Species: {result.get('species_list', [])}")
+
+    return calibration_obs_path
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="OpenWQ Calibration Framework")
     parser.add_argument("--resume", action="store_true",
@@ -662,7 +971,16 @@ if __name__ == "__main__":
                        help="Run only sensitivity analysis")
     parser.add_argument("--dry-run", action="store_true",
                        help="Validate configuration without running")
+    parser.add_argument("--prepare-obs-only", action="store_true",
+                       help="Only prepare observation data (Section 1B) without running calibration")
+    parser.add_argument("--extract-grqa-only", action="store_true",
+                       help="Deprecated: use --prepare-obs-only instead")
     args = parser.parse_args()
+
+    # Handle deprecated flag
+    if args.extract_grqa_only:
+        print("WARNING: --extract-grqa-only is deprecated. Use --prepare-obs-only instead.")
+        args.prepare_obs_only = True
 
     # Collect all configuration into a dictionary
     config = {
@@ -711,7 +1029,73 @@ if __name__ == "__main__":
         "hpc_tasks_per_node": hpc_tasks_per_node,
         "hpc_memory": hpc_memory,
         "hpc_max_concurrent_jobs": hpc_max_concurrent_jobs,
+
+        # Observation data settings
+        "observation_data_source": observation_data_source,
+        "grqa_config": grqa_config,
+        "csv_river_network_shapefile": csv_river_network_shapefile,
+        "csv_reach_id_column": csv_reach_id_column,
     }
+
+    # ==========================================================================
+    # Observation Data Preparation (based on observation_data_source)
+    # ==========================================================================
+
+    if observation_data_source == "grqa":
+        print("Preparing observation data from GRQA database...")
+        try:
+            obs_path = prepare_grqa_observations(config, grqa_config)
+            config["observation_data_path"] = obs_path
+            print(f"\nObservation data ready: {obs_path}")
+        except Exception as e:
+            print(f"\nERROR: GRQA extraction failed: {e}")
+            if args.prepare_obs_only:
+                sys.exit(1)
+            else:
+                print("Falling back to configured observation_data_path...")
+
+    elif observation_data_source == "csv":
+        print(f"Using pre-formatted observation file: {observation_data_path}")
+
+        # Generate calibration stations shapefile from CSV
+        if GRQA_AVAILABLE and os.path.exists(observation_data_path):
+            try:
+                output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
+                os.makedirs(output_dir, exist_ok=True)
+                stations_output = os.path.join(output_dir, "calibration_observations")
+
+                stations_gdf = generate_stations_from_csv(
+                    calibration_csv_path=observation_data_path,
+                    river_network_path=csv_river_network_shapefile,
+                    output_path=stations_output,
+                    reach_id_column=csv_reach_id_column
+                )
+                if stations_gdf is not None:
+                    print(f"\nGenerated calibration stations shapefile with {len(stations_gdf)} stations")
+            except Exception as e:
+                print(f"\nWARNING: Could not generate stations shapefile: {e}")
+                if args.prepare_obs_only:
+                    sys.exit(1)
+                print("Calibration will continue without the shapefile.")
+
+    else:
+        print(f"WARNING: Unknown observation_data_source '{observation_data_source}'. "
+              f"Valid options: 'csv', 'grqa'")
+        print(f"Falling back to: {observation_data_path}")
+
+    # Exit if only preparing observations
+    if args.prepare_obs_only:
+        print("\n" + "=" * 60)
+        print("OBSERVATION DATA PREPARATION COMPLETE")
+        print("=" * 60)
+        output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
+        print(f"Output directory: {output_dir}")
+        print("\nGenerated files:")
+        print(f"  - Observation CSV: {config.get('observation_data_path', observation_data_path)}")
+        print(f"  - Stations shapefile: {output_dir}/calibration_observations_stations.shp")
+        print(f"  - Stations GeoJSON: {output_dir}/calibration_observations_stations.geojson")
+        print("\nTo run calibration, use: python your_config.py")
+        sys.exit(0)
 
     if args.dry_run:
         print("=" * 60)

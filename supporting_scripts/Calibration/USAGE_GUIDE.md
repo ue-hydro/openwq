@@ -121,6 +121,10 @@ cp /path/to/openwq/supporting_scripts/Calibration/calibration_config_template.py
 
 ## 4. Preparing Observation Data
 
+You have two options for preparing observation data:
+
+### Option A: Manual CSV File
+
 Create a CSV file with your observation data. Required columns:
 
 | Column | Description | Example |
@@ -144,6 +148,103 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
 - `reach_id` must match the reach IDs in your model output HDF5 files
 - `species` must match exactly the species names in your BGC configuration
 - Use consistent units throughout (typically `mg/l` or `MG/L`)
+
+### Option B: GRQA Database Extraction (Recommended for Large-Scale Calibration)
+
+The framework can automatically download and process data from the **Global River Water Quality Archive (GRQA)** database. This is ideal for large-scale calibrations.
+
+**Step 4B.1: Enable GRQA in your configuration**
+
+```python
+# Enable automatic GRQA extraction
+use_grqa = True
+```
+
+**Step 4B.2: Configure GRQA settings**
+
+```python
+grqa_config = {
+    # River network shapefile for spatial matching
+    # (bounding box is automatically derived from shapefile extent)
+    "river_network_shapefile": "/path/to/river_network.shp",
+
+    # Column in shapefile containing reach IDs
+    "reach_id_column": "seg_id",
+
+    # Time period
+    "start_date": "2000-01-01",
+    "end_date": "2020-12-31",
+
+    # Maximum distance to match stations to reaches
+    "max_station_distance_m": 500,
+
+    # Map GRQA parameters to model species
+    "species_mapping": {
+        "NO3": "NO3-N",
+        "NH4": "NH4-N",
+        "TN": "TN",
+        "PO4": "PO4-P",
+        "TP": "TP",
+    },
+}
+```
+
+**Step 4B.3: Run GRQA extraction**
+
+```bash
+# Extract only (without calibration)
+python my_calibration.py --extract-grqa-only
+
+# Or run calibration (extraction happens automatically)
+python my_calibration.py
+```
+
+**GRQA Species Mapping Reference:**
+
+| GRQA Parameter | Description | Typical Model Species |
+|----------------|-------------|----------------------|
+| NO3 | Nitrate | NO3-N |
+| NH4 | Ammonium | NH4-N |
+| TN | Total Nitrogen | TN |
+| NO2 | Nitrite | NO2-N |
+| PO4 | Orthophosphate | PO4-P |
+| TP | Total Phosphorus | TP |
+| DO | Dissolved Oxygen | DO |
+| BOD | Biochemical Oxygen Demand | BOD |
+| DOC | Dissolved Organic Carbon | DOC |
+| TSS | Total Suspended Solids | TSS |
+
+**GRQA Dependencies:**
+
+```bash
+pip install geopandas requests shapely
+```
+
+### Calibration Stations Shapefile
+
+For both CSV and GRQA observation sources, a **calibration stations shapefile** is automatically generated containing:
+
+- Station name/ID
+- Corresponding spatial ID (reach_id for mizuRoute, hruId for SUMMA)
+- Parameters available at each station
+- Number of observations per parameter
+- Total observations per station
+
+**Output files:**
+```
+observation_data/
+├── calibration_observations.csv              # Formatted observation data
+├── calibration_observations_stations.shp     # Shapefile for GIS visualization
+├── calibration_observations_stations.geojson # GeoJSON (easier to inspect)
+└── calibration_observations_summary.txt      # Statistics summary
+```
+
+**Note for CSV observations:**
+When using your own CSV, also configure the river network shapefile for geometry:
+```python
+csv_river_network_shapefile = "/path/to/river_network.shp"
+csv_reach_id_column = "seg_id"
+```
 
 ---
 
@@ -532,10 +633,11 @@ cat slurm_logs/array_*.err
 ### Command Line Options
 
 ```bash
-python my_calibration.py                 # Normal calibration run
-python my_calibration.py --resume        # Resume from checkpoint
-python my_calibration.py --dry-run       # Validate config only
-python my_calibration.py --sensitivity-only  # Run sensitivity analysis only
+python my_calibration.py                          # Normal calibration run
+python my_calibration.py --resume                 # Resume from checkpoint
+python my_calibration.py --dry-run                # Validate config only
+python my_calibration.py --sensitivity-only       # Run sensitivity analysis only
+python my_calibration.py --prepare-obs-only       # Prepare observation data only (Section 1B)
 ```
 
 ### Recommended Workflow
