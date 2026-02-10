@@ -750,8 +750,17 @@ def generate_stations_from_csv(
     calibration_df = pd.read_csv(calibration_csv_path)
     print(f"  Loaded {len(calibration_df)} observations from CSV")
 
-    # Load river network
-    river_gdf = gpd.read_file(river_network_path)
+    # Load river network (handle CRS issues gracefully)
+    try:
+        river_gdf = gpd.read_file(river_network_path)
+    except Exception as crs_error:
+        # Try reading without CRS validation
+        import fiona
+        with fiona.open(river_network_path) as src:
+            features = list(src)
+            river_gdf = gpd.GeoDataFrame.from_features(features)
+            print(f"  WARNING: CRS issue ({crs_error}), reading without CRS")
+
     print(f"  Loaded {len(river_gdf)} reaches from river network")
 
     # Get station statistics
@@ -778,6 +787,8 @@ def generate_stations_from_csv(
     reach_centroids = reach_centroids[[reach_id_column, 'centroid']].rename(
         columns={reach_id_column: 'reach_id', 'centroid': 'geometry'}
     )
+    # Drop duplicate reach_ids (keep first occurrence)
+    reach_centroids = reach_centroids.drop_duplicates(subset=['reach_id'], keep='first')
 
     # Merge with station stats
     stations_with_geom = station_stats.merge(
