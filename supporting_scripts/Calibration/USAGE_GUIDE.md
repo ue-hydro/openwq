@@ -220,6 +220,32 @@ python my_calibration.py
 pip install geopandas requests shapely
 ```
 
+### Calibration Stations Shapefile
+
+For both CSV and GRQA observation sources, a **calibration stations shapefile** is automatically generated containing:
+
+- Station name/ID
+- Corresponding reach_id (for OpenWQ/host model mapping)
+- Parameters available at each station
+- Number of observations per parameter
+- Total observations per station
+
+**Output files:**
+```
+observation_data/
+├── calibration_observations.csv              # Formatted observation data
+├── calibration_observations_stations.shp     # Shapefile for GIS visualization
+├── calibration_observations_stations.geojson # GeoJSON (easier to inspect)
+└── calibration_observations_summary.txt      # Statistics summary
+```
+
+**Note for CSV observations:**
+When using your own CSV, also configure the river network shapefile for geometry:
+```python
+csv_river_network_shapefile = "/path/to/river_network.shp"
+csv_reach_id_column = "seg_id"
+```
+
 ---
 
 ## 5. Creating Your Calibration Configuration

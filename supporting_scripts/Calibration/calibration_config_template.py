@@ -89,7 +89,10 @@ from calibration_lib.parameter_defaults import (
 # GRQA extraction tools (optional - only needed if observation_data_source = "grqa")
 try:
     from calibration_lib.observation_data.grqa_extract_stations import GRQACalibrationExtractor
-    from calibration_lib.observation_data.prepare_calibration_observations import CalibrationObservationConverter
+    from calibration_lib.observation_data.prepare_calibration_observations import (
+        CalibrationObservationConverter,
+        generate_stations_from_csv
+    )
     GRQA_AVAILABLE = True
 except ImportError:
     GRQA_AVAILABLE = False
@@ -116,13 +119,19 @@ test_case_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq
 # 1B. OBSERVATION DATA CONFIGURATION
 # =============================================================================
 #
-# Three options for observation data:
+# Two options for observation data:
 #   Option A: "csv" - Provide pre-formatted observation CSV file
 #   Option B: "grqa" - Extract from GRQA database (Global River Water Quality Archive)
-#   Option C: "copernicus" - Generate synthetic observations from Copernicus data
 #
 # The calibration framework requires observations in CSV format with columns:
 #   datetime, reach_id, species, value, units, source, uncertainty, quality_flag
+#
+# A calibration stations shapefile will be automatically generated containing:
+#   - Station name/ID
+#   - Corresponding reach_id (for OpenWQ/host model mapping)
+#   - Parameters available at each station
+#   - Number of observations per parameter
+#   - Total observations per station
 
 # --- Select observation data source ---
 # Options: "csv", "grqa"
@@ -131,6 +140,11 @@ observation_data_source = "csv"
 # --- Option A: Pre-formatted observation file (used when observation_data_source = "csv") ---
 # Provide path to existing observation CSV file
 observation_data_path = "/path/to/your/observations.csv"
+
+# River network shapefile (required for generating stations shapefile from CSV)
+# This shapefile is used to get reach centroids for station locations
+csv_river_network_shapefile = "/path/to/river_network.shp"
+csv_reach_id_column = "seg_id"  # Column in shapefile containing reach IDs
 
 # --- Option B: Extract from GRQA database (used when observation_data_source = "grqa") ---
 # Automatically downloads and processes data from GRQA (https://zenodo.org/records/15335450)
@@ -952,6 +966,8 @@ if __name__ == "__main__":
         "observation_data_source": observation_data_source,
         "use_grqa": use_grqa,  # Deprecated, kept for backwards compatibility
         "grqa_config": grqa_config,
+        "csv_river_network_shapefile": csv_river_network_shapefile,
+        "csv_reach_id_column": csv_reach_id_column,
     }
 
     # ==========================================================================
@@ -986,6 +1002,25 @@ if __name__ == "__main__":
 
     elif effective_source == "csv":
         print(f"Using pre-formatted observation file: {observation_data_path}")
+
+        # Generate calibration stations shapefile from CSV
+        if GRQA_AVAILABLE and os.path.exists(observation_data_path):
+            try:
+                output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
+                os.makedirs(output_dir, exist_ok=True)
+                stations_output = os.path.join(output_dir, "calibration_observations")
+
+                stations_gdf = generate_stations_from_csv(
+                    calibration_csv_path=observation_data_path,
+                    river_network_path=csv_river_network_shapefile,
+                    output_path=stations_output,
+                    reach_id_column=csv_reach_id_column
+                )
+                if stations_gdf is not None:
+                    print(f"\nGenerated calibration stations shapefile with {len(stations_gdf)} stations")
+            except Exception as e:
+                print(f"\nWARNING: Could not generate stations shapefile: {e}")
+                print("Calibration will continue without the shapefile.")
 
     else:
         print(f"WARNING: Unknown observation_data_source '{effective_source}'. "

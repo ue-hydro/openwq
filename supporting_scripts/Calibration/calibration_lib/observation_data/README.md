@@ -136,6 +136,46 @@ The calibration framework will:
 2. Use uncertainty values for weighted objective functions (if provided)
 3. Match observations to model output based on reach_id, species, and nearest timestamp
 
+---
+
+## Calibration Stations Shapefile
+
+A calibration stations shapefile is automatically generated containing metadata about all stations used in calibration. This shapefile is useful for:
+- Visualizing station locations in GIS
+- Verifying station-reach matching
+- Documenting observation coverage
+
+### Output Files
+
+For both CSV and GRQA sources, the following files are generated:
+
+```
+observation_data/
+├── calibration_observations.csv              # Formatted observation data
+├── calibration_observations_stations.shp     # Shapefile with station metadata
+├── calibration_observations_stations.geojson # GeoJSON (easier to view)
+├── calibration_observations_summary.txt      # Statistics summary
+└── calibration_observations_station_reach_mapping.csv  # Station-to-reach mapping
+```
+
+### Shapefile Attributes
+
+| Attribute | Description |
+|-----------|-------------|
+| stn_id | Station identifier |
+| reach_id | Corresponding reach ID in model/river network |
+| params | Comma-separated list of parameters available |
+| total_obs | Total number of observations |
+| n_params | Number of unique parameters |
+| dist_m | Distance to matched reach (meters) — GRQA only |
+| n_<species> | Number of observations per species (e.g., n_NO3-N) |
+
+### Notes
+
+- For **GRQA data**: Station locations are original GRQA coordinates
+- For **CSV data**: Station locations are reach centroids (since original locations are not provided)
+- Shapefile column names are limited to 10 characters (standard ESRI limitation)
+
 ## Dependencies
 
 ### For GRQA Extraction
