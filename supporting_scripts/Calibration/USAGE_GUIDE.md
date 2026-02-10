@@ -225,7 +225,7 @@ pip install geopandas requests shapely
 For both CSV and GRQA observation sources, a **calibration stations shapefile** is automatically generated containing:
 
 - Station name/ID
-- Corresponding reach_id (for OpenWQ/host model mapping)
+- Corresponding spatial ID (reach_id for mizuRoute, hruId for SUMMA)
 - Parameters available at each station
 - Number of observations per parameter
 - Total observations per station

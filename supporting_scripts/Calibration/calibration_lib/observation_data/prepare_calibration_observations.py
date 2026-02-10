@@ -676,9 +676,10 @@ def generate_calibration_stations_shapefile(
     )
 
     # Rename columns for shapefile compatibility (max 10 chars)
+    # Use 'spatial_id' as generic name (reach_id for mizuRoute, hruId for SUMMA)
     column_renames = {
         'station_id': 'stn_id',
-        'reach_id': 'reach_id',
+        'reach_id': 'spatial_id',
         'parameters': 'params',
         'total_obs': 'total_obs',
         'distance_m': 'dist_m',
@@ -800,9 +801,10 @@ def generate_stations_from_csv(
     )
 
     # Rename for shapefile compatibility
+    # Use 'spatial_id' as generic name (reach_id for mizuRoute, hruId for SUMMA)
     column_renames = {
         'station_id': 'stn_id',
-        'reach_id': 'reach_id',
+        'reach_id': 'spatial_id',
         'parameters': 'params',
         'total_obs': 'total_obs',
         'n_params': 'n_params'
