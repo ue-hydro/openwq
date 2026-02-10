@@ -51,6 +51,21 @@ from calibration_lib.parameter_defaults import (
     SOURCE_SINK_PARAMETERS, create_parameter_entry, validate_parameter_bounds
 )
 
+# GRQA extraction tools (optional - only needed if observation_data_source = "grqa")
+try:
+    from observation_data.grqa_extract_stations import GRQACalibrationExtractor
+    from observation_data.prepare_calibration_observations import CalibrationObservationConverter
+    GRQA_AVAILABLE = True
+except ImportError:
+    GRQA_AVAILABLE = False
+
+# Copernicus workflow tools (optional - only needed if observation_data_source = "copernicus")
+try:
+    from observation_data.copernicus_observations import CopernicusObservationGenerator
+    COPERNICUS_AVAILABLE = True
+except ImportError:
+    COPERNICUS_AVAILABLE = False
+
 
 # =============================================================================
 # 1. PATH CONFIGURATION
@@ -64,12 +79,228 @@ base_model_config_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_csl
 # Each evaluation will create a subdirectory here
 calibration_work_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/calibration_workspace"
 
-# Observation data file (CSV format)
-# Format: datetime,reach_id,species,value,units,source
-observation_data_path = "/path/to/your/observations.csv"
-
 # Path to the test case directory (containing mizuroute_in, etc.)
 test_case_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case_2"
+
+
+# =============================================================================
+# 1B. OBSERVATION DATA CONFIGURATION
+# =============================================================================
+#
+# Three options for observation data:
+#   Option A: "csv" - Provide pre-formatted observation CSV file
+#   Option B: "grqa" - Extract from GRQA database (Global River Water Quality Archive)
+#   Option C: "copernicus" - Generate synthetic observations from Copernicus data
+#
+# The calibration framework requires observations in CSV format with columns:
+#   datetime, reach_id, species, value, units, source, uncertainty, quality_flag
+
+# --- Select observation data source ---
+# Options: "csv", "grqa", "copernicus"
+observation_data_source = "csv"
+
+# --- Option A: Pre-formatted observation file (used when observation_data_source = "csv") ---
+# Provide path to existing observation CSV file
+observation_data_path = "/path/to/your/observations.csv"
+
+# --- Option B: Extract from GRQA database (used when observation_data_source = "grqa") ---
+# Automatically downloads and processes data from GRQA (https://zenodo.org/records/15335450)
+use_grqa = False  # Deprecated: use observation_data_source = "grqa" instead
+
+# GRQA Configuration (only used if observation_data_source = "grqa")
+grqa_config = {
+    # -------------------------------------------------------------------------
+    # DATA SOURCE: Choose between downloading or using local files
+    # -------------------------------------------------------------------------
+    # Option 1: Download from Zenodo (default)
+    #   Set "local_data_path" to None - data will be downloaded automatically
+    #
+    # Option 2: Use already-downloaded GRQA data
+    #   Set "local_data_path" to the folder containing GRQA CSV files
+    #   Expected structure:
+    #     local_data_path/
+    #       ├── GRQA_data_v1.3/
+    #       │   ├── GRQA_data_v1.3_NO3.csv
+    #       │   ├── GRQA_data_v1.3_NH4.csv
+    #       │   ├── GRQA_data_v1.3_TN.csv
+    #       │   └── ... (other parameter files)
+    #       └── GRQA_meta_v1.3.csv (station metadata)
+    # -------------------------------------------------------------------------
+    "local_data_path": None,  # e.g., "/data/GRQA" or None to download
+
+    # River network shapefile for spatial matching
+    "river_network_shapefile": "/path/to/river_network.shp",
+
+    # Column in shapefile containing reach IDs
+    "reach_id_column": "seg_id",
+
+    # Bounding box to filter stations [min_lon, min_lat, max_lon, max_lat]
+    # Set to None to use shapefile extent
+    "bounding_box": None,  # e.g., [-125, 24, -66, 50] for CONUS
+
+    # Time period for observations (ISO format)
+    "start_date": "2000-01-01",
+    "end_date": "2020-12-31",
+
+    # Maximum distance (meters) to match stations to river reaches
+    "max_station_distance_m": 500,
+
+    # Minimum number of observations required per station
+    "min_observations": 10,
+
+    # Output directory for GRQA extraction
+    "output_dir": None,  # Default: calibration_work_dir/observation_data
+
+    # Species mapping: GRQA parameter names -> Model species names
+    # Only parameters listed here will be downloaded and processed
+    # See GRQA documentation for full parameter list:
+    # https://zenodo.org/records/15335450
+    "species_mapping": {
+        # Nitrogen species
+        "NO3": "NO3-N",      # Nitrate
+        "NH4": "NH4-N",      # Ammonium
+        "TN": "TN",          # Total Nitrogen
+        "NO2": "NO2-N",      # Nitrite
+        "DON": "DON",        # Dissolved Organic Nitrogen
+
+        # Phosphorus species
+        "PO4": "PO4-P",      # Orthophosphate
+        "TP": "TP",          # Total Phosphorus
+        "DP": "DP",          # Dissolved Phosphorus
+
+        # General water quality
+        "DO": "DO",          # Dissolved Oxygen
+        "BOD": "BOD",        # Biochemical Oxygen Demand
+        "COD": "COD",        # Chemical Oxygen Demand
+        "DOC": "DOC",        # Dissolved Organic Carbon
+        "TOC": "TOC",        # Total Organic Carbon
+        "TSS": "TSS",        # Total Suspended Solids
+
+        # Uncomment additional parameters as needed:
+        # "Chl-a": "Chla",   # Chlorophyll-a
+        # "EC": "EC",        # Electrical Conductivity
+        # "pH": "pH",        # pH
+        # "TDS": "TDS",      # Total Dissolved Solids
+        # "Temp": "Temp",    # Temperature
+    },
+
+    # Unit conversions applied during extraction
+    # Format: {grqa_unit: {target_unit: conversion_factor}}
+    "unit_conversions": {
+        "ug/l": {"mg/l": 0.001},
+        "µg/l": {"mg/l": 0.001},
+        "mg/l": {"mg/l": 1.0},
+        "ppm": {"mg/l": 1.0},
+    },
+
+    # Target units for each species (optional)
+    # If not specified, original units are preserved
+    "target_units": {
+        "NO3-N": "mg/l",
+        "NH4-N": "mg/l",
+        "TN": "mg/l",
+        "TP": "mg/l",
+        "DO": "mg/l",
+    },
+
+    # Quality control flags to include (GRQA quality flags)
+    # Good/Acceptable values only
+    "accepted_quality_flags": ["GOOD", "ACCEPTABLE", "A", "B", None],
+}
+
+# --- Option C: Copernicus workflow (used when observation_data_source = "copernicus") ---
+# Generate synthetic observations using Copernicus land cover and climate data
+# This uses export coefficients to estimate nutrient loads based on land use
+copernicus_config = {
+    # -------------------------------------------------------------------------
+    # DATA PATHS: Specify paths to Copernicus data files
+    # -------------------------------------------------------------------------
+    # Land Cover Data:
+    #   Download from: https://land.copernicus.eu/global/products/lc
+    #   Supported formats: GeoTIFF (.tif), NetCDF (.nc)
+    #   Resolution: 100m recommended for catchment-scale analysis
+    #
+    # Climate Data (optional):
+    #   Download from: https://cds.climate.copernicus.eu/
+    #   Supported: ERA5 NetCDF files with precipitation (tp) and temperature (t2m)
+    # -------------------------------------------------------------------------
+
+    # River network shapefile for spatial matching
+    "river_network_shapefile": "/path/to/river_network.shp",
+
+    # Column in shapefile containing reach IDs
+    "reach_id_column": "seg_id",
+
+    # Copernicus land cover data path (GeoTIFF or NetCDF)
+    # Can be a single file or directory containing yearly files
+    # Examples:
+    #   Single file: "/data/copernicus/CGLS-LC100_2019.tif"
+    #   Directory:   "/data/copernicus/land_cover/" (will use files matching time period)
+    "land_cover_path": "/path/to/copernicus_land_cover.tif",
+
+    # Climate data for dynamic export coefficients (optional)
+    # ERA5 or other climate reanalysis data in NetCDF format
+    # Set to None to use static export coefficients (no climate adjustment)
+    # Examples:
+    #   Single file: "/data/era5/era5_daily_2010-2020.nc"
+    #   Directory:   "/data/era5/" (will load files matching time period)
+    "climate_data_path": None,  # Set to enable climate-adjusted exports
+
+    # Time period for synthetic observations
+    "start_date": "2000-01-01",
+    "end_date": "2020-12-31",
+
+    # Temporal resolution for synthetic observations
+    # Options: "daily", "weekly", "monthly", "annual"
+    "temporal_resolution": "monthly",
+
+    # Output directory for Copernicus workflow
+    "output_dir": None,  # Default: calibration_work_dir/observation_data
+
+    # Species to generate (must match model species names)
+    "target_species": ["TN", "TP", "TSS"],
+
+    # Export coefficients by land cover class (kg/ha/yr)
+    # Copernicus Global Land Cover classes:
+    #   10: Cropland, 20: Forest, 30: Grassland, 40: Shrubland,
+    #   50: Wetland, 60: Water, 70: Tundra, 80: Artificial,
+    #   90: Bare/sparse vegetation, 100: Snow/Ice
+    "export_coefficients": {
+        # Cropland - highest nutrient exports
+        10: {"TN": 25.0, "TP": 2.0, "TSS": 500.0},
+        # Forest - low background exports
+        20: {"TN": 2.0, "TP": 0.2, "TSS": 50.0},
+        # Grassland - moderate exports
+        30: {"TN": 10.0, "TP": 0.8, "TSS": 150.0},
+        # Shrubland
+        40: {"TN": 5.0, "TP": 0.4, "TSS": 100.0},
+        # Wetland - nutrient sink/source
+        50: {"TN": 3.0, "TP": 0.3, "TSS": 30.0},
+        # Water bodies
+        60: {"TN": 0.5, "TP": 0.05, "TSS": 10.0},
+        # Artificial/Urban - high runoff
+        80: {"TN": 15.0, "TP": 1.5, "TSS": 300.0},
+        # Bare/sparse vegetation
+        90: {"TN": 1.0, "TP": 0.1, "TSS": 200.0},
+    },
+
+    # Climate response parameters (only used if climate_data_path is set)
+    "climate_params": {
+        # Precipitation scaling power (1.0 = linear, >1.0 = nonlinear erosion response)
+        "precip_scaling_power": 1.5,
+        # Temperature Q10 factor for biological processes
+        "temp_q10": 2.0,
+        # Reference temperature (°C)
+        "temp_reference_c": 15.0,
+    },
+
+    # Uncertainty estimation
+    "uncertainty_fraction": 0.3,  # 30% uncertainty on synthetic values
+
+    # Add noise to synthetic observations for realism
+    "add_noise": True,
+    "noise_cv": 0.2,  # Coefficient of variation for noise
+}
 
 
 # =============================================================================
@@ -654,6 +885,133 @@ hpc_max_concurrent_jobs = 50
 # 7. RUN CALIBRATION
 # =============================================================================
 
+def prepare_grqa_observations(config: dict, grqa_config: dict) -> str:
+    """
+    Download and process GRQA data for calibration.
+
+    Returns path to the prepared observation CSV file.
+    """
+    if not GRQA_AVAILABLE:
+        raise ImportError(
+            "GRQA extraction tools not available. Install required dependencies:\n"
+            "  pip install geopandas requests\n"
+            "Or provide pre-formatted observation_data_path."
+        )
+
+    print("=" * 60)
+    print("GRQA DATA EXTRACTION")
+    print("=" * 60)
+
+    # Set output directory
+    output_dir = grqa_config.get("output_dir")
+    if output_dir is None:
+        output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Step 1: Extract GRQA stations and observations
+    print("\n[1/2] Extracting GRQA stations and observations...")
+
+    # Check for local data path
+    local_data_path = grqa_config.get("local_data_path")
+    if local_data_path:
+        print(f"  Using local GRQA data: {local_data_path}")
+    else:
+        print("  Will download from Zenodo if needed")
+
+    extractor = GRQACalibrationExtractor(
+        river_network_shapefile=grqa_config["river_network_shapefile"],
+        species_mapping=grqa_config["species_mapping"],
+        output_dir=output_dir,
+        local_data_path=local_data_path,
+        bounding_box=grqa_config.get("bounding_box"),
+        time_period=(grqa_config.get("start_date"), grqa_config.get("end_date"))
+    )
+
+    grqa_output = extractor.run_extraction()
+    print(f"  Extracted {grqa_output.get('total_observations', 0)} observations "
+          f"from {grqa_output.get('total_stations', 0)} stations")
+
+    # Step 2: Convert to calibration format
+    print("\n[2/2] Converting to calibration format...")
+    converter = CalibrationObservationConverter(
+        grqa_stations_path=os.path.join(output_dir, "grqa_stations.csv"),
+        grqa_observations_path=os.path.join(output_dir, "grqa_observations.csv"),
+        river_network_shapefile=grqa_config["river_network_shapefile"],
+        reach_id_column=grqa_config.get("reach_id_column", "seg_id"),
+        output_dir=output_dir
+    )
+
+    result = converter.convert(
+        max_distance_m=grqa_config.get("max_station_distance_m", 500),
+        min_observations=grqa_config.get("min_observations", 10),
+        target_units=grqa_config.get("target_units"),
+        accepted_quality_flags=grqa_config.get("accepted_quality_flags")
+    )
+
+    calibration_obs_path = result.get("calibration_observations_path")
+    print(f"  Generated calibration observations: {calibration_obs_path}")
+    print(f"  Total observations: {result.get('total_observations', 0)}")
+    print(f"  Matched reaches: {result.get('matched_reaches', 0)}")
+    print(f"  Species: {result.get('species_list', [])}")
+
+    return calibration_obs_path
+
+
+def prepare_copernicus_observations(config: dict, copernicus_config: dict) -> str:
+    """
+    Generate synthetic observations from Copernicus land cover and climate data.
+
+    Returns path to the generated observation CSV file.
+    """
+    if not COPERNICUS_AVAILABLE:
+        raise ImportError(
+            "Copernicus observation tools not available. Install required dependencies:\n"
+            "  pip install geopandas rasterio xarray\n"
+            "Or provide pre-formatted observation_data_path or use GRQA extraction."
+        )
+
+    print("=" * 60)
+    print("COPERNICUS OBSERVATION GENERATION")
+    print("=" * 60)
+
+    # Set output directory
+    output_dir = copernicus_config.get("output_dir")
+    if output_dir is None:
+        output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Generate observations using Copernicus workflow
+    print("\nGenerating synthetic observations from land cover data...")
+    generator = CopernicusObservationGenerator(
+        river_network_shapefile=copernicus_config["river_network_shapefile"],
+        reach_id_column=copernicus_config.get("reach_id_column", "seg_id"),
+        land_cover_path=copernicus_config["land_cover_path"],
+        climate_data_path=copernicus_config.get("climate_data_path"),
+        output_dir=output_dir
+    )
+
+    result = generator.generate(
+        target_species=copernicus_config["target_species"],
+        export_coefficients=copernicus_config["export_coefficients"],
+        start_date=copernicus_config.get("start_date", "2000-01-01"),
+        end_date=copernicus_config.get("end_date", "2020-12-31"),
+        temporal_resolution=copernicus_config.get("temporal_resolution", "monthly"),
+        climate_params=copernicus_config.get("climate_params"),
+        uncertainty_fraction=copernicus_config.get("uncertainty_fraction", 0.3),
+        add_noise=copernicus_config.get("add_noise", True),
+        noise_cv=copernicus_config.get("noise_cv", 0.2)
+    )
+
+    calibration_obs_path = result.get("calibration_observations_path")
+    print(f"  Generated calibration observations: {calibration_obs_path}")
+    print(f"  Total observations: {result.get('total_observations', 0)}")
+    print(f"  Reaches covered: {result.get('reaches_covered', 0)}")
+    print(f"  Species: {result.get('species_list', [])}")
+    print(f"  Time period: {result.get('start_date')} to {result.get('end_date')}")
+
+    return calibration_obs_path
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="OpenWQ Calibration Framework")
     parser.add_argument("--resume", action="store_true",
@@ -662,6 +1020,10 @@ if __name__ == "__main__":
                        help="Run only sensitivity analysis")
     parser.add_argument("--dry-run", action="store_true",
                        help="Validate configuration without running")
+    parser.add_argument("--extract-grqa-only", action="store_true",
+                       help="Only extract GRQA data without running calibration")
+    parser.add_argument("--generate-copernicus-only", action="store_true",
+                       help="Only generate Copernicus observations without running calibration")
     args = parser.parse_args()
 
     # Collect all configuration into a dictionary
@@ -711,7 +1073,72 @@ if __name__ == "__main__":
         "hpc_tasks_per_node": hpc_tasks_per_node,
         "hpc_memory": hpc_memory,
         "hpc_max_concurrent_jobs": hpc_max_concurrent_jobs,
+
+        # Observation data settings
+        "observation_data_source": observation_data_source,
+        "use_grqa": use_grqa,  # Deprecated, kept for backwards compatibility
+        "grqa_config": grqa_config,
+        "copernicus_config": copernicus_config,
     }
+
+    # ==========================================================================
+    # Observation Data Preparation (based on observation_data_source)
+    # ==========================================================================
+
+    # Determine effective source (handle backwards compatibility with use_grqa)
+    effective_source = observation_data_source
+    if use_grqa and observation_data_source == "csv":
+        effective_source = "grqa"  # Backwards compatibility
+
+    if effective_source == "grqa" or args.extract_grqa_only:
+        print("Preparing observation data from GRQA database...")
+        try:
+            obs_path = prepare_grqa_observations(config, grqa_config)
+            config["observation_data_path"] = obs_path
+            print(f"\nObservation data ready: {obs_path}")
+        except Exception as e:
+            print(f"\nERROR: GRQA extraction failed: {e}")
+            if args.extract_grqa_only:
+                sys.exit(1)
+            else:
+                print("Falling back to configured observation_data_path...")
+
+        if args.extract_grqa_only:
+            print("\n" + "=" * 60)
+            print("GRQA EXTRACTION COMPLETE")
+            print("=" * 60)
+            print(f"Observation data saved to: {config['observation_data_path']}")
+            print("\nTo run calibration, use: python your_config.py")
+            sys.exit(0)
+
+    elif effective_source == "copernicus" or args.generate_copernicus_only:
+        print("Generating synthetic observations from Copernicus data...")
+        try:
+            obs_path = prepare_copernicus_observations(config, copernicus_config)
+            config["observation_data_path"] = obs_path
+            print(f"\nObservation data ready: {obs_path}")
+        except Exception as e:
+            print(f"\nERROR: Copernicus observation generation failed: {e}")
+            if args.generate_copernicus_only:
+                sys.exit(1)
+            else:
+                print("Falling back to configured observation_data_path...")
+
+        if args.generate_copernicus_only:
+            print("\n" + "=" * 60)
+            print("COPERNICUS OBSERVATION GENERATION COMPLETE")
+            print("=" * 60)
+            print(f"Observation data saved to: {config['observation_data_path']}")
+            print("\nTo run calibration, use: python your_config.py")
+            sys.exit(0)
+
+    elif effective_source == "csv":
+        print(f"Using pre-formatted observation file: {observation_data_path}")
+
+    else:
+        print(f"WARNING: Unknown observation_data_source '{effective_source}'. "
+              f"Valid options: 'csv', 'grqa', 'copernicus'")
+        print(f"Falling back to: {observation_data_path}")
 
     if args.dry_run:
         print("=" * 60)
