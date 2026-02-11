@@ -40,6 +40,20 @@
         .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
         .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
 
+        /* Dynamic reveal animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .title-slide .reveal-title { opacity: 0; animation: fadeInScale 0.8s ease-out forwards; animation-delay: 0.2s; }
+        .title-slide .reveal-subtitle { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.6s; }
+        .title-slide .reveal-tagline { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.9s; }
+        .title-slide .reveal-logo { opacity: 0; animation: fadeInUp 0.5s ease-out forwards; animation-delay: 1.2s; }
+
         /* University Logo - Only on title and section slides */
         .university-logo {
             position: absolute;
@@ -155,17 +169,58 @@
 
         <!-- Slide 1: Title -->
         <div class="slide title-slide active" data-slide="1">
-            <h1>Sources, <span>Sinks</span> & Loads</h1>
-            <div class="subtitle">OpenWQ Input Options</div>
-            <div class="tagline">
+            <h1 class="reveal-title">Sources, <span>Sinks</span> & Loads</h1>
+            <div class="subtitle reveal-subtitle">OpenWQ Input Options</div>
+            <div class="tagline reveal-tagline">
                 Five methods for defining chemical loading — from simple CSV files<br>
                 to land-use calculations and machine learning predictions
             </div>
-            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo reveal-logo">
         </div>
 
-        <!-- Slide 2: Overview -->
+        <!-- Slide 2: Table of Contents -->
         <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Contents</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 60px;">
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="margin-bottom: 8px;">• Loading Options Overview</p>
+                            <p style="margin-bottom: 8px;">• Sources/Sinks vs External Fluxes</p>
+                            <p style="margin-top: 15px; color: var(--primary); font-weight: 600;">Section 01: JSON Inline Format</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• JSON Configuration</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Inline Data Examples</p>
+                            <p style="margin-top: 15px; color: var(--secondary); font-weight: 600;">Section 02: CSV/ASCII Files</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• External File Format</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Time Series Data</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="color: var(--purple); font-weight: 600;">Section 03: HDF5 Coupling</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Model Integration</p>
+                            <p style="margin-top: 15px; color: var(--accent); font-weight: 600;">Section 04: Land Use Based Loading</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• LULC with Static Coefficients</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• LULC with Dynamic Coefficients</p>
+                            <p style="margin-top: 15px; color: var(--teal); font-weight: 600;">Section 05: Machine Learning</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• ML Model Predictions</p>
+                            <p style="margin-top: 15px; margin-bottom: 8px;">• Temporal Patterns & Wildcards</p>
+                            <p style="margin-bottom: 8px;">• Discrete vs Continuous Loads</p>
+                            <p style="margin-bottom: 8px;">• Master Configuration</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Overview -->
+        <div class="slide" data-slide="3">
             <div class="slide-header">
                 <h2>Loading Options Overview</h2>
             </div>
@@ -206,12 +261,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">2</div>
+                <div class="page-number">3</div>
             </div>
         </div>
 
         <!-- Slide 3: SS vs EWF -->
-        <div class="slide" data-slide="3">
+        <div class="slide" data-slide="4">
             <div class="slide-header">
                 <h2>Sources/Sinks vs External Fluxes</h2>
             </div>
@@ -251,19 +306,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">3</div>
+                <div class="page-number">4</div>
             </div>
         </div>
 
         <!-- Slide 4: Section - Method 1 -->
-        <div class="slide section-slide" data-slide="4">
+        <div class="slide section-slide" data-slide="5">
             <div class="section-number">01</div>
             <h2>JSON Inline Format</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 5: JSON Format -->
-        <div class="slide" data-slide="5">
+        <div class="slide" data-slide="6">
             <div class="slide-header">
                 <h2>Method 1: JSON Inline Data</h2>
             </div>
@@ -309,19 +364,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">5</div>
+                <div class="page-number">6</div>
             </div>
         </div>
 
         <!-- Slide 6: Section - Method 2 -->
-        <div class="slide section-slide teal" data-slide="6">
+        <div class="slide section-slide teal" data-slide="7">
             <div class="section-number">02</div>
             <h2>CSV/ASCII Files</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 7: CSV Format -->
-        <div class="slide" data-slide="7">
+        <div class="slide" data-slide="8">
             <div class="slide-header">
                 <h2>Method 2: External CSV Files</h2>
             </div>
@@ -366,19 +421,19 @@ YYYY,MM,DD,HH,MIN,SEC,ix,iy,iz,load,load_type
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">7</div>
+                <div class="page-number">8</div>
             </div>
         </div>
 
         <!-- Slide 8: Section - Method 3 -->
-        <div class="slide section-slide purple" data-slide="8">
+        <div class="slide section-slide purple" data-slide="9">
             <div class="section-number">03</div>
             <h2>HDF5 Coupling</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 9: HDF5 Format -->
-        <div class="slide" data-slide="9">
+        <div class="slide" data-slide="10">
             <div class="slide-header">
                 <h2>Method 3: HDF5 Model Coupling</h2>
             </div>
@@ -432,19 +487,19 @@ YYYY,MM,DD,HH,MIN,SEC,ix,iy,iz,load,load_type
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">9</div>
+                <div class="page-number">10</div>
             </div>
         </div>
 
         <!-- Slide 10: Section - Method 4 -->
-        <div class="slide section-slide" data-slide="10">
+        <div class="slide section-slide" data-slide="11">
             <div class="section-number">04</div>
             <h2>Land Use Based Loading</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 11: LULC Static -->
-        <div class="slide" data-slide="11">
+        <div class="slide" data-slide="12">
             <div class="slide-header">
                 <h2>Method 4a: LULC with Static Coefficients</h2>
             </div>
@@ -490,12 +545,12 @@ YYYY,MM,DD,HH,MIN,SEC,ix,iy,iz,load,load_type
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">11</div>
+                <div class="page-number">12</div>
             </div>
         </div>
 
         <!-- Slide 12: LULC Dynamic -->
-        <div class="slide" data-slide="12">
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Method 4b: LULC with Dynamic Coefficients</h2>
             </div>
@@ -537,19 +592,19 @@ YYYY,MM,DD,HH,MIN,SEC,ix,iy,iz,load,load_type
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">12</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
         <!-- Slide 13: Section - Method 5 -->
-        <div class="slide section-slide purple" data-slide="13">
+        <div class="slide section-slide purple" data-slide="14">
             <div class="section-number">05</div>
             <h2>Machine Learning</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 14: ML Method -->
-        <div class="slide" data-slide="14">
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>Method 5: ML Model Predictions</h2>
             </div>
@@ -603,12 +658,12 @@ date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
         <!-- Slide 15: Temporal Patterns -->
-        <div class="slide" data-slide="15">
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Temporal Patterns & Wildcards</h2>
             </div>
@@ -654,12 +709,12 @@ date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
         <!-- Slide 16: Load Types -->
-        <div class="slide" data-slide="16">
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Discrete vs Continuous Loads</h2>
             </div>
@@ -703,12 +758,12 @@ date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
         <!-- Slide 17: Master Configuration -->
-        <div class="slide" data-slide="17">
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Master Configuration</h2>
             </div>
@@ -737,12 +792,12 @@ date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
         <!-- Slide 18: Summary -->
-        <div class="slide" data-slide="18">
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -791,12 +846,12 @@ date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">18</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
         <!-- Slide 19: Thank You -->
-        <div class="slide title-slide" data-slide="19">
+        <div class="slide title-slide" data-slide="20">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
@@ -804,7 +859,7 @@ date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
 
     </div>
 
-    <div class="nav-hint" id="navHint">Use ← → arrows | Press F for fullscreen</div>
+    <div class="nav-hint" id="navHint">Use ← → arrows or Enter | Press F for fullscreen</div>
 
     <script>
         let currentSlide = 1;
@@ -824,7 +879,7 @@ date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
 
         document.addEventListener('keydown', (e) => {
             switch(e.key) {
-                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'Enter': nextSlide(); break;
                 case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
                 case 'Home': currentSlide = 1; showSlide(currentSlide); break;
                 case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;

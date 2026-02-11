@@ -40,6 +40,20 @@
         .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
         .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
 
+        /* Dynamic reveal animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .title-slide .reveal-title { opacity: 0; animation: fadeInScale 0.8s ease-out forwards; animation-delay: 0.2s; }
+        .title-slide .reveal-subtitle { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.6s; }
+        .title-slide .reveal-tagline { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.9s; }
+        .title-slide .reveal-logo { opacity: 0; animation: fadeInUp 0.5s ease-out forwards; animation-delay: 1.2s; }
+
         /* University Logo - Only on title and section slides */
         .university-logo {
             position: absolute;
@@ -183,17 +197,58 @@
 
         <!-- Slide 1: Title -->
         <div class="slide title-slide active" data-slide="1">
-            <h1>Model <span>Calibration</span></h1>
-            <div class="subtitle">OpenWQ Parameter Optimization</div>
-            <div class="tagline">
+            <h1 class="reveal-title">Model <span>Calibration</span></h1>
+            <div class="subtitle reveal-subtitle">OpenWQ Parameter Optimization</div>
+            <div class="tagline reveal-tagline">
                 A comprehensive guide to calibrating OpenWQ models<br>
                 — sensitivity analysis, optimization algorithms, and best practices
             </div>
-            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo reveal-logo">
         </div>
 
-        <!-- Slide 2: Overview -->
+        <!-- Slide 2: Table of Contents -->
         <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Contents</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 60px;">
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="margin-bottom: 8px;">• Calibration Framework Overview</p>
+                            <p style="margin-bottom: 8px;">• Parameter Categories (106+)</p>
+                            <p style="margin-top: 15px; color: var(--primary); font-weight: 600;">Section 01: Sensitivity Analysis</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Morris Screening</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Sobol Sensitivity Analysis</p>
+                            <p style="margin-top: 15px; color: var(--rose); font-weight: 600;">Section 02: DDS Optimization</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• DDS Algorithm</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Objective Functions</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="color: var(--secondary); font-weight: 600;">Section 03: Calibration Workflow</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Step-by-Step Workflow</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Observation Data Sources</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• GRQA Database Integration</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• CSV Format</p>
+                            <p style="margin-top: 15px; color: var(--accent); font-weight: 600;">Section 04: Implementation</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Priority-Based Calibration</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Running Calibration</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Calibration Output</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Best Practices</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Overview -->
+        <div class="slide" data-slide="3">
             <div class="slide-header">
                 <h2>Calibration Framework Overview</h2>
             </div>
@@ -247,12 +302,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">2</div>
+                <div class="page-number">3</div>
             </div>
         </div>
 
         <!-- Slide 3: Parameter Categories -->
-        <div class="slide" data-slide="3">
+        <div class="slide" data-slide="4">
             <div class="slide-header">
                 <h2>Parameter Categories (106+ total)</h2>
             </div>
@@ -313,19 +368,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">3</div>
+                <div class="page-number">4</div>
             </div>
         </div>
 
         <!-- Slide 4: Section - Sensitivity -->
-        <div class="slide section-slide blue" data-slide="4">
+        <div class="slide section-slide blue" data-slide="5">
             <div class="section-number">01</div>
             <h2>Sensitivity Analysis</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 5: Morris Screening -->
-        <div class="slide" data-slide="5">
+        <div class="slide" data-slide="6">
             <div class="slide-header">
                 <h2>Morris Screening (Elementary Effects)</h2>
             </div>
@@ -387,12 +442,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">5</div>
+                <div class="page-number">6</div>
             </div>
         </div>
 
         <!-- Slide 6: Sobol Analysis -->
-        <div class="slide" data-slide="6">
+        <div class="slide" data-slide="7">
             <div class="slide-header">
                 <h2>Sobol Sensitivity Analysis</h2>
             </div>
@@ -432,19 +487,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">6</div>
+                <div class="page-number">7</div>
             </div>
         </div>
 
         <!-- Slide 7: Section - Optimization -->
-        <div class="slide section-slide" data-slide="7">
+        <div class="slide section-slide" data-slide="8">
             <div class="section-number">02</div>
             <h2>DDS Optimization</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 8: DDS Algorithm -->
-        <div class="slide" data-slide="8">
+        <div class="slide" data-slide="9">
             <div class="slide-header">
                 <h2>Dynamically Dimensioned Search (DDS)</h2>
             </div>
@@ -495,12 +550,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">8</div>
+                <div class="page-number">9</div>
             </div>
         </div>
 
         <!-- Slide 9: Objective Functions -->
-        <div class="slide" data-slide="9">
+        <div class="slide" data-slide="10">
             <div class="slide-header">
                 <h2>Objective Functions</h2>
             </div>
@@ -534,19 +589,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">9</div>
+                <div class="page-number">10</div>
             </div>
         </div>
 
         <!-- Slide 10: Section - Workflow -->
-        <div class="slide section-slide green" data-slide="10">
+        <div class="slide section-slide green" data-slide="11">
             <div class="section-number">03</div>
             <h2>Calibration Workflow</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 11: Workflow Steps -->
-        <div class="slide" data-slide="11">
+        <div class="slide" data-slide="12">
             <div class="slide-header">
                 <h2>Step-by-Step Workflow</h2>
             </div>
@@ -589,12 +644,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">11</div>
+                <div class="page-number">12</div>
             </div>
         </div>
 
         <!-- Slide 12: Observation Data Sources -->
-        <div class="slide" data-slide="12">
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Observation Data Sources</h2>
             </div>
@@ -618,7 +673,7 @@
                         <p style="font-size: 0.95rem; margin-bottom: 12px;"><code>observation_data_source = "grqa"</code></p>
                         <ul style="margin-left: 15px;">
                             <li style="font-size: 0.9rem;">43 water quality parameters</li>
-                            <li style="font-size: 0.9rem;">~5 million observations worldwide</li>
+                            <li style="font-size: 0.9rem;">~100 million observations worldwide</li>
                             <li style="font-size: 0.9rem;">Auto station-to-reach matching</li>
                             <li style="font-size: 0.9rem;">Local data or Zenodo download</li>
                         </ul>
@@ -631,12 +686,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">12</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
         <!-- Slide 13: GRQA Integration -->
-        <div class="slide" data-slide="13">
+        <div class="slide" data-slide="14">
             <div class="slide-header">
                 <h2>GRQA Database Integration</h2>
             </div>
@@ -647,7 +702,7 @@
                             <h3>Global River Water Quality Archive</h3>
                             <ul style="margin-left: 15px;">
                                 <li style="font-size: 0.9rem;">43 water quality parameters</li>
-                                <li style="font-size: 0.9rem;">~5 million observations worldwide</li>
+                                <li style="font-size: 0.9rem;">~100 million observations worldwide</li>
                                 <li style="font-size: 0.9rem;">Automatic Zenodo download</li>
                                 <li style="font-size: 0.9rem;">Spatial station-reach matching</li>
                             </ul>
@@ -681,19 +736,19 @@ grqa_config = {
                         </div>
                         <div class="highlight-box success" style="margin-top: 15px;">
                             <strong>Run extraction:</strong><br>
-                            <code style="font-size: 0.85rem;">python my_calibration.py --extract-grqa-only</code>
+                            <code style="font-size: 0.85rem;">python my_calibration.py --prepare-obs-only</code>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">13</div>
+                <div class="page-number">14</div>
             </div>
         </div>
 
         <!-- Slide 14: CSV Format -->
-        <div class="slide" data-slide="14">
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>Observation Data CSV Format</h2>
             </div>
@@ -730,12 +785,12 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
         <!-- Slide 15: Priority Parameters -->
-        <div class="slide" data-slide="15">
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Priority-Based Calibration</h2>
             </div>
@@ -780,63 +835,61 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
         <!-- Slide 16: Running Calibration -->
-        <div class="slide" data-slide="16">
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Running Calibration</h2>
             </div>
             <div class="slide-content">
-                <pre style="font-size: 0.8rem;">
-<span class="comment"># calibration_config.py</span>
-config = {
-    <span class="comment"># Paths</span>
-    <span class="string">"base_model_config_dir"</span>: <span class="string">"openwq_in/"</span>,
-    <span class="string">"observation_data_path"</span>: <span class="string">"observations.csv"</span>,
-    <span class="string">"calibration_work_dir"</span>: <span class="string">"calibration_workspace/"</span>,
+                <p style="font-size: 1.05rem; margin-bottom: 15px;">
+                    Copy the template to your working directory, configure parameters, then run:
+                </p>
+                <div class="two-column" style="gap: 30px;">
+                    <div class="column">
+                        <pre style="font-size: 0.78rem;">
+<span class="comment"># 1) Copy and edit the template</span>
+cp calibration_config_template.py my_calibration.py
 
-    <span class="comment"># Algorithm</span>
-    <span class="string">"algorithm"</span>: <span class="string">"DDS"</span>,
-    <span class="string">"max_evaluations"</span>: <span class="keyword">300</span>,
-    <span class="string">"objective_function"</span>: <span class="string">"KGE"</span>,
-
-    <span class="comment"># Parameters to calibrate</span>
-    <span class="string">"parameters"</span>: [
-        {<span class="string">"name"</span>: <span class="string">"k_nitrification"</span>, <span class="string">"bounds"</span>: [<span class="keyword">0.001</span>, <span class="keyword">0.5</span>], <span class="string">"transform"</span>: <span class="string">"log"</span>},
-        {<span class="string">"name"</span>: <span class="string">"k_denitrification"</span>, <span class="string">"bounds"</span>: [<span class="keyword">1e-8</span>, <span class="keyword">0.01</span>], <span class="string">"transform"</span>: <span class="string">"log"</span>},
-        {<span class="string">"name"</span>: <span class="string">"ss_scale_all"</span>, <span class="string">"bounds"</span>: [<span class="keyword">0.5</span>, <span class="keyword">2.0</span>]}
-    ],
-
-    <span class="comment"># Target species</span>
-    <span class="string">"target_species"</span>: [<span class="string">"NO3-N"</span>, <span class="string">"NH4-N"</span>],
-    <span class="string">"species_weights"</span>: {<span class="string">"NO3-N"</span>: <span class="keyword">1.0</span>, <span class="string">"NH4-N"</span>: <span class="keyword">0.5</span>}
-}
-                </pre>
-                <div class="two-column" style="gap: 30px; margin-top: 15px;">
-                    <pre style="font-size: 0.85rem;">
-<span class="comment"># Run calibration</span>
-python calibration_driver.py
-
-<span class="comment"># With options</span>
-python calibration_driver.py --dry-run     <span class="comment"># Validate only</span>
-python calibration_driver.py --resume      <span class="comment"># From checkpoint</span>
-                    </pre>
-                    <div class="highlight-box success" style="margin: 0;">
-                        <strong>Checkpoint support:</strong> Automatically saves state for restart after interruption
+<span class="comment"># 2) Run in different modes:</span>
+python my_calibration.py                    <span class="comment"># Full calibration</span>
+python my_calibration.py --sensitivity-only <span class="comment"># SA only</span>
+python my_calibration.py --prepare-obs-only <span class="comment"># Obs data only</span>
+python my_calibration.py --dry-run          <span class="comment"># Validate config</span>
+python my_calibration.py --resume           <span class="comment"># Resume from checkpoint</span>
+                        </pre>
+                        <div class="highlight-box success" style="margin-top: 10px;">
+                            <strong>Template pattern:</strong> Copy → Edit → Run — no need to modify library code
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Command-Line Flags</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td><strong>--sensitivity-only</strong></td><td>Run Morris/Sobol only</td></tr>
+                                <tr><td><strong>--prepare-obs-only</strong></td><td>Prepare observations (GRQA/CSV)</td></tr>
+                                <tr><td><strong>--dry-run</strong></td><td>Validate without running</td></tr>
+                                <tr><td><strong>--resume</strong></td><td>Continue from checkpoint</td></tr>
+                            </table>
+                        </div>
+                        <div class="card rose" style="margin-top: 10px;">
+                            <h3>In-File Options</h3>
+                            <p style="font-size: 0.9rem;"><code>run_sensitivity_first = True</code><br>→ Auto SA → Calibration pipeline</p>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
         <!-- Slide 17: Output Files -->
-        <div class="slide" data-slide="17">
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Calibration Output</h2>
             </div>
@@ -873,12 +926,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
         <!-- Slide 18: Best Practices -->
-        <div class="slide" data-slide="18">
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Best Practices</h2>
             </div>
@@ -917,12 +970,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">18</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
         <!-- Slide 19: Summary -->
-        <div class="slide" data-slide="19">
+        <div class="slide" data-slide="20">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -948,12 +1001,12 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">19</div>
+                <div class="page-number">20</div>
             </div>
         </div>
 
         <!-- Slide 20: Thank You -->
-        <div class="slide title-slide" data-slide="20">
+        <div class="slide title-slide" data-slide="21">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">
@@ -969,7 +1022,7 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
 
     </div>
 
-    <div class="nav-hint" id="navHint">Use ← → arrows | Press F for fullscreen</div>
+    <div class="nav-hint" id="navHint">Use ← → arrows or Enter | Press F for fullscreen</div>
 
     <script>
         let currentSlide = 1;
@@ -989,7 +1042,7 @@ python calibration_driver.py --resume      <span class="comment"># From checkpoi
 
         document.addEventListener('keydown', (e) => {
             switch(e.key) {
-                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'Enter': nextSlide(); break;
                 case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
                 case 'Home': currentSlide = 1; showSlide(currentSlide); break;
                 case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
