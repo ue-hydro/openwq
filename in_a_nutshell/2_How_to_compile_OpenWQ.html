@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWQ - How to Compile</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004499;
+            --secondary: #00a86b;
+            --accent: #ff6b35;
+            --purple: #7c3aed;
+            --teal: #0891b2;
+            --dark: #1a1a2e;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #000; overflow: hidden; }
+        .presentation { height: 100vh; width: 100vw; position: relative; }
+
+        .slide {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; padding: 55px 75px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%); overflow: hidden;
+        }
+        .slide.active { display: flex; }
+
+        .slide.title-slide {
+            background: linear-gradient(135deg, var(--dark) 0%, #16213e 50%, #0f3460 100%);
+            justify-content: center; align-items: center; text-align: center; color: white;
+        }
+        .slide.title-slide h1 { font-size: 4rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .slide.title-slide h1 span { color: var(--accent); }
+        .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
+        .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
+
+        /* Dynamic reveal animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .title-slide .reveal-title { opacity: 0; animation: fadeInScale 0.8s ease-out forwards; animation-delay: 0.2s; }
+        .title-slide .reveal-subtitle { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.6s; }
+        .title-slide .reveal-tagline { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.9s; }
+        .title-slide .reveal-logo { opacity: 0; animation: fadeInUp 0.5s ease-out forwards; animation-delay: 1.2s; }
+
+        .university-logo {
+            position: absolute; bottom: 30px; right: 40px; height: 60px; opacity: 0.9;
+        }
+        .slide.title-slide .university-logo { height: 70px; }
+        .slide.section-slide .university-logo { height: 55px; opacity: 0.85; }
+
+        .slide.section-slide {
+            background: linear-gradient(135deg, var(--accent) 0%, #e65100 100%);
+            justify-content: center; align-items: center; color: white;
+        }
+        .slide.section-slide.blue { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
+        .slide.section-slide.purple { background: linear-gradient(135deg, var(--purple) 0%, #5b21b6 100%); }
+        .slide.section-slide.teal { background: linear-gradient(135deg, var(--teal) 0%, #0e7490 100%); }
+        .slide.section-slide.green { background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%); }
+        .slide.section-slide h2 { font-size: 3.5rem; font-weight: 600; }
+        .slide.section-slide .section-number { font-size: 10rem; font-weight: 700; opacity: 0.15; position: absolute; top: 40px; right: 80px; }
+
+        .slide-header { margin-bottom: 30px; }
+        .slide-header h2 { font-size: 2.5rem; font-weight: 600; color: var(--dark); border-left: 6px solid var(--accent); padding-left: 22px; }
+        .slide-content { flex: 1; display: flex; flex-direction: column; }
+
+        .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 45px; height: 100%; }
+        .three-column { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 25px; }
+        .column { display: flex; flex-direction: column; }
+
+        .card {
+            background: white; border-radius: 14px; padding: 22px;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.07); margin-bottom: 15px;
+        }
+        .card.primary { border-left: 5px solid var(--primary); }
+        .card.secondary { border-left: 5px solid var(--secondary); }
+        .card.accent { border-left: 5px solid var(--accent); }
+        .card.purple { border-left: 5px solid var(--purple); }
+        .card.teal { border-left: 5px solid var(--teal); }
+        .card h3 { font-size: 1.25rem; color: var(--dark); margin-bottom: 10px; }
+        .card h4 { font-size: 1.1rem; color: var(--primary-dark); margin-bottom: 8px; }
+        .card p, .card li { font-size: 1rem; color: var(--text); line-height: 1.45; }
+
+        ul, ol { margin-left: 20px; }
+        li { font-size: 1.15rem; color: var(--text); margin-bottom: 10px; line-height: 1.35; }
+        li strong { color: var(--primary-dark); }
+
+        pre {
+            background: var(--dark); color: #e2e8f0; padding: 18px; border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; line-height: 1.4; overflow-x: auto;
+        }
+        pre .comment { color: #68d391; }
+        pre .string { color: #fbd38d; }
+        pre .keyword { color: #63b3ed; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; background: white; border-radius: 10px; overflow: hidden; }
+        th { background: var(--dark); color: white; padding: 10px 14px; text-align: left; font-weight: 600; }
+        td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #fff7ed, #ffedd5);
+            border-left: 5px solid var(--accent); padding: 18px 22px; border-radius: 0 10px 10px 0; margin: 12px 0;
+        }
+        .highlight-box.info { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-left-color: var(--primary); }
+        .highlight-box.success { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-left-color: var(--secondary); }
+        .highlight-box.warning { background: linear-gradient(135deg, #fef3c7, #fde68a); border-left-color: #f59e0b; }
+
+        .slide-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 12px; border-top: 1px solid #e2e8f0; margin-top: auto;
+        }
+        .slide-footer .logo { font-weight: 700; font-size: 1.1rem; color: var(--dark); }
+        .slide-footer .logo span { color: var(--accent); }
+        .slide-footer .page-number {
+            background: var(--dark); color: white; width: 36px; height: 36px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;
+        }
+
+        .workflow-step {
+            display: flex; align-items: center; gap: 20px;
+            background: white; padding: 16px 22px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 12px;
+        }
+        .workflow-step .number {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--accent); color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; font-weight: 700; flex-shrink: 0;
+        }
+        .workflow-step .content h4 { font-size: 1.1rem; color: var(--dark); margin-bottom: 4px; }
+        .workflow-step .content p { font-size: 0.9rem; color: var(--text-light); }
+
+        .method-badge {
+            display: inline-block; padding: 4px 12px; border-radius: 6px;
+            font-size: 0.8rem; font-weight: 600; margin-right: 8px;
+        }
+        .method-badge.docker { background: #2496ed20; color: #2496ed; }
+        .method-badge.apptainer { background: #1d4ed820; color: #1d4ed8; }
+        .method-badge.native { background: #00a86b20; color: #00a86b; }
+
+        .folder-tree {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            background: #f8fafc;
+            padding: 15px 20px;
+            border-radius: 10px;
+            border-left: 4px solid var(--accent);
+        }
+        .folder-tree .folder { color: var(--primary); font-weight: 600; }
+        .folder-tree .file { color: var(--text); }
+        .folder-tree .comment { color: var(--text-light); font-size: 0.8rem; }
+
+        .nav-hint {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 10px 22px; border-radius: 25px;
+            font-size: 0.85rem; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+        }
+        .nav-hint.visible { opacity: 1; }
+
+        .diagram { background: white; border: 2px solid #e2e8f0; border-radius: 14px; padding: 20px; text-align: center; }
+        .diagram pre { background: transparent; color: var(--text); display: inline-block; text-align: left; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="presentation" id="presentation">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1 class="reveal-title">How to <span>Compile</span></h1>
+            <div class="subtitle reveal-subtitle">OpenWQ Build Guide</div>
+            <div class="tagline reveal-tagline">
+                Step-by-step instructions for compiling OpenWQ<br>
+                — Docker, Apptainer (HPC), and native Linux builds
+            </div>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo reveal-logo">
+        </div>
+
+        <!-- Slide 2: Table of Contents -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Contents</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 60px;">
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.4;">
+                            <p style="margin-bottom: 8px;">• Compilation Methods Overview</p>
+                            <p style="margin-bottom: 8px;">• Dependencies</p>
+                            <p style="margin-top: 15px; color: var(--accent); font-weight: 600;">Section 01: Docker Build</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: Setup & Build</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: CMake Configuration</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.4;">
+                            <p style="color: var(--primary); font-weight: 600;">Section 02: Apptainer (HPC)</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Apptainer: Build Container</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Apptainer: Compile & Run</p>
+                            <p style="margin-top: 15px; color: var(--secondary); font-weight: 600;">Section 03: Native Linux</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Native Linux: Manual Setup</p>
+                            <p style="margin-top: 15px; margin-bottom: 8px;">• Key Files & Locations</p>
+                            <p style="margin-bottom: 8px;">• Troubleshooting</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Overview -->
+        <div class="slide" data-slide="3">
+            <div class="slide-header">
+                <h2>Compilation Methods Overview</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.15rem; margin-bottom: 25px;">
+                    Choose the method that matches your environment:
+                </p>
+                <div class="three-column" style="gap: 25px;">
+                    <div class="card accent">
+                        <h3><span class="method-badge docker">🐳 Docker</span></h3>
+                        <p style="margin-bottom: 12px;"><strong>Local development & testing</strong></p>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.95rem;">All dependencies pre-installed</li>
+                            <li style="font-size: 0.95rem;">Works on macOS, Linux, Windows</li>
+                            <li style="font-size: 0.95rem;">Easy volume mounting</li>
+                            <li style="font-size: 0.95rem;">VSCode integration</li>
+                        </ul>
+                        <p style="margin-top: 12px; font-size: 0.9rem; color: var(--secondary);"><strong>Recommended for beginners</strong></p>
+                    </div>
+                    <div class="card primary">
+                        <h3><span class="method-badge apptainer">📦 Apptainer</span></h3>
+                        <p style="margin-bottom: 12px;"><strong>HPC clusters & production</strong></p>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.95rem;">No root required to run</li>
+                            <li style="font-size: 0.95rem;">HPC-optimized</li>
+                            <li style="font-size: 0.95rem;">Portable .sif image</li>
+                            <li style="font-size: 0.95rem;">SLURM/PBS compatible</li>
+                        </ul>
+                        <p style="margin-top: 12px; font-size: 0.9rem; color: var(--primary);"><strong>Recommended for HPC</strong></p>
+                    </div>
+                    <div class="card secondary">
+                        <h3><span class="method-badge native">🐧 Native Linux</span></h3>
+                        <p style="margin-bottom: 12px;"><strong>Full control & customization</strong></p>
+                        <ul style="margin-left: 15px;">
+                            <li style="font-size: 0.95rem;">Direct hardware access</li>
+                            <li style="font-size: 0.95rem;">Maximum performance</li>
+                            <li style="font-size: 0.95rem;">Custom dependencies</li>
+                            <li style="font-size: 0.95rem;">Requires manual setup</li>
+                        </ul>
+                        <p style="margin-top: 12px; font-size: 0.9rem; color: var(--text-light);">Advanced users only</p>
+                    </div>
+                </div>
+                <div class="highlight-box warning" style="margin-top: 20px;">
+                    <strong>Note:</strong> Native compilation on <strong>macOS</strong> and <strong>Windows</strong> is not supported — use Docker or Apptainer instead
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">3</div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Dependencies -->
+        <div class="slide" data-slide="4">
+            <div class="slide-header">
+                <h2>Dependencies</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>Required Libraries</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>Armadillo</strong></td><td>Linear algebra (C++)</td></tr>
+                                <tr><td><strong>HDF5</strong></td><td>Output file format</td></tr>
+                                <tr><td><strong>NetCDF</strong></td><td>Host model I/O</td></tr>
+                                <tr><td><strong>OpenBLAS/LAPACK</strong></td><td>Matrix operations</td></tr>
+                                <tr><td><strong>CMake ≥ 3.10</strong></td><td>Build system</td></tr>
+                                <tr><td><strong>g++ / gfortran</strong></td><td>Compilers</td></tr>
+                            </table>
+                        </div>
+                        <div class="card primary">
+                            <h3>Optional Libraries</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>PHREEQC-RM</strong></td><td>Geochemistry engine</td></tr>
+                                <tr><td><strong>SUNDIALS</strong></td><td>ODE solver</td></tr>
+                                <tr><td><strong>ParallelIO</strong></td><td>MizuRoute-CSLM support</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="highlight-box success">
+                            <strong>Container builds include everything!</strong><br>
+                            Docker and Apptainer containers come with all dependencies pre-installed — no manual setup required.
+                        </div>
+                        <div class="card teal" style="margin-top: 15px;">
+                            <h3>Host Models</h3>
+                            <p>OpenWQ is coupled to:</p>
+                            <ul style="margin-left: 15px; margin-top: 10px;">
+                                <li style="font-size: 0.95rem;"><strong>SUMMA</strong> — Land surface hydrology</li>
+                                <li style="font-size: 0.95rem;"><strong>mizuRoute</strong> — River routing</li>
+                                <li style="font-size: 0.95rem;"><strong>mizuRoute-CSLM</strong> — With lakes</li>
+                                <li style="font-size: 0.95rem;"><strong>FLUXOS</strong> — Overland flow</li>
+                                <li style="font-size: 0.95rem;"><strong>CRHM</strong> — Cold regions</li>
+                                <li style="font-size: 0.95rem;"><strong>Custom</strong> — Any model via API</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">4</div>
+            </div>
+        </div>
+
+        <!-- Slide 5: Container Files Organization -->
+        <div class="slide" data-slide="5">
+            <div class="slide-header">
+                <h2>Container Files Organization</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="folder-tree">
+                            <span class="folder">📁 containers/</span><br>
+                            ├── Dockerfile <span class="comment"># Docker image definition</span><br>
+                            ├── docker-compose.yml <span class="comment"># Docker config</span><br>
+                            ├── openwq_apptainer.def <span class="comment"># Apptainer definition</span><br>
+                            └── <span class="folder">📁 hpc_templates/</span> <span class="comment"># Job scripts</span><br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;├── slurm_job.sh<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;└── pbs_job.sh<br>
+                            <br>
+                            <span class="folder">📁 utils/</span><br>
+                            ├── install_armadillo.sh <span class="comment"># Armadillo installer</span><br>
+                            ├── compile_summa_apptainer.sh<br>
+                            ├── run_summa_apptainer.sh<br>
+                            └── compile_mizuroute_apptainer.sh
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>🐳 Docker Files</h3>
+                            <p style="font-size: 0.9rem;">Complete dev environment with all dependencies pre-installed</p>
+                        </div>
+                        <div class="card primary">
+                            <h3>📦 Apptainer Files</h3>
+                            <p style="font-size: 0.9rem;">HPC-ready container definition + job templates for SLURM/PBS</p>
+                        </div>
+                        <div class="card secondary">
+                            <h3>🔧 Utils Scripts</h3>
+                            <p style="font-size: 0.9rem;">Helper scripts for building and running with containers</p>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 10px;">
+                            <strong>Executables:</strong> <code>openwq/build/</code> or <code>host_model/bin/</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">5</div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Docker Steps -->
+        <div class="slide" data-slide="6">
+            <div class="slide-header">
+                <h2>Docker: Setup & Build</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="workflow-step">
+                            <div class="number">1</div>
+                            <div class="content">
+                                <h4>Clone the repository</h4>
+                                <p>Get host model + OpenWQ source code</p>
+                            </div>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="number" style="background: var(--primary);">2</div>
+                            <div class="content">
+                                <h4>Build container</h4>
+                                <p>docker-compose build (includes all deps)</p>
+                            </div>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="number" style="background: var(--purple);">3</div>
+                            <div class="content">
+                                <h4>Start container</h4>
+                                <p>docker-compose up -d</p>
+                            </div>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="number" style="background: var(--secondary);">4</div>
+                            <div class="content">
+                                <h4>Compile inside container</h4>
+                                <p>cmake & make</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+<span class="comment"># 1. Clone host model (e.g., SUMMA)</span>
+git clone -b develop https://github.com/ashleymedin/summa.git
+cd summa/build/source/openwq
+
+<span class="comment"># 2. Clone OpenWQ</span>
+git clone -b develop git@github.com:ue-hydro/openwq.git
+cd openwq/containers
+
+<span class="comment"># 3. Build & start container</span>
+docker-compose build
+docker-compose up -d
+
+<span class="comment"># 4. Connect to container</span>
+docker attach docker_openwq
+<span class="comment"># Or use VSCode Remote-Containers</span>
+
+<span class="comment"># 5. Inside container: compile</span>
+cd /code/build/source/openwq/openwq
+cmake -DHOST_MODEL_TARGET=summa_openwq \
+      -DCMAKE_BUILD_TYPE=Release .
+make -j4
+<span class="comment"># Executable created in bin/ folder</span>
+                        </pre>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">6</div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Docker CMake Options -->
+        <div class="slide" data-slide="7">
+            <div class="slide-header">
+                <h2>Docker: CMake Configuration</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.05rem; margin-bottom: 20px;">
+                    CMake requires two arguments: <code>-DHOST_MODEL_TARGET</code> and <code>-DCMAKE_BUILD_TYPE</code>
+                </p>
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.75rem;">
+<span class="comment"># CMake command syntax:</span>
+cmake -DHOST_MODEL_TARGET=&lt;target&gt; \
+      -DCMAKE_BUILD_TYPE=&lt;type&gt; .
+
+<span class="comment"># Examples:</span>
+cmake -DHOST_MODEL_TARGET=summa_openwq \
+      -DCMAKE_BUILD_TYPE=Release .
+
+cmake -DHOST_MODEL_TARGET=mizuroute_openwq \
+      -DCMAKE_BUILD_TYPE=Debug .
+
+cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq \
+      -DCMAKE_BUILD_TYPE=Release .
+
+<span class="comment"># Then compile:</span>
+make -j4
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>HOST_MODEL_TARGET Options</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td><strong>summa_openwq</strong></td><td>SUMMA land model</td></tr>
+                                <tr><td><strong>mizuroute_openwq</strong></td><td>MizuRoute routing</td></tr>
+                                <tr><td><strong>mizuroute_lakes_openwq</strong></td><td>With lake module</td></tr>
+                                <tr><td><strong>mizuroute_lakes_cslm_openwq</strong></td><td>CSLM lakes</td></tr>
+                                <tr><td><strong>openwq</strong></td><td>Standalone</td></tr>
+                            </table>
+                        </div>
+                        <div class="card accent" style="margin-top: 10px;">
+                            <h3>CMAKE_BUILD_TYPE Options</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td><strong>Release</strong></td><td>Optimized (production)</td></tr>
+                                <tr><td><strong>Debug</strong></td><td>With debug symbols</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">7</div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Section - Apptainer -->
+        <div class="slide section-slide blue" data-slide="8">
+            <div class="section-number">02</div>
+            <h2>Apptainer (HPC)</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+        <!-- Slide 9: Apptainer Build -->
+        <div class="slide" data-slide="9">
+            <div class="slide-header">
+                <h2>Apptainer: Build Container</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <p style="font-size: 1.05rem; margin-bottom: 15px;">
+                            Build on a machine with <strong>sudo access</strong>, then transfer the .sif image to HPC.
+                        </p>
+                        <pre style="font-size: 0.75rem;">
+<span class="comment"># 1. Clone repositories (same as Docker)</span>
+git clone -b develop https://github.com/ashleymedin/summa.git
+cd summa/build/source/openwq
+git clone -b develop git@github.com:ue-hydro/openwq.git
+
+<span class="comment"># 2. Build Apptainer image (requires sudo)</span>
+cd openwq/containers
+sudo apptainer build openwq.sif openwq_apptainer.def
+
+<span class="comment"># 3. Transfer to HPC</span>
+scp openwq.sif user@hpc:/path/to/containers/
+
+<span class="comment"># Image size: ~2-3 GB</span>
+<span class="comment"># Build time: 15-30 minutes</span>
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>What's Included</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;">Ubuntu 24.04 base</li>
+                                <li style="font-size: 0.95rem;">Armadillo 10.6.0</li>
+                                <li style="font-size: 0.95rem;">SUNDIALS 7.1.1</li>
+                                <li style="font-size: 0.95rem;">PHREEQC-RM</li>
+                                <li style="font-size: 0.95rem;">ParallelIO (for MizuRoute-CSLM)</li>
+                                <li style="font-size: 0.95rem;">NetCDF, HDF5, OpenBLAS</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box warning" style="margin-top: 15px;">
+                            <strong>Note:</strong> Building requires sudo, but <strong>running does not</strong> — perfect for HPC clusters
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">9</div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Apptainer Compile -->
+        <div class="slide" data-slide="10">
+            <div class="slide-header">
+                <h2>Apptainer: Compile & Run</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>Compile with Container</h3>
+                            <pre style="font-size: 0.72rem; padding: 12px;">
+<span class="comment"># Use the provided script</span>
+cd utils
+./compile_summa_apptainer.sh
+
+<span class="comment"># Or manually:</span>
+apptainer exec --bind $(pwd):/code openwq.sif \
+  bash -c "cd /code/build/source/openwq/openwq && \
+           cmake -DHOST_MODEL_TARGET=summa_openwq \
+                 -DCMAKE_BUILD_TYPE=Release . && \
+           make -j4"
+                            </pre>
+                        </div>
+                        <div class="card secondary">
+                            <h3>Run with Container</h3>
+                            <pre style="font-size: 0.72rem; padding: 12px;">
+<span class="comment"># Use the provided script</span>
+cd utils
+./run_summa_apptainer.sh
+
+<span class="comment"># Or manually:</span>
+apptainer exec --bind /path/to/data:/data \
+  --env master_json=/data/openwq_in/master.json \
+  openwq.sif ./summa_openwq -g 1 1 -m fileManager.txt
+                            </pre>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Key Apptainer Flags</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td><strong>--bind</strong></td><td>Mount host directories</td></tr>
+                                <tr><td><strong>--env</strong></td><td>Set environment variables</td></tr>
+                                <tr><td><strong>exec</strong></td><td>Run command in container</td></tr>
+                                <tr><td><strong>shell</strong></td><td>Interactive shell</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>HPC Tip:</strong> Use job scripts in <code>hpc_templates/</code> for SLURM/PBS submission
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">10</div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Section - Native Linux -->
+        <div class="slide section-slide green" data-slide="11">
+            <div class="section-number">03</div>
+            <h2>Native Linux Build</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+        <!-- Slide 12: Native Linux -->
+        <div class="slide" data-slide="12">
+            <div class="slide-header">
+                <h2>Native Linux: Manual Setup</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+<span class="comment"># 1. Install system dependencies (Ubuntu/Debian)</span>
+sudo apt-get install g++ gfortran cmake \
+  libnetcdf-dev libnetcdff-dev \
+  libhdf5-dev libopenblas-dev liblapack-dev
+
+<span class="comment"># 2. Install Armadillo</span>
+cd openwq/utils
+./install_armadillo.sh
+<span class="comment"># Installs to openwq/utils/armadillo-VERSION</span>
+
+<span class="comment"># 3. (Optional) Install SUNDIALS for ODE solver</span>
+wget https://github.com/LLNL/sundials/archive/v7.1.1.tar.gz
+tar -xzf v7.1.1.tar.gz && cd sundials-7.1.1
+mkdir build && cd build
+cmake .. -DBUILD_FORTRAN_MODULE_INTERFACE=ON \
+         -DCMAKE_INSTALL_PREFIX=/usr/local/sundials
+make -j4 && sudo make install
+
+<span class="comment"># 4. Compile OpenWQ</span>
+cd openwq
+cmake -DHOST_MODEL_TARGET=summa_openwq \
+      -DCMAKE_BUILD_TYPE=Release .
+make -j4
+<span class="comment"># Executable in bin/ folder</span>
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>HPC Cluster Setup</h3>
+                            <p style="font-size: 0.95rem;">Use module system instead of apt:</p>
+                            <pre style="font-size: 0.72rem; padding: 10px; margin-top: 10px;">
+module load gcc/11.2.0
+module load netcdf/4.8.1
+module load hdf5/1.12.1
+module load openblas/0.3.18
+module load cmake/3.22.1
+                            </pre>
+                        </div>
+                        <div class="highlight-box warning" style="margin-top: 15px;">
+                            <strong>Caution:</strong> Native builds require matching library versions. Container builds are more reproducible.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">12</div>
+            </div>
+        </div>
+
+        <!-- Slide 13: Key Files -->
+        <div class="slide" data-slide="13">
+            <div class="slide-header">
+                <h2>Key Build Files</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>Build Configuration</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><code>CMakeLists.txt</code></td><td>Main build config</td></tr>
+                                <tr><td><code>cmake/</code></td><td>CMake modules</td></tr>
+                                <tr><td><code>src/</code></td><td>OpenWQ source code</td></tr>
+                            </table>
+                        </div>
+                        <div class="card primary">
+                            <h3>Output Executables</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>summa_openwq</strong></td><td>SUMMA + OpenWQ</td></tr>
+                                <tr><td><strong>mizuroute_openwq</strong></td><td>mizuRoute + OpenWQ</td></tr>
+                                <tr><td><strong>mizuroute_lakes_cslm_openwq</strong></td><td>Full lakes model</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Configuration Files</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><code>openwq_master.json</code></td><td>Main config file</td></tr>
+                                <tr><td><code>openwq_config.json</code></td><td>Runtime settings</td></tr>
+                                <tr><td><code>openwq_bgc_*.json</code></td><td>BGC framework</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>Executables location:</strong><br>
+                            <code style="font-size: 0.9rem;">openwq/build/</code> or<br>
+                            <code style="font-size: 0.9rem;">host_model/bin/</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">13</div>
+            </div>
+        </div>
+
+        <!-- Slide 14: Troubleshooting -->
+        <div class="slide" data-slide="14">
+            <div class="slide-header">
+                <h2>Troubleshooting</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>CMake Errors</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr>
+                                    <td><strong>Armadillo not found</strong></td>
+                                    <td>Set <code>-DARMADILLO_ROOT=/path</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>HDF5 not found</strong></td>
+                                    <td><code>module load hdf5</code> or install</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>NetCDF version mismatch</strong></td>
+                                    <td>Ensure Fortran bindings installed</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="card primary">
+                            <h3>Runtime Errors</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr>
+                                    <td><strong>Library not found</strong></td>
+                                    <td>Set <code>LD_LIBRARY_PATH</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>HDF5 version error</strong></td>
+                                    <td>Compile with same HDF5 version</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Docker Issues</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr>
+                                    <td><strong>Permission denied</strong></td>
+                                    <td>Add user to docker group</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Volume mount fails</strong></td>
+                                    <td>Check path in docker-compose.yml</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>Get help:</strong><br>
+                            • Documentation: <code>openwq.readthedocs.io</code><br>
+                            • GitHub Issues: <code>github.com/ue-hydro/openwq</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">14</div>
+            </div>
+        </div>
+
+        <!-- Slide 15: Summary -->
+        <div class="slide" data-slide="15">
+            <div class="slide-header">
+                <h2>Summary</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column">
+                    <div class="card accent" style="text-align: center;">
+                        <h3 style="justify-content: center;">🐳 Docker</h3>
+                        <p>Best for local development<br><code>docker-compose build</code></p>
+                    </div>
+                    <div class="card primary" style="text-align: center;">
+                        <h3 style="justify-content: center;">📦 Apptainer</h3>
+                        <p>Best for HPC clusters<br><code>apptainer build openwq.sif</code></p>
+                    </div>
+                    <div class="card secondary" style="text-align: center;">
+                        <h3 style="justify-content: center;">🐧 Native</h3>
+                        <p>For advanced users<br><code>cmake .. && make</code></p>
+                    </div>
+                </div>
+                <div class="highlight-box" style="margin-top: 25px; text-align: center; font-size: 1.1rem;">
+                    <strong>Quick Start Recommendation:</strong><br>
+                    Use <strong>Docker</strong> for development → Build <strong>Apptainer</strong> image for production HPC runs
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">15</div>
+            </div>
+        </div>
+
+        <!-- Slide 16: Thank You -->
+        <div class="slide title-slide" data-slide="16">
+            <h1 style="font-size: 3.5rem;">Thank You</h1>
+            <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
+            <div style="margin-top: 2rem;">
+                <p style="font-size: 1.2rem; color: #a0aec0;">
+                    <strong>Container files:</strong> containers/
+                </p>
+                <p style="font-size: 1rem; color: #718096; margin-top: 0.5rem;">
+                    Docker | Apptainer | Native Linux
+                </p>
+            </div>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+    </div>
+
+    <div class="nav-hint" id="navHint">Use ← → arrows or Enter | Press F for fullscreen</div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            history.replaceState(null, null, `#${currentSlide}`);
+        }
+
+        function nextSlide() { currentSlide++; showSlide(currentSlide); }
+        function prevSlide() { currentSlide--; showSlide(currentSlide); }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'Enter': nextSlide(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
+                case 'Home': currentSlide = 1; showSlide(currentSlide); break;
+                case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
+                case 'f': case 'F':
+                    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                    else document.exitFullscreen();
+                    break;
+            }
+        });
+
+        document.querySelector('.presentation').addEventListener('click', (e) => {
+            const rect = e.target.getBoundingClientRect();
+            if (e.clientX - rect.left > rect.width / 2) nextSlide(); else prevSlide();
+        });
+
+        const navHint = document.getElementById('navHint');
+        navHint.classList.add('visible');
+        setTimeout(() => navHint.classList.remove('visible'), 4000);
+
+        let hintTimeout;
+        document.addEventListener('mousemove', () => {
+            navHint.classList.add('visible');
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => navHint.classList.remove('visible'), 2000);
+        });
+
+        if (window.location.hash) {
+            const slideNum = parseInt(window.location.hash.substring(1));
+            if (slideNum >= 1 && slideNum <= totalSlides) currentSlide = slideNum;
+        }
+        showSlide(currentSlide);
+
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', (e) => {
+            const diff = touchStartX - e.changedTouches[0].screenX;
+            if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
+        });
+    </script>
+</body>
+</html>

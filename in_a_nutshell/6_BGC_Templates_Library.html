@@ -41,6 +41,20 @@
         .slide.title-slide .subtitle { font-size: 1.8rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
         .slide.title-slide .tagline { font-size: 1.2rem; color: #718096; max-width: 800px; }
 
+        /* Dynamic reveal animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .title-slide .reveal-title { opacity: 0; animation: fadeInScale 0.8s ease-out forwards; animation-delay: 0.2s; }
+        .title-slide .reveal-subtitle { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.6s; }
+        .title-slide .reveal-tagline { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.9s; }
+        .title-slide .reveal-logo { opacity: 0; animation: fadeInUp 0.5s ease-out forwards; animation-delay: 1.2s; }
+
         /* University Logo - Only on title and section slides */
         .university-logo {
             position: absolute;
@@ -155,17 +169,58 @@
 
         <!-- Slide 1: Title -->
         <div class="slide title-slide active" data-slide="1">
-            <h1>Open<span>WQ</span></h1>
-            <div class="subtitle">BGC Templates Library</div>
-            <div class="tagline">
+            <h1 class="reveal-title">Open<span>WQ</span></h1>
+            <div class="subtitle reveal-subtitle">BGC Templates Library</div>
+            <div class="tagline reveal-tagline">
                 Pre-built biogeochemical reaction frameworks for NATIVE_BGC_FLEX and PHREEQC<br>
                 — ready to use, easy to customize
             </div>
-            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo reveal-logo">
         </div>
 
-        <!-- Slide 2: Overview -->
+        <!-- Slide 2: Table of Contents -->
         <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Contents</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 60px;">
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="margin-bottom: 8px;">• Templates Library Overview</p>
+                            <p style="margin-top: 15px; color: var(--primary); font-weight: 600;">Section 01: Individual Chemicals</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Nitrogen & Phosphorus Templates</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Dissolved Oxygen & Carbon</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Phytoplankton/Algae Dynamics</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Plant Uptake Module</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Emerging Contaminants</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Groundwater Age Tracking</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• New Advanced Templates</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="color: var(--secondary); font-weight: 600;">Section 02: Popular Model Frameworks</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• SWAT, QUAL2K, HYPE, WASP8</p>
+                            <p style="margin-top: 15px; color: var(--purple); font-weight: 600;">Section 03: Thermodynamic Templates</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• F<sub>T</sub> Factor Templates</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Redox Ladder</p>
+                            <p style="margin-top: 15px; color: var(--teal); font-weight: 600;">Section 04: PHREEQC Templates</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Equilibrium Templates</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Kinetic Templates (.pqi)</p>
+                            <p style="margin-top: 15px; margin-bottom: 8px;">• Template Summary</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Overview -->
+        <div class="slide" data-slide="3">
             <div class="slide-header">
                 <h2>Templates Library Overview</h2>
             </div>
@@ -213,19 +268,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">2</div>
+                <div class="page-number">3</div>
             </div>
         </div>
 
         <!-- Slide 3: Section - Individual Chemicals -->
-        <div class="slide section-slide" data-slide="3">
+        <div class="slide section-slide" data-slide="4">
             <div class="section-number">01</div>
             <h2>Individual Chemicals</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 4: Nutrients -->
-        <div class="slide" data-slide="4">
+        <div class="slide" data-slide="5">
             <div class="slide-header">
                 <h2>Nitrogen & Phosphorus Templates</h2>
             </div>
@@ -275,12 +330,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">4</div>
+                <div class="page-number">5</div>
             </div>
         </div>
 
         <!-- Slide 5: DO & Carbon -->
-        <div class="slide" data-slide="5">
+        <div class="slide" data-slide="6">
             <div class="slide-header">
                 <h2>Dissolved Oxygen & Carbon <span class="badge new">v2.0</span></h2>
             </div>
@@ -345,12 +400,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">5</div>
+                <div class="page-number">6</div>
             </div>
         </div>
 
         <!-- Slide 6: Phytoplankton -->
-        <div class="slide" data-slide="6">
+        <div class="slide" data-slide="7">
             <div class="slide-header">
                 <h2>Phytoplankton/Algae Dynamics <span class="badge new">v2.0 NEW</span></h2>
             </div>
@@ -398,12 +453,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">6</div>
+                <div class="page-number">7</div>
             </div>
         </div>
 
         <!-- Slide 7: Plant Uptake -->
-        <div class="slide" data-slide="7">
+        <div class="slide" data-slide="8">
             <div class="slide-header">
                 <h2>Plant Uptake Module <span class="badge new">v2.0 NEW</span></h2>
             </div>
@@ -459,12 +514,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">7</div>
+                <div class="page-number">8</div>
             </div>
         </div>
 
         <!-- Slide 8: Emerging Contaminants -->
-        <div class="slide" data-slide="8">
+        <div class="slide" data-slide="9">
             <div class="slide-header">
                 <h2>Emerging Contaminants <span class="badge new">v2.0 NEW</span></h2>
             </div>
@@ -513,12 +568,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">8</div>
+                <div class="page-number">9</div>
             </div>
         </div>
 
         <!-- Slide 9: Groundwater Age -->
-        <div class="slide" data-slide="9">
+        <div class="slide" data-slide="10">
             <div class="slide-header">
                 <h2>Groundwater Age Tracking <span class="badge new">v2.0 NEW</span></h2>
             </div>
@@ -571,12 +626,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">9</div>
+                <div class="page-number">10</div>
             </div>
         </div>
 
         <!-- Slide 10: New Advanced Templates -->
-        <div class="slide" data-slide="10">
+        <div class="slide" data-slide="11">
             <div class="slide-header">
                 <h2>New Advanced Templates <span class="badge new">v2.0 NEW</span></h2>
             </div>
@@ -631,19 +686,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">10</div>
+                <div class="page-number">11</div>
             </div>
         </div>
 
         <!-- Slide 11: Section - Popular Models -->
-        <div class="slide section-slide green" data-slide="11">
+        <div class="slide section-slide green" data-slide="12">
             <div class="section-number">02</div>
             <h2>Popular Model Frameworks</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 12: Popular Models -->
-        <div class="slide" data-slide="12">
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>SWAT, QUAL2K, HYPE, WASP8 Frameworks</h2>
             </div>
@@ -694,19 +749,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">12</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
         <!-- Slide 13: Section - Thermodynamic -->
-        <div class="slide section-slide purple" data-slide="13">
+        <div class="slide section-slide purple" data-slide="14">
             <div class="section-number">03</div>
             <h2>Thermodynamic Templates</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 14: Thermodynamic Templates -->
-        <div class="slide" data-slide="14">
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>F<sub>T</sub> Factor Templates — Redox Ladder</h2>
             </div>
@@ -746,19 +801,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
         <!-- Slide 15: Section - PHREEQC -->
-        <div class="slide section-slide teal" data-slide="15">
+        <div class="slide section-slide teal" data-slide="16">
             <div class="section-number">04</div>
             <h2>PHREEQC Templates</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 16: PHREEQC Templates -->
-        <div class="slide" data-slide="16">
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>PHREEQC Templates (.pqi files)</h2>
             </div>
@@ -811,12 +866,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
         <!-- Slide 17: Summary Table -->
-        <div class="slide" data-slide="17">
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Template Summary</h2>
             </div>
@@ -910,12 +965,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
         <!-- Slide 18: Thank You -->
-        <div class="slide title-slide" data-slide="18">
+        <div class="slide title-slide" data-slide="19">
             <h1 style="font-size: 3rem;">BGC Templates Library</h1>
             <div class="subtitle" style="font-size: 1.5rem;">Ready to use • Easy to customize</div>
             <div class="tagline" style="margin-top: 30px;">
@@ -926,7 +981,7 @@
 
     </div>
 
-    <div class="nav-hint" id="navHint">Use ← → arrows | Press F for fullscreen</div>
+    <div class="nav-hint" id="navHint">Use ← → arrows or Enter | Press F for fullscreen</div>
 
     <script>
         let currentSlide = 1;
@@ -946,7 +1001,7 @@
 
         document.addEventListener('keydown', (e) => {
             switch(e.key) {
-                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'Enter': nextSlide(); break;
                 case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
                 case 'Home': currentSlide = 1; showSlide(currentSlide); break;
                 case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;

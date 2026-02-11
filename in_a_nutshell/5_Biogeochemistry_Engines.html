@@ -39,6 +39,20 @@
         .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
         .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
 
+        /* Dynamic reveal animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .title-slide .reveal-title { opacity: 0; animation: fadeInScale 0.8s ease-out forwards; animation-delay: 0.2s; }
+        .title-slide .reveal-subtitle { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.6s; }
+        .title-slide .reveal-tagline { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.9s; }
+        .title-slide .reveal-logo { opacity: 0; animation: fadeInUp 0.5s ease-out forwards; animation-delay: 1.2s; }
+
         /* University Logo - Only on title and section slides */
         .university-logo {
             position: absolute;
@@ -155,59 +169,44 @@
 
         <!-- Slide 1: Title -->
         <div class="slide title-slide active" data-slide="1">
-            <h1>Open<span>WQ</span></h1>
-            <div class="subtitle">Biogeochemistry Engines</div>
-            <div class="tagline">
+            <h1 class="reveal-title">Open<span>WQ</span></h1>
+            <div class="subtitle reveal-subtitle">Biogeochemistry Engines</div>
+            <div class="tagline reveal-tagline">
                 From empirical kinetics to thermodynamic equilibrium geochemistry<br>
                 — flexible frameworks for any water quality application
             </div>
-            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo reveal-logo">
         </div>
 
-        <!-- Slide 2: Overview -->
+        <!-- Slide 2: Table of Contents -->
         <div class="slide" data-slide="2">
             <div class="slide-header">
-                <h2>Three Biogeochemistry Approaches</h2>
+                <h2>Contents</h2>
             </div>
             <div class="slide-content">
-                <div class="three-column">
-                    <div class="card primary" style="height: 100%;">
-                        <h3>🧪 NATIVE_BGC_FLEX</h3>
-                        <p><strong>Kinetic Reactions</strong></p>
-                        <ul style="margin-top: 15px; margin-left: 15px;">
-                            <li style="font-size: 1rem;">User-defined rate expressions</li>
-                            <li style="font-size: 1rem;">SWAT/HYPE/INCA style</li>
-                            <li style="font-size: 1rem;">exprtk math parser</li>
-                            <li style="font-size: 1rem;">Flexible and transparent</li>
-                        </ul>
-                        <div class="highlight-box info" style="margin-top: auto; padding: 12px;">
-                            <strong>Best for:</strong> Watersheds, nutrient cycling
+                <div class="two-column" style="gap: 60px;">
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="margin-bottom: 8px;">• Three Biogeochemistry Engines</p>
+                            <p style="margin-top: 15px; color: var(--primary); font-weight: 600;">Section 01: NATIVE_BGC_FLEX</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Kinetic Reactions</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Host Model Variables</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• JSON Configuration</p>
+                            <p style="margin-top: 15px; color: var(--secondary); font-weight: 600;">Section 02: Thermodynamic Extension</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• F<sub>T</sub> Factor Theory</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Gibbs Energy Constraints</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Redox Ladder</p>
                         </div>
                     </div>
-                    <div class="card secondary" style="height: 100%;">
-                        <h3>⚡ Thermodynamic Extension</h3>
-                        <p><strong>F<sub>T</sub> Factor</strong></p>
-                        <ul style="margin-top: 15px; margin-left: 15px;">
-                            <li style="font-size: 1rem;">Gibbs energy constraints</li>
-                            <li style="font-size: 1rem;">Automatic redox ladder</li>
-                            <li style="font-size: 1rem;">Jin & Bethke (2003)</li>
-                            <li style="font-size: 1rem;">Fewer calibration params</li>
-                        </ul>
-                        <div class="highlight-box success" style="margin-top: auto; padding: 12px;">
-                            <strong>Best for:</strong> Sediment diagenesis, redox
-                        </div>
-                    </div>
-                    <div class="card purple" style="height: 100%;">
-                        <h3>⚗️ PHREEQC</h3>
-                        <p><strong>Equilibrium Geochemistry</strong></p>
-                        <ul style="margin-top: 15px; margin-left: 15px;">
-                            <li style="font-size: 1rem;">Automatic speciation</li>
-                            <li style="font-size: 1rem;">Mineral reactions</li>
-                            <li style="font-size: 1rem;">100+ mineral database</li>
-                            <li style="font-size: 1rem;">pH/pe calculation</li>
-                        </ul>
-                        <div class="highlight-box purple" style="margin-top: auto; padding: 12px;">
-                            <strong>Best for:</strong> Groundwater, AMD
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="color: var(--purple); font-weight: 600;">Section 03: PHREEQC</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Equilibrium Geochemistry</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Input Files (.pqi + .dat)</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Integration with OpenWQ</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Selected Outputs</p>
+                            <p style="margin-top: 15px; margin-bottom: 8px;">• Comparison & When to Use</p>
+                            <p style="margin-bottom: 8px;">• Available Templates</p>
                         </div>
                     </div>
                 </div>
@@ -306,7 +305,7 @@
                             <ul style="margin-left: 15px;">
                                 <li style="font-size: 1rem;"><code>T</code> — Temperature (°C)</li>
                                 <li style="font-size: 1rem;"><code>[species]</code> — Any defined species</li>
-                                <li style="font-size: 1rem;">Host model variables (DO, pH...)</li>
+                                <li style="font-size: 1rem;">Host model variables</li>
                             </ul>
                         </div>
                     </div>
@@ -327,7 +326,12 @@
                 <pre style="font-size: 0.92rem;">
 <span class="comment">// Define chemical species</span>
 <span class="string">"CHEMICAL_SPECIES"</span>: {
-    <span class="string">"list"</span>: { <span class="string">"1"</span>: <span class="string">"NO3_N"</span>, <span class="string">"2"</span>: <span class="string">"NH4_N"</span>, <span class="string">"3"</span>: <span class="string">"DOC"</span>, <span class="string">"4"</span>: <span class="string">"DO"</span> },
+    <span class="string">"list"</span>: {
+        <span class="string">"1"</span>: <span class="string">"NO3_N"</span>,
+        <span class="string">"2"</span>: <span class="string">"NH4_N"</span>,
+        <span class="string">"3"</span>: <span class="string">"DOC"</span>,
+        <span class="string">"4"</span>: <span class="string">"DO"</span>
+    },
     <span class="string">"BGC_GENERAL_MOBILE_SPECIES"</span>: [<span class="string">"NO3_N"</span>, <span class="string">"NH4_N"</span>, <span class="string">"DOC"</span>, <span class="string">"DO"</span>]
 }
 
@@ -782,57 +786,55 @@
                 <h2>Available Templates</h2>
             </div>
             <div class="slide-content">
-                <div class="two-column" style="gap: 40px;">
-                    <div class="column">
-                        <div class="card primary">
-                            <h3>Individual Chemicals</h3>
-                            <ul style="margin-left: 15px;">
-                                <li style="font-size: 0.9rem;">Nitrogen, Phosphorus, Carbon (simple & full)</li>
-                                <li style="font-size: 0.9rem;"><strong>Dissolved oxygen</strong> (v2.0 - complete DO budget)</li>
-                                <li style="font-size: 0.9rem;"><strong>Phytoplankton/Algae</strong> (v2.0 - WASP8 style)</li>
-                                <li style="font-size: 0.9rem;"><strong>Plant uptake</strong> (v2.0 - SWAT/HYPE)</li>
-                                <li style="font-size: 0.9rem;"><strong>Emerging contaminants</strong> (v2.0 - PFAS, PPCPs)</li>
-                                <li style="font-size: 0.9rem;"><strong>Groundwater age</strong> (v2.0 - ³H-³He, ¹⁴C, CFCs)</li>
-                                <li style="font-size: 0.9rem;"><strong>Sediment diagenesis</strong> (v2.0 - Multi-G, redox)</li>
-                                <li style="font-size: 0.9rem;"><strong>Wetland/BMP</strong> (v2.0 - N/P/TSS removal)</li>
-                                <li style="font-size: 0.9rem;"><strong>Tile drainage</strong> (v2.0 - NO₃/P leaching)</li>
-                                <li style="font-size: 0.9rem;"><strong>pH/Alkalinity</strong> (v2.0 - carbonate, AMD)</li>
+                <div class="three-column" style="gap: 25px;">
+                    <div class="card primary" style="padding: 18px;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 10px;">Individual Chemicals</h3>
+                        <ul style="margin-left: 12px;">
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Nitrogen, Phosphorus, Carbon</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Dissolved oxygen</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Phytoplankton/Algae</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Plant uptake</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Emerging contaminants</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Groundwater age</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Sediment diagenesis</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Wetland/BMP</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Tile drainage</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">pH/Alkalinity</li>
+                        </ul>
+                    </div>
+                    <div class="column" style="display: flex; flex-direction: column; gap: 15px;">
+                        <div class="card secondary" style="padding: 18px;">
+                            <h3 style="font-size: 1.1rem; margin-bottom: 10px;">Thermodynamic Templates</h3>
+                            <ul style="margin-left: 12px;">
+                                <li style="font-size: 0.8rem; margin-bottom: 4px;">Aerobic respiration, nitrification</li>
+                                <li style="font-size: 0.8rem; margin-bottom: 4px;">Denitrification, anammox</li>
+                                <li style="font-size: 0.8rem; margin-bottom: 4px;">Fe/Mn/SO₄ reduction</li>
+                                <li style="font-size: 0.8rem; margin-bottom: 4px;">Methanogenesis</li>
+                                <li style="font-size: 0.8rem; margin-bottom: 4px;">Full sediment diagenesis</li>
                             </ul>
                         </div>
-                        <div class="card secondary">
-                            <h3>Thermodynamic Templates</h3>
-                            <ul style="margin-left: 15px;">
-                                <li style="font-size: 0.95rem;">Aerobic respiration, nitrification</li>
-                                <li style="font-size: 0.95rem;">Denitrification, anammox</li>
-                                <li style="font-size: 0.95rem;">Fe/Mn/SO₄ reduction</li>
-                                <li style="font-size: 0.95rem;">Methanogenesis</li>
-                                <li style="font-size: 0.95rem;">Full sediment diagenesis (13 reactions)</li>
+                        <div class="card accent" style="padding: 18px;">
+                            <h3 style="font-size: 1.1rem; margin-bottom: 10px;">Model Frameworks</h3>
+                            <ul style="margin-left: 12px;">
+                                <li style="font-size: 0.8rem; margin-bottom: 4px;"><strong>SWAT</strong> — N & P soil</li>
+                                <li style="font-size: 0.8rem; margin-bottom: 4px;"><strong>QUAL2E/2K</strong> — Stream WQ</li>
+                                <li style="font-size: 0.8rem; margin-bottom: 4px;"><strong>HYPE</strong> — Nordic nutrients</li>
+                                <li style="font-size: 0.8rem; margin-bottom: 4px;"><strong>WASP8</strong> — Eutrophication</li>
                             </ul>
                         </div>
                     </div>
-                    <div class="column">
-                        <div class="card accent">
-                            <h3>Popular Model Frameworks</h3>
-                            <table style="font-size: 0.95rem; margin-top: 10px;">
-                                <tr><td><strong>SWAT</strong></td><td>N & P with soil processes</td></tr>
-                                <tr><td><strong>QUAL2E/2K</strong></td><td>Stream WQ + algae</td></tr>
-                                <tr><td><strong>HYPE</strong></td><td>Nordic-style nutrients</td></tr>
-                                <tr><td><strong>WASP8</strong></td><td>Eutrophication</td></tr>
-                            </table>
-                        </div>
-                        <div class="card purple">
-                            <h3>PHREEQC Templates (v2.0)</h3>
-                            <ul style="margin-left: 15px;">
-                                <li style="font-size: 0.9rem;">Major ions, N/P speciation (equilibrium)</li>
-                                <li style="font-size: 0.9rem;"><strong>DO, Phyto, Plant uptake</strong> (kinetics)</li>
-                                <li style="font-size: 0.9rem;"><strong>Emerging contaminants</strong> (kinetics)</li>
-                                <li style="font-size: 0.9rem;"><strong>Groundwater age tracers</strong> (kinetics)</li>
-                                <li style="font-size: 0.9rem;"><strong>Sediment diagenesis</strong> (kinetics)</li>
-                                <li style="font-size: 0.9rem;"><strong>Wetland processing</strong> (kinetics)</li>
-                                <li style="font-size: 0.9rem;"><strong>Tile drainage</strong> (kinetics)</li>
-                                <li style="font-size: 0.9rem;"><strong>pH/Alkalinity</strong> (kinetics)</li>
-                            </ul>
-                        </div>
+                    <div class="card purple" style="padding: 18px;">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 10px;">PHREEQC Templates</h3>
+                        <ul style="margin-left: 12px;">
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Major ions, N/P speciation</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">DO, Phyto, Plant uptake</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Emerging contaminants</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Groundwater age tracers</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Sediment diagenesis</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Wetland processing</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">Tile drainage</li>
+                            <li style="font-size: 0.8rem; margin-bottom: 4px;">pH/Alkalinity</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -881,7 +883,7 @@
 
     </div>
 
-    <div class="nav-hint" id="navHint">Use ← → arrows | Press F for fullscreen</div>
+    <div class="nav-hint" id="navHint">Use ← → arrows or Enter | Press F for fullscreen</div>
 
     <script>
         let currentSlide = 1;
@@ -901,7 +903,7 @@
 
         document.addEventListener('keydown', (e) => {
             switch(e.key) {
-                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'Enter': nextSlide(); break;
                 case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
                 case 'Home': currentSlide = 1; showSlide(currentSlide); break;
                 case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
