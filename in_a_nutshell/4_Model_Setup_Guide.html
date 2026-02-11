@@ -107,6 +107,66 @@
         pre .string { color: #fbd38d; }
         pre .keyword { color: #63b3ed; }
 
+        .code-container {
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            color: #a0aec0;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.25);
+            color: white;
+        }
+        .copy-btn.copied {
+            background: var(--secondary);
+            color: white;
+        }
+
+        /* PDF Export Button */
+        .pdf-btn {
+            position: absolute;
+            bottom: 30px;
+            left: 40px;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            color: white;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pdf-btn:hover {
+            background: rgba(255,255,255,0.25);
+            border-color: rgba(255,255,255,0.5);
+        }
+        .slide:not(.title-slide) .pdf-btn {
+            background: var(--dark);
+            border-color: var(--dark);
+            color: white;
+        }
+        .slide:not(.title-slide) .pdf-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
         table { width: 100%; border-collapse: collapse; font-size: 0.95rem; background: white; border-radius: 10px; overflow: hidden; }
         th { background: var(--dark); color: white; padding: 10px 14px; text-align: left; font-weight: 600; }
         td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
@@ -185,6 +245,7 @@
                 from scratch — configuration files, directory structure, and execution
             </div>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo reveal-logo">
+            <button class="pdf-btn" onclick="exportToPDF()">📄 Export to PDF</button>
         </div>
 
         <!-- Slide 2: Table of Contents -->
@@ -931,6 +992,7 @@ cd /code/my_project  <span class="comment"># where master.json is</span>
                 </p>
             </div>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+            <button class="pdf-btn" onclick="exportToPDF()">📄 Export to PDF</button>
         </div>
 
     </div>
@@ -966,11 +1028,6 @@ cd /code/my_project  <span class="comment"># where master.json is</span>
             }
         });
 
-        document.querySelector('.presentation').addEventListener('click', (e) => {
-            const rect = e.target.getBoundingClientRect();
-            if (e.clientX - rect.left > rect.width / 2) nextSlide(); else prevSlide();
-        });
-
         const navHint = document.getElementById('navHint');
         navHint.classList.add('visible');
         setTimeout(() => navHint.classList.remove('visible'), 4000);
@@ -994,6 +1051,61 @@ cd /code/my_project  <span class="comment"># where master.json is</span>
             const diff = touchStartX - e.changedTouches[0].screenX;
             if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
         });
+
+        // Copy to clipboard functionality
+        function addCopyButtons() {
+            document.querySelectorAll('pre').forEach(pre => {
+                if (pre.closest('.diagram')) return;
+                if (pre.parentElement.classList.contains('code-container')) return;
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-container';
+                pre.parentNode.insertBefore(wrapper, pre);
+                wrapper.appendChild(pre);
+
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.innerHTML = '📋 Copy';
+                btn.onclick = function() {
+                    const code = pre.textContent;
+                    navigator.clipboard.writeText(code).then(() => {
+                        btn.innerHTML = '✓ Copied!';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.innerHTML = '📋 Copy';
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    });
+                };
+                wrapper.appendChild(btn);
+            });
+        }
+        addCopyButtons();
+
+        // PDF Export functionality
+        function exportToPDF() {
+            const printStyles = document.createElement('style');
+            printStyles.id = 'print-styles';
+            printStyles.textContent = `
+                @media print {
+                    @page { size: landscape; margin: 0; }
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    .slide {
+                        display: flex !important;
+                        page-break-after: always;
+                        position: relative !important;
+                        height: 100vh !important;
+                        width: 100vw !important;
+                    }
+                    .nav-hint, .pdf-btn, .copy-btn { display: none !important; }
+                }
+            `;
+            document.head.appendChild(printStyles);
+            window.print();
+            setTimeout(() => {
+                document.getElementById('print-styles')?.remove();
+            }, 1000);
+        }
     </script>
 </body>
 </html>
