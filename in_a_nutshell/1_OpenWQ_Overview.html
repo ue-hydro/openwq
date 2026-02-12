@@ -625,6 +625,7 @@
                             <p style="margin-top: 15px; color: var(--accent); font-weight: 600;">Section 03: Applications</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Application Areas</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Technical Stack</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• AI-Powered Assistance</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Summary</p>
                         </div>
                     </div>
@@ -1312,8 +1313,65 @@
             </div>
         </div>
 
-        <!-- Slide 17: Summary -->
+        <!-- Slide 17: AI Assistance -->
         <div class="slide" data-slide="17">
+            <div class="slide-header">
+                <h2>AI-Powered Assistance</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.1rem; margin-bottom: 20px;">
+                    OpenWQ includes built-in support for AI-powered assistance using Claude and other LLMs.
+                </p>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>🖥️ Claude Code CLI (Users & Developers)</h3>
+                            <pre style="font-size: 0.68rem; padding: 10px; margin-bottom: 8px;">
+<span class="comment"># macOS/Linux: Install + add to PATH</span>
+curl -fsSL https://claude.ai/install.sh | sh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+
+<span class="comment"># Windows: Install using winget, then restart terminal</span>
+winget install Anthropic.ClaudeCode
+
+<span class="comment"># Navigate to OpenWQ & start Claude</span>
+cd /path/to/openwq/ && claude
+
+<span class="comment"># CLAUDE.md auto-loaded - ask anything:</span>
+> How do I set up nitrification?</pre>
+                            <p style="font-size: 0.75rem; color: var(--text-light);">Can read, write & edit files directly</p>
+                        </div>
+                        <div class="card secondary">
+                            <h3>🌐 Web/API Users (Everyone)</h3>
+                            <p style="font-size: 0.9rem; margin-bottom: 8px;">Copy prompt from <code>docs/OPENWQ_ASSISTANT_PROMPT.md</code></p>
+                            <p style="font-size: 0.85rem; color: var(--text-light);">Paste into claude.ai or any AI assistant</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>What AI Can Help With</h3>
+                            <ul style="margin-left: 15px; margin-top: 10px;">
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">BGC reaction configuration</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Calibration framework setup</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Troubleshooting errors</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Understanding source code</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Writing JSON configurations</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>Pro Tip:</strong> Create a Claude Project with uploaded docs for persistent context across conversations
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">17</div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Summary -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1343,12 +1401,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 18: Resources -->
-        <div class="slide title-slide" data-slide="18">
+        <!-- Slide 19: Resources -->
+        <div class="slide title-slide" data-slide="19">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions & Resources</div>
             <div style="margin-top: 3rem;">
