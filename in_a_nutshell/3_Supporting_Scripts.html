@@ -1003,37 +1003,41 @@ transport_flux = results[<span class="string">'d_transport'</span>]
                 <div class="two-column" style="gap: 40px;">
                     <div class="column">
                         <div class="card primary">
-                            <h3>🖥️ Claude Code CLI</h3>
+                            <h3>🖥️ Claude Code CLI (Users & Developers)</h3>
                             <pre style="font-size: 0.68rem; padding: 10px; margin-bottom: 8px;">
 <span class="comment"># macOS/Linux: Install + add to PATH</span>
 curl -fsSL https://claude.ai/install.sh | sh
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 
-<span class="comment"># Windows: Install, then restart terminal</span>
+<span class="comment"># Windows: Install using winget, then restart terminal</span>
 winget install Anthropic.ClaudeCode
 
-<span class="comment"># Start Claude in OpenWQ directory</span>
-cd /path/to/openwq/ && claude</pre>
-                            <p style="font-size: 0.75rem; color: var(--text-light);">Reads/writes files, runs commands</p>
+<span class="comment"># Navigate to OpenWQ & start Claude</span>
+cd /path/to/openwq/ && claude
+
+<span class="comment"># CLAUDE.md auto-loaded - ask anything:</span>
+> How do I set up nitrification?</pre>
+                            <p style="font-size: 0.75rem; color: var(--text-light);">Can read, write & edit files directly</p>
                         </div>
                         <div class="card secondary">
-                            <h3>🌐 Web Users</h3>
-                            <p style="font-size: 0.9rem;">Copy <code>docs/OPENWQ_ASSISTANT_PROMPT.md</code><br>and paste into claude.ai</p>
+                            <h3>🌐 Web/API Users (Everyone)</h3>
+                            <p style="font-size: 0.9rem; margin-bottom: 8px;">Copy prompt from <code>docs/OPENWQ_ASSISTANT_PROMPT.md</code></p>
+                            <p style="font-size: 0.85rem; color: var(--text-light);">Paste into claude.ai or any AI assistant</p>
                         </div>
                     </div>
                     <div class="column">
                         <div class="card accent">
-                            <h3>AI Can Help With</h3>
-                            <ul style="margin-left: 15px; margin-top: 8px;">
-                                <li style="font-size: 0.9rem; margin-bottom: 5px;">Writing BGC JSON configs</li>
-                                <li style="font-size: 0.9rem; margin-bottom: 5px;">Setting up calibration</li>
-                                <li style="font-size: 0.9rem; margin-bottom: 5px;">Debugging script errors</li>
-                                <li style="font-size: 0.9rem; margin-bottom: 5px;">Reading HDF5 outputs</li>
-                                <li style="font-size: 0.9rem;">Understanding code structure</li>
+                            <h3>What AI Can Help With</h3>
+                            <ul style="margin-left: 15px; margin-top: 10px;">
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">BGC reaction configuration</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Calibration framework setup</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Troubleshooting errors</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Understanding source code</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Writing JSON configurations</li>
                             </ul>
                         </div>
-                        <div class="highlight-box info" style="margin-top: 12px;">
-                            <strong>Free & Paid:</strong> Both access methods work for all users
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>Pro Tip:</strong> Create a Claude Project with uploaded docs for persistent context across conversations
                         </div>
                     </div>
                 </div>
