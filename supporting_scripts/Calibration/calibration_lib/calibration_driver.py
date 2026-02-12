@@ -163,6 +163,13 @@ def run_calibration(
     # H5 reader path for objective function
     h5_reader_path = str(Path(base_model_config_dir).parent / "Read_Outputs" / "hdf5_support_lib")
 
+    # Get temporal resolution settings from kwargs
+    temporal_resolution = kwargs.get("temporal_resolution", "native")
+    aggregation_method = kwargs.get("aggregation_method", "mean")
+
+    logger.info(f"Temporal resolution: {temporal_resolution}")
+    logger.info(f"Aggregation method: {aggregation_method}")
+
     obj_func = ObjectiveFunction(
         observation_path=observation_data_path,
         target_species=calibration_targets["species"],
@@ -170,7 +177,9 @@ def run_calibration(
         compartments=calibration_targets.get("compartments", ["RIVER_NETWORK_REACHES"]),
         metric=objective_function,
         weights=objective_weights,
-        h5_reader_path=h5_reader_path
+        h5_reader_path=h5_reader_path,
+        temporal_resolution=temporal_resolution,
+        aggregation_method=aggregation_method
     )
 
     checkpoint_mgr = CheckpointManager(work_dir / "checkpoints")
@@ -381,6 +390,16 @@ def run_calibration(
         analyzer = ResultsAnalyzer(results_dir)
         analyzer.plot_convergence(result.history, results_dir / "convergence.png")
         analyzer.plot_parameter_evolution(result.history, param_names, results_dir / "parameter_evolution.png")
+
+        # Generate performance plots if matched data is available
+        matched_data = obj_func.get_matched_data()
+        if not matched_data.empty:
+            logger.info("Generating performance plots...")
+            analyzer.generate_performance_plots(
+                matched_data=matched_data,
+                output_dir=results_dir / "performance",
+                temporal_resolution=temporal_resolution
+            )
     except Exception as e:
         logger.warning(f"Could not generate plots: {e}")
 
@@ -513,6 +532,10 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
 
     h5_reader_path = str(Path(kwargs['base_model_config_dir']).parent / "Read_Outputs" / "hdf5_support_lib")
 
+    # Get temporal resolution settings
+    temporal_resolution = kwargs.get("temporal_resolution", "native")
+    aggregation_method = kwargs.get("aggregation_method", "mean")
+
     obj_func = ObjectiveFunction(
         observation_path=kwargs['observation_data_path'],
         target_species=kwargs['calibration_targets']["species"],
@@ -520,7 +543,9 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         compartments=kwargs['calibration_targets'].get("compartments", ["RIVER_NETWORK_REACHES"]),
         metric=kwargs.get('objective_function', "KGE"),
         weights=kwargs.get('objective_weights'),
-        h5_reader_path=h5_reader_path
+        h5_reader_path=h5_reader_path,
+        temporal_resolution=temporal_resolution,
+        aggregation_method=aggregation_method
     )
 
     # Parameter info

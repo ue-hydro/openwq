@@ -284,6 +284,7 @@
                             <p style="margin-top: 15px; color: var(--rose); font-weight: 600;">Section 02: DDS Optimization</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• DDS Algorithm</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Objective Functions</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Temporal Resolution</p>
                         </div>
                     </div>
                     <div class="column">
@@ -621,30 +622,33 @@
                 <h2>Objective Functions</h2>
             </div>
             <div class="slide-content">
-                <div class="three-column" style="gap: 25px;">
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;">
                     <div class="metric-card">
                         <h4>RMSE</h4>
-                        <div class="formula">√(Σ(obs - sim)² / n)</div>
-                        <p style="font-size: 0.9rem; margin: 10px 0;">Root Mean Square Error</p>
-                        <div class="range">Range: 0 → ∞ (lower is better)</div>
-                        <p style="font-size: 0.85rem; color: var(--text-light); margin-top: 8px;">Sensitive to outliers</p>
+                        <div class="formula" style="font-size: 0.95rem;">√(Σ(obs-sim)²/n)</div>
+                        <p style="font-size: 0.85rem; margin: 8px 0;">Root Mean Square Error</p>
+                        <div class="range" style="font-size: 0.8rem;">0 → ∞ (lower better)</div>
                     </div>
                     <div class="metric-card" style="border: 2px solid var(--secondary);">
                         <h4>NSE</h4>
-                        <div class="formula">1 - Σ(obs-sim)² / Σ(obs-mean)²</div>
-                        <p style="font-size: 0.9rem; margin: 10px 0;">Nash-Sutcliffe Efficiency</p>
-                        <div class="range">Range: -∞ → 1 (1 is perfect)</div>
-                        <p style="font-size: 0.85rem; color: var(--text-light); margin-top: 8px;">Classic hydrology metric</p>
+                        <div class="formula" style="font-size: 0.95rem;">1-Σ(o-s)²/Σ(o-ō)²</div>
+                        <p style="font-size: 0.85rem; margin: 8px 0;">Nash-Sutcliffe Efficiency</p>
+                        <div class="range" style="font-size: 0.8rem;">-∞ → 1 (1 perfect)</div>
                     </div>
                     <div class="metric-card" style="border: 2px solid var(--rose);">
-                        <h4>KGE ⭐</h4>
-                        <div class="formula">1 - √((r-1)² + (α-1)² + (β-1)²)</div>
-                        <p style="font-size: 0.9rem; margin: 10px 0;">Kling-Gupta Efficiency</p>
-                        <div class="range">Range: -∞ → 1 (1 is perfect)</div>
-                        <p style="font-size: 0.85rem; color: var(--secondary); margin-top: 8px;"><strong>Recommended!</strong></p>
+                        <h4>KGE</h4>
+                        <div class="formula" style="font-size: 0.95rem;">1-√((r-1)²+(α-1)²+(β-1)²)</div>
+                        <p style="font-size: 0.85rem; margin: 8px 0;">Kling-Gupta Efficiency</p>
+                        <div class="range" style="font-size: 0.8rem; color: var(--secondary);"><strong>Recommended!</strong></div>
+                    </div>
+                    <div class="metric-card">
+                        <h4>PBIAS</h4>
+                        <div class="formula" style="font-size: 0.95rem;">100×Σ(s-o)/Σ(o)</div>
+                        <p style="font-size: 0.85rem; margin: 8px 0;">Percent Bias</p>
+                        <div class="range" style="font-size: 0.8rem;">-∞ → +∞ (0 perfect)</div>
                     </div>
                 </div>
-                <div class="highlight-box" style="margin-top: 25px;">
+                <div class="highlight-box" style="margin-top: 20px;">
                     <strong>KGE advantages:</strong> Balances correlation (r), variability ratio (α), and bias ratio (β) — better for multi-species calibration
                 </div>
             </div>
@@ -654,15 +658,70 @@
             </div>
         </div>
 
-        <!-- Slide 10: Section - Workflow -->
-        <div class="slide section-slide green" data-slide="11">
+        <!-- Slide 10b: Temporal Resolution -->
+        <div class="slide" data-slide="11">
+            <div class="slide-header">
+                <h2>Temporal Resolution</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.05rem; margin-bottom: 15px;">
+                    Aggregate observations and model outputs to a common temporal scale before computing objective functions.
+                </p>
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Available Resolutions</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><th>Option</th><th>Use Case</th></tr>
+                                <tr><td><strong>native</strong></td><td>Original timestamps (no aggregation)</td></tr>
+                                <tr><td><strong>daily</strong></td><td>Daily patterns matter</td></tr>
+                                <tr><td><strong>weekly</strong></td><td>Smooth day-to-day noise</td></tr>
+                                <tr><td><strong>monthly</strong></td><td>Seasonal patterns, sparse obs</td></tr>
+                                <tr><td><strong>yearly</strong></td><td>Long-term trends, budgets</td></tr>
+                            </table>
+                        </div>
+                        <div class="card teal">
+                            <h3>Aggregation Methods</h3>
+                            <p style="font-size: 0.9rem;"><strong>mean</strong> (default) | <strong>sum</strong> | <strong>median</strong> | <strong>min</strong> | <strong>max</strong></p>
+                            <p style="font-size: 0.85rem; margin-top: 8px; color: var(--text-light);">Use <em>mean</em> for concentrations, <em>sum</em> for loads/fluxes</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <pre style="font-size: 0.78rem;">
+<span class="comment"># Configuration in calibration file</span>
+temporal_resolution = <span class="string">"monthly"</span>
+aggregation_method = <span class="string">"mean"</span>
+
+<span class="comment"># How it works:</span>
+<span class="comment"># 1. Group obs by reach, species, month</span>
+<span class="comment"># 2. Extract model outputs for same periods</span>
+<span class="comment"># 3. Aggregate both to monthly means</span>
+<span class="comment"># 4. Compute KGE/NSE/RMSE on aggregated data</span>
+                        </pre>
+                        <div class="highlight-box success" style="margin-top: 12px;">
+                            <strong>Tip:</strong> Use <code>monthly</code> for sparse grab samples — ensures fair comparison with continuous model output
+                        </div>
+                    </div>
+                </div>
+                <div class="highlight-box info" style="margin-top: 15px;">
+                    <strong>Output:</strong> Performance plots generated at specified resolution (time series, scatter, residuals)
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">11</div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Section - Workflow -->
+        <div class="slide section-slide green" data-slide="12">
             <div class="section-number">03</div>
             <h2>Calibration Workflow</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 11: Workflow Steps -->
-        <div class="slide" data-slide="12">
+        <!-- Slide 12: Workflow Steps -->
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Step-by-Step Workflow</h2>
             </div>
@@ -705,12 +764,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">12</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
-        <!-- Slide 12: Observation Data Sources -->
-        <div class="slide" data-slide="13">
+        <!-- Slide 13: Observation Data Sources -->
+        <div class="slide" data-slide="14">
             <div class="slide-header">
                 <h2>Observation Data Sources</h2>
             </div>
@@ -747,12 +806,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">13</div>
+                <div class="page-number">14</div>
             </div>
         </div>
 
-        <!-- Slide 13: GRQA Integration -->
-        <div class="slide" data-slide="14">
+        <!-- Slide 14: GRQA Integration -->
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>GRQA Database Integration</h2>
             </div>
@@ -804,12 +863,12 @@ grqa_config = {
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
-        <!-- Slide 14: CSV Format -->
-        <div class="slide" data-slide="15">
+        <!-- Slide 15: CSV Format -->
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Observation Data CSV Format</h2>
             </div>
@@ -846,12 +905,12 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
-        <!-- Slide 15: Priority Parameters -->
-        <div class="slide" data-slide="16">
+        <!-- Slide 16: Priority Parameters -->
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Priority-Based Calibration</h2>
             </div>
@@ -896,12 +955,12 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
-        <!-- Slide 16: Running Calibration -->
-        <div class="slide" data-slide="17">
+        <!-- Slide 17: Running Calibration -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Running Calibration</h2>
             </div>
@@ -945,12 +1004,12 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 17: Output Files -->
-        <div class="slide" data-slide="18">
+        <!-- Slide 18: Output Files -->
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Calibration Output</h2>
             </div>
@@ -987,12 +1046,12 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">18</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
-        <!-- Slide 18: Best Practices -->
-        <div class="slide" data-slide="19">
+        <!-- Slide 19: Best Practices -->
+        <div class="slide" data-slide="20">
             <div class="slide-header">
                 <h2>Best Practices</h2>
             </div>
@@ -1031,12 +1090,12 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">19</div>
+                <div class="page-number">20</div>
             </div>
         </div>
 
-        <!-- Slide 19: Summary -->
-        <div class="slide" data-slide="20">
+        <!-- Slide 20: Summary -->
+        <div class="slide" data-slide="21">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1062,12 +1121,12 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">20</div>
+                <div class="page-number">21</div>
             </div>
         </div>
 
-        <!-- Slide 20: Thank You -->
-        <div class="slide title-slide" data-slide="21">
+        <!-- Slide 21: Thank You -->
+        <div class="slide title-slide" data-slide="22">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">
@@ -1171,27 +1230,70 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
 
         // PDF Export functionality
         function exportToPDF() {
+            const slides = document.querySelectorAll('.slide');
+            const presentation = document.getElementById('presentation');
+
+            // Store original styles
+            const originalPresentationStyle = presentation.style.cssText;
+            const originalBodyStyle = document.body.style.cssText;
+            const originalHtmlStyle = document.documentElement.style.cssText;
+            const originalSlideStyles = Array.from(slides).map(s => s.style.cssText);
+
+            // Create print-specific styles
             const printStyles = document.createElement('style');
             printStyles.id = 'print-styles';
             printStyles.textContent = `
                 @media print {
                     @page { size: landscape; margin: 0; }
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+                    html, body { height: auto !important; overflow: visible !important; background: white !important; }
+                    .presentation { height: auto !important; position: relative !important; overflow: visible !important; }
                     .slide {
                         display: flex !important;
-                        page-break-after: always;
                         position: relative !important;
+                        page-break-after: always !important;
+                        page-break-inside: avoid !important;
                         height: 100vh !important;
                         width: 100vw !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
                     }
+                    .slide:last-child { page-break-after: auto !important; }
                     .nav-hint, .pdf-btn, .copy-btn { display: none !important; }
+                    .university-logo { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                 }
             `;
             document.head.appendChild(printStyles);
-            window.print();
+
+            // Temporarily modify for print - show all slides
+            document.body.style.cssText = 'height: auto; overflow: visible;';
+            document.documentElement.style.cssText = 'height: auto; overflow: visible;';
+            presentation.style.cssText = 'height: auto; position: relative; overflow: visible;';
+
+            slides.forEach(slide => {
+                slide.style.display = 'flex';
+                slide.style.position = 'relative';
+                slide.style.pageBreakAfter = 'always';
+                slide.style.height = '100vh';
+                slide.style.width = '100vw';
+            });
+
+            // Small delay to ensure styles are applied
             setTimeout(() => {
-                document.getElementById('print-styles')?.remove();
-            }, 1000);
+                window.print();
+
+                // Restore original styles after print dialog closes
+                setTimeout(() => {
+                    document.getElementById('print-styles')?.remove();
+                    document.body.style.cssText = originalBodyStyle;
+                    document.documentElement.style.cssText = originalHtmlStyle;
+                    presentation.style.cssText = originalPresentationStyle;
+                    slides.forEach((slide, i) => {
+                        slide.style.cssText = originalSlideStyles[i];
+                    });
+                    showSlide(currentSlide);
+                }, 500);
+            }, 100);
         }
     </script>
 </body>

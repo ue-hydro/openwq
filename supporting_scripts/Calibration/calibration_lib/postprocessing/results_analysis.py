@@ -755,3 +755,378 @@ class ResultsAnalyzer:
         df = pd.DataFrame(rows)
         df.to_csv(output_path, index=False)
         logger.info(f"History exported to {output_path}")
+
+    def plot_timeseries_comparison(self,
+                                   matched_data: pd.DataFrame,
+                                   species: str = None,
+                                   reach_ids: list = None,
+                                   temporal_resolution: str = "native",
+                                   output_path: Optional[Path] = None,
+                                   show: bool = False) -> Optional[Any]:
+        """
+        Plot time series comparison of observed vs simulated values.
+
+        Parameters
+        ----------
+        matched_data : pd.DataFrame
+            DataFrame with datetime, reach_id, species, observed, simulated columns
+        species : str, optional
+            Filter to specific species (default: all species)
+        reach_ids : list, optional
+            Filter to specific reach IDs (default: all reaches)
+        temporal_resolution : str
+            Temporal resolution label for title
+        output_path : Path, optional
+            Path to save plot
+        show : bool
+            Whether to display plot
+
+        Returns
+        -------
+        Figure or None
+            Matplotlib figure if available
+        """
+        if not HAS_MATPLOTLIB:
+            logger.warning("matplotlib not available - cannot create plot")
+            return None
+
+        if matched_data.empty:
+            logger.warning("No matched data for time series plot")
+            return None
+
+        data = matched_data.copy()
+        data['datetime'] = pd.to_datetime(data['datetime'])
+
+        # Filter by species
+        if species:
+            data = data[data['species'] == species]
+
+        # Filter by reach_ids
+        if reach_ids:
+            data = data[data['reach_id'].isin(reach_ids)]
+
+        if data.empty:
+            logger.warning("No data after filtering")
+            return None
+
+        # Get unique species for subplots
+        unique_species = data['species'].unique()
+        n_species = len(unique_species)
+
+        fig, axes = plt.subplots(n_species, 1, figsize=(14, 4 * n_species), squeeze=False)
+
+        for i, sp in enumerate(unique_species):
+            ax = axes[i, 0]
+            sp_data = data[data['species'] == sp].sort_values('datetime')
+
+            # Plot observed
+            ax.scatter(sp_data['datetime'], sp_data['observed'],
+                      color='blue', alpha=0.6, s=30, label='Observed', marker='o')
+
+            # Plot simulated
+            ax.scatter(sp_data['datetime'], sp_data['simulated'],
+                      color='red', alpha=0.6, s=30, label='Simulated', marker='x')
+
+            # If multiple reaches, show as different colors
+            unique_reaches = sp_data['reach_id'].unique()
+            if len(unique_reaches) <= 10:
+                colors = plt.cm.tab10(np.linspace(0, 1, len(unique_reaches)))
+                for j, reach in enumerate(unique_reaches):
+                    reach_data = sp_data[sp_data['reach_id'] == reach].sort_values('datetime')
+                    if len(reach_data) > 1:
+                        ax.plot(reach_data['datetime'], reach_data['simulated'],
+                               color=colors[j], alpha=0.3, linewidth=1)
+
+            # Compute metrics for this species
+            obs = sp_data['observed'].values
+            sim = sp_data['simulated'].values
+            valid_mask = ~(np.isnan(obs) | np.isnan(sim))
+            if valid_mask.sum() >= 2:
+                obs_valid = obs[valid_mask]
+                sim_valid = sim[valid_mask]
+
+                # Import metrics from objective_functions
+                from ..objective_functions import ObjectiveFunction
+                rmse = ObjectiveFunction.rmse(obs_valid, sim_valid)
+                nse = ObjectiveFunction.nse(obs_valid, sim_valid)
+                kge = ObjectiveFunction.kge(obs_valid, sim_valid)
+                pbias = ObjectiveFunction.pbias(obs_valid, sim_valid)
+
+                metrics_text = f'RMSE={rmse:.3f}  NSE={nse:.3f}  KGE={kge:.3f}  PBIAS={pbias:.1f}%'
+                ax.text(0.02, 0.98, metrics_text, transform=ax.transAxes,
+                       fontsize=10, verticalalignment='top',
+                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+            ax.set_xlabel('Date', fontsize=11)
+            ax.set_ylabel(f'{sp} Concentration', fontsize=11)
+            ax.set_title(f'{sp} - Time Series Comparison ({temporal_resolution})', fontsize=12)
+            ax.legend(loc='upper right')
+            ax.grid(True, alpha=0.3)
+
+            # Format x-axis dates
+            fig.autofmt_xdate()
+
+        plt.tight_layout()
+
+        if output_path:
+            plt.savefig(output_path, dpi=150, bbox_inches='tight')
+            logger.info(f"Time series plot saved to {output_path}")
+
+        if show:
+            plt.show()
+
+        return fig
+
+    def plot_scatter_obs_sim(self,
+                             matched_data: pd.DataFrame,
+                             species: str = None,
+                             temporal_resolution: str = "native",
+                             output_path: Optional[Path] = None,
+                             show: bool = False) -> Optional[Any]:
+        """
+        Plot scatter plot of observed vs simulated values (1:1 plot).
+
+        Parameters
+        ----------
+        matched_data : pd.DataFrame
+            DataFrame with observed and simulated columns
+        species : str, optional
+            Filter to specific species
+        temporal_resolution : str
+            Temporal resolution label for title
+        output_path : Path, optional
+            Path to save plot
+        show : bool
+            Whether to display plot
+
+        Returns
+        -------
+        Figure or None
+            Matplotlib figure if available
+        """
+        if not HAS_MATPLOTLIB:
+            logger.warning("matplotlib not available - cannot create plot")
+            return None
+
+        if matched_data.empty:
+            logger.warning("No matched data for scatter plot")
+            return None
+
+        data = matched_data.copy()
+
+        # Filter by species
+        if species:
+            data = data[data['species'] == species]
+
+        if data.empty:
+            return None
+
+        # Get unique species for subplots
+        unique_species = data['species'].unique()
+        n_species = len(unique_species)
+        n_cols = min(3, n_species)
+        n_rows = int(np.ceil(n_species / n_cols))
+
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 5 * n_rows), squeeze=False)
+
+        for i, sp in enumerate(unique_species):
+            row = i // n_cols
+            col = i % n_cols
+            ax = axes[row, col]
+
+            sp_data = data[data['species'] == sp]
+            obs = sp_data['observed'].values
+            sim = sp_data['simulated'].values
+
+            # Remove NaN pairs
+            valid_mask = ~(np.isnan(obs) | np.isnan(sim))
+            obs = obs[valid_mask]
+            sim = sim[valid_mask]
+
+            if len(obs) < 2:
+                ax.set_visible(False)
+                continue
+
+            # Scatter plot
+            ax.scatter(obs, sim, alpha=0.5, s=30, c='steelblue')
+
+            # 1:1 line
+            min_val = min(obs.min(), sim.min())
+            max_val = max(obs.max(), sim.max())
+            ax.plot([min_val, max_val], [min_val, max_val], 'k--', linewidth=1.5, label='1:1 line')
+
+            # Linear regression
+            if len(obs) >= 3:
+                z = np.polyfit(obs, sim, 1)
+                p = np.poly1d(z)
+                ax.plot([min_val, max_val], [p(min_val), p(max_val)],
+                       'r-', linewidth=1, alpha=0.7, label=f'Fit: y={z[0]:.2f}x+{z[1]:.2f}')
+
+            # Compute metrics
+            from ..objective_functions import ObjectiveFunction
+            rmse = ObjectiveFunction.rmse(obs, sim)
+            nse = ObjectiveFunction.nse(obs, sim)
+            kge = ObjectiveFunction.kge(obs, sim)
+            r2 = np.corrcoef(obs, sim)[0, 1] ** 2
+
+            metrics_text = f'n={len(obs)}\nRMSE={rmse:.3f}\nNSE={nse:.3f}\nKGE={kge:.3f}\nR²={r2:.3f}'
+            ax.text(0.05, 0.95, metrics_text, transform=ax.transAxes,
+                   fontsize=9, verticalalignment='top',
+                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+            ax.set_xlabel('Observed', fontsize=11)
+            ax.set_ylabel('Simulated', fontsize=11)
+            ax.set_title(f'{sp} ({temporal_resolution})', fontsize=12)
+            ax.legend(loc='lower right', fontsize=9)
+            ax.grid(True, alpha=0.3)
+            ax.set_aspect('equal', adjustable='box')
+
+        # Hide empty subplots
+        for i in range(n_species, n_rows * n_cols):
+            row = i // n_cols
+            col = i % n_cols
+            axes[row, col].set_visible(False)
+
+        plt.suptitle('Observed vs Simulated Comparison', fontsize=14, y=1.02)
+        plt.tight_layout()
+
+        if output_path:
+            plt.savefig(output_path, dpi=150, bbox_inches='tight')
+            logger.info(f"Scatter plot saved to {output_path}")
+
+        if show:
+            plt.show()
+
+        return fig
+
+    def plot_residuals(self,
+                       matched_data: pd.DataFrame,
+                       species: str = None,
+                       temporal_resolution: str = "native",
+                       output_path: Optional[Path] = None,
+                       show: bool = False) -> Optional[Any]:
+        """
+        Plot residuals (simulated - observed) analysis.
+
+        Parameters
+        ----------
+        matched_data : pd.DataFrame
+            DataFrame with observed, simulated, datetime columns
+        species : str, optional
+            Filter to specific species
+        temporal_resolution : str
+            Temporal resolution label for title
+        output_path : Path, optional
+            Path to save plot
+        show : bool
+            Whether to display plot
+
+        Returns
+        -------
+        Figure or None
+            Matplotlib figure if available
+        """
+        if not HAS_MATPLOTLIB:
+            logger.warning("matplotlib not available - cannot create plot")
+            return None
+
+        if matched_data.empty:
+            return None
+
+        data = matched_data.copy()
+        data['datetime'] = pd.to_datetime(data['datetime'])
+
+        if species:
+            data = data[data['species'] == species]
+
+        if data.empty:
+            return None
+
+        # Calculate residuals
+        data['residual'] = data['simulated'] - data['observed']
+
+        unique_species = data['species'].unique()
+        n_species = len(unique_species)
+
+        fig, axes = plt.subplots(n_species, 2, figsize=(12, 4 * n_species), squeeze=False)
+
+        for i, sp in enumerate(unique_species):
+            sp_data = data[data['species'] == sp].dropna(subset=['residual'])
+
+            if sp_data.empty:
+                continue
+
+            residuals = sp_data['residual'].values
+
+            # Left plot: Residuals over time
+            ax1 = axes[i, 0]
+            ax1.scatter(sp_data['datetime'], residuals, alpha=0.5, s=20, c='steelblue')
+            ax1.axhline(0, color='red', linestyle='--', linewidth=1)
+            ax1.set_xlabel('Date', fontsize=11)
+            ax1.set_ylabel('Residual (Sim - Obs)', fontsize=11)
+            ax1.set_title(f'{sp} - Residuals Over Time ({temporal_resolution})', fontsize=12)
+            ax1.grid(True, alpha=0.3)
+
+            # Right plot: Residuals histogram
+            ax2 = axes[i, 1]
+            ax2.hist(residuals, bins=30, color='steelblue', alpha=0.7, edgecolor='white')
+            ax2.axvline(0, color='red', linestyle='--', linewidth=1.5)
+            ax2.axvline(np.mean(residuals), color='green', linestyle='-', linewidth=1.5,
+                       label=f'Mean={np.mean(residuals):.3f}')
+            ax2.set_xlabel('Residual (Sim - Obs)', fontsize=11)
+            ax2.set_ylabel('Frequency', fontsize=11)
+            ax2.set_title(f'{sp} - Residual Distribution', fontsize=12)
+            ax2.legend()
+            ax2.grid(True, alpha=0.3)
+
+        fig.autofmt_xdate()
+        plt.tight_layout()
+
+        if output_path:
+            plt.savefig(output_path, dpi=150, bbox_inches='tight')
+            logger.info(f"Residuals plot saved to {output_path}")
+
+        if show:
+            plt.show()
+
+        return fig
+
+    def generate_performance_plots(self,
+                                   matched_data: pd.DataFrame,
+                                   output_dir: Path,
+                                   temporal_resolution: str = "native"):
+        """
+        Generate all performance analysis plots.
+
+        Parameters
+        ----------
+        matched_data : pd.DataFrame
+            DataFrame with matched observation-simulation pairs
+        output_dir : Path
+            Directory to save plots
+        temporal_resolution : str
+            Temporal resolution label
+        """
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if HAS_MATPLOTLIB and not matched_data.empty:
+            self.plot_timeseries_comparison(
+                matched_data,
+                temporal_resolution=temporal_resolution,
+                output_path=output_dir / "timeseries_comparison.png"
+            )
+
+            self.plot_scatter_obs_sim(
+                matched_data,
+                temporal_resolution=temporal_resolution,
+                output_path=output_dir / "scatter_obs_sim.png"
+            )
+
+            self.plot_residuals(
+                matched_data,
+                temporal_resolution=temporal_resolution,
+                output_path=output_dir / "residuals_analysis.png"
+            )
+
+            logger.info(f"Performance plots generated in {output_dir}")
