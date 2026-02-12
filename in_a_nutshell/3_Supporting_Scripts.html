@@ -991,8 +991,61 @@ transport_flux = results[<span class="string">'d_transport'</span>]
             </div>
         </div>
 
-        <!-- Slide 19: Summary -->
+        <!-- Slide 19: AI Assistance -->
         <div class="slide" data-slide="19">
+            <div class="slide-header">
+                <h2>AI-Powered Assistance</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.1rem; margin-bottom: 20px;">
+                    Get help with OpenWQ scripts and configuration using AI assistants.
+                </p>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>🖥️ Claude Code CLI</h3>
+                            <pre style="font-size: 0.68rem; padding: 10px; margin-bottom: 8px;">
+<span class="comment"># macOS/Linux: Install + add to PATH</span>
+curl -fsSL https://claude.ai/install.sh | sh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+
+<span class="comment"># Windows: Install, then restart terminal</span>
+winget install Anthropic.ClaudeCode
+
+<span class="comment"># Start Claude in OpenWQ directory</span>
+cd /path/to/openwq/ && claude</pre>
+                            <p style="font-size: 0.75rem; color: var(--text-light);">Reads/writes files, runs commands</p>
+                        </div>
+                        <div class="card secondary">
+                            <h3>🌐 Web Users</h3>
+                            <p style="font-size: 0.9rem;">Copy <code>docs/OPENWQ_ASSISTANT_PROMPT.md</code><br>and paste into claude.ai</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>AI Can Help With</h3>
+                            <ul style="margin-left: 15px; margin-top: 8px;">
+                                <li style="font-size: 0.9rem; margin-bottom: 5px;">Writing BGC JSON configs</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 5px;">Setting up calibration</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 5px;">Debugging script errors</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 5px;">Reading HDF5 outputs</li>
+                                <li style="font-size: 0.9rem;">Understanding code structure</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 12px;">
+                            <strong>Free & Paid:</strong> Both access methods work for all users
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">19</div>
+            </div>
+        </div>
+
+        <!-- Slide 20: Summary -->
+        <div class="slide" data-slide="20">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1018,12 +1071,12 @@ transport_flux = results[<span class="string">'d_transport'</span>]
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">19</div>
+                <div class="page-number">20</div>
             </div>
         </div>
 
-        <!-- Slide 20: Thank You -->
-        <div class="slide title-slide" data-slide="20">
+        <!-- Slide 21: Thank You -->
+        <div class="slide title-slide" data-slide="21">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions & Resources</div>
             <div style="margin-top: 3rem;">
