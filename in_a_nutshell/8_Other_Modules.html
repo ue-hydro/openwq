@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWQ - Other Modules</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004499;
+            --secondary: #00a86b;
+            --accent: #ff6b35;
+            --purple: #7c3aed;
+            --teal: #0891b2;
+            --dark: #1a1a2e;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #000; overflow: hidden; }
+        .presentation { height: 100vh; width: 100vw; position: relative; }
+
+        .slide {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; padding: 55px 75px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%); overflow: hidden;
+        }
+        .slide.active { display: flex; }
+
+        .slide.title-slide {
+            background: linear-gradient(135deg, var(--dark) 0%, #16213e 50%, #0f3460 100%);
+            justify-content: center; align-items: center; text-align: center; color: white;
+        }
+        .slide.title-slide h1 { font-size: 4rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .slide.title-slide h1 span { color: var(--teal); }
+        .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
+        .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
+
+        /* Dynamic reveal animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .title-slide .reveal-title { opacity: 0; animation: fadeInScale 0.8s ease-out forwards; animation-delay: 0.2s; }
+        .title-slide .reveal-subtitle { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.6s; }
+        .title-slide .reveal-tagline { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.9s; }
+        .title-slide .reveal-logo { opacity: 0; animation: fadeInUp 0.5s ease-out forwards; animation-delay: 1.2s; }
+
+        .university-logo {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            height: 60px;
+            opacity: 0.9;
+        }
+        .slide.title-slide .university-logo { height: 70px; }
+        .slide.section-slide .university-logo { height: 55px; opacity: 0.85; }
+
+        .slide.section-slide {
+            background: linear-gradient(135deg, var(--teal) 0%, #0e7490 100%);
+            justify-content: center; align-items: center; color: white;
+        }
+        .slide.section-slide.purple { background: linear-gradient(135deg, var(--purple) 0%, #5b21b6 100%); }
+        .slide.section-slide.green { background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%); }
+        .slide.section-slide.blue { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
+        .slide.section-slide.accent { background: linear-gradient(135deg, var(--accent) 0%, #ea580c 100%); }
+        .slide.section-slide h2 { font-size: 3.5rem; font-weight: 600; }
+        .slide.section-slide .section-number { font-size: 10rem; font-weight: 700; opacity: 0.15; position: absolute; top: 40px; right: 80px; }
+
+        .slide-header { margin-bottom: 30px; }
+        .slide-header h2 { font-size: 2.5rem; font-weight: 600; color: var(--dark); border-left: 6px solid var(--teal); padding-left: 22px; }
+        .slide-content { flex: 1; display: flex; flex-direction: column; }
+
+        .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 45px; height: 100%; }
+        .three-column { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 25px; }
+        .column { display: flex; flex-direction: column; }
+
+        .card {
+            background: white; border-radius: 14px; padding: 22px;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.07); margin-bottom: 15px;
+        }
+        .card.primary { border-left: 5px solid var(--primary); }
+        .card.secondary { border-left: 5px solid var(--secondary); }
+        .card.accent { border-left: 5px solid var(--accent); }
+        .card.purple { border-left: 5px solid var(--purple); }
+        .card.teal { border-left: 5px solid var(--teal); }
+        .card h3 { font-size: 1.25rem; color: var(--dark); margin-bottom: 10px; }
+        .card h4 { font-size: 1.1rem; color: var(--primary-dark); margin-bottom: 8px; }
+        .card p, .card li { font-size: 1rem; color: var(--text); line-height: 1.45; }
+
+        ul, ol { margin-left: 20px; }
+        li { font-size: 1.2rem; color: var(--text); margin-bottom: 10px; line-height: 1.35; }
+        li strong { color: var(--primary-dark); }
+
+        pre {
+            background: var(--dark); color: #e2e8f0; padding: 18px; border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; line-height: 1.35; overflow-x: auto;
+        }
+        pre .comment { color: #68d391; }
+        pre .string { color: #fbd38d; }
+        pre .keyword { color: #63b3ed; }
+
+        .code-container {
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            color: #a0aec0;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.25);
+            color: white;
+        }
+        .copy-btn.copied {
+            background: var(--secondary);
+            color: white;
+        }
+
+        /* PDF Export Button */
+        .pdf-btn {
+            position: absolute;
+            bottom: 30px;
+            left: 40px;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            color: white;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pdf-btn:hover {
+            background: rgba(255,255,255,0.25);
+            border-color: rgba(255,255,255,0.5);
+        }
+        .slide:not(.title-slide) .pdf-btn {
+            background: var(--dark);
+            border-color: var(--dark);
+            color: white;
+        }
+        .slide:not(.title-slide) .pdf-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; background: white; border-radius: 10px; overflow: hidden; }
+        th { background: var(--dark); color: white; padding: 10px 14px; text-align: left; font-weight: 600; }
+        td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #ecfeff, #cffafe);
+            border-left: 5px solid var(--teal); padding: 18px 22px; border-radius: 0 10px 10px 0; margin: 12px 0;
+        }
+        .highlight-box.info { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-left-color: var(--primary); }
+        .highlight-box.success { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-left-color: var(--secondary); }
+        .highlight-box.warning { background: linear-gradient(135deg, #fff7ed, #ffedd5); border-left-color: var(--accent); }
+
+        .slide-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 12px; border-top: 1px solid #e2e8f0; margin-top: auto;
+        }
+        .slide-footer .logo { font-weight: 700; font-size: 1.1rem; color: var(--dark); }
+        .slide-footer .logo span { color: var(--teal); }
+        .slide-footer .page-number {
+            background: var(--dark); color: white; width: 36px; height: 36px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;
+        }
+
+        .equation-box {
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 12px;
+            margin: 15px 0;
+            text-align: center;
+        }
+        .equation-box .equation {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.4rem;
+            margin: 8px 0;
+        }
+        .equation-box .label {
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+
+        .nav-hint {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 10px 22px; border-radius: 25px;
+            font-size: 0.85rem; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+        }
+        .nav-hint.visible { opacity: 1; }
+
+        .diagram { background: white; border: 2px solid #e2e8f0; border-radius: 14px; padding: 20px; text-align: center; }
+        .diagram pre { background: transparent; color: var(--text); display: inline-block; text-align: left; font-size: 0.85rem; }
+
+        .param-table td:first-child { font-weight: 600; color: var(--primary-dark); }
+    </style>
+</head>
+<body>
+    <div class="presentation" id="presentation">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1 class="reveal-title">Other <span>Modules</span></h1>
+            <div class="subtitle reveal-subtitle">OpenWQ Module Documentation</div>
+            <div class="tagline reveal-tagline">
+                Detailed theory and JSON configuration for transport, sorption isotherms,<br>
+                lateral exchange, and sediment transport modules
+            </div>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo reveal-logo">
+            <button class="pdf-btn" onclick="exportToPDF()">📄 Export to PDF</button>
+        </div>
+
+        <!-- Slide 2: Table of Contents -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Contents</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 60px;">
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="margin-bottom: 8px;">• Module Overview</p>
+                            <p style="margin-top: 15px; color: var(--teal); font-weight: 600;">Section 01: Transport Modules</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• ADVDISP (Advection-Dispersion)</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• ADV (Advection Only)</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• NONE (No Transport)</p>
+                            <p style="margin-top: 15px; color: var(--purple); font-weight: 600;">Section 02: Lateral Exchange</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• BOUNDMIX Theory</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Configuration</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="color: var(--secondary); font-weight: 600;">Section 03: Sorption Isotherms</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Langmuir Isotherm</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Freundlich Isotherm</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Configuration</p>
+                            <p style="margin-top: 15px; color: var(--accent); font-weight: 600;">Section 04: Sediment Transport</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• HYPE_HBVSED Model</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• HYPE_MMF Model</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Configuration</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Module Overview -->
+        <div class="slide" data-slide="3">
+            <div class="slide-header">
+                <h2>Module Overview</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.15rem; margin-bottom: 20px;">
+                    OpenWQ provides specialized modules for different physical and chemical processes:
+                </p>
+                <div class="three-column" style="gap: 20px;">
+                    <div class="card teal">
+                        <h3>Transport</h3>
+                        <p style="margin-bottom: 10px;">Controls solute movement with water flow</p>
+                        <table style="font-size: 0.85rem;">
+                            <tr><td><strong>ADVDISP</strong></td><td>Full transport</td></tr>
+                            <tr><td><strong>ADV</strong></td><td>Advection only</td></tr>
+                            <tr><td><strong>NONE</strong></td><td>No transport</td></tr>
+                        </table>
+                    </div>
+                    <div class="card purple">
+                        <h3>Lateral Exchange</h3>
+                        <p style="margin-bottom: 10px;">Mixing between compartments</p>
+                        <table style="font-size: 0.85rem;">
+                            <tr><td><strong>BOUNDMIX</strong></td><td>Boundary mixing</td></tr>
+                        </table>
+                        <p style="font-size: 0.85rem; margin-top: 10px; color: var(--text-light);">Vertical & horizontal exchange</p>
+                    </div>
+                    <div class="card secondary">
+                        <h3>Sorption</h3>
+                        <p style="margin-bottom: 10px;">Solid-liquid partitioning</p>
+                        <table style="font-size: 0.85rem;">
+                            <tr><td><strong>LANGMUIR</strong></td><td>Monolayer</td></tr>
+                            <tr><td><strong>FREUNDLICH</strong></td><td>Empirical</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="card accent" style="margin-top: 15px;">
+                    <h3>Sediment Transport</h3>
+                    <div class="two-column" style="gap: 20px; height: auto;">
+                        <div>
+                            <p><strong>HYPE_HBVSED:</strong> HBV-sed approach — flow-based erosion</p>
+                        </div>
+                        <div>
+                            <p><strong>HYPE_MMF:</strong> Modified Morgan-Morgan-Finney — rainfall/runoff erosion</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">3</div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Section - Transport -->
+        <div class="slide section-slide" data-slide="4">
+            <div class="section-number">01</div>
+            <h2>Transport Modules</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+        <!-- Slide 5: ADVDISP Theory -->
+        <div class="slide" data-slide="5">
+            <div class="slide-header">
+                <h2>ADVDISP: Advection-Dispersion Transport</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="equation-box">
+                            <div class="label">Advection-Dispersion Equation</div>
+                            <div class="equation">∂C/∂t = -v·∇C + ∇·(D·∇C)</div>
+                        </div>
+                        <div class="card teal" style="margin-top: 15px;">
+                            <h3>Components</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>C</strong></td><td>Concentration [mg/L]</td></tr>
+                                <tr><td><strong>v</strong></td><td>Flow velocity [m/s]</td></tr>
+                                <tr><td><strong>D</strong></td><td>Dispersion coefficient [m²/s]</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>Advection:</strong> Transport with bulk water flow<br>
+                            <strong>Dispersion:</strong> Spreading due to velocity variations
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Use Cases</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;">River reaches with mixing</li>
+                                <li style="font-size: 0.95rem;">Groundwater transport</li>
+                                <li style="font-size: 0.95rem;">Lake outflow mixing</li>
+                                <li style="font-size: 0.95rem;">Estuarine systems</li>
+                            </ul>
+                        </div>
+                        <div class="diagram" style="margin-top: 15px;">
+                            <pre style="font-size: 0.9rem;">
+   Advection (v)
+   ──────────────────────────────→
+
+   ████████████   →   ████  ████  ████
+   Initial pulse      Dispersion spreads
+                      concentration
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">5</div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Transport Configuration -->
+        <div class="slide" data-slide="6">
+            <div class="slide-header">
+                <h2>Transport Module Configuration</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.75rem;">
+{
+  <span class="comment">// In openWQ_master.json → MODULES</span>
+  <span class="string">"TRANSPORT_EROSION"</span>: {
+    <span class="string">"MODULE_NAME"</span>: <span class="string">"OPENWQ_NATIVE_TRANSP_DISS_ADVDISP"</span>,
+    <span class="string">"MODULE_CONFIG_FILEPATH"</span>: <span class="string">"transport_config.json"</span>
+  }
+}
+
+<span class="comment">// transport_config.json</span>
+{
+  <span class="string">"ADVDISP_CONFIGURATION"</span>: {
+    <span class="string">"dispersion_x"</span>: <span class="keyword">10.0</span>,   <span class="comment">// m²/s, longitudinal</span>
+    <span class="string">"dispersion_y"</span>: <span class="keyword">1.0</span>,    <span class="comment">// m²/s, lateral</span>
+    <span class="string">"dispersion_z"</span>: <span class="keyword">0.1</span>,    <span class="comment">// m²/s, vertical</span>
+    <span class="string">"characteristic_length_m"</span>: <span class="keyword">100.0</span>
+  }
+}
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>Module Options</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><th>Module Name</th><th>Description</th></tr>
+                                <tr><td><code>ADVDISP</code></td><td>Advection + Dispersion</td></tr>
+                                <tr><td><code>ADV</code></td><td>Advection only</td></tr>
+                                <tr><td><code>NONE</code></td><td>No transport</td></tr>
+                            </table>
+                        </div>
+                        <div class="card primary" style="margin-top: 10px;">
+                            <h3>Parameters</h3>
+                            <table class="param-table" style="font-size: 0.85rem;">
+                                <tr><td>dispersion_x</td><td>0.1 - 100 m²/s</td></tr>
+                                <tr><td>dispersion_y</td><td>0.01 - 10 m²/s</td></tr>
+                                <tr><td>dispersion_z</td><td>0.001 - 1 m²/s</td></tr>
+                                <tr><td>char_length</td><td>Grid scale [m]</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">6</div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Section - Lateral Exchange -->
+        <div class="slide section-slide purple" data-slide="7">
+            <div class="section-number">02</div>
+            <h2>Lateral Exchange</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+        <!-- Slide 8: BOUNDMIX Theory -->
+        <div class="slide" data-slide="8">
+            <div class="slide-header">
+                <h2>BOUNDMIX: Boundary Mixing</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="equation-box" style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);">
+                            <div class="label">Mass Exchange Rate</div>
+                            <div class="equation">F = K · (C<sub>upper</sub> - C<sub>lower</sub>)</div>
+                        </div>
+                        <div class="card purple" style="margin-top: 15px;">
+                            <h3>Components</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>F</strong></td><td>Mass flux [g/s]</td></tr>
+                                <tr><td><strong>K</strong></td><td>Exchange coefficient [1/s]</td></tr>
+                                <tr><td><strong>C</strong></td><td>Concentration [mg/L]</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box" style="margin-top: 15px; background: linear-gradient(135deg, #f5f3ff, #ede9fe); border-left-color: var(--purple);">
+                            <strong>K_VAL:</strong> Controls mixing rate — higher values mean faster equilibration between compartments
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="diagram">
+                            <pre style="font-size: 0.9rem;">
+   UPPER COMPARTMENT (e.g., Runoff)
+   ┌─────────────────────────────┐
+   │     C_upper = 5.0 mg/L      │
+   └──────────────┬──────────────┘
+                  │
+                  │ K_VAL = 0.001 /s
+                  │ ←→ Exchange
+                  │
+   ┌──────────────┴──────────────┐
+   │     C_lower = 2.0 mg/L      │
+   └─────────────────────────────┘
+   LOWER COMPARTMENT (e.g., Soil)
+                            </pre>
+                        </div>
+                        <div class="card primary" style="margin-top: 15px;">
+                            <h3>Common Exchanges</h3>
+                            <ul style="margin-left: 15px; font-size: 0.9rem;">
+                                <li>Runoff ↔ Soil</li>
+                                <li>Soil ↔ Groundwater</li>
+                                <li>River ↔ Hyporheic zone</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">8</div>
+            </div>
+        </div>
+
+        <!-- Slide 9: BOUNDMIX Configuration -->
+        <div class="slide" data-slide="9">
+            <div class="slide-header">
+                <h2>BOUNDMIX Configuration</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+{
+  <span class="comment">// In transport_config.json</span>
+  <span class="string">"BOUNDMIX_CONFIGURATION"</span>: {
+    <span class="comment">// Exchange 1: Runoff ↔ Soil</span>
+    <span class="string">"1"</span>: {
+      <span class="string">"DIRECTION"</span>: <span class="string">"z"</span>,
+      <span class="string">"UPPER_COMPARTMENT"</span>: <span class="string">"RUNOFF"</span>,
+      <span class="string">"LOWER_COMPARTMENT"</span>: <span class="string">"SOIL"</span>,
+      <span class="string">"K_VAL"</span>: <span class="keyword">0.001</span>   <span class="comment">// [1/s]</span>
+    },
+    <span class="comment">// Exchange 2: Soil ↔ Groundwater</span>
+    <span class="string">"2"</span>: {
+      <span class="string">"DIRECTION"</span>: <span class="string">"z"</span>,
+      <span class="string">"UPPER_COMPARTMENT"</span>: <span class="string">"SOIL"</span>,
+      <span class="string">"LOWER_COMPARTMENT"</span>: <span class="string">"GROUNDWATER"</span>,
+      <span class="string">"K_VAL"</span>: <span class="keyword">0.0001</span>
+    },
+    <span class="comment">// Exchange 3: River ↔ Floodplain (lateral)</span>
+    <span class="string">"3"</span>: {
+      <span class="string">"DIRECTION"</span>: <span class="string">"x"</span>,
+      <span class="string">"UPPER_COMPARTMENT"</span>: <span class="string">"RIVER"</span>,
+      <span class="string">"LOWER_COMPARTMENT"</span>: <span class="string">"FLOODPLAIN"</span>,
+      <span class="string">"K_VAL"</span>: <span class="keyword">0.01</span>
+    }
+  }
+}
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card purple">
+                            <h3>Parameters</h3>
+                            <table class="param-table" style="font-size: 0.85rem;">
+                                <tr><th>Parameter</th><th>Description</th></tr>
+                                <tr><td>DIRECTION</td><td>x, y, or z axis</td></tr>
+                                <tr><td>UPPER_COMPARTMENT</td><td>Source compartment</td></tr>
+                                <tr><td>LOWER_COMPARTMENT</td><td>Destination compartment</td></tr>
+                                <tr><td>K_VAL</td><td>Exchange rate [1/s]</td></tr>
+                            </table>
+                        </div>
+                        <div class="card primary" style="margin-top: 10px;">
+                            <h3>Typical K_VAL Ranges</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td>Fast exchange</td><td>0.01 - 0.1 /s</td></tr>
+                                <tr><td>Moderate</td><td>0.001 - 0.01 /s</td></tr>
+                                <tr><td>Slow diffusion</td><td>0.0001 - 0.001 /s</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">9</div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Section - Sorption -->
+        <div class="slide section-slide green" data-slide="10">
+            <div class="section-number">03</div>
+            <h2>Sorption Isotherms</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+        <!-- Slide 11: Langmuir Isotherm -->
+        <div class="slide" data-slide="11">
+            <div class="slide-header">
+                <h2>Langmuir Isotherm</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="equation-box" style="background: linear-gradient(135deg, #00a86b 0%, #059669 100%);">
+                            <div class="label">Langmuir Adsorption Isotherm</div>
+                            <div class="equation">q = q<sub>max</sub> · K<sub>L</sub> · C / (1 + K<sub>L</sub> · C)</div>
+                        </div>
+                        <div class="card secondary" style="margin-top: 15px;">
+                            <h3>Parameters</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>q</strong></td><td>Adsorbed concentration [mg/kg]</td></tr>
+                                <tr><td><strong>q<sub>max</sub></strong></td><td>Maximum adsorption capacity [mg/kg]</td></tr>
+                                <tr><td><strong>K<sub>L</sub></strong></td><td>Langmuir constant [L/mg]</td></tr>
+                                <tr><td><strong>C</strong></td><td>Equilibrium concentration [mg/L]</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Physical Basis</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;">Monolayer adsorption model</li>
+                                <li style="font-size: 0.95rem;">Finite number of identical sites</li>
+                                <li style="font-size: 0.95rem;">Saturation at high concentrations</li>
+                                <li style="font-size: 0.95rem;">Best for: Phosphorus, heavy metals</li>
+                            </ul>
+                        </div>
+                        <div class="diagram" style="margin-top: 15px;">
+                            <pre style="font-size: 0.85rem;">
+   q (adsorbed)
+   │          ___________  q_max
+   │        /
+   │      /
+   │    /
+   │  /
+   │/__________________ C (solution)
+
+   Approaches saturation limit
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">11</div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Freundlich Isotherm -->
+        <div class="slide" data-slide="12">
+            <div class="slide-header">
+                <h2>Freundlich Isotherm</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="equation-box" style="background: linear-gradient(135deg, #00a86b 0%, #059669 100%);">
+                            <div class="label">Freundlich Adsorption Isotherm</div>
+                            <div class="equation">q = K<sub>F</sub> · C<sup>n</sup></div>
+                        </div>
+                        <div class="card secondary" style="margin-top: 15px;">
+                            <h3>Parameters</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>q</strong></td><td>Adsorbed concentration [mg/kg]</td></tr>
+                                <tr><td><strong>K<sub>F</sub></strong></td><td>Freundlich constant [(mg/kg)/(mg/L)ⁿ]</td></tr>
+                                <tr><td><strong>n</strong></td><td>Freundlich exponent (0 < n ≤ 1)</td></tr>
+                                <tr><td><strong>C</strong></td><td>Equilibrium concentration [mg/L]</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Physical Basis</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;">Empirical power-law model</li>
+                                <li style="font-size: 0.95rem;">Heterogeneous surfaces</li>
+                                <li style="font-size: 0.95rem;">No saturation limit</li>
+                                <li style="font-size: 0.95rem;">n < 1: Favorable adsorption</li>
+                                <li style="font-size: 0.95rem;">Best for: Organic compounds, pesticides</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>Linear case (n = 1):</strong><br>
+                            q = K<sub>d</sub> · C (partition coefficient)
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">12</div>
+            </div>
+        </div>
+
+        <!-- Slide 13: Sorption Configuration -->
+        <div class="slide" data-slide="13">
+            <div class="slide-header">
+                <h2>Sorption Isotherm Configuration</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+{
+  <span class="comment">// Langmuir configuration</span>
+  <span class="string">"SORPTION_ISOTHERMS"</span>: {
+    <span class="string">"PO4"</span>: {
+      <span class="string">"ISOTHERM_TYPE"</span>: <span class="string">"LANGMUIR"</span>,
+      <span class="string">"COMPARTMENTS"</span>: [<span class="string">"SOIL"</span>, <span class="string">"SEDIMENT"</span>],
+      <span class="string">"PARAMETERS"</span>: {
+        <span class="string">"qmax"</span>: <span class="keyword">500.0</span>,     <span class="comment">// mg/kg</span>
+        <span class="string">"KL"</span>: <span class="keyword">0.5</span>,         <span class="comment">// L/mg</span>
+        <span class="string">"Kadsdes"</span>: <span class="keyword">0.01</span>    <span class="comment">// kinetic rate [1/s]</span>
+      }
+    },
+    <span class="comment">// Freundlich configuration</span>
+    <span class="string">"PESTICIDE_A"</span>: {
+      <span class="string">"ISOTHERM_TYPE"</span>: <span class="string">"FREUNDLICH"</span>,
+      <span class="string">"COMPARTMENTS"</span>: [<span class="string">"SOIL"</span>],
+      <span class="string">"PARAMETERS"</span>: {
+        <span class="string">"KF"</span>: <span class="keyword">25.0</span>,        <span class="comment">// Freundlich K</span>
+        <span class="string">"n"</span>: <span class="keyword">0.8</span>,          <span class="comment">// Freundlich n</span>
+        <span class="string">"Kadsdes"</span>: <span class="keyword">0.001</span>   <span class="comment">// kinetic rate [1/s]</span>
+      }
+    }
+  }
+}
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Langmuir Parameters</h3>
+                            <table class="param-table" style="font-size: 0.8rem;">
+                                <tr><th>Parameter</th><th>Typical Range</th></tr>
+                                <tr><td>qmax</td><td>100 - 1000 mg/kg</td></tr>
+                                <tr><td>KL</td><td>0.01 - 10 L/mg</td></tr>
+                                <tr><td>Kadsdes</td><td>0.0001 - 0.1 /s</td></tr>
+                            </table>
+                        </div>
+                        <div class="card primary" style="margin-top: 10px;">
+                            <h3>Freundlich Parameters</h3>
+                            <table class="param-table" style="font-size: 0.8rem;">
+                                <tr><th>Parameter</th><th>Typical Range</th></tr>
+                                <tr><td>KF</td><td>1 - 100</td></tr>
+                                <tr><td>n</td><td>0.3 - 1.0</td></tr>
+                                <tr><td>Kadsdes</td><td>0.0001 - 0.1 /s</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 10px;">
+                            <strong>Kadsdes:</strong> Controls rate of approach to equilibrium
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">13</div>
+            </div>
+        </div>
+
+        <!-- Slide 14: Section - Sediment Transport -->
+        <div class="slide section-slide accent" data-slide="14">
+            <div class="section-number">04</div>
+            <h2>Sediment Transport</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+        <!-- Slide 15: HYPE_HBVSED -->
+        <div class="slide" data-slide="15">
+            <div class="slide-header">
+                <h2>HYPE_HBVSED: HBV-Sed Approach</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="equation-box" style="background: linear-gradient(135deg, #ff6b35 0%, #ea580c 100%);">
+                            <div class="label">Sediment Yield (HBV-sed)</div>
+                            <div class="equation">SY = erosion_index · Q<sup>exp</sup></div>
+                        </div>
+                        <div class="card accent" style="margin-top: 15px;">
+                            <h3>Theory</h3>
+                            <p style="font-size: 0.95rem;">
+                                Empirical relationship between streamflow and sediment transport.
+                                Based on the HBV-sed model from HYPE.
+                            </p>
+                            <ul style="margin: 10px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">Flow-driven erosion</li>
+                                <li style="font-size: 0.9rem;">Simple parameterization</li>
+                                <li style="font-size: 0.9rem;">Suitable for data-sparse regions</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Parameters</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr><td><strong>erosion_index</strong></td><td>Erodibility factor</td></tr>
+                                <tr><td><strong>exp</strong></td><td>Flow exponent (typically 1-2)</td></tr>
+                                <tr><td><strong>Q</strong></td><td>Discharge [m³/s]</td></tr>
+                                <tr><td><strong>SY</strong></td><td>Sediment yield [kg/s]</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box warning" style="margin-top: 15px;">
+                            <strong>Best for:</strong><br>
+                            • Catchment-scale modeling<br>
+                            • Limited sediment data<br>
+                            • Flow-dominated erosion systems
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">15</div>
+            </div>
+        </div>
+
+        <!-- Slide 16: HYPE_MMF -->
+        <div class="slide" data-slide="16">
+            <div class="slide-header">
+                <h2>HYPE_MMF: Modified Morgan-Morgan-Finney</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="equation-box" style="background: linear-gradient(135deg, #ff6b35 0%, #ea580c 100%);">
+                            <div class="label">Detachment by Rainfall</div>
+                            <div class="equation">F = K · R<sup>2</sup> · (1 - C)</div>
+                        </div>
+                        <div class="equation-box" style="background: linear-gradient(135deg, #ff6b35 0%, #ea580c 100%); margin-top: 10px;">
+                            <div class="label">Transport Capacity</div>
+                            <div class="equation">TC = c · Q<sup>η</sup> · S<sup>ζ</sup></div>
+                        </div>
+                        <div class="card accent" style="margin-top: 15px;">
+                            <h3>Key Features</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;">Rainfall-driven detachment</li>
+                                <li style="font-size: 0.9rem;">Runoff-driven transport</li>
+                                <li style="font-size: 0.9rem;">Slope factor included</li>
+                                <li style="font-size: 0.9rem;">Cover factor (vegetation)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Parameters</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td><strong>K</strong></td><td>Soil erodibility</td></tr>
+                                <tr><td><strong>R</strong></td><td>Rainfall energy</td></tr>
+                                <tr><td><strong>C</strong></td><td>Crop/cover factor (0-1)</td></tr>
+                                <tr><td><strong>Q</strong></td><td>Runoff volume</td></tr>
+                                <tr><td><strong>S</strong></td><td>Slope gradient</td></tr>
+                                <tr><td><strong>η, ζ</strong></td><td>Calibration exponents</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box warning" style="margin-top: 15px;">
+                            <strong>Best for:</strong><br>
+                            • Agricultural watersheds<br>
+                            • Rainfall-dominated erosion<br>
+                            • Land-use change scenarios
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">16</div>
+            </div>
+        </div>
+
+        <!-- Slide 17: Sediment Configuration -->
+        <div class="slide" data-slide="17">
+            <div class="slide-header">
+                <h2>Sediment Transport Configuration</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+{
+  <span class="comment">// In openWQ_master.json → MODULES</span>
+  <span class="string">"SEDIMENT_TRANSPORT"</span>: {
+    <span class="string">"MODULE_NAME"</span>: <span class="string">"HYPE_HBVSED"</span>,
+    <span class="string">"MODULE_CONFIG_FILEPATH"</span>: <span class="string">"sediment_config.json"</span>
+  }
+}
+
+<span class="comment">// sediment_config.json - HYPE_HBVSED</span>
+{
+  <span class="string">"HBVSED_CONFIGURATION"</span>: {
+    <span class="string">"erosion_index"</span>: <span class="keyword">0.5</span>,
+    <span class="string">"flow_exponent"</span>: <span class="keyword">1.5</span>,
+    <span class="string">"deposition_rate"</span>: <span class="keyword">0.1</span>
+  }
+}
+
+<span class="comment">// sediment_config.json - HYPE_MMF</span>
+{
+  <span class="string">"MMF_CONFIGURATION"</span>: {
+    <span class="string">"soil_erodibility_K"</span>: <span class="keyword">0.3</span>,
+    <span class="string">"cover_factor_C"</span>: <span class="keyword">0.2</span>,
+    <span class="string">"slope_factor"</span>: <span class="keyword">0.05</span>,
+    <span class="string">"cohesion"</span>: <span class="keyword">5.0</span>
+  }
+}
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>HYPE_HBVSED Parameters</h3>
+                            <table class="param-table" style="font-size: 0.8rem;">
+                                <tr><th>Parameter</th><th>Range</th></tr>
+                                <tr><td>erosion_index</td><td>0.1 - 5.0</td></tr>
+                                <tr><td>flow_exponent</td><td>1.0 - 2.5</td></tr>
+                                <tr><td>deposition_rate</td><td>0.01 - 0.5</td></tr>
+                            </table>
+                        </div>
+                        <div class="card primary" style="margin-top: 10px;">
+                            <h3>HYPE_MMF Parameters</h3>
+                            <table class="param-table" style="font-size: 0.8rem;">
+                                <tr><th>Parameter</th><th>Range</th></tr>
+                                <tr><td>soil_erodibility_K</td><td>0.1 - 0.7</td></tr>
+                                <tr><td>cover_factor_C</td><td>0.0 - 1.0</td></tr>
+                                <tr><td>cohesion</td><td>1 - 20 kPa</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">17</div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Summary -->
+        <div class="slide" data-slide="18">
+            <div class="slide-header">
+                <h2>Summary</h2>
+            </div>
+            <div class="slide-content">
+                <div class="three-column" style="gap: 20px;">
+                    <div class="card teal" style="text-align: center;">
+                        <h3 style="justify-content: center;">Transport</h3>
+                        <p style="font-size: 0.95rem;">ADVDISP, ADV, NONE<br><br>Controls solute movement with dispersion coefficients</p>
+                    </div>
+                    <div class="card purple" style="text-align: center;">
+                        <h3 style="justify-content: center;">Exchange</h3>
+                        <p style="font-size: 0.95rem;">BOUNDMIX<br><br>Inter-compartment mixing via K_VAL exchange rates</p>
+                    </div>
+                    <div class="card secondary" style="text-align: center;">
+                        <h3 style="justify-content: center;">Sorption</h3>
+                        <p style="font-size: 0.95rem;">LANGMUIR, FREUNDLICH<br><br>Solid-liquid partitioning with kinetic rates</p>
+                    </div>
+                </div>
+                <div class="card accent" style="margin-top: 20px; text-align: center;">
+                    <h3 style="justify-content: center;">Sediment Transport</h3>
+                    <p style="font-size: 0.95rem;">HYPE_HBVSED (flow-based) | HYPE_MMF (rainfall/runoff-based)<br>
+                    Particulate-bound contaminant transport</p>
+                </div>
+                <div class="highlight-box" style="margin-top: 20px; text-align: center;">
+                    <strong>All modules configured via JSON</strong> — modify parameters without recompiling
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">18</div>
+            </div>
+        </div>
+
+        <!-- Slide 19: Thank You -->
+        <div class="slide title-slide" data-slide="19">
+            <h1 style="font-size: 3.5rem;">Thank You</h1>
+            <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
+            <div style="margin-top: 2rem;">
+                <p style="font-size: 1.2rem; color: #a0aec0;">
+                    <strong>Documentation:</strong> openwq.readthedocs.io
+                </p>
+            </div>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+            <button class="pdf-btn" onclick="exportToPDF()">📄 Export to PDF</button>
+        </div>
+
+    </div>
+
+    <div class="nav-hint" id="navHint">Use ← → arrows or Enter | Press F for fullscreen</div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            history.replaceState(null, null, `#${currentSlide}`);
+        }
+
+        function nextSlide() { currentSlide++; showSlide(currentSlide); }
+        function prevSlide() { currentSlide--; showSlide(currentSlide); }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'Enter': nextSlide(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
+                case 'Home': currentSlide = 1; showSlide(currentSlide); break;
+                case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
+                case 'f': case 'F':
+                    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                    else document.exitFullscreen();
+                    break;
+            }
+        });
+
+        const navHint = document.getElementById('navHint');
+        navHint.classList.add('visible');
+        setTimeout(() => navHint.classList.remove('visible'), 4000);
+
+        let hintTimeout;
+        document.addEventListener('mousemove', () => {
+            navHint.classList.add('visible');
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => navHint.classList.remove('visible'), 2000);
+        });
+
+        if (window.location.hash) {
+            const slideNum = parseInt(window.location.hash.substring(1));
+            if (slideNum >= 1 && slideNum <= totalSlides) currentSlide = slideNum;
+        }
+        showSlide(currentSlide);
+
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', (e) => {
+            const diff = touchStartX - e.changedTouches[0].screenX;
+            if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
+        });
+
+        // Copy to clipboard functionality
+        function addCopyButtons() {
+            document.querySelectorAll('pre').forEach(pre => {
+                if (pre.closest('.diagram')) return;
+                if (pre.parentElement.classList.contains('code-container')) return;
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-container';
+                pre.parentNode.insertBefore(wrapper, pre);
+                wrapper.appendChild(pre);
+
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.innerHTML = '📋 Copy';
+                btn.onclick = function() {
+                    const code = pre.textContent;
+                    navigator.clipboard.writeText(code).then(() => {
+                        btn.innerHTML = '✓ Copied!';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.innerHTML = '📋 Copy';
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    });
+                };
+                wrapper.appendChild(btn);
+            });
+        }
+        addCopyButtons();
+
+        // PDF Export functionality
+        function exportToPDF() {
+            const slides = document.querySelectorAll('.slide');
+            const presentation = document.getElementById('presentation');
+
+            // Store original styles
+            const originalPresentationStyle = presentation.style.cssText;
+            const originalBodyStyle = document.body.style.cssText;
+            const originalHtmlStyle = document.documentElement.style.cssText;
+            const originalSlideStyles = Array.from(slides).map(s => s.style.cssText);
+
+            // Create print-specific styles
+            const printStyles = document.createElement('style');
+            printStyles.id = 'print-styles';
+            printStyles.textContent = `
+                @media print {
+                    @page { size: landscape; margin: 0; }
+                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+                    html, body { height: auto !important; overflow: visible !important; background: white !important; }
+                    .presentation { height: auto !important; position: relative !important; overflow: visible !important; }
+                    .slide {
+                        display: flex !important;
+                        position: relative !important;
+                        page-break-after: always !important;
+                        page-break-inside: avoid !important;
+                        height: 100vh !important;
+                        width: 100vw !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
+                    }
+                    .slide:last-child { page-break-after: auto !important; }
+                    .nav-hint, .pdf-btn, .copy-btn { display: none !important; }
+                    .university-logo { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                }
+            `;
+            document.head.appendChild(printStyles);
+
+            // Temporarily modify for print - show all slides
+            document.body.style.cssText = 'height: auto; overflow: visible;';
+            document.documentElement.style.cssText = 'height: auto; overflow: visible;';
+            presentation.style.cssText = 'height: auto; position: relative; overflow: visible;';
+
+            slides.forEach(slide => {
+                slide.style.display = 'flex';
+                slide.style.position = 'relative';
+                slide.style.pageBreakAfter = 'always';
+                slide.style.height = '100vh';
+                slide.style.width = '100vw';
+            });
+
+            // Small delay to ensure styles are applied
+            setTimeout(() => {
+                window.print();
+
+                // Restore original styles after print dialog closes
+                setTimeout(() => {
+                    document.getElementById('print-styles')?.remove();
+                    document.body.style.cssText = originalBodyStyle;
+                    document.documentElement.style.cssText = originalHtmlStyle;
+                    presentation.style.cssText = originalPresentationStyle;
+                    slides.forEach((slide, i) => {
+                        slide.style.cssText = originalSlideStyles[i];
+                    });
+                    showSlide(currentSlide);
+                }, 500);
+            }, 100);
+        }
+    </script>
+</body>
+</html>
