@@ -41,5 +41,5 @@ Key capabilities:
    4_1_OpenWQ_IO
    4_2_2support_scripts
    4_2_2_Calibration
+   2_4_AI_Assistant
    5_0_Developer
-   6_0_Contact
