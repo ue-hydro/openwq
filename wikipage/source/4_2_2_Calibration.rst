@@ -223,11 +223,12 @@ Each parameter definition supports these options:
 Objective Functions
 ~~~~~~~~~~~~~~~~~~~
 
-The framework supports three objective functions:
+The framework supports four objective functions:
 
 * **RMSE** - Root Mean Square Error
 * **NSE** - Nash-Sutcliffe Efficiency (1 - NSE for minimization)
 * **KGE** - Kling-Gupta Efficiency (1 - KGE for minimization) - *Recommended*
+* **PBIAS** - Percent Bias (absolute value for minimization)
 
 Configure in your calibration file:
 
@@ -247,6 +248,82 @@ Configure in your calibration file:
         "reach_ids": "all",  # or [1200014181, 200014181]
         "compartments": ["RIVER_NETWORK_REACHES"]
     }
+
+
+Temporal Resolution
+~~~~~~~~~~~~~~~~~~~
+
+The calibration framework supports flexible temporal resolution for objective function calculation and performance evaluation. Both model outputs and observations are aggregated to the specified resolution before computing metrics.
+
+**Available Resolutions:**
+
+* ``native`` - Use original model/observation timestamps (no aggregation)
+* ``daily`` - Aggregate to daily averages
+* ``weekly`` - Aggregate to weekly averages
+* ``monthly`` - Aggregate to monthly averages
+* ``yearly`` - Aggregate to yearly averages
+
+**Aggregation Methods:**
+
+* ``mean`` - Average value (default, recommended for concentrations)
+* ``sum`` - Total sum (useful for loads/fluxes)
+* ``median`` - Median value (robust to outliers)
+* ``min`` / ``max`` - Minimum/maximum values
+
+**Configuration:**
+
+.. code-block:: python
+
+    # Temporal resolution for calibration
+    temporal_resolution = "monthly"    # Options: native, daily, weekly, monthly, yearly
+    aggregation_method = "mean"        # Options: mean, sum, median, min, max
+
+**When to Use Different Resolutions:**
+
++---------------+---------------------------------------------------------------+
+| Resolution    | Recommended Use Case                                          |
++===============+===============================================================+
+| ``native``    | High-frequency data, sub-daily dynamics important             |
++---------------+---------------------------------------------------------------+
+| ``daily``     | Standard choice when daily patterns matter                    |
++---------------+---------------------------------------------------------------+
+| ``weekly``    | Smooth out day-to-day variability                             |
++---------------+---------------------------------------------------------------+
+| ``monthly``   | Seasonal patterns, reduce noise from sparse observations      |
++---------------+---------------------------------------------------------------+
+| ``yearly``    | Long-term trends, annual budgets                              |
++---------------+---------------------------------------------------------------+
+
+**How Aggregation Works:**
+
+1. Observations are grouped by reach_id, species, and temporal period
+2. Model outputs are extracted and matched to observation timestamps
+3. Both are aggregated to the specified resolution using the chosen method
+4. Objective functions are computed on the aggregated data
+5. Performance plots show both native and aggregated comparisons
+
+**Example Use Case:**
+
+If you have sparse monthly grab samples but an hourly model, using ``temporal_resolution = "monthly"`` ensures fair comparison:
+
+.. code-block:: python
+
+    # Monthly calibration for sparse observations
+    temporal_resolution = "monthly"
+    aggregation_method = "mean"
+
+    # This aggregates both model outputs and observations to monthly means
+    # before computing KGE, NSE, RMSE, etc.
+
+**Performance Plots:**
+
+When temporal aggregation is enabled, the calibration framework generates additional diagnostic plots:
+
+* Time series comparison (observed vs simulated at specified resolution)
+* Scatter plot with 1:1 line and performance metrics
+* Residual analysis (temporal patterns in errors)
+
+These are saved in ``results/performance_plots/`` after calibration completes.
 
 
 Observation Data Format
@@ -543,6 +620,12 @@ Complete Configuration Example
         "compartments": ["RIVER_NETWORK_REACHES"]
     }
     random_seed = 42
+
+    # =============================================================================
+    # TEMPORAL RESOLUTION
+    # =============================================================================
+    temporal_resolution = "monthly"  # native, daily, weekly, monthly, yearly
+    aggregation_method = "mean"      # mean, sum, median, min, max
 
 
 Dependencies

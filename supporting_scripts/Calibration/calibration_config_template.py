@@ -748,6 +748,39 @@ n_parallel = 1
 # KGE (Kling-Gupta Efficiency) is recommended
 objective_function = "KGE"
 
+# =============================================================================
+# TEMPORAL RESOLUTION FOR CALIBRATION
+# =============================================================================
+# Controls the temporal scale at which observations and model results are
+# compared. Both observations and simulations are aggregated to the specified
+# resolution BEFORE computing objective functions and performance metrics.
+#
+# Options:
+#   - "native": Use original model timestep (no aggregation) - fastest but
+#               may be noisy for sub-daily data
+#   - "daily": Aggregate to daily values - good for sub-daily models
+#   - "weekly": Aggregate to weekly values - smooths short-term variability
+#   - "monthly": Aggregate to monthly values - focuses on seasonal patterns
+#   - "yearly": Aggregate to yearly values - long-term averages only
+#
+# Aggregation method controls how values within each period are combined:
+#   - "mean": Average value (recommended for concentrations)
+#   - "sum": Total value (use for loads/fluxes)
+#   - "median": Median value (robust to outliers)
+#   - "min": Minimum value
+#   - "max": Maximum value
+#
+# RECOMMENDATIONS:
+#   - For hourly/sub-daily model output: use "daily" or "weekly"
+#   - For daily model output: use "daily", "weekly", or "monthly"
+#   - For nutrient concentrations: use aggregation_method = "mean"
+#   - For sediment/nutrient loads: use aggregation_method = "sum"
+#   - For seasonal calibration focus: use "monthly"
+#   - For inter-annual variability: use "yearly"
+# =============================================================================
+temporal_resolution = "native"  # "native", "daily", "weekly", "monthly", "yearly"
+aggregation_method = "mean"     # "mean", "sum", "median", "min", "max"
+
 # Species weights for multi-species calibration
 # Higher weight = more influence on objective function
 objective_weights = {
@@ -1011,6 +1044,8 @@ if __name__ == "__main__":
         "objective_weights": objective_weights,
         "calibration_targets": calibration_targets,
         "random_seed": random_seed,
+        "temporal_resolution": temporal_resolution,
+        "aggregation_method": aggregation_method,
 
         # Sensitivity analysis
         "run_sensitivity_first": run_sensitivity_first,

@@ -60,6 +60,76 @@
 
         .slide.title-slide h1 span { color: var(--primary); }
 
+        /* Dynamic reveal animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-60px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .title-slide .reveal-title {
+            opacity: 0;
+            animation: fadeInScale 0.8s ease-out forwards;
+            animation-delay: 0.2s;
+        }
+
+        .title-slide .reveal-subtitle {
+            opacity: 0;
+            animation: fadeInUp 0.7s ease-out forwards;
+            animation-delay: 0.6s;
+        }
+
+        .title-slide .reveal-tagline {
+            opacity: 0;
+            animation: fadeInUp 0.7s ease-out forwards;
+            animation-delay: 0.9s;
+        }
+
+        .title-slide .reveal-author {
+            opacity: 0;
+            animation: fadeInUp 0.6s ease-out forwards;
+            animation-delay: 1.2s;
+        }
+
+        .title-slide .reveal-affiliation {
+            opacity: 0;
+            animation: fadeInUp 0.6s ease-out forwards;
+            animation-delay: 1.4s;
+        }
+
+        .title-slide .reveal-logo {
+            opacity: 0;
+            animation: fadeInUp 0.5s ease-out forwards;
+            animation-delay: 1.6s;
+        }
+
         .slide.title-slide .subtitle {
             font-size: 2.2rem;
             font-weight: 300;
@@ -248,6 +318,9 @@
         }
 
         /* Code blocks */
+        .code-container {
+            position: relative;
+        }
         pre {
             background: var(--dark);
             color: #e2e8f0;
@@ -257,6 +330,62 @@
             font-size: 0.95rem;
             line-height: 1.5;
             overflow-x: auto;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            color: #a0aec0;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.25);
+            color: white;
+        }
+        .copy-btn.copied {
+            background: var(--secondary);
+            color: white;
+        }
+
+        /* PDF Export Button */
+        .pdf-btn {
+            position: absolute;
+            bottom: 30px;
+            left: 40px;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            color: white;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pdf-btn:hover {
+            background: rgba(255,255,255,0.25);
+            border-color: rgba(255,255,255,0.5);
+        }
+        .slide:not(.title-slide) .pdf-btn {
+            background: var(--dark);
+            border-color: var(--dark);
+            color: white;
+        }
+        .slide:not(.title-slide) .pdf-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
         }
 
         /* Diagram */
@@ -457,19 +586,59 @@
 
         <!-- Slide 1: Title -->
         <div class="slide title-slide active" data-slide="1">
-            <h1>Open<span>WQ</span></h1>
-            <div class="subtitle">Open-Source Water Quality Modeling Framework</div>
-            <div class="tagline">
+            <h1 class="reveal-title">Open<span>WQ</span></h1>
+            <div class="subtitle reveal-subtitle">Open-Source Water Quality Modeling Framework</div>
+            <div class="tagline reveal-tagline">
                 A flexible, modular platform for simulating biogeochemical processes<br>
                 coupled with any hydrological model
             </div>
-            <div class="author">Diogo Costa</div>
-            <div class="affiliation">University of Évora, Portugal</div>
-            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+            <div class="author reveal-author">Diogo Costa</div>
+            <div class="affiliation reveal-affiliation">University of Évora, Portugal</div>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo reveal-logo">
+            <button class="pdf-btn" onclick="exportToPDF()">📄 Export to PDF</button>
         </div>
 
-        <!-- Slide 2: What is OpenWQ -->
+        <!-- Slide 2: Table of Contents -->
         <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <h2>Contents</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 60px;">
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="margin-bottom: 8px;">• What is OpenWQ?</p>
+                            <p style="margin-bottom: 8px;">• Core Capabilities</p>
+                            <p style="margin-bottom: 8px;">• Available Modules</p>
+                            <p style="margin-bottom: 8px;">• Coupled Host Models</p>
+                            <p style="margin-top: 15px; color: var(--secondary); font-weight: 600;">Section 01: Theoretical Framework</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Governing Equation</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Compartment Structure</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Module Architecture</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div style="font-size: 1.15rem; line-height: 2.2;">
+                            <p style="margin-top: 15px; margin-bottom: 8px; font-weight: 600; color: var(--primary-dark);">Supported Processes</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Biogeochemical Processes</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Pre-Built Templates</p>
+                            <p style="margin-top: 15px; color: var(--accent); font-weight: 600;">Section 03: Applications</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Application Areas</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Technical Stack</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• AI-Powered Assistance</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Summary</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">2</div>
+            </div>
+        </div>
+
+        <!-- Slide 3: What is OpenWQ -->
+        <div class="slide" data-slide="3">
             <div class="slide-header">
                 <h2>What is OpenWQ?</h2>
             </div>
@@ -520,57 +689,122 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">2</div>
+                <div class="page-number">3</div>
             </div>
         </div>
 
-        <!-- Slide 3: Core Capabilities -->
-        <div class="slide" data-slide="3">
+        <!-- Slide 4: Core Capabilities -->
+        <div class="slide" data-slide="4">
             <div class="slide-header">
                 <h2>Core Capabilities</h2>
             </div>
             <div class="slide-content">
-                <div class="three-column">
-                    <div class="feature-card">
-                        <div class="icon">🧪</div>
-                        <h4>Biogeochemistry</h4>
-                        <p>User-defined reaction networks with flexible kinetic expressions. Supports SWAT, HYPE, INCA-style models.</p>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="feature-card" style="margin-bottom: 15px;">
+                            <div class="icon">🧪</div>
+                            <h4>Bio/Geochemistry</h4>
+                            <p>Two engines: <strong>NATIVE_BGC_FLEX</strong> for user-defined kinetic reactions (JSON-based) and <strong>PHREEQC</strong> for thermodynamic equilibrium geochemistry.</p>
+                        </div>
+                        <div class="feature-card" style="margin-bottom: 15px;">
+                            <div class="icon">📊</div>
+                            <h4>Sources & Sinks</h4>
+                            <p>Flexible loading from CSV, JSON, HDF5, land-use coefficients, or ML predictions.</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="icon">🔧</div>
+                            <h4>Calibration</h4>
+                            <p>DDS optimizer with Morris screening and Sobol sensitivity analysis.</p>
+                        </div>
                     </div>
-                    <div class="feature-card">
-                        <div class="icon">🌊</div>
-                        <h4>Transport</h4>
-                        <p>Advection, dispersion, and lateral exchange between compartments. Follows water movement from host model.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="icon">⚗️</div>
-                        <h4>Geochemistry</h4>
-                        <p>PHREEQC integration for thermodynamic equilibrium, mineral reactions, and speciation.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="icon">📊</div>
-                        <h4>Sources & Sinks</h4>
-                        <p>Flexible loading from CSV, JSON, HDF5, or land-use based calculations with ML support.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="icon">🔧</div>
-                        <h4>Calibration</h4>
-                        <p>106+ parameters with DDS optimizer, Morris screening, and Sobol sensitivity analysis.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="icon">📈</div>
-                        <h4>Output</h4>
-                        <p>HDF5, CSV, or VTU formats. Visualization tools for time series and spatial maps.</p>
+                    <div class="column">
+                        <div class="card primary" style="padding: 20px;">
+                            <h3 style="margin-bottom: 15px;">Available Modules</h3>
+                            <table style="font-size: 0.9rem;">
+                                <tr>
+                                    <td><strong>Transport</strong></td>
+                                    <td>Advection & dispersion</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Lateral Exchange</strong></td>
+                                    <td>Inter-compartment fluxes</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Isotherms</strong></td>
+                                    <td>Freundlich, Langmuir sorption</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Erosion</strong></td>
+                                    <td>Sediment-bound transport</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Consumptive Use</strong></td>
+                                    <td>Irrigation, withdrawals</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>External Fluxes</strong></td>
+                                    <td>Precipitation, inflows</td>
+                                </tr>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">3</div>
+                <div class="page-number">4</div>
             </div>
         </div>
 
-        <!-- Slide 4: Coupled Host Models -->
-        <div class="slide" data-slide="4">
+        <!-- Slide 5: Available Modules Summary -->
+        <div class="slide" data-slide="5">
+            <div class="slide-header">
+                <h2>Available Modules</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.2rem; margin-bottom: 25px;">
+                    OpenWQ provides a comprehensive set of modules for water quality modeling:
+                </p>
+                <div class="three-column" style="gap: 25px;">
+                    <div class="card primary">
+                        <h3>🧪 Biogeochemistry</h3>
+                        <table style="font-size: 0.95rem; margin-top: 10px;">
+                            <tr><td><strong>NATIVE_BGC_FLEX</strong></td><td>User-defined kinetics</td></tr>
+                            <tr><td><strong>BGC_FLEX_THERMO</strong></td><td>With F<sub>T</sub> factor</td></tr>
+                            <tr><td><strong>PHREEQC</strong></td><td>Equilibrium geochemistry</td></tr>
+                        </table>
+                    </div>
+                    <div class="card secondary">
+                        <h3>🌊 Transport & Exchange</h3>
+                        <table style="font-size: 0.95rem; margin-top: 10px;">
+                            <tr><td><strong>ADVDISP</strong></td><td>Advection + Dispersion</td></tr>
+                            <tr><td><strong>ADV</strong></td><td>Advection only</td></tr>
+                            <tr><td><strong>BOUNDMIX</strong></td><td>Lateral exchange</td></tr>
+                        </table>
+                    </div>
+                    <div class="card accent">
+                        <h3>📎 Sorption & Sediment</h3>
+                        <table style="font-size: 0.95rem; margin-top: 10px;">
+                            <tr><td><strong>LANGMUIR</strong></td><td>Sorption isotherm</td></tr>
+                            <tr><td><strong>FREUNDLICH</strong></td><td>Sorption isotherm</td></tr>
+                            <tr><td><strong>HYPE_HBVSED</strong></td><td>Sediment transport</td></tr>
+                            <tr><td><strong>HYPE_MMF</strong></td><td>Sediment transport</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="highlight-box info" style="margin-top: 25px; text-align: center;">
+                    <strong>All modules configured via JSON</strong> — swap modules by changing configuration, not code!<br>
+                    <span style="font-size: 0.95rem;">See "Other Modules" presentation for detailed theory and configuration.</span>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">5</div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Coupled Host Models -->
+        <div class="slide" data-slide="6">
             <div class="slide-header">
                 <h2>Coupled Host Models</h2>
             </div>
@@ -595,19 +829,19 @@
                         <td>Continental-scale river routing with lakes and reservoirs</td>
                     </tr>
                     <tr>
+                        <td><strong>mizuRoute-CSLM</strong></td>
+                        <td>River + Lakes</td>
+                        <td>mizuRoute with Community Surface and Lake Model integration</td>
+                    </tr>
+                    <tr>
+                        <td><strong>FLUXOS</strong></td>
+                        <td>Overland Flow</td>
+                        <td>2D overland flow and sediment transport model</td>
+                    </tr>
+                    <tr>
                         <td><strong>CRHM</strong></td>
                         <td>Cold Regions</td>
                         <td>Cold Regions Hydrological Model — snow, frozen soils, prairie hydrology</td>
-                    </tr>
-                    <tr>
-                        <td><strong>MESH</strong></td>
-                        <td>Land-Atmosphere</td>
-                        <td>Modélisation Environnementale Surface et Hydrologie</td>
-                    </tr>
-                    <tr>
-                        <td><strong>CHM</strong></td>
-                        <td>Mountain Hydrology</td>
-                        <td>Canadian Hydrological Model — complex terrain processes</td>
                     </tr>
                     <tr>
                         <td><strong>Custom</strong></td>
@@ -621,19 +855,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">4</div>
+                <div class="page-number">6</div>
             </div>
         </div>
 
-        <!-- Slide 5: Theoretical Framework -->
-        <div class="slide section-slide" data-slide="5">
+        <!-- Slide 7: Theoretical Framework -->
+        <div class="slide section-slide" data-slide="7">
             <div class="section-number">01</div>
             <h2>Theoretical Framework</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 6: Mass Balance -->
-        <div class="slide" data-slide="6">
+        <!-- Slide 8: Mass Balance -->
+        <div class="slide" data-slide="8">
             <div class="slide-header">
                 <h2>Governing Equation: Mass Balance</h2>
             </div>
@@ -688,12 +922,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">6</div>
+                <div class="page-number">8</div>
             </div>
         </div>
 
-        <!-- Slide 7: Compartment Structure -->
-        <div class="slide" data-slide="7">
+        <!-- Slide 9: Compartment Structure -->
+        <div class="slide" data-slide="9">
             <div class="slide-header">
                 <h2>Compartment Structure</h2>
             </div>
@@ -748,12 +982,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">7</div>
+                <div class="page-number">9</div>
             </div>
         </div>
 
-        <!-- Slide 8: Module Architecture -->
-        <div class="slide" data-slide="8">
+        <!-- Slide 10: Module Architecture -->
+        <div class="slide" data-slide="10">
             <div class="slide-header">
                 <h2>Module Architecture</h2>
             </div>
@@ -779,7 +1013,7 @@
 │   │                     │    │                     │    │                     │        │
 │   │ • Freundlich        │    │ • HYPE_HBVSED       │    │ • HDF5              │        │
 │   │ • Langmuir          │    │ • HYPE_MMF          │    │ • CSV               │        │
-│   │                     │    │                     │    │ • VTU (ParaView)    │        │
+│   │                     │    │                     │    │                     │        │
 │   └─────────────────────┘    └─────────────────────┘    └─────────────────────┘        │
 │                                                                                         │
 └────────────────────────────────────────────────────────────────────────────────────────┘
@@ -791,19 +1025,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">8</div>
+                <div class="page-number">10</div>
             </div>
         </div>
 
-        <!-- Slide 9: Supported Processes -->
-        <div class="slide section-slide" data-slide="9">
+        <!-- Slide 11: Supported Processes -->
+        <div class="slide section-slide" data-slide="11">
             <div class="section-number">02</div>
             <h2>Supported Processes</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 10: Biogeochemical Processes -->
-        <div class="slide" data-slide="10">
+        <!-- Slide 12: Biogeochemical Processes -->
+        <div class="slide" data-slide="12">
             <div class="slide-header">
                 <h2>Biogeochemical Processes</h2>
             </div>
@@ -856,12 +1090,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">10</div>
+                <div class="page-number">12</div>
             </div>
         </div>
 
-        <!-- Slide 11: Available Templates -->
-        <div class="slide" data-slide="11">
+        <!-- Slide 13: Available Templates -->
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Pre-Built Model Templates</h2>
             </div>
@@ -900,39 +1134,40 @@
                     </div>
                     <div class="column">
                         <div class="card secondary">
-                            <h3>Individual Process Templates</h3>
+                            <h3>NATIVE_BGC_FLEX Templates (.json)</h3>
                             <ul style="margin-left: 15px;">
-                                <li style="font-size: 1.05rem;">Inorganic nitrogen (NO₃, NH₄)</li>
-                                <li style="font-size: 1.05rem;">Organic nitrogen (active, stable)</li>
-                                <li style="font-size: 1.05rem;">Phosphorus (PO₄, sediment-P)</li>
-                                <li style="font-size: 1.05rem;">Carbon (DOC, POC, DIC)</li>
-                                <li style="font-size: 1.05rem;">Dissolved oxygen</li>
-                                <li style="font-size: 1.05rem;">Heavy metals (Zn, Cu, Pb, Cd)</li>
-                                <li style="font-size: 1.05rem;">Pathogens (E. coli)</li>
-                                <li style="font-size: 1.05rem;">Conservative tracers</li>
+                                <li style="font-size: 0.95rem;">Inorganic nitrogen (NO₃, NH₄)</li>
+                                <li style="font-size: 0.95rem;">Phosphorus (PO₄, sediment-P)</li>
+                                <li style="font-size: 0.95rem;">Carbon (DOC, POC) & Dissolved oxygen</li>
+                                <li style="font-size: 0.95rem;">Heavy metals, Pathogens, Tracers</li>
                             </ul>
                         </div>
-                        <div class="highlight-box" style="margin-top: 15px;">
-                            Mix and match templates to build custom models!
+                        <div class="card purple" style="margin-top: 12px;">
+                            <h3>PHREEQC Templates (.pqi)</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.95rem;">Major ions equilibrium</li>
+                                <li style="font-size: 0.95rem;">Mineral saturation indices</li>
+                                <li style="font-size: 0.95rem;">Kinetic processes (DO, algae)</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">11</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
-        <!-- Slide 12: Applications -->
-        <div class="slide section-slide" data-slide="12">
+        <!-- Slide 14: Applications -->
+        <div class="slide section-slide" data-slide="14">
             <div class="section-number">03</div>
             <h2>Applications</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 13: Application Areas -->
-        <div class="slide" data-slide="13">
+        <!-- Slide 15: Application Areas -->
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>Application Areas</h2>
             </div>
@@ -998,12 +1233,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">13</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
-        <!-- Slide 14: Technical Stack -->
-        <div class="slide" data-slide="14">
+        <!-- Slide 16: Technical Stack -->
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Technical Stack</h2>
             </div>
@@ -1053,10 +1288,6 @@
                                     <td>Configuration files</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>VTK</strong></td>
-                                    <td>3D visualization output</td>
-                                </tr>
-                                <tr>
                                     <td><strong>CMake</strong></td>
                                     <td>Build system</td>
                                 </tr>
@@ -1078,12 +1309,69 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
-        <!-- Slide 15: Summary -->
-        <div class="slide" data-slide="15">
+        <!-- Slide 17: AI Assistance -->
+        <div class="slide" data-slide="17">
+            <div class="slide-header">
+                <h2>AI-Powered Assistance</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.1rem; margin-bottom: 20px;">
+                    OpenWQ includes built-in support for AI-powered assistance using Claude and other LLMs.
+                </p>
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>🖥️ Claude Code CLI (Users & Developers)</h3>
+                            <pre style="font-size: 0.68rem; padding: 10px; margin-bottom: 8px;">
+<span class="comment"># macOS/Linux: Install + add to PATH</span>
+curl -fsSL https://claude.ai/install.sh | sh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+
+<span class="comment"># Windows: Install using winget, then restart terminal</span>
+winget install Anthropic.ClaudeCode
+
+<span class="comment"># Navigate to OpenWQ & start Claude</span>
+cd /path/to/openwq/ && claude
+
+<span class="comment"># CLAUDE.md auto-loaded - ask anything:</span>
+> How do I set up nitrification?</pre>
+                            <p style="font-size: 0.75rem; color: var(--text-light);">Can read, write & edit files directly</p>
+                        </div>
+                        <div class="card secondary">
+                            <h3>🌐 Web/API Users (Everyone)</h3>
+                            <p style="font-size: 0.9rem; margin-bottom: 8px;">Copy prompt from <code>docs/OPENWQ_ASSISTANT_PROMPT.md</code></p>
+                            <p style="font-size: 0.85rem; color: var(--text-light);">Paste into claude.ai or any AI assistant</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>What AI Can Help With</h3>
+                            <ul style="margin-left: 15px; margin-top: 10px;">
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">BGC reaction configuration</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Calibration framework setup</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Troubleshooting errors</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Understanding source code</li>
+                                <li style="font-size: 0.9rem; margin-bottom: 6px;">Writing JSON configurations</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>Pro Tip:</strong> Create a Claude Project with uploaded docs for persistent context across conversations
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">17</div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Summary -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1113,12 +1401,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 16: Resources -->
-        <div class="slide title-slide" data-slide="16">
+        <!-- Slide 19: Resources -->
+        <div class="slide title-slide" data-slide="19">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions & Resources</div>
             <div style="margin-top: 3rem;">
@@ -1133,11 +1421,12 @@
                 </p>
             </div>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+            <button class="pdf-btn" onclick="exportToPDF()">📄 Export to PDF</button>
         </div>
 
     </div>
 
-    <div class="nav-hint" id="navHint">Use ← → arrows or click to navigate | Press F for fullscreen</div>
+    <div class="nav-hint" id="navHint">Use ← → arrows to navigate | Press F for fullscreen</div>
 
     <script>
         let currentSlide = 1;
@@ -1157,17 +1446,12 @@
 
         document.addEventListener('keydown', (e) => {
             switch(e.key) {
-                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': nextSlide(); break;
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'Enter': nextSlide(); break;
                 case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
                 case 'Home': currentSlide = 1; showSlide(currentSlide); break;
                 case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
                 case 'f': case 'F': toggleFullscreen(); break;
             }
-        });
-
-        document.querySelector('.presentation').addEventListener('click', (e) => {
-            const rect = e.target.getBoundingClientRect();
-            if (e.clientX - rect.left > rect.width / 2) nextSlide(); else prevSlide();
         });
 
         function toggleFullscreen() {
@@ -1198,6 +1482,104 @@
             const diff = touchStartX - e.changedTouches[0].screenX;
             if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
         });
+
+        // Copy to clipboard functionality
+        function addCopyButtons() {
+            document.querySelectorAll('pre').forEach(pre => {
+                if (pre.closest('.diagram')) return; // Skip diagram pre elements
+                if (pre.parentElement.classList.contains('code-container')) return; // Already wrapped
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-container';
+                pre.parentNode.insertBefore(wrapper, pre);
+                wrapper.appendChild(pre);
+
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.innerHTML = '📋 Copy';
+                btn.onclick = function() {
+                    const code = pre.textContent;
+                    navigator.clipboard.writeText(code).then(() => {
+                        btn.innerHTML = '✓ Copied!';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.innerHTML = '📋 Copy';
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    });
+                };
+                wrapper.appendChild(btn);
+            });
+        }
+        addCopyButtons();
+
+        // PDF Export functionality
+        function exportToPDF() {
+            const slides = document.querySelectorAll('.slide');
+            const presentation = document.getElementById('presentation');
+
+            // Store original styles
+            const originalPresentationStyle = presentation.style.cssText;
+            const originalBodyStyle = document.body.style.cssText;
+            const originalHtmlStyle = document.documentElement.style.cssText;
+            const originalSlideStyles = Array.from(slides).map(s => s.style.cssText);
+
+            // Create print-specific styles
+            const printStyles = document.createElement('style');
+            printStyles.id = 'print-styles';
+            printStyles.textContent = `
+                @media print {
+                    @page { size: landscape; margin: 0; }
+                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+                    html, body { height: auto !important; overflow: visible !important; background: white !important; }
+                    .presentation { height: auto !important; position: relative !important; overflow: visible !important; }
+                    .slide {
+                        display: flex !important;
+                        position: relative !important;
+                        page-break-after: always !important;
+                        page-break-inside: avoid !important;
+                        height: 100vh !important;
+                        width: 100vw !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
+                    }
+                    .slide:last-child { page-break-after: auto !important; }
+                    .nav-hint, .pdf-btn, .copy-btn { display: none !important; }
+                    .university-logo { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                }
+            `;
+            document.head.appendChild(printStyles);
+
+            // Temporarily modify for print - show all slides
+            document.body.style.cssText = 'height: auto; overflow: visible;';
+            document.documentElement.style.cssText = 'height: auto; overflow: visible;';
+            presentation.style.cssText = 'height: auto; position: relative; overflow: visible;';
+
+            slides.forEach(slide => {
+                slide.style.display = 'flex';
+                slide.style.position = 'relative';
+                slide.style.pageBreakAfter = 'always';
+                slide.style.height = '100vh';
+                slide.style.width = '100vw';
+            });
+
+            // Small delay to ensure styles are applied
+            setTimeout(() => {
+                window.print();
+
+                // Restore original styles after print dialog closes
+                setTimeout(() => {
+                    document.getElementById('print-styles')?.remove();
+                    document.body.style.cssText = originalBodyStyle;
+                    document.documentElement.style.cssText = originalHtmlStyle;
+                    presentation.style.cssText = originalPresentationStyle;
+                    slides.forEach((slide, i) => {
+                        slide.style.cssText = originalSlideStyles[i];
+                    });
+                    showSlide(currentSlide);
+                }, 500);
+            }, 100);
+        }
     </script>
 </body>
 </html>
