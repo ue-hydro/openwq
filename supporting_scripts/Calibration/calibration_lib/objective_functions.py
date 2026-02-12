@@ -19,16 +19,22 @@ Objective Functions Module
 ==========================
 
 Computes goodness-of-fit metrics by comparing model outputs with observations.
+
+Supports temporal aggregation of both observations and simulations to different
+resolutions (native, daily, weekly, monthly, yearly) before computing metrics.
 """
 
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Union
+from typing import Dict, List, Tuple, Optional, Union, Literal
 import logging
 import sys
 
 logger = logging.getLogger(__name__)
+
+# Valid temporal resolution options
+TemporalResolution = Literal["native", "daily", "weekly", "monthly", "yearly"]
 
 
 class ObjectiveFunction:
@@ -44,7 +50,9 @@ class ObjectiveFunction:
                  metric: str = "KGE",
                  weights: Dict[str, float] = None,
                  no_data_flag: float = -9999,
-                 h5_reader_path: str = None):
+                 h5_reader_path: str = None,
+                 temporal_resolution: TemporalResolution = "native",
+                 aggregation_method: str = "mean"):
         """
         Initialize objective function calculator.
 
@@ -66,6 +74,15 @@ class ObjectiveFunction:
             Flag value for missing data
         h5_reader_path : str
             Path to the Read_h5_driver.py module
+        temporal_resolution : str
+            Temporal resolution for objective function calculation:
+            - "native": Use original model timestep (no aggregation)
+            - "daily": Aggregate to daily values
+            - "weekly": Aggregate to weekly values
+            - "monthly": Aggregate to monthly values
+            - "yearly": Aggregate to yearly values
+        aggregation_method : str
+            Method for temporal aggregation: "mean", "sum", "median", "min", "max"
         """
         self.observation_path = observation_path
         self.target_species = target_species
@@ -74,6 +91,27 @@ class ObjectiveFunction:
         self.metric = metric
         self.weights = weights or {s: 1.0 for s in target_species}
         self.no_data_flag = no_data_flag
+        self.temporal_resolution = temporal_resolution
+        self.aggregation_method = aggregation_method
+
+        # Validate temporal resolution
+        valid_resolutions = ["native", "daily", "weekly", "monthly", "yearly"]
+        if temporal_resolution not in valid_resolutions:
+            raise ValueError(
+                f"Invalid temporal_resolution '{temporal_resolution}'. "
+                f"Valid options: {valid_resolutions}"
+            )
+
+        # Validate aggregation method
+        valid_methods = ["mean", "sum", "median", "min", "max"]
+        if aggregation_method not in valid_methods:
+            raise ValueError(
+                f"Invalid aggregation_method '{aggregation_method}'. "
+                f"Valid options: {valid_methods}"
+            )
+
+        logger.info(f"Objective function configured with temporal_resolution='{temporal_resolution}', "
+                    f"aggregation_method='{aggregation_method}'")
 
         # Setup H5 reader import path
         if h5_reader_path:
@@ -134,6 +172,17 @@ class ObjectiveFunction:
         if matched.empty:
             logger.warning("No matched observation-simulation pairs - returning penalty")
             return 1e10
+
+        # Apply temporal aggregation if specified
+        if self.temporal_resolution != "native":
+            matched = self._aggregate_matched_data(matched)
+
+            if matched.empty:
+                logger.warning("No data after temporal aggregation - returning penalty")
+                return 1e10
+
+        # Store matched data for later analysis/plotting
+        self._last_matched_data = matched
 
         # Compute objective by species
         objectives = {}
@@ -321,6 +370,165 @@ class ObjectiveFunction:
 
         return pd.DataFrame(all_data)
 
+    def _get_temporal_grouper(self, resolution: str) -> str:
+        """
+        Get pandas frequency string for temporal aggregation.
+
+        Parameters
+        ----------
+        resolution : str
+            Temporal resolution: "daily", "weekly", "monthly", "yearly"
+
+        Returns
+        -------
+        str
+            Pandas frequency string for resample/groupby
+        """
+        freq_map = {
+            "daily": "D",
+            "weekly": "W",
+            "monthly": "MS",  # Month Start for consistent grouping
+            "yearly": "YS"    # Year Start
+        }
+        return freq_map.get(resolution, "D")
+
+    def _aggregate_temporal(self,
+                            df: pd.DataFrame,
+                            value_column: str = "value",
+                            datetime_column: str = "datetime") -> pd.DataFrame:
+        """
+        Aggregate data to the specified temporal resolution.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            DataFrame with datetime, reach_id, species, and value columns
+        value_column : str
+            Name of the column containing values to aggregate
+        datetime_column : str
+            Name of the datetime column
+
+        Returns
+        -------
+        pd.DataFrame
+            Aggregated DataFrame with same structure
+        """
+        if self.temporal_resolution == "native" or df.empty:
+            return df
+
+        # Ensure datetime column is datetime type
+        df = df.copy()
+        df[datetime_column] = pd.to_datetime(df[datetime_column])
+
+        # Get the aggregation frequency
+        freq = self._get_temporal_grouper(self.temporal_resolution)
+
+        # Define aggregation function
+        agg_func_map = {
+            "mean": "mean",
+            "sum": "sum",
+            "median": "median",
+            "min": "min",
+            "max": "max"
+        }
+        agg_func = agg_func_map.get(self.aggregation_method, "mean")
+
+        # Group by reach_id, species, and temporal period
+        df['period'] = df[datetime_column].dt.to_period(freq[0] if freq != "MS" else "M")
+
+        # Handle different frequencies
+        if self.temporal_resolution == "weekly":
+            # Use isocalendar for consistent week grouping
+            df['period'] = df[datetime_column].dt.isocalendar().year.astype(str) + '-W' + \
+                          df[datetime_column].dt.isocalendar().week.astype(str).str.zfill(2)
+
+        # Aggregate
+        grouped = df.groupby(['reach_id', 'species', 'period']).agg({
+            value_column: agg_func,
+            datetime_column: 'first'  # Keep first datetime as representative
+        }).reset_index()
+
+        # Convert period back to representative datetime
+        if self.temporal_resolution == "daily":
+            grouped[datetime_column] = pd.to_datetime(grouped['period'].astype(str))
+        elif self.temporal_resolution == "weekly":
+            # Parse year-week format
+            grouped[datetime_column] = pd.to_datetime(
+                grouped['period'].astype(str) + '-1',
+                format='%Y-W%W-%w'
+            )
+        elif self.temporal_resolution == "monthly":
+            grouped[datetime_column] = grouped['period'].dt.to_timestamp()
+        elif self.temporal_resolution == "yearly":
+            grouped[datetime_column] = grouped['period'].dt.to_timestamp()
+
+        # Drop the temporary period column
+        grouped = grouped.drop(columns=['period'])
+
+        logger.debug(f"Aggregated {len(df)} records to {len(grouped)} records "
+                     f"at {self.temporal_resolution} resolution")
+
+        return grouped
+
+    def _aggregate_matched_data(self, matched: pd.DataFrame) -> pd.DataFrame:
+        """
+        Aggregate matched observation-simulation pairs to the specified temporal resolution.
+
+        Parameters
+        ----------
+        matched : pd.DataFrame
+            DataFrame with datetime, reach_id, species, observed, simulated columns
+
+        Returns
+        -------
+        pd.DataFrame
+            Aggregated DataFrame
+        """
+        if self.temporal_resolution == "native" or matched.empty:
+            return matched
+
+        matched = matched.copy()
+        matched['datetime'] = pd.to_datetime(matched['datetime'])
+
+        # Get the aggregation frequency
+        freq = self._get_temporal_grouper(self.temporal_resolution)
+
+        # Define aggregation function
+        agg_func_map = {
+            "mean": "mean",
+            "sum": "sum",
+            "median": "median",
+            "min": "min",
+            "max": "max"
+        }
+        agg_func = agg_func_map.get(self.aggregation_method, "mean")
+
+        # Create period column for grouping
+        if self.temporal_resolution == "daily":
+            matched['period'] = matched['datetime'].dt.date
+        elif self.temporal_resolution == "weekly":
+            matched['period'] = matched['datetime'].dt.isocalendar().year.astype(str) + '-W' + \
+                               matched['datetime'].dt.isocalendar().week.astype(str).str.zfill(2)
+        elif self.temporal_resolution == "monthly":
+            matched['period'] = matched['datetime'].dt.to_period('M')
+        elif self.temporal_resolution == "yearly":
+            matched['period'] = matched['datetime'].dt.to_period('Y')
+
+        # Aggregate both observed and simulated values
+        aggregated = matched.groupby(['reach_id', 'species', 'period']).agg({
+            'observed': agg_func,
+            'simulated': agg_func,
+            'datetime': 'first'
+        }).reset_index()
+
+        # Drop the period column
+        aggregated = aggregated.drop(columns=['period'])
+
+        logger.info(f"Temporal aggregation: {len(matched)} pairs → {len(aggregated)} pairs "
+                    f"({self.temporal_resolution}, {self.aggregation_method})")
+
+        return aggregated
+
     def _match_obs_sim(self, simulated: pd.DataFrame) -> pd.DataFrame:
         """
         Match observations with simulated values.
@@ -415,3 +623,43 @@ class ObjectiveFunction:
     def pbias(obs: np.ndarray, sim: np.ndarray) -> float:
         """Percent Bias."""
         return 100 * np.nansum(sim - obs) / np.nansum(obs)
+
+    def get_matched_data(self) -> pd.DataFrame:
+        """
+        Get the last matched observation-simulation data.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with datetime, reach_id, species, observed, simulated columns
+            (already aggregated to the specified temporal resolution)
+        """
+        if hasattr(self, '_last_matched_data'):
+            return self._last_matched_data.copy()
+        return pd.DataFrame()
+
+    def get_temporal_resolution_info(self) -> Dict:
+        """
+        Get information about the temporal resolution settings.
+
+        Returns
+        -------
+        Dict
+            Dictionary with resolution and aggregation method info
+        """
+        return {
+            "temporal_resolution": self.temporal_resolution,
+            "aggregation_method": self.aggregation_method,
+            "description": self._get_resolution_description()
+        }
+
+    def _get_resolution_description(self) -> str:
+        """Get human-readable description of temporal resolution."""
+        descriptions = {
+            "native": "Native model timestep (no aggregation)",
+            "daily": "Daily aggregated values",
+            "weekly": "Weekly aggregated values",
+            "monthly": "Monthly aggregated values",
+            "yearly": "Yearly aggregated values"
+        }
+        return descriptions.get(self.temporal_resolution, "Unknown")

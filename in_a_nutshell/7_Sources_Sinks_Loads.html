@@ -1008,27 +1008,70 @@ date,discharge_m3s,precip_mm,temp_c,NO3-N,TP
 
         // PDF Export functionality
         function exportToPDF() {
+            const slides = document.querySelectorAll('.slide');
+            const presentation = document.getElementById('presentation');
+
+            // Store original styles
+            const originalPresentationStyle = presentation.style.cssText;
+            const originalBodyStyle = document.body.style.cssText;
+            const originalHtmlStyle = document.documentElement.style.cssText;
+            const originalSlideStyles = Array.from(slides).map(s => s.style.cssText);
+
+            // Create print-specific styles
             const printStyles = document.createElement('style');
             printStyles.id = 'print-styles';
             printStyles.textContent = `
                 @media print {
                     @page { size: landscape; margin: 0; }
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+                    html, body { height: auto !important; overflow: visible !important; background: white !important; }
+                    .presentation { height: auto !important; position: relative !important; overflow: visible !important; }
                     .slide {
                         display: flex !important;
-                        page-break-after: always;
                         position: relative !important;
+                        page-break-after: always !important;
+                        page-break-inside: avoid !important;
                         height: 100vh !important;
                         width: 100vw !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
                     }
+                    .slide:last-child { page-break-after: auto !important; }
                     .nav-hint, .pdf-btn, .copy-btn { display: none !important; }
+                    .university-logo { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                 }
             `;
             document.head.appendChild(printStyles);
-            window.print();
+
+            // Temporarily modify for print - show all slides
+            document.body.style.cssText = 'height: auto; overflow: visible;';
+            document.documentElement.style.cssText = 'height: auto; overflow: visible;';
+            presentation.style.cssText = 'height: auto; position: relative; overflow: visible;';
+
+            slides.forEach(slide => {
+                slide.style.display = 'flex';
+                slide.style.position = 'relative';
+                slide.style.pageBreakAfter = 'always';
+                slide.style.height = '100vh';
+                slide.style.width = '100vw';
+            });
+
+            // Small delay to ensure styles are applied
             setTimeout(() => {
-                document.getElementById('print-styles')?.remove();
-            }, 1000);
+                window.print();
+
+                // Restore original styles after print dialog closes
+                setTimeout(() => {
+                    document.getElementById('print-styles')?.remove();
+                    document.body.style.cssText = originalBodyStyle;
+                    document.documentElement.style.cssText = originalHtmlStyle;
+                    presentation.style.cssText = originalPresentationStyle;
+                    slides.forEach((slide, i) => {
+                        slide.style.cssText = originalSlideStyles[i];
+                    });
+                    showSlide(currentSlide);
+                }, 500);
+            }, 100);
         }
     </script>
 </body>
