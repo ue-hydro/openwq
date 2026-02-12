@@ -1,5 +1,5 @@
-Model Calibration Framework
-===========================
+Calibration Frameworks
+======================
 
 OpenWQ provides a comprehensive Python calibration framework for parameter optimization and sensitivity analysis. The framework is designed for computationally expensive models, supporting both local (Docker) and HPC (Apptainer/SLURM) execution environments.
 

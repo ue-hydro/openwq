@@ -7,7 +7,6 @@ Documentation
    2_1_Theoretical
    2_2_Example
    2_3_Software
-   2_4_AI_Assistant
 
 
 
