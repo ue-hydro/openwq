@@ -82,3 +82,7 @@ From: ubuntu:24.04
     -DCMAKE_INSTALL_PREFIX=../piolib
   make -j4
   make install
+
+%environment
+    export CMAKE_PREFIX_PATH=/usr/local/phreeqcrm:/usr/local/sundials:/opt/piolib
+    export LD_LIBRARY_PATH=/usr/local/phreeqcrm/lib:/usr/local/sundials/lib:/opt/piolib/lib:$LD_LIBRARY_PATH
