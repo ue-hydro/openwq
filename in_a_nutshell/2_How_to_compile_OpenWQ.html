@@ -710,7 +710,8 @@ apptainer shell --bind $(pwd):/code openwq.sif
 <span class="comment"># Inside container - compile:</span>
 cd /&lt;hostmodel_code&gt;/openwq/openwq
 cmake -DHOST_MODEL_TARGET=summa_openwq \
-      -DCMAKE_BUILD_TYPE=Release .
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH="/usr/local/phreeqcrm;/usr/local/sundials" .
 make -j4
                             </pre>
                         </div>
@@ -735,7 +736,7 @@ apptainer exec --bind /path/to/data:/data \
                             </table>
                         </div>
                         <div class="highlight-box info" style="margin-top: 12px;">
-                            <strong>Note:</strong> If SIF was built on the same machine, skip step 1 — repositories already exist.
+                            <strong>Note:</strong> If SIF was built on the same machine, skip step 1 — repositories already exist. CMAKE_PREFIX_PATH is set automatically in the container environment.
                         </div>
                         <div class="highlight-box success" style="margin-top: 10px;">
                             <strong>HPC Tip:</strong> Use job scripts in <code>hpc_templates/</code> for SLURM/PBS submission
