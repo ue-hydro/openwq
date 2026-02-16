@@ -27,10 +27,14 @@ From: ubuntu:24.04
 
   # Install PHREEQC-RM
   cd /opt
-  git clone https://github.com/usgs-coupled/phreeqcrm_use_cmake.git phreeqcrm -b modern
+  git clone https://github.com/usgs-coupled/phreeqcrm.git phreeqcrm
   cd phreeqcrm
-  git checkout cf03df1
-  cmake . -P build_phreeqcrm.cmake -DCMAKE_INSTALL_PREFIX=/usr/local/phreeqcrm
+  mkdir build && cd build
+  cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local/phreeqcrm \
+           -DPHREEQCRM_BUILD_TESTS=OFF \
+           -DPHREEQCRM_FORTRAN_TESTING=OFF
+  make -j4
+  make install
   
   # Install Sundials
   cd /opt
