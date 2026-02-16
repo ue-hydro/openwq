@@ -259,6 +259,7 @@
                         <div style="font-size: 1.15rem; line-height: 2.4;">
                             <p style="margin-bottom: 8px;">• Compilation Methods Overview</p>
                             <p style="margin-bottom: 8px;">• Dependencies</p>
+                            <p style="margin-bottom: 8px;">• Clone Repositories</p>
                             <p style="margin-top: 15px; color: var(--accent); font-weight: 600;">Section 01: Docker Build</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: Setup & Build</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: CMake Configuration</p>
@@ -370,17 +371,11 @@
                             <strong>Container builds include everything!</strong><br>
                             Docker and Apptainer containers come with all dependencies pre-installed — no manual setup required.
                         </div>
-                        <div class="card teal" style="margin-top: 15px;">
-                            <h3>Host Models</h3>
-                            <p>OpenWQ is coupled to:</p>
-                            <ul style="margin-left: 15px; margin-top: 10px;">
-                                <li style="font-size: 0.95rem;"><strong><a href="https://github.com/ashleymedin/summa.git" target="_blank" style="color: var(--primary);">SUMMA</a></strong> — Land surface hydrology</li>
-                                <li style="font-size: 0.95rem;"><strong><a href="https://github.com/ue-hydro/mizuRoute-OpenWQ.git" target="_blank" style="color: var(--primary);">mizuRoute</a></strong> — River routing</li>
-                                <li style="font-size: 0.95rem;"><strong><a href="https://github.com/ue-hydro/mizuroute_cslm_openwq.git" target="_blank" style="color: var(--primary);">mizuRoute-CSLM</a></strong> — With lakes</li>
-                                <li style="font-size: 0.95rem;"><strong><a href="https://github.com/ue-hydro/FLUXOS_cpp.git" target="_blank" style="color: var(--primary);">FLUXOS</a></strong> — Overland flow</li>
-                                <li style="font-size: 0.95rem;"><strong>CRHM</strong> — Cold regions</li>
-                                <li style="font-size: 0.95rem;"><strong>Custom</strong> — Any model via API</li>
-                            </ul>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>Installation scripts:</strong> <code>openwq/utils/</code> contains helper scripts for installing Armadillo, SUNDIALS, and PHREEQC-RM
+                        </div>
+                        <div class="highlight-box warning" style="margin-top: 15px;">
+                            <strong>Recommendation:</strong> Use container builds (Docker/Apptainer) for reproducibility. Native builds require careful version matching.
                         </div>
                     </div>
                 </div>
@@ -391,8 +386,61 @@
             </div>
         </div>
 
-        <!-- Slide 5: Container Files Organization -->
+        <!-- Slide 5: Clone Repositories -->
         <div class="slide" data-slide="5">
+            <div class="slide-header">
+                <h2>Clone Repositories</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 40px;">
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>Step 1: Clone Host Model</h3>
+                            <p style="font-size: 0.9rem; margin-bottom: 10px;">Choose one host model repository:</p>
+                            <pre style="font-size: 0.7rem; padding: 12px;">
+<span class="comment"># SUMMA (land surface hydrology)</span>
+git clone https://github.com/ashleymedin/summa.git
+
+<span class="comment"># mizuRoute (river routing)</span>
+git clone https://github.com/ue-hydro/mizuRoute-OpenWQ.git
+
+<span class="comment"># mizuRoute-CSLM (with lakes)</span>
+git clone https://github.com/ue-hydro/mizuroute_cslm_openwq.git
+
+<span class="comment"># FLUXOS (overland flow)</span>
+git clone https://github.com/ue-hydro/FLUXOS_cpp.git
+                            </pre>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Step 2: Clone OpenWQ</h3>
+                            <p style="font-size: 0.9rem; margin-bottom: 10px;">Navigate to host model's OpenWQ directory, then clone:</p>
+                            <pre style="font-size: 0.7rem; padding: 12px;">
+<span class="comment"># Example for SUMMA:</span>
+cd summa/build/source/openwq
+
+<span class="comment"># Clone OpenWQ (use develop branch)</span>
+git clone -b develop https://github.com/ue-hydro/openwq.git
+
+<span class="comment"># Navigate to compilation directory</span>
+cd openwq/openwq
+                            </pre>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 15px;">
+                            <strong>Note:</strong> The exact path to the OpenWQ directory varies by host model. Check the host model's documentation.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">5</div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Container Files Organization -->
+        <div class="slide" data-slide="6">
             <div class="slide-header">
                 <h2>Container Files Organization</h2>
             </div>
@@ -436,12 +484,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">5</div>
+                <div class="page-number">6</div>
             </div>
         </div>
 
-        <!-- Slide 6: Docker Steps -->
-        <div class="slide" data-slide="6">
+        <!-- Slide 7: Docker Steps -->
+        <div class="slide" data-slide="7">
             <div class="slide-header">
                 <h2>Docker: Setup & Build</h2>
             </div>
@@ -507,12 +555,12 @@ make -j4
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">6</div>
+                <div class="page-number">7</div>
             </div>
         </div>
 
-        <!-- Slide 7: Docker CMake Options -->
-        <div class="slide" data-slide="7">
+        <!-- Slide 8: Docker CMake Options -->
+        <div class="slide" data-slide="8">
             <div class="slide-header">
                 <h2>Docker: CMake Configuration</h2>
             </div>
@@ -564,123 +612,66 @@ make -j4
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">7</div>
+                <div class="page-number">8</div>
             </div>
         </div>
 
-        <!-- Slide 8: Section - Apptainer -->
-        <div class="slide section-slide blue" data-slide="8">
+        <!-- Slide 9: Section - Apptainer -->
+        <div class="slide section-slide blue" data-slide="9">
             <div class="section-number">02</div>
             <h2>Apptainer (HPC)</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 9: Apptainer Build -->
-        <div class="slide" data-slide="9">
+        <!-- Slide 10: Apptainer Build -->
+        <div class="slide" data-slide="10">
             <div class="slide-header">
                 <h2>Apptainer: Build Container</h2>
             </div>
             <div class="slide-content">
                 <div class="two-column" style="gap: 35px;">
                     <div class="column">
-                        <p style="font-size: 1.05rem; margin-bottom: 15px;">
-                            Build on a machine with <strong>sudo access</strong>, then transfer the .sif image to HPC.
+                        <p style="font-size: 1rem; margin-bottom: 12px;">
+                            Build SIF image on a machine with sudo access, then transfer to HPC.
                         </p>
-                        <pre style="font-size: 0.75rem;">
-<span class="comment"># 1. Clone repositories (same as Docker)</span>
+                        <pre style="font-size: 0.68rem;">
+<span class="comment"># 1. Clone host model repository (e.g., SUMMA)</span>
 git clone -b develop https://github.com/ashleymedin/summa.git
 cd summa/build/source/openwq
+
+<span class="comment"># 2. Clone OpenWQ inside host model</span>
 git clone -b develop git@github.com:ue-hydro/openwq.git
 
-<span class="comment"># 2. Build Apptainer/Singularity image</span>
+<span class="comment"># 3. Build Apptainer/Singularity image</span>
 cd openwq/containers
 sudo apptainer build openwq.sif openwq_apptainer.def
-<span class="comment"># Or without sudo (if fakeroot is enabled):</span>
+<span class="comment"># Or without sudo (if fakeroot enabled):</span>
 singularity build --fakeroot openwq.sif openwq_apptainer.def
 
 <span class="comment"># IMPORTANT: Build on same architecture as target HPC</span>
-<span class="comment"># (e.g., x86_64 vs ARM). Contact your HPC team for</span>
-<span class="comment"># site-specific build instructions and policies.</span>
+<span class="comment"># (x86_64 vs ARM). Contact HPC team for site policies.</span>
 
-<span class="comment"># 3. Transfer to HPC (if built locally)</span>
+<span class="comment"># 4. Transfer SIF to HPC (if built locally)</span>
 scp openwq.sif user@hpc:/path/to/containers/
-
-<span class="comment"># Image size: ~2-3 GB | Build time: 15-30 min</span>
                         </pre>
                     </div>
                     <div class="column">
                         <div class="card primary">
-                            <h3>What's Included</h3>
+                            <h3>What's Included in SIF</h3>
                             <ul style="margin-left: 15px;">
-                                <li style="font-size: 0.95rem;">Ubuntu 24.04 base</li>
-                                <li style="font-size: 0.95rem;">Armadillo 10.6.0</li>
-                                <li style="font-size: 0.95rem;">SUNDIALS 7.1.1</li>
-                                <li style="font-size: 0.95rem;">PHREEQC-RM</li>
-                                <li style="font-size: 0.95rem;">ParallelIO (for MizuRoute-CSLM)</li>
-                                <li style="font-size: 0.95rem;">NetCDF, HDF5, OpenBLAS</li>
+                                <li style="font-size: 0.9rem;">Ubuntu 24.04 base</li>
+                                <li style="font-size: 0.9rem;">Armadillo 10.6.0</li>
+                                <li style="font-size: 0.9rem;">SUNDIALS 7.1.1</li>
+                                <li style="font-size: 0.9rem;">PHREEQC-RM</li>
+                                <li style="font-size: 0.9rem;">ParallelIO (MizuRoute-CSLM)</li>
+                                <li style="font-size: 0.9rem;">NetCDF, HDF5, OpenBLAS</li>
                             </ul>
                         </div>
-                        <div class="highlight-box warning" style="margin-top: 15px;">
-                            <strong>Note:</strong> Building requires sudo, but <strong>running does not</strong> — perfect for HPC clusters
+                        <div class="highlight-box warning" style="margin-top: 12px;">
+                            <strong>Note:</strong> Building SIF requires sudo, but <strong>running does not</strong> — perfect for HPC
                         </div>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">9</div>
-            </div>
-        </div>
-
-        <!-- Slide 10: Apptainer Compile -->
-        <div class="slide" data-slide="10">
-            <div class="slide-header">
-                <h2>Apptainer: Compile & Run</h2>
-            </div>
-            <div class="slide-content">
-                <div class="two-column" style="gap: 35px;">
-                    <div class="column">
-                        <div class="card accent">
-                            <h3>Compile with Container</h3>
-                            <pre style="font-size: 0.72rem; padding: 12px;">
-<span class="comment"># Use the provided script</span>
-cd utils
-./compile_summa_apptainer.sh
-
-<span class="comment"># Or manually:</span>
-apptainer exec --bind $(pwd):/code openwq.sif \
-  bash -c "cd /code/build/source/openwq/openwq && \
-           cmake -DHOST_MODEL_TARGET=summa_openwq \
-                 -DCMAKE_BUILD_TYPE=Release . && \
-           make -j4"
-                            </pre>
-                        </div>
-                        <div class="card secondary">
-                            <h3>Run with Container</h3>
-                            <pre style="font-size: 0.72rem; padding: 12px;">
-<span class="comment"># Use the provided script</span>
-cd utils
-./run_summa_apptainer.sh
-
-<span class="comment"># Or manually:</span>
-apptainer exec --bind /path/to/data:/data \
-  --env master_json=/data/openwq_in/master.json \
-  openwq.sif ./summa_openwq -g 1 1 -m fileManager.txt
-                            </pre>
-                        </div>
-                    </div>
-                    <div class="column">
-                        <div class="card primary">
-                            <h3>Key Apptainer Flags</h3>
-                            <table style="font-size: 0.85rem;">
-                                <tr><td><strong>--bind</strong></td><td>Mount host directories</td></tr>
-                                <tr><td><strong>--env</strong></td><td>Set environment variables</td></tr>
-                                <tr><td><strong>exec</strong></td><td>Run command in container</td></tr>
-                                <tr><td><strong>shell</strong></td><td>Interactive shell</td></tr>
-                            </table>
-                        </div>
-                        <div class="highlight-box success" style="margin-top: 15px;">
-                            <strong>HPC Tip:</strong> Use job scripts in <code>hpc_templates/</code> for SLURM/PBS submission
+                        <div class="highlight-box info" style="margin-top: 10px;">
+                            <strong>Image:</strong> ~2-3 GB | <strong>Build:</strong> 15-30 min
                         </div>
                     </div>
                 </div>
@@ -691,15 +682,82 @@ apptainer exec --bind /path/to/data:/data \
             </div>
         </div>
 
-        <!-- Slide 11: Section - Native Linux -->
-        <div class="slide section-slide green" data-slide="11">
+        <!-- Slide 11: Apptainer Compile -->
+        <div class="slide" data-slide="11">
+            <div class="slide-header">
+                <h2>Apptainer: Compile & Run</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="card accent">
+                            <h3>1. Clone Repositories (if SIF transferred from another machine)</h3>
+                            <pre style="font-size: 0.68rem; padding: 10px;">
+<span class="comment"># Clone host model (e.g., SUMMA)</span>
+git clone -b develop https://github.com/ashleymedin/summa.git
+cd summa/build/source/openwq
+
+<span class="comment"># Clone OpenWQ inside host model</span>
+git clone -b develop git@github.com:ue-hydro/openwq.git
+                            </pre>
+                        </div>
+                        <div class="card primary">
+                            <h3>2. Compile with Container (recommended)</h3>
+                            <pre style="font-size: 0.68rem; padding: 10px;">
+<span class="comment"># Enter container shell</span>
+apptainer shell --bind $(pwd):/code openwq.sif
+
+<span class="comment"># Inside container - compile:</span>
+cd /&lt;hostmodel_code&gt;/openwq/openwq
+cmake -DHOST_MODEL_TARGET=summa_openwq \
+      -DCMAKE_BUILD_TYPE=Release .
+make -j4
+                            </pre>
+                        </div>
+                        <div class="card secondary">
+                            <h3>3. Run Model</h3>
+                            <pre style="font-size: 0.68rem; padding: 10px;">
+<span class="comment"># Run inside container:</span>
+apptainer exec --bind /path/to/data:/data \
+  --env master_json=/data/openwq_in/master.json \
+  openwq.sif ./summa_openwq -g 1 1 -m fileManager.txt
+                            </pre>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>Key Apptainer Commands</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td><strong>shell</strong></td><td>Interactive shell in container</td></tr>
+                                <tr><td><strong>exec</strong></td><td>Run single command</td></tr>
+                                <tr><td><strong>--bind</strong></td><td>Mount host directories</td></tr>
+                                <tr><td><strong>--env</strong></td><td>Set environment variables</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 12px;">
+                            <strong>Note:</strong> If SIF was built on the same machine, skip step 1 — repositories already exist.
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 10px;">
+                            <strong>HPC Tip:</strong> Use job scripts in <code>hpc_templates/</code> for SLURM/PBS submission
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">11</div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Section - Native Linux -->
+        <div class="slide section-slide green" data-slide="12">
             <div class="section-number">03</div>
             <h2>Native Linux Build</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 12: Native Linux -->
-        <div class="slide" data-slide="12">
+        <!-- Slide 13: Native Linux -->
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Native Linux: Manual Setup</h2>
             </div>
@@ -753,12 +811,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">12</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
-        <!-- Slide 13: Key Files -->
-        <div class="slide" data-slide="13">
+        <!-- Slide 14: Key Files -->
+        <div class="slide" data-slide="14">
             <div class="slide-header">
                 <h2>Key Build Files</h2>
             </div>
@@ -801,12 +859,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">13</div>
+                <div class="page-number">14</div>
             </div>
         </div>
 
-        <!-- Slide 14: Troubleshooting -->
-        <div class="slide" data-slide="14">
+        <!-- Slide 15: Troubleshooting -->
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>Troubleshooting</h2>
             </div>
@@ -868,12 +926,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
-        <!-- Slide 15: Summary -->
-        <div class="slide" data-slide="15">
+        <!-- Slide 16: Summary -->
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -899,12 +957,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
-        <!-- Slide 16: Thank You -->
-        <div class="slide title-slide" data-slide="16">
+        <!-- Slide 17: Thank You -->
+        <div class="slide title-slide" data-slide="17">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">
