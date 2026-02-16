@@ -592,15 +592,20 @@ git clone -b develop https://github.com/ashleymedin/summa.git
 cd summa/build/source/openwq
 git clone -b develop git@github.com:ue-hydro/openwq.git
 
-<span class="comment"># 2. Build Apptainer image (requires sudo)</span>
+<span class="comment"># 2. Build Apptainer/Singularity image</span>
 cd openwq/containers
 sudo apptainer build openwq.sif openwq_apptainer.def
+<span class="comment"># Or without sudo (if fakeroot is enabled):</span>
+singularity build --fakeroot openwq.sif openwq_apptainer.def
 
-<span class="comment"># 3. Transfer to HPC</span>
+<span class="comment"># IMPORTANT: Build on same architecture as target HPC</span>
+<span class="comment"># (e.g., x86_64 vs ARM). Contact your HPC team for</span>
+<span class="comment"># site-specific build instructions and policies.</span>
+
+<span class="comment"># 3. Transfer to HPC (if built locally)</span>
 scp openwq.sif user@hpc:/path/to/containers/
 
-<span class="comment"># Image size: ~2-3 GB</span>
-<span class="comment"># Build time: 15-30 minutes</span>
+<span class="comment"># Image size: ~2-3 GB | Build time: 15-30 min</span>
                         </pre>
                     </div>
                     <div class="column">
