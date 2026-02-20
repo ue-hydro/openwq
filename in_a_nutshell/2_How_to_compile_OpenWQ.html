@@ -121,12 +121,13 @@
             padding: 1px 5px;
             cursor: pointer;
             color: #a0aec0;
-            font-size: 0.6rem;
+            font-size: 0.55rem;
             opacity: 0.7;
             transition: all 0.15s;
             line-height: 1.2;
             z-index: 2;
             margin-right: 6px;
+            font-family: 'Inter', sans-serif;
         }
         .copy-line-btn:hover {
             background: rgba(255,255,255,0.3);
@@ -1169,7 +1170,7 @@ module load cmake/3.22.1
                     window._copyLineData[dataId] = fullText;
                     pre.innerHTML = '<span class="code-line-wrapper">' + pre.innerHTML +
                         '<button class="copy-line-btn" onclick="copyLine(this, \'' + dataId +
-                        '\')" title="Copy all">📋</button></span>';
+                        '\')" title="Copy all to clipboard">📋 copy all</button></span>';
                     return;
                 }
 
@@ -1216,7 +1217,7 @@ module load cmake/3.22.1
                         window._copyLineData[dataId] = fullText;
                         const joined = group.htmlLines.join('\n');
                         result.push('<span class="code-line-wrapper"><button class="copy-line-btn" onclick="copyLine(this, \'' + dataId +
-                            '\')" title="Copy command">📋</button>' + joined + '</span>');
+                            '\')" title="Copy to clipboard">📋 copy</button>' + joined + '</span>');
                     }
                 });
                 pre.innerHTML = result.join('\n');
@@ -1224,11 +1225,12 @@ module load cmake/3.22.1
         }
         function copyLine(btn, dataId) {
             const text = window._copyLineData[dataId];
+            const originalText = btn.textContent;
             navigator.clipboard.writeText(text).then(() => {
-                btn.textContent = '✓';
+                btn.textContent = '✓ copied!';
                 btn.classList.add('copied');
                 setTimeout(() => {
-                    btn.textContent = '📋';
+                    btn.textContent = originalText;
                     btn.classList.remove('copied');
                 }, 1500);
             });
