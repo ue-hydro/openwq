@@ -32,9 +32,9 @@ Development Setup
     # Clone repository
     git clone --recurse-submodules https://github.com/ue-hydro/openwq.git
 
-    # Build in debug mode
+    # Build in debug mode (requires at least 16 GB RAM)
     cmake -DHOST_MODEL_TARGET=openwq -DCMAKE_BUILD_TYPE=debug .
-    make -j 4
+    make -j 2
 
     # Run synthetic tests to verify setup
     # Make changes on a feature branch and submit a pull request

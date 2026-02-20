@@ -409,9 +409,6 @@
                             <strong>Container builds include everything!</strong><br>
                             Docker and Apptainer containers come with all dependencies pre-installed — no manual setup required.
                         </div>
-                        <div class="highlight-box info" style="margin-top: 15px;">
-                            <strong>Installation scripts:</strong> <code>openwq/utils/</code> contains helper scripts for installing Armadillo, SUNDIALS, and PHREEQC-RM
-                        </div>
                         <div class="highlight-box warning" style="margin-top: 15px;">
                             <strong>Recommendation:</strong> Use container builds (Docker/Apptainer) for reproducibility. Native builds require careful version matching.
                         </div>
@@ -711,8 +708,8 @@ cmake -DHOST_MODEL_TARGET=mizuroute_openwq \
 cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq \
       -DCMAKE_BUILD_TYPE=Release .
 
-<span class="comment"># Then compile:</span>
-make -j4
+<span class="comment"># Then compile (requires at least 16 GB RAM):</span>
+make -j2
 <span class="comment"># Executable created in .../openwq/openwq/bin/</span>
                         </pre>
                     </div>
@@ -862,10 +859,13 @@ cmake -DHOST_MODEL_TARGET=mizuroute_openwq \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_PREFIX_PATH="/usr/local/phreeqcrm;/usr/local/sundials" .
 
-<span class="comment"># Then compile:</span>
-make -j4
+<span class="comment"># Then compile (requires at least 16 GB RAM):</span>
+make -j2
 <span class="comment"># Executable created in .../openwq/openwq/bin/</span>
                         </pre>
+                        <div class="highlight-box success" style="margin-top: 10px;">
+                            <strong>HPC Tip:</strong> Use job scripts in <code>hpc_templates/</code> for SLURM/PBS submission
+                        </div>
                     </div>
                     <div class="column">
                         <div class="card primary">
@@ -886,9 +886,6 @@ make -j4
                         </div>
                         <div class="highlight-box info" style="margin-top: 12px;">
                             <strong>Note:</strong> CMAKE_PREFIX_PATH is needed so CMake can find PhreeqcRM and SUNDIALS installed inside the container.
-                        </div>
-                        <div class="highlight-box success" style="margin-top: 10px;">
-                            <strong>HPC Tip:</strong> Use job scripts in <code>hpc_templates/</code> for SLURM/PBS submission
                         </div>
                     </div>
                 </div>
@@ -933,11 +930,11 @@ cmake .. -DBUILD_FORTRAN_MODULE_INTERFACE=ON \
          -DCMAKE_INSTALL_PREFIX=/usr/local/sundials
 make -j4 && sudo make install
 
-<span class="comment"># 4. Compile OpenWQ</span>
+<span class="comment"># 4. Compile OpenWQ (requires at least 16 GB RAM)</span>
 cd openwq
 cmake -DHOST_MODEL_TARGET=summa_openwq \
       -DCMAKE_BUILD_TYPE=Release .
-make -j4
+make -j2
 <span class="comment"># Executable in bin/ folder</span>
                         </pre>
                     </div>
