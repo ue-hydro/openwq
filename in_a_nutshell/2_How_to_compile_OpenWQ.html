@@ -147,7 +147,25 @@
             position: absolute;
             top: 4px;
             right: 4px;
-            float: none;
+            margin-right: 0;
+        }
+
+        /* Inline code highlighting (outside pre blocks) */
+        :not(pre) > code {
+            background: rgba(255, 107, 53, 0.12);
+            color: #e05500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        /* Important note label */
+        .important-note {
+            color: #e05500;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
         }
 
         /* PDF Export Button */
@@ -667,7 +685,7 @@ docker exec -it docker_openwq /bin/bash
                     Run CMake to generate the Makefile used to compile OpenWQ (see code snippets below).
                 </p>
                 <p style="font-size: 1.0rem; margin-bottom: 20px;">
-                    <strong>Important note:</strong> OpenWQ requires two CMake arguments:
+                    <strong class="important-note">Important note:</strong> OpenWQ requires two CMake arguments:
                     <code>-DHOST_MODEL_TARGET</code> and
                     <code>-DCMAKE_BUILD_TYPE</code>.
                 </p>
@@ -814,11 +832,14 @@ singularity shell --bind $(pwd):/code openwq.sif
                 <p style="font-size: 1.0rem; margin-bottom: 8px;">
                     Run CMake to generate the Makefile used to compile OpenWQ (see code snippets below).
                 </p>
-                <p style="font-size: 1.0rem; margin-bottom: 20px;">
-                    <strong>Important note:</strong> OpenWQ requires three CMake arguments:
+                <p style="font-size: 1.0rem; margin-bottom: 8px;">
+                    <strong class="important-note">Important note 1:</strong> OpenWQ requires three CMake arguments:
                     <code>-DHOST_MODEL_TARGET</code>,
                     <code>-DCMAKE_BUILD_TYPE</code>, and
                     <code>-DCMAKE_PREFIX_PATH</code>.
+                </p>
+                <p style="font-size: 1.0rem; margin-bottom: 20px;">
+                    <strong class="important-note">Important note 2:</strong> OpenWQ must be compiled on the same machine (and architecture) that was used to build the Apptainer/Singularity SIF image.
                 </p>
                 <div class="two-column" style="gap: 35px;">
                     <div class="column">
@@ -1168,9 +1189,9 @@ module load cmake/3.22.1
                     const fullText = pre.textContent;
                     const dataId = 'cmd_' + Math.random().toString(36).substr(2, 9);
                     window._copyLineData[dataId] = fullText;
-                    pre.innerHTML = '<span class="code-line-wrapper">' + pre.innerHTML +
+                    pre.innerHTML = pre.innerHTML +
                         '<button class="copy-line-btn" onclick="copyLine(this, \'' + dataId +
-                        '\')" title="Copy all to clipboard">📋 copy all</button></span>';
+                        '\')" title="Copy all to clipboard">📋 copy all</button>';
                     return;
                 }
 

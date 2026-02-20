@@ -356,6 +356,24 @@
             color: white;
         }
 
+        /* Inline code highlighting (outside pre blocks) */
+        :not(pre) > code {
+            background: rgba(255, 107, 53, 0.12);
+            color: #e05500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        /* Important note label */
+        .important-note {
+            color: #e05500;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
         /* PDF Export Button */
         .pdf-btn {
             position: absolute;
