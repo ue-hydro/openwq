@@ -135,6 +135,24 @@
             color: white;
         }
 
+        /* Inline code highlighting (outside pre blocks) */
+        :not(pre) > code {
+            background: rgba(255, 107, 53, 0.12);
+            color: #e05500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        /* Important note label */
+        .important-note {
+            color: #e05500;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
         /* PDF Export Button */
         .pdf-btn {
             position: absolute;
@@ -809,7 +827,7 @@
                 <div class="two-column" style="gap: 40px;">
                     <div class="column">
                         <div class="highlight-box warning" style="margin-bottom: 12px;">
-                            <strong>Important:</strong> Place <code>openWQ_master.json</code> in the same directory where you run the model (working directory).
+                            <strong class="important-note">Important:</strong> Place <code>openWQ_master.json</code> in the same directory where you run the model (working directory).
                         </div>
                         <div class="card accent">
                             <h3>Running with Apptainer (HPC)</h3>
