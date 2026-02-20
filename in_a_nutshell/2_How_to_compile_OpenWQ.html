@@ -724,7 +724,6 @@ make -j4
                                 <tr><td><strong>mizuroute_openwq</strong></td><td>MizuRoute routing</td></tr>
                                 <tr><td><strong>mizuroute_lakes_openwq</strong></td><td>With lake module</td></tr>
                                 <tr><td><strong>mizuroute_lakes_cslm_openwq</strong></td><td>CSLM lakes</td></tr>
-                                <tr><td><strong>openwq</strong></td><td>Standalone</td></tr>
                             </table>
                         </div>
                         <div class="card accent" style="margin-top: 10px;">
@@ -860,7 +859,7 @@ cmake -DHOST_MODEL_TARGET=summa_openwq \
       -DCMAKE_PREFIX_PATH="/usr/local/phreeqcrm;/usr/local/sundials" .
 
 cmake -DHOST_MODEL_TARGET=mizuroute_openwq \
-      -DCMAKE_BUILD_TYPE=Debug \
+      -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_PREFIX_PATH="/usr/local/phreeqcrm;/usr/local/sundials" .
 
 <span class="comment"># Then compile:</span>
@@ -876,7 +875,13 @@ make -j4
                                 <tr><td><strong>mizuroute_openwq</strong></td><td>MizuRoute routing</td></tr>
                                 <tr><td><strong>mizuroute_lakes_openwq</strong></td><td>With lake module</td></tr>
                                 <tr><td><strong>mizuroute_lakes_cslm_openwq</strong></td><td>CSLM lakes</td></tr>
-                                <tr><td><strong>openwq</strong></td><td>Standalone</td></tr>
+                            </table>
+                        </div>
+                        <div class="card accent" style="margin-top: 10px;">
+                            <h3>CMAKE_BUILD_TYPE Options</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td><strong>Release</strong></td><td>Optimized (recommended for HPC)</td></tr>
+                                <tr><td><strong>Debug</strong></td><td>With debug symbols</td></tr>
                             </table>
                         </div>
                         <div class="highlight-box info" style="margin-top: 12px;">
