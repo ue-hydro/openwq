@@ -260,8 +260,9 @@
                             <p style="margin-bottom: 8px;">• Compilation Methods Overview</p>
                             <p style="margin-bottom: 8px;">• Dependencies</p>
                             <p style="margin-bottom: 8px;">• Clone Repositories</p>
+                            <p style="margin-bottom: 8px;">• Repository Structure</p>
                             <p style="margin-top: 15px; color: var(--accent); font-weight: 600;">Section 01: Docker Build</p>
-                            <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: Setup & Build</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: Build Container & Enter It</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: CMake Configuration</p>
                         </div>
                     </div>
@@ -415,20 +416,18 @@ git clone https://github.com/ue-hydro/FLUXOS_cpp.git
                     <div class="column">
                         <div class="card primary">
                             <h3>Step 2: Clone OpenWQ</h3>
-                            <p style="font-size: 0.9rem; margin-bottom: 10px;">Navigate to host model's OpenWQ directory, then clone:</p>
+                            <p style="font-size: 0.9rem; margin-bottom: 10px;">Navigate to host model's OpenWQ directory, where the hydrolink file is located (<code>.../openwq/OpenWQ_hydrolink.cpp</code>), then clone:</p>
                             <pre style="font-size: 0.7rem; padding: 12px;">
-<span class="comment"># Example for SUMMA:</span>
-cd summa/build/source/openwq
+<span class="comment"># Go to the "openwq" directory inside the hostmodel</span>
+<span class="comment"># Example for Mizuroute:</span>
+cd .../route/build/openwq
 
 <span class="comment"># Clone OpenWQ (use develop branch)</span>
 git clone -b develop https://github.com/ue-hydro/openwq.git
-
-<span class="comment"># Navigate to compilation directory</span>
-cd openwq/openwq
                             </pre>
                         </div>
                         <div class="highlight-box info" style="margin-top: 15px;">
-                            <strong>Note:</strong> The exact path to the OpenWQ directory varies by host model. Check the host model's documentation.
+                            <strong>Note:</strong> The exact path to the OpenWQ directory varies by host model. However, it is always located inside a folder named "openwq" inside or close to where the hostmodel code is located.
                         </div>
                     </div>
                 </div>
@@ -439,12 +438,79 @@ cd openwq/openwq
             </div>
         </div>
 
-        <!-- Slide 6: Container Files Organization -->
+        <!-- Slide 6: OpenWQ Repository Structure -->
         <div class="slide" data-slide="6">
+            <div class="slide-header">
+                <h2>OpenWQ Repository Structure</h2>
+            </div>
+            <div class="slide-content">
+                <div class="highlight-box info" style="margin-bottom: 15px;">
+                    <strong>Navigate inside the cloned OpenWQ repository:</strong> From the host model's openwq directory (<code>.../openwq</code>), enter the cloned repo: <code>cd openwq</code><br>
+                    You should now be at <code>.../openwq/openwq</code>
+                </div>
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="folder-tree" style="font-size: 0.8rem; line-height: 1.5;">
+                            <span class="folder">📁 openwq/</span> <span class="comment"># Root of cloned repo</span><br>
+                            ├── CMakeLists.txt <span class="comment"># Build configuration</span><br>
+                            ├── main.cpp <span class="comment"># Mock entry point (for testing only)</span><br>
+                            ├── <span class="folder">📁 src/</span> <span class="comment"># C++ source code</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">couplercalls/</span> <span class="comment"># Host model coupling</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">compute/</span> <span class="comment"># Core computations</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">models_CH/</span> <span class="comment"># BGC engines (PHREEQC, bgc_flex)</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">models_LE/</span> <span class="comment"># Load/export models</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">models_SI/</span> <span class="comment"># Sorption/isotherms</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">models_TD/</span> <span class="comment"># Transport/dispersion</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">models_TS/</span> <span class="comment"># Sediment transport</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">readjson/</span> <span class="comment"># JSON config readers</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">output/</span> <span class="comment"># HDF5 output writers</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">initiate/</span> <span class="comment"># Initialization routines</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">units/</span> <span class="comment"># Unit conversions</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">extwatflux_ss/</span> <span class="comment"># External water/sources</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">global/</span> <span class="comment"># Global variables</span><br>
+                            │&nbsp;&nbsp;&nbsp;└── <span class="folder">utils/</span> <span class="comment"># Utility functions</span><br>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="folder-tree" style="font-size: 0.8rem; line-height: 1.5;">
+                            ├── <span class="folder">📁 supporting_scripts/</span> <span class="comment"># Python tools</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">Model_Config/</span> <span class="comment"># Config generators</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── <span class="folder">Calibration/</span> <span class="comment"># Calibration framework</span><br>
+                            │&nbsp;&nbsp;&nbsp;└── <span class="folder">Read_Outputs/</span> <span class="comment"># HDF5 output readers</span><br>
+                            ├── <span class="folder">📁 containers/</span> <span class="comment"># Docker & Apptainer</span><br>
+                            │&nbsp;&nbsp;&nbsp;├── Dockerfile<br>
+                            │&nbsp;&nbsp;&nbsp;├── docker-compose.yml<br>
+                            │&nbsp;&nbsp;&nbsp;└── openwq_apptainer.def<br>
+                            ├── <span class="folder">📁 utils/</span> <span class="comment"># Build helper scripts</span><br>
+                            ├── <span class="folder">📁 in_a_nutshell/</span> <span class="comment"># HTML presentations</span><br>
+                            ├── <span class="folder">📁 wikipage/</span> <span class="comment"># ReadTheDocs source</span><br>
+                            ├── <span class="folder">📁 testing/</span> <span class="comment"># Test cases</span><br>
+                            └── README.md<br>
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>Key directories:</strong><br>
+                            <code>src/</code> — C++ source code (compiled)<br>
+                            <code>supporting_scripts/</code> — Python tools (config, calibration, output reading)<br>
+                            <code>containers/</code> — Docker & Apptainer definitions
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">6</div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Container Files Organization -->
+        <div class="slide" data-slide="7">
             <div class="slide-header">
                 <h2>Container Files Organization</h2>
             </div>
             <div class="slide-content">
+                <p style="font-size: 1rem; margin-bottom: 15px;">
+                    OpenWQ provides containerized build support via <strong>Docker</strong> (for local machines with root access) and <strong>Apptainer/Singularity</strong> (for HPC environments). Native compilation is possible but is system-dependent and must be configured by the user.
+                </p>
                 <div class="two-column" style="gap: 40px;">
                     <div class="column">
                         <div class="folder-tree">
@@ -484,83 +550,92 @@ cd openwq/openwq
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">6</div>
+                <div class="page-number">7</div>
             </div>
         </div>
 
-        <!-- Slide 7: Docker Steps -->
-        <div class="slide" data-slide="7">
+        <!-- Slide 8: Section - Docker -->
+        <div class="slide section-slide" data-slide="8">
+            <div class="section-number">01</div>
+            <h2>Docker (Local Machines)</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+        <!-- Slide 9: Docker Steps -->
+        <div class="slide" data-slide="9">
             <div class="slide-header">
-                <h2>Docker: Setup & Build</h2>
+                <h2>Docker: Build Container & Enter It</h2>
             </div>
             <div class="slide-content">
+                <p style="font-size: 1.0rem; margin-bottom: 15px;">
+                    Assuming the host model and OpenWQ have already been cloned
+                    (see <a href="#5" onclick="currentSlide=5; showSlide(currentSlide); return false;" style="color: var(--primary); text-decoration: underline; font-weight: 500;">Clone Repositories</a>),
+                    and that you are now inside the cloned OpenWQ repository (<code>.../openwq/openwq</code>),
+                    follow the steps below to build the Docker container and run a shell inside it.
+                </p>
                 <div class="two-column" style="gap: 35px;">
                     <div class="column">
                         <div class="workflow-step">
                             <div class="number">1</div>
                             <div class="content">
-                                <h4>Clone the repository</h4>
-                                <p>Get host model + OpenWQ source code</p>
+                                <h4>Start Docker</h4>
+                                <p>Make sure Docker Desktop is running</p>
                             </div>
                         </div>
                         <div class="workflow-step">
                             <div class="number" style="background: var(--primary);">2</div>
                             <div class="content">
-                                <h4>Build container</h4>
-                                <p>docker-compose build (includes all deps)</p>
+                                <h4>Navigate to containers</h4>
+                                <p>cd containers</p>
                             </div>
                         </div>
                         <div class="workflow-step">
                             <div class="number" style="background: var(--purple);">3</div>
                             <div class="content">
-                                <h4>Start container</h4>
-                                <p>docker-compose up -d</p>
+                                <h4>Create the container</h4>
+                                <p>docker compose up -d</p>
                             </div>
                         </div>
                         <div class="workflow-step">
                             <div class="number" style="background: var(--secondary);">4</div>
                             <div class="content">
-                                <h4>Compile inside container</h4>
-                                <p>cmake & make</p>
+                                <h4>Run a shell inside the container</h4>
+                                <p>docker exec -it docker_openwq /bin/bash</p>
                             </div>
                         </div>
                     </div>
                     <div class="column">
                         <pre style="font-size: 0.72rem;">
-<span class="comment"># 1. Clone host model (e.g., SUMMA)</span>
-git clone -b develop https://github.com/ashleymedin/summa.git
-cd summa/build/source/openwq
+<span class="comment"># 1. Start Docker (e.g., open Docker Desktop)</span>
 
-<span class="comment"># 2. Clone OpenWQ</span>
-git clone -b develop git@github.com:ue-hydro/openwq.git
-cd openwq/containers
+<span class="comment"># 2. Navigate to the containers/ folder</span>
+cd containers
 
-<span class="comment"># 3. Build & start container</span>
-docker-compose build
-docker-compose up -d
+<span class="comment"># (optional) Clear all docker images and containers</span>
+docker system prune -a
 
-<span class="comment"># 4. Connect to container</span>
-docker attach docker_openwq
-<span class="comment"># Or use VSCode Remote-Containers</span>
+<span class="comment"># 3. Create the "docker_openwq" container</span>
+docker compose up -d
 
-<span class="comment"># 5. Inside container: compile</span>
-cd /code/build/source/openwq/openwq
-cmake -DHOST_MODEL_TARGET=summa_openwq \
-      -DCMAKE_BUILD_TYPE=Release .
-make -j4
-<span class="comment"># Executable created in bin/ folder</span>
+<span class="comment"># (optional) Stop the container</span>
+docker compose down
+<span class="comment"># (optional) See the containers running</span>
+docker ps
+
+<span class="comment"># 4. Run a shell inside the container</span>
+docker exec -it docker_openwq /bin/bash
                         </pre>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">7</div>
+                <div class="page-number">9</div>
             </div>
         </div>
 
-        <!-- Slide 8: Docker CMake Options -->
-        <div class="slide" data-slide="8">
+        <!-- Slide 10: Docker CMake Options -->
+        <div class="slide" data-slide="10">
             <div class="slide-header">
                 <h2>Docker: CMake Configuration</h2>
             </div>
@@ -612,19 +687,19 @@ make -j4
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">8</div>
+                <div class="page-number">10</div>
             </div>
         </div>
 
-        <!-- Slide 9: Section - Apptainer -->
-        <div class="slide section-slide blue" data-slide="9">
+        <!-- Slide 11: Section - Apptainer -->
+        <div class="slide section-slide blue" data-slide="11">
             <div class="section-number">02</div>
             <h2>Apptainer (HPC)</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 10: Apptainer Build -->
-        <div class="slide" data-slide="10">
+        <!-- Slide 12: Apptainer Build -->
+        <div class="slide" data-slide="12">
             <div class="slide-header">
                 <h2>Apptainer: Build Container</h2>
             </div>
@@ -678,12 +753,12 @@ scp openwq.sif user@hpc:/path/to/containers/
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">10</div>
+                <div class="page-number">12</div>
             </div>
         </div>
 
-        <!-- Slide 11: Apptainer Compile -->
-        <div class="slide" data-slide="11">
+        <!-- Slide 13: Apptainer Compile -->
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Apptainer: Compile & Run</h2>
             </div>
@@ -746,19 +821,19 @@ apptainer exec --bind /path/to/data:/data \
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">11</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
-        <!-- Slide 12: Section - Native Linux -->
-        <div class="slide section-slide green" data-slide="12">
+        <!-- Slide 14: Section - Native Linux -->
+        <div class="slide section-slide green" data-slide="14">
             <div class="section-number">03</div>
             <h2>Native Linux Build</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 13: Native Linux -->
-        <div class="slide" data-slide="13">
+        <!-- Slide 15: Native Linux -->
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>Native Linux: Manual Setup</h2>
             </div>
@@ -812,12 +887,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">13</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
-        <!-- Slide 14: Key Files -->
-        <div class="slide" data-slide="14">
+        <!-- Slide 16: Key Files -->
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Key Build Files</h2>
             </div>
@@ -860,12 +935,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
-        <!-- Slide 15: Troubleshooting -->
-        <div class="slide" data-slide="15">
+        <!-- Slide 17: Troubleshooting -->
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Troubleshooting</h2>
             </div>
@@ -927,12 +1002,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
-        <!-- Slide 16: Summary -->
-        <div class="slide" data-slide="16">
+        <!-- Slide 18: Summary -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -958,12 +1033,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 17: Thank You -->
-        <div class="slide title-slide" data-slide="17">
+        <!-- Slide 19: Thank You -->
+        <div class="slide title-slide" data-slide="19">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">
