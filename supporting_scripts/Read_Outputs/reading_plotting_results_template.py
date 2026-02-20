@@ -115,3 +115,40 @@ h5_plib.Plot_h5_driver(
     # 4) output config
     output_path='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out/plotSeries.png'
     )
+
+############################################
+# Exporting interactive WebGL 3D viewer
+# Generates heightmaps, velocity fields, and concentration data
+# as PNG images for the interactive 3D WebGL particle viewer.
+# The viewer renders river network segments with animated flow
+# particles and water quality concentrations.
+#
+# To view: start a local server in the output directory:
+#   python3 -m http.server 8080 -d /path/to/openwq_webgl_viewer
+# Then open: http://localhost:8080
+"""
+import WebGL_h5_driver as h5_wlib
+
+h5_wlib.WebGL_h5_driver(
+    # 1) What results to export?
+    what2map='openwq',  # hostmodel or openwq
+    hostmodel='mizuroute',
+    # 2) shapefile info
+    shpfile_info=shpfile_info,
+    # 3) openwq info (used if what2map=openwq)
+    openwq_results=openwq_results,
+    chemSpec=["NO3-N","NH4-N"],
+    sediment_as_well=True,  # also export sediment transport
+    # 4) hostmodel info (flow data for velocity field)
+    hydromodel_info=hydromodel_info,
+    hydromodel_var2print='DWroutedRunoff',
+    # 5) output config
+    output_dir='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out/openwq_webgl_viewer',
+    timeframes=50,          # number of equally spaced frames to export
+    # 6) WebGL-specific options
+    dem_path=None,           # optional: path to DEM .asc or .tif for 3D terrain
+    n_particles=65536,       # particle count for the viewer
+    river_width_cells=3,     # rasterized river width in grid cells
+    grid_resolution=None     # auto-compute from shapefile extent
+)
+"""
