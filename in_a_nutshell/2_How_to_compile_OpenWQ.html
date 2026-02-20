@@ -263,7 +263,7 @@
                             <p style="margin-bottom: 8px;">• Repository Structure</p>
                             <p style="margin-top: 15px; color: var(--accent); font-weight: 600;">Section 01: Docker Build</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: Build Container & Enter It</p>
-                            <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: CMake Configuration</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Docker: Create Makefile via CMake & Compile</p>
                         </div>
                     </div>
                     <div class="column">
@@ -634,18 +634,32 @@ docker exec -it docker_openwq /bin/bash
             </div>
         </div>
 
-        <!-- Slide 10: Docker CMake Options -->
+        <!-- Slide 10: Docker CMake - Create Makefile -->
         <div class="slide" data-slide="10">
             <div class="slide-header">
-                <h2>Docker: CMake Configuration</h2>
+                <h2>Docker: Create Makefile via CMake and Compile the Coupled Hostmodel-OpenWQ</h2>
             </div>
             <div class="slide-content">
-                <p style="font-size: 1.05rem; margin-bottom: 20px;">
-                    CMake requires two arguments: <code>-DHOST_MODEL_TARGET</code> and <code>-DCMAKE_BUILD_TYPE</code>
+                <p style="font-size: 1.0rem; margin-bottom: 8px;">
+                    Inside the container (via shell, step 4 of <a href="#9" onclick="currentSlide=9; showSlide(currentSlide); return false;" style="color: var(--primary); text-decoration: underline; font-weight: 500;">previous page</a>), navigate to the cloned OpenWQ repository (<code>.../openwq/openwq</code>),
+                    where the <code>CMakeLists.txt</code> file is located.
+                </p>
+                <p style="font-size: 1.0rem; margin-bottom: 8px;">
+                    Run CMake to generate the Makefile used to compile OpenWQ (see code snippets below).
+                </p>
+                <p style="font-size: 1.0rem; margin-bottom: 20px;">
+                    <strong>Important note:</strong> OpenWQ requires two CMake arguments:
+                    <code>-DHOST_MODEL_TARGET</code> and
+                    <code>-DCMAKE_BUILD_TYPE</code>.
                 </p>
                 <div class="two-column" style="gap: 35px;">
                     <div class="column">
                         <pre style="font-size: 0.75rem;">
+<span class="comment"># (Optional but recommended) Clean previous CMake</span>
+<span class="comment"># cache to avoid stale configuration issues</span>
+rm -f CMakeCache.txt
+rm -rf CMakeFiles
+
 <span class="comment"># CMake command syntax:</span>
 cmake -DHOST_MODEL_TARGET=&lt;target&gt; \
       -DCMAKE_BUILD_TYPE=&lt;type&gt; .
@@ -662,6 +676,7 @@ cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq \
 
 <span class="comment"># Then compile:</span>
 make -j4
+<span class="comment"># Executable created in .../openwq/openwq/bin/</span>
                         </pre>
                     </div>
                     <div class="column">
