@@ -160,11 +160,11 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	if (cropcover + groundcover != 1.0){
 
 		// Create Message (Warning Message)
-		msg_string = 
-			"<OpenWQ> WARNING: TS_model -> MMF_HYPE - \"CROPCOVER + GROUNDCOVER\" needs to be equal to 1 (entry skiped): \\
-			COMPARTMENT: " + OpenWQ_hostModelconfig.get_HydroComp_name_at(sediment_icmp) 
-			+ "(" + std::to_string(xyz_SedCmpt_interface[0]) + " ," 
-			+ std::to_string(xyz_SedCmpt_interface[1]) + " ," 
+		msg_string =
+			"<OpenWQ> WARNING: TS_model -> MMF_HYPE - \"CROPCOVER + GROUNDCOVER\" needs to be equal to 1 (entry skipped): "
+			"COMPARTMENT: " + OpenWQ_hostModelconfig.get_HydroComp_name_at(sediment_icmp)
+			+ "(" + std::to_string(xyz_SedCmpt_interface[0]) + " ,"
+			+ std::to_string(xyz_SedCmpt_interface[1]) + " ,"
 			+ std::to_string(xyz_SedCmpt_interface[2]) + ")";
 
 		// Print it (Console and/or Log file)
