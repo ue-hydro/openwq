@@ -90,10 +90,16 @@ To compile OpenWQ or a coupled model using the container:
     export PhreeqcRM_DIR=/usr/local/phreeqcrm
     export SUNDIALS_DIR=/usr/local/sundials
 
-    # Navigate to code and build
+    # Navigate to code and build (requires at least 16 GB RAM)
     cd /code/route/build/openwq/openwq/
     cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq -DCMAKE_BUILD_TYPE=fast .
-    make -j 4
+    make -j 2
+
+.. note::
+
+   Compilation requires at least **16 GB of RAM** due to heavy C++ template instantiation
+   (exprtk expression parser). Use ``make -j 2`` (not ``-j 4``) to avoid out-of-memory crashes.
+   On HPC clusters, request at least ``--mem=16G`` in your job submission.
 
 A helper script (``utils/compile_summa_apptainer.sh``) is provided for SUMMA compilation.
 

@@ -84,6 +84,9 @@ Below are the steps to compile SUMMA with OpenWQ integration.
 Native macOS compilation is currently not supported. Please use Docker.
 
 #### Linux
+
+> **Note:** Compilation requires at least **16 GB of RAM** due to heavy C++ template instantiation. Use `make -j 2` (not `-j 4`) to avoid out-of-memory crashes. On HPC clusters, request at least `--mem=16G` in your job submission.
+
   1. Install or Load (Cluster) Dependencies
     - NetCDF
     - HDF5
