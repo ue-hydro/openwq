@@ -50,6 +50,27 @@ except ImportError as e:
 # GRQA Dataset Information
 GRQA_ZENODO_RECORD = "15335450"
 GRQA_ZENODO_BASE = f"https://zenodo.org/records/{GRQA_ZENODO_RECORD}"
+
+# GRQA v1.4 filename mapping: our parameter code -> filename stem in the zip
+# The zip contains files like "GRQA_data/NO3N_GRQA.csv" not "NO3_GRQA.csv"
+GRQA_V14_FILENAME_MAP = {
+    'NO3': 'NO3N',
+    'NH4': 'NH4N',
+    'NO2': 'NO2N',
+    'NH3': 'NH3N',
+    'DO_sat': 'DOSAT',
+    'Temp': 'TEMP',
+    'PO4': 'DIP',      # Dissolved Inorganic Phosphorus ≈ PO4
+    'DP': 'TDP',
+    'PP': 'TPP',
+    'NO3_NO2': 'TIN',  # Total Inorganic Nitrogen ≈ NO3+NO2
+    'SS': 'TSS',
+    'PN': 'PN',
+    'TKN': 'TKN',
+    'DIN': 'DIN',
+    # These match directly and don't need mapping:
+    # TN, TP, DO, DOC, DON, DOP, DIC, TOC, TC, TIC, BOD, BOD5, COD, CODMn, TSS, pH, POC, PC
+}
 GRQA_DATA_URL = f"{GRQA_ZENODO_BASE}/files/GRQA_data_v1.4.zip"
 
 # GRQA Parameters (43 total as of v1.4) with units
@@ -331,20 +352,30 @@ class GRQADownloader:
             self.use_local = False
 
     def _find_local_file(self, parameter: str) -> Optional[Path]:
-        """Find a parameter file in local data."""
+        """Find a parameter file in local data.
+
+        Handles GRQA v1.4 naming convention via GRQA_V14_FILENAME_MAP.
+        """
         if not self.use_local:
             return None
 
+        # Build candidate list: original name + mapped name
+        candidates = [parameter]
+        if parameter in GRQA_V14_FILENAME_MAP:
+            candidates.append(GRQA_V14_FILENAME_MAP[parameter])
+
         for base_path, pattern in self.local_file_patterns:
-            filename = pattern.format(param=parameter)
-            filepath = base_path / filename
-            if filepath.exists():
-                return filepath
+            for candidate in candidates:
+                filename = pattern.format(param=candidate)
+                filepath = base_path / filename
+                if filepath.exists():
+                    return filepath
 
             # Try case-insensitive search
-            for f in base_path.glob(f'*{parameter}*'):
-                if f.suffix.lower() == '.csv':
-                    return f
+            for candidate in candidates:
+                for f in base_path.glob(f'*{candidate}*'):
+                    if f.suffix.lower() == '.csv':
+                        return f
 
         return None
 
@@ -402,22 +433,36 @@ class GRQADownloader:
         print()
 
     def _extract_parameter(self, zip_path: Path, parameter: str) -> Optional[Path]:
-        """Extract a specific parameter file from the zip."""
-        target_pattern = f"{parameter}_GRQA.csv"
+        """Extract a specific parameter file from the zip.
+
+        Handles GRQA v1.4 naming convention where filenames differ from
+        parameter codes (e.g., NO3 -> NO3N_GRQA.csv, NH4 -> NH4N_GRQA.csv).
+        """
+        # Build list of candidate filename stems to search for
+        candidates = [parameter]  # Try exact match first
+        if parameter in GRQA_V14_FILENAME_MAP:
+            candidates.append(GRQA_V14_FILENAME_MAP[parameter])
 
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            for name in zf.namelist():
-                if name.endswith(target_pattern):
-                    # Extract to cache directory
-                    zf.extract(name, self.cache_dir)
-                    # Move to flat structure
-                    extracted = self.cache_dir / name
-                    dest = self.cache_dir / target_pattern
-                    if extracted != dest:
-                        extracted.rename(dest)
-                    return dest
+            for candidate in candidates:
+                target_pattern = f"{candidate}_GRQA.csv"
+                for name in zf.namelist():
+                    if name.endswith(target_pattern):
+                        # Extract to cache directory
+                        zf.extract(name, self.cache_dir)
+                        # Move to flat structure, keep our parameter code as filename
+                        extracted = self.cache_dir / name
+                        dest = self.cache_dir / f"{parameter}_GRQA.csv"
+                        if extracted != dest:
+                            if dest.exists():
+                                dest.unlink()
+                            extracted.rename(dest)
+                        if candidate != parameter:
+                            print(f"  Mapped {parameter} -> {candidate} (GRQA v1.4 naming)")
+                        return dest
 
-        print(f"  Warning: Parameter {parameter} not found in archive")
+        print(f"  Warning: Parameter {parameter} not found in archive "
+              f"(tried: {', '.join(c + '_GRQA.csv' for c in candidates)})")
         return None
 
     def download_required_parameters(self,
@@ -523,18 +568,72 @@ class GRQACalibrationExtractor:
         self.stations_gdf = None
         self.observations_df = None
 
+    @staticmethod
+    def _get_wgs84_crs():
+        """Get WGS84 CRS object compatible with the installed pyproj version."""
+        WGS84_WKT = (
+            'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",'
+            'SPHEROID["WGS_1984",6378137.0,298.257223563]],'
+            'PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]'
+        )
+        try:
+            from pyproj import CRS
+            return CRS.from_wkt(WGS84_WKT)
+        except Exception:
+            try:
+                return {'init': 'epsg:4326'}
+            except Exception:
+                return None
+
+    @staticmethod
+    def _get_utm_crs(epsg_code: int):
+        """Get UTM CRS object compatible with the installed pyproj version."""
+        if epsg_code >= 32700:
+            zone = epsg_code - 32700
+            south = ' +south'
+        else:
+            zone = epsg_code - 32600
+            south = ''
+        proj4 = f'+proj=utm +zone={zone}{south} +datum=WGS84 +units=m +no_defs'
+        try:
+            from pyproj import CRS
+            return CRS.from_proj4(proj4)
+        except Exception:
+            return proj4
+
     def load_river_network(self, shapefile_path: str) -> gpd.GeoDataFrame:
         """Load and validate river network shapefile."""
         print(f"\nLoading river network: {shapefile_path}")
 
-        gdf = gpd.read_file(shapefile_path)
+        wgs84 = self._get_wgs84_crs()
 
-        if gdf.crs is None:
-            print("  Warning: No CRS detected, assuming EPSG:4326 (WGS84)")
-            gdf = gdf.set_crs("EPSG:4326")
-        elif gdf.crs.to_epsg() != 4326:
-            print(f"  Reprojecting from {gdf.crs} to EPSG:4326")
-            gdf = gdf.to_crs("EPSG:4326")
+        # Handle old pyproj/PROJ versions that may fail on CRS parsing
+        try:
+            gdf = gpd.read_file(shapefile_path)
+        except Exception as e:
+            print(f"  Warning: gpd.read_file failed ({type(e).__name__}), using fiona fallback...")
+            import fiona
+            from shapely.geometry import shape as shp_shape
+            with fiona.open(shapefile_path) as src:
+                records = []
+                for feat in src:
+                    props = dict(feat['properties'])
+                    props['geometry'] = shp_shape(feat['geometry'])
+                    records.append(props)
+            gdf = gpd.GeoDataFrame(records)
+
+        # Ensure WGS84 CRS is set
+        if gdf.crs is None and wgs84 is not None:
+            print("  Setting CRS to WGS84")
+            gdf.crs = wgs84
+        elif gdf.crs is not None:
+            try:
+                epsg = gdf.crs.to_epsg()
+                if epsg is not None and epsg != 4326:
+                    print(f"  Reprojecting from EPSG:{epsg} to WGS84")
+                    gdf = gdf.to_crs(wgs84)
+            except Exception:
+                pass  # CRS is set but can't determine EPSG - assume OK
 
         print(f"  Features: {len(gdf)}")
         print(f"  Bounds: {gdf.total_bounds}")
@@ -543,21 +642,34 @@ class GRQACalibrationExtractor:
 
     def create_buffer(self, river_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """Create buffer around river network for station selection."""
+        from shapely.ops import transform as shp_transform
+        from pyproj import Transformer
+
         print(f"\nCreating {self.buffer_distance_m}m buffer...")
 
-        # Determine appropriate UTM zone
-        centroid = river_gdf.dissolve().centroid.iloc[0]
+        wgs84 = self._get_wgs84_crs()
+
+        # Determine appropriate UTM zone from geometry centroid
+        union_geom = unary_union(river_gdf.geometry)
+        centroid = union_geom.centroid
         utm_zone = int((centroid.x + 180) / 6) + 1
         hemisphere = 'north' if centroid.y >= 0 else 'south'
         epsg_code = 32600 + utm_zone if hemisphere == 'north' else 32700 + utm_zone
+        utm_crs = self._get_utm_crs(epsg_code)
 
-        # Project, buffer, dissolve, reproject
-        river_projected = river_gdf.to_crs(f"EPSG:{epsg_code}")
-        buffered = river_projected.buffer(self.buffer_distance_m)
+        # Use pyproj Transformer directly (compatible with old pyproj versions)
+        fwd = Transformer.from_crs(wgs84, utm_crs, always_xy=True)
+        rev = Transformer.from_crs(utm_crs, wgs84, always_xy=True)
+
+        # Project to UTM, buffer, project back to WGS84
+        projected = shp_transform(fwd.transform, union_geom)
+        buffered = projected.buffer(self.buffer_distance_m)
+        buffer_wgs84 = shp_transform(rev.transform, buffered)
+
         buffer_gdf = gpd.GeoDataFrame(
-            geometry=[unary_union(buffered)],
-            crs=f"EPSG:{epsg_code}"
-        ).to_crs("EPSG:4326")
+            geometry=[buffer_wgs84],
+            crs=wgs84
+        )
 
         print(f"  Using UTM zone {utm_zone}{hemisphere[0].upper()}")
 
@@ -623,7 +735,15 @@ class GRQACalibrationExtractor:
             print(f"\nProcessing {param}...")
 
             try:
-                df = pd.read_csv(filepath, low_memory=False)
+                # GRQA v1.4 uses semicolons as delimiter
+                # Auto-detect: try semicolon first, fall back to comma
+                try:
+                    df = pd.read_csv(filepath, sep=';', low_memory=False)
+                    if len(df.columns) < 3:
+                        # Semicolon didn't split properly, try comma
+                        df = pd.read_csv(filepath, sep=',', low_memory=False)
+                except Exception:
+                    df = pd.read_csv(filepath, sep=',', low_memory=False)
 
                 # Detect columns on first file
                 if self.column_map is None:
@@ -638,7 +758,8 @@ class GRQACalibrationExtractor:
 
                 # Create geometry and filter by buffer
                 geometry = [Point(xy) for xy in zip(df[lon_col], df[lat_col])]
-                gdf = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
+                gdf = gpd.GeoDataFrame(df, geometry=geometry,
+                                       crs=self._get_wgs84_crs())
                 gdf_filtered = gdf[gdf.geometry.within(buffer_union)].copy()
 
                 if len(gdf_filtered) == 0:
@@ -682,6 +803,10 @@ class GRQACalibrationExtractor:
 
         # Combine stations (merge to track which species each station has)
         site_col = self.column_map.get('site_id', 'site_id')
+        # Ensure consistent site_id type (string) across all parameter files
+        for i, s in enumerate(all_stations):
+            if site_col in s.columns:
+                all_stations[i][site_col] = s[site_col].astype(str)
         stations_combined = all_stations[0]
         for s in all_stations[1:]:
             stations_combined = stations_combined.merge(
@@ -706,7 +831,7 @@ class GRQACalibrationExtractor:
             geometry=[Point(xy) for xy in zip(
                 stations_combined[lon_col], stations_combined[lat_col]
             )],
-            crs="EPSG:4326"
+            crs=self._get_wgs84_crs()
         )
 
         # Combine observations
