@@ -176,8 +176,32 @@ class OptimizedLULCAnalyzer:
         self.output_dir.mkdir(exist_ok=True)
 
         # Load shapefile
+        # Use fiona-based loading to avoid pyproj CRS resolution issues
+        # on older PROJ databases (e.g., PROJ 6.2.1 can't resolve epsg:4326)
         print(f"Loading shapefile: {shapefile_info['path_to_shp']}")
-        self.gdf = gpd.read_file(shapefile_info['path_to_shp'])
+        try:
+            self.gdf = gpd.read_file(shapefile_info['path_to_shp'])
+        except Exception as crs_err:
+            if 'Invalid projection' in str(crs_err) or 'CRSError' in type(crs_err).__name__:
+                print(f"  CRS resolution failed ({crs_err}), loading without CRS...")
+                import fiona
+                from shapely.geometry import shape
+                with fiona.open(shapefile_info['path_to_shp']) as src:
+                    crs_wkt = src.crs_wkt
+                    records = []
+                    for feat in src:
+                        props = dict(feat['properties'])
+                        props['geometry'] = shape(feat['geometry'])
+                        records.append(props)
+                self.gdf = gpd.GeoDataFrame(records, geometry='geometry')
+                # Set CRS from WKT string (bypasses EPSG lookup)
+                if crs_wkt:
+                    try:
+                        self.gdf.crs = crs_wkt
+                    except Exception:
+                        print(f"  WARNING: Could not set CRS from WKT, proceeding without CRS")
+            else:
+                raise
         print(f"Loaded {len(self.gdf)} HRU polygons")
         print(f"CRS: {self.gdf.crs}")
 
@@ -371,7 +395,13 @@ class OptimizedLULCAnalyzer:
 
             # Reproject shapefile to match raster
             print(f"    • Reprojecting HRUs to raster CRS...", end='', flush=True)
-            gdf_reprojected = self.gdf.to_crs(raster_crs)
+            if self.gdf.crs is not None and raster_crs is not None:
+                gdf_reprojected = self.gdf.to_crs(raster_crs)
+            else:
+                # CRS not available (e.g., old PROJ database can't resolve EPSG codes)
+                # Assume both are in WGS84/EPSG:4326 and skip reprojection
+                print(" (skipping — CRS not set, assuming WGS84)", end='', flush=True)
+                gdf_reprojected = self.gdf
             print(" ✓")
 
             # Get pixel size in meters
@@ -455,8 +485,8 @@ class OptimizedLULCAnalyzer:
         --------
         float : Pixel area in m²
         """
-        if raster_src.crs.is_geographic:
-            # For geographic CRS (lat/lon), use approximate area
+        if raster_src.crs is None or raster_src.crs.is_geographic:
+            # For geographic CRS (lat/lon) or unknown CRS, use approximate area
             # Copernicus nominal resolution is 300m
             return 300 * 300
         else:
@@ -597,7 +627,13 @@ class OptimizedLULCAnalyzer:
 
             # Reproject shapefile to match raster CRS
             print(f"    • Reprojecting shapefile to raster CRS...", end='', flush=True)
-            gdf_reprojected = self.gdf.to_crs(src.crs)
+            if self.gdf.crs is not None and src.crs is not None:
+                gdf_reprojected = self.gdf.to_crs(src.crs)
+            else:
+                # CRS not available (e.g., old PROJ database can't resolve EPSG codes)
+                # Assume both are in WGS84/EPSG:4326 and skip reprojection
+                print(" (skipping — CRS not set, assuming WGS84)", end='', flush=True)
+                gdf_reprojected = self.gdf
             print(" ✓")
 
             # Create a single polygon representing the entire basin

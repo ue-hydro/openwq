@@ -59,8 +59,10 @@ A comprehensive Python calibration framework for OpenWQ that includes:
 - **Sensitivity Analysis**: Morris screening and Sobol variance-based methods
 - **HPC Support**: SLURM/PBS job templates for high-performance computing
 - **Parameter Defaults**: Scientifically-grounded parameter ranges from peer-reviewed literature
+- **Post-Calibration Reporting**: Auto-generated interactive HTML reports with Plotly.js charts, Leaflet.js basin maps, and per-basin multi-variant comparisons
 
 Key documentation:
+- [Calibration Usage Guide](Calibration/USAGE_GUIDE.md) - Step-by-step calibration guide
 - [Sensitivity Analysis Guide](Calibration/SENSITIVITY_ANALYSIS_GUIDE.md) - Comprehensive parameter sensitivity documentation
 - [Calibration Config Template](Calibration/calibration_config_template.py) - User-facing configuration
 

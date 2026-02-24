@@ -157,7 +157,9 @@ def run_calibration(
         apptainer_bind_path=apptainer_bind_path,
         executable_name=executable_name,
         executable_args=executable_args,
-        file_manager_path=file_manager_path
+        file_manager_path=file_manager_path,
+        executable_full_path=kwargs.get("executable_full_path"),
+        command_template=kwargs.get("command_template")
     )
 
     # H5 reader path for objective function
@@ -385,23 +387,174 @@ def run_calibration(
     with open(results_dir / "best_parameters.json", 'w') as f:
         json.dump(best_params_real, f, indent=2)
 
-    # Generate plots
+    # Save calibration history in the format expected by ResultsAnalyzer
+    # result.history entries are tuples: (eval_num, objective, params_array)
+    calibration_history = []
+    for entry in result.history:
+        eval_num, objective, params_array = entry  # Unpack tuple
+        hist_entry = {
+            "eval_id": int(eval_num),
+            "objective": float(objective),
+            "parameters": {
+                name: ParameterHandler.transform_to_real(val, transforms[i])
+                for i, (name, val) in enumerate(
+                    zip(param_names, params_array))
+            },
+            "timestamp": 0,
+        }
+        calibration_history.append(hist_entry)
+
+    with open(results_dir / "calibration_history.json", 'w') as f:
+        json.dump(calibration_history, f, indent=2)
+
+    # Save parameter definitions (for basin report aggregation)
+    _param_defs_serializable = []
+    for pdef in calibration_parameters:
+        d = dict(pdef)
+        # Convert tuples to lists for JSON
+        if "bounds" in d and isinstance(d["bounds"], tuple):
+            d["bounds"] = list(d["bounds"])
+        # Convert Path-like objects to strings
+        if "path" in d and not isinstance(d["path"], (str, list, dict)):
+            d["path"] = str(d["path"])
+        _param_defs_serializable.append(d)
+    with open(results_dir / "parameter_definitions.json", 'w') as f:
+        json.dump(_param_defs_serializable, f, indent=2)
+
+    # Resolve shapefile directory from base_model_config_dir
+    # Convention: ../shapefiles/ relative to variant dir
+    _base_cfg = Path(base_model_config_dir)
+    _shapefile_dir = kwargs.get("shapefile_dir", "")
+    if not _shapefile_dir and _base_cfg.exists():
+        _candidate = _base_cfg.parent / "shapefiles"
+        if _candidate.is_dir():
+            _shapefile_dir = str(_candidate)
+
+    # Generate plots and HTML report
     try:
-        analyzer = ResultsAnalyzer(results_dir)
-        analyzer.plot_convergence(result.history, results_dir / "convergence.png")
-        analyzer.plot_parameter_evolution(result.history, param_names, results_dir / "parameter_evolution.png")
+        analyzer = ResultsAnalyzer(
+            results_dir,
+            parameter_definitions=calibration_parameters
+        )
+        analyzer.plot_convergence(output_path=results_dir / "convergence.png")
+        analyzer.plot_parameter_evolution(
+            param_names=param_names,
+            output_path=results_dir / "parameter_evolution.png"
+        )
+        analyzer.plot_parameter_correlations(
+            output_path=results_dir / "parameter_correlations.png"
+        )
 
         # Generate performance plots if matched data is available
         matched_data = obj_func.get_matched_data()
-        if not matched_data.empty:
+        if matched_data is not None and not matched_data.empty:
             logger.info("Generating performance plots...")
             analyzer.generate_performance_plots(
                 matched_data=matched_data,
                 output_dir=results_dir / "performance",
                 temporal_resolution=temporal_resolution
             )
+            # Save matched data for basin report aggregation
+            matched_data.to_csv(
+                results_dir / "matched_data.csv", index=False)
+
+        # Generate comprehensive HTML report
+        logger.info("Generating HTML calibration report...")
+
+        html_report_path = analyzer.generate_html_report(
+            output_dir=results_dir,
+            matched_data=matched_data if matched_data is not None else None,
+            config_summary={
+                "basin_id": kwargs.get("basin_id", ""),
+                "variant": kwargs.get("variant", ""),
+                "algorithm": algorithm,
+                "max_evaluations": max_evaluations,
+                "objective_function": objective_function,
+                "temporal_resolution": temporal_resolution,
+                "aggregation_method": kwargs.get("aggregation_method", "mean"),
+                "n_parameters": len(calibration_parameters),
+                "calibration_targets": kwargs.get("calibration_targets", {}),
+                "random_seed": random_seed,
+                "container_runtime": kwargs.get("container_runtime", ""),
+            },
+            temporal_resolution=temporal_resolution,
+            shapefile_dir=_shapefile_dir,
+            observation_data_path=observation_data_path,
+        )
+        logger.info(f"HTML report saved to: {html_report_path}")
     except Exception as e:
-        logger.warning(f"Could not generate plots: {e}")
+        logger.warning(f"Could not generate plots/report: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+
+    # =========================================================================
+    # Auto-generate per-basin report (aggregates all completed variants)
+    # =========================================================================
+    _basin_id = kwargs.get("basin_id", "")
+    if _basin_id:
+        try:
+            from .postprocessing.results_analysis import generate_basin_report
+
+            logger.info("Generating per-basin report...")
+
+            # Discover sibling variant workspaces
+            # Convention: workspace_{basin_id}_{variant} in the same parent
+            ws_parent = work_dir.parent
+            prefix = f"workspace_{_basin_id}_"
+            variant_results = {}
+
+            for ws_dir in sorted(ws_parent.iterdir()):
+                if not ws_dir.is_dir():
+                    continue
+                if not ws_dir.name.startswith(prefix):
+                    continue
+
+                # Extract variant label from directory name
+                v_label = ws_dir.name[len(prefix):]
+                v_results_dir = ws_dir / "results"
+                v_history = v_results_dir / "calibration_history.json"
+
+                if not v_history.exists():
+                    continue  # not yet completed
+
+                # Load parameter definitions if saved
+                v_pdefs_path = v_results_dir / "parameter_definitions.json"
+                v_pdefs = []
+                if v_pdefs_path.exists():
+                    with open(v_pdefs_path) as f:
+                        v_pdefs = json.load(f)
+                    # Convert bounds lists back to tuples
+                    for pd in v_pdefs:
+                        if "bounds" in pd and isinstance(pd["bounds"], list):
+                            pd["bounds"] = tuple(pd["bounds"])
+
+                variant_results[v_label] = {
+                    "results_dir": str(v_results_dir),
+                    "calibration_parameters": v_pdefs,
+                }
+
+            if variant_results:
+                # Resolve paths for map data
+                _obs_path = observation_data_path or ""
+                basin_report_dir = ws_parent / "basin_reports"
+
+                basin_report_path = generate_basin_report(
+                    basin_id=_basin_id,
+                    variant_results=variant_results,
+                    output_dir=str(basin_report_dir),
+                    shapefile_dir=_shapefile_dir,
+                    observation_data_path=_obs_path,
+                )
+                if basin_report_path:
+                    logger.info(f"Basin report saved to: "
+                                f"{basin_report_path}")
+            else:
+                logger.info("No completed variant workspaces found "
+                            "for basin report")
+        except Exception as e:
+            logger.warning(f"Could not generate basin report: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
 
     # Summary
     logger.info("=" * 60)
@@ -527,7 +680,9 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         apptainer_bind_path=kwargs.get('apptainer_bind_path'),
         executable_name=kwargs.get('executable_name', "mizuroute_lakes_cslm_openwq_fast"),
         executable_args=kwargs.get('executable_args', "-g 1 1"),
-        file_manager_path=kwargs.get('file_manager_path')
+        file_manager_path=kwargs.get('file_manager_path'),
+        executable_full_path=kwargs.get('executable_full_path'),
+        command_template=kwargs.get('command_template')
     )
 
     h5_reader_path = str(Path(kwargs['base_model_config_dir']).parent / "Read_Outputs" / "hdf5_support_lib")

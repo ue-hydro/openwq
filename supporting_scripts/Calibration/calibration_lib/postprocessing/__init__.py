@@ -8,4 +8,4 @@ Post-processing
 Results analysis, plotting, and uncertainty quantification.
 """
 
-from .results_analysis import ResultsAnalyzer, CalibrationSummary
+from .results_analysis import ResultsAnalyzer, CalibrationSummary, generate_basin_report
