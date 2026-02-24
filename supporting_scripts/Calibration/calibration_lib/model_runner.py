@@ -47,6 +47,8 @@ class ModelRunner:
                  executable_name: str = "mizuroute_lakes_cslm_openwq_fast",
                  executable_args: str = "-g 1 1",
                  file_manager_path: str = None,
+                 executable_full_path: str = None,
+                 command_template: str = None,
                  timeout_seconds: int = 7200):
         """
         Initialize model runner.
@@ -69,6 +71,13 @@ class ModelRunner:
             Additional command-line arguments
         file_manager_path : str
             Path to mizuRoute file manager (inside container)
+        executable_full_path : str, optional
+            Full container path to executable. If provided, overrides
+            default path construction from executable_name.
+        command_template : str, optional
+            Custom command template using placeholders:
+            {eval_dir}, {exec_path}, {master_json}, {file_manager}, {args}.
+            Default: "cd {eval_dir} && {exec_path} {args} -m {file_manager}"
         timeout_seconds : int
             Maximum execution time
         """
@@ -80,6 +89,8 @@ class ModelRunner:
         self.executable_name = executable_name
         self.executable_args = executable_args
         self.file_manager_path = file_manager_path
+        self.executable_full_path = executable_full_path
+        self.command_template = command_template
         self.timeout_seconds = timeout_seconds
 
         # Parse Docker compose to get volume mapping
@@ -174,15 +185,31 @@ class ModelRunner:
         container_master_json = f"{container_eval_dir}/openWQ_master.json"
 
         # Build the command
-        # Find executable path - assume it's in the bin directory
-        exec_path = f"{self.docker_container_path}/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/{self.executable_name}"
+        # Determine executable path
+        if self.executable_full_path:
+            exec_path = self.executable_full_path
+        else:
+            # Default: assume it's in the standard bin directory
+            exec_path = f"{self.docker_container_path}/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/{self.executable_name}"
+
+        # Build the shell command using template or default
+        if self.command_template:
+            shell_cmd = self.command_template.format(
+                eval_dir=container_eval_dir,
+                exec_path=exec_path,
+                master_json=container_master_json,
+                file_manager=self.file_manager_path,
+                args=self.executable_args or ""
+            )
+        else:
+            shell_cmd = f"cd {container_eval_dir} && {exec_path} {self.executable_args} -m {self.file_manager_path}"
 
         cmd = [
             "docker", "exec",
             "-e", f"master_json={container_master_json}",
             self.docker_container_name,
             "/bin/bash", "-c",
-            f"cd {container_eval_dir} && {exec_path} {self.executable_args} -m {self.file_manager_path}"
+            shell_cmd
         ]
 
         logger.debug(f"Docker command: {' '.join(cmd)}")

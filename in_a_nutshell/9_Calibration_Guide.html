@@ -317,6 +317,10 @@
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Running Calibration</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Calibration Output</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Best Practices</p>
+                            <p style="margin-top: 15px; color: var(--purple); font-weight: 600;">Section 05: Post-Calibration Reporting</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Interactive HTML Reports</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Basin Maps & Spatial Analysis</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• Multi-Variant Basin Reports</p>
                         </div>
                     </div>
                 </div>
@@ -1039,10 +1043,11 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
                             <table style="font-size: 0.85rem;">
                                 <tr><td><code>best_parameters.json</code></td><td>Optimal values</td></tr>
                                 <tr><td><code>calibration_history.json</code></td><td>All evaluations</td></tr>
-                                <tr><td><code>convergence.png</code></td><td>Objective vs iteration</td></tr>
-                                <tr><td><code>parameter_evolution.png</code></td><td>Param trajectories</td></tr>
+                                <tr><td><code>parameter_definitions.json</code></td><td>Parameter metadata &amp; bounds</td></tr>
+                                <tr><td><code>matched_data.csv</code></td><td>Obs-model matched pairs</td></tr>
+                                <tr><td><code>calibration_report.html</code></td><td><strong>Interactive HTML report</strong></td></tr>
+                                <tr><td><code>basin_report.html</code></td><td><strong>Per-basin multi-variant report</strong></td></tr>
                                 <tr><td><code>sensitivity_results.json</code></td><td>SA results (if run)</td></tr>
-                                <tr><td><code>calibration_report.txt</code></td><td>Summary statistics</td></tr>
                             </table>
                         </div>
                     </div>
@@ -1112,13 +1117,178 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
             </div>
         </div>
 
-        <!-- Slide 20: Summary -->
-        <div class="slide" data-slide="21">
+        <!-- Section 05: Post-Calibration Reporting -->
+        <div class="slide section-slide purple" data-slide="21">
+            <div class="section-number">05</div>
+            <h2>Post-Calibration Reporting</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+        <!-- Slide: Interactive HTML Reports -->
+        <div class="slide" data-slide="22">
+            <div class="slide-header">
+                <h2>Interactive HTML Reports</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.05rem; margin-bottom: 15px;">
+                    Calibration automatically generates self-contained HTML reports with interactive Plotly.js charts.
+                </p>
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="card rose">
+                            <h3>6 Diagnostic Charts</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;">Convergence curve (objective vs iteration)</li>
+                                <li style="font-size: 0.9rem;">Parameter evolution trajectories</li>
+                                <li style="font-size: 0.9rem;">Time series: observed vs simulated</li>
+                                <li style="font-size: 0.9rem;">Scatter plot with 1:1 line</li>
+                                <li style="font-size: 0.9rem;">Residual analysis</li>
+                                <li style="font-size: 0.9rem;">Parameter sensitivity ranking</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box success">
+                            <strong>Self-contained:</strong> Single HTML file with embedded data — share via email, no server needed
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Report Features</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td><strong>Plotly.js</strong></td><td>Zoom, pan, hover tooltips</td></tr>
+                                <tr><td><strong>Dark/Light mode</strong></td><td>Theme toggle included</td></tr>
+                                <tr><td><strong>Parameter table</strong></td><td>Best values + bounds + position bar</td></tr>
+                                <tr><td><strong>Species metrics</strong></td><td>Per-species KGE/NSE/RMSE</td></tr>
+                                <tr><td><strong>Sidebar nav</strong></td><td>Jump to any section</td></tr>
+                            </table>
+                        </div>
+                        <div class="card teal">
+                            <h3>Auto-Generated</h3>
+                            <p style="font-size: 0.9rem;">Reports are created automatically when calibration completes — no extra steps needed.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">22</div>
+            </div>
+        </div>
+
+        <!-- Slide: Basin Maps -->
+        <div class="slide" data-slide="23">
+            <div class="slide-header">
+                <h2>Interactive Basin Maps</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.05rem; margin-bottom: 15px;">
+                    Calibration reports include interactive Leaflet.js maps showing the basin spatial context.
+                </p>
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Map Layers</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;"><strong>HRU polygons</strong> — colored by area quintiles</li>
+                                <li style="font-size: 0.9rem;"><strong>River network</strong> — styled by Strahler order</li>
+                                <li style="font-size: 0.9rem;"><strong>Observation stations</strong> — red markers with popup info</li>
+                            </ul>
+                        </div>
+                        <div class="card accent">
+                            <h3>Basemaps</h3>
+                            <p style="font-size: 0.9rem;">3 selectable basemaps: CARTO Light, OpenTopoMap, Esri Satellite</p>
+                        </div>
+                        <div class="highlight-box info">
+                            <strong>Data source:</strong> GeoPackage files (<code>*_basinHru.gpkg</code>, <code>*_riverNetwork.gpkg</code>)
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card purple">
+                            <h3>Basin Info Grid</h3>
+                            <table style="font-size: 0.85rem;">
+                                <tr><td>Total HRUs</td><td>Count from GeoPackage</td></tr>
+                                <tr><td>River reaches</td><td>Network segments</td></tr>
+                                <tr><td>Total area</td><td>km² from HRU polygons</td></tr>
+                                <tr><td>Network length</td><td>km of river network</td></tr>
+                                <tr><td>Max Strahler order</td><td>Stream hierarchy</td></tr>
+                                <tr><td>Obs stations</td><td>Matched monitoring sites</td></tr>
+                            </table>
+                        </div>
+                        <div class="card primary">
+                            <h3>Interactive Controls</h3>
+                            <p style="font-size: 0.9rem;">Layer toggle, zoom, scale bar, legend, click-for-info popups</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">23</div>
+            </div>
+        </div>
+
+        <!-- Slide: Per-Basin Reports -->
+        <div class="slide" data-slide="24">
+            <div class="slide-header">
+                <h2>Per-Basin Multi-Variant Reports</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.05rem; margin-bottom: 15px;">
+                    When running multiple variants (A/B/C/D), a consolidated basin report is auto-generated comparing all variants.
+                </p>
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <div class="card rose">
+                            <h3>Basin Report Contents</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;"><strong>Overview KPIs</strong> — best KGE per variant</li>
+                                <li style="font-size: 0.9rem;"><strong>Basin map</strong> — shared spatial context</li>
+                                <li style="font-size: 0.9rem;"><strong>Variant comparison table</strong> — side-by-side metrics</li>
+                                <li style="font-size: 0.9rem;"><strong>Detail cards</strong> — per-variant parameter tables</li>
+                                <li style="font-size: 0.9rem;"><strong>Links</strong> — to detailed per-variant reports</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box success">
+                            <strong>Auto-discovery:</strong> Sibling workspaces (<code>workspace_{basin}_{variant}</code>) are detected automatically
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Post-Calibration Pipeline</h3>
+                            <div class="diagram" style="border: none; box-shadow: none; padding: 10px;">
+                                <pre style="font-size: 0.72rem; background: var(--dark); color: #e2e8f0; padding: 12px; border-radius: 8px;">
+<span class="comment">Calibration completes</span>
+        │
+        ▼
+<span class="string">parameter_definitions.json</span>  ← saved
+<span class="string">matched_data.csv</span>            ← saved
+        │
+        ▼
+<span class="keyword">calibration_report.html</span>     ← per-variant
+        │
+        ▼
+<span class="comment">Detect sibling workspaces</span>
+        │
+        ▼
+<span class="keyword">basin_report.html</span>           ← multi-variant
+                                </pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">24</div>
+            </div>
+        </div>
+
+        <!-- Slide: Summary -->
+        <div class="slide" data-slide="25">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
             <div class="slide-content">
-                <div class="three-column">
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;">
                     <div class="card primary" style="text-align: center;">
                         <h3 style="justify-content: center;">🔍 Screen</h3>
                         <p>Morris screening to identify influential parameters (106 → 30)</p>
@@ -1131,20 +1301,24 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
                         <h3 style="justify-content: center;">🎯 Optimize</h3>
                         <p>DDS calibration of top parameters (200-500 evaluations)</p>
                     </div>
+                    <div class="card teal" style="text-align: center;">
+                        <h3 style="justify-content: center;">📋 Report</h3>
+                        <p>Auto-generated interactive HTML reports with maps &amp; charts</p>
+                    </div>
                 </div>
                 <div class="highlight-box success" style="margin-top: 25px; text-align: center; font-size: 1.1rem;">
-                    <strong>Key Message:</strong> Hierarchical approach (Screen → Rank → Optimize) is more efficient<br>
-                    than blindly optimizing all parameters
+                    <strong>Key Message:</strong> Hierarchical approach (Screen → Rank → Optimize → Report) with<br>
+                    automated post-calibration diagnostics for every basin and variant
                 </div>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">21</div>
+                <div class="page-number">25</div>
             </div>
         </div>
 
-        <!-- Slide 21: Thank You -->
-        <div class="slide title-slide" data-slide="22">
+        <!-- Slide: Thank You -->
+        <div class="slide title-slide" data-slide="26">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">
@@ -1152,7 +1326,7 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
                     <strong>Calibration scripts:</strong> supporting_scripts/Calibration/
                 </p>
                 <p style="font-size: 1rem; color: #718096; margin-top: 0.5rem;">
-                    Observation data: CSV | GRQA Database
+                    Observation data: CSV | GRQA Database | Reports: HTML with interactive maps &amp; charts
                 </p>
             </div>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">

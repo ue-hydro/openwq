@@ -514,13 +514,48 @@ After calibration completes, results are in the `results/` directory:
 
 ```
 results/
-├── best_parameters.json       # Optimal parameter values
-├── calibration_history.json   # All evaluations
-├── convergence.png            # Convergence plot
-├── parameter_evolution.png    # Parameter values over iterations
-├── sensitivity_results.json   # Sensitivity analysis (if run)
-└── calibration_report.txt     # Summary report
+├── best_parameters.json         # Optimal parameter values
+├── calibration_history.json     # All evaluations
+├── parameter_definitions.json   # Parameter metadata & bounds
+├── matched_data.csv             # Observation-model matched pairs
+├── calibration_report.html      # Interactive HTML report (per-variant)
+├── sensitivity_results.json     # Sensitivity analysis (if run)
+└── performance_plots/           # Time series & scatter plots
 ```
+
+If multiple variants are calibrated for the same basin, a consolidated report is also generated:
+
+```
+basin_reports/
+└── basin_report_{basin_id}.html  # Multi-variant comparison report
+```
+
+### Interactive HTML Reports
+
+Calibration automatically generates **self-contained HTML reports** with interactive diagnostics. No extra steps needed — reports appear when calibration completes.
+
+**Per-Variant Report** (`calibration_report.html`):
+- **6 Interactive Plotly.js Charts**: Convergence, parameter evolution, time series (obs vs sim), scatter plot, residuals, sensitivity ranking
+- **Best Parameters Table**: Optimal values with initial, bounds, transform, type, and position-in-range bar
+- **Per-Species Metrics**: KGE, NSE, RMSE, PBIAS per target species
+- **Dark/Light Theme Toggle**: Switch between visual themes
+- **Sidebar Navigation**: Jump to sections with scroll-spy
+
+**Per-Basin Report** (`basin_report.html`):
+- **Variant Comparison Table**: Side-by-side KGE badges per species, color-coded by performance
+- **Per-Variant Detail Cards**: Full parameter tables for each variant
+- **Auto-Discovery**: Scans sibling `workspace_{basin_id}_{variant}` directories
+
+### Interactive Basin Maps
+
+Reports include embedded **Leaflet.js** maps with:
+- **HRU polygons** colored by area (click for attributes)
+- **River network** styled by Strahler order
+- **Observation station markers** with popup info
+- **3 basemaps**: CARTO Light, OpenTopoMap, Esri Satellite
+- **Basin info grid**: HRUs, reaches, area, network length, max order, stations
+
+Maps require GeoPackage files (`*_basinHru.gpkg`, `*_riverNetwork.gpkg`) in a `shapefiles/` directory. The `fiona` package must be installed (`pip install fiona`).
 
 ### View Best Parameters
 
@@ -549,8 +584,26 @@ analyzer.plot_convergence(output_path="convergence.png", show=True)
 # Parameter evolution
 analyzer.plot_parameter_evolution(output_path="param_evolution.png", show=True)
 
-# Full report
-analyzer.generate_report(output_dir="results/")
+# Full HTML report
+analyzer.generate_html_report(output_dir="results/")
+```
+
+### Generate Basin Report Manually
+
+```python
+from calibration_lib.postprocessing import generate_basin_report
+
+# Provide results from each completed variant
+basin_report_path = generate_basin_report(
+    basin_id="CAN_01AM001_meso",
+    variant_results={
+        "A": {"results_dir": "/path/to/workspace_A/results", "calibration_parameters": [...]},
+        "B": {"results_dir": "/path/to/workspace_B/results", "calibration_parameters": [...]},
+    },
+    output_dir="/path/to/basin_reports",
+    shapefile_dir="/path/to/shapefiles",        # Optional: for basin map
+    observation_data_path="/path/to/obs.csv",    # Optional: for station markers
+)
 ```
 
 ### Apply Best Parameters to Model

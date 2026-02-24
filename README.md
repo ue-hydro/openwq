@@ -201,8 +201,12 @@ OpenWQ includes a comprehensive calibration framework with:
 - **Sensitivity Analysis**: Morris screening and Sobol variance-based methods
 - **DDS Optimization**: Efficient parameter calibration for expensive models
 - **HPC Support**: SLURM/PBS templates for high-performance computing
+- **Interactive HTML Reports**: Auto-generated per-variant reports with Plotly.js charts (convergence, time series, scatter, residuals), parameter tables with bounds and position bars, and dark/light theme toggle
+- **Interactive Basin Maps**: Leaflet.js maps with HRU polygons, river network (styled by Strahler order), and observation station markers — embedded directly in reports
+- **Per-Basin Multi-Variant Reports**: Consolidated reports comparing all calibration variants (A/B/C/D) for each basin, with side-by-side KGE metrics and parameter comparisons
 
 Key documentation:
+- [Calibration Usage Guide](supporting_scripts/Calibration/USAGE_GUIDE.md) - Step-by-step calibration guide
 - [Sensitivity Analysis Guide](supporting_scripts/Calibration/SENSITIVITY_ANALYSIS_GUIDE.md) - Complete parameter sensitivity reference
 - [Parameter Defaults](supporting_scripts/Calibration/calibration_lib/parameter_defaults.py) - Scientifically-grounded parameter ranges
 
