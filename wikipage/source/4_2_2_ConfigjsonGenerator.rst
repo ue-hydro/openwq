@@ -344,7 +344,7 @@ When ``run_model = True``, the template:
 Report generation (Section 9)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-After a successful model run, the template can generate an interactive HTML report. Set ``generate_report = True`` to enable this.
+The template can generate an interactive HTML report. Set ``generate_report = True`` to enable this. The report can be generated **with or without** running the model.
 
 .. code-block:: python
 
@@ -357,17 +357,21 @@ After a successful model run, the template can generate an interactive HTML repo
 
 The report is a self-contained HTML file saved to ``{dir2save_input_files}/openwq_report.html`` and includes:
 
+* **Project information** -- Project name, authors, host model, and description displayed at the top of the report
 * **Configuration summary** -- Table of modules, solver, species, and compartments
+* **Module parameter details** -- Collapsible sections showing the full configuration of each active module (BGC species and cycling frameworks, TD dispersion coefficients, LE exchange pairs, TS sediment parameters, SI isotherm settings)
+* **Source/sink setup** -- Method badge, metadata card, and per-species statistics table (number of cells, time period, total load)
 * **Basin map** -- Interactive Leaflet.js map with river network (if shapefile provided)
 * **Time series** -- Interactive Plotly.js charts for each output species
 * **Spatial statistics** -- Min/max/mean/std per species across all reaches
-* **Source/sink summary** -- Applied loads from the SS configuration
 * **Run metadata** -- Runtime, exit code, container type, MPI processes
+
+**Config-only mode:** When ``run_model = False``, the report is still generated but time series charts and spatial statistics are omitted. The report displays a notice indicating the model was not executed, while configuration, module parameters, and source/sink setup sections remain fully rendered.
 
 .. note::
 
-    Report generation requires ``run_model = True``. The full pipeline is:
-    generate configs → run model → generate report, all from a single ``python`` command.
+    The full pipeline is: generate configs → (optionally) run model → generate report, all from a single ``python`` command.
+    When ``run_model = False``, the report focuses on configuration review and setup validation.
 
 
 Docker support

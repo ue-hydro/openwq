@@ -190,7 +190,12 @@ cp model_config_template.py my_project.py
 python my_project.py   # generates configs → runs model → produces report
 ```
 
-The report (`openwq_report.html`) is a self-contained HTML file with interactive Plotly.js time series, Leaflet.js basin maps, spatial statistics, and run metadata.
+The report (`openwq_report.html`) is a self-contained HTML file featuring:
+- **Project information** header (name, authors, host model, description)
+- **Module parameter details** with collapsible sections for each active module (BGC species/frameworks, transport dispersion, lateral exchange, sediment parameters, sorption isotherms)
+- **Source/sink setup** summary with per-species statistics (cells, time period, total load)
+- Interactive Plotly.js time series, Leaflet.js basin maps, spatial statistics, and run metadata
+- **Config-only mode**: set `run_model = False` to generate a configuration-review report without executing the model
 
 ### Python Environment Setup
 
