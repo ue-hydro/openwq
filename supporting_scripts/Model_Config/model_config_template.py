@@ -358,7 +358,7 @@ compartments_and_cells = {
 #   - The model reads openWQ_master.json from the CWD (set by cd to dir2save_input_files)
 #   - All paths in master JSON are relative (openwq_in/...), so they resolve from CWD
 
-run_model = True
+run_model = False
 
 # Container runtime: "docker" or "apptainer"
 container_runtime = "docker"
@@ -436,13 +436,14 @@ if run_model:
     )
 
 # 3) Generate report (optional)
-if generate_report and run_model:
+if generate_report:
     _generate_report(
         dir2save_input_files=dir2save_input_files,
         project_name=project_name,
         authors=authors,
         date=date,
         comment=comment,
+        hostmodel=hostmodel,
         bgc_module_name=bgc_module_name,
         td_module_name=td_module_name,
         le_module_name=le_module_name,
@@ -459,10 +460,8 @@ if generate_report and run_model:
         container_runtime=container_runtime,
         mpi_np=mpi_np,
         run_time_seconds=_elapsed,
+        model_was_run=run_model,
     )
-elif generate_report and not run_model:
-    print("\n  NOTE: Report generation requires run_model = True.")
-    print("  Set run_model = True to generate configs, run the model, AND produce a report.")
 
 print("\n" + "=" * 60)
 print("DONE")
