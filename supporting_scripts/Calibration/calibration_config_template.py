@@ -20,10 +20,16 @@ OpenWQ Calibration Configuration Template
 
 Copy this file to your working directory and modify for your calibration setup.
 
-USAGE:
-  cp calibration_config_template.py my_calibration.py
-  # Edit my_calibration.py with your settings
-  python my_calibration.py [options]
+QUICK START:
+  1. cp calibration_config_template.py my_calibration.py
+  2. Edit my_calibration.py:
+     a. Set paths (Section 1) to your model config and observation data
+     b. Set container settings (Section 2) for Docker or Apptainer
+     c. Define calibration parameters (Section 3) - open YOUR BGC JSON file
+        and use the exact key names/paths you see there
+     d. Set calibration options (Section 4) - species names, algorithm, etc.
+  3. Validate: python my_calibration.py --dry-run
+  4. Run:     python my_calibration.py
 
 COMMAND-LINE OPTIONS:
   python my_calibration.py                     # Run calibration (default)
@@ -34,7 +40,16 @@ COMMAND-LINE OPTIONS:
 
 CONFIGURATION OPTIONS (set in this file):
   run_sensitivity_first = False  # Calibration only (default)
-  run_sensitivity_first = True   # Sensitivity analysis → Calibration
+  run_sensitivity_first = True   # Sensitivity analysis -> Calibration
+
+SPECIES NAMING CONVENTION:
+  OpenWQ follows the GRQA convention using HYPHENS for species names:
+    NO3-N (Nitrate-N)    NH4-N (Ammonium-N)    PO4-P (Phosphate-P)
+  These names must match EXACTLY between:
+    - Your observation CSV "species" column
+    - calibration_targets["species"]
+    - objective_weights keys
+    - grqa_config["species_mapping"] values (if using GRQA)
 
 SECTIONS:
   1. Path Configuration
@@ -44,7 +59,8 @@ SECTIONS:
   4. Calibration Settings
   5. Sensitivity Analysis Settings
   6. HPC Settings (Apptainer)
-  7. Run Calibration
+  7. Run Control (run_calibration_flag = True/False)
+  8. Execution (do not modify)
 
 Parameter Reference:
   See calibration_lib/parameter_defaults.py for comprehensive list of all
@@ -179,16 +195,21 @@ grqa_config = {
     # Only parameters listed here will be downloaded and processed
     # See GRQA documentation for full parameter list:
     # https://zenodo.org/records/15335450
+    #
+    # IMPORTANT: The mapped names (right side) become the "species" column
+    # in your observation CSV. These MUST match your calibration_targets
+    # and objective_weights above. Use the GRQA hyphen convention
+    # (e.g., NO3-N, NH4-N) for consistency.
     "species_mapping": {
         # Nitrogen species
-        "NO3": "NO3-N",      # Nitrate
-        "NH4": "NH4-N",      # Ammonium
+        "NO3": "NO3-N",      # Nitrate-nitrogen
+        "NH4": "NH4-N",      # Ammonium-nitrogen
         "TN": "TN",          # Total Nitrogen
-        "NO2": "NO2-N",      # Nitrite
+        "NO2": "NO2-N",      # Nitrite-nitrogen
         "DON": "DON",        # Dissolved Organic Nitrogen
 
         # Phosphorus species
-        "PO4": "PO4-P",      # Orthophosphate
+        "PO4": "PO4-P",      # Orthophosphate-phosphorus
         "TP": "TP",          # Total Phosphorus
         "DP": "DP",          # Dissolved Phosphorus
 
@@ -219,6 +240,7 @@ grqa_config = {
 
     # Target units for each species (optional)
     # If not specified, original units are preserved
+    # Species names must match species_mapping values above
     "target_units": {
         "NO3-N": "mg/l",
         "NH4-N": "mg/l",
@@ -250,9 +272,30 @@ apptainer_sif_path = "/path/to/openwq.sif"
 apptainer_bind_path = "/scratch/user/openwq_code:/code"  # host:container
 
 # --- Executable settings ---
-executable_name = "mizuroute_lakes_cslm_openwq_fast"  # or mizuroute_lakes_cslm_openwq_debug
-executable_args = "-g 1 1"  # Grid arguments
-file_manager_path = "/code/openwq_code/6_mizuroute_cslm_openwq/test_case_2/mizuroute_in/fileManager.txt"
+executable_name = "mizuroute_lakes_openwq_Release"  # or mizuroute_lakes_openwq_Debug
+executable_args = ""  # No flags needed - file manager is a positional argument
+
+# Full path to executable inside container
+# Overrides default path construction from executable_name
+executable_full_path = (
+    "/code/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/"
+    "mizuroute_lakes_openwq_Release"
+)
+
+# mizuRoute file manager path (inside container) - passed as positional argument
+file_manager_path = "/code/openwq_code/6_mizuroute_cslm_openwq/test_case_2/mizuroute_in/settings/mizuroute.control"
+
+# Command template for model execution
+# Placeholders: {eval_dir}, {exec_path}, {master_json}, {file_manager}, {args}
+#
+# IMPORTANT:
+#   - mpirun -np 2 is REQUIRED: mizuRoute domain decomposition needs >=2 MPI processes
+#   - --allow-run-as-root: needed inside Docker/Apptainer containers
+#   - -x master_json: forwards the OpenWQ master JSON env var to all MPI ranks
+command_template = (
+    "cd {eval_dir} && mpirun --allow-run-as-root -np 2 "
+    "-x master_json {exec_path} {file_manager}"
+)
 
 
 # =============================================================================
@@ -301,8 +344,8 @@ file_manager_path = "/code/openwq_code/6_mizuroute_cslm_openwq/test_case_2/mizur
 #   Ca:                     (5.0, 500.0)    log - 10-200 mg/L typical
 #   Mg:                     (1.0, 200.0)    log - 5-50 mg/L typical
 #   Na:                     (1.0, 10000.0)  log - Freshwater to brackish
-#   N(5) as NO3:            (0.01, 50.0)    log - Pristine to agricultural
-#   N(-3) as NH4:           (0.001, 10.0)   log - Surface water <0.5 mg/L
+#   N(5) as NO3:            (0.05, 50.0)    log - Pristine to agricultural
+#   N(-3) as NH4:           (0.005, 10.0)   log - Surface water <0.5 mg/L
 #   P as PO4:               (0.001, 5.0)    log - Oligo to eutrophic
 #   pCO2_log (atm):         (-4.5, -1.5)    linear - Atmospheric to organic-rich
 #   Calcite_SI:             (-3.0, 1.0)     linear - Under to supersaturated
@@ -316,7 +359,7 @@ file_manager_path = "/code/openwq_code/6_mizuroute_cslm_openwq/test_case_2/mizur
 #   bulk_density (kg/m3):   (1000, 2000)    linear
 #
 # Sediment (HYPE_HBVSED/MMF):
-#   erosion_index:          (0.1, 2.0)      linear - Calibration coefficient
+#   erosion_index:          (0.05, 5.0)     linear - Calibration coefficient
 #   slope (m/m):            (0.001, 0.5)    linear - Land slope
 #   slope_erosion_exponent: (0.5, 3.0)      linear - USLE ~1.4
 #   precip_erosion_exponent:(0.5, 3.0)      linear - Erosivity ~1.5
@@ -335,12 +378,13 @@ file_manager_path = "/code/openwq_code/6_mizuroute_cslm_openwq/test_case_2/mizur
 #
 # Source/Sink:
 #   csv_scale (all/species):(0.1, 5.0)      linear - Load multiplier
-#   cropland_TN (kg/ha/yr): (5.0, 80.0)     linear - Literature 10-50
-#   cropland_TP (kg/ha/yr): (0.5, 10.0)     linear - Literature 0.5-5
-#   forest_TN (kg/ha/yr):   (0.5, 10.0)     linear - Background 1-5
-#   forest_TP (kg/ha/yr):   (0.05, 1.0)     linear - Background 0.1-0.5
-#   urban_TN (kg/ha/yr):    (5.0, 50.0)     linear - Stormwater 5-30
-#   urban_TP (kg/ha/yr):    (0.5, 5.0)      linear - Stormwater 0.5-3
+#   cropland_TN (kg/ha/yr): (1.0, 30.0)     linear - Literature 1-30
+#   cropland_TP (kg/ha/yr): (0.1, 4.0)      linear - Literature 0.1-4
+#   forest_TN (kg/ha/yr):   (0.1, 5.0)      linear - Background 0.1-5
+#   forest_TP (kg/ha/yr):   (0.01, 0.5)     linear - Background 0.01-0.5
+#   urban_TN (kg/ha/yr):    (2.0, 25.0)     linear - Stormwater 2-25
+#   urban_TP (kg/ha/yr):    (0.2, 3.0)      linear - Stormwater 0.2-3
+#   grassland_TN (kg/ha/yr):(0.5, 15.0)     linear - 0.5-15, grazed higher
 #   precip_scaling_power:   (0.5, 2.5)      linear - Nonlinear erosion
 #   Q10_biological:         (1.5, 4.0)      linear - Temp response
 #   T_reference (degC):     (10.0, 25.0)    linear - Baseline temp
@@ -354,33 +398,110 @@ file_manager_path = "/code/openwq_code/6_mizuroute_cslm_openwq/test_case_2/mizur
 calibration_parameters = [
     # =========================================================================
     # BGC Rate Constants (NATIVE_BGC_FLEX)
-    # Path: ["CYCLING_FRAMEWORKS", "<framework>", "<rxn_num>", "parameter_values", "<param>"]
+    # =========================================================================
+    #
+    # PATH FORMAT:
+    #   ["CYCLING_FRAMEWORKS", "<framework_name>", "<reaction_number>",
+    #    "<param_values_key>", "<parameter_name>"]
+    #
+    # IMPORTANT - Check your own BGC JSON file to verify:
+    #   1. Framework name: e.g., "FULL_N_CYCLE", "SWAT_NITROGEN_CYCLE", etc.
+    #   2. Reaction number: "1", "2", "3", ... (string keys in JSON)
+    #   3. Parameter values key: typically "PARAMETER_VALUES" (uppercase).
+    #      Open your openWQ_MODULE_NATIVE_BGC_FLEX.json and verify the exact case!
+    #   4. Parameter name: must match exactly (e.g., "k_hydrol", "k_min", "k")
+    #
+    # HOW TO FIND THE CORRECT PATH:
+    #   Open your openWQ_MODULE_NATIVE_BGC_FLEX.json and look at the structure:
+    #   {
+    #     "CYCLING_FRAMEWORKS": {
+    #       "FULL_N_CYCLE": {            <-- framework name
+    #         "1": {                      <-- reaction number
+    #           "consumed": [...],
+    #           "produced": [...],
+    #           "PARAMETER_VALUES": {     <-- check case in YOUR file!
+    #             "k_hydrol": 0.1         <-- parameter name
+    #           }
+    #         },
+    #         "2": { ... },
+    #       }
+    #     }
+    #   }
+    #
     # Scientific ranges from Chapra (2008) and Thomann & Mueller (1987)
     # =========================================================================
+
+    # --- Example: Full N Cycle (Variant A) ---
+    # Uncomment and adapt to your BGC configuration
     {
         "name": "k_nitrification",
         "file_type": "bgc_json",
-        "path": ["CYCLING_FRAMEWORKS", "N_cycle", "3", "parameter_values", "k"],
-        "initial": 0.03,                    # Typical: 0.01-0.1/day
-        "bounds": (0.001, 0.5),             # Chapra: up to 0.5/day in warm water
+        "path": ["CYCLING_FRAMEWORKS", "FULL_N_CYCLE", "3", "PARAMETER_VALUES", "k_nitrif1"],
+        "initial": 0.15,                    # 1/day - Typical: 0.01-0.2/day
+        "bounds": (0.01, 2.0),              # Chapra: up to 0.5/day in warm water
         "transform": "log"
     },
     {
         "name": "k_denitrification",
         "file_type": "bgc_json",
-        "path": ["CYCLING_FRAMEWORKS", "N_cycle", "9", "parameter_values", "k"],
-        "initial": 1e-6,                    # Highly variable
-        "bounds": (1e-8, 0.01),             # SWAT: 0.001-0.01/day anoxic sediments
+        "path": ["CYCLING_FRAMEWORKS", "FULL_N_CYCLE", "6", "PARAMETER_VALUES", "k_denitrif"],
+        "initial": 0.1,                     # 1/day - Highly variable
+        "bounds": (0.005, 2.0),             # SWAT: 0.001-0.01/day anoxic sediments
         "transform": "log"
     },
     {
-        "name": "k_mineralization_active",
+        "name": "k_mineralization",
         "file_type": "bgc_json",
-        "path": ["CYCLING_FRAMEWORKS", "N_cycle", "4", "parameter_values", "k"],
-        "initial": 0.1,                     # Fast pool
-        "bounds": (0.01, 1.0),              # Thomann & Mueller: 0.05-0.5/day
+        "path": ["CYCLING_FRAMEWORKS", "FULL_N_CYCLE", "2", "PARAMETER_VALUES", "k_min"],
+        "initial": 0.08,                    # 1/day - Fast pool
+        "bounds": (0.005, 0.8),             # Thomann & Mueller: 0.05-0.5/day
         "transform": "log"
     },
+
+    # --- Example: SWAT-style Nitrogen Cycle (Variant B) ---
+    # Uncomment if using SWAT_NITROGEN_CYCLE framework
+    # {
+    #     "name": "k_nit",
+    #     "file_type": "bgc_json",
+    #     "path": ["CYCLING_FRAMEWORKS", "SWAT_NITROGEN_CYCLE", "4",
+    #              "PARAMETER_VALUES", "k_nit"],
+    #     "initial": 0.1,
+    #     "bounds": (0.005, 2.0),
+    #     "transform": "log"
+    # },
+    # {
+    #     "name": "k_den",
+    #     "file_type": "bgc_json",
+    #     "path": ["CYCLING_FRAMEWORKS", "SWAT_NITROGEN_CYCLE", "6",
+    #              "PARAMETER_VALUES", "k_den"],
+    #     "initial": 0.05,
+    #     "bounds": (0.005, 1.0),
+    #     "transform": "log"
+    # },
+
+    # --- Example: Thermodynamic N Cycle (Variant C) ---
+    # Uncomment if using NITRIFICATION_THERMODYNAMIC framework
+    # {
+    #     "name": "k_max_AOB",
+    #     "file_type": "bgc_json",
+    #     "path": ["CYCLING_FRAMEWORKS", "NITRIFICATION_THERMODYNAMIC", "1",
+    #              "PARAMETER_VALUES", "k_max"],
+    #     "initial": 5.0,                   # Maximum growth rate (1/day)
+    #     "bounds": (0.1, 100.0),
+    #     "transform": "log"
+    # },
+
+    # --- Example: PHREEQC Geochemistry (Variant D) ---
+    # Uncomment if using PHREEQC_N_CYCLE framework
+    # {
+    #     "name": "k_nitrif_phreeqc",
+    #     "file_type": "bgc_json",
+    #     "path": ["CYCLING_FRAMEWORKS", "PHREEQC_N_CYCLE", "1",
+    #              "PARAMETER_VALUES", "k_nitrif"],
+    #     "initial": 0.2,                   # 1/day
+    #     "bounds": (0.001, 5.0),
+    #     "transform": "log"
+    # },
 
     # =========================================================================
     # PHREEQC Parameters (if using bgc_module_name = "PHREEQC")
@@ -400,7 +521,7 @@ calibration_parameters = [
     #     "file_type": "phreeqc_pqi",
     #     "path": {"block": "SOLUTION", "species": "N(5)"},
     #     "initial": 2.0,                   # mg/L as N
-    #     "bounds": (0.01, 50.0),           # Pristine to agricultural
+    #     "bounds": (0.05, 50.0),           # Pristine to agricultural
     #     "transform": "log"
     # },
     # {
@@ -408,7 +529,7 @@ calibration_parameters = [
     #     "file_type": "phreeqc_pqi",
     #     "path": {"block": "SOLUTION", "species": "N(-3)"},
     #     "initial": 0.1,                   # mg/L as N
-    #     "bounds": (0.001, 10.0),          # Surface water typically <0.5
+    #     "bounds": (0.005, 10.0),          # Surface water typically <0.5
     #     "transform": "log"
     # },
     # {
@@ -630,8 +751,8 @@ calibration_parameters = [
     #     "name": "cropland_TN_coeff",
     #     "file_type": "ss_copernicus_static",
     #     "path": {"lulc_class": 10, "species": "TN"},
-    #     "initial": 25.0,                  # kg/ha/yr
-    #     "bounds": (5.0, 80.0),            # Literature: 10-50, fertilized up to 80
+    #     "initial": 15.0,                  # kg/ha/yr
+    #     "bounds": (1.0, 30.0),            # Literature: 1-30
     #     "transform": "linear"
     # },
     # {
@@ -639,7 +760,7 @@ calibration_parameters = [
     #     "file_type": "ss_copernicus_static",
     #     "path": {"lulc_class": 10, "species": "TP"},
     #     "initial": 2.0,                   # kg/ha/yr
-    #     "bounds": (0.5, 10.0),            # Literature: 0.5-5, erosion-prone higher
+    #     "bounds": (0.1, 4.0),             # Literature: 0.1-4
     #     "transform": "linear"
     # },
     # {
@@ -647,23 +768,23 @@ calibration_parameters = [
     #     "file_type": "ss_copernicus_static",
     #     "path": {"lulc_class": 50, "species": "TN"},
     #     "initial": 2.0,                   # kg/ha/yr
-    #     "bounds": (0.5, 10.0),            # Natural background: 1-5
+    #     "bounds": (0.1, 5.0),             # Natural background: 0.1-5
     #     "transform": "linear"
     # },
     # {
     #     "name": "grassland_TN_coeff",
     #     "file_type": "ss_copernicus_static",
     #     "path": {"lulc_class": 30, "species": "TN"},
-    #     "initial": 10.0,                  # kg/ha/yr
-    #     "bounds": (2.0, 30.0),            # 5-20, grazed higher
+    #     "initial": 5.0,                   # kg/ha/yr
+    #     "bounds": (0.5, 15.0),            # 0.5-15, grazed higher
     #     "transform": "linear"
     # },
     # {
     #     "name": "urban_TN_coeff",
     #     "file_type": "ss_copernicus_static",
     #     "path": {"lulc_class": 190, "species": "TN"},
-    #     "initial": 15.0,                  # kg/ha/yr
-    #     "bounds": (5.0, 50.0),            # Stormwater: 5-30
+    #     "initial": 10.0,                  # kg/ha/yr
+    #     "bounds": (2.0, 25.0),            # Stormwater: 2-25
     #     "transform": "linear"
     # },
 
@@ -783,12 +904,16 @@ aggregation_method = "mean"     # "mean", "sum", "median", "min", "max"
 
 # Species weights for multi-species calibration
 # Higher weight = more influence on objective function
+#
+# IMPORTANT: Species names must EXACTLY match the "species" column in your
+# observation CSV file. Use the GRQA hyphen convention (e.g., NO3-N, NH4-N).
 objective_weights = {
     "NO3-N": 1.0,
     "NH4-N": 0.5,
 }
 
 # Calibration targets: which species and reaches to match
+# Species names must match your observation CSV exactly
 calibration_targets = {
     "species": ["NO3-N", "NH4-N"],
     "reach_ids": "all",  # or list of specific IDs: [1200014181, 200014181]
@@ -846,7 +971,15 @@ hpc_max_concurrent_jobs = 50
 
 
 # =============================================================================
-# 7. RUN CALIBRATION
+# 7. RUN CONTROL
+# =============================================================================
+# Set to True to run calibration after setup/validation
+# Set to False to only create/validate calibration input files without running
+run_calibration_flag = True
+
+
+# =============================================================================
+# 8. EXECUTION (do not modify below this line)
 # =============================================================================
 
 def get_time_range_from_netcdf(nc_path: str) -> tuple:
@@ -1032,6 +1165,8 @@ if __name__ == "__main__":
         "executable_name": executable_name,
         "executable_args": executable_args,
         "file_manager_path": file_manager_path,
+        "executable_full_path": executable_full_path,
+        "command_template": command_template,
 
         # Calibration parameters
         "calibration_parameters": calibration_parameters,
@@ -1174,6 +1309,15 @@ if __name__ == "__main__":
         print("  - SOURCE_SINK_PARAMETERS: LULC export coefficients, climate params")
         print("\nUse create_parameter_entry() helper for automatic bounds lookup.")
 
+        sys.exit(0)
+
+    # Check run_calibration_flag
+    if not run_calibration_flag:
+        print("\n" + "=" * 60)
+        print("run_calibration_flag = False")
+        print("=" * 60)
+        print("Setup and validation complete. No calibration will be run.")
+        print("Set run_calibration_flag = True in Section 7 and re-run to start calibration.")
         sys.exit(0)
 
     if args.sensitivity_only:
