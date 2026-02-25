@@ -35,7 +35,8 @@ Quick start
 
     python my_project_config.py
 
-4. The script generates all OpenWQ input files in the specified output directory
+4. The script generates all OpenWQ input files in the specified output directory.
+   Optionally, it can also run the model (``run_model = True``) and generate an interactive HTML report (``generate_report = True``)
 
 
 Configuration parameters
@@ -296,6 +297,77 @@ The configuration generator creates the following files in your output directory
 * ``openwq_in/openWQ_MODULE_<SI>.json`` -- Sorption isotherm module configuration
 * ``openwq_in/openWQ_SS_<method>.json`` -- Source/sink configuration (if applicable)
 * ``openwq_in/openWQ_EWF_fixed_value.json`` -- External water flux configuration (if applicable)
+
+
+Model execution (Section 8)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The template can run the model directly after generating configuration files. Set ``run_model = True`` to enable this.
+
+.. code-block:: python
+
+    run_model = True
+
+    # Container runtime: "docker" or "apptainer"
+    container_runtime = "docker"
+
+    # Docker settings
+    docker_container_name = "docker_openwq"
+
+    # Apptainer settings (for HPC)
+    apptainer_sif_path = "/path/to/openwq.sif"
+    apptainer_bind_path = "/scratch/user/openwq_code:/code"
+
+    # Executable path (absolute path INSIDE the container)
+    executable_path = "/code/.../bin/mizuroute_openwq_Release"
+
+    # mizuRoute control file path (absolute path INSIDE the container)
+    file_manager_path = "/code/.../settings/mizuroute.control"
+
+    # MPI processes (minimum 2 for mizuRoute domain decomposition)
+    mpi_np = 2
+
+When ``run_model = True``, the template:
+
+1. Generates all configuration files (Sections 1-7)
+2. Maps the host ``dir2save_input_files`` path to the container path using the ``docker-compose.yml`` volume mount
+3. Executes ``mpirun -np <mpi_np> <executable_path> <file_manager_path>`` inside the container
+4. Streams stdout/stderr in real-time and saves the full log to ``model_output.log``
+5. Reports success or failure with exit code and elapsed time
+
+.. note::
+
+    mizuRoute requires a minimum of 2 MPI processes (``mpi_np = 2``) for domain decomposition.
+    The ``--allow-run-as-root`` flag is automatically added inside containers.
+
+
+Report generation (Section 9)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+After a successful model run, the template can generate an interactive HTML report. Set ``generate_report = True`` to enable this.
+
+.. code-block:: python
+
+    generate_report = True
+
+    # Path to river network shapefile or GeoPackage (for interactive basin map)
+    # Set to None if no spatial data available — map section will be skipped
+    shapefile_path = None    # e.g., "/path/to/river_network.shp"
+    shapefile_reach_id_col = "seg_id"   # Column containing reach IDs
+
+The report is a self-contained HTML file saved to ``{dir2save_input_files}/openwq_report.html`` and includes:
+
+* **Configuration summary** -- Table of modules, solver, species, and compartments
+* **Basin map** -- Interactive Leaflet.js map with river network (if shapefile provided)
+* **Time series** -- Interactive Plotly.js charts for each output species
+* **Spatial statistics** -- Min/max/mean/std per species across all reaches
+* **Source/sink summary** -- Applied loads from the SS configuration
+* **Run metadata** -- Runtime, exit code, container type, MPI processes
+
+.. note::
+
+    Report generation requires ``run_model = True``. The full pipeline is:
+    generate configs → run model → generate report, all from a single ``python`` command.
 
 
 Docker support
