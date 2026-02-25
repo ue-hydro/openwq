@@ -53,6 +53,194 @@ def _js(obj):
     return json.dumps(obj)
 
 
+def _read_module_json(output_dir, module_name):
+    """Read a module JSON file from openwq_in/, stripping comment lines."""
+    if module_name.upper() == 'NONE':
+        return None
+    fpath = os.path.join(output_dir, 'openwq_in',
+                         f'openWQ_MODULE_{module_name}.json')
+    if not os.path.isfile(fpath):
+        return None
+    try:
+        with open(fpath, 'r') as f:
+            lines = [l for l in f.readlines()
+                     if not l.strip().startswith('//')]
+        return json.loads(''.join(lines))
+    except Exception:
+        return None
+
+
+def _render_module_params(module_data, module_name):
+    """Generate HTML list for module parameter display inside a <details> block."""
+    if module_data is None or module_name.upper() == 'NONE':
+        return []
+
+    H = []
+    mn = module_name.upper()
+
+    # --- Transport Dissolved ---
+    if 'TRANSPORT_CONFIGURATION' in module_data:
+        tc = module_data['TRANSPORT_CONFIGURATION']
+        H.append('<table class="param-table">')
+        H.append('<tr><th>Parameter</th><th>Value</th></tr>')
+        for k, v in tc.items():
+            H.append(f'<tr><td>{k}</td><td class="num">{v}</td></tr>')
+        H.append('</table>')
+
+    # --- Lateral Exchange ---
+    elif 'CONFIGURATION' in module_data and 'LE' in mn:
+        cfg = module_data['CONFIGURATION']
+        H.append('<table class="param-table">')
+        H.append('<tr><th>#</th><th>Direction</th><th>Upper Compartment</th>'
+                 '<th>Lower Compartment</th><th>K<sub>val</sub></th></tr>')
+        for idx, entry in cfg.items():
+            if isinstance(entry, dict):
+                H.append(
+                    f'<tr><td>{idx}</td>'
+                    f'<td>{entry.get("direction", "")}</td>'
+                    f'<td>{entry.get("upper_compartment", "")}</td>'
+                    f'<td>{entry.get("lower_compartment", "")}</td>'
+                    f'<td class="num">{entry.get("K_val", "")}</td></tr>')
+        H.append('</table>')
+
+    # --- Sediment Transport (HYPE_MMF / HYPE_HBVSED) ---
+    elif mn.startswith('HYPE'):
+        if 'CONFIGURATION' in module_data:
+            cfg = module_data['CONFIGURATION']
+            H.append('<h4>Configuration</h4>')
+            H.append('<table class="param-table">')
+            H.append('<tr><th>Setting</th><th>Value</th></tr>')
+            for k, v in cfg.items():
+                H.append(f'<tr><td>{k}</td><td>{v}</td></tr>')
+            H.append('</table>')
+
+        if 'PARAMETER_DEFAULTS' in module_data:
+            pd = module_data['PARAMETER_DEFAULTS']
+            H.append('<h4>Parameter Defaults</h4>')
+            H.append('<table class="param-table">')
+            H.append('<tr><th>Parameter</th><th>Value</th></tr>')
+            for k, v in pd.items():
+                H.append(f'<tr><td>{k}</td><td class="num">{v}</td></tr>')
+            H.append('</table>')
+
+        if 'MONTHLY_EROSION_FACTOR' in module_data:
+            mef = module_data['MONTHLY_EROSION_FACTOR']
+            months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            H.append('<h4>Monthly Erosion Factor</h4>')
+            H.append('<table class="param-table">')
+            H.append('<tr>' + ''.join(f'<th>{m}</th>' for m in months) + '</tr>')
+            H.append('<tr>' + ''.join(f'<td class="num">{v}</td>' for v in mef) + '</tr>')
+            H.append('</table>')
+
+    # --- BGC (NATIVE_BGC_FLEX) ---
+    elif 'BIOGEOCHEMISTRY_CONFIGURATION' in module_data:
+        bgc = module_data['BIOGEOCHEMISTRY_CONFIGURATION']
+
+        if 'CHEMICAL_SPECIES' in bgc:
+            species = bgc['CHEMICAL_SPECIES']
+            H.append('<h4>Chemical Species</h4>')
+            H.append('<table class="param-table">')
+            H.append('<tr><th>Species</th><th>Description</th>'
+                     '<th>Units</th><th>Initial Condition</th></tr>')
+            for k, v in species.items():
+                if k.startswith('_') or not isinstance(v, dict):
+                    continue
+                H.append(
+                    f'<tr><td><code>{k}</code></td>'
+                    f'<td>{v.get("DESCRIPTION", "")}</td>'
+                    f'<td>{v.get("UNITS", "")}</td>'
+                    f'<td class="num">{v.get("INITIAL_CONDITION", "")}</td></tr>')
+            H.append('</table>')
+
+        if 'CYCLING_FRAMEWORKS' in bgc:
+            frameworks = bgc['CYCLING_FRAMEWORKS']
+            H.append('<h4>Cycling Frameworks</h4>')
+            for fw_name, fw_data in frameworks.items():
+                if not isinstance(fw_data, dict):
+                    continue
+                desc = fw_data.get('_DESCRIPTION', fw_name)
+                H.append(f'<details class="nested-details">'
+                         f'<summary>{fw_name} &mdash; {desc}</summary>')
+                H.append('<table class="param-table">')
+                H.append('<tr><th>Transformation</th><th>Consumed</th>'
+                         '<th>Produced</th><th>Kinetics</th></tr>')
+                for t_name, t_data in fw_data.items():
+                    if t_name.startswith('_') or not isinstance(t_data, dict):
+                        continue
+                    if 'KINETICS' not in t_data and 'FORMULA' not in t_data:
+                        continue
+                    consumed = t_data.get('CONSUMED', '')
+                    produced = t_data.get('PRODUCED', '')
+                    kinetics = t_data.get('KINETICS', t_data.get('FORMULA', ''))
+                    H.append(
+                        f'<tr><td><code>{t_name}</code></td>'
+                        f'<td>{consumed}</td>'
+                        f'<td>{produced}</td>'
+                        f'<td><code style="font-size:.75rem">{kinetics}</code></td></tr>')
+                H.append('</table></details>')
+
+        if 'COMPARTMENT_ASSIGNMENT' in bgc:
+            ca = bgc['COMPARTMENT_ASSIGNMENT']
+            H.append('<h4>Compartment Assignment</h4>')
+            H.append('<table class="param-table">')
+            H.append('<tr><th>Compartment</th><th>Frameworks</th></tr>')
+            for comp, fws in ca.items():
+                fws_str = ", ".join(fws) if isinstance(fws, list) else str(fws)
+                H.append(f'<tr><td>{comp}</td><td>{fws_str}</td></tr>')
+            H.append('</table>')
+
+    # --- PHREEQC ---
+    elif mn == 'PHREEQC':
+        if 'PHREEQC_CONFIGURATION' in module_data:
+            pc = module_data['PHREEQC_CONFIGURATION']
+            H.append('<table class="param-table">')
+            H.append('<tr><th>Setting</th><th>Value</th></tr>')
+            for k, v in pc.items():
+                val = ", ".join(v) if isinstance(v, list) else str(v)
+                H.append(f'<tr><td>{k}</td><td>{val}</td></tr>')
+            H.append('</table>')
+
+    # --- Sorption Isotherm (Freundlich / Langmuir) ---
+    elif mn in ('FREUNDLICH', 'LANGMUIR'):
+        for key, val in module_data.items():
+            if key == 'MODULE_NAME':
+                continue
+            if isinstance(val, dict):
+                H.append(f'<h4>{key}</h4>')
+                H.append('<table class="param-table">')
+                H.append('<tr><th>Parameter</th><th>Value</th></tr>')
+                for pk, pv in val.items():
+                    if isinstance(pv, dict):
+                        for spk, spv in pv.items():
+                            H.append(f'<tr><td>{pk}.{spk}</td>'
+                                     f'<td class="num">{spv}</td></tr>')
+                    else:
+                        H.append(f'<tr><td>{pk}</td>'
+                                 f'<td class="num">{pv}</td></tr>')
+                H.append('</table>')
+
+    # --- Generic fallback ---
+    elif module_data:
+        for key, val in module_data.items():
+            if key == 'MODULE_NAME':
+                continue
+            if isinstance(val, dict):
+                H.append(f'<h4>{key}</h4>')
+                H.append('<table class="param-table">')
+                H.append('<tr><th>Parameter</th><th>Value</th></tr>')
+                for pk, pv in val.items():
+                    H.append(f'<tr><td>{pk}</td><td class="num">{pv}</td></tr>')
+                H.append('</table>')
+            elif isinstance(val, list):
+                H.append(f'<p><strong>{key}:</strong> '
+                         f'[{", ".join(str(x) for x in val)}]</p>')
+            else:
+                H.append(f'<p><strong>{key}:</strong> {val}</p>')
+
+    return H
+
+
 def _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, units):
     """Read HDF5 simulation outputs.
 
@@ -467,6 +655,35 @@ td.num{text-align:right;font-family:'JetBrains Mono',monospace;font-size:.82rem}
 [data-theme="dark"] .highlight-box.success{background:rgba(0,168,107,.08)}
 [data-theme="dark"] .highlight-box.warning{background:rgba(255,107,53,.08)}
 
+/* Module details (collapsible) */
+details.module-details{margin-top:.8rem}
+details.module-details>summary{cursor:pointer;padding:.6rem 1rem;border-radius:8px;
+  background:var(--surface);border:1px solid var(--border);font-weight:600;font-size:.88rem;
+  transition:all .15s;list-style:none;display:flex;align-items:center;gap:.5rem}
+details.module-details>summary::before{content:'\25B8';font-size:.9rem;transition:transform .2s}
+details[open].module-details>summary::before{transform:rotate(90deg)}
+details.module-details>summary:hover{border-color:var(--primary);color:var(--primary)}
+.module-content{padding:1rem;border:1px solid var(--border);border-top:none;
+  border-radius:0 0 12px 12px;background:var(--surface)}
+.module-content h4{font-size:.85rem;font-weight:600;color:var(--text2);margin:1rem 0 .5rem;
+  text-transform:uppercase;letter-spacing:.5px}
+.module-content h4:first-child{margin-top:0}
+table.param-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:.5rem}
+table.param-table th{background:var(--dark);color:#fff;padding:.45rem .7rem;text-align:left;
+  font-size:.7rem;text-transform:uppercase;letter-spacing:.5px}
+[data-theme="dark"] table.param-table th{background:#252640}
+table.param-table td{padding:.4rem .7rem;border-bottom:1px solid var(--border)}
+table.param-table code{font-family:'JetBrains Mono',monospace;font-size:.78rem;
+  background:rgba(0,102,204,.05);padding:.1rem .3rem;border-radius:4px}
+details.nested-details{margin:.5rem 0}
+details.nested-details>summary{cursor:pointer;padding:.4rem .7rem;border-radius:6px;
+  font-size:.82rem;font-weight:500;color:var(--primary);background:rgba(0,102,204,.04);
+  border:1px solid transparent;transition:all .15s;list-style:none;
+  display:flex;align-items:center;gap:.4rem}
+details.nested-details>summary::before{content:'\25B8';font-size:.8rem;transition:transform .2s}
+details[open].nested-details>summary::before{transform:rotate(90deg)}
+details.nested-details>summary:hover{border-color:var(--primary);background:rgba(0,102,204,.08)}
+
 /* Footer */
 .footer{text-align:center;padding:2rem;color:var(--text3);font-size:.78rem;
   border-top:1px solid var(--border)}
@@ -581,7 +798,24 @@ td.num{text-align:right;font-family:'JetBrains Mono',monospace;font-size:.82rem}
     H.append(f'<tr><td>Species</td><td>{", ".join(chemical_species)}</td></tr>')
     cmp_names = ", ".join(compartments_and_cells.keys())
     H.append(f'<tr><td>Compartments</td><td>{cmp_names}</td></tr>')
-    H.append('</table></div></div></div>')
+    H.append('</table></div></div>')
+
+    # Module parameter details (collapsible)
+    for mod_label, mod_name in modules:
+        mod_data = _read_module_json(output_dir, mod_name)
+        if mod_data is None:
+            continue
+        param_html = _render_module_params(mod_data, mod_name)
+        if not param_html:
+            continue
+        H.append(f'<details class="module-details">')
+        H.append(f'<summary>{mod_label}: '
+                 f'<span class="badge badge-primary">{mod_name}</span></summary>')
+        H.append('<div class="module-content">')
+        H.extend(param_html)
+        H.append('</div></details>')
+
+    H.append('</div>')  # close section
 
     # --- SECTION: Basin Map ---
     if geojson_str:
