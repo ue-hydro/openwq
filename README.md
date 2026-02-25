@@ -173,8 +173,24 @@ RUNNING SUMMA-OPENWQ WITH THE CONTAINER:
 -->
 
 ## Supporting Scripts
-* Used for post-processing, calibration, and model configuration
+* Used for model configuration, execution, reporting, calibration, and post-processing
 * See [supporting_scripts](supporting_scripts) folder
+
+### Model Configuration Template
+
+The `model_config_template.py` provides a single-file workflow that can:
+1. **Generate** all OpenWQ JSON configuration files (Sections 1-7)
+2. **Run** the model inside Docker or Apptainer containers (Section 8)
+3. **Generate** an interactive HTML report with maps, charts, and statistics (Section 9)
+
+```bash
+cd supporting_scripts/Model_Config/
+cp model_config_template.py my_project.py
+# Edit my_project.py — set run_model = True, generate_report = True
+python my_project.py   # generates configs → runs model → produces report
+```
+
+The report (`openwq_report.html`) is a self-contained HTML file with interactive Plotly.js time series, Leaflet.js basin maps, spatial statistics, and run metadata.
 
 ### Python Environment Setup
 

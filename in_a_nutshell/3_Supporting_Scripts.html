@@ -290,6 +290,8 @@
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Model Configuration</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Configuration Sections</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Source/Sink Methods</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• <strong>Model Execution</strong> (Docker/Apptainer)</p>
+                            <p style="margin-left: 20px; margin-bottom: 8px;">• <strong>HTML Report Generation</strong></p>
                         </div>
                     </div>
                     <div class="column">
@@ -517,8 +519,8 @@ td_module_dispersion_xyz = [<span class="keyword">0.3</span>, <span class="keywo
                             </ul>
                         </div>
                         <div class="card primary">
-                            <h3>7 Configuration Sections</h3>
-                            <p style="font-size: 0.85rem;">1) General Info · 2) Computational ·<br>3) Initial Conditions · 4) Modules (BGC, TD, LE, TS, SI) · 5) Source/Sink ·<br>6) External Fluxes · 7) Output</p>
+                            <h3>9 Configuration Sections</h3>
+                            <p style="font-size: 0.85rem;">1) General Info · 2) Computational ·<br>3) Initial Conditions · 4) Modules (BGC, TD, LE, TS, SI) · 5) Source/Sink ·<br>6) External Fluxes · 7) Output · <strong>8) Model Execution</strong> · <strong>9) Report</strong></p>
                         </div>
                     </div>
                 </div>
@@ -1066,8 +1068,133 @@ cd /path/to/openwq/ && claude
             </div>
         </div>
 
-        <!-- Slide 20: Summary -->
+        <!-- Slide 20: Model Execution -->
         <div class="slide" data-slide="20">
+            <div class="slide-header">
+                <h2>Model Execution (Section 8)</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.05rem; margin-bottom: 15px;">
+                    The configuration template can now <strong>run the model</strong> directly after generating config files — no separate step needed.
+                </p>
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+<span class="comment"># ======= 8. MODEL EXECUTION (optional) =======</span>
+run_model = <span class="keyword">True</span>
+
+<span class="comment"># Container runtime</span>
+container_runtime = <span class="string">"docker"</span>   <span class="comment"># or "apptainer"</span>
+
+<span class="comment"># Docker settings</span>
+docker_container_name = <span class="string">"docker_openwq"</span>
+
+<span class="comment"># Apptainer settings (for HPC)</span>
+apptainer_sif_path = <span class="string">"/path/to/openwq.sif"</span>
+apptainer_bind_path = <span class="string">"/scratch/user:/code"</span>
+
+<span class="comment"># Executable inside container</span>
+executable_path = <span class="string">"/code/.../mizuroute_openwq_Release"</span>
+
+<span class="comment"># mizuRoute control file inside container</span>
+file_manager_path = <span class="string">"/code/.../mizuroute.control"</span>
+
+<span class="comment"># MPI processes (min 2 for mizuRoute)</span>
+mpi_np = <span class="keyword">2</span>
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>How It Works</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;">Generates all config files (Sections 1-7)</li>
+                                <li style="font-size: 0.9rem;">Maps host paths to container paths via <code>docker-compose.yml</code></li>
+                                <li style="font-size: 0.9rem;">Runs <code>mpirun -np 2</code> inside Docker or Apptainer</li>
+                                <li style="font-size: 0.9rem;">Streams stdout/stderr in real-time</li>
+                                <li style="font-size: 0.9rem;">Saves full log to <code>model_output.log</code></li>
+                            </ul>
+                        </div>
+                        <div class="card accent">
+                            <h3>Supported Runtimes</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;"><strong>Docker</strong> — local development</li>
+                                <li style="font-size: 0.9rem;"><strong>Apptainer</strong> — HPC clusters (SLURM/PBS)</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box" style="margin-top: 10px;">
+                            <strong>Workflow:</strong> <code>python model_config_template.py</code><br>
+                            generates configs + runs the model in one command!
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">20</div>
+            </div>
+        </div>
+
+        <!-- Slide 21: Report Generation -->
+        <div class="slide" data-slide="21">
+            <div class="slide-header">
+                <h2>HTML Report Generation (Section 9)</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.05rem; margin-bottom: 15px;">
+                    After the simulation completes, the template auto-generates an <strong>interactive HTML report</strong>.
+                </p>
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+<span class="comment"># ======= 9. REPORT SETTINGS (optional) =======</span>
+generate_report = <span class="keyword">True</span>
+
+<span class="comment"># River network shapefile (for basin map)</span>
+<span class="comment"># Set None to skip map section</span>
+shapefile_path = <span class="string">"/path/to/river_network.shp"</span>
+shapefile_reach_id_col = <span class="string">"seg_id"</span>
+                        </pre>
+                        <div class="card secondary" style="margin-top: 15px;">
+                            <h3>Report Sections</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;">Model configuration summary table</li>
+                                <li style="font-size: 0.9rem;">Interactive basin map (Leaflet.js)</li>
+                                <li style="font-size: 0.9rem;">Time series charts (Plotly.js)</li>
+                                <li style="font-size: 0.9rem;">Spatial statistics per species</li>
+                                <li style="font-size: 0.9rem;">Source/sink load summary</li>
+                                <li style="font-size: 0.9rem;">Run metadata (runtime, exit code, MPI)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>Features</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;"><strong>Self-contained</strong> — single HTML file, no server needed</li>
+                                <li style="font-size: 0.9rem;"><strong>Interactive</strong> — zoom, hover, pan on all charts and maps</li>
+                                <li style="font-size: 0.9rem;"><strong>Dark/light theme</strong> toggle</li>
+                                <li style="font-size: 0.9rem;"><strong>Optional basin map</strong> — provide a shapefile or skip</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>Output:</strong> <code>{dir2save_input_files}/openwq_report.html</code><br>
+                            Open in any browser — no additional software required!
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 10px;">
+                            <strong>Note:</strong> Report generation requires <code>run_model = True</code>.
+                            The full pipeline is: generate configs → run model → generate report.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">21</div>
+            </div>
+        </div>
+
+        <!-- Slide 22: Summary -->
+        <div class="slide" data-slide="22">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1078,27 +1205,27 @@ cd /path/to/openwq/ && claude
                         <p><code>model_config_template.py</code><br>→ All JSON files auto-generated</p>
                     </div>
                     <div class="card primary" style="text-align: center;">
-                        <h3 style="justify-content: center;">📊 Read & Plot</h3>
-                        <p><code>Read_h5_driver</code> + <code>Plot_h5_driver</code><br>→ Time series at any location</p>
+                        <h3 style="justify-content: center;">🚀 Run</h3>
+                        <p><code>run_model = True</code><br>→ Execute in Docker/Apptainer</p>
                     </div>
                     <div class="card secondary" style="text-align: center;">
-                        <h3 style="justify-content: center;">🗺️ Map</h3>
-                        <p><code>Map_h5_driver</code><br>→ Spatial maps & animated GIFs</p>
+                        <h3 style="justify-content: center;">📊 Report</h3>
+                        <p><code>generate_report = True</code><br>→ Interactive HTML report</p>
                     </div>
                 </div>
                 <div class="highlight-box success" style="margin-top: 25px; text-align: center; font-size: 1.1rem;">
-                    <strong>All scripts in:</strong> <code>supporting_scripts/</code> directory<br>
-                    Use templates as starting points — minimal coding required!
+                    <strong>One command does it all:</strong> <code>python model_config_template.py</code><br>
+                    generates configs → runs the model → produces an interactive report!
                 </div>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">20</div>
+                <div class="page-number">22</div>
             </div>
         </div>
 
-        <!-- Slide 21: Thank You -->
-        <div class="slide title-slide" data-slide="21">
+        <!-- Slide 23: Thank You -->
+        <div class="slide title-slide" data-slide="23">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions & Resources</div>
             <div style="margin-top: 3rem;">
