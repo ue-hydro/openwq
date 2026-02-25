@@ -271,6 +271,18 @@ observation_data_path = "/path/to/calibration_workspace/observations.csv"
 container_runtime = "docker"
 docker_container_name = "docker_openwq"
 docker_compose_path = "/path/to/openwq/containers/docker-compose.yml"
+
+# Executable settings
+executable_name = "mizuroute_lakes_openwq_Release"
+executable_args = ""  # No flags - file manager is positional argument
+executable_full_path = "/code/openwq_code/.../bin/mizuroute_lakes_openwq_Release"
+file_manager_path = "/code/openwq_code/.../mizuroute_in/settings/mizuroute.control"
+
+# Command template (mpirun -np 2 required for mizuRoute domain decomposition)
+command_template = (
+    "cd {eval_dir} && mpirun --allow-run-as-root -np 2 "
+    "-x master_json {exec_path} {file_manager}"
+)
 ```
 
 **For Apptainer (HPC):**
@@ -278,19 +290,35 @@ docker_compose_path = "/path/to/openwq/containers/docker-compose.yml"
 container_runtime = "apptainer"
 apptainer_sif_path = "/path/to/openwq.sif"
 apptainer_bind_path = "/scratch/user/openwq_code:/code"
+
+# Same executable/command settings as Docker
+executable_full_path = "/code/openwq_code/.../bin/mizuroute_lakes_openwq_Release"
+file_manager_path = "/code/openwq_code/.../mizuroute_in/settings/mizuroute.control"
+command_template = (
+    "cd {eval_dir} && mpirun --allow-run-as-root -np 2 "
+    "-x master_json {exec_path} {file_manager}"
+)
+```
+
+**Run Control:**
+```python
+# Set to False to only validate/prepare files without running calibration
+run_calibration_flag = True
 ```
 
 ### Step 5.3: Define Parameters to Calibrate
 
 ```python
 calibration_parameters = [
-    # BGC rate constant (example: nitrification rate)
+    # BGC rate constant (example: nitrification rate in Full N Cycle)
+    # IMPORTANT: Check YOUR openWQ_MODULE_NATIVE_BGC_FLEX.json for exact
+    # framework name, reaction number, key case, and parameter name!
     {
         "name": "k_nitrification",
         "file_type": "bgc_json",
-        "path": ["CYCLING_FRAMEWORKS", "N_cycle", "3", "parameter_values", "k"],
-        "initial": 0.03,
-        "bounds": (0.001, 0.5),
+        "path": ["CYCLING_FRAMEWORKS", "FULL_N_CYCLE", "3", "PARAMETER_VALUES", "k_nitrif1"],
+        "initial": 0.15,
+        "bounds": (0.01, 2.0),
         "transform": "log"  # Use log-space for rate constants
     },
 
@@ -311,7 +339,8 @@ calibration_parameters = [
 **Finding the correct `path` for BGC parameters:**
 1. Open your `openWQ_MODULE_NATIVE_BGC_FLEX.json`
 2. Navigate to the parameter you want to calibrate
-3. The path is the sequence of keys: `["CYCLING_FRAMEWORKS", "cycle_name", "reaction_index", "parameter_values", "param_name"]`
+3. The path is the sequence of JSON keys: `["CYCLING_FRAMEWORKS", "cycle_name", "reaction_number", "parameter_values_key", "param_name"]`
+4. Note: the parameter values key is typically `"PARAMETER_VALUES"` (uppercase) — check your specific JSON file!
 
 ### Step 5.4: Configure Optimization Settings
 

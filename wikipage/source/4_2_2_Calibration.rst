@@ -94,7 +94,7 @@ The framework supports calibration of all major OpenWQ parameter types:
         "file_type": "phreeqc_pqi",
         "path": {"block": "SOLUTION", "species": "N(5)"},
         "initial": 2.0,
-        "bounds": (0.1, 10.0)
+        "bounds": (0.05, 50.0)
     }
 
     # Equilibrium phase partial pressures
@@ -139,7 +139,7 @@ The framework supports calibration of all major OpenWQ parameter types:
         "file_type": "sediment_json",
         "path": {"module": "HYPE_HBVSED", "param": "EROSION_INDEX"},
         "initial": 0.4,
-        "bounds": (0.1, 1.0)
+        "bounds": (0.05, 5.0)
     }
 
     # HYPE_MMF module
@@ -169,8 +169,8 @@ The framework supports calibration of all major OpenWQ parameter types:
         "name": "cropland_TN_coeff",
         "file_type": "ss_copernicus_static",
         "path": {"lulc_class": 10, "species": "TN"},
-        "initial": 20.0,
-        "bounds": (5.0, 50.0)
+        "initial": 15.0,
+        "bounds": (1.0, 30.0)
     }
 
     # Climate response parameters
@@ -667,9 +667,16 @@ Complete Configuration Example
     container_runtime = "docker"  # or "apptainer"
     docker_container_name = "docker_openwq"
     docker_compose_path = "/path/to/docker-compose.yml"
-    executable_name = "mizuroute_lakes_cslm_openwq_fast"
-    executable_args = "-g 1 1"
-    file_manager_path = "/code/.../fileManager.txt"
+    executable_name = "mizuroute_lakes_openwq_Release"
+    executable_args = ""  # No flags - file manager is positional argument
+    executable_full_path = "/code/.../bin/mizuroute_lakes_openwq_Release"
+    file_manager_path = "/code/.../mizuroute_in/settings/mizuroute.control"
+
+    # mpirun -np 2 required for mizuRoute domain decomposition
+    command_template = (
+        "cd {eval_dir} && mpirun --allow-run-as-root -np 2 "
+        "-x master_json {exec_path} {file_manager}"
+    )
 
     # =============================================================================
     # CALIBRATION PARAMETERS
@@ -678,7 +685,7 @@ Complete Configuration Example
         {
             "name": "k_nitrification",
             "file_type": "bgc_json",
-            "path": ["CYCLING_FRAMEWORKS", "N_cycle", "3", "parameter_values", "k"],
+            "path": ["CYCLING_FRAMEWORKS", "N_cycle", "3", "PARAMETER_VALUES", "k"],
             "initial": 0.03,
             "bounds": (0.001, 0.5),
             "transform": "log"
@@ -712,6 +719,11 @@ Complete Configuration Example
     # =============================================================================
     temporal_resolution = "monthly"  # native, daily, weekly, monthly, yearly
     aggregation_method = "mean"      # mean, sum, median, min, max
+
+    # =============================================================================
+    # RUN CONTROL
+    # =============================================================================
+    run_calibration_flag = True  # Set to False to only validate/prepare files
 
 
 Dependencies

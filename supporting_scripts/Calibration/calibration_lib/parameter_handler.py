@@ -154,7 +154,8 @@ class ParameterHandler:
             elif file_type == "ss_csv_scale":
                 self._apply_ss_csv_scale(eval_dir, path, value)
             elif file_type in ("ss_copernicus_static", "ss_copernicus_dynamic"):
-                self._apply_ss_copernicus_coeff(eval_dir, path, value)
+                initial = param.get("initial", None)
+                self._apply_ss_copernicus_coeff(eval_dir, path, value, initial_value=initial)
             elif file_type == "ss_climate_param":
                 self._apply_ss_climate_param(eval_dir, path, value)
             elif file_type == "ss_ml_param":
@@ -649,44 +650,146 @@ class ParameterHandler:
     def _apply_ss_copernicus_coeff(self,
                                    eval_dir: Path,
                                    path: Dict,
-                                   value: float) -> None:
+                                   value: float,
+                                   initial_value: float = None) -> None:
         """
-        Modify Copernicus LULC export coefficients.
+        Modify Copernicus LULC export coefficients in the SS JSON.
 
-        This requires modifying the template config and regenerating the SS JSON.
-        For now, we modify the generated JSON directly if possible.
+        The SS JSON has numbered entries, each with:
+          - CHEMICAL_NAME: species name (e.g., "NH4_N", "TN", "TP")
+          - DATA: dict of rows, each row is a list:
+            [year, month, day, hour, "all", "all", lulc_idx, seg_id, subreach, load, "discrete"]
+
+        The 'value' parameter is the NEW export coefficient. We compute a scale
+        factor relative to the initial coefficient and apply it to all matching
+        load entries.
+
+        Parameters
+        ----------
+        eval_dir : Path
+            Evaluation directory (with freshly-copied SS JSON)
+        path : Dict
+            {"lulc_class": int, "species": str}
+            - lulc_class: LULC index used in the DATA arrays (position 6)
+            - species: species name to match against CHEMICAL_NAME
+              Use "TN"/"TP" to match aggregate species, or specific names
+              like "NH4_N", "NO3_N" to match individual species.
+        value : float
+            New export coefficient value
+        initial_value : float, optional
+            Initial (baseline) export coefficient. If provided, the scale
+            factor = value / initial_value is applied to all matching loads.
+            If None, 'value' is treated as a direct scale factor.
         """
         lulc_class = path.get("lulc_class")
         species = path.get("species")
 
+        # Compute scale factor
+        if initial_value is not None and initial_value > 0:
+            scale_factor = value / initial_value
+        else:
+            scale_factor = value
+
         # Find SS JSON
         ss_files = list((eval_dir / "openwq_in").glob("openWQ_SS_*copernicus*.json"))
         if not ss_files:
-            logger.warning("Copernicus SS JSON not found - may need template regeneration")
+            ss_files = list((eval_dir / "openwq_in").glob("openWQ_SS_*.json"))
+        if not ss_files:
+            logger.warning("SS JSON not found for Copernicus coefficient modification")
             return
 
         ss_file = ss_files[0]
         data, header = self._read_json_with_header(ss_file)
 
-        # The Copernicus SS JSON structure may vary based on the method
-        # Try to find and modify the load coefficient
+        # Also load original (unmodified) SS from test_case_dir for base loads
+        original_ss = self.test_case_dir / "openwq_in" / ss_file.name
+        if original_ss.exists() and original_ss != ss_file:
+            orig_data, _ = self._read_json_with_header(original_ss)
+        else:
+            orig_data = None
+
         modified = False
+        n_modified = 0
+
         for key, entry in data.items():
-            if key == "METADATA":
+            if key == "METADATA" or not isinstance(entry, dict):
                 continue
-            if isinstance(entry, dict):
-                # Check if this entry matches our LULC class and species
-                if entry.get("LULC_CLASS") == lulc_class or \
-                   str(entry.get("LULC_CLASS")) == str(lulc_class):
-                    if "LOAD_COEFFICIENTS" in entry:
-                        if species in entry["LOAD_COEFFICIENTS"]:
-                            entry["LOAD_COEFFICIENTS"][species] = value
-                            modified = True
+
+            chem_name = entry.get("CHEMICAL_NAME", "")
+
+            # Match species: exact match, or "TN" matches N-species, "TP" matches P-species
+            if not self._ss_species_match(chem_name, species):
+                continue
+
+            if "DATA" not in entry:
+                continue
+
+            # Get original entry's DATA for base load values
+            orig_entry_data = None
+            if orig_data and key in orig_data and "DATA" in orig_data[key]:
+                orig_entry_data = orig_data[key]["DATA"]
+
+            for row_key, row in entry["DATA"].items():
+                if not isinstance(row, list) or len(row) < 10:
+                    continue
+
+                # Check LULC class at position 6
+                row_lulc = row[6]
+                if row_lulc != lulc_class and str(row_lulc) != str(lulc_class):
+                    continue
+
+                # Get original base load value
+                if orig_entry_data and row_key in orig_entry_data:
+                    orig_row = orig_entry_data[row_key]
+                    base_load = orig_row[9] if isinstance(orig_row, list) and len(orig_row) > 9 else row[9]
+                else:
+                    base_load = row[9]
+
+                # Apply scale factor to base load
+                row[9] = base_load * scale_factor
+                n_modified += 1
+                modified = True
 
         if modified:
             self._write_json_with_header(ss_file, data, header)
+            logger.debug(f"Modified {n_modified} SS load entries for LULC={lulc_class}, species={species} "
+                        f"(scale_factor={scale_factor:.4f})")
         else:
-            logger.warning(f"Could not find Copernicus coefficient for LULC={lulc_class}, species={species}")
+            logger.warning(f"Could not find SS entries for LULC={lulc_class}, species={species}")
+
+    @staticmethod
+    def _ss_species_match(chem_name: str, target_species: str) -> bool:
+        """
+        Check if a SS entry's CHEMICAL_NAME matches the target species.
+
+        Supports exact match and aggregate matching:
+          - "TN" matches TN, NH4_N, NO3_N, NO2_N, DON, PON (all N species)
+          - "TP" matches TP, PO4_P (all P species)
+          - Exact names match directly (e.g., "NH4_N" matches "NH4_N")
+        """
+        if not chem_name or not target_species:
+            return False
+
+        chem_upper = chem_name.upper()
+        target_upper = target_species.upper()
+
+        # Exact match
+        if chem_upper == target_upper:
+            return True
+
+        # Aggregate TN matches all nitrogen species
+        if target_upper == "TN":
+            n_species = {"TN", "NH4_N", "NO3_N", "NO2_N", "DON", "PON",
+                        "NH4-N", "NO3-N", "NO2-N", "N_ORG_ACTIVE", "N_ORG_PASSIVE"}
+            return chem_upper in n_species
+
+        # Aggregate TP matches all phosphorus species
+        if target_upper == "TP":
+            p_species = {"TP", "PO4_P", "PO4-P", "P_ORG_ACTIVE", "P_ORG_PASSIVE",
+                        "P_INORG", "DIP", "DOP"}
+            return chem_upper in p_species
+
+        return False
 
     # =========================================================================
     # Source/Sink: Climate Parameters
