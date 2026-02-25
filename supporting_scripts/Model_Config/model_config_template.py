@@ -80,7 +80,7 @@ ic_all_units = "mg/l"      # units of ic_all_value
 bgc_module_name = "NATIVE_BGC_FLEX"
 
 # -- NATIVE_BGC_FLEX --
-path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/examples_BGC_frameworks/openWQ_Ncycling_example.json"
+path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/BGC_templates/NATIVE_BGC_FLEX/popular_models/SWAT_full_nutrients.json"
 
 # -- PHREEQC --
 # See wiki: https://openwq.readthedocs.io (Modules > PHREEQC)
@@ -349,11 +349,122 @@ compartments_and_cells = {
 }
 
 
+# ====================== 8. MODEL EXECUTION (optional) ========================
+# Set run_model = True to run the model after generating config files.
+# Requires Docker or Apptainer to be set up and the container running.
+#
+# IMPORTANT:
+#   - mpirun -np 2 is REQUIRED: mizuRoute domain decomposition needs >=2 MPI processes
+#   - --allow-run-as-root: needed inside Docker/Apptainer containers
+#   - The model reads openWQ_master.json from the CWD (set by cd to dir2save_input_files)
+#   - All paths in master JSON are relative (openwq_in/...), so they resolve from CWD
+
+run_model = False
+
+# Container runtime: "docker" or "apptainer"
+container_runtime = "docker"
+
+# Docker settings
+docker_container_name = "docker_openwq"
+
+# Apptainer settings (for HPC)
+apptainer_sif_path = "/path/to/openwq.sif"
+apptainer_bind_path = "/scratch/user/openwq_code:/code"  # host:container
+
+# Executable path (absolute path INSIDE the container)
+executable_path = (
+    "/code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/"
+    "mizuroute_lakes_openwq_Release"
+)
+
+# mizuRoute control file path (absolute path INSIDE the container)
+file_manager_path = (
+    "/code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/"
+    "mizuroute_in/BakerCreek_2x2_example/settings/"
+    "testCase_cameo_case3.control_E5evap"
+)
+
+# MPI processes (minimum 2 for mizuRoute domain decomposition)
+mpi_np = 2
+
+
+# ====================== 9. REPORT SETTINGS (optional) ========================
+# Generate an HTML report after the simulation completes.
+# The report includes: model configuration summary, basin map, time series,
+# spatial statistics, and source/sink summary.
+
+generate_report = True
+
+# Path to river network shapefile or GeoPackage (for interactive basin map)
+# Set to None if no spatial data available — map section will be skipped
+shapefile_path = None    # e.g., "/path/to/river_network.shp" or "*.gpkg"
+shapefile_reach_id_col = "seg_id"   # Column in shapefile containing reach IDs
+
+
 # ============================================================================
 # DO NOT EDIT BELOW THIS LINE -- Collects settings and generates input files
 # ============================================================================
 
-# Gather all configuration variables and call the generator
+from Run_Model import run_model_in_container
+from Gen_Report import generate_report as _generate_report
+
+# 1) Generate configuration files
+_excluded = {'sys', 'os', 'gJSON_lib', 'uniform_param',
+             'run_model_in_container', '_generate_report'}
 _config = {k: v for k, v in locals().items()
-           if not k.startswith('_') and k not in ('sys', 'os', 'gJSON_lib', 'uniform_param')}
+           if not k.startswith('_') and k not in _excluded}
 gJSON_lib.Gen_Input_Driver(**_config)
+
+print("\n" + "=" * 60)
+print("CONFIG FILES GENERATED SUCCESSFULLY")
+print("=" * 60)
+print(f"  Output directory: {dir2save_input_files}")
+print(f"  Master JSON:      {dir2save_input_files}/openWQ_master.json")
+print(f"  Input files:      {dir2save_input_files}/openwq_in/")
+
+# 2) Run model (optional)
+_elapsed = 0.0
+if run_model:
+    _elapsed = run_model_in_container(
+        dir2save_input_files=dir2save_input_files,
+        container_runtime=container_runtime,
+        executable_path=executable_path,
+        file_manager_path=file_manager_path,
+        mpi_np=mpi_np,
+        docker_container_name=docker_container_name,
+        apptainer_sif_path=apptainer_sif_path,
+        apptainer_bind_path=apptainer_bind_path,
+    )
+
+# 3) Generate report (optional)
+if generate_report and run_model:
+    _generate_report(
+        dir2save_input_files=dir2save_input_files,
+        project_name=project_name,
+        authors=authors,
+        date=date,
+        comment=comment,
+        bgc_module_name=bgc_module_name,
+        td_module_name=td_module_name,
+        le_module_name=le_module_name,
+        ts_module_name=ts_module_name,
+        si_module_name=si_module_name,
+        ss_method=ss_method,
+        solver=solver,
+        chemical_species=chemical_species,
+        units=units,
+        compartments_and_cells=compartments_and_cells,
+        timestep=timestep,
+        shapefile_path=shapefile_path,
+        shapefile_reach_id_col=shapefile_reach_id_col,
+        container_runtime=container_runtime,
+        mpi_np=mpi_np,
+        run_time_seconds=_elapsed,
+    )
+elif generate_report and not run_model:
+    print("\n  NOTE: Report generation requires run_model = True.")
+    print("  Set run_model = True to generate configs, run the model, AND produce a report.")
+
+print("\n" + "=" * 60)
+print("DONE")
+print("=" * 60)
