@@ -53,8 +53,7 @@ comment = "This a demonstration input file setup"
 hostmodel = "mizuroute"   # "mizuroute" or "summa"
 
 # Directory to save generated input files
-dir2save_input_files = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case_2/"
-
+dir2save_input_files = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/"
 # Docker: set True when running inside the Docker container.
 # Paths are auto-corrected from host to container using docker-compose.yml volume mount.
 running_on_docker = True
@@ -180,7 +179,7 @@ si_species_params = None
 #   "none"                                      - No source/sink
 # Note: When using PHREEQC, set "none" unless CSV references valid PHREEQC components.
 
-ss_method = "load_from_csv"
+ss_method = "using_copernicus_lulc_with_static_coeff"
 
 # -- Common metadata --
 ss_metadata_source = "Just for demonstration"
@@ -359,7 +358,7 @@ compartments_and_cells = {
 #   - The model reads openWQ_master.json from the CWD (set by cd to dir2save_input_files)
 #   - All paths in master JSON are relative (openwq_in/...), so they resolve from CWD
 
-run_model = False
+run_model = True
 
 # Container runtime: "docker" or "apptainer"
 container_runtime = "docker"
@@ -374,7 +373,7 @@ apptainer_bind_path = "/scratch/user/openwq_code:/code"  # host:container
 # Executable path (absolute path INSIDE the container)
 executable_path = (
     "/code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/"
-    "mizuroute_lakes_openwq_Release"
+    "mizuroute_openwq_Release"
 )
 
 # mizuRoute control file path (absolute path INSIDE the container)
