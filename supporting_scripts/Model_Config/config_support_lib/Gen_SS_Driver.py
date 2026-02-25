@@ -662,11 +662,16 @@ class OptimizedLULCAnalyzer:
             spinner_thread.start()
 
             try:
+                # Choose a nodata value compatible with the raster dtype
+                if src.nodata is not None:
+                    _nodata = src.nodata
+                else:
+                    _nodata = 0 if np.issubdtype(src.dtypes[0], np.unsignedinteger) else -9999
                 out_image, out_transform = rasterio_mask(
                     src,
                     [basin_boundary],
                     crop=True,
-                    nodata=src.nodata if src.nodata is not None else -9999
+                    nodata=_nodata
                 )
             finally:
                 stop_spinner.set()
