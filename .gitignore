@@ -25,3 +25,6 @@ __pycache__/
 
 # Sphinx build output (ReadTheDocs builds this automatically)
 wikipage/build/
+
+# Century basins scripts (project-specific, not for distribution)
+supporting_scripts/Calibration/century_basins_scripts/

@@ -108,13 +108,38 @@ data = read_openwq_hdf5.load_results("output.h5")
 - `transport_json`: Dispersion coefficients
 
 ## Docker/Apptainer Execution
+
+**IMPORTANT**: mizuRoute requires `mpirun -np 2` (minimum 2 MPI processes) for domain decomposition. The executable takes a positional argument (path to `mizuroute.control`), NOT flags like `-g 1 1`.
+
 ```bash
-# Docker (local)
-docker-compose up
+# Docker (local) - start container
+cd containers && docker compose up -d
+
+# Run model inside Docker
+docker exec -e master_json=/path/to/openWQ_master.json docker_openwq \
+  mpirun --allow-run-as-root -np 2 -x master_json \
+  /code/.../bin/mizuroute_lakes_openwq_Release \
+  /code/.../mizuroute_in/settings/mizuroute.control
 
 # Apptainer (HPC)
-apptainer exec openwq.sif ./mizuroute_openwq -g 1 1
+mpirun -np 2 apptainer exec openwq.sif \
+  /path/to/mizuroute_lakes_openwq_Release \
+  /path/to/mizuroute.control
 ```
+
+## Calibration Workflow
+
+The calibration is driven entirely through the template:
+1. Copy `calibration_config_template.py` to your working directory
+2. Edit all sections (paths, container, parameters, settings)
+3. Set `run_calibration_flag = True` (Section 7) to run, or `False` to only validate
+4. Run: `python my_calibration.py`
+
+Key template settings:
+- `executable_full_path`: Full path to executable inside container
+- `file_manager_path`: Path to `mizuroute.control` inside container
+- `command_template`: Shell command with `{eval_dir}`, `{exec_path}`, `{file_manager}` placeholders
+- `run_calibration_flag`: Controls whether calibration runs or just validates
 
 ## Code Conventions
 - C++ source uses OpenMP for parallelization

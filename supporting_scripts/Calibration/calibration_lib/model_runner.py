@@ -44,8 +44,8 @@ class ModelRunner:
                  docker_compose_path: str = None,
                  apptainer_sif_path: str = None,
                  apptainer_bind_path: str = None,
-                 executable_name: str = "mizuroute_lakes_cslm_openwq_fast",
-                 executable_args: str = "-g 1 1",
+                 executable_name: str = "mizuroute_lakes_openwq_Release",
+                 executable_args: str = "",
                  file_manager_path: str = None,
                  executable_full_path: str = None,
                  command_template: str = None,
@@ -77,7 +77,7 @@ class ModelRunner:
         command_template : str, optional
             Custom command template using placeholders:
             {eval_dir}, {exec_path}, {master_json}, {file_manager}, {args}.
-            Default: "cd {eval_dir} && {exec_path} {args} -m {file_manager}"
+            Default: "cd {eval_dir} && mpirun --allow-run-as-root -np 2 -x master_json {exec_path} {file_manager}"
         timeout_seconds : int
             Maximum execution time
         """
@@ -202,7 +202,10 @@ class ModelRunner:
                 args=self.executable_args or ""
             )
         else:
-            shell_cmd = f"cd {container_eval_dir} && {exec_path} {self.executable_args} -m {self.file_manager_path}"
+            shell_cmd = (
+                f"cd {container_eval_dir} && mpirun --allow-run-as-root -np 2 "
+                f"-x master_json {exec_path} {self.file_manager_path}"
+            )
 
         cmd = [
             "docker", "exec",
