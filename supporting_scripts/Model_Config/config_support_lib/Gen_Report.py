@@ -439,6 +439,7 @@ def generate_simulation_report(
         authors,
         date,
         comment,
+        hostmodel,
         bgc_module_name,
         td_module_name,
         le_module_name,
@@ -455,6 +456,7 @@ def generate_simulation_report(
         container_runtime="docker",
         mpi_np=2,
         run_time_seconds=0.0,
+        model_was_run=True,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -463,8 +465,10 @@ def generate_simulation_report(
     report_path = os.path.join(output_dir, "openwq_report.html")
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    print(f"  Reading HDF5 outputs...")
-    results = _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, units)
+    results = {}
+    if model_was_run:
+        print(f"  Reading HDF5 outputs...")
+        results = _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, units)
 
     # Spatial statistics
     spatial_stats = _compute_spatial_stats(results)
@@ -476,26 +480,64 @@ def generate_simulation_report(
     ss_config_path = os.path.join(output_dir, 'openwq_in',
                                   f'openWQ_SS_{ss_method}.json')
     ss_summary = []
+    ss_metadata = {}
     if os.path.isfile(ss_config_path):
         try:
             with open(ss_config_path, 'r') as f:
-                # Skip comment lines
-                lines = [l for l in f.readlines() if not l.strip().startswith('//')]
+                lines = [l for l in f.readlines()
+                         if not l.strip().startswith('//')]
                 ss_data = json.loads(''.join(lines))
+
+            # Extract metadata block
+            if 'METADATA' in ss_data:
+                ss_metadata = ss_data['METADATA']
+
+            # Entries are stored under numeric keys ("1", "2", ...)
+            # or under a "SINKSOURCE" wrapper (legacy format)
+            entries_dict = ss_data
             if 'SINKSOURCE' in ss_data:
-                for key, entry in ss_data['SINKSOURCE'].items():
-                    if isinstance(entry, dict):
-                        ss_summary.append({
-                            'chemical': entry.get('CHEMICAL_NAME', 'N/A'),
-                            'compartment': entry.get('COMPARTMENT_NAME', 'N/A'),
-                            'type': entry.get('TYPE', 'N/A'),
-                            'units': entry.get('UNITS', 'N/A'),
-                        })
+                entries_dict = ss_data['SINKSOURCE']
+
+            for key, entry in entries_dict.items():
+                if key == 'METADATA' or not isinstance(entry, dict):
+                    continue
+                if 'CHEMICAL_NAME' not in entry:
+                    continue
+
+                # Parse DATA block for statistics
+                data_block = entry.get('DATA', {})
+                n_entries = len(data_block)
+                cells = set()
+                years = set()
+                total_load = 0.0
+                for _dk, row in data_block.items():
+                    if isinstance(row, list) and len(row) >= 10:
+                        years.add(row[0])
+                        cells.add(str(row[6]))  # cell_id or ix
+                        try:
+                            total_load += float(row[9])
+                        except (ValueError, TypeError):
+                            pass
+
+                ss_summary.append({
+                    'chemical': entry.get('CHEMICAL_NAME', 'N/A'),
+                    'compartment': entry.get('COMPARTMENT_NAME', 'N/A'),
+                    'type': entry.get('TYPE', 'N/A'),
+                    'units': entry.get('UNITS', 'N/A'),
+                    'data_format': entry.get('DATA_FORMAT', ''),
+                    'comment': entry.get('COMMENT', ''),
+                    'n_entries': n_entries,
+                    'n_cells': len(cells),
+                    'year_range': (min(years), max(years)) if years else None,
+                    'total_load': total_load,
+                })
         except Exception as e:
             print(f"  WARNING: Could not parse SS config: {e}")
 
     # Format runtime
-    if run_time_seconds >= 3600:
+    if not model_was_run:
+        runtime_str = "Not executed"
+    elif run_time_seconds >= 3600:
         runtime_str = f"{run_time_seconds/3600:.1f} hours"
     elif run_time_seconds >= 60:
         runtime_str = f"{run_time_seconds/60:.1f} min"
@@ -609,7 +651,8 @@ a{color:var(--primary);text-decoration:none}
   background:linear-gradient(90deg,var(--primary),var(--secondary))}
 .kpi .icon{font-size:1.6rem;margin-bottom:.4rem}
 .kpi .value{font-size:1.5rem;font-weight:700;color:var(--primary);
-  font-family:'JetBrains Mono',monospace}
+  font-family:'JetBrains Mono',monospace;overflow-wrap:break-word;word-break:break-word;
+  font-size:clamp(.85rem,3.5vw,1.5rem)}
 .kpi .label{font-size:.7rem;color:var(--text3);text-transform:uppercase;
   letter-spacing:.8px;margin-top:.3rem}
 
@@ -709,6 +752,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
     # --- SIDEBAR ---
     nav_items = [
+        ('project', 'Project'),
         ('summary', 'Summary'),
         ('config', 'Configuration'),
     ]
@@ -719,7 +763,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     if spatial_stats:
         nav_items.append(('spatial', 'Spatial Statistics'))
     if ss_summary:
-        nav_items.append(('sources', 'Source/Sink'))
+        nav_items.append(('sources', 'Source/Sink Setup'))
     nav_items.append(('metadata', 'Run Metadata'))
 
     H.append('<div class="layout">')
@@ -753,11 +797,25 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 <div class="meta">
 <span>Authors: {authors}</span>
 <span>Date: {date}</span>
+<span>Host Model: {hostmodel}</span>
 <span>Report: {now}</span>
 </div>
 </div>""")
 
     H.append('<div class="container">')
+
+    # --- SECTION: Project Information ---
+    H.append(f"""<div class="section" id="project">
+<h2>Project Information</h2>
+<div class="card primary"><div class="table-wrap"><table>
+<tr><th>Property</th><th>Value</th></tr>
+<tr><td>Project Name</td><td><strong>{project_name}</strong></td></tr>
+<tr><td>Authors</td><td>{authors}</td></tr>
+<tr><td>Description</td><td>{comment}</td></tr>
+<tr><td>Host Model</td><td><span class="badge badge-primary">{hostmodel}</span></td></tr>
+<tr><td>Date</td><td>{date}</td></tr>
+</table></div></div>
+</div>""")
 
     # --- SECTION: Summary KPIs ---
     n_species = len(chemical_species)
@@ -777,6 +835,15 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 <div class="kpi"><div class="icon">&#x1f552;</div><div class="value">{timestep[0]} {timestep[1]}</div><div class="label">Output Timestep</div></div>
 </div>
 </div>""")
+
+    # Notice when model was not run
+    if not model_was_run:
+        H.append("""<div class="section visible" style="margin-bottom:1.5rem">
+<div class="highlight-box warning">
+<strong>Configuration-only report</strong> &mdash; The model was not executed.
+This report shows the selected modules and their parameters.
+Time series, spatial statistics, and runtime metadata are not available.
+</div></div>""")
 
     # --- SECTION: Configuration ---
     modules = [
@@ -856,28 +923,60 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
     # --- SECTION: Source/Sink Summary ---
     if ss_summary:
-        H.append('<div class="section" id="sources"><h2>Source/Sink Summary</h2>')
+        H.append('<div class="section" id="sources"><h2>Source/Sink Setup</h2>')
+
+        # Metadata card
+        if ss_metadata:
+            H.append('<div class="card primary" style="margin-bottom:1rem">'
+                     '<div class="table-wrap"><table>')
+            H.append('<tr><th>Property</th><th>Value</th></tr>')
+            H.append(f'<tr><td>Method</td><td><span class="badge badge-secondary">'
+                     f'{ss_method}</span></td></tr>')
+            for mk, mv in ss_metadata.items():
+                H.append(f'<tr><td>{mk}</td><td>{mv}</td></tr>')
+            H.append('</table></div></div>')
+
+        # Per-species detail table
         H.append('<div class="card accent"><div class="table-wrap"><table>')
-        H.append('<tr><th>Chemical</th><th>Compartment</th><th>Type</th><th>Units</th></tr>')
+        H.append('<tr><th>Chemical</th><th>Compartment</th><th>Type</th>'
+                 '<th>Units</th><th>Cells</th><th>Period</th>'
+                 '<th>Entries</th><th>Total Load</th></tr>')
         for entry in ss_summary:
-            H.append(f'<tr><td>{entry["chemical"]}</td><td>{entry["compartment"]}</td>'
-                     f'<td>{entry["type"]}</td><td>{entry["units"]}</td></tr>')
-        H.append('</table></div></div></div>')
+            yr = entry.get('year_range')
+            period = f"{yr[0]}&ndash;{yr[1]}" if yr and yr[0] != yr[1] else (
+                str(yr[0]) if yr else 'N/A')
+            total = entry.get('total_load', 0)
+            total_str = f"{total:.4g}" if total else "0"
+            H.append(
+                f'<tr><td>{entry["chemical"]}</td>'
+                f'<td>{entry["compartment"]}</td>'
+                f'<td>{entry["type"]}</td>'
+                f'<td>{entry["units"]}</td>'
+                f'<td class="num">{entry.get("n_cells", "N/A")}</td>'
+                f'<td>{period}</td>'
+                f'<td class="num">{entry.get("n_entries", "N/A")}</td>'
+                f'<td class="num">{total_str} {entry["units"]}</td></tr>')
+        H.append('</table></div></div>')
+
+        H.append('</div>')
 
     # --- SECTION: Run Metadata ---
-    H.append(f"""<div class="section" id="metadata">
-<h2>Run Metadata</h2>
-<div class="card primary"><div class="table-wrap"><table>
-<tr><th>Property</th><th>Value</th></tr>
-<tr><td>Container Runtime</td><td>{container_runtime}</td></tr>
-<tr><td>MPI Processes</td><td>{mpi_np}</td></tr>
-<tr><td>Runtime</td><td>{runtime_str}</td></tr>
-<tr><td>Output Directory</td><td style="font-family:monospace;font-size:.8rem">{output_dir}</td></tr>
-<tr><td>Report Generated</td><td>{now}</td></tr>
-<tr><td>Solver</td><td>{solver}</td></tr>
-<tr><td>Output Timestep</td><td>{timestep[0]} {timestep[1]}</td></tr>
-</table></div></div>
-</div>""")
+    H.append('<div class="section" id="metadata"><h2>Run Metadata</h2>')
+    H.append('<div class="card primary"><div class="table-wrap"><table>')
+    H.append('<tr><th>Property</th><th>Value</th></tr>')
+    if model_was_run:
+        H.append(f'<tr><td>Container Runtime</td><td>{container_runtime}</td></tr>')
+        H.append(f'<tr><td>MPI Processes</td><td>{mpi_np}</td></tr>')
+        H.append(f'<tr><td>Runtime</td><td>{runtime_str}</td></tr>')
+    else:
+        H.append('<tr><td>Model Execution</td>'
+                 '<td><span class="badge badge-none">Not executed</span></td></tr>')
+    H.append(f'<tr><td>Output Directory</td>'
+             f'<td style="font-family:monospace;font-size:.8rem">{output_dir}</td></tr>')
+    H.append(f'<tr><td>Report Generated</td><td>{now}</td></tr>')
+    H.append(f'<tr><td>Solver</td><td>{solver}</td></tr>')
+    H.append(f'<tr><td>Output Timestep</td><td>{timestep[0]} {timestep[1]}</td></tr>')
+    H.append('</table></div></div></div>')
 
     H.append('</div>')  # container
 
@@ -1057,6 +1156,7 @@ def generate_report(
         authors,
         date,
         comment,
+        hostmodel,
         bgc_module_name,
         td_module_name,
         le_module_name,
@@ -1073,6 +1173,7 @@ def generate_report(
         container_runtime="docker",
         mpi_np=2,
         run_time_seconds=0.0,
+        model_was_run=True,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -1092,6 +1193,7 @@ def generate_report(
             authors=authors,
             date=date,
             comment=comment,
+            hostmodel=hostmodel,
             bgc_module_name=bgc_module_name,
             td_module_name=td_module_name,
             le_module_name=le_module_name,
@@ -1108,6 +1210,7 @@ def generate_report(
             container_runtime=container_runtime,
             mpi_np=mpi_np,
             run_time_seconds=run_time_seconds,
+            model_was_run=model_was_run,
         )
 
         print(f"  Report saved: {report_path}")
