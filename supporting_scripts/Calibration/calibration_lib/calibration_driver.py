@@ -62,9 +62,11 @@ def run_calibration(
         docker_compose_path: str = None,
         apptainer_sif_path: str = None,
         apptainer_bind_path: str = None,
-        executable_name: str = "mizuroute_lakes_cslm_openwq_fast",
-        executable_args: str = "-g 1 1",
+        executable_name: str = "mizuroute_lakes_openwq_Release",
+        executable_args: str = "",
         file_manager_path: str = None,
+        executable_full_path: str = None,
+        command_template: str = None,
 
         # Calibration parameters
         calibration_parameters: List[Dict] = None,
@@ -158,8 +160,8 @@ def run_calibration(
         executable_name=executable_name,
         executable_args=executable_args,
         file_manager_path=file_manager_path,
-        executable_full_path=kwargs.get("executable_full_path"),
-        command_template=kwargs.get("command_template")
+        executable_full_path=executable_full_path,
+        command_template=command_template
     )
 
     # H5 reader path for objective function
@@ -678,8 +680,8 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         docker_compose_path=kwargs.get('docker_compose_path'),
         apptainer_sif_path=kwargs.get('apptainer_sif_path'),
         apptainer_bind_path=kwargs.get('apptainer_bind_path'),
-        executable_name=kwargs.get('executable_name', "mizuroute_lakes_cslm_openwq_fast"),
-        executable_args=kwargs.get('executable_args', "-g 1 1"),
+        executable_name=kwargs.get('executable_name', "mizuroute_lakes_openwq_Release"),
+        executable_args=kwargs.get('executable_args', ""),
         file_manager_path=kwargs.get('file_manager_path'),
         executable_full_path=kwargs.get('executable_full_path'),
         command_template=kwargs.get('command_template')
