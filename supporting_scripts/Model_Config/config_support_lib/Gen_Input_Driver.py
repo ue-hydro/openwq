@@ -361,29 +361,23 @@ def Gen_Input_Driver(
     ewf_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_EWF_fixed_value.json")
     output_file_fullpath = os.path.join(f'{dir2save_input_files}', "openwq_out/")
 
-    # When running_on_docker, create Docker-corrected paths for JSON content
-    # These paths are what OpenWQ sees at runtime inside the container
-    if running_on_docker and _docker_host_root and _docker_container_root:
-        docker_config_file_fullpath = _correct_path_for_docker(config_file_fullpath, _docker_host_root, _docker_container_root)
-        docker_bgc_config_filepath = _correct_path_for_docker(bgc_config_filepath, _docker_host_root, _docker_container_root)
-        docker_td_config_filepath = _correct_path_for_docker(td_config_filepath, _docker_host_root, _docker_container_root)
-        docker_le_config_filepath = _correct_path_for_docker(le_config_filepath, _docker_host_root, _docker_container_root)
-        docker_ts_config_filepath = _correct_path_for_docker(ts_config_filepath, _docker_host_root, _docker_container_root)
-        docker_si_config_filepath = _correct_path_for_docker(si_config_filepath, _docker_host_root, _docker_container_root)
-        docker_ss_config_filepath = _correct_path_for_docker(ss_config_filepath, _docker_host_root, _docker_container_root)
-        docker_ewf_config_filepath = _correct_path_for_docker(ewf_config_filepath, _docker_host_root, _docker_container_root)
-        docker_output_file_fullpath = _correct_path_for_docker(output_file_fullpath, _docker_host_root, _docker_container_root)
-    else:
-        # No Docker correction — JSON content paths are the same as host paths
-        docker_config_file_fullpath = config_file_fullpath
-        docker_bgc_config_filepath = bgc_config_filepath
-        docker_td_config_filepath = td_config_filepath
-        docker_le_config_filepath = le_config_filepath
-        docker_ts_config_filepath = ts_config_filepath
-        docker_si_config_filepath = si_config_filepath
-        docker_ss_config_filepath = ss_config_filepath
-        docker_ewf_config_filepath = ewf_config_filepath
-        docker_output_file_fullpath = output_file_fullpath
+    # =============================================
+    # RELATIVE PATHS for master JSON content
+    # =============================================
+    # The master JSON uses RELATIVE paths (openwq_in/..., openwq_out/) so it is
+    # portable across Docker, Apptainer, and native execution. The coupled model
+    # (OpenWQ_hydrolink.cpp) reads "openWQ_master.json" from the CWD, so all paths
+    # inside it resolve relative to where the master JSON lives.
+    # This replaces the old Docker absolute-path correction for master JSON content.
+    rel_config_file = "openwq_in/openWQ_config.json"
+    rel_bgc_config  = f"openwq_in/openWQ_MODULE_{bgc_module_name}.json"
+    rel_td_config   = f"openwq_in/openWQ_MODULE_{td_module_name}.json"
+    rel_le_config   = f"openwq_in/openWQ_MODULE_{le_module_name}.json"
+    rel_ts_config   = f"openwq_in/openWQ_MODULE_{ts_module_name}.json"
+    rel_si_config   = f"openwq_in/openWQ_MODULE_{si_module_name}.json"
+    rel_ss_config   = f"openwq_in/openWQ_SS_{ss_method}.json"
+    rel_ewf_config  = f"openwq_in/openWQ_EWF_fixed_value.json"
+    rel_output      = "openwq_out/"
 
     ###############
     # Call create_master_json
@@ -391,16 +385,16 @@ def Gen_Input_Driver(
 
     mJSON_lib.create_master_json(
         json_header_comment=json_header_comment,
-        master_file_fullpath=master_file_fullpath,           # Host path: where to write the file
-        config_file_fullpath=docker_config_file_fullpath,    # Docker path: embedded in JSON content
-        bgc_config_filepath=docker_bgc_config_filepath,
-        td_config_filepath=docker_td_config_filepath,
-        le_config_filepath=docker_le_config_filepath,
-        ts_config_filepath=docker_ts_config_filepath,
-        si_config_filepath=docker_si_config_filepath,
-        ss_config_filepath=docker_ss_config_filepath,
-        ewf_config_filepath=docker_ewf_config_filepath,
-        output_file_fullpath=docker_output_file_fullpath,
+        master_file_fullpath=master_file_fullpath,   # Host path: where to write the file
+        config_file_fullpath=rel_config_file,        # Relative path: embedded in JSON content
+        bgc_config_filepath=rel_bgc_config,
+        td_config_filepath=rel_td_config,
+        le_config_filepath=rel_le_config,
+        ts_config_filepath=rel_ts_config,
+        si_config_filepath=rel_si_config,
+        ss_config_filepath=rel_ss_config,
+        ewf_config_filepath=rel_ewf_config,
+        output_file_fullpath=rel_output,
         project_name=project_name,
         geographical_location=geographical_location,
         authors=authors,
