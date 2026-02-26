@@ -518,7 +518,8 @@ class OptimizedLULCAnalyzer:
             print(f"Processing: {Path(nc_file).name}")
             print(f"{'=' * 60}")
 
-            if convert_to_tiff:
+            is_already_tif = str(nc_file).lower().endswith(('.tif', '.tiff'))
+            if convert_to_tiff and not is_already_tif:
                 # Convert to GeoTIFF
                 tiff_path = self.netcdf_to_geotiff(nc_file)
                 raster_path = tiff_path
@@ -561,7 +562,8 @@ class OptimizedLULCAnalyzer:
             print(f"Processing: {Path(nc_file).name}")
             print(f"{'=' * 60}")
 
-            if convert_to_tiff:
+            is_already_tif = str(nc_file).lower().endswith(('.tif', '.tiff'))
+            if convert_to_tiff and not is_already_tif:
                 # Convert to GeoTIFF in temporary location
                 tiff_path = self.netcdf_to_geotiff(nc_file, use_temp=True)
                 raster_path = tiff_path
@@ -768,16 +770,237 @@ class OptimizedLULCAnalyzer:
             print(f"  {year}: {area:10.2f} km²")
 
 
+def _clip_netcdf_to_bbox(src_path: str, dst_path: str,
+                         bbox: List[float]) -> None:
+    """Clip a global NetCDF/GeoTIFF raster to a bounding box using rasterio.
+
+    Uses a windowed read so only the basin extent is loaded into memory,
+    even for multi-GB global files.  For ESA CCI LC NetCDF files the land-
+    cover data lives in the ``lccs_class`` subdataset; this function detects
+    that automatically.
+
+    Parameters
+    ----------
+    src_path : str
+        Path to the source raster (NetCDF or GeoTIFF).
+    dst_path : str
+        Path where the clipped raster will be saved (GeoTIFF).
+    bbox : list of float
+        Bounding box as ``[west, south, east, north]`` in the raster's CRS
+        (assumed WGS84 / EPSG:4326).
+    """
+    from rasterio.windows import from_bounds
+    from rasterio.crs import CRS
+
+    west, south, east, north = bbox
+
+    # For NetCDF files with subdatasets, open the land-cover subdataset
+    open_path = src_path
+    if src_path.lower().endswith('.nc'):
+        with rasterio.open(src_path) as probe:
+            if hasattr(probe, 'subdatasets') and probe.subdatasets:
+                # Prefer lccs_class, fall back to first subdataset
+                for sd in probe.subdatasets:
+                    if 'lccs_class' in sd:
+                        open_path = sd
+                        break
+                else:
+                    open_path = probe.subdatasets[0]
+
+    with rasterio.open(open_path) as src:
+        # Compute the pixel window that covers the bounding box
+        window = from_bounds(west, south, east, north, src.transform)
+        # Round to integer pixel indices
+        window = window.round_offsets().round_lengths()
+
+        # Read only the bands we need (windowed — memory-efficient)
+        data = src.read(window=window)
+        transform = src.window_transform(window)
+
+        # Determine CRS — ESA CCI LC uses WGS84 but may not embed it
+        crs = src.crs if src.crs is not None else CRS.from_epsg(4326)
+
+        profile = src.profile.copy()
+        profile.update(
+            driver='GTiff',
+            height=data.shape[1],
+            width=data.shape[2],
+            transform=transform,
+            crs=crs,
+            compress='lzw',
+        )
+        # Remove NetCDF-specific keys if present
+        for key in ['crs_wkt']:
+            profile.pop(key, None)
+
+        with rasterio.open(dst_path, 'w', **profile) as dst:
+            dst.write(data)
+
+
+def _download_copernicus_lc_from_cds(
+        basin_shapefile_path: str,
+        years: List[int],
+        cache_dir: str,
+) -> str:
+    """Download ESA CCI Land Cover data from the Copernicus Climate Data Store.
+
+    Downloads the global file for each needed year, then clips locally to the
+    basin bounding box (with a 0.5° buffer).  The clipped file (a few MB) is
+    cached; the large global download (~2.2 GB) is deleted immediately after
+    clipping.
+
+    Requires:
+        - ``pip install cdsapi``
+        - CDS API key configured in ``~/.cdsapirc``
+          (see https://cds.climate.copernicus.eu/how-to-api)
+
+    Parameters
+    ----------
+    basin_shapefile_path : str
+        Path to the basin/HRU shapefile (used to compute bounding box).
+    years : list of int
+        Years to download (e.g. [1993, 1994]).
+    cache_dir : str
+        Directory to store clipped NetCDF/GeoTIFF files (reused on subsequent runs).
+
+    Returns
+    -------
+    str
+        Path to the cache directory containing the clipped files.
+    """
+    try:
+        import cdsapi
+    except ImportError:
+        raise ImportError(
+            "The 'cdsapi' package is required for auto-downloading Copernicus data.\n"
+            "Install with:  pip install cdsapi\n"
+            "Then configure your API key: https://cds.climate.copernicus.eu/how-to-api\n"
+            "Alternatively, set ss_method_copernicus_nc_lc_dir to a local directory."
+        )
+
+    import os, zipfile, shutil
+
+    os.makedirs(cache_dir, exist_ok=True)
+
+    # ── Compute bounding box from basin shapefile ──────────────────────
+    basin_gdf = gpd.read_file(basin_shapefile_path)
+    if basin_gdf.crs is not None:
+        try:
+            epsg = basin_gdf.crs.to_epsg()
+            if epsg is not None and epsg != 4326:
+                basin_gdf = basin_gdf.to_crs("EPSG:4326")
+            elif epsg is None:
+                bounds = basin_gdf.total_bounds
+                if abs(bounds[0]) > 360 or abs(bounds[1]) > 360:
+                    basin_gdf = basin_gdf.to_crs("EPSG:4326")
+        except Exception:
+            pass
+
+    bounds = basin_gdf.total_bounds  # [west, south, east, north]
+    # Add 0.5° buffer and clamp to valid range
+    bbox = [
+        max(float(bounds[0]) - 0.5, -180),   # west
+        max(float(bounds[1]) - 0.5, -90),    # south
+        min(float(bounds[2]) + 0.5, 180),    # east
+        min(float(bounds[3]) + 0.5, 90),     # north
+    ]
+    print(f"  Basin clip bbox: W={bbox[0]:.2f} S={bbox[1]:.2f} E={bbox[2]:.2f} N={bbox[3]:.2f}")
+
+    # ── Download each year (global) then clip locally ──────────────────
+    client = cdsapi.Client()
+
+    for year in sorted(years):
+        # Clipped file uses .tif extension (GeoTIFF with LZW compression)
+        clipped_filename = f"ESACCI-LC-L4-LCCS-Map-300m-P1Y-{year}-v2.0.7cds.tif"
+        clipped_path = os.path.join(cache_dir, clipped_filename)
+
+        # Also check for legacy .nc cached files
+        nc_legacy = os.path.join(cache_dir,
+                                 f"ESACCI-LC-L4-LCCS-Map-300m-P1Y-{year}-v2.0.7cds.nc")
+
+        if os.path.exists(clipped_path):
+            sz = os.path.getsize(clipped_path) / 1e6
+            print(f"  Year {year}: cached ({sz:.1f} MB)")
+            continue
+        if os.path.exists(nc_legacy):
+            sz = os.path.getsize(nc_legacy) / 1e6
+            print(f"  Year {year}: cached .nc ({sz:.1f} MB)")
+            continue
+
+        # CDS versions: v2_0_7cds for 1992-2015, v2_1_1 for 2016+
+        version = 'v2_0_7cds' if year <= 2015 else 'v2_1_1'
+        print(f"  Downloading year {year} (version {version}) — global file from CDS...")
+
+        zip_path = os.path.join(cache_dir, f"lc_{year}_global.zip")
+        try:
+            client.retrieve(
+                'satellite-land-cover',
+                {
+                    'variable': 'all',
+                    'year': str(year),
+                    'version': version,
+                    'format': 'zip',
+                },
+                zip_path,
+            )
+        except Exception as e:
+            print(f"  WARNING: CDS download failed for year {year}: {e}")
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+            continue
+
+        # Extract .nc file from zip
+        global_nc_path = None
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                nc_names = [n for n in zf.namelist() if n.endswith('.nc')]
+                if nc_names:
+                    zf.extract(nc_names[0], cache_dir)
+                    global_nc_path = os.path.join(cache_dir, nc_names[0])
+                else:
+                    print(f"  WARNING: No .nc file found in zip for year {year}")
+                    continue
+        except zipfile.BadZipFile:
+            print(f"  WARNING: Downloaded zip for year {year} is corrupted — skipping")
+            continue
+        finally:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+
+        # Clip global file to basin bounding box
+        if global_nc_path and os.path.exists(global_nc_path):
+            try:
+                print(f"  Clipping year {year} to basin extent...", end='', flush=True)
+                _clip_netcdf_to_bbox(global_nc_path, clipped_path, bbox)
+                sz = os.path.getsize(clipped_path) / 1e6
+                print(f" done ({sz:.1f} MB)")
+            except Exception as e:
+                print(f"\n  WARNING: Clipping failed for year {year}: {e}")
+                # Fall back: keep the full global file under the legacy .nc name
+                if not os.path.exists(nc_legacy):
+                    shutil.move(global_nc_path, nc_legacy)
+                    sz = os.path.getsize(nc_legacy) / 1e6
+                    print(f"  Kept global file as fallback ({sz:.1f} MB)")
+                global_nc_path = None  # prevent deletion below
+            finally:
+                # Delete global file after clipping (saves ~2 GB per year)
+                if global_nc_path and os.path.exists(global_nc_path):
+                    os.remove(global_nc_path)
+
+    return cache_dir
+
+
 def calc_copernicus_lulc(
         ss_config_filepath: str,
         ss_method_copernicus_basin_info: Dict[str, str],
-        ss_method_copernicus_nc_lc_dir: str,
+        ss_method_copernicus_nc_lc_dir: Optional[str],
         ss_method_copernicus_period: List[Union[int, float]],
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc'
 ):
     """
-    Process all Copernicus LULC NetCDF files from a directory.
+    Process Copernicus LULC NetCDF files from a local directory **or** auto-download
+    from the Copernicus Climate Data Store (CDS).
 
     Parameters:
     -----------
@@ -787,8 +1010,12 @@ def calc_copernicus_lulc(
         Dictionary containing:
         - 'path_to_shp': Path to the shapefile containing HRU/basin polygons
         - 'mapping_key': Column name in shapefile for HRU ID (e.g., 'HRU_ID', 'ID', 'FID')
-    ss_method_copernicus_nc_lc_dir : str
-        Directory containing Copernicus LULC NetCDF files
+    ss_method_copernicus_nc_lc_dir : str or None
+        Directory containing Copernicus LULC NetCDF files.
+        If **None**, data is auto-downloaded from the CDS for the needed years
+        (clipped to the basin bounding box — typically a few MB per year
+        instead of the full 2.2 GB global files).
+        Requires ``cdsapi`` and a CDS API key configured in ``~/.cdsapirc``.
     ss_method_copernicus_period : list
         [year_start, year_end] - Filter files to include only this period
     recursive : bool, default False
@@ -816,6 +1043,22 @@ def calc_copernicus_lulc(
     clipped_rasters_dir = ss_output_dir / 'lulc_clipped_rasters'
     clipped_rasters_dir.mkdir(exist_ok=True)
 
+    # ── Auto-download from CDS if no local directory provided ──────────
+    if ss_method_copernicus_nc_lc_dir is None:
+        cache_dir = str(ss_output_dir / 'copernicus_cache')
+        years_needed = list(range(
+            int(year_start) if year_start else 1992,
+            (int(year_end) if year_end else 2022) + 1,
+        ))
+        print(f"\nNo local Copernicus LULC directory provided — downloading from CDS.")
+        print(f"  Years needed: {years_needed}")
+        print(f"  Cache directory: {cache_dir}")
+        ss_method_copernicus_nc_lc_dir = _download_copernicus_lc_from_cds(
+            basin_shapefile_path=ss_method_copernicus_basin_info['path_to_shp'],
+            years=years_needed,
+            cache_dir=cache_dir,
+        )
+
     print(f"Base output directory: {output_base_dir}")
     print(f"SS Copernicus files directory: {ss_output_dir}")
     print(f"Clipped rasters will be saved to: {clipped_rasters_dir}")
@@ -830,8 +1073,8 @@ def calc_copernicus_lulc(
     if not lc_dir.is_dir():
         raise NotADirectoryError(f"Path is not a directory: {ss_method_copernicus_nc_lc_dir}")
 
-    # Find all NetCDF files
-    print(f"Searching for NetCDF files in: {lc_dir}")
+    # Find all raster files (NetCDF or GeoTIFF from auto-download clipping)
+    print(f"Searching for raster files in: {lc_dir}")
     print(f"Pattern: {file_pattern}")
     print(f"Recursive: {recursive}")
 
@@ -842,9 +1085,23 @@ def calc_copernicus_lulc(
         # Search only in the specified directory
         netcdf_files = sorted(lc_dir.glob(file_pattern))
 
+    # Also pick up .tif files (produced by auto-download local clipping)
+    if not netcdf_files or file_pattern.endswith('.nc'):
+        tif_pattern = file_pattern.replace('.nc', '.tif')
+        if recursive:
+            tif_files = sorted(lc_dir.rglob(tif_pattern))
+        else:
+            tif_files = sorted(lc_dir.glob(tif_pattern))
+        # Merge, avoiding duplicates (same stem)
+        existing_stems = {f.stem for f in netcdf_files}
+        for tf in tif_files:
+            if tf.stem not in existing_stems:
+                netcdf_files.append(tf)
+        netcdf_files = sorted(netcdf_files, key=lambda p: p.name)
+
     if not netcdf_files:
         # Try alternative patterns
-        alternative_patterns = ['*.nc', 'ESACCI-*.nc', 'LC-*.nc']
+        alternative_patterns = ['*.nc', '*.tif', 'ESACCI-*.nc', 'ESACCI-*.tif', 'LC-*.nc']
         print(f"\nNo files found with pattern '{file_pattern}'")
         print("Trying alternative patterns...")
 
@@ -1095,7 +1352,7 @@ def list_available_files(
 def set_ss_from_copernicus_lulc(
         ss_config_filepath: str,
         ss_method_copernicus_basin_info: Dict[str, str],
-        ss_method_copernicus_nc_lc_dir: str,
+        ss_method_copernicus_nc_lc_dir: Optional[str],
         ss_method_copernicus_period: List[Union[int, float]],
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc'
@@ -1421,7 +1678,7 @@ def set_ss_climate_adjusted_export_coefficients(
         ss_config_filepath: str,
         json_header_comment: List[str],
         ss_method_copernicus_basin_info: Dict[str, str],
-        ss_method_copernicus_nc_lc_dir: str,
+        ss_method_copernicus_nc_lc_dir: Optional[str],
         ss_method_copernicus_period: List[Union[int, float]],
         ss_method_copernicus_default_loads_bool: bool,
         ss_method_copernicus_compartment_name_for_load: str,
@@ -2022,7 +2279,7 @@ def set_ss_from_copernicus_lulc_with_loads(
         ss_config_filepath: str,
         json_header_comment: List[str],
         ss_method_copernicus_basin_info: Dict[str, str],
-        ss_method_copernicus_nc_lc_dir: str,
+        ss_method_copernicus_nc_lc_dir: Optional[str],
         ss_method_copernicus_period: List[Union[int, float]],
         ss_method_copernicus_default_loads_bool: bool,
 

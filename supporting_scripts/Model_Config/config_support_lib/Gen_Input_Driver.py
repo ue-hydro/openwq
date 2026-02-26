@@ -208,7 +208,7 @@ def Gen_Input_Driver(
         ss_method_copernicus_basin_info: Dict[str, str] = None,
         ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str] = None,
         ss_method_copernicus_compartment_name_for_load: str = "",
-        ss_method_copernicus_nc_lc_dir: str = "",
+        ss_method_copernicus_nc_lc_dir = None,
         ss_method_copernicus_period: List[Union[int, float]] = None,
         ss_method_copernicus_default_loads_bool: bool = True,
         ss_method_copernicus_annual_to_seasonal_loads_method: str = "uniform",
