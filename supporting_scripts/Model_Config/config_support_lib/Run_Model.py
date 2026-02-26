@@ -42,8 +42,8 @@ def run_model_in_container(
     Parameters:
         dir2save_input_files: Host directory where openWQ_master.json lives (CWD for model)
         container_runtime: "docker" or "apptainer"
-        executable_path: Absolute path to executable INSIDE the container
-        file_manager_path: Absolute path to mizuRoute control file INSIDE the container
+        executable_path: Path to executable (host path — auto-converted to container path)
+        file_manager_path: Path to mizuRoute control file (host path — auto-converted)
         mpi_np: Number of MPI processes (minimum 2 for mizuRoute)
         docker_container_name: Docker container name (only for docker runtime)
         apptainer_sif_path: Path to .sif image (only for apptainer runtime)
@@ -112,10 +112,16 @@ def _build_docker_cmd(dir2save_input_files, docker_container_name,
     container_work_dir = gJSON_lib._correct_path_for_docker(
         abs_save_dir, host_root, container_root).rstrip('/')
 
+    # Convert host paths to container paths
+    container_exec = gJSON_lib._correct_path_for_docker(
+        os.path.abspath(executable_path), host_root, container_root)
+    container_fm = gJSON_lib._correct_path_for_docker(
+        os.path.abspath(file_manager_path), host_root, container_root)
+
     shell_cmd = (
         f"cd {container_work_dir} && "
         f"mpirun --allow-run-as-root -np {mpi_np} "
-        f"{executable_path} {file_manager_path}"
+        f"{container_exec} {container_fm}"
     )
 
     cmd = [
@@ -140,10 +146,14 @@ def _build_apptainer_cmd(dir2save_input_files, apptainer_sif_path,
     abs_save_dir = os.path.abspath(dir2save_input_files)
     container_work_dir = abs_save_dir.replace(host_bind, container_bind)
 
+    # Convert host paths to container paths
+    container_exec = os.path.abspath(executable_path).replace(host_bind, container_bind)
+    container_fm = os.path.abspath(file_manager_path).replace(host_bind, container_bind)
+
     shell_cmd = (
         f"cd {container_work_dir} && "
         f"mpirun --allow-run-as-root -np {mpi_np} "
-        f"{executable_path} {file_manager_path}"
+        f"{container_exec} {container_fm}"
     )
 
     cmd = [
