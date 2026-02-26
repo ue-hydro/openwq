@@ -1107,6 +1107,7 @@ def WebGL_h5_driver(shpfile_info=None,
                     n_particles=65536,
                     river_width_cells=3,
                     step=1,
+                    satellite_resolution=1,
                     fluxos_viewer_path=None):
     """
     Export OpenWQ/mizuRoute results as an interactive WebGL 3D particle viewer.
@@ -1152,6 +1153,9 @@ def WebGL_h5_driver(shpfile_info=None,
         Width of rasterized river in grid cells (default: 3)
     step : int
         Subsample every Nth timestep (default: 1 = all)
+    satellite_resolution : int
+        Satellite image resolution multiplier relative to the grid
+        (1 = same as grid, 2 = double, 4 = high quality). Default: 1.
     fluxos_viewer_path : str or None
         Path to FLUXOS index.html viewer template. If None, searches common locations.
 
@@ -1522,12 +1526,16 @@ def WebGL_h5_driver(shpfile_info=None,
     print("\n  Downloading satellite imagery...")
     try:
         sat_path = os.path.join(data_dir, "satellite.jpg")
+        sat_mult = max(1, int(satellite_resolution))
+        sat_w, sat_h = ncols * sat_mult, nrows * sat_mult
+        print(f"  Satellite resolution: {sat_w}x{sat_h} px "
+              f"({sat_mult}x grid)")
         _download_satellite(
             sw_lat=grid_params['ymin'], sw_lon=grid_params['xmin'],
             ne_lat=grid_params['ymax'], ne_lon=grid_params['xmax'],
-            img_w=ncols, img_h=nrows,
+            img_w=sat_w, img_h=sat_h,
             output_path=sat_path,
-            river_mask=river_mask
+            river_mask=river_mask if sat_mult == 1 else None
         )
         # Check if file was created (could be .jpg or .png fallback)
         if os.path.exists(sat_path):
