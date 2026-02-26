@@ -149,6 +149,7 @@ h5_wlib.WebGL_h5_driver(
     dem_path=None,           # optional: path to DEM .asc or .tif for 3D terrain
     n_particles=65536,       # particle count for the viewer
     river_width_cells=3,     # rasterized river width in grid cells
-    grid_resolution=None     # auto-compute from shapefile extent
+    grid_resolution=None,    # auto-compute from shapefile extent
+    satellite_resolution=2   # satellite image resolution multiplier (1=grid, 2=double, 4=high)
 )
 """
