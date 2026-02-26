@@ -39,6 +39,35 @@ _read_outputs_dir = os.path.normpath(
 if _read_outputs_dir not in sys.path:
     sys.path.insert(0, _read_outputs_dir)
 
+# GRQA extraction tools — add Calibration path
+_calibration_dir = os.path.normpath(
+    os.path.join(_this_dir, '..', '..', 'Calibration'))
+if _calibration_dir not in sys.path:
+    sys.path.insert(0, _calibration_dir)
+
+try:
+    from calibration_lib.observation_data.grqa_extract_stations import (
+        GRQACalibrationExtractor, SpeciesMapper, GRQA_PARAMETERS)
+    _GRQA_AVAILABLE = True
+except ImportError:
+    _GRQA_AVAILABLE = False
+
+# Auto-mapping: model species name → GRQA parameter code
+_MODEL_SPECIES_TO_GRQA = {
+    'NO3-N': 'NO3', 'NO3': 'NO3', 'Nitrate': 'NO3',
+    'NH4-N': 'NH4', 'NH4': 'NH4', 'Ammonium': 'NH4',
+    'NO2-N': 'NO2', 'NO2': 'NO2',
+    'TN': 'TN', 'Total Nitrogen': 'TN',
+    'DON': 'DON', 'DIN': 'DIN', 'TKN': 'TKN',
+    'PO4-P': 'PO4', 'PO4': 'PO4', 'Phosphate': 'PO4',
+    'TP': 'TP', 'Total Phosphorus': 'TP', 'DP': 'DP',
+    'DO': 'DO', 'Dissolved Oxygen': 'DO',
+    'BOD': 'BOD', 'BOD5': 'BOD5', 'COD': 'COD',
+    'DOC': 'DOC', 'TOC': 'TOC', 'DIC': 'DIC',
+    'TSS': 'TSS', 'TDS': 'TDS',
+    'N_ORG_active': 'DON', 'N_ORG_fresh': 'DON', 'N_ORG_stable': 'TKN',
+}
+
 
 def _js(obj):
     """Convert Python object to safe JSON string for embedding in HTML/JS."""
@@ -359,13 +388,33 @@ def _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, uni
     return results
 
 
-def _load_geojson(shapefile_path, reach_id_col):
-    """Load shapefile/GeoPackage as GeoJSON string for Leaflet.
+def _reproject_geom_to_wgs84(geom, src_proj4):
+    """Reproject a shapely geometry from source CRS (proj4 string) to WGS84.
 
-    Uses fiona directly to avoid PROJ CRS validation issues.
-    Assumes the shapefile is in WGS84 (EPSG:4326) or close enough for display.
+    Uses pyproj.Proj with inverse=True — robust against PROJ database issues.
+    Returns reprojected geometry, or original if reprojection fails.
     """
-    if shapefile_path is None or not os.path.isfile(shapefile_path):
+    try:
+        from pyproj import Proj
+        from shapely.ops import transform as shp_transform
+        src_proj = Proj(src_proj4)
+
+        def _to_wgs84(x, y):
+            return src_proj(x, y, inverse=True)
+
+        return shp_transform(_to_wgs84, geom)
+    except Exception:
+        return geom
+
+
+def _load_single_geojson(path):
+    """Load a single shapefile/GeoPackage as a GeoJSON dict in WGS84.
+
+    Attempts reprojection to WGS84 (EPSG:4326) so Leaflet can render it.
+    Uses fiona + shapely with pyproj for CRS reprojection.
+    Returns (geojson_dict, bounds_wgs84) or (None, None) on failure.
+    """
+    if path is None or not os.path.isfile(path):
         return None, None
 
     try:
@@ -373,38 +422,239 @@ def _load_geojson(shapefile_path, reach_id_col):
         from shapely.geometry import shape, mapping
 
         features = []
-        with fiona.open(shapefile_path) as src:
+        src_proj4 = None
+
+        with fiona.open(path) as src:
+            # Get source CRS as proj4 string for reprojection
+            if src.crs:
+                if isinstance(src.crs, dict):
+                    parts = []
+                    for k, v in src.crs.items():
+                        if v is True:
+                            parts.append(f'+{k}')
+                        else:
+                            parts.append(f'+{k}={v}')
+                    src_proj4 = ' '.join(parts)
+                else:
+                    try:
+                        src_proj4 = src.crs.to_proj4()
+                    except Exception:
+                        src_proj4 = None
+
             for feat in src:
                 geom = shape(feat['geometry'])
                 properties = dict(feat['properties'])
                 features.append({
                     'type': 'Feature',
-                    'geometry': mapping(geom),
+                    'geometry': geom,
                     'properties': properties,
                 })
 
         if not features:
-            print("  WARNING: Shapefile has no features")
+            print(f"  WARNING: Shapefile has no features: {path}")
             return None, None
 
-        geojson = {'type': 'FeatureCollection', 'features': features}
+        # Check if reprojection is needed (coordinates > 360 ⇒ projected)
+        sample_bounds = features[0]['geometry'].bounds
+        needs_reproj = (abs(sample_bounds[0]) > 360 or abs(sample_bounds[1]) > 360)
 
-        # Compute bounds for map center
-        all_bounds = [shape(f['geometry']).bounds for f in features]
-        minx = min(b[0] for b in all_bounds)
-        miny = min(b[1] for b in all_bounds)
-        maxx = max(b[2] for b in all_bounds)
-        maxy = max(b[3] for b in all_bounds)
-        center = [(miny + maxy) / 2, (minx + maxx) / 2]
+        if needs_reproj and src_proj4:
+            print(f"  Reprojecting to WGS84...")
+            for f in features:
+                f['geometry'] = _reproject_geom_to_wgs84(f['geometry'], src_proj4)
 
-        geojson_str = json.dumps(geojson)
-        return geojson_str, center
+        # Convert to GeoJSON dicts
+        geojson_features = []
+        for f in features:
+            geojson_features.append({
+                'type': 'Feature',
+                'geometry': mapping(f['geometry']),
+                'properties': {k: (str(v) if v is not None else '')
+                               for k, v in f['properties'].items()},
+            })
+
+        geojson = {'type': 'FeatureCollection', 'features': geojson_features}
+        all_bounds = [f['geometry'].bounds for f in features]
+        bounds = (
+            min(b[0] for b in all_bounds),
+            min(b[1] for b in all_bounds),
+            max(b[2] for b in all_bounds),
+            max(b[3] for b in all_bounds),
+        )
+        return geojson, bounds
 
     except ImportError:
-        print("  WARNING: fiona/shapely not installed — skipping basin map")
+        print("  WARNING: fiona/shapely not installed — skipping shapefile")
         return None, None
     except Exception as e:
-        print(f"  WARNING: Failed to load shapefile: {e}")
+        print(f"  WARNING: Failed to load shapefile {path}: {e}")
+        return None, None
+
+
+def _build_map_layers(river_network_shapefile, basin_shapefile):
+    """Build map layers from the river network and basin shapefiles.
+
+    Returns:
+        (layers, map_center) where layers is a list of dicts with
+        'geojson_str', 'label', 'style', 'type', and map_center is [lat, lng].
+        Returns ([], None) if no layers loaded.
+    """
+    layers = []
+    all_bounds = []
+
+    # Layer 1: Basin polygons (from Copernicus LULC shapefile)
+    if basin_shapefile:
+        geojson, bounds = _load_single_geojson(basin_shapefile)
+        if geojson is not None:
+            layers.append({
+                'geojson_str': json.dumps(geojson),
+                'label': 'Basin',
+                'style': {'color': '#2d6a4f', 'weight': 1.5, 'opacity': 0.7,
+                          'fillOpacity': 0.15},
+                'type': 'polygon',
+            })
+            all_bounds.append(bounds)
+
+    # Layer 2: River network
+    if river_network_shapefile:
+        geojson, bounds = _load_single_geojson(river_network_shapefile)
+        if geojson is not None:
+            layers.append({
+                'geojson_str': json.dumps(geojson),
+                'label': 'River Network',
+                'style': {'color': '#0066cc', 'weight': 2.5, 'opacity': 0.85},
+                'type': 'line',
+            })
+            all_bounds.append(bounds)
+
+    if not layers:
+        return [], None
+
+    minx = min(b[0] for b in all_bounds)
+    miny = min(b[1] for b in all_bounds)
+    maxx = max(b[2] for b in all_bounds)
+    maxy = max(b[3] for b in all_bounds)
+    map_center = [(miny + maxy) / 2, (minx + maxx) / 2]
+
+    return layers, map_center
+
+
+def _extract_grqa_for_report(river_network_shapefile, chemical_species,
+                              output_dir, grqa_local_data_path=None):
+    """Extract GRQA observation stations for the simulated species.
+
+    Uses the GRQACalibrationExtractor to find monitoring stations near the
+    river network that have observations for the species being simulated.
+
+    Parameters:
+        river_network_shapefile: path to river network shapefile
+        chemical_species: list of model species names (e.g. ['NO3-N', 'NH4-N'])
+        output_dir: directory to cache GRQA extraction results
+        grqa_local_data_path: path to pre-downloaded GRQA data (or None)
+
+    Returns:
+        (stations_geojson_str, grqa_stats) or (None, None) on failure.
+        grqa_stats is a dict with keys: n_stations, n_observations,
+        species_stats (list), year_range, etc.
+    """
+    if not _GRQA_AVAILABLE:
+        print("  GRQA tools not available (missing geopandas/shapely). Skipping.")
+        return None, None
+
+    if not river_network_shapefile or not os.path.isfile(river_network_shapefile):
+        print("  No river network shapefile — skipping GRQA extraction.")
+        return None, None
+
+    # Build species mapping: GRQA code → model species name
+    species_mapping = {}
+    for model_name in chemical_species:
+        grqa_code = _MODEL_SPECIES_TO_GRQA.get(model_name)
+        if grqa_code and grqa_code not in species_mapping:
+            species_mapping[grqa_code] = model_name
+
+    if not species_mapping:
+        print("  No GRQA-compatible species found. Skipping GRQA extraction.")
+        return None, None
+
+    grqa_params = list(species_mapping.keys())
+    print(f"  GRQA species mapping: {species_mapping}")
+    print(f"  Will extract {len(grqa_params)} GRQA parameters: {', '.join(grqa_params)}")
+    if grqa_local_data_path is None:
+        print("  No local GRQA data provided — will download from Zenodo (one-time, ~1.2 GB).")
+        print("  Tip: set grqa_local_data_path to skip future downloads.")
+
+    grqa_output_dir = os.path.join(output_dir, 'grqa_report_data')
+
+    try:
+        mapper = SpeciesMapper(mapping=species_mapping)
+        extractor = GRQACalibrationExtractor(
+            output_dir=grqa_output_dir,
+            species_mapper=mapper,
+            local_data_path=grqa_local_data_path,
+            buffer_distance_m=1000,
+        )
+
+        # Load river network — CRS reprojection to WGS84 is handled
+        # automatically by the extractor's load_river_network() method.
+        river_gdf = extractor.load_river_network(river_network_shapefile)
+
+        buffer_gdf = extractor.create_buffer(river_gdf)
+        stations, observations = extractor.extract_stations_and_observations(buffer_gdf)
+
+        if stations is None or stations.empty:
+            print("  No GRQA stations found near the river network.")
+            return None, None
+
+        # Generate files (shapefile + CSV)
+        extractor.generate_calibration_files(prefix="report_grqa")
+
+        # Build GeoJSON for map
+        from shapely.geometry import mapping
+        features = []
+        for _, row in stations.iterrows():
+            props = {k: (str(v) if v is not None else '')
+                     for k, v in row.items() if k != 'geometry'}
+            features.append({
+                'type': 'Feature',
+                'geometry': mapping(row.geometry),
+                'properties': props,
+            })
+        stations_geojson = {'type': 'FeatureCollection', 'features': features}
+
+        # Compute statistics
+        import pandas as pd
+        site_col = extractor.column_map.get('site_id', 'site_id')
+        date_col = extractor.column_map.get('obs_date', 'obs_date')
+
+        dates = pd.to_datetime(observations[date_col], errors='coerce')
+        species_stats = []
+        for model_sp in observations['model_species'].unique():
+            sp_obs = observations[observations['model_species'] == model_sp]
+            sp_dates = pd.to_datetime(sp_obs[date_col], errors='coerce')
+            sp_stations = sp_obs[site_col].nunique()
+            species_stats.append({
+                'species': model_sp,
+                'n_stations': sp_stations,
+                'n_observations': len(sp_obs),
+                'year_start': int(sp_dates.min().year) if not sp_dates.isna().all() else None,
+                'year_end': int(sp_dates.max().year) if not sp_dates.isna().all() else None,
+            })
+
+        grqa_stats = {
+            'n_stations': len(stations),
+            'n_observations': len(observations),
+            'year_start': int(dates.min().year) if not dates.isna().all() else None,
+            'year_end': int(dates.max().year) if not dates.isna().all() else None,
+            'species_stats': species_stats,
+            'output_dir': grqa_output_dir,
+        }
+
+        return json.dumps(stations_geojson), grqa_stats
+
+    except Exception as e:
+        print(f"  WARNING: GRQA extraction failed: {e}")
+        import traceback
+        traceback.print_exc()
         return None, None
 
 
@@ -451,14 +701,23 @@ def generate_simulation_report(
         units,
         compartments_and_cells,
         timestep,
-        shapefile_path=None,
-        shapefile_reach_id_col="seg_id",
+        river_network_shapefile=None,
+        basin_shapefile=None,
+        grqa_local_data_path=None,
         container_runtime="docker",
         mpi_np=2,
         run_time_seconds=0.0,
         model_was_run=True,
 ):
     """Generate a self-contained HTML simulation report.
+
+    Parameters:
+        river_network_shapefile: path to river network shapefile (.shp/.gpkg)
+        basin_shapefile: path to basin/catchment shapefile (auto-loaded from
+            ss_method_copernicus_basin_info if available)
+        grqa_local_data_path: path to pre-downloaded GRQA data folder, or None
+            to download automatically. If river_network_shapefile is also set,
+            GRQA observation stations will be extracted and shown on the map.
 
     Returns the path to the generated HTML file.
     """
@@ -473,8 +732,17 @@ def generate_simulation_report(
     # Spatial statistics
     spatial_stats = _compute_spatial_stats(results)
 
-    # Basin map data
-    geojson_str, map_center = _load_geojson(shapefile_path, shapefile_reach_id_col)
+    # Basin map layers (river network + basin polygons)
+    map_layers, map_center = _build_map_layers(river_network_shapefile, basin_shapefile)
+
+    # GRQA observation stations
+    grqa_geojson_str = None
+    grqa_stats = None
+    if river_network_shapefile:
+        print("  Extracting GRQA observation stations...")
+        grqa_geojson_str, grqa_stats = _extract_grqa_for_report(
+            river_network_shapefile, chemical_species,
+            output_dir, grqa_local_data_path)
 
     # Read source/sink config for summary
     ss_config_path = os.path.join(output_dir, 'openwq_in',
@@ -754,10 +1022,12 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     nav_items = [
         ('project', 'Project'),
         ('summary', 'Summary'),
-        ('config', 'Configuration'),
     ]
-    if geojson_str:
+    if map_layers or grqa_geojson_str:
         nav_items.append(('map', 'Basin Map'))
+    if grqa_stats:
+        nav_items.append(('grqa', 'GRQA Observations'))
+    nav_items.append(('config', 'Configuration'))
     if results:
         nav_items.append(('timeseries', 'Time Series'))
     if spatial_stats:
@@ -845,6 +1115,54 @@ This report shows the selected modules and their parameters.
 Time series, spatial statistics, and runtime metadata are not available.
 </div></div>""")
 
+    # --- SECTION: Basin Map ---
+    if map_layers or grqa_geojson_str:
+        H.append(f"""<div class="section" id="map">
+<h2>Basin Map</h2>
+<div class="card secondary">
+<div class="map-container"><div id="basinMap"></div></div>
+</div>
+</div>""")
+
+    # --- SECTION: GRQA Observations ---
+    if grqa_stats:
+        H.append('<div class="section" id="grqa"><h2>GRQA Observation Data</h2>')
+        H.append('<div class="highlight-box info">'
+                 '<strong>Global River Water Quality Archive (GRQA)</strong> — '
+                 'Monitoring stations near the river network with observations '
+                 'for the simulated species. '
+                 '<a href="https://zenodo.org/records/15335450" target="_blank">'
+                 'GRQA Dataset</a></div>')
+
+        # Summary KPIs
+        yr_range = ''
+        if grqa_stats.get('year_start') and grqa_stats.get('year_end'):
+            yr_range = f"{grqa_stats['year_start']}&ndash;{grqa_stats['year_end']}"
+        H.append(f"""<div class="kpi-grid" style="margin:1rem 0">
+<div class="kpi"><div class="icon">&#x1f4cd;</div><div class="value">{grqa_stats['n_stations']}</div><div class="label">Stations</div></div>
+<div class="kpi"><div class="icon">&#x1f4c8;</div><div class="value">{grqa_stats['n_observations']:,}</div><div class="label">Observations</div></div>
+<div class="kpi"><div class="icon">&#x1f4c5;</div><div class="value">{yr_range}</div><div class="label">Period</div></div>
+<div class="kpi"><div class="icon">&#x1f9ea;</div><div class="value">{len(grqa_stats.get('species_stats', []))}</div><div class="label">Species Matched</div></div>
+</div>""")
+
+        # Per-species table
+        if grqa_stats.get('species_stats'):
+            H.append('<div class="card primary"><div class="table-wrap"><table>')
+            H.append('<tr><th>Species</th><th>Stations</th><th>Observations</th>'
+                     '<th>Period</th></tr>')
+            for sp in grqa_stats['species_stats']:
+                yr = ''
+                if sp.get('year_start') and sp.get('year_end'):
+                    yr = f"{sp['year_start']}&ndash;{sp['year_end']}"
+                H.append(
+                    f'<tr><td><span class="badge badge-primary">{sp["species"]}</span></td>'
+                    f'<td class="num">{sp["n_stations"]}</td>'
+                    f'<td class="num">{sp["n_observations"]:,}</td>'
+                    f'<td>{yr}</td></tr>')
+            H.append('</table></div></div>')
+
+        H.append('</div>')
+
     # --- SECTION: Configuration ---
     modules = [
         ('Biogeochemistry', bgc_module_name),
@@ -883,15 +1201,6 @@ Time series, spatial statistics, and runtime metadata are not available.
         H.append('</div></details>')
 
     H.append('</div>')  # close section
-
-    # --- SECTION: Basin Map ---
-    if geojson_str:
-        H.append(f"""<div class="section" id="map">
-<h2>Basin Map</h2>
-<div class="card secondary">
-<div class="map-container"><div id="basinMap"></div></div>
-</div>
-</div>""")
 
     # --- SECTION: Time Series ---
     if results:
@@ -1080,32 +1389,77 @@ Plotly.newPlot('{plot_id}',{json.dumps(traces)},
   }}),PCFG);
 """)
 
-    # Basin map
-    if geojson_str and map_center:
-        H.append(f"""
-(function(){{
-  var map = L.map('basinMap').setView({_js(map_center)}, 9);
-  L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
-    attribution:'&copy; OpenStreetMap &copy; CARTO',
-    maxZoom:19
-  }}).addTo(map);
-  var topoLayer = L.tileLayer('https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png',{{
-    attribution:'OpenTopoMap',maxZoom:17}});
-  L.control.layers({{
-    'Light':L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png').addTo(map),
-    'Topo':topoLayer
-  }}).addTo(map);
-  var geojson = {geojson_str};
-  var layer = L.geoJSON(geojson, {{
-    style: function(f){{ return {{color:'#0066cc',weight:2.5,opacity:0.85}}; }},
+    # Basin map — river network + basin + GRQA stations
+    if (map_layers and map_center) or grqa_geojson_str:
+        layer_js_blocks = []
+        overlay_entries = []
+        fit_var = None
+
+        # Shapefile layers (basin polygons + river network)
+        for idx, layer in enumerate(map_layers):
+            var_name = f"lyr_{idx}"
+            geojson_var = f"gj_{idx}"
+            style = layer['style']
+            label = layer['label'].replace("'", "\\'")
+            layer_type = layer['type']
+
+            layer_js_blocks.append(f"  var {geojson_var} = {layer['geojson_str']};")
+
+            color = style.get('color', '#0066cc')
+            weight = style.get('weight', 2.5)
+            opacity = style.get('opacity', 0.85)
+            fill_opacity = style.get('fillOpacity', 0.2)
+            layer_js_blocks.append(f"""  var {var_name} = L.geoJSON({geojson_var}, {{
+    style: function(f){{ return {{color:'{color}',weight:{weight},opacity:{opacity},fillOpacity:{fill_opacity}}}; }},
     onEachFeature: function(f,l){{
       var props = f.properties;
-      var html = '<b>Feature</b><br>';
-      for(var k in props){{ if(props[k]!==null) html += k+': '+props[k]+'<br>'; }}
+      var html = '<b>{label}</b><br>';
+      for(var k in props){{ if(props[k]!==null && props[k]!=='') html += '<b>'+k+'</b>: '+props[k]+'<br>'; }}
       l.bindPopup(html);
     }}
+  }}).addTo(map);""")
+            overlay_entries.append(f"'{label}': {var_name}")
+            if fit_var is None:
+                fit_var = var_name
+
+        # GRQA stations layer (circle markers)
+        if grqa_geojson_str:
+            layer_js_blocks.append(f"  var gj_grqa = {grqa_geojson_str};")
+            layer_js_blocks.append("""  var lyr_grqa = L.geoJSON(gj_grqa, {
+    pointToLayer: function(f, latlng){
+      return L.circleMarker(latlng, {
+        radius: 7, fillColor: '#e63946', color: '#333',
+        weight: 1.5, opacity: 0.9, fillOpacity: 0.85
+      });
+    },
+    onEachFeature: function(f,l){
+      var props = f.properties;
+      var html = '<b>GRQA Station</b><br>';
+      for(var k in props){ if(props[k]!==null && props[k]!=='') html += '<b>'+k+'</b>: '+props[k]+'<br>'; }
+      l.bindPopup(html);
+    }
+  }).addTo(map);""")
+            overlay_entries.append("'GRQA Stations': lyr_grqa")
+            if fit_var is None:
+                fit_var = "lyr_grqa"
+
+        overlay_obj = "{" + ", ".join(overlay_entries) + "}"
+        center_js = _js(map_center) if map_center else "[0, 0]"
+        zoom = 9 if map_center else 2
+
+        H.append(f"""
+(function(){{
+  var map = L.map('basinMap').setView({center_js}, {zoom});
+  var lightTile = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
+    attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:19
   }}).addTo(map);
-  map.fitBounds(layer.getBounds());
+  var topoTile = L.tileLayer('https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png',{{
+    attribution:'OpenTopoMap', maxZoom:17}});
+  var satTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',{{
+    attribution:'Esri, Maxar, Earthstar Geographics', maxZoom:19}});
+{chr(10).join(layer_js_blocks)}
+  L.control.layers({{'Light':lightTile,'Topo':topoTile,'Satellite':satTile}}, {overlay_obj}).addTo(map);
+  try{{ map.fitBounds({fit_var}.getBounds()); }}catch(e){{}}
   L.control.scale().addTo(map);
 }})();
 """)
@@ -1168,8 +1522,9 @@ def generate_report(
         units,
         compartments_and_cells,
         timestep,
-        shapefile_path=None,
-        shapefile_reach_id_col="seg_id",
+        river_network_shapefile=None,
+        basin_shapefile=None,
+        grqa_local_data_path=None,
         container_runtime="docker",
         mpi_np=2,
         run_time_seconds=0.0,
@@ -1178,6 +1533,11 @@ def generate_report(
     """Generate an HTML simulation report (entry point for template).
 
     Wraps generate_simulation_report() with logging and error handling.
+
+    Parameters:
+        river_network_shapefile: path to river network shapefile
+        basin_shapefile: path to basin/catchment shapefile
+        grqa_local_data_path: path to pre-downloaded GRQA data (or None)
 
     Returns:
         str: Path to the generated HTML report, or None on failure
@@ -1205,8 +1565,9 @@ def generate_report(
             units=units,
             compartments_and_cells=compartments_and_cells,
             timestep=timestep,
-            shapefile_path=shapefile_path,
-            shapefile_reach_id_col=shapefile_reach_id_col,
+            river_network_shapefile=river_network_shapefile,
+            basin_shapefile=basin_shapefile,
+            grqa_local_data_path=grqa_local_data_path,
             container_runtime=container_runtime,
             mpi_np=mpi_np,
             run_time_seconds=run_time_seconds,

@@ -191,7 +191,7 @@ si_species_params = None
 #   "none"                                      - No source/sink
 # Note: When using PHREEQC, set "none" unless CSV references valid PHREEQC components.
 
-ss_method = "using_copernicus_lulc_with_static_coeff"
+ss_method = "using_copernicus_lulc_with_dynamic_coeff"
 
 # -- Common metadata --
 ss_metadata_source = "Just for demonstration"
@@ -228,7 +228,15 @@ ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key = {
     'mapping_key': 'reachID'
 }
 ss_method_copernicus_compartment_name_for_load = "RIVER_NETWORK_REACHES"
-ss_method_copernicus_nc_lc_dir = '/Users/diogocosta/Documents/ESACCI-LC/'   # Copernicus LULC NetCDF directory
+# Copernicus ESA CCI Land Cover data.
+# Options:
+#   None  → auto-download from CDS for the needed years.  The global file
+#           (~2.2 GB) is downloaded, clipped locally to the basin bounding
+#           box (a few MB), and the global file is deleted automatically.
+#           Requires: pip install cdsapi + API key in ~/.cdsapirc
+#           See: https://cds.climate.copernicus.eu/how-to-api
+#   path  → use a local directory with pre-downloaded NetCDF/GeoTIFF files.
+ss_method_copernicus_nc_lc_dir = '/Users/diogocosta/Documents/ESACCI-LC/'
 ss_method_copernicus_period = [1993, 1994]                                   # [year_start, year_end]
 ss_method_copernicus_default_loads_bool = True                               # True = use built-in export coefficients
 # Custom load coefficients (only when ss_method_copernicus_default_loads_bool = False)
@@ -395,10 +403,21 @@ mpi_np = 2
 generate_report = True
 open_report = True   # Open the report in the default browser when complete
 
-# Path to river network shapefile or GeoPackage (for interactive basin map)
-# Set to None if no spatial data available — map section will be skipped
-shapefile_path = None    # e.g., "/path/to/river_network.shp" or "*.gpkg"
-shapefile_reach_id_col = "seg_id"   # Column in shapefile containing reach IDs
+# River network shapefile for the interactive basin map.
+# Set to None to skip the map — or provide a path to .shp or .gpkg.
+# The basin polygons are automatically loaded from ss_method_copernicus_basin_info above.
+river_network_shapefile = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/mizuSegId.shp"
+
+# GRQA observation data (Global River Water Quality Archive).
+# Extracts monitoring stations near the river network for the species in
+# your BGC cycle (auto-mapped to GRQA parameters).
+#
+# Options:
+#   None  → auto-download from Zenodo (one-time ~1.2 GB, cached locally).
+#           Only CSVs for the needed species are extracted from the archive.
+#   path  → use a pre-downloaded GRQA folder (e.g., "/data/GRQA").
+#           See: https://zenodo.org/records/15335450
+grqa_local_data_path = None   # e.g., "/data/GRQA" or None for auto-download
 
 
 # ============================================================================
@@ -445,6 +464,13 @@ if run_model:
 # 3) Generate report (optional)
 _report_path = None
 if generate_report:
+    # Basin shapefile from Copernicus config (if available)
+    _basin_shp = None
+    try:
+        _basin_shp = ss_method_copernicus_basin_info.get('path_to_shp')
+    except (NameError, AttributeError):
+        pass
+
     _report_path = _generate_report(
         dir2save_input_files=dir2save_input_files,
         project_name=project_name,
@@ -463,8 +489,9 @@ if generate_report:
         units=units,
         compartments_and_cells=compartments_and_cells,
         timestep=timestep,
-        shapefile_path=shapefile_path,
-        shapefile_reach_id_col=shapefile_reach_id_col,
+        river_network_shapefile=river_network_shapefile,
+        basin_shapefile=_basin_shp,
+        grqa_local_data_path=grqa_local_data_path,
         container_runtime=container_runtime,
         mpi_np=mpi_np,
         run_time_seconds=_elapsed,

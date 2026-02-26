@@ -404,10 +404,21 @@ class GRQADownloader:
         if param_file.exists() and not force:
             return param_file
 
-        # Check if zip exists
+        # Check if zip exists and is valid
         zip_path = self.cache_dir / "GRQA_data_v1.4.zip"
 
-        if not zip_path.exists():
+        need_download = not zip_path.exists()
+        if zip_path.exists():
+            # Verify the zip is not corrupted (e.g., from an interrupted download)
+            try:
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    zf.namelist()  # Quick validity check
+            except (zipfile.BadZipFile, Exception):
+                print(f"  Cached zip is corrupted — re-downloading...")
+                zip_path.unlink()
+                need_download = True
+
+        if need_download:
             print(f"Downloading GRQA data archive...")
             print(f"  This is a one-time download (~1.2 GB)")
             self._download_with_progress(GRQA_DATA_URL, zip_path)
@@ -622,18 +633,38 @@ class GRQACalibrationExtractor:
                     records.append(props)
             gdf = gpd.GeoDataFrame(records)
 
-        # Ensure WGS84 CRS is set
+        # Ensure data is in WGS84
         if gdf.crs is None and wgs84 is not None:
-            print("  Setting CRS to WGS84")
+            # No CRS metadata — check if coordinates look projected
+            bounds = gdf.total_bounds
+            if abs(bounds[0]) > 360 or abs(bounds[1]) > 360:
+                print("  Warning: No CRS metadata but coordinates appear projected.")
+                print("  Cannot auto-reproject without source CRS. Setting to WGS84.")
+            else:
+                print("  Setting CRS to WGS84")
             gdf.crs = wgs84
         elif gdf.crs is not None:
             try:
                 epsg = gdf.crs.to_epsg()
                 if epsg is not None and epsg != 4326:
                     print(f"  Reprojecting from EPSG:{epsg} to WGS84")
-                    gdf = gdf.to_crs(wgs84)
-            except Exception:
-                pass  # CRS is set but can't determine EPSG - assume OK
+                    gdf = gdf.to_crs("EPSG:4326")
+                elif epsg is None:
+                    # CRS exists but no EPSG code (e.g., ESRI:102001)
+                    # Check if coordinates are in a projected system
+                    bounds = gdf.total_bounds
+                    if abs(bounds[0]) > 360 or abs(bounds[1]) > 360:
+                        print(f"  Reprojecting from {gdf.crs.name} to WGS84")
+                        gdf = gdf.to_crs("EPSG:4326")
+            except Exception as e:
+                # Fallback: check coordinate magnitudes
+                bounds = gdf.total_bounds
+                if abs(bounds[0]) > 360 or abs(bounds[1]) > 360:
+                    print(f"  Detected projected coordinates, reprojecting to WGS84...")
+                    try:
+                        gdf = gdf.to_crs("EPSG:4326")
+                    except Exception:
+                        print(f"  Warning: CRS reprojection failed: {e}")
 
         print(f"  Features: {len(gdf)}")
         print(f"  Bounds: {gdf.total_bounds}")
