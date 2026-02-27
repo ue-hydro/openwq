@@ -826,39 +826,40 @@
             <div class="slide-content">
                 <div class="two-column" style="gap: 40px;">
                     <div class="column">
-                        <div class="highlight-box warning" style="margin-bottom: 12px;">
-                            <strong class="important-note">Important:</strong> Place <code>openWQ_master.json</code> in the same directory where you run the model (working directory).
+                        <div class="highlight-box info" style="margin-bottom: 12px;">
+                            <strong>HTML Report:</strong> The <code>model_config_template.py</code> generates an <strong>interactive HTML report</strong> with ready-to-copy Docker commands — paths are auto-filled from your template configuration.
                         </div>
-                        <div class="card accent">
-                            <h3>Running with Apptainer (HPC)</h3>
-                            <pre style="font-size: 0.75rem; margin-top: 10px;">
-<span class="comment"># Ensure openWQ_master.json is in working dir</span>
-cd /path/to/my_project
+                        <div class="card primary">
+                            <h3>Running with Docker (via mpirun)</h3>
+                            <pre style="font-size: 0.72rem; margin-top: 10px;">
+<span class="comment"># General pattern (auto-filled in the HTML report)</span>
+docker exec docker_openwq /bin/bash -c \
+  <span class="string">"cd &lt;output_dir&gt; && \
+   mpirun --allow-run-as-root -np 2 \
+   &lt;executable&gt; &lt;control_file&gt;"</span>
 
-<span class="comment"># Run mizuRoute-CSLM with OpenWQ</span>
-apptainer exec --bind $PROJECT:/code \\
-    openwq.sif ./mizuroute_lakes_cslm_openwq \\
-    -g 1 1 -m file_manager.txt
+<span class="comment"># Example with actual paths</span>
+docker exec docker_openwq /bin/bash -c \
+  <span class="string">"cd /code/my_project && \
+   mpirun --allow-run-as-root -np 2 \
+   /code/bin/mizuroute_openwq_Release \
+   /code/my_project/mizuroute.control"</span>
                             </pre>
                         </div>
-                        <div class="card primary" style="margin-top: 12px;">
-                            <h3>Running with Docker</h3>
-                            <pre style="font-size: 0.75rem; margin-top: 10px;">
-<span class="comment"># Run inside Docker container</span>
-docker exec -it docker_openwq /bin/bash
-cd /code/my_project  <span class="comment"># where master.json is</span>
-./mizuroute_openwq -g 1 1 -m file_manager.txt
-                            </pre>
+                        <div class="highlight-box warning" style="margin-top: 12px;">
+                            <strong class="important-note">Important:</strong> mizuRoute requires <code>mpirun -np 2</code> (minimum 2 MPI processes) for domain decomposition. Do <strong>not</strong> use <code>-g 1 1 -m</code> flags.
                         </div>
                     </div>
                     <div class="column">
                         <div class="card secondary">
-                            <h3>Key Requirements</h3>
-                            <table style="font-size: 0.85rem;">
-                                <tr><td><code>openWQ_master.json</code></td><td>Must be in working directory</td></tr>
-                                <tr><td><code>-m</code></td><td>Host model file manager</td></tr>
-                                <tr><td><code>-g</code></td><td>GRU start/count (e.g., 1 1)</td></tr>
-                            </table>
+                            <h3>What the HTML Report Provides</h3>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.85rem;">Configuration summary (modules, species, solver)</li>
+                                <li style="font-size: 0.85rem;">Interactive basin map with GRQA stations</li>
+                                <li style="font-size: 0.85rem;">Source/sink setup details</li>
+                                <li style="font-size: 0.85rem;"><strong>Ready-to-copy Docker commands</strong></li>
+                                <li style="font-size: 0.85rem;"><strong>Python snippets</strong> to read &amp; visualize results</li>
+                            </ul>
                         </div>
                         <div class="card teal" style="margin-top: 12px;">
                             <h3>Expected Output</h3>
@@ -911,9 +912,10 @@ cd /code/my_project  <span class="comment"># where master.json is</span>
                         </ul>
                         <h3 style="margin: 25px 0 20px; color: var(--accent);">Execution</h3>
                         <ul class="checklist">
-                            <li>Compile or use Docker container</li>
-                            <li>Verify paths in configuration files</li>
-                            <li>Run model and check log file</li>
+                            <li>Start Docker container</li>
+                            <li>Review the HTML report for configuration summary</li>
+                            <li>Copy Docker run command from report and execute</li>
+                            <li>Use Python snippets from report to visualize results</li>
                         </ul>
                     </div>
                 </div>
@@ -983,15 +985,15 @@ cd /code/my_project  <span class="comment"># where master.json is</span>
                     </div>
                     <div class="card primary" style="text-align: center;">
                         <h3 style="justify-content: center;">📝 Configure</h3>
-                        <p>Create 4 JSON files: Master, Config, BGC, Transport</p>
+                        <p>Edit <code>model_config_template.py</code> — generates JSON configs + interactive HTML report</p>
                     </div>
                     <div class="card accent" style="text-align: center;">
                         <h3 style="justify-content: center;">🚀 Execute</h3>
-                        <p>Build or use Docker, run with config paths, check output</p>
+                        <p>Copy Docker commands from report, run model, use Python snippets to visualize</p>
                     </div>
                 </div>
                 <div class="highlight-box" style="margin-top: 30px; text-align: center; font-size: 1.15rem;">
-                    <strong>Start from templates!</strong> Copy and modify existing configurations from the BGC_templates folder
+                    <strong>The HTML report is your central hub</strong> — review configuration, run the model, and visualize results from copy-paste code.
                 </div>
             </div>
             <div class="slide-footer">

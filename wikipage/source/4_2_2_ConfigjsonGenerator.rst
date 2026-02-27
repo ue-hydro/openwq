@@ -35,8 +35,9 @@ Quick start
 
     python my_project_config.py
 
-4. The script generates all OpenWQ input files in the specified output directory.
-   Optionally, it can also run the model (``run_model = True``) and generate an interactive HTML report (``generate_report = True``)
+4. The script generates all OpenWQ input files in the specified output directory
+   and an interactive HTML report (``openwq_report.html``). The report includes
+   configuration summaries, Docker run commands, and Python visualization code snippets.
 
 
 Configuration parameters
@@ -54,9 +55,6 @@ Configuration parameters
 
     hostmodel = "mizuroute"  # "mizuroute" or "summa"
     dir2save_input_files = "/path/to/output/"
-
-    # Docker support (see Docker section below)
-    running_on_docker = False
 
 **Computational settings:**
 
@@ -299,56 +297,34 @@ The configuration generator creates the following files in your output directory
 * ``openwq_in/openWQ_EWF_fixed_value.json`` -- External water flux configuration (if applicable)
 
 
-Model execution (Section 8)
+Docker settings (Section 8)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The template can run the model directly after generating configuration files. Set ``run_model = True`` to enable this.
+The template includes Docker settings used to generate ready-to-copy Docker commands in the HTML report.
 
 .. code-block:: python
-
-    run_model = True
-
-    # Container runtime: "docker" or "apptainer"
-    container_runtime = "docker"
-
-    # Docker settings
-    docker_container_name = "docker_openwq"
-
-    # Apptainer settings (for HPC)
-    apptainer_sif_path = "/path/to/openwq.sif"
-    apptainer_bind_path = "/scratch/user/openwq_code:/code"
-
-    # Executable path (absolute path INSIDE the container)
-    executable_path = "/code/.../bin/mizuroute_openwq_Release"
-
-    # mizuRoute control file path (absolute path INSIDE the container)
-    file_manager_path = "/code/.../settings/mizuroute.control"
 
     # MPI processes (minimum 2 for mizuRoute domain decomposition)
     mpi_np = 2
 
-When ``run_model = True``, the template:
-
-1. Generates all configuration files (Sections 1-7)
-2. Maps the host ``dir2save_input_files`` path to the container path using the ``docker-compose.yml`` volume mount
-3. Executes ``mpirun -np <mpi_np> <executable_path> <file_manager_path>`` inside the container
-4. Streams stdout/stderr in real-time and saves the full log to ``model_output.log``
-5. Reports success or failure with exit code and elapsed time
+The ``mpi_np`` setting controls the number of MPI processes included in the Docker run command
+that appears in the report. The report automatically resolves container paths from the
+``docker-compose.yml`` volume mount configuration, so the generated commands use the correct
+paths inside the container.
 
 .. note::
 
     mizuRoute requires a minimum of 2 MPI processes (``mpi_np = 2``) for domain decomposition.
-    The ``--allow-run-as-root`` flag is automatically added inside containers.
+    The model is not executed by the template itself -- instead, the report provides ready-to-copy
+    Docker commands that you can paste into your terminal.
 
 
 Report generation (Section 9)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The template can generate an interactive HTML report. Set ``generate_report = True`` to enable this. The report can be generated **with or without** running the model.
+The template always generates an interactive HTML report alongside the configuration files -- no toggle is needed. The report serves as the central hub for reviewing your configuration, running the model, and visualizing results.
 
 .. code-block:: python
-
-    generate_report = True
 
     # Path to river network shapefile or GeoPackage (for interactive basin map)
     # Set to None if no spatial data available — map section will be skipped
@@ -357,37 +333,48 @@ The template can generate an interactive HTML report. Set ``generate_report = Tr
 
 The report is a self-contained HTML file saved to ``{dir2save_input_files}/openwq_report.html`` and includes:
 
-* **Project information** -- Project name, authors, host model, and description displayed at the top of the report
-* **Configuration summary** -- Table of modules, solver, species, and compartments
-* **Module parameter details** -- Collapsible sections showing the full configuration of each active module (BGC species and cycling frameworks, TD dispersion coefficients, LE exchange pairs, TS sediment parameters, SI isotherm settings)
-* **Source/sink setup** -- Method badge, metadata card, and per-species statistics table (number of cells, time period, total load)
-* **Basin map** -- Interactive Leaflet.js map with river network (if shapefile provided)
-* **Time series** -- Interactive Plotly.js charts for each output species
+* **Project information** -- Project name, authors, host model, and description
+* **Summary KPIs** -- Species count, compartments, solver, timestep
+* **Interactive basin map** -- Leaflet.js map with river network, basin polygons, and GRQA monitoring stations (with layer control to toggle each layer)
+* **GRQA observation data** -- Stations from the Global River Water Quality Archive within a configurable buffer distance, including per-species statistics and stoichiometric conversion tables
+* **Model configuration** -- Modules table with collapsible parameter details for each active module (BGC species and cycling frameworks, TD dispersion coefficients, LE exchange pairs, TS sediment parameters, SI isotherm settings)
+* **Time series** -- Interactive Plotly.js charts per species (displayed if HDF5 outputs exist on disk)
 * **Spatial statistics** -- Min/max/mean/std per species across all reaches
-* **Run metadata** -- Runtime, exit code, container type, MPI processes
+* **Source/sink setup** -- Method badge, per-species load statistics
+* **Run metadata** -- Output directory, timestep, solver
+* **Next steps** -- Docker commands with copy-to-clipboard buttons:
 
-**Config-only mode:** When ``run_model = False``, the report is still generated but time series charts and spatial statistics are omitted. The report displays a notice indicating the model was not executed, while configuration, module parameters, and source/sink setup sections remain fully rendered.
+  - Start the Docker container
+  - Run the model (with auto-resolved container paths)
+  - Check outputs (HDF5 directory)
+  - Read and visualize results (Python code snippets with copy buttons for: reading HDF5, WebGL 3D map export, time series per species, and all species in one plot)
+
+**Key features:**
+
+* **Self-contained HTML** -- No external dependencies; the report can be opened in any browser
+* **Dark/light theme toggle** -- Switch between themes for comfortable viewing
+* **Error-resilient rendering** -- Sections that encounter errors display inline error cards instead of crashing the report
+* **Auto-detected HDF5 outputs** -- Time series and spatial statistics appear automatically when output files exist on disk
+* **Copy-to-clipboard buttons** -- All Docker commands and Python code snippets include copy buttons for quick use
 
 .. note::
 
-    The full pipeline is: generate configs → (optionally) run model → generate report, all from a single ``python`` command.
-    When ``run_model = False``, the report focuses on configuration review and setup validation.
+    The report is designed as the central hub for model configuration review.
+    Use it to verify your setup, then copy the Docker commands to run the model
+    and the Python snippets to visualize results.
 
 
 Docker support
 ~~~~~~~~~~~~~~~
 
-When running OpenWQ inside a Docker container, file paths in the generated JSON files must reference the container filesystem rather than the host filesystem. The ``running_on_docker`` flag automates this path correction.
+When running OpenWQ inside a Docker container, file paths in the generated JSON files must reference the container filesystem rather than the host filesystem. Docker path correction is now automatic -- the generator reads ``docker-compose.yml`` (located at the openwq root) to determine the volume mount mapping and applies the correction without any manual flag.
 
-.. code-block:: python
+The generator:
 
-    running_on_docker = True   # Set to True when model runs inside Docker
-
-When enabled, the generator:
-
-1. Reads ``docker-compose.yml`` (located at the openwq root) to determine the volume mount mapping
+1. Reads ``docker-compose.yml`` to determine the volume mount mapping
 2. Resolves the relative host path from the compose file location
 3. Replaces host path prefixes with container path prefixes in all JSON content
+4. Includes the corrected paths in the Docker commands shown in the HTML report
 
 For example, with the default volume mount ``../../../../../../:/code:Z``:
 
@@ -416,6 +403,6 @@ Tips
 
 5. **Sediment parameters**: When ``PARAMETERS`` is left empty (``{}``), warnings are shown but the model uses ``PARAMETER_DEFAULTS`` for all cells. Populate ``PARAMETERS`` with at least one entry per parameter to suppress warnings
 
-6. **Docker paths**: When ``running_on_docker = True``, verify the generated master JSON contains container paths (e.g., ``/code/...``) rather than host paths
+6. **Docker paths**: Docker path correction is automatic -- the generated JSON files contain container paths resolved from ``docker-compose.yml``
 
 7. **Spatially-varying overrides**: Use ``"ALL"`` in the IX/IY/IZ fields to apply a value to all cells in that dimension. Add multiple rows (``"2"``, ``"3"``, ...) for cell-specific overrides

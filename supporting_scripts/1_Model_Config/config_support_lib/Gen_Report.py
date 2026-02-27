@@ -854,8 +854,9 @@ def generate_simulation_report(
         grqa_buffer_km=10,
         container_runtime="docker",
         mpi_np=2,
-        run_time_seconds=0.0,
-        model_was_run=True,
+        docker_container_name="docker_openwq",
+        executable_path=None,
+        file_manager_path=None,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -872,16 +873,35 @@ def generate_simulation_report(
     report_path = os.path.join(output_dir, "openwq_report.html")
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
+    # Track errors for each section so the report can still be generated
+    _section_errors = {}   # section_id → error message
+
     results = {}
-    if model_was_run:
-        print(f"  Reading HDF5 outputs...")
-        results = _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, units)
+    # Read HDF5 outputs if they exist (model may have been run separately)
+    try:
+        _h5_dir = os.path.join(output_dir, 'openwq_out', 'HDF5')
+        if os.path.isdir(_h5_dir) and any(f.endswith('.h5') for f in os.listdir(_h5_dir)):
+            print(f"  Reading HDF5 outputs...")
+            results = _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, units)
+    except Exception as _e:
+        print(f"  WARNING: HDF5 reading failed: {_e}")
+        _section_errors['timeseries'] = str(_e)
 
     # Spatial statistics
-    spatial_stats = _compute_spatial_stats(results)
+    spatial_stats = []
+    try:
+        spatial_stats = _compute_spatial_stats(results)
+    except Exception as _e:
+        print(f"  WARNING: Spatial statistics failed: {_e}")
+        _section_errors['spatial'] = str(_e)
 
     # Basin map layers (river network + basin polygons)
-    map_layers, map_center = _build_map_layers(river_network_shapefile, basin_shapefile)
+    map_layers, map_center = [], None
+    try:
+        map_layers, map_center = _build_map_layers(river_network_shapefile, basin_shapefile)
+    except Exception as _e:
+        print(f"  WARNING: Map layers failed: {_e}")
+        _section_errors['map'] = str(_e)
 
     # GRQA observation stations
     grqa_geojson_str = None
@@ -959,19 +979,66 @@ def generate_simulation_report(
         except Exception as e:
             print(f"  WARNING: Could not parse SS config: {e}")
 
-    # Format runtime
-    if not model_was_run:
-        runtime_str = "Not executed"
-    elif run_time_seconds >= 3600:
-        runtime_str = f"{run_time_seconds/3600:.1f} hours"
-    elif run_time_seconds >= 60:
-        runtime_str = f"{run_time_seconds/60:.1f} min"
-    else:
-        runtime_str = f"{run_time_seconds:.1f}s"
-
     # =========================================================================
     # Build HTML
     # =========================================================================
+    import html as _html_mod
+    import traceback as _tb_mod
+
+    def _error_card(section_title, error_msg, tb_str=None):
+        """Return HTML for an inline error card shown when a section fails."""
+        safe_msg = _html_mod.escape(str(error_msg))
+        card = (f'<div class="card" style="border-left:4px solid #e74c3c;'
+                f'background:rgba(231,76,60,.06);margin-bottom:1rem">'
+                f'<p style="color:#e74c3c;font-weight:600;margin:0 0 .3rem 0">'
+                f'&#x26a0; Error generating {_html_mod.escape(section_title)}</p>'
+                f'<p style="font-size:.85rem;margin:0">{safe_msg}</p>')
+        if tb_str:
+            safe_tb = _html_mod.escape(tb_str)
+            card += (f'<details style="margin-top:.5rem"><summary style="font-size:.8rem;'
+                     f'cursor:pointer;color:var(--muted)">Show traceback</summary>'
+                     f'<pre style="font-size:.75rem;overflow-x:auto;margin-top:.3rem;'
+                     f'background:var(--glass);padding:.5rem;border-radius:4px">'
+                     f'{safe_tb}</pre></details>')
+        card += '</div>'
+        return card
+
+    def _safe_section(H, section_id, section_title, builder_fn):
+        """Run builder_fn(H) inside a try/except. On failure, render an error
+        card inside the section div so the rest of the report still works."""
+        try:
+            builder_fn(H)
+        except Exception as _e:
+            print(f"  WARNING: Section '{section_title}' failed: {_e}")
+            H.append(f'<div class="section" id="{section_id}">'
+                     f'<h2>{_html_mod.escape(section_title)}</h2>'
+                     f'{_error_card(section_title, _e, _tb_mod.format_exc())}'
+                     f'</div>')
+
+    class _SectionGuard:
+        """Context manager that rolls back H on exception and emits an error card."""
+        def __init__(self, h_list, section_id, section_title):
+            self.h_list = h_list
+            self.section_id = section_id
+            self.section_title = section_title
+            self.snapshot_len = 0
+            self.failed = False
+        def __enter__(self):
+            self.snapshot_len = len(self.h_list)
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if exc_type is not None:
+                # Roll back any partial HTML appended by the failed section
+                del self.h_list[self.snapshot_len:]
+                print(f"  WARNING: Section '{self.section_title}' failed: {exc_val}")
+                self.h_list.append(
+                    f'<div class="section" id="{self.section_id}">'
+                    f'<h2>{_html_mod.escape(self.section_title)}</h2>'
+                    f'{_error_card(self.section_title, exc_val, _tb_mod.format_exc())}'
+                    f'</div>')
+                self.failed = True
+                return True  # suppress exception
+
     H = []
 
     # --- HEAD ---
@@ -1192,6 +1259,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     if ss_summary:
         nav_items.append(('sources', 'Source/Sink Setup'))
     nav_items.append(('metadata', 'Run Metadata'))
+    nav_items.append(('nextsteps', 'Next Steps'))
 
     H.append('<div class="layout">')
     H.append('<aside class="sidebar">')
@@ -1245,325 +1313,550 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 </div>""")
 
     # --- SECTION: Summary KPIs ---
-    n_species = len(chemical_species)
-    n_compartments = len(compartments_and_cells)
-    n_cells = sum(1 for cmp in compartments_and_cells.values()
-                  for _ in cmp.values())
-    n_outputs = len(results) if results else n_species
+    try:
+        n_species = len(chemical_species)
+        n_compartments = len(compartments_and_cells)
+        n_cells = sum(1 for cmp in compartments_and_cells.values()
+                      for _ in cmp.values())
+        n_outputs = len(results) if results else n_species
 
-    H.append(f"""<div class="section" id="summary">
+        H.append(f"""<div class="section" id="summary">
 <h2>Summary</h2>
 <div class="kpi-grid">
 <div class="kpi"><div class="icon">&#x1f9ea;</div><div class="value">{n_species}</div><div class="label">Chemical Species</div></div>
 <div class="kpi"><div class="icon">&#x1f4e6;</div><div class="value">{n_compartments}</div><div class="label">Compartments</div></div>
 <div class="kpi"><div class="icon">&#x2699;</div><div class="value">{solver}</div><div class="label">Solver</div></div>
-<div class="kpi"><div class="icon">&#x23f1;</div><div class="value">{runtime_str}</div><div class="label">Runtime</div></div>
 <div class="kpi"><div class="icon">&#x1f4ca;</div><div class="value">{n_outputs}</div><div class="label">Output Species</div></div>
 <div class="kpi"><div class="icon">&#x1f552;</div><div class="value">{timestep[0]} {timestep[1]}</div><div class="label">Output Timestep</div></div>
 </div>
 </div>""")
-
-    # Notice when model was not run
-    if not model_was_run:
-        H.append("""<div class="section visible" style="margin-bottom:1.5rem">
-<div class="highlight-box warning">
-<strong>Configuration-only report</strong> &mdash; The model was not executed.
-This report shows the selected modules and their parameters.
-Time series, spatial statistics, and runtime metadata are not available.
-</div></div>""")
+    except Exception as _e:
+        H.append(f'<div class="section" id="summary"><h2>Summary</h2>'
+                 f'{_error_card("Summary", _e, _tb_mod.format_exc())}</div>')
 
     # --- SECTION: Basin Map ---
-    if map_layers or grqa_geojson_str:
-        H.append(f"""<div class="section" id="map">
+    try:
+        if 'map' in _section_errors:
+            H.append(f'<div class="section" id="map"><h2>Basin Map</h2>'
+                     f'{_error_card("Basin Map", _section_errors["map"])}</div>')
+        elif map_layers or grqa_geojson_str:
+            H.append(f"""<div class="section" id="map">
 <h2>Basin Map</h2>
 <div class="card secondary">
 <div class="map-container"><div id="basinMap"></div></div>
 </div>
 </div>""")
+    except Exception as _e:
+        H.append(f'<div class="section" id="map"><h2>Basin Map</h2>'
+                 f'{_error_card("Basin Map", _e, _tb_mod.format_exc())}</div>')
 
     # --- SECTION: GRQA Observations ---
-    if grqa_stats:
-        H.append('<div class="section" id="grqa"><h2>GRQA Observation Data</h2>')
-        _buf_km = grqa_stats.get('buffer_km', '?')
-        H.append(f'<div class="highlight-box info">'
-                 f'<strong>Global River Water Quality Archive (GRQA)</strong> — '
-                 f'Monitoring stations within {_buf_km} km of the basin/river network. '
-                 f'<a href="https://zenodo.org/records/15335450" target="_blank">'
-                 f'GRQA Dataset</a></div>')
+    with _SectionGuard(H, 'grqa', 'GRQA Observation Data'):
+        if grqa_stats:
+            H.append('<div class="section" id="grqa"><h2>GRQA Observation Data</h2>')
+            _buf_km = grqa_stats.get('buffer_km', '?')
+            H.append(f'<div class="highlight-box info">'
+                     f'<strong>Global River Water Quality Archive (GRQA)</strong> — '
+                     f'Monitoring stations within {_buf_km} km of the basin/river network. '
+                     f'<a href="https://zenodo.org/records/15335450" target="_blank">'
+                     f'GRQA Dataset</a></div>')
 
-        _no_data = grqa_stats.get('no_data_species', [])
-        _unmapped = grqa_stats.get('unmapped_species', [])
+            _no_data = grqa_stats.get('no_data_species', [])
+            _unmapped = grqa_stats.get('unmapped_species', [])
 
-        if grqa_stats['n_stations'] == 0:
-            # No stations found — distinguish between GRQA-supported vs unsupported
-            searched = grqa_stats.get('searched_species', [])
-            sp_list = ', '.join(f'<code>{s}</code>' for s in searched) \
-                if searched else 'N/A'
-            H.append(
-                f'<div class="highlight-box" style="border-left-color:var(--accent);">'
-                f'<strong>No GRQA monitoring stations found</strong> within '
-                f'{_buf_km} km of the basin/river network for the following '
-                f'GRQA-supported species: {sp_list}. '
-                f'Try increasing <code>grqa_buffer_km</code> to widen the '
-                f'search area.</div>')
-            if _unmapped:
-                _um_list = ', '.join(f'<code>{s}</code>' for s in _unmapped)
+            if grqa_stats['n_stations'] == 0:
+                # No stations found — distinguish between GRQA-supported vs unsupported
+                searched = grqa_stats.get('searched_species', [])
+                sp_list = ', '.join(f'<code>{s}</code>' for s in searched) \
+                    if searched else 'N/A'
                 H.append(
-                    f'<div class="highlight-box" '
-                    f'style="border-left-color:var(--text-light);">'
-                    f'The following model species are <strong>not available'
-                    f'</strong> in the GRQA database and were excluded from '
-                    f'the search: {_um_list}.</div>')
-        else:
-            # Summary KPIs
-            yr_range = ''
-            if grqa_stats.get('year_start') and grqa_stats.get('year_end'):
-                yr_range = (f"{grqa_stats['year_start']}&ndash;"
-                            f"{grqa_stats['year_end']}")
-            H.append(f"""<div class="kpi-grid" style="margin:1rem 0">
+                    f'<div class="highlight-box" style="border-left-color:var(--accent);">'
+                    f'<strong>No GRQA monitoring stations found</strong> within '
+                    f'{_buf_km} km of the basin/river network for the following '
+                    f'GRQA-supported species: {sp_list}. '
+                    f'Try increasing <code>grqa_buffer_km</code> to widen the '
+                    f'search area.</div>')
+                if _unmapped:
+                    _um_list = ', '.join(f'<code>{s}</code>' for s in _unmapped)
+                    H.append(
+                        f'<div class="highlight-box" '
+                        f'style="border-left-color:var(--text-light);">'
+                        f'The following model species are <strong>not available'
+                        f'</strong> in the GRQA database and were excluded from '
+                        f'the search: {_um_list}.</div>')
+            else:
+                # Summary KPIs
+                yr_range = ''
+                if grqa_stats.get('year_start') and grqa_stats.get('year_end'):
+                    yr_range = (f"{grqa_stats['year_start']}&ndash;"
+                                f"{grqa_stats['year_end']}")
+                H.append(f"""<div class="kpi-grid" style="margin:1rem 0">
 <div class="kpi"><div class="icon">&#x1f4cd;</div><div class="value">{grqa_stats['n_stations']}</div><div class="label">Stations</div></div>
 <div class="kpi"><div class="icon">&#x1f4c8;</div><div class="value">{grqa_stats['n_observations']:,}</div><div class="label">Observations</div></div>
 <div class="kpi"><div class="icon">&#x1f4c5;</div><div class="value">{yr_range}</div><div class="label">Period</div></div>
 <div class="kpi"><div class="icon">&#x1f9ea;</div><div class="value">{len(grqa_stats.get('species_stats', []))}</div><div class="label">Species Matched</div></div>
 </div>""")
 
-            # Per-species table
-            if grqa_stats.get('species_stats'):
-                H.append('<div class="card primary"><div class="table-wrap">'
-                         '<table>')
-                H.append('<tr><th>Species</th><th>Stations</th>'
-                         '<th>Observations</th><th>Period</th></tr>')
-                for sp in grqa_stats['species_stats']:
-                    yr = ''
-                    if sp.get('year_start') and sp.get('year_end'):
-                        yr = f"{sp['year_start']}&ndash;{sp['year_end']}"
+                # Per-species table
+                if grqa_stats.get('species_stats'):
+                    H.append('<div class="card primary"><div class="table-wrap">'
+                             '<table>')
+                    H.append('<tr><th>Species</th><th>Stations</th>'
+                             '<th>Observations</th><th>Period</th></tr>')
+                    for sp in grqa_stats['species_stats']:
+                        yr = ''
+                        if sp.get('year_start') and sp.get('year_end'):
+                            yr = f"{sp['year_start']}&ndash;{sp['year_end']}"
+                        H.append(
+                            f'<tr><td><span class="badge badge-primary">'
+                            f'{sp["species"]}</span></td>'
+                            f'<td class="num">{sp["n_stations"]}</td>'
+                            f'<td class="num">{sp["n_observations"]:,}</td>'
+                            f'<td>{yr}</td></tr>')
+                    H.append('</table></div></div>')
+
+                # Species searched but with no data within the buffer
+                if _no_data:
+                    _nd_list = ', '.join(f'<code>{s}</code>' for s in _no_data)
                     H.append(
-                        f'<tr><td><span class="badge badge-primary">'
-                        f'{sp["species"]}</span></td>'
-                        f'<td class="num">{sp["n_stations"]}</td>'
-                        f'<td class="num">{sp["n_observations"]:,}</td>'
-                        f'<td>{yr}</td></tr>')
-                H.append('</table></div></div>')
+                        f'<div class="highlight-box" '
+                        f'style="border-left-color:var(--accent);">'
+                        f'The following species exist in the GRQA database but '
+                        f'<strong>no stations were found</strong> within '
+                        f'{_buf_km} km: {_nd_list}. '
+                        f'Try increasing <code>grqa_buffer_km</code>.</div>')
 
-            # Species searched but with no data within the buffer
-            if _no_data:
-                _nd_list = ', '.join(f'<code>{s}</code>' for s in _no_data)
-                H.append(
-                    f'<div class="highlight-box" '
-                    f'style="border-left-color:var(--accent);">'
-                    f'The following species exist in the GRQA database but '
-                    f'<strong>no stations were found</strong> within '
-                    f'{_buf_km} km: {_nd_list}. '
-                    f'Try increasing <code>grqa_buffer_km</code>.</div>')
+                # Species not available in GRQA at all
+                if _unmapped:
+                    _um_list = ', '.join(f'<code>{s}</code>' for s in _unmapped)
+                    H.append(
+                        f'<div class="highlight-box" '
+                        f'style="border-left-color:var(--text-light);">'
+                        f'The following model species are <strong>not available'
+                        f'</strong> in the GRQA database: {_um_list}.</div>')
 
-            # Species not available in GRQA at all
-            if _unmapped:
-                _um_list = ', '.join(f'<code>{s}</code>' for s in _unmapped)
-                H.append(
-                    f'<div class="highlight-box" '
-                    f'style="border-left-color:var(--text-light);">'
-                    f'The following model species are <strong>not available'
-                    f'</strong> in the GRQA database: {_um_list}.</div>')
-
-        # Stoichiometric conversion note
-        H.append(
-            '<details style="margin-top:1rem;">'
-            '<summary style="cursor:pointer;font-weight:600;'
-            'color:var(--primary);font-size:0.95rem;">'
-            'Stoichiometric Conversion: GRQA &rarr; Model Units</summary>'
-            '<div class="card primary" style="margin-top:0.5rem;">'
-            '<p style="margin-bottom:0.5rem;">GRQA reports concentrations '
-            'of the full ion (e.g.&nbsp;mg&#8209;NO<sub>3</sub>/L), while '
-            'the model uses the <strong>&ldquo;as element&rdquo;</strong> '
-            'convention (e.g.&nbsp;NO3&#8209;N in mg&#8209;N/L). The '
-            'conversion uses stoichiometry:</p>'
-            '<p style="text-align:center;font-size:0.95rem;margin:0.5rem 0;">'
-            '<code>model_value = GRQA_value &times; MW(element) / '
-            'MW(ion)</code></p>'
-            '<div class="table-wrap"><table>'
-            '<tr><th>GRQA</th><th>Model</th>'
-            '<th>Factor</th><th>Formula</th></tr>')
-        for grqa_code, factor in _GRQA_TO_MODEL_FACTOR.items():
-            elem = {'NO3': 'N', 'NH4': 'N', 'NO2': 'N',
-                    'PO4': 'P', 'SO4': 'S'}[grqa_code]
-            model_name = f'{grqa_code}-{elem}'
+            # Stoichiometric conversion note
             H.append(
-                f'<tr><td><code>{grqa_code}</code> '
-                f'(mg&#8209;{grqa_code}/L)</td>'
-                f'<td><code>{model_name}</code> '
-                f'(mg&#8209;{elem}/L)</td>'
-                f'<td class="num">{factor:.4f}</td>'
-                f'<td>MW({elem}) / MW({grqa_code})</td></tr>')
-        H.append('</table></div></div></details>')
+                '<details style="margin-top:1rem;">'
+                '<summary style="cursor:pointer;font-weight:600;'
+                'color:var(--primary);font-size:0.95rem;">'
+                'Stoichiometric Conversion: GRQA &rarr; Model Units</summary>'
+                '<div class="card primary" style="margin-top:0.5rem;">'
+                '<p style="margin-bottom:0.5rem;">GRQA reports concentrations '
+                'of the full ion (e.g.&nbsp;mg&#8209;NO<sub>3</sub>/L), while '
+                'the model uses the <strong>&ldquo;as element&rdquo;</strong> '
+                'convention (e.g.&nbsp;NO3&#8209;N in mg&#8209;N/L). The '
+                'conversion uses stoichiometry:</p>'
+                '<p style="text-align:center;font-size:0.95rem;margin:0.5rem 0;">'
+                '<code>model_value = GRQA_value &times; MW(element) / '
+                'MW(ion)</code></p>'
+                '<div class="table-wrap"><table>'
+                '<tr><th>GRQA</th><th>Model</th>'
+                '<th>Factor</th><th>Formula</th></tr>')
+            for grqa_code, factor in _GRQA_TO_MODEL_FACTOR.items():
+                elem = {'NO3': 'N', 'NH4': 'N', 'NO2': 'N',
+                        'PO4': 'P', 'SO4': 'S'}[grqa_code]
+                model_name = f'{grqa_code}-{elem}'
+                H.append(
+                    f'<tr><td><code>{grqa_code}</code> '
+                    f'(mg&#8209;{grqa_code}/L)</td>'
+                    f'<td><code>{model_name}</code> '
+                    f'(mg&#8209;{elem}/L)</td>'
+                    f'<td class="num">{factor:.4f}</td>'
+                    f'<td>MW({elem}) / MW({grqa_code})</td></tr>')
+            H.append('</table></div></div></details>')
 
-        # Collapsible table of all GRQA parameters available
-        _grqa_groups = {}
-        for code, name in _GRQA_AVAILABLE_PARAMS.items():
-            # Derive group from the code category
-            if code in ('TN', 'DN', 'NO3', 'NO2', 'NH4', 'NO3_NO2',
-                        'DIN', 'DON', 'TKN', 'PN'):
-                grp = 'Nitrogen'
-            elif code in ('TP', 'DP', 'DIP', 'PO4', 'DOP', 'PP'):
-                grp = 'Phosphorus'
-            elif code in ('DO', 'DO_sat', 'BOD', 'BOD5', 'COD', 'CODMn'):
-                grp = 'Oxygen'
-            elif code in ('DOC', 'TOC', 'TC', 'TIC', 'DIC', 'POC', 'PC'):
-                grp = 'Carbon'
-            elif code in ('TSS', 'TDS', 'SS', 'Turbidity'):
-                grp = 'Sediment'
-            elif code in ('Temp', 'pH', 'EC', 'SC'):
-                grp = 'Physical'
-            else:
-                grp = 'Other'
-            _grqa_groups.setdefault(grp, []).append((code, name))
+            # Collapsible table of all GRQA parameters available
+            _grqa_groups = {}
+            for code, name in _GRQA_AVAILABLE_PARAMS.items():
+                # Derive group from the code category
+                if code in ('TN', 'DN', 'NO3', 'NO2', 'NH4', 'NO3_NO2',
+                            'DIN', 'DON', 'TKN', 'PN'):
+                    grp = 'Nitrogen'
+                elif code in ('TP', 'DP', 'DIP', 'PO4', 'DOP', 'PP'):
+                    grp = 'Phosphorus'
+                elif code in ('DO', 'DO_sat', 'BOD', 'BOD5', 'COD', 'CODMn'):
+                    grp = 'Oxygen'
+                elif code in ('DOC', 'TOC', 'TC', 'TIC', 'DIC', 'POC', 'PC'):
+                    grp = 'Carbon'
+                elif code in ('TSS', 'TDS', 'SS', 'Turbidity'):
+                    grp = 'Sediment'
+                elif code in ('Temp', 'pH', 'EC', 'SC'):
+                    grp = 'Physical'
+                else:
+                    grp = 'Other'
+                _grqa_groups.setdefault(grp, []).append((code, name))
 
-        H.append(
-            '<details style="margin-top:1rem;">'
-            '<summary style="cursor:pointer;font-weight:600;'
-            'color:var(--primary);font-size:0.95rem;">'
-            'All GRQA Parameters Available in the Archive '
-            f'({len(_GRQA_AVAILABLE_PARAMS)} parameters)</summary>'
-            '<div class="card teal" style="margin-top:0.5rem;">'
-            '<div class="table-wrap"><table>'
-            '<tr><th>Group</th><th>Code</th><th>Parameter</th></tr>')
-        for grp in ('Nitrogen', 'Phosphorus', 'Oxygen', 'Carbon',
-                    'Sediment', 'Physical', 'Other'):
-            params = _grqa_groups.get(grp, [])
-            for i, (code, name) in enumerate(params):
-                grp_cell = (f'<td rowspan="{len(params)}" '
-                            f'style="font-weight:600;">{grp}</td>'
-                            if i == 0 else '')
-                H.append(f'<tr>{grp_cell}<td><code>{code}</code></td>'
-                         f'<td>{name}</td></tr>')
-        H.append('</table></div></div></details>')
+            H.append(
+                '<details style="margin-top:1rem;">'
+                '<summary style="cursor:pointer;font-weight:600;'
+                'color:var(--primary);font-size:0.95rem;">'
+                'All GRQA Parameters Available in the Archive '
+                f'({len(_GRQA_AVAILABLE_PARAMS)} parameters)</summary>'
+                '<div class="card teal" style="margin-top:0.5rem;">'
+                '<div class="table-wrap"><table>'
+                '<tr><th>Group</th><th>Code</th><th>Parameter</th></tr>')
+            for grp in ('Nitrogen', 'Phosphorus', 'Oxygen', 'Carbon',
+                        'Sediment', 'Physical', 'Other'):
+                params = _grqa_groups.get(grp, [])
+                for i, (code, name) in enumerate(params):
+                    grp_cell = (f'<td rowspan="{len(params)}" '
+                                f'style="font-weight:600;">{grp}</td>'
+                                if i == 0 else '')
+                    H.append(f'<tr>{grp_cell}<td><code>{code}</code></td>'
+                             f'<td>{name}</td></tr>')
+            H.append('</table></div></div></details>')
 
-        H.append('</div>')
+            H.append('</div>')
 
     # --- SECTION: Configuration ---
-    modules = [
-        ('Biogeochemistry', bgc_module_name),
-        ('Transport Dissolved', td_module_name),
-        ('Lateral Exchange', le_module_name),
-        ('Sediment Transport', ts_module_name),
-        ('Sorption Isotherm', si_module_name),
-    ]
+    with _SectionGuard(H, 'config', 'Model Configuration'):
+        modules = [
+            ('Biogeochemistry', bgc_module_name),
+            ('Transport Dissolved', td_module_name),
+            ('Lateral Exchange', le_module_name),
+            ('Sediment Transport', ts_module_name),
+            ('Sorption Isotherm', si_module_name),
+        ]
 
-    H.append('<div class="section" id="config"><h2>Model Configuration</h2>')
-    H.append('<div class="card primary"><div class="table-wrap"><table>')
-    H.append('<tr><th>Module</th><th>Selection</th></tr>')
-    for mod_label, mod_name in modules:
-        badge = 'badge-none' if mod_name.upper() == 'NONE' else 'badge-primary'
-        H.append(f'<tr><td>{mod_label}</td><td><span class="badge {badge}">{mod_name}</span></td></tr>')
-    H.append(f'<tr><td>Source/Sink Method</td><td><span class="badge badge-secondary">{ss_method}</span></td></tr>')
-    H.append(f'<tr><td>Output Format</td><td>{units}</td></tr>')
-    H.append(f'<tr><td>Species</td><td>{", ".join(chemical_species)}</td></tr>')
-    cmp_names = ", ".join(compartments_and_cells.keys())
-    H.append(f'<tr><td>Compartments</td><td>{cmp_names}</td></tr>')
-    H.append('</table></div></div>')
-
-    # Module parameter details (collapsible)
-    for mod_label, mod_name in modules:
-        mod_data = _read_module_json(output_dir, mod_name)
-        if mod_data is None:
-            continue
-        param_html = _render_module_params(mod_data, mod_name)
-        if not param_html:
-            continue
-        H.append(f'<details class="module-details">')
-        H.append(f'<summary>{mod_label}: '
-                 f'<span class="badge badge-primary">{mod_name}</span></summary>')
-        H.append('<div class="module-content">')
-        H.extend(param_html)
-        H.append('</div></details>')
-
-    H.append('</div>')  # close section
-
-    # --- SECTION: Time Series ---
-    if results:
-        H.append('<div class="section" id="timeseries"><h2>Time Series</h2>')
-        for i, (species, df) in enumerate(results.items()):
-            plot_id = f"plotTS_{i}"
-            H.append(f'<div class="card accent" style="margin-bottom:1rem">')
-            H.append(f'<h3>{species}</h3>')
-            H.append(f'<div id="{plot_id}" class="plot-container"></div>')
-            H.append('</div>')
-        H.append('</div>')
-
-    # --- SECTION: Spatial Statistics ---
-    if spatial_stats:
-        H.append('<div class="section" id="spatial"><h2>Spatial Statistics</h2>')
-        H.append('<div class="card secondary"><div class="table-wrap"><table>')
-        H.append('<tr><th>Species</th><th>Min</th><th>Max</th><th>Mean</th>'
-                 '<th>Std</th><th>Median</th><th>Cells</th><th>Timesteps</th></tr>')
-        for s in spatial_stats:
-            H.append(f'<tr><td>{s["species"]}</td>'
-                     f'<td class="num">{s["min"]:.4g}</td>'
-                     f'<td class="num">{s["max"]:.4g}</td>'
-                     f'<td class="num">{s["mean"]:.4g}</td>'
-                     f'<td class="num">{s["std"]:.4g}</td>'
-                     f'<td class="num">{s["median"]:.4g}</td>'
-                     f'<td class="num">{s["n_cells"]}</td>'
-                     f'<td class="num">{s["n_timesteps"]}</td></tr>')
-        H.append('</table></div></div></div>')
-
-    # --- SECTION: Source/Sink Summary ---
-    if ss_summary:
-        H.append('<div class="section" id="sources"><h2>Source/Sink Setup</h2>')
-
-        # Metadata card
-        if ss_metadata:
-            H.append('<div class="card primary" style="margin-bottom:1rem">'
-                     '<div class="table-wrap"><table>')
-            H.append('<tr><th>Property</th><th>Value</th></tr>')
-            H.append(f'<tr><td>Method</td><td><span class="badge badge-secondary">'
-                     f'{ss_method}</span></td></tr>')
-            for mk, mv in ss_metadata.items():
-                H.append(f'<tr><td>{mk}</td><td>{mv}</td></tr>')
-            H.append('</table></div></div>')
-
-        # Per-species detail table
-        H.append('<div class="card accent"><div class="table-wrap"><table>')
-        H.append('<tr><th>Chemical</th><th>Compartment</th><th>Type</th>'
-                 '<th>Units</th><th>Cells</th><th>Period</th>'
-                 '<th>Entries</th><th>Total Load</th></tr>')
-        for entry in ss_summary:
-            yr = entry.get('year_range')
-            period = f"{yr[0]}&ndash;{yr[1]}" if yr and yr[0] != yr[1] else (
-                str(yr[0]) if yr else 'N/A')
-            total = entry.get('total_load', 0)
-            total_str = f"{total:.4g}" if total else "0"
-            H.append(
-                f'<tr><td>{entry["chemical"]}</td>'
-                f'<td>{entry["compartment"]}</td>'
-                f'<td>{entry["type"]}</td>'
-                f'<td>{entry["units"]}</td>'
-                f'<td class="num">{entry.get("n_cells", "N/A")}</td>'
-                f'<td>{period}</td>'
-                f'<td class="num">{entry.get("n_entries", "N/A")}</td>'
-                f'<td class="num">{total_str} {entry["units"]}</td></tr>')
+        H.append('<div class="section" id="config"><h2>Model Configuration</h2>')
+        H.append('<div class="card primary"><div class="table-wrap"><table>')
+        H.append('<tr><th>Module</th><th>Selection</th></tr>')
+        for mod_label, mod_name in modules:
+            badge = 'badge-none' if mod_name.upper() == 'NONE' else 'badge-primary'
+            H.append(f'<tr><td>{mod_label}</td><td><span class="badge {badge}">{mod_name}</span></td></tr>')
+        H.append(f'<tr><td>Source/Sink Method</td><td><span class="badge badge-secondary">{ss_method}</span></td></tr>')
+        H.append(f'<tr><td>Output Format</td><td>{units}</td></tr>')
+        H.append(f'<tr><td>Species</td><td>{", ".join(chemical_species)}</td></tr>')
+        cmp_names = ", ".join(compartments_and_cells.keys())
+        H.append(f'<tr><td>Compartments</td><td>{cmp_names}</td></tr>')
         H.append('</table></div></div>')
 
-        H.append('</div>')
+        # Module parameter details (collapsible)
+        for mod_label, mod_name in modules:
+            mod_data = _read_module_json(output_dir, mod_name)
+            if mod_data is None:
+                continue
+            param_html = _render_module_params(mod_data, mod_name)
+            if not param_html:
+                continue
+            H.append(f'<details class="module-details">')
+            H.append(f'<summary>{mod_label}: '
+                     f'<span class="badge badge-primary">{mod_name}</span></summary>')
+            H.append('<div class="module-content">')
+            H.extend(param_html)
+            H.append('</div></details>')
+
+        H.append('</div>')  # close section
+
+    # --- SECTION: Time Series ---
+    with _SectionGuard(H, 'timeseries', 'Time Series'):
+        if 'timeseries' in _section_errors:
+            H.append(f'<div class="section" id="timeseries"><h2>Time Series</h2>'
+                     f'{_error_card("Time Series", _section_errors["timeseries"])}</div>')
+        elif results:
+            H.append('<div class="section" id="timeseries"><h2>Time Series</h2>')
+            for i, (species, df) in enumerate(results.items()):
+                plot_id = f"plotTS_{i}"
+                H.append(f'<div class="card accent" style="margin-bottom:1rem">')
+                H.append(f'<h3>{species}</h3>')
+                H.append(f'<div id="{plot_id}" class="plot-container"></div>')
+                H.append('</div>')
+            H.append('</div>')
+
+    # --- SECTION: Spatial Statistics ---
+    with _SectionGuard(H, 'spatial', 'Spatial Statistics'):
+        if 'spatial' in _section_errors:
+            H.append(f'<div class="section" id="spatial"><h2>Spatial Statistics</h2>'
+                     f'{_error_card("Spatial Statistics", _section_errors["spatial"])}</div>')
+        elif spatial_stats:
+            H.append('<div class="section" id="spatial"><h2>Spatial Statistics</h2>')
+            H.append('<div class="card secondary"><div class="table-wrap"><table>')
+            H.append('<tr><th>Species</th><th>Min</th><th>Max</th><th>Mean</th>'
+                     '<th>Std</th><th>Median</th><th>Cells</th><th>Timesteps</th></tr>')
+            for s in spatial_stats:
+                H.append(f'<tr><td>{s["species"]}</td>'
+                         f'<td class="num">{s["min"]:.4g}</td>'
+                         f'<td class="num">{s["max"]:.4g}</td>'
+                         f'<td class="num">{s["mean"]:.4g}</td>'
+                         f'<td class="num">{s["std"]:.4g}</td>'
+                         f'<td class="num">{s["median"]:.4g}</td>'
+                         f'<td class="num">{s["n_cells"]}</td>'
+                         f'<td class="num">{s["n_timesteps"]}</td></tr>')
+            H.append('</table></div></div></div>')
+
+    # --- SECTION: Source/Sink Summary ---
+    with _SectionGuard(H, 'sources', 'Source/Sink Setup'):
+        if ss_summary:
+            H.append('<div class="section" id="sources"><h2>Source/Sink Setup</h2>')
+
+            # Metadata card
+            if ss_metadata:
+                H.append('<div class="card primary" style="margin-bottom:1rem">'
+                         '<div class="table-wrap"><table>')
+                H.append('<tr><th>Property</th><th>Value</th></tr>')
+                H.append(f'<tr><td>Method</td><td><span class="badge badge-secondary">'
+                         f'{ss_method}</span></td></tr>')
+                for mk, mv in ss_metadata.items():
+                    H.append(f'<tr><td>{mk}</td><td>{mv}</td></tr>')
+                H.append('</table></div></div>')
+
+            # Per-species detail table
+            H.append('<div class="card accent"><div class="table-wrap"><table>')
+            H.append('<tr><th>Chemical</th><th>Compartment</th><th>Type</th>'
+                     '<th>Units</th><th>Cells</th><th>Period</th>'
+                     '<th>Entries</th><th>Total Load</th></tr>')
+            for entry in ss_summary:
+                yr = entry.get('year_range')
+                period = f"{yr[0]}&ndash;{yr[1]}" if yr and yr[0] != yr[1] else (
+                    str(yr[0]) if yr else 'N/A')
+                total = entry.get('total_load', 0)
+                total_str = f"{total:.4g}" if total else "0"
+                H.append(
+                    f'<tr><td>{entry["chemical"]}</td>'
+                    f'<td>{entry["compartment"]}</td>'
+                    f'<td>{entry["type"]}</td>'
+                    f'<td>{entry["units"]}</td>'
+                    f'<td class="num">{entry.get("n_cells", "N/A")}</td>'
+                    f'<td>{period}</td>'
+                    f'<td class="num">{entry.get("n_entries", "N/A")}</td>'
+                    f'<td class="num">{total_str} {entry["units"]}</td></tr>')
+            H.append('</table></div></div>')
+
+            H.append('</div>')
 
     # --- SECTION: Run Metadata ---
-    H.append('<div class="section" id="metadata"><h2>Run Metadata</h2>')
-    H.append('<div class="card primary"><div class="table-wrap"><table>')
-    H.append('<tr><th>Property</th><th>Value</th></tr>')
-    if model_was_run:
-        H.append(f'<tr><td>Container Runtime</td><td>{container_runtime}</td></tr>')
-        H.append(f'<tr><td>MPI Processes</td><td>{mpi_np}</td></tr>')
-        H.append(f'<tr><td>Runtime</td><td>{runtime_str}</td></tr>')
-    else:
-        H.append('<tr><td>Model Execution</td>'
-                 '<td><span class="badge badge-none">Not executed</span></td></tr>')
-    H.append(f'<tr><td>Output Directory</td>'
-             f'<td style="font-family:monospace;font-size:.8rem">{output_dir}</td></tr>')
-    H.append(f'<tr><td>Report Generated</td><td>{now}</td></tr>')
-    H.append(f'<tr><td>Solver</td><td>{solver}</td></tr>')
-    H.append(f'<tr><td>Output Timestep</td><td>{timestep[0]} {timestep[1]}</td></tr>')
-    H.append('</table></div></div></div>')
+    with _SectionGuard(H, 'metadata', 'Run Metadata'):
+        H.append('<div class="section" id="metadata"><h2>Run Metadata</h2>')
+        H.append('<div class="card primary"><div class="table-wrap"><table>')
+        H.append('<tr><th>Property</th><th>Value</th></tr>')
+        H.append(f'<tr><td>Output Directory</td>'
+                 f'<td style="font-family:monospace;font-size:.8rem">{output_dir}</td></tr>')
+        H.append(f'<tr><td>Report Generated</td><td>{now}</td></tr>')
+        H.append(f'<tr><td>Solver</td><td>{solver}</td></tr>')
+        H.append(f'<tr><td>Output Timestep</td><td>{timestep[0]} {timestep[1]}</td></tr>')
+        H.append('</table></div></div></div>')
 
-    H.append('</div>')  # container
+    # --- SECTION: Next Steps ---
+    with _SectionGuard(H, 'nextsteps', 'Next Steps'):
+        # Helper: wrap a code snippet in a <pre> with a copy button.
+        # The raw text is stored in a hidden <template> tag to avoid any
+        # escaping issues with quotes / backslashes inside onclick attributes.
+        _pre_style = ('position:relative;background:var(--glass);padding:.8rem 2.5rem .8rem .8rem;'
+                      'border-radius:6px;overflow-x:auto;font-size:.82rem')
+        _btn_style = ('position:absolute;top:.4rem;right:.4rem;background:var(--primary);color:#fff;'
+                      'border:none;border-radius:4px;padding:2px 8px;font-size:.7rem;cursor:pointer')
+        _copy_id_counter = [0]
+
+        def _code_block(code_text):
+            """Return HTML for a <pre> block with a copy-to-clipboard button."""
+            import html as _html
+            safe = _html.escape(code_text)
+            cid = f'_cb{_copy_id_counter[0]}'
+            _copy_id_counter[0] += 1
+            return (f'<div style="position:relative">'
+                    f'<pre id="{cid}" style="{_pre_style}">{safe}</pre>'
+                    f'<button style="{_btn_style}" '
+                    f'onclick="var t=document.getElementById(\'{cid}\').textContent;'
+                    f'navigator.clipboard.writeText(t);'
+                    f'this.textContent=\'Copied!\';'
+                    f'setTimeout(function(){{this.textContent=\'Copy\'}}.bind(this),1500)">'
+                    f'Copy</button></div>')
+
+        H.append('<div class="section" id="nextsteps"><h2>Next Steps</h2>')
+        H.append('<div class="card primary">')
+        H.append('<p>If you are happy with this configuration, follow these steps '
+                 'to run the model using Docker.</p>')
+
+        # Step 1: Start Docker container
+        _script_dir = os.path.dirname(os.path.abspath(__file__))
+        _containers_dir = os.path.normpath(
+            os.path.join(_script_dir, '..', '..', '..', 'containers'))
+        _step1_cmd = f'cd {_containers_dir}\ndocker compose up -d'
+        H.append('<h3 style="margin-top:1rem">1. Start the Docker container</h3>')
+        H.append('<p>If the container is not already running:</p>')
+        H.append(_code_block(_step1_cmd))
+
+        # Step 2: Run the model
+        H.append('<h3 style="margin-top:1rem">2. Run the model</h3>')
+
+        # Build the docker exec command with resolved container paths
+        _docker_cmd = None
+        if executable_path and file_manager_path:
+            try:
+                import Gen_Input_Driver as _gJSON
+                _dc_path = os.path.normpath(
+                    os.path.join(_script_dir, '..', '..', '..', 'containers',
+                                 'docker-compose.yml'))
+                _host_root, _cont_root = _gJSON._parse_docker_volume_mount(_dc_path)
+                if _host_root and _cont_root:
+                    _cont_exec = _gJSON._correct_path_for_docker(
+                        os.path.abspath(executable_path), _host_root, _cont_root)
+                    _cont_fm = _gJSON._correct_path_for_docker(
+                        os.path.abspath(file_manager_path), _host_root, _cont_root)
+                    _abs_out = os.path.abspath(output_dir)
+                    if not _abs_out.endswith('/'):
+                        _abs_out += '/'
+                    _cont_wd = _gJSON._correct_path_for_docker(
+                        _abs_out, _host_root, _cont_root).rstrip('/')
+                    _docker_cmd = (
+                        f'docker exec {docker_container_name} /bin/bash -c '
+                        f'"cd {_cont_wd} && '
+                        f'mpirun --allow-run-as-root -np {mpi_np} '
+                        f'{_cont_exec} '
+                        f'{_cont_fm}"'
+                    )
+            except Exception as _e:
+                print(f"  WARNING: Could not resolve Docker paths for report: {_e}")
+
+        if not _docker_cmd and executable_path and file_manager_path:
+            # Fallback: show host paths (user will need to convert manually)
+            _docker_cmd = (
+                f'docker exec {docker_container_name} /bin/bash -c '
+                f'"cd <container_path_to:{os.path.abspath(output_dir)}> && '
+                f'mpirun --allow-run-as-root -np {mpi_np} '
+                f'<container_path_to:{os.path.abspath(executable_path)}> '
+                f'<container_path_to:{os.path.abspath(file_manager_path)}>"'
+            )
+
+        if _docker_cmd:
+            H.append(_code_block(_docker_cmd))
+        else:
+            H.append('<p style="color:var(--muted);font-style:italic">'
+                     'Could not build Docker command &mdash; executable_path '
+                     'or file_manager_path not provided.</p>')
+
+        H.append('<p style="margin-top:.6rem;font-size:.82rem;color:var(--muted)">'
+                 'Or set <code>run_model = True</code> in your template and re-run it '
+                 '&mdash; the command above will be executed automatically.</p>')
+
+        # Step 3: Check outputs
+        H.append('<h3 style="margin-top:1rem">3. Check outputs</h3>')
+        _h5_dir = os.path.join(output_dir, 'openwq_out', 'HDF5')
+        H.append('<p>After a successful run, HDF5 results will be saved to:</p>')
+        H.append(_code_block(_h5_dir))
+
+        # Step 4: Read & visualize results
+        _read_outputs_dir = os.path.normpath(
+            os.path.join(_script_dir, '..', '..', '2_Read_Outputs'))
+        _hdf5_lib_dir = os.path.join(_read_outputs_dir, 'hdf5_support_lib')
+        _abs_output_dir = os.path.abspath(output_dir)
+
+        # Build species list string
+        _species_list = chemical_species if isinstance(chemical_species, (list, tuple)) \
+            else [chemical_species]
+        _species_str = ', '.join(f'"{s}"' for s in _species_list)
+
+        # Compartment names
+        _cmp_names = list(compartments_and_cells.keys()) \
+            if isinstance(compartments_and_cells, dict) else ['RIVER_NETWORK_REACHES']
+        _cmp_str = ', '.join(f'"{c}"' for c in _cmp_names)
+
+        # Shapefile info for mapping
+        _shp_path = river_network_shapefile or ''
+        _shp_key = 'SegId'  # default for mizuRoute
+
+        H.append('<h3 style="margin-top:1rem">4. Read &amp; visualize results</h3>')
+
+        # --- 4a: Common setup (read HDF5) ---
+        _read_setup = (
+            f'import sys\n'
+            f'sys.path.insert(0, "{_hdf5_lib_dir}")\n'
+            f'\n'
+            f'import Read_h5_driver as h5_rlib\n'
+            f'\n'
+            f'openwq_results = h5_rlib.Read_h5_driver(\n'
+            f'    openwq_info={{\n'
+            f'        "path_to_results": "{os.path.join(_abs_output_dir, "openwq_out")}",\n'
+            f'        "mapping_key": "reachID"\n'
+            f'    }},\n'
+            f'    output_format="HDF5",\n'
+            f'    debugmode=False,\n'
+            f'    cmp=[{_cmp_str}],\n'
+            f'    space_elem="all",\n'
+            f'    chemSpec=[{_species_str}],\n'
+            f'    chemUnits="{units}",\n'
+            f'    noDataFlag=-9999,\n'
+            f'    sediment_as_well={ts_module_name.upper() != "NONE"}\n'
+            f')'
+        )
+        H.append('<p><strong>a)</strong> Read HDF5 outputs (run this first &mdash; '
+                 'needed by all steps below):</p>')
+        H.append(_code_block(_read_setup))
+
+        # --- 4b: WebGL 3D map ---
+        _webgl_cmd = (
+            f'import WebGL_h5_driver as h5_wlib\n'
+            f'\n'
+            f'h5_wlib.WebGL_h5_driver(\n'
+            f'    what2map="openwq",\n'
+            f'    hostmodel="{hostmodel}",\n'
+            f'    shpfile_info={{\n'
+            f'        "path_to_shp": "{_shp_path}",\n'
+            f'        "mapping_key": "{_shp_key}"\n'
+            f'    }},\n'
+            f'    openwq_results=openwq_results,\n'
+            f'    chemSpec=[{_species_str}],\n'
+            f'    sediment_as_well={ts_module_name.upper() != "NONE"},\n'
+            f'    hydromodel_info={{\n'
+            f'        "path_to_results": "<path_to_mizuroute_netcdf>",\n'
+            f'        "mapping_key": "reachID"\n'
+            f'    }},\n'
+            f'    hydromodel_var2print="DWroutedRunoff",\n'
+            f'    output_dir="{os.path.join(_abs_output_dir, "openwq_out", "webgl_viewer")}",\n'
+            f'    timeframes=50\n'
+            f')\n'
+            f'\n'
+            f'# Then open the viewer:\n'
+            f'# cd {os.path.join(_abs_output_dir, "openwq_out", "webgl_viewer")}\n'
+            f'# python3 -m http.server 8080\n'
+            f'# Open http://localhost:8080 in your browser'
+        )
+        H.append('<p style="margin-top:1rem"><strong>b)</strong> Generate interactive '
+                 'WebGL 3D map with all observations:</p>')
+        H.append(_code_block(_webgl_cmd))
+
+        # --- 4c: Time series per species (one button each) ---
+        H.append('<p style="margin-top:1rem"><strong>c)</strong> Plot time series '
+                 'per species:</p>')
+        for sp in _species_list:
+            _plot_single = (
+                f'import Plot_h5_driver as h5_plib\n'
+                f'\n'
+                f'h5_plib.Plot_h5_driver(\n'
+                f'    what2map="openwq",\n'
+                f'    hostmodel="{hostmodel}",\n'
+                f'    mapping_key_values="all",\n'
+                f'    openwq_results=openwq_results,\n'
+                f'    chemSpec=["{sp}"],\n'
+                f'    debugmode=False,\n'
+                f'    output_path="{os.path.join(_abs_output_dir, "openwq_out", f"timeseries_{sp}.png")}"\n'
+                f')'
+            )
+            H.append(f'<p style="margin:.4rem 0;font-size:.85rem">{sp}:</p>')
+            H.append(_code_block(_plot_single))
+
+        # --- 4d: All species in one plot ---
+        _plot_all = (
+            f'import Plot_h5_driver as h5_plib\n'
+            f'\n'
+            f'h5_plib.Plot_h5_driver(\n'
+            f'    what2map="openwq",\n'
+            f'    hostmodel="{hostmodel}",\n'
+            f'    mapping_key_values="all",\n'
+            f'    openwq_results=openwq_results,\n'
+            f'    chemSpec=[{_species_str}],\n'
+            f'    debugmode=False,\n'
+            f'    output_path="{os.path.join(_abs_output_dir, "openwq_out", "timeseries_all_species.png")}"\n'
+            f')'
+        )
+        H.append('<p style="margin-top:1rem"><strong>d)</strong> All species '
+                 'in a single plot:</p>')
+        H.append(_code_block(_plot_all))
+
+        H.append('</div></div>')
+
+        H.append('</div>')  # container
 
     # Footer
     H.append(f"""<div class="footer">
@@ -1577,10 +1870,11 @@ Time series, spatial statistics, and runtime metadata are not available.
     # =========================================================================
     # JAVASCRIPT
     # =========================================================================
-    H.append('<script>')
+    try:
+        H.append('<script>')
 
-    # Theme toggle
-    H.append("""
+        # Theme toggle
+        H.append("""
 (function(){
   var saved = localStorage.getItem('owq_theme');
   if(saved) document.documentElement.setAttribute('data-theme', saved);
@@ -1594,8 +1888,8 @@ function toggleTheme(){
 }
 """)
 
-    # Plotly layout helper
-    H.append("""
+        # Plotly layout helper
+        H.append("""
 function _owqLayout(extra){
   var t = document.documentElement.getAttribute('data-theme')==='dark';
   var base = {
@@ -1627,35 +1921,35 @@ function _owqRelayoutAll(){
 }
 """)
 
-    # Time series plots
-    if results:
-        for i, (species, df) in enumerate(results.items()):
-            plot_id = f"plotTS_{i}"
-            H.append(f'window._owqPlotIds.push("{plot_id}");')
+        # Time series plots
+        if results:
+            for i, (species, df) in enumerate(results.items()):
+                plot_id = f"plotTS_{i}"
+                H.append(f'window._owqPlotIds.push("{plot_id}");')
 
-            # Select up to 10 representative columns
-            cols = list(df.columns)
-            if len(cols) > 10:
-                step = max(1, len(cols) // 10)
-                cols = cols[::step][:10]
+                # Select up to 10 representative columns
+                cols = list(df.columns)
+                if len(cols) > 10:
+                    step = max(1, len(cols) // 10)
+                    cols = cols[::step][:10]
 
-            timestamps = df.index.tolist()
-            ts_strings = [str(t) for t in timestamps]
+                timestamps = df.index.tolist()
+                ts_strings = [str(t) for t in timestamps]
 
-            traces = []
-            for col in cols:
-                vals = df[col].tolist()
-                # Replace NaN with None for JSON
-                vals = [None if (isinstance(v, float) and np.isnan(v)) else v for v in vals]
-                traces.append({
-                    'x': ts_strings,
-                    'y': vals,
-                    'name': col,
-                    'type': 'scatter',
-                    'mode': 'lines',
-                })
+                traces = []
+                for col in cols:
+                    vals = df[col].tolist()
+                    # Replace NaN with None for JSON
+                    vals = [None if (isinstance(v, float) and np.isnan(v)) else v for v in vals]
+                    traces.append({
+                        'x': ts_strings,
+                        'y': vals,
+                        'name': col,
+                        'type': 'scatter',
+                        'mode': 'lines',
+                    })
 
-            H.append(f"""
+                H.append(f"""
 Plotly.newPlot('{plot_id}',{json.dumps(traces)},
   _owqLayout({{
     title:'{species} ({units})',
@@ -1664,27 +1958,27 @@ Plotly.newPlot('{plot_id}',{json.dumps(traces)},
   }}),PCFG);
 """)
 
-    # Basin map — river network + basin + GRQA stations
-    if (map_layers and map_center) or grqa_geojson_str:
-        layer_js_blocks = []
-        overlay_entries = []
-        fit_var = None
+        # Basin map — river network + basin + GRQA stations
+        if (map_layers and map_center) or grqa_geojson_str:
+            layer_js_blocks = []
+            overlay_entries = []
+            fit_var = None
 
-        # Shapefile layers (basin polygons + river network)
-        for idx, layer in enumerate(map_layers):
-            var_name = f"lyr_{idx}"
-            geojson_var = f"gj_{idx}"
-            style = layer['style']
-            label = layer['label'].replace("'", "\\'")
-            layer_type = layer['type']
+            # Shapefile layers (basin polygons + river network)
+            for idx, layer in enumerate(map_layers):
+                var_name = f"lyr_{idx}"
+                geojson_var = f"gj_{idx}"
+                style = layer['style']
+                label = layer['label'].replace("'", "\\'")
+                layer_type = layer['type']
 
-            layer_js_blocks.append(f"  var {geojson_var} = {layer['geojson_str']};")
+                layer_js_blocks.append(f"  var {geojson_var} = {layer['geojson_str']};")
 
-            color = style.get('color', '#0066cc')
-            weight = style.get('weight', 2.5)
-            opacity = style.get('opacity', 0.85)
-            fill_opacity = style.get('fillOpacity', 0.2)
-            layer_js_blocks.append(f"""  var {var_name} = L.geoJSON({geojson_var}, {{
+                color = style.get('color', '#0066cc')
+                weight = style.get('weight', 2.5)
+                opacity = style.get('opacity', 0.85)
+                fill_opacity = style.get('fillOpacity', 0.2)
+                layer_js_blocks.append(f"""  var {var_name} = L.geoJSON({geojson_var}, {{
     style: function(f){{ return {{color:'{color}',weight:{weight},opacity:{opacity},fillOpacity:{fill_opacity}}}; }},
     onEachFeature: function(f,l){{
       var props = f.properties;
@@ -1693,14 +1987,14 @@ Plotly.newPlot('{plot_id}',{json.dumps(traces)},
       l.bindPopup(html);
     }}
   }}).addTo(map);""")
-            overlay_entries.append(f"'{label}': {var_name}")
-            if fit_var is None:
-                fit_var = var_name
+                overlay_entries.append(f"'{label}': {var_name}")
+                if fit_var is None:
+                    fit_var = var_name
 
-        # GRQA stations layer (circle markers)
-        if grqa_geojson_str:
-            layer_js_blocks.append(f"  var gj_grqa = {grqa_geojson_str};")
-            layer_js_blocks.append("""  var lyr_grqa = L.geoJSON(gj_grqa, {
+            # GRQA stations layer (circle markers)
+            if grqa_geojson_str:
+                layer_js_blocks.append(f"  var gj_grqa = {grqa_geojson_str};")
+                layer_js_blocks.append("""  var lyr_grqa = L.geoJSON(gj_grqa, {
     pointToLayer: function(f, latlng){
       return L.circleMarker(latlng, {
         radius: 7, fillColor: '#e63946', color: '#333',
@@ -1714,15 +2008,15 @@ Plotly.newPlot('{plot_id}',{json.dumps(traces)},
       l.bindPopup(html);
     }
   }).addTo(map);""")
-            overlay_entries.append("'GRQA Stations': lyr_grqa")
-            if fit_var is None:
-                fit_var = "lyr_grqa"
+                overlay_entries.append("'GRQA Stations': lyr_grqa")
+                if fit_var is None:
+                    fit_var = "lyr_grqa"
 
-        overlay_obj = "{" + ", ".join(overlay_entries) + "}"
-        center_js = _js(map_center) if map_center else "[0, 0]"
-        zoom = 9 if map_center else 2
+            overlay_obj = "{" + ", ".join(overlay_entries) + "}"
+            center_js = _js(map_center) if map_center else "[0, 0]"
+            zoom = 9 if map_center else 2
 
-        H.append(f"""
+            H.append(f"""
 (function(){{
   var map = L.map('basinMap').setView({center_js}, {zoom});
   var satTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',{{
@@ -1752,8 +2046,8 @@ Plotly.newPlot('{plot_id}',{json.dumps(traces)},
 }})();
 """)
 
-    # Scroll animation + sidebar active state
-    H.append("""
+        # Scroll animation + sidebar active state
+        H.append("""
 (function(){
   var sections = document.querySelectorAll('.section');
   var links = document.querySelectorAll('.sidebar a');
@@ -1781,7 +2075,11 @@ Plotly.newPlot('{plot_id}',{json.dumps(traces)},
 })();
 """)
 
-    H.append('</script>')
+        H.append('</script>')
+    except Exception as _e:
+        print(f"  WARNING: JavaScript generation failed: {_e}")
+        H.append('<script>console.error("OpenWQ report: JS generation failed");</script>')
+
     H.append('</body></html>')
 
     # Write report
@@ -1816,8 +2114,9 @@ def generate_report(
         grqa_buffer_km=10,
         container_runtime="docker",
         mpi_np=2,
-        run_time_seconds=0.0,
-        model_was_run=True,
+        docker_container_name="docker_openwq",
+        executable_path=None,
+        file_manager_path=None,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -1861,8 +2160,9 @@ def generate_report(
             grqa_buffer_km=grqa_buffer_km,
             container_runtime=container_runtime,
             mpi_np=mpi_np,
-            run_time_seconds=run_time_seconds,
-            model_was_run=model_was_run,
+            docker_container_name=docker_container_name,
+            executable_path=executable_path,
+            file_manager_path=file_manager_path,
         )
 
         print(f"  Report saved: {report_path}")

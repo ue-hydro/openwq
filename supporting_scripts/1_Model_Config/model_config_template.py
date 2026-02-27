@@ -46,7 +46,7 @@ from Gen_Input_Driver import uniform_param
 # ║    5. Source/Sink Loads        — nutrient inputs (CSV, LULC, or ML)    ║
 # ║    6. External Water Fluxes    — boundary conditions from other models ║
 # ║    7. Output Settings          — species, format, timestep             ║
-# ║    8. Model Execution          — run via Docker (local machine)         ║
+# ║    8. Docker Settings          — MPI processes for model execution      ║
 # ║    9. Report Generation        — HTML report with maps & time series   ║
 # ║                                                                        ║
 # ║  Full documentation: https://openwq.readthedocs.io                     ║
@@ -537,24 +537,10 @@ compartments_and_cells = {
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  SECTION 8: MODEL EXECUTION (optional)
+#  SECTION 8: DOCKER SETTINGS
 # ──────────────────────────────────────────────────────────────────────────────
-#  This template is designed for exploring model options and arriving at a
-#  general desired configuration on your local machine. Only Docker is
-#  supported here. For HPC execution with Apptainer/Singularity, use
-#  calibration_config_template.py which provides full HPC support.
-#
-#  Set run_model = True to launch the simulation after generating config files.
-#
-#  IMPORTANT:
-#    • mizuRoute requires mpirun -np 2 (minimum 2 MPI processes for domain
-#      decomposition). Single-process runs will fail.
-#    • Host paths from Section 1 are auto-converted to container paths.
-
-run_model = False
-
-container_runtime = "docker"
-docker_container_name = "docker_openwq"   # Name of the running Docker container
+#  The generated HTML report includes ready-to-copy Docker commands.
+#  Adjust the number of MPI processes below if needed.
 
 # Number of MPI processes. Minimum 2 for mizuRoute.
 mpi_np = 2
@@ -602,7 +588,6 @@ grqa_buffer_km = 10
 # ╚════════════════════════════════════════════════════════════════════════╝
 
 import webbrowser
-from Run_Model import run_model_in_container
 from Gen_Report import generate_report as _generate_report
 
 # Derive output directory from executable path (files go where the executable lives)
@@ -619,7 +604,7 @@ if (isinstance(chemical_species, str) and chemical_species.lower() == "all") or 
 
 # 1) Generate configuration files
 _excluded = {'sys', 'os', 'webbrowser', 'gJSON_lib', 'uniform_param',
-             'run_model_in_container', '_generate_report'}
+             '_generate_report'}
 _config = {k: v for k, v in locals().items()
            if not k.startswith('_') and k not in _excluded}
 gJSON_lib.Gen_Input_Driver(**_config)
@@ -631,19 +616,7 @@ print(f"  Output directory: {dir2save_input_files}")
 print(f"  Master JSON:      {dir2save_input_files}/openWQ_master.json")
 print(f"  Input files:      {dir2save_input_files}/openwq_in/")
 
-# 2) Run model (optional)
-_elapsed = 0.0
-if run_model:
-    _elapsed = run_model_in_container(
-        dir2save_input_files=dir2save_input_files,
-        container_runtime=container_runtime,
-        executable_path=executable_path,
-        file_manager_path=file_manager_path,
-        mpi_np=mpi_np,
-        docker_container_name=docker_container_name,
-    )
-
-# 3) Generate report (optional)
+# 2) Generate report (optional)
 _report_path = None
 if generate_report:
     # Basin shapefile from Copernicus config (if available)
@@ -675,10 +648,9 @@ if generate_report:
         basin_shapefile=_basin_shp,
         grqa_local_data_path=grqa_local_data_path,
         grqa_buffer_km=grqa_buffer_km,
-        container_runtime=container_runtime,
         mpi_np=mpi_np,
-        run_time_seconds=_elapsed,
-        model_was_run=run_model,
+        executable_path=executable_path,
+        file_manager_path=file_manager_path,
     )
 
 print("\n" + "=" * 60)
