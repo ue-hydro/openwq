@@ -192,7 +192,7 @@ td_module_characteristic_length_m = 100.0
 #  "NATIVE_LE_BOUNDMIX"  — Exchange proportional to concentration gradient × K
 #  "NONE"                 — No lateral/vertical exchange
 
-le_module_name = "NONE"
+le_module_name = "NATIVE_LE_BOUNDMIX"
 
 # ── NATIVE_LE_BOUNDMIX settings ──
 # ⚠ Only used if le_module_name = "NATIVE_LE_BOUNDMIX"; ignored otherwise.
@@ -221,7 +221,7 @@ le_module_config = [
 #  "HYPE_HBVSED" — HBV-SED model (simpler, empirical erosion)
 #  "NONE"        — Disable sediment transport
 
-ts_module_name = "NONE"
+ts_module_name = "HYPE_HBVSED"
 
 # Which compartment experiences erosion and receives transported sediment.
 ts_sediment_compartment = "RIVER_NETWORK_REACHES"
@@ -359,7 +359,7 @@ ss_method_csv_config = [
 
 # Basin shapefile — defines the spatial extent and sub-catchment boundaries.
 ss_method_copernicus_basin_info = {
-    'path_to_shp': '/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/finalcat_info_v1-0.shp',
+    'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/finalcat_info_v1-0.shp',
     'mapping_key': 'SubId'    # Column in shapefile that identifies each sub-catchment
 }
 
@@ -595,6 +595,16 @@ from Gen_Report import generate_report as _generate_report
 dir2save_input_files = os.path.dirname(os.path.abspath(executable_path))
 # Docker path correction — needed by Gen_Input_Driver for JSON path conversion
 running_on_docker = True
+
+# Resolve chemical_species = "all" before passing to driver and report
+if (isinstance(chemical_species, str) and chemical_species.lower() == "all") or \
+   (isinstance(chemical_species, list) and len(chemical_species) == 1
+    and isinstance(chemical_species[0], str) and chemical_species[0].lower() == "all"):
+    chemical_species = gJSON_lib.extract_species_from_bgc(
+        bgc_module_name=bgc_module_name,
+        path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework,
+        phreeqc_mobile_species=locals().get('phreeqc_mobile_species'),
+    )
 
 # 1) Generate configuration files
 _excluded = {'sys', 'os', 'webbrowser', 'gJSON_lib', 'uniform_param',
