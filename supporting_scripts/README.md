@@ -69,10 +69,21 @@ Key documentation:
 #### Model Configuration Generator
 Location: `Model_Config/`
 
-Python scripts for generating OpenWQ input configuration files:
-- Source/sink configurations
-- BGC reaction definitions
-- Transport parameters
+Python-based configuration generator that creates all OpenWQ input JSON files from a single template script (`model_config_template.py`). Edit one file, run it, and get:
+
+- **All JSON configuration files** -- master, config, BGC, transport, source/sink, sorption, sediment, lateral exchange
+- **Interactive HTML report** (`openwq_report.html`) -- a self-contained configuration review tool featuring:
+  - Project summary with KPI grid (species, compartments, solver, timestep)
+  - Interactive basin map (Leaflet.js) with river network, basin polygons, and GRQA monitoring stations
+  - GRQA observation data -- nearby stations from the Global River Water Quality Archive with stoichiometric conversion tables
+  - Full model configuration tables with collapsible module parameter details
+  - Source/sink load statistics
+  - Time series charts (Plotly.js) and spatial statistics (if HDF5 outputs exist)
+  - **Ready-to-copy Docker commands** to start the container and run the model
+  - **Ready-to-copy Python code snippets** to read HDF5 outputs, generate WebGL 3D maps, and plot time series
+  - Dark/light theme toggle, error-resilient rendering, copy-to-clipboard buttons
+
+**Workflow:** Edit the template -> run it -> open the HTML report to review your configuration -> copy the Docker commands to run the model -> copy the Python snippets to visualize results.
 
 #### Output Reading
 Location: `Read_Outputs/`
