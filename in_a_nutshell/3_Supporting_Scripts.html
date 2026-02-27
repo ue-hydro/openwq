@@ -218,6 +218,120 @@
             font-size: 0.9em;
         }
 
+        /* ── Report mockup styles (dark theme — matches actual report default) ── */
+        .report-mockup {
+            border: 1px solid #2a2b3d; border-radius: 10px; overflow: hidden;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.35); display: flex;
+            font-family: 'Inter', sans-serif; background: #0f1117;
+            max-height: 380px;
+        }
+        .report-mockup-sidebar {
+            width: 90px; min-width: 90px; background: rgba(15,17,23,0.92);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid #2a2b3d;
+            padding: 8px 6px; display: flex; flex-direction: column; gap: 1px;
+        }
+        .report-mockup-sidebar .rm-logo {
+            font-size: 0.5rem; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;
+            padding: 0 4px 5px; border-bottom: 1px solid #2a2b3d;
+        }
+        .report-mockup-sidebar .rm-logo span { color: #4d9ee8; }
+        .report-mockup-sidebar .rm-nav-item {
+            font-size: 0.38rem; color: #a0aec0; padding: 2px 5px;
+            border-radius: 4px; cursor: default; line-height: 1.3;
+        }
+        .report-mockup-sidebar .rm-nav-item.active {
+            background: rgba(77,158,232,0.1); color: #4d9ee8; font-weight: 600;
+        }
+        .report-mockup-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .report-mockup-header {
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            padding: 8px 12px; color: #fff; position: relative;
+        }
+        .report-mockup-header::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(circle at 80% 20%, rgba(255,255,255,.06) 0%, transparent 60%);
+        }
+        .report-mockup-header h3 {
+            font-size: 0.58rem; font-weight: 700; color: #fff; margin: 0; position: relative;
+        }
+        .report-mockup-header h3 span { color: #4d9ee8; }
+        .report-mockup-header .rm-meta {
+            font-size: 0.34rem; color: rgba(255,255,255,0.55); margin-top: 2px;
+            display: flex; gap: 6px; position: relative;
+        }
+        .report-mockup-header .rm-meta span {
+            background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 10px;
+        }
+        .report-mockup-body { padding: 8px 12px; overflow: hidden; flex: 1; }
+        .rm-section-title {
+            font-size: 0.44rem; font-weight: 700; color: #e2e8f0;
+            margin-bottom: 5px; display: flex; align-items: center; gap: 4px;
+        }
+        .rm-section-title::before {
+            content: ''; width: 3px; height: 0.8em; border-radius: 2px;
+            background: linear-gradient(180deg, #4d9ee8, #3a8bd4);
+        }
+        .rm-kpi-grid {
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-bottom: 8px;
+        }
+        .rm-kpi {
+            background: #1a1b2e; border: 1px solid #2a2b3d; border-radius: 8px;
+            padding: 5px 4px; text-align: center; position: relative; overflow: hidden;
+        }
+        .rm-kpi::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, #4d9ee8, #34d399);
+        }
+        .rm-kpi .rm-kpi-value {
+            font-size: 0.5rem; font-weight: 700; color: #e2e8f0;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .rm-kpi .rm-kpi-label {
+            font-size: 0.3rem; color: #636e72; text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .rm-config-table {
+            width: 100%; border-collapse: collapse; font-size: 0.38rem; background: #1a1b2e;
+            border: 1px solid #2a2b3d; border-radius: 8px; overflow: hidden; margin-bottom: 8px;
+        }
+        .rm-config-table th {
+            background: #0f1117; color: #a0aec0; padding: 3px 6px; text-align: left;
+            font-weight: 600; font-size: 0.34rem; text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .rm-config-table td {
+            padding: 2px 6px; border-bottom: 1px solid #2a2b3d; color: #e2e8f0;
+        }
+        .rm-badge {
+            display: inline-block; padding: 1px 5px; border-radius: 8px;
+            font-size: 0.32rem; font-weight: 600;
+        }
+        .rm-badge.blue { background: rgba(77,158,232,0.15); color: #4d9ee8; }
+        .rm-badge.green { background: rgba(52,211,153,0.15); color: #34d399; }
+        .rm-badge.gray { background: rgba(99,110,114,0.2); color: #636e72; }
+        /* Next Steps mockup code blocks */
+        .rm-step-header {
+            font-size: 0.44rem; font-weight: 600; color: #e2e8f0; margin: 5px 0 2px;
+        }
+        .rm-code-block {
+            background: rgba(15,17,23,0.92); border-radius: 4px; padding: 4px 7px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.34rem; color: #e2e8f0;
+            position: relative; margin-bottom: 5px; line-height: 1.35;
+            border: 1px solid #2a2b3d; overflow: hidden;
+        }
+        .rm-code-block .rm-copy-btn {
+            position: absolute; top: 2px; right: 3px;
+            background: #4d9ee8; color: #fff; border: none; border-radius: 3px;
+            padding: 1px 4px; font-size: 0.26rem; font-weight: 600;
+        }
+        .rm-code-block .rm-kw { color: #63b3ed; }
+        .rm-code-block .rm-str { color: #fbd38d; }
+        .rm-code-block .rm-cmt { color: #68d391; }
+        .rm-nextsteps-card {
+            background: #1a1b2e; border-left: 3px solid #4d9ee8; border-radius: 0 6px 6px 0;
+            padding: 6px 8px; margin-bottom: 6px;
+        }
+        .rm-nextsteps-card p { font-size: 0.34rem; color: #a0aec0; margin-top: 2px; }
+
         /* Important note label */
         .important-note {
             color: #e05500;
@@ -698,55 +812,95 @@ ss_ml_training_data_csv = \
             </div>
         </div>
 
-        <!-- Slide 10: Report Generation -->
+        <!-- Slide 10: Report Generation — Visual Overview -->
         <div class="slide" data-slide="10">
             <div class="slide-header">
                 <h2>HTML Report Generation (Section 9)</h2>
             </div>
             <div class="slide-content">
-                <p style="font-size: 1.05rem; margin-bottom: 15px;">
-                    After the simulation completes, the template auto-generates an <strong>interactive HTML report</strong>.
+                <p style="font-size: 1.0rem; margin-bottom: 12px;">
+                    Set <code>generate_report = True</code> to auto-generate a <strong>self-contained interactive HTML report</strong>.
+                    Open it in any browser — no server needed.
                 </p>
-                <div class="two-column" style="gap: 35px;">
-                    <div class="column">
-                        <pre style="font-size: 0.72rem;">
-<span class="comment"># ======= 9. REPORT SETTINGS (optional) =======</span>
-generate_report = <span class="keyword">True</span>
-
-<span class="comment"># River network shapefile (for basin map)</span>
-<span class="comment"># Set None to skip map section</span>
-shapefile_path = <span class="string">"/path/to/river_network.shp"</span>
-shapefile_reach_id_col = <span class="string">"seg_id"</span>
-                        </pre>
-                        <div class="card secondary" style="margin-top: 15px;">
+                <div class="two-column" style="gap: 30px; grid-template-columns: 45fr 55fr;">
+                    <!-- Left: Visual mockup of the report (dark theme) -->
+                    <div class="column" style="min-width: 0;">
+                        <div style="font-size: 0.7rem; font-weight: 600; color: var(--text-light); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Report Preview (dark theme)</div>
+                        <div class="report-mockup">
+                            <div class="report-mockup-sidebar">
+                                <div class="rm-logo">Open<span>WQ</span> Report</div>
+                                <div class="rm-nav-item active">Summary</div>
+                                <div class="rm-nav-item">Basin Map</div>
+                                <div class="rm-nav-item">GRQA Data</div>
+                                <div class="rm-nav-item">Configuration</div>
+                                <div class="rm-nav-item">Sources/Sinks</div>
+                                <div class="rm-nav-item">Run Metadata</div>
+                                <div class="rm-nav-item" style="color: #4d9ee8; font-weight: 600;">Next Steps</div>
+                            </div>
+                            <div class="report-mockup-main">
+                                <div class="report-mockup-header">
+                                    <h3>Open<span>WQ</span> — Simulation Report</h3>
+                                    <div class="rm-meta">
+                                        <span>Authors: User</span>
+                                        <span>mizuroute</span>
+                                        <span>2026-02-27</span>
+                                    </div>
+                                </div>
+                                <div class="report-mockup-body">
+                                    <div class="rm-section-title">Summary</div>
+                                    <div class="rm-kpi-grid">
+                                        <div class="rm-kpi"><div class="rm-kpi-value">15</div><div class="rm-kpi-label">Species</div></div>
+                                        <div class="rm-kpi"><div class="rm-kpi-value">1</div><div class="rm-kpi-label">Compartments</div></div>
+                                        <div class="rm-kpi"><div class="rm-kpi-value" style="font-size:0.36rem;">FWD_EULER</div><div class="rm-kpi-label">Solver</div></div>
+                                        <div class="rm-kpi"><div class="rm-kpi-value">15</div><div class="rm-kpi-label">Output Spp.</div></div>
+                                        <div class="rm-kpi"><div class="rm-kpi-value">1 hr</div><div class="rm-kpi-label">Timestep</div></div>
+                                    </div>
+                                    <div class="rm-section-title">Configuration</div>
+                                    <table class="rm-config-table">
+                                        <tr><th>Module</th><th>Selection</th></tr>
+                                        <tr><td>Biogeochemistry</td><td><span class="rm-badge blue">NATIVE_BGC_FLEX</span></td></tr>
+                                        <tr><td>Transport</td><td><span class="rm-badge blue">NATIVE_TD_ADVDISP</span></td></tr>
+                                        <tr><td>Sediment</td><td><span class="rm-badge green">HYPE_HBVSED</span></td></tr>
+                                        <tr><td>Sorption</td><td><span class="rm-badge gray">NONE</span></td></tr>
+                                        <tr><td>Source/Sink</td><td><span class="rm-badge green">copernicus_lulc</span></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card teal" style="margin-top: 8px;">
                             <h3>Report Sections</h3>
                             <ul style="margin-left: 15px;">
-                                <li style="font-size: 0.9rem;">Model configuration summary table</li>
-                                <li style="font-size: 0.9rem;">Interactive basin map (Leaflet.js)</li>
-                                <li style="font-size: 0.9rem;">Time series charts (Plotly.js)</li>
-                                <li style="font-size: 0.9rem;">Spatial statistics per species</li>
-                                <li style="font-size: 0.9rem;">Source/sink load summary</li>
-                                <li style="font-size: 0.9rem;">Run metadata (runtime, exit code, MPI)</li>
+                                <li style="font-size: 0.85rem;">KPI summary cards (species, solver, timestep)</li>
+                                <li style="font-size: 0.85rem;">Module configuration table with badges</li>
+                                <li style="font-size: 0.85rem;">Interactive basin map (Leaflet.js)</li>
+                                <li style="font-size: 0.85rem;">GRQA observation stations matched</li>
+                                <li style="font-size: 0.85rem;">Source/sink load summary</li>
+                                <li style="font-size: 0.85rem;">Run metadata (exit code, timing)</li>
+                                <li style="font-size: 0.85rem; color: var(--primary);"><strong>Ready-to-run code snippets</strong> (next slide)</li>
                             </ul>
                         </div>
                     </div>
-                    <div class="column">
-                        <div class="card teal">
+                    <!-- Right: Features & how to enable -->
+                    <div class="column" style="min-width: 0; overflow: hidden;">
+                        <pre style="font-size: 0.72rem; overflow: hidden;">
+<span class="comment"># ======= 9. REPORT SETTINGS =======</span>
+generate_report = <span class="keyword">True</span>
+
+<span class="comment"># River network shapefile (for map)</span>
+shapefile_path = <span class="string">"/path/to/river.shp"</span>
+shapefile_reach_id_col = <span class="string">"seg_id"</span>
+                        </pre>
+                        <div class="card secondary" style="margin-top: 8px;">
                             <h3>Features</h3>
                             <ul style="margin-left: 15px;">
-                                <li style="font-size: 0.9rem;"><strong>Self-contained</strong> — single HTML file, no server needed</li>
-                                <li style="font-size: 0.9rem;"><strong>Interactive</strong> — zoom, hover, pan on all charts and maps</li>
-                                <li style="font-size: 0.9rem;"><strong>Dark/light theme</strong> toggle</li>
-                                <li style="font-size: 0.9rem;"><strong>Optional basin map</strong> — provide a shapefile or skip</li>
+                                <li style="font-size: 0.85rem;"><strong>Self-contained</strong> single HTML file</li>
+                                <li style="font-size: 0.85rem;"><strong>Dark/light theme</strong> toggle</li>
+                                <li style="font-size: 0.85rem;"><strong>Copy buttons</strong> on all code blocks</li>
+                                <li style="font-size: 0.85rem;">All paths <strong>pre-filled</strong> from your config</li>
                             </ul>
                         </div>
-                        <div class="highlight-box success" style="margin-top: 15px;">
-                            <strong>Output:</strong> <code>{dir2save_input_files}/openwq_report.html</code><br>
-                            Open in any browser — no additional software required!
-                        </div>
-                        <div class="highlight-box info" style="margin-top: 10px;">
-                            <strong>Note:</strong> Report generation requires <code>run_model = True</code>.
-                            The full pipeline is: generate configs → run model → generate report.
+                        <div class="highlight-box success" style="margin-top: 8px;">
+                            <strong>Output:</strong> <code>openwq_report.html</code> — open in any browser
                         </div>
                     </div>
                 </div>
@@ -757,15 +911,97 @@ shapefile_reach_id_col = <span class="string">"seg_id"</span>
             </div>
         </div>
 
-        <!-- Slide 11: Section - Reading Results -->
-        <div class="slide section-slide blue" data-slide="11">
+        <!-- Slide 11: Report — Next Steps & Code Snippets -->
+        <div class="slide" data-slide="11">
+            <div class="slide-header">
+                <h2>Report: Ready-to-Run Code Snippets</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.0rem; margin-bottom: 12px;">
+                    The report's <strong>"Next Steps"</strong> section provides <strong>copy-paste code</strong> for every step — from starting Docker to plotting results. All paths are pre-filled from your configuration.
+                </p>
+                <div class="two-column" style="gap: 30px;">
+                    <!-- Left: Visual mockup of the Next Steps section (dark theme) -->
+                    <div class="column">
+                        <div style="font-size: 0.7rem; font-weight: 600; color: var(--text-light); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;">Report "Next Steps" Preview</div>
+                        <div class="report-mockup">
+                            <div class="report-mockup-sidebar">
+                                <div class="rm-logo">Open<span>WQ</span> Report</div>
+                                <div class="rm-nav-item">Summary</div>
+                                <div class="rm-nav-item">Basin Map</div>
+                                <div class="rm-nav-item">Configuration</div>
+                                <div class="rm-nav-item">Sources/Sinks</div>
+                                <div class="rm-nav-item">Run Metadata</div>
+                                <div class="rm-nav-item active" style="color: #4d9ee8;">Next Steps</div>
+                            </div>
+                            <div class="report-mockup-main">
+                                <div class="report-mockup-header">
+                                    <h3>Open<span>WQ</span> — Simulation Report</h3>
+                                    <div class="rm-meta"><span>mizuroute</span><span>2026-02-27</span></div>
+                                </div>
+                                <div class="report-mockup-body">
+                                    <div class="rm-section-title">Next Steps</div>
+                                    <div class="rm-nextsteps-card">
+                                        <div class="rm-step-header">1. Start the Docker container</div>
+                                        <div class="rm-code-block"><span class="rm-copy-btn">Copy</span>cd /path/to/containers<br>docker compose up -d</div>
+                                    </div>
+                                    <div class="rm-nextsteps-card">
+                                        <div class="rm-step-header">2. Run the model</div>
+                                        <div class="rm-code-block"><span class="rm-copy-btn">Copy</span>docker exec docker_openwq /bin/bash -c \<br>&nbsp;&nbsp;"mpirun -np 2 /code/.../mizuroute_Release \<br>&nbsp;&nbsp;/code/.../mizuroute.control"</div>
+                                    </div>
+                                    <div class="rm-nextsteps-card">
+                                        <div class="rm-step-header">4. Read &amp; visualize results</div>
+                                        <div class="rm-code-block" style="line-height:1.3;"><span class="rm-copy-btn">Copy</span><span class="rm-kw">import</span> Read_h5_driver <span class="rm-kw">as</span> h5_rlib<br>results = h5_rlib.Read_h5_driver(<br>&nbsp;&nbsp;chemSpec=[<span class="rm-str">"NO3-N"</span>, <span class="rm-str">"NH4-N"</span>, ...], ...)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Right: Explanation -->
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>What the Report Provides</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.88rem;"><strong>Docker startup</strong> command — <code>cd</code> + <code>docker compose up</code></li>
+                                <li style="font-size: 0.88rem;"><strong>Full MPI execution</strong> command — with all container paths resolved</li>
+                                <li style="font-size: 0.88rem;"><strong>Output directory</strong> path — where HDF5 files are saved</li>
+                                <li style="font-size: 0.88rem;"><strong>Python code to read HDF5</strong> — using <code>Read_h5_driver</code></li>
+                                <li style="font-size: 0.88rem;"><strong>WebGL 3D visualization</strong> — interactive browser-based map</li>
+                                <li style="font-size: 0.88rem;"><strong>Time series plots</strong> — one block per species</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 10px;">
+                            <strong>All paths pre-filled</strong> — the report reads your configuration and fills in every path (executable, control file, output directory, shapefile) so you can copy and run immediately.
+                        </div>
+                        <div class="card accent" style="margin-top: 10px;">
+                            <h3>Copy Buttons</h3>
+                            <p style="font-size: 0.88rem;">
+                                Every code block has a <strong>Copy</strong> button.
+                                Click it, paste into terminal or Jupyter — done.
+                            </p>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 10px;">
+                            <strong>Tip:</strong> Set <code>run_model = True</code> and the template will
+                            generate configs, run the model, <em>and</em> produce the report — all in one command.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">11</div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Section - Reading Results -->
+        <div class="slide section-slide blue" data-slide="12">
             <div class="section-number">02</div>
             <h2>Reading Model Results</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 12: Read_h5_driver -->
-        <div class="slide" data-slide="12">
+        <!-- Slide 13: Read_h5_driver -->
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Reading HDF5 Output (Read_h5_driver)</h2>
             </div>
@@ -817,19 +1053,19 @@ results = h5_rlib.Read_h5_driver(
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">12</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
-        <!-- Slide 13: Section - Plotting -->
-        <div class="slide section-slide purple" data-slide="13">
+        <!-- Slide 14: Section - Plotting -->
+        <div class="slide section-slide purple" data-slide="14">
             <div class="section-number">03</div>
             <h2>Plotting Time Series</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 14: Plot_h5_driver -->
-        <div class="slide" data-slide="14">
+        <!-- Slide 15: Plot_h5_driver -->
+        <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>Time Series Plots (Plot_h5_driver)</h2>
             </div>
@@ -893,19 +1129,19 @@ h5_plib.Plot_h5_driver(
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">14</div>
+                <div class="page-number">15</div>
             </div>
         </div>
 
-        <!-- Slide 15: Section - Mapping -->
-        <div class="slide section-slide green" data-slide="15">
+        <!-- Slide 16: Section - Mapping -->
+        <div class="slide section-slide green" data-slide="16">
             <div class="section-number">04</div>
             <h2>Spatial Mapping & GIFs</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 16: Map_h5_driver -->
-        <div class="slide" data-slide="16">
+        <!-- Slide 17: Map_h5_driver -->
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Spatial Maps (Map_h5_driver)</h2>
             </div>
@@ -967,12 +1203,12 @@ h5_mplib.Map_h5_driver(
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
-        <!-- Slide 17: Complete Workflow -->
-        <div class="slide" data-slide="17">
+        <!-- Slide 18: Complete Workflow -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Complete Post-Processing Workflow</h2>
             </div>
@@ -1011,12 +1247,12 @@ h5_mplib.Map_h5_driver(
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 18: Debug Mode -->
-        <div class="slide" data-slide="18">
+        <!-- Slide 19: Debug Mode -->
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Debug Mode Outputs</h2>
             </div>
@@ -1059,12 +1295,12 @@ transport_flux = results[<span class="string">'d_transport'</span>]
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">18</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
-        <!-- Slide 19: Tips & Best Practices -->
-        <div class="slide" data-slide="19">
+        <!-- Slide 20: Tips & Best Practices -->
+        <div class="slide" data-slide="20">
             <div class="slide-header">
                 <h2>Tips & Best Practices</h2>
             </div>
@@ -1103,12 +1339,12 @@ transport_flux = results[<span class="string">'d_transport'</span>]
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">19</div>
+                <div class="page-number">20</div>
             </div>
         </div>
 
-        <!-- Slide 20: AI Assistance -->
-        <div class="slide" data-slide="20">
+        <!-- Slide 21: AI Assistance -->
+        <div class="slide" data-slide="21">
             <div class="slide-header">
                 <h2>AI-Powered Assistance</h2>
             </div>
@@ -1160,12 +1396,12 @@ cd /path/to/openwq/ && claude
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">20</div>
+                <div class="page-number">21</div>
             </div>
         </div>
 
-        <!-- Slide 21: Model Execution -->
-        <div class="slide" data-slide="21">
+        <!-- Slide 22: Model Execution -->
+        <div class="slide" data-slide="22">
             <div class="slide-header">
                 <h2>Model Execution (Section 8)</h2>
             </div>
@@ -1226,12 +1462,12 @@ mpi_np = <span class="keyword">2</span>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">21</div>
+                <div class="page-number">22</div>
             </div>
         </div>
 
-        <!-- Slide 22: Summary -->
-        <div class="slide" data-slide="22">
+        <!-- Slide 23: Summary -->
+        <div class="slide" data-slide="23">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1257,12 +1493,12 @@ mpi_np = <span class="keyword">2</span>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">22</div>
+                <div class="page-number">23</div>
             </div>
         </div>
 
-        <!-- Slide 23: Thank You -->
-        <div class="slide title-slide" data-slide="23">
+        <!-- Slide 24: Thank You -->
+        <div class="slide title-slide" data-slide="24">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions & Resources</div>
             <div style="margin-top: 3rem;">
