@@ -287,9 +287,6 @@ def Gen_Input_Driver(
         # where to save input files
         dir2save_input_files: str,
 
-        # Docker support: correct paths from host to container
-        running_on_docker: bool,
-
         # Top-level settings
         project_name: str,
         geographical_location: str,
@@ -409,47 +406,45 @@ def Gen_Input_Driver(
     print(f"Authors: {authors}")
 
     # Docker path correction setup
-    # When running_on_docker=True, the script runs on the HOST but generates JSON files
-    # with paths that will be used INSIDE the Docker container. So we need two sets of paths:
-    #   - Host paths: for writing files to disk (file I/O)
-    #   - Docker paths: for embedding inside JSON content (read by OpenWQ at runtime in container)
+    # This script runs on the HOST but generates JSON files with paths that will be
+    # used INSIDE the Docker container.  Always enabled — model_config_template runs
+    # with Docker only (Apptainer is handled separately by the calibration workflow).
     _docker_host_root = None
     _docker_container_root = None
 
-    if running_on_docker:
-        # Locate docker-compose.yml relative to this script
-        # This script is in: .../supporting_scripts/Model_Config/config_support_lib/
-        # docker-compose.yml is in: .../containers/
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        docker_compose_path = os.path.normpath(
-            os.path.join(script_dir, '..', '..', '..', 'containers', 'docker-compose.yml'))
+    # Locate docker-compose.yml relative to this script
+    # This script is in: .../supporting_scripts/Model_Config/config_support_lib/
+    # docker-compose.yml is in: .../containers/
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    docker_compose_path = os.path.normpath(
+        os.path.join(script_dir, '..', '..', '..', 'containers', 'docker-compose.yml'))
 
-        _docker_host_root, _docker_container_root = _parse_docker_volume_mount(docker_compose_path)
+    _docker_host_root, _docker_container_root = _parse_docker_volume_mount(docker_compose_path)
 
-        if _docker_host_root and _docker_container_root:
-            print(f"  Docker mode: mapping host '{_docker_host_root}' -> container '{_docker_container_root}'")
+    if _docker_host_root and _docker_container_root:
+        print(f"  Docker mode: mapping host '{_docker_host_root}' -> container '{_docker_container_root}'")
 
-            # Correct paths that are ONLY embedded in JSON content (NOT used for file I/O)
-            # These are paths that OpenWQ reads at runtime inside the container.
-            #
-            # NOTE: The following paths are NOT corrected here because they are used
-            # for file I/O during config generation (the script reads/copies these files):
-            #   - path2selected_NATIVE_BGC_FLEX_framework (read by Load_BGQmodule_file.py)
-            #   - phreeqc_input_filepath / phreeqc_database_filepath (copied by Gen_PHREEQCmodule_file.py)
-            #   - ss_method_copernicus_basin_info (shapefile read by Gen_SS_Driver.py)
-            #   - ss_method_copernicus_nc_lc_dir (NetCDF files read by Gen_SS_Driver.py)
-            #   - ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key (HDF5 read)
-            #
-            # Only CSV source/sink Filepath entries are purely embedded in JSON (the CSV files
-            # themselves are read by OpenWQ at runtime, not by the config generator).
+        # Correct paths that are ONLY embedded in JSON content (NOT used for file I/O)
+        # These are paths that OpenWQ reads at runtime inside the container.
+        #
+        # NOTE: The following paths are NOT corrected here because they are used
+        # for file I/O during config generation (the script reads/copies these files):
+        #   - path2selected_NATIVE_BGC_FLEX_framework (read by Load_BGQmodule_file.py)
+        #   - phreeqc_input_filepath / phreeqc_database_filepath (copied by Gen_PHREEQCmodule_file.py)
+        #   - ss_method_copernicus_basin_info (shapefile read by Gen_SS_Driver.py)
+        #   - ss_method_copernicus_nc_lc_dir (NetCDF files read by Gen_SS_Driver.py)
+        #   - ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key (HDF5 read)
+        #
+        # Only CSV source/sink Filepath entries are purely embedded in JSON (the CSV files
+        # themselves are read by OpenWQ at runtime, not by the config generator).
 
-            # Correct CSV source/sink file paths (embedded in SS JSON, read at runtime by OpenWQ)
-            if ss_method_csv_config is not None:
-                ss_method_csv_config = _correct_list_paths_for_docker(
-                    ss_method_csv_config, _docker_host_root, _docker_container_root)
-        else:
-            print("WARNING: running_on_docker=True but could not determine Docker path mapping. "
-                  "Paths will NOT be corrected.")
+        # Correct CSV source/sink file paths (embedded in SS JSON, read at runtime by OpenWQ)
+        if ss_method_csv_config is not None:
+            ss_method_csv_config = _correct_list_paths_for_docker(
+                ss_method_csv_config, _docker_host_root, _docker_container_root)
+    else:
+        print("WARNING: Could not determine Docker path mapping from docker-compose.yml. "
+              "Paths will NOT be corrected.")
 
     # =============================================
     # Cross-module compatibility validation

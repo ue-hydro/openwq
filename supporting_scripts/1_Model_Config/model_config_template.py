@@ -98,7 +98,8 @@ file_manager_path = (
 # "SUNDIALS"      — implicit adaptive solver (better for stiff systems)
 solver = "FORWARD_EULER"
 
-# Print solver derivatives to the log (useful for debugging reactions).
+# Print solver derivatives to the log
+# Useful to investigate the causes of concentration dynamics, but it will generate more model outputs.
 run_mode_debug = True
 
 # Number of OpenMP threads. Set to "all" to use every available core.
@@ -606,9 +607,6 @@ from Gen_Report import generate_report as _generate_report
 
 # Derive output directory from executable path (files go where the executable lives)
 dir2save_input_files = os.path.dirname(os.path.abspath(executable_path))
-# Docker path correction — needed by Gen_Input_Driver for JSON path conversion
-running_on_docker = True
-
 # Resolve chemical_species = "all" before passing to driver and report
 if (isinstance(chemical_species, str) and chemical_species.lower() == "all") or \
    (isinstance(chemical_species, list) and len(chemical_species) == 1
