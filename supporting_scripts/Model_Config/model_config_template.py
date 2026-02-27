@@ -22,34 +22,35 @@ import Gen_Input_Driver as gJSON_lib
 from Gen_Input_Driver import uniform_param
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
-# ║                   OpenWQ MODEL CONFIGURATION TEMPLATE                    ║
+# ║                   OpenWQ MODEL CONFIGURATION TEMPLATE                      ║
 # ╠════════════════════════════════════════════════════════════════════════════╣
-# ║                                                                          ║
-# ║  HOW TO USE:                                                             ║
-# ║    1. Copy this file to your working directory                           ║
-# ║    2. Update the paths in Section 1 (executable & control file)          ║
-# ║    3. Choose which modules to enable/disable in Section 4                ║
-# ║    4. Configure source/sink loads in Section 5                           ║
-# ║    5. Set the output species in Section 7                                ║
-# ║    6. Run:  python model_config_template.py                              ║
-# ║                                                                          ║
-# ║  SECTIONS:                                                               ║
-# ║    1. General Information      — project metadata & file paths           ║
-# ║    2. Computational Settings   — solver, threads, debug mode             ║
-# ║    3. Initial Conditions       — starting concentrations                 ║
-# ║    4. Physics Modules:                                                   ║
-# ║       a. Biogeochemistry (BGC) — reaction kinetics or geochemistry       ║
-# ║       b. Transport Dissolved   — advection & dispersion                  ║
-# ║       c. Lateral Exchange      — vertical mixing between compartments    ║
-# ║       d. Sediment Transport    — erosion & suspended sediment            ║
-# ║       e. Sorption Isotherm     — dissolved ↔ sorbed phase exchange       ║
-# ║    5. Source/Sink Loads        — nutrient inputs (CSV, LULC, or ML)      ║
-# ║    6. External Water Fluxes    — boundary conditions from other models   ║
-# ║    7. Output Settings          — species, format, timestep               ║
-# ║    8. Model Execution          — run via Docker/Apptainer                ║
-# ║    9. Report Generation        — HTML report with maps & time series     ║
-# ║                                                                          ║
-# ║  Full documentation: https://openwq.readthedocs.io                       ║
+# ║                                                                            ║
+# ║  HOW TO USE:                                                               ║
+# ║    1. Copy this file (keep it in this directory — it needs access          ║
+# ║       to config_support_lib/)                                              ║
+# ║    2. Update the paths in Section 1 (executable & control file)            ║
+# ║    3. Choose which modules to enable/disable in Section 4                  ║
+# ║    4. Configure source/sink loads in Section 5                             ║
+# ║    5. Set the output species in Section 7                                  ║
+# ║    6. Run:  python model_config_template.py                                ║
+# ║                                                                            ║
+# ║  SECTIONS:                                                                 ║
+# ║    1. General Information      — project metadata & file paths             ║
+# ║    2. Computational Settings   — solver, threads, debug mode               ║
+# ║    3. Initial Conditions       — starting concentrations                   ║
+# ║    4. Physics Modules:                                                     ║
+# ║       a. Biogeochemistry (BGC) — reaction kinetics or geochemistry         ║
+# ║       b. Transport Dissolved   — advection & dispersion                    ║
+# ║       c. Lateral Exchange      — vertical mixing between compartments      ║
+# ║       d. Sediment Transport    — erosion & suspended sediment              ║
+# ║       e. Sorption Isotherm     — dissolved ↔ sorbed phase exchange         ║
+# ║    5. Source/Sink Loads        — nutrient inputs (CSV, LULC, or ML)        ║
+# ║    6. External Water Fluxes    — boundary conditions from other models     ║
+# ║    7. Output Settings          — species, format, timestep                 ║
+# ║    8. Model Execution          — run via Docker/Apptainer                  ║
+# ║    9. Report Generation        — HTML report with maps & time series       ║
+# ║                                                                            ║
+# ║  Full documentation: https://openwq.readthedocs.io                         ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
 
