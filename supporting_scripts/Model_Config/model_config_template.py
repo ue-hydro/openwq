@@ -21,37 +21,36 @@ sys.path.insert(0, 'config_support_lib')
 import Gen_Input_Driver as gJSON_lib
 from Gen_Input_Driver import uniform_param
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║                   OpenWQ MODEL CONFIGURATION TEMPLATE                      ║
-# ╠════════════════════════════════════════════════════════════════════════════╣
-# ║                                                                            ║
-# ║  HOW TO USE:                                                               ║
-# ║    1. Copy this file (keep it in this directory — it needs access          ║
-# ║       to config_support_lib/)                                              ║
-# ║    2. Update the paths in Section 1 (executable & control file)            ║
-# ║    3. Choose which modules to enable/disable in Section 4                  ║
-# ║    4. Configure source/sink loads in Section 5                             ║
-# ║    5. Set the output species in Section 7                                  ║
-# ║    6. Run:  python model_config_template.py                                ║
-# ║                                                                            ║
-# ║  SECTIONS:                                                                 ║
-# ║    1. General Information      — project metadata & file paths             ║
-# ║    2. Computational Settings   — solver, threads, debug mode               ║
-# ║    3. Initial Conditions       — starting concentrations                   ║
-# ║    4. Physics Modules:                                                     ║
-# ║       a. Biogeochemistry (BGC) — reaction kinetics or geochemistry         ║
-# ║       b. Transport Dissolved   — advection & dispersion                    ║
-# ║       c. Lateral Exchange      — vertical mixing between compartments      ║
-# ║       d. Sediment Transport    — erosion & suspended sediment              ║
-# ║       e. Sorption Isotherm     — dissolved ↔ sorbed phase exchange         ║
-# ║    5. Source/Sink Loads        — nutrient inputs (CSV, LULC, or ML)        ║
-# ║    6. External Water Fluxes    — boundary conditions from other models     ║
-# ║    7. Output Settings          — species, format, timestep                 ║
-# ║    8. Model Execution          — run via Docker/Apptainer                  ║
-# ║    9. Report Generation        — HTML report with maps & time series       ║
-# ║                                                                            ║
-# ║  Full documentation: https://openwq.readthedocs.io                         ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# ╔════════════════════════════════════════════════════════════════════════╗
+# ║                 OpenWQ MODEL CONFIGURATION TEMPLATE                    ║
+# ╠════════════════════════════════════════════════════════════════════════╣
+# ║                                                                        ║
+# ║  HOW TO USE:                                                           ║
+# ║    1. Copy this file (keep it here — needs config_support_lib/)        ║
+# ║    2. Update the paths in Section 1 (executable & control file)        ║
+# ║    3. Choose which modules to enable/disable in Section 4              ║
+# ║    4. Configure source/sink loads in Section 5                         ║
+# ║    5. Set the output species in Section 7                              ║
+# ║    6. Run:  python model_config_template.py                            ║
+# ║                                                                        ║
+# ║  SECTIONS:                                                             ║
+# ║    1. General Information      — project metadata & file paths         ║
+# ║    2. Computational Settings   — solver, threads, debug mode           ║
+# ║    3. Initial Conditions       — starting concentrations               ║
+# ║    4. Physics Modules:                                                 ║
+# ║       a. Biogeochemistry (BGC) — reaction kinetics or geochemistry     ║
+# ║       b. Transport Dissolved   — advection & dispersion                ║
+# ║       c. Lateral Exchange      — vertical mixing between compartments  ║
+# ║       d. Sediment Transport    — erosion & suspended sediment          ║
+# ║       e. Sorption Isotherm     — dissolved ↔ sorbed phase exchange     ║
+# ║    5. Source/Sink Loads        — nutrient inputs (CSV, LULC, or ML)    ║
+# ║    6. External Water Fluxes    — boundary conditions from other models ║
+# ║    7. Output Settings          — species, format, timestep             ║
+# ║    8. Model Execution          — run via Docker/Apptainer              ║
+# ║    9. Report Generation        — HTML report with maps & time series   ║
+# ║                                                                        ║
+# ║  Full documentation: https://openwq.readthedocs.io                     ║
+# ╚════════════════════════════════════════════════════════════════════════╝
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -134,6 +133,7 @@ ic_all_units = "mg/l"     # Units: "mg/l", "kg", "g", etc.
 bgc_module_name = "NATIVE_BGC_FLEX"
 
 # ── NATIVE_BGC_FLEX settings ──
+# ⚠ Only used if bgc_module_name = "NATIVE_BGC_FLEX"; ignored otherwise.
 # Path to the JSON file describing reactions, species, and rate constants.
 # Browse available templates:
 #   config_support_lib/BGC_templates/NATIVE_BGC_FLEX/popular_models/
@@ -142,7 +142,8 @@ bgc_module_name = "NATIVE_BGC_FLEX"
 #     ... (see folder for more)
 path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/BGC_templates/NATIVE_BGC_FLEX/popular_models/SWAT_full_nutrients.json"
 
-# ── PHREEQC settings (only used when bgc_module_name = "PHREEQC") ──
+# ── PHREEQC settings ──
+# ⚠ Only used if bgc_module_name = "PHREEQC"; ignored otherwise.
 phreeqc_input_filepath = "config_support_lib/examples_PHREEQC/phreeqc_river.pqi"
 phreeqc_database_filepath = "config_support_lib/examples_PHREEQC/phreeqc.dat"
 phreeqc_mobile_species = ["H", "O", "Charge", "Ca"]   # Must match PHREEQC components
@@ -172,6 +173,8 @@ phreeqc_chemical_species_names = []
 
 td_module_name = "OPENWQ_NATIVE_TD_ADVDISP"
 
+# ── Dispersion settings ──
+# ⚠ Only used if td_module_name = "OPENWQ_NATIVE_TD_ADVDISP"; ignored otherwise.
 # Dispersion coefficients [Dx, Dy, Dz] in m²/s.
 # Typical river values: 0.1–10 m²/s. Higher = more mixing.
 td_module_dispersion_xyz = [0.3, 0.3, 0.3]
@@ -191,6 +194,8 @@ td_module_characteristic_length_m = 100.0
 
 le_module_name = "NATIVE_LE_BOUNDMIX"
 
+# ── NATIVE_LE_BOUNDMIX settings ──
+# ⚠ Only used if le_module_name = "NATIVE_LE_BOUNDMIX"; ignored otherwise.
 # Exchange configuration: one entry per interface between compartments.
 #   direction           — exchange axis: "x", "y", or "z"
 #   upper_compartment   — compartment on top (e.g., surface runoff)
@@ -225,7 +230,8 @@ ts_direction = "z"
 ts_erosion_inhibit_compartment = "RIVER_NETWORK_REACHES"
 ts_data_format = "JSON"
 
-# ── HYPE_MMF parameters (only when ts_module_name = "HYPE_MMF") ──
+# ── HYPE_MMF parameters ──
+# ⚠ Only used if ts_module_name = "HYPE_MMF"; ignored otherwise.
 # Physical soil erosion properties applied uniformly.
 # Override per-cell using ts_mmf_parameters below.
 ts_mmf_defaults = {
@@ -242,7 +248,8 @@ ts_mmf_defaults = {
 # To vary spatially, replace uniform_param() with per-cell dictionaries.
 ts_mmf_parameters = {k: uniform_param(v) for k, v in ts_mmf_defaults.items()}
 
-# ── HYPE_HBVSED parameters (only when ts_module_name = "HYPE_HBVSED") ──
+# ── HYPE_HBVSED parameters ──
+# ⚠ Only used if ts_module_name = "HYPE_HBVSED"; ignored otherwise.
 ts_hbvsed_defaults = {
     "SLOPE": 0.4,                                    # Terrain slope [m/m]
     "EROSION_INDEX": 0.4,                             # Soil erosion susceptibility [-]
@@ -320,6 +327,7 @@ ss_metadata_comment = "Leave any comments needed for future reference"
 
 
 # ── METHOD 1: Load from CSV ──────────────────────────────────────────────────
+# ⚠ Only used if ss_method = "load_from_csv"; ignored otherwise.
 #  Provide one entry per species × compartment combination.
 #  Each CSV file has columns: datetime, cell_id_1, cell_id_2, ...
 #  Values are load rates in the specified units.
@@ -345,6 +353,7 @@ ss_method_csv_config = [
 
 
 # ── METHOD 2 & 3: Copernicus LULC ────────────────────────────────────────────
+# ⚠ Only used if ss_method = "using_copernicus_lulc_with_*"; ignored otherwise.
 #  Estimates loads from ESA CCI Land Cover maps × export coefficients.
 #  Requires: basin shapefile + (optionally) OpenWQ HDF5 output for cell mapping.
 
@@ -412,6 +421,7 @@ ss_use_cellid_mapping = True
 
 
 # ── METHOD 3 only: Climate-adjusted coefficients ─────────────────────────────
+# ⚠ Only used if ss_method = "using_copernicus_lulc_with_dynamic_coeff"; ignored otherwise.
 #  Monthly weight formula: w_m = P_m^alpha × Q10^((T_m − T_ref) / 10)
 #  Requires one entry per year in the simulation period.
 
@@ -431,6 +441,7 @@ ss_climate_temp_reference_c = 15.0       # Reference temperature [°C]
 
 
 # ── METHOD 4: Machine Learning model ─────────────────────────────────────────
+# ⚠ Only used if ss_method = "ml_model"; ignored otherwise.
 #  Train a model from monitoring station data to predict loads.
 #  Requires: pip install scikit-learn xgboost
 
@@ -454,6 +465,9 @@ ss_ml_max_depth = 6                    # Maximum tree depth (higher = more compl
 #  ⚠  When using PHREEQC, set "none" unless the species name is a valid component.
 
 ewf_method = "none"
+
+# ── Fixed value settings ──
+# ⚠ Only used if ewf_method = "fixed_value"; ignored otherwise.
 ewf_method_fixedval_comment = "External model: summa"
 ewf_method_fixedval_source = "Just for demonstration purposes"
 ewf_method_fixedval_chem_name = "NO3-N"           # Species receiving the concentration
@@ -516,9 +530,11 @@ run_model = False
 container_runtime = "docker"
 
 # ── Docker settings ──
+# ⚠ Only used if container_runtime = "docker"; ignored otherwise.
 docker_container_name = "docker_openwq"   # Name of the running Docker container
 
 # ── Apptainer settings (for HPC) ──
+# ⚠ Only used if container_runtime = "apptainer"; ignored otherwise.
 apptainer_sif_path = "/path/to/openwq.sif"                  # Path to .sif image
 apptainer_bind_path = "/scratch/user/openwq_code:/code"      # host_path:container_path
 
