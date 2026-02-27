@@ -497,8 +497,11 @@ ewf_method_fixedval_external_inputflux_name = "SUMMA_RUNOFF"  # Name of the exte
 output_format = "HDF5"
 
 # Which chemical species to write to output files.
-# Must match species names defined in the BGC module.
-chemical_species = ["NO3-N", "NH4-N", "N_ORG_fresh", "N_ORG_stable"]
+#   "all"  → auto-detect from the BGC module file:
+#             NATIVE_BGC_FLEX: reads species keys from the JSON framework file
+#             PHREEQC: uses phreeqc_mobile_species list
+#   [list] → explicit list of species names (must match BGC module names)
+chemical_species = "all"
 
 # Concentration units in the output files.
 units = "MG/L"

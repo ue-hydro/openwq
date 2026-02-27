@@ -17,6 +17,7 @@
 
 from typing import Dict, List, Union, Any, Optional
 import datetime
+import json
 import os
 import re
 
@@ -122,6 +123,70 @@ def parse_sim_period_from_control_file(
         )
 
     return [start_year, end_year]
+
+
+def extract_species_from_bgc(
+        bgc_module_name: str,
+        path2selected_NATIVE_BGC_FLEX_framework: str = "",
+        phreeqc_mobile_species: Optional[List[str]] = None,
+) -> List[str]:
+    """Extract all chemical species names from the BGC module configuration.
+
+    Parameters
+    ----------
+    bgc_module_name : str
+        ``"NATIVE_BGC_FLEX"`` or ``"PHREEQC"``.
+    path2selected_NATIVE_BGC_FLEX_framework : str
+        Path to the NATIVE_BGC_FLEX JSON file (only used when
+        bgc_module_name = ``"NATIVE_BGC_FLEX"``).
+    phreeqc_mobile_species : list of str, optional
+        User-provided list of PHREEQC mobile species (only used when
+        bgc_module_name = ``"PHREEQC"``).
+
+    Returns
+    -------
+    list of str
+        Species names extracted from the BGC configuration.
+    """
+    if bgc_module_name == "NATIVE_BGC_FLEX":
+        if not path2selected_NATIVE_BGC_FLEX_framework:
+            raise ValueError(
+                "chemical_species = 'all' with NATIVE_BGC_FLEX requires "
+                "path2selected_NATIVE_BGC_FLEX_framework to be set."
+            )
+        if not os.path.isfile(path2selected_NATIVE_BGC_FLEX_framework):
+            raise FileNotFoundError(
+                f"BGC framework file not found: "
+                f"{path2selected_NATIVE_BGC_FLEX_framework}"
+            )
+
+        with open(path2selected_NATIVE_BGC_FLEX_framework, 'r') as f:
+            bgc_data = json.load(f)
+
+        chem_species_dict = (bgc_data
+                             .get("BIOGEOCHEMISTRY_CONFIGURATION", {})
+                             .get("CHEMICAL_SPECIES", {}))
+
+        # Keys starting with '_' are comments/descriptions, skip them
+        species = [k for k in chem_species_dict.keys()
+                   if not k.startswith("_")]
+        return species
+
+    elif bgc_module_name == "PHREEQC":
+        if phreeqc_mobile_species and len(phreeqc_mobile_species) > 0:
+            return list(phreeqc_mobile_species)
+        else:
+            raise ValueError(
+                "chemical_species = 'all' with PHREEQC requires "
+                "phreeqc_mobile_species to be set (list of mobile species "
+                "from the PHREEQC database)."
+            )
+
+    else:
+        raise ValueError(
+            f"Cannot extract species: unknown bgc_module_name '{bgc_module_name}'. "
+            f"Expected 'NATIVE_BGC_FLEX' or 'PHREEQC'."
+        )
 
 
 def _parse_docker_volume_mount(docker_compose_path: str) -> tuple:
@@ -419,6 +484,23 @@ def Gen_Input_Driver(
         ss_method_csv_config = []
     if chemical_species is None:
         chemical_species = ["NO3-N"]
+
+    # ── Resolve chemical_species = "all" ───────────────────────────────
+    if (isinstance(chemical_species, str) and chemical_species.lower() == "all") or \
+       (isinstance(chemical_species, list) and len(chemical_species) == 1
+        and isinstance(chemical_species[0], str) and chemical_species[0].lower() == "all"):
+
+        chemical_species = extract_species_from_bgc(
+            bgc_module_name=bgc_module_name,
+            path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework,
+            phreeqc_mobile_species=phreeqc_mobile_species,
+        )
+
+        print(f"\n  ── Output Species (auto-detected from {bgc_module_name}) ──")
+        print(f"     chemical_species = 'all' → resolved to {len(chemical_species)} species:")
+        for i, sp in enumerate(chemical_species, 1):
+            print(f"       {i}. {sp}")
+        print()
     if timestep is None:
         timestep = [1, "hour"]
 
