@@ -576,11 +576,15 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
         return None, None
 
     # Build species mapping: GRQA code → model species name
+    # Also track which model species have no GRQA equivalent
     species_mapping = {}
+    unmapped_species = []
     for model_name in chemical_species:
         grqa_code = _MODEL_SPECIES_TO_GRQA.get(model_name)
         if grqa_code and grqa_code not in species_mapping:
             species_mapping[grqa_code] = model_name
+        elif not grqa_code:
+            unmapped_species.append(model_name)
 
     if not species_mapping:
         print("  No GRQA-compatible species found. Skipping GRQA extraction.")
@@ -655,6 +659,7 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
                 'species_stats': [],
                 'output_dir': grqa_output_dir,
                 'searched_species': list(species_mapping.values()),
+                'unmapped_species': unmapped_species,
                 'buffer_km': grqa_buffer_km,
             }
             return None, grqa_stats
@@ -680,6 +685,7 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
 
         dates = pd.to_datetime(observations[date_col], errors='coerce')
         species_stats = []
+        found_model_species = set()
         for model_sp in observations['model_species'].unique():
             sp_obs = observations[observations['model_species'] == model_sp]
             sp_dates = pd.to_datetime(sp_obs[date_col], errors='coerce')
@@ -691,6 +697,11 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
                 'year_start': int(sp_dates.min().year) if not sp_dates.isna().all() else None,
                 'year_end': int(sp_dates.max().year) if not sp_dates.isna().all() else None,
             })
+            found_model_species.add(model_sp)
+
+        # Species that exist in GRQA but had no data within the buffer
+        no_data_species = [s for s in species_mapping.values()
+                           if s not in found_model_species]
 
         grqa_stats = {
             'n_stations': len(stations),
@@ -700,6 +711,8 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
             'species_stats': species_stats,
             'output_dir': grqa_output_dir,
             'buffer_km': grqa_buffer_km,
+            'no_data_species': no_data_species,
+            'unmapped_species': unmapped_species,
         }
 
         return json.dumps(stations_geojson), grqa_stats
@@ -1197,20 +1210,35 @@ Time series, spatial statistics, and runtime metadata are not available.
                  f'<a href="https://zenodo.org/records/15335450" target="_blank">'
                  f'GRQA Dataset</a></div>')
 
+        _no_data = grqa_stats.get('no_data_species', [])
+        _unmapped = grqa_stats.get('unmapped_species', [])
+
         if grqa_stats['n_stations'] == 0:
-            # No stations found — show searched species
+            # No stations found — distinguish between GRQA-supported vs unsupported
             searched = grqa_stats.get('searched_species', [])
-            sp_list = ', '.join(f'<code>{s}</code>' for s in searched) if searched else 'N/A'
-            H.append(f'<div class="highlight-box" style="border-left-color:var(--accent);">'
-                     f'<strong>No GRQA monitoring stations found</strong> within '
-                     f'the basin area for the searched species: {sp_list}. '
-                     f'This is common for remote catchments with limited monitoring '
-                     f'infrastructure.</div>')
+            sp_list = ', '.join(f'<code>{s}</code>' for s in searched) \
+                if searched else 'N/A'
+            H.append(
+                f'<div class="highlight-box" style="border-left-color:var(--accent);">'
+                f'<strong>No GRQA monitoring stations found</strong> within '
+                f'{_buf_km} km of the basin/river network for the following '
+                f'GRQA-supported species: {sp_list}. '
+                f'Try increasing <code>grqa_buffer_km</code> to widen the '
+                f'search area.</div>')
+            if _unmapped:
+                _um_list = ', '.join(f'<code>{s}</code>' for s in _unmapped)
+                H.append(
+                    f'<div class="highlight-box" '
+                    f'style="border-left-color:var(--text-light);">'
+                    f'The following model species are <strong>not available'
+                    f'</strong> in the GRQA database and were excluded from '
+                    f'the search: {_um_list}.</div>')
         else:
             # Summary KPIs
             yr_range = ''
             if grqa_stats.get('year_start') and grqa_stats.get('year_end'):
-                yr_range = f"{grqa_stats['year_start']}&ndash;{grqa_stats['year_end']}"
+                yr_range = (f"{grqa_stats['year_start']}&ndash;"
+                            f"{grqa_stats['year_end']}")
             H.append(f"""<div class="kpi-grid" style="margin:1rem 0">
 <div class="kpi"><div class="icon">&#x1f4cd;</div><div class="value">{grqa_stats['n_stations']}</div><div class="label">Stations</div></div>
 <div class="kpi"><div class="icon">&#x1f4c8;</div><div class="value">{grqa_stats['n_observations']:,}</div><div class="label">Observations</div></div>
@@ -1220,19 +1248,41 @@ Time series, spatial statistics, and runtime metadata are not available.
 
             # Per-species table
             if grqa_stats.get('species_stats'):
-                H.append('<div class="card primary"><div class="table-wrap"><table>')
-                H.append('<tr><th>Species</th><th>Stations</th><th>Observations</th>'
-                         '<th>Period</th></tr>')
+                H.append('<div class="card primary"><div class="table-wrap">'
+                         '<table>')
+                H.append('<tr><th>Species</th><th>Stations</th>'
+                         '<th>Observations</th><th>Period</th></tr>')
                 for sp in grqa_stats['species_stats']:
                     yr = ''
                     if sp.get('year_start') and sp.get('year_end'):
                         yr = f"{sp['year_start']}&ndash;{sp['year_end']}"
                     H.append(
-                        f'<tr><td><span class="badge badge-primary">{sp["species"]}</span></td>'
+                        f'<tr><td><span class="badge badge-primary">'
+                        f'{sp["species"]}</span></td>'
                         f'<td class="num">{sp["n_stations"]}</td>'
                         f'<td class="num">{sp["n_observations"]:,}</td>'
                         f'<td>{yr}</td></tr>')
                 H.append('</table></div></div>')
+
+            # Species searched but with no data within the buffer
+            if _no_data:
+                _nd_list = ', '.join(f'<code>{s}</code>' for s in _no_data)
+                H.append(
+                    f'<div class="highlight-box" '
+                    f'style="border-left-color:var(--accent);">'
+                    f'The following species exist in the GRQA database but '
+                    f'<strong>no stations were found</strong> within '
+                    f'{_buf_km} km: {_nd_list}. '
+                    f'Try increasing <code>grqa_buffer_km</code>.</div>')
+
+            # Species not available in GRQA at all
+            if _unmapped:
+                _um_list = ', '.join(f'<code>{s}</code>' for s in _unmapped)
+                H.append(
+                    f'<div class="highlight-box" '
+                    f'style="border-left-color:var(--text-light);">'
+                    f'The following model species are <strong>not available'
+                    f'</strong> in the GRQA database: {_um_list}.</div>')
 
         H.append('</div>')
 
