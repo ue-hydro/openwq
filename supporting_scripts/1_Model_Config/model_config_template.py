@@ -46,7 +46,7 @@ from Gen_Input_Driver import uniform_param
 # ║    5. Source/Sink Loads        — nutrient inputs (CSV, LULC, or ML)    ║
 # ║    6. External Water Fluxes    — boundary conditions from other models ║
 # ║    7. Output Settings          — species, format, timestep             ║
-# ║    8. Model Execution          — run via Docker/Apptainer              ║
+# ║    8. Model Execution          — run via Docker (local machine)         ║
 # ║    9. Report Generation        — HTML report with maps & time series   ║
 # ║                                                                        ║
 # ║  Full documentation: https://openwq.readthedocs.io                     ║
@@ -529,8 +529,12 @@ compartments_and_cells = {
 # ──────────────────────────────────────────────────────────────────────────────
 #  SECTION 8: MODEL EXECUTION (optional)
 # ──────────────────────────────────────────────────────────────────────────────
+#  This template is designed for exploring model options and arriving at a
+#  general desired configuration on your local machine. Only Docker is
+#  supported here. For HPC execution with Apptainer/Singularity, use
+#  calibration_config_template.py which provides full HPC support.
+#
 #  Set run_model = True to launch the simulation after generating config files.
-#  The model runs inside a Docker or Apptainer container.
 #
 #  IMPORTANT:
 #    • mizuRoute requires mpirun -np 2 (minimum 2 MPI processes for domain
@@ -539,17 +543,8 @@ compartments_and_cells = {
 
 run_model = False
 
-# Container runtime: "docker" (local machine) or "apptainer" (HPC clusters).
 container_runtime = "docker"
-
-# ── Docker settings ──
-# ⚠ Only used if container_runtime = "docker"; ignored otherwise.
 docker_container_name = "docker_openwq"   # Name of the running Docker container
-
-# ── Apptainer settings (for HPC) ──
-# ⚠ Only used if container_runtime = "apptainer"; ignored otherwise.
-apptainer_sif_path = "/path/to/openwq.sif"                  # Path to .sif image
-apptainer_bind_path = "/scratch/user/openwq_code:/code"      # host_path:container_path
 
 # Number of MPI processes. Minimum 2 for mizuRoute.
 mpi_np = 2
@@ -585,6 +580,11 @@ river_network_shapefile = "/Users/diogocosta/Documents/openwq_code/diogo_test/mi
 #            Download: https://zenodo.org/records/15335450
 #   "skip"  → skip GRQA entirely (no station overlay, no data report)
 grqa_local_data_path = "auto"
+
+# Buffer distance [km] around the basin boundary (or river network if no basin
+# shapefile is provided) for searching GRQA monitoring stations.
+# Increase for remote catchments with sparse monitoring coverage.
+grqa_buffer_km = 10
 
 
 # ╔════════════════════════════════════════════════════════════════════════╗
@@ -634,8 +634,6 @@ if run_model:
         file_manager_path=file_manager_path,
         mpi_np=mpi_np,
         docker_container_name=docker_container_name,
-        apptainer_sif_path=apptainer_sif_path,
-        apptainer_bind_path=apptainer_bind_path,
     )
 
 # 3) Generate report (optional)
@@ -669,6 +667,7 @@ if generate_report:
         river_network_shapefile=river_network_shapefile,
         basin_shapefile=_basin_shp,
         grqa_local_data_path=grqa_local_data_path,
+        grqa_buffer_km=grqa_buffer_km,
         container_runtime=container_runtime,
         mpi_np=mpi_np,
         run_time_seconds=_elapsed,
