@@ -1569,7 +1569,6 @@ Time series, spatial statistics, and runtime metadata are not available.
     H.append(f"""<div class="footer">
 <div class="logo">Open<span>WQ</span></div>
 <p>Simulation report generated on {now}</p>
-<p><a href="https://github.com/DigitalWaterAnalytics/openwq" target="_blank">github.com/DigitalWaterAnalytics/openwq</a></p>
 </div>""")
 
     H.append('</div>')  # main

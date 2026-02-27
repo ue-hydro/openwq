@@ -846,8 +846,14 @@ class GRQACalibrationExtractor:
                 how='outer',
                 suffixes=('', '_dup')
             )
-            # Clean up duplicate columns
+            # Clean up duplicate columns — but first coalesce lat/lon so that
+            # stations appearing only in the right side keep their coordinates.
             dup_cols = [c for c in stations_combined.columns if c.endswith('_dup')]
+            for col in dup_cols:
+                base = col.removesuffix('_dup')
+                if base in stations_combined.columns:
+                    stations_combined[base] = stations_combined[base].fillna(
+                        stations_combined[col])
             stations_combined.drop(columns=dup_cols, inplace=True)
 
         # Fill NaN in has_* columns with False
