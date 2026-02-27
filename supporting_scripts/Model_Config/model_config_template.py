@@ -192,7 +192,7 @@ td_module_characteristic_length_m = 100.0
 #  "NATIVE_LE_BOUNDMIX"  — Exchange proportional to concentration gradient × K
 #  "NONE"                 — No lateral/vertical exchange
 
-le_module_name = "NATIVE_LE_BOUNDMIX"
+le_module_name = "NONE"
 
 # ── NATIVE_LE_BOUNDMIX settings ──
 # ⚠ Only used if le_module_name = "NATIVE_LE_BOUNDMIX"; ignored otherwise.
@@ -221,7 +221,7 @@ le_module_config = [
 #  "HYPE_HBVSED" — HBV-SED model (simpler, empirical erosion)
 #  "NONE"        — Disable sediment transport
 
-ts_module_name = "HYPE_HBVSED"
+ts_module_name = "NONE"
 
 # Which compartment experiences erosion and receives transported sediment.
 ts_sediment_compartment = "RIVER_NETWORK_REACHES"
@@ -359,7 +359,7 @@ ss_method_csv_config = [
 
 # Basin shapefile — defines the spatial extent and sub-catchment boundaries.
 ss_method_copernicus_basin_info = {
-    'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/finalcat_info_v1-0.shp',
+    'path_to_shp': '/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/finalcat_info_v1-0.shp',
     'mapping_key': 'SubId'    # Column in shapefile that identifies each sub-catchment
 }
 

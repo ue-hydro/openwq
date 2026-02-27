@@ -1127,6 +1127,7 @@ def calc_copernicus_lulc(
 
     # Filter by year if specified
     if year_start is not None or year_end is not None:
+        all_netcdf_files = list(netcdf_files)   # keep unfiltered copy for fallback
         filtered_files = []
 
         for nc_file in netcdf_files:
@@ -1150,6 +1151,26 @@ def calc_copernicus_lulc(
 
         netcdf_files = filtered_files
         print(f"After year filtering ({year_start}-{year_end}): {len(netcdf_files)} files")
+
+        # ── Nearest-year fallback (proxy) ──────────────────────────────
+        if not netcdf_files and all_netcdf_files:
+            available_years = sorted(set(
+                _extract_year_from_filename(f.name)
+                for f in all_netcdf_files
+                if _extract_year_from_filename(f.name) is not None
+            ))
+            if available_years:
+                target = year_start if year_start is not None else year_end
+                nearest = min(available_years, key=lambda y: abs(y - target))
+                print(f"     ⚠  No files found for requested year range "
+                      f"{year_start}–{year_end}.")
+                print(f"        Available years in directory: {available_years}")
+                print(f"        → Using nearest available year ({nearest}) as proxy.")
+                netcdf_files = [
+                    f for f in all_netcdf_files
+                    if _extract_year_from_filename(f.name) == nearest
+                ]
+                print(f"        Files selected: {len(netcdf_files)}")
 
     if not netcdf_files:
         raise ValueError(
