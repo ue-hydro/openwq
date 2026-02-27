@@ -1092,7 +1092,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     n_compartments = len(compartments_and_cells)
     n_cells = sum(1 for cmp in compartments_and_cells.values()
                   for _ in cmp.values())
-    n_outputs = len(results)
+    n_outputs = len(results) if results else n_species
 
     H.append(f"""<div class="section" id="summary">
 <h2>Summary</h2>
@@ -1450,17 +1450,30 @@ Plotly.newPlot('{plot_id}',{json.dumps(traces)},
         H.append(f"""
 (function(){{
   var map = L.map('basinMap').setView({center_js}, {zoom});
+  var satTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',{{
+    attribution:'Esri, Maxar, Earthstar Geographics', maxZoom:19}}).addTo(map);
   var lightTile = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
     attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:19
-  }}).addTo(map);
+  }});
   var topoTile = L.tileLayer('https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png',{{
     attribution:'OpenTopoMap', maxZoom:17}});
-  var satTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',{{
-    attribution:'Esri, Maxar, Earthstar Geographics', maxZoom:19}});
 {chr(10).join(layer_js_blocks)}
-  L.control.layers({{'Light':lightTile,'Topo':topoTile,'Satellite':satTile}}, {overlay_obj}).addTo(map);
-  try{{ map.fitBounds({fit_var}.getBounds()); }}catch(e){{}}
+  L.control.layers({{'Satellite':satTile,'Light':lightTile,'Topo':topoTile}}, {overlay_obj}).addTo(map);
+  var _fitBounds = null;
+  try{{ _fitBounds = {fit_var}.getBounds(); map.fitBounds(_fitBounds); }}catch(e){{}}
   L.control.scale().addTo(map);
+  var recenterBtn = L.control({{position:'topleft'}});
+  recenterBtn.onAdd = function(){{
+    var div = L.DomUtil.create('div','leaflet-bar leaflet-control');
+    div.innerHTML = '<a href="#" title="Re-center map" style="font-size:18px;line-height:30px;width:30px;height:30px;display:block;text-align:center;text-decoration:none;color:#333">⌖</a>';
+    div.firstChild.onclick = function(e){{
+      e.preventDefault(); e.stopPropagation();
+      if(_fitBounds) map.fitBounds(_fitBounds);
+      else map.setView({center_js}, {zoom});
+    }};
+    return div;
+  }};
+  recenterBtn.addTo(map);
 }})();
 """)
 
