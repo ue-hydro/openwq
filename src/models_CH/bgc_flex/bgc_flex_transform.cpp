@@ -102,10 +102,15 @@ void OpenWQ_CH_model::bgc_flex_transform(
                 const unsigned int num_chem_in_transf = index_chemtransf.size();
                 const unsigned int expr_idx = transf_index[transi];
 
-                // Pre-fetch cube references for consumed and produced species
-                auto& d_chem_cons = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_cons);
-                auto& d_chem_prod = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_prod);
-                auto& chemass_cons = (*OpenWQ_vars.chemass)(icmp)(index_cons);
+                // Check if consumed/produced species are valid
+                // (index remains UINT_MAX when species name is "NONE" or not found in species list)
+                const bool has_cons = (index_cons != static_cast<unsigned int>(-1));
+                const bool has_prod = (index_prod != static_cast<unsigned int>(-1));
+
+                // Pre-fetch cube pointers for consumed and produced species (nullptr if NONE)
+                arma::Cube<double>* p_d_chem_cons = has_cons ? &(*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_cons) : nullptr;
+                arma::Cube<double>* p_d_chem_prod = has_prod ? &(*OpenWQ_vars.d_chemass_dt_chem)(icmp)(index_prod) : nullptr;
+                arma::Cube<double>* p_chemass_cons = has_cons ? &(*OpenWQ_vars.chemass)(icmp)(index_cons) : nullptr;
 
                 /* ########################################
                 // Loop over space: nx, ny, nz
@@ -165,18 +170,19 @@ void OpenWQ_CH_model::bgc_flex_transform(
 
                             // Guarantee that removed mass is not larger than existing mass
                             if (!is_time_step_0) {
-                                transf_mass = std::fmin(
-                                    chemass_cons(ix, iy, iz),
-                                    transf_mass * time_step);
+                                transf_mass *= time_step;
+                                if (has_cons) {
+                                    transf_mass = std::fmin(
+                                        (*p_chemass_cons)(ix, iy, iz),
+                                        transf_mass);
+                                }
                             } else {
                                 transf_mass = 0.0;
                             }
 
-                            // Update derivatives (atomic updates since different threads
-                            // may write to the same cell - but with static scheduling
-                            // on a flattened loop, each cell is processed by exactly one thread)
-                            d_chem_cons(ix, iy, iz) -= transf_mass;
-                            d_chem_prod(ix, iy, iz) += transf_mass;
+                            // Update derivatives (skip if species is NONE / not in species list)
+                            if (has_cons) (*p_d_chem_cons)(ix, iy, iz) -= transf_mass;
+                            if (has_prod) (*p_d_chem_prod)(ix, iy, iz) += transf_mass;
                         }
                     } // end omp parallel
 
@@ -212,16 +218,19 @@ void OpenWQ_CH_model::bgc_flex_transform(
 
                                 // Guarantee that removed mass is not larger than existing mass
                                 if (!is_time_step_0){
-                                    transf_mass = std::fmin(
-                                            chemass_cons(ix,iy,iz),
-                                            transf_mass * time_step);
+                                    transf_mass *= time_step;
+                                    if (has_cons) {
+                                        transf_mass = std::fmin(
+                                            (*p_chemass_cons)(ix,iy,iz),
+                                            transf_mass);
+                                    }
                                 }else{
                                     transf_mass = 0.0;
                                 }
 
-                                // Update derivatives
-                                d_chem_cons(ix,iy,iz) -= transf_mass;
-                                d_chem_prod(ix,iy,iz) += transf_mass;
+                                // Update derivatives (skip if species is NONE / not in species list)
+                                if (has_cons) (*p_d_chem_cons)(ix,iy,iz) -= transf_mass;
+                                if (has_prod) (*p_d_chem_prod)(ix,iy,iz) += transf_mass;
 
                             }
                         }
