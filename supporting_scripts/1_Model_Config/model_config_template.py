@@ -587,6 +587,7 @@ grqa_buffer_km = 10
 # ║  END OF USER CONFIGURATION — do not edit below this line               ║
 # ╚════════════════════════════════════════════════════════════════════════╝
 
+import io
 import webbrowser
 from Gen_Report import generate_report as _generate_report
 
@@ -602,19 +603,40 @@ if (isinstance(chemical_species, str) and chemical_species.lower() == "all") or 
         phreeqc_mobile_species=locals().get('phreeqc_mobile_species'),
     )
 
-# 1) Generate configuration files
-_excluded = {'sys', 'os', 'webbrowser', 'gJSON_lib', 'uniform_param',
-             '_generate_report'}
-_config = {k: v for k, v in locals().items()
-           if not k.startswith('_') and k not in _excluded}
-gJSON_lib.Gen_Input_Driver(**_config)
+# 1) Generate configuration files — capture console output for the report
+_console_log = io.StringIO()
+_has_errors = False
 
-print("\n" + "=" * 60)
-print("CONFIG FILES GENERATED SUCCESSFULLY")
-print("=" * 60)
-print(f"  Output directory: {dir2save_input_files}")
-print(f"  Master JSON:      {dir2save_input_files}/openWQ_master.json")
-print(f"  Input files:      {dir2save_input_files}/openwq_in/")
+import contextlib
+with contextlib.redirect_stdout(_console_log), contextlib.redirect_stderr(_console_log):
+    try:
+        _excluded = {'sys', 'os', 'io', 'webbrowser', 'gJSON_lib', 'uniform_param',
+                     '_generate_report', 'contextlib', '_console_log', '_has_errors'}
+        _config = {k: v for k, v in locals().items()
+                   if not k.startswith('_') and k not in _excluded}
+        gJSON_lib.Gen_Input_Driver(**_config)
+    except Exception as _e:
+        _has_errors = True
+        import traceback
+        traceback.print_exc()
+
+_console_output = _console_log.getvalue()
+
+# Print captured output to the real console so the user can still see it
+if _console_output:
+    print(_console_output, end='')
+
+if not _has_errors:
+    print("\n" + "=" * 60)
+    print("CONFIG FILES GENERATED SUCCESSFULLY")
+    print("=" * 60)
+    print(f"  Output directory: {dir2save_input_files}")
+    print(f"  Master JSON:      {dir2save_input_files}/openWQ_master.json")
+    print(f"  Input files:      {dir2save_input_files}/openwq_in/")
+else:
+    print("\n" + "=" * 60)
+    print("CONFIG GENERATION ENCOUNTERED ERRORS")
+    print("=" * 60)
 
 # 2) Generate report (optional)
 _report_path = None
@@ -651,6 +673,8 @@ if generate_report:
         mpi_np=mpi_np,
         executable_path=executable_path,
         file_manager_path=file_manager_path,
+        console_log=_console_output if _console_output else None,
+        has_errors=_has_errors,
     )
 
 print("\n" + "=" * 60)

@@ -857,6 +857,8 @@ def generate_simulation_report(
         docker_container_name="docker_openwq",
         executable_path=None,
         file_manager_path=None,
+        console_log=None,
+        has_errors=False,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -867,6 +869,8 @@ def generate_simulation_report(
         grqa_local_data_path: "auto" or None to download from Zenodo,
             a path to pre-downloaded GRQA folder, or "skip" to disable.
         grqa_buffer_km: buffer distance in km around basin/river for GRQA search
+        console_log: captured console output from config generation (str or None)
+        has_errors: True if errors were encountered during config generation
 
     Returns the path to the generated HTML file.
     """
@@ -1259,7 +1263,10 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     if ss_summary:
         nav_items.append(('sources', 'Source/Sink Setup'))
     nav_items.append(('metadata', 'Run Metadata'))
-    nav_items.append(('nextsteps', 'Next Steps'))
+    if has_errors and console_log:
+        nav_items.append(('consoleerrors', 'Console Errors'))
+    if not has_errors:
+        nav_items.append(('nextsteps', 'Next Steps'))
 
     H.append('<div class="layout">')
     H.append('<aside class="sidebar">')
@@ -1637,8 +1644,27 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append(f'<tr><td>Output Timestep</td><td>{timestep[0]} {timestep[1]}</td></tr>')
         H.append('</table></div></div></div>')
 
-    # --- SECTION: Next Steps ---
-    with _SectionGuard(H, 'nextsteps', 'Next Steps'):
+    # --- SECTION: Console Errors (only when errors occurred) ---
+    if has_errors and console_log:
+        with _SectionGuard(H, 'consoleerrors', 'Console Errors'):
+            H.append('<div class="section" id="consoleerrors">'
+                     '<h2>Console Errors</h2>')
+            H.append('<div class="card" style="border-left:4px solid #e74c3c;'
+                     'background:rgba(231,76,60,.06)">')
+            H.append('<p style="color:#e74c3c;font-weight:600;margin:0 0 .8rem 0">'
+                     '&#x26a0; Errors were encountered during configuration generation. '
+                     'Please fix the issues below before running the model.</p>')
+            _safe_log = _html_mod.escape(console_log)
+            H.append(f'<pre style="font-size:.8rem;overflow-x:auto;'
+                     f'background:var(--glass);padding:.8rem;border-radius:6px;'
+                     f'white-space:pre-wrap;word-wrap:break-word">{_safe_log}</pre>')
+            H.append('</div></div>')
+
+    # --- SECTION: Next Steps (skipped when errors occurred) ---
+    if has_errors:
+        pass  # Next Steps omitted — errors must be fixed first
+    else:
+      with _SectionGuard(H, 'nextsteps', 'Next Steps'):
         # Helper: wrap a code snippet in a <pre> with a copy button.
         # The raw text is stored in a hidden <template> tag to avoid any
         # escaping issues with quotes / backslashes inside onclick attributes.
@@ -2117,6 +2143,8 @@ def generate_report(
         docker_container_name="docker_openwq",
         executable_path=None,
         file_manager_path=None,
+        console_log=None,
+        has_errors=False,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -2127,6 +2155,8 @@ def generate_report(
         basin_shapefile: path to basin/catchment shapefile
         grqa_local_data_path: "auto"/path/"skip"
         grqa_buffer_km: buffer distance in km for GRQA station search
+        console_log: captured console output from config generation (str or None)
+        has_errors: True if errors were encountered during config generation
 
     Returns:
         str: Path to the generated HTML report, or None on failure
@@ -2163,6 +2193,8 @@ def generate_report(
             docker_container_name=docker_container_name,
             executable_path=executable_path,
             file_manager_path=file_manager_path,
+            console_log=console_log,
+            has_errors=has_errors,
         )
 
         print(f"  Report saved: {report_path}")
