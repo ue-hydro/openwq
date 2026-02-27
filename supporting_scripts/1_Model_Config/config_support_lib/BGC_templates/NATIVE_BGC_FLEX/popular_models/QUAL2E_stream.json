@@ -25,17 +25,17 @@
         "UNITS": "mg/L as N",
         "INITIAL_CONDITION": 1.0
       },
-      "NH4_N": {
+      "NH4-N": {
         "DESCRIPTION": "Ammonia nitrogen",
         "UNITS": "mg/L as N",
         "INITIAL_CONDITION": 0.5
       },
-      "NO2_N": {
+      "NO2-N": {
         "DESCRIPTION": "Nitrite nitrogen",
         "UNITS": "mg/L as N",
         "INITIAL_CONDITION": 0.05
       },
-      "NO3_N": {
+      "NO3-N": {
         "DESCRIPTION": "Nitrate nitrogen",
         "UNITS": "mg/L as N",
         "INITIAL_CONDITION": 2.0
@@ -168,7 +168,7 @@
 
         "ORG_N_HYDROLYSIS": {
           "CONSUMED": "ORG_N",
-          "PRODUCED": "NH4_N",
+          "PRODUCED": "NH4-N",
           "KINETICS": "beta_1 * ORG_N",
           "PARAMETERS": {
             "beta_1": {
@@ -182,9 +182,9 @@
         },
 
         "NITRIFICATION_STEP1": {
-          "CONSUMED": "NH4_N",
-          "PRODUCED": "NO2_N",
-          "KINETICS": "beta_2 * NH4_N",
+          "CONSUMED": "NH4-N",
+          "PRODUCED": "NO2-N",
+          "KINETICS": "beta_2 * NH4-N",
           "PARAMETERS": {
             "beta_2": {
               "VALUE": 0.3,
@@ -197,9 +197,9 @@
         },
 
         "NITRIFICATION_STEP2": {
-          "CONSUMED": "NO2_N",
-          "PRODUCED": "NO3_N",
-          "KINETICS": "beta_3 * NO2_N",
+          "CONSUMED": "NO2-N",
+          "PRODUCED": "NO3-N",
+          "KINETICS": "beta_3 * NO2-N",
           "PARAMETERS": {
             "beta_3": {
               "VALUE": 1.0,
@@ -214,26 +214,26 @@
         "NITRIFICATION_O2_STEP1": {
           "CONSUMED": "DO",
           "PRODUCED": "NONE",
-          "KINETICS": "3.43 * beta_2 * NH4_N",
+          "KINETICS": "3.43 * beta_2 * NH4-N",
           "PARAMETERS": {
             "beta_2": {"VALUE": 0.3, "UNITS": "1/day"}
           },
-          "NOTES": "3.43 g O2 / g NH4-N oxidized to NO2"
+          "NOTES": "3.43 g O2 / g NH4-N-N oxidized to NO2-N"
         },
 
         "NITRIFICATION_O2_STEP2": {
           "CONSUMED": "DO",
           "PRODUCED": "NONE",
-          "KINETICS": "1.14 * beta_3 * NO2_N",
+          "KINETICS": "1.14 * beta_3 * NO2-N",
           "PARAMETERS": {
             "beta_3": {"VALUE": 1.0, "UNITS": "1/day"}
           },
-          "NOTES": "1.14 g O2 / g NO2-N oxidized to NO3"
+          "NOTES": "1.14 g O2 / g NO2-N-N oxidized to NO3-N"
         },
 
-        "BENTHIC_NH4": {
+        "BENTHIC_NH4-N": {
           "CONSUMED": "NONE",
-          "PRODUCED": "NH4_N",
+          "PRODUCED": "NH4-N",
           "KINETICS": "sigma_3 / depth",
           "PARAMETERS": {
             "sigma_3": {
@@ -381,15 +381,15 @@
         },
 
         "ALGAE_N_UPTAKE": {
-          "CONSUMED": "NH4_N",
+          "CONSUMED": "NH4-N",
           "PRODUCED": "NONE",
-          "KINETICS": "alpha_1 * mu * ALGAE * P_NH4",
+          "KINETICS": "alpha_1 * mu * ALGAE * P_NH4-N",
           "PARAMETERS": {
             "alpha_1": {"VALUE": 0.08, "UNITS": "mg N/mg Chl-a"},
             "mu": {"VALUE": 2.0, "UNITS": "1/day"},
-            "P_NH4": {
+            "P_NH4-N": {
               "VALUE": 0.5,
-              "DESCRIPTION": "Preference for NH4 over NO3"
+              "DESCRIPTION": "Preference for NH4-N over NO3-N"
             }
           }
         },

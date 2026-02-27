@@ -2,7 +2,7 @@
   "_DESCRIPTION": "Manganese Reduction with Thermodynamic Control",
   "_REFERENCE": "Jin & Bethke (2007); Thamdrup (2000)",
   "_REACTION": "CH2O + 2 MnO2 + 4 H+ -> CO2 + 2 Mn2+ + 3 H2O",
-  "_DELTA_G0": "-95 kJ/mol e- (between NO3 and Fe(III) in redox ladder)",
+  "_DELTA_G0": "-95 kJ/mol e- (between NO3-N and Fe(III) in redox ladder)",
 
   "MODULE_NAME": "NATIVE_BGC_FLEX",
 
@@ -13,7 +13,7 @@
       "3": "DOC",
       "4": "CO2",
       "5": "DO",
-      "6": "NO3_N",
+      "6": "NO3-N",
       "7": "X_mrb"
     },
     "BGC_GENERAL_MOBILE_SPECIES": ["Mn_II", "DOC", "CO2"]
@@ -35,7 +35,7 @@
         "R_kJ": 0.008314,
         "NOTES": [
           "Mn(IV) reduction is energetically favorable (ΔG° = -95)",
-          "Proceeds after O2 and NO3 depletion",
+          "Proceeds after O2 and NO3-N depletion",
           "Often limited by Mn oxide availability (solid phase)",
           "Important in coastal/marine sediments"
         ]
@@ -47,16 +47,16 @@
         "consumed": "Mn_IV",
         "produced": "Mn_II",
         "kinetics": [
-          "k_mrb * X_mrb * (Mn_IV/(Km_Mn4+Mn_IV)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((95-45)/(2*0.008314*(T+273)))))",
+          "k_mrb * X_mrb * (Mn_IV/(Km_Mn4+Mn_IV)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-((95-45)/(2*0.008314*(T+273)))))",
           "mg-Mn/L/day"
         ],
-        "parameter_names": ["k_mrb", "Km_Mn4", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_names": ["k_mrb", "Km_Mn4", "Km_DOC", "Ki_O2", "Ki_NO3-N"],
         "parameter_values": {
           "k_mrb": 12.0,
           "Km_Mn4": 5.0,
           "Km_DOC": 2.0,
           "Ki_O2": 0.2,
-          "Ki_NO3": 0.3
+          "Ki_NO3-N": 0.3
         },
         "_notes": [
           "F_T = 1 - exp(-50/(2*0.008314*293)) = 1 - exp(-10.3) ≈ 1.0",
@@ -70,17 +70,17 @@
         "consumed": "DOC",
         "produced": "X_mrb",
         "kinetics": [
-          "Y_mrb * k_mrb * X_mrb * (Mn_IV/(Km_Mn4+Mn_IV)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((95-45)/(2*0.008314*(T+273)))))",
+          "Y_mrb * k_mrb * X_mrb * (Mn_IV/(Km_Mn4+Mn_IV)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-((95-45)/(2*0.008314*(T+273)))))",
           "mg/L/day"
         ],
-        "parameter_names": ["Y_mrb", "k_mrb", "Km_Mn4", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_names": ["Y_mrb", "k_mrb", "Km_Mn4", "Km_DOC", "Ki_O2", "Ki_NO3-N"],
         "parameter_values": {
           "Y_mrb": 0.3,
           "k_mrb": 12.0,
           "Km_Mn4": 5.0,
           "Km_DOC": 2.0,
           "Ki_O2": 0.2,
-          "Ki_NO3": 0.3
+          "Ki_NO3-N": 0.3
         }
       },
 

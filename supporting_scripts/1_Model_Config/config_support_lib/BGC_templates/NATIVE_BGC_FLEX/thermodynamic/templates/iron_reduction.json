@@ -13,7 +13,7 @@
       "3": "DOC",
       "4": "CO2",
       "5": "DO",
-      "6": "NO3_N",
+      "6": "NO3-N",
       "7": "X_irb"
     },
     "BGC_GENERAL_MOBILE_SPECIES": ["Fe_II", "DOC", "CO2"]
@@ -35,7 +35,7 @@
         "R_kJ": 0.008314,
         "NOTES": [
           "Fe(III) reduction is intermediate in the redox ladder",
-          "Proceeds after O2 and NO3 depletion, before SO4 reduction",
+          "Proceeds after O2 and NO3-N depletion, before SO4-S reduction",
           "Fe(III) is often solid phase (ferrihydrite, goethite)",
           "Surface area limitation important for solid Fe(III)"
         ]
@@ -47,16 +47,16 @@
         "consumed": "Fe_III",
         "produced": "Fe_II",
         "kinetics": [
-          "k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
+          "k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
           "mg-Fe/L/day"
         ],
-        "parameter_names": ["k_irb", "Km_Fe3", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_names": ["k_irb", "Km_Fe3", "Km_DOC", "Ki_O2", "Ki_NO3-N"],
         "parameter_values": {
           "k_irb": 10.0,
           "Km_Fe3": 10.0,
           "Km_DOC": 2.0,
           "Ki_O2": 0.2,
-          "Ki_NO3": 0.5
+          "Ki_NO3-N": 0.5
         },
         "_notes": [
           "F_T = 1 - exp(-5/(2*0.008314*293)) = 1 - exp(-1.03) ≈ 0.64",
@@ -70,17 +70,17 @@
         "consumed": "DOC",
         "produced": "X_irb",
         "kinetics": [
-          "Y_irb * k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
+          "Y_irb * k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
           "mg/L/day"
         ],
-        "parameter_names": ["Y_irb", "k_irb", "Km_Fe3", "Km_DOC", "Ki_O2", "Ki_NO3"],
+        "parameter_names": ["Y_irb", "k_irb", "Km_Fe3", "Km_DOC", "Ki_O2", "Ki_NO3-N"],
         "parameter_values": {
           "Y_irb": 0.25,
           "k_irb": 10.0,
           "Km_Fe3": 10.0,
           "Km_DOC": 2.0,
           "Ki_O2": 0.2,
-          "Ki_NO3": 0.5
+          "Ki_NO3-N": 0.5
         }
       },
 

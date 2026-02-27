@@ -2,8 +2,8 @@
   "_DESCRIPTION": "Nitrification with Thermodynamic Control",
   "_REFERENCE": "Jin & Bethke (2007); Blackburne et al. (2007)",
   "_PATHWAYS": {
-    "AMMONIA_OXIDATION": "NH4+ + 1.5 O2 -> NO2- + 2 H+ + H2O (ΔG° = -275 kJ/mol)",
-    "NITRITE_OXIDATION": "NO2- + 0.5 O2 -> NO3- (ΔG° = -74 kJ/mol)"
+    "AMMONIA_OXIDATION": "NH4-N+ + 1.5 O2 -> NO2-N- + 2 H+ + H2O (ΔG° = -275 kJ/mol)",
+    "NITRITE_OXIDATION": "NO2-N- + 0.5 O2 -> NO3-N- (ΔG° = -74 kJ/mol)"
   },
   "_DELTA_G0": "Highly exergonic, but requires O2 as electron acceptor",
 
@@ -11,14 +11,14 @@
 
   "CHEMICAL_SPECIES": {
     "list": {
-      "1": "NH4_N",
-      "2": "NO2_N",
-      "3": "NO3_N",
+      "1": "NH4-N",
+      "2": "NO2-N",
+      "3": "NO3-N",
       "4": "DO",
       "5": "X_aob",
       "6": "X_nob"
     },
-    "BGC_GENERAL_MOBILE_SPECIES": ["NH4_N", "NO2_N", "NO3_N", "DO"]
+    "BGC_GENERAL_MOBILE_SPECIES": ["NH4-N", "NO2-N", "NO3-N", "DO"]
   },
 
   "CYCLING_FRAMEWORKS": {
@@ -33,8 +33,8 @@
       },
 
       "_THERMODYNAMIC_CONSTANTS": {
-        "deltaG0_NH4_to_NO2": -275.0,
-        "deltaG0_NO2_to_NO3": -74.0,
+        "deltaG0_NH4-N_to_NO2-N": -275.0,
+        "deltaG0_NO2-N_to_NO3-N": -74.0,
         "deltaG_ATP": 45.0,
         "chi": 2,
         "R_kJ": 0.008314,
@@ -48,18 +48,18 @@
 
       "1": {
         "_name": "ammonia_oxidation",
-        "_description": "NH4+ oxidation to NO2- by ammonia oxidizing bacteria (AOB)",
-        "_reaction": "NH4+ + 1.5 O2 -> NO2- + 2 H+ + H2O",
-        "consumed": "NH4_N",
-        "produced": "NO2_N",
+        "_description": "NH4-N+ oxidation to NO2-N- by ammonia oxidizing bacteria (AOB)",
+        "_reaction": "NH4-N+ + 1.5 O2 -> NO2-N- + 2 H+ + H2O",
+        "consumed": "NH4-N",
+        "produced": "NO2-N",
         "kinetics": [
-          "k_aob * X_aob * (NH4_N/(Km_NH4+NH4_N)) * (DO/(Km_O2_aob+DO)) * (1 - exp(-((275-45)/(2*0.008314*(T+273)))))",
+          "k_aob * X_aob * (NH4-N/(Km_NH4-N+NH4-N)) * (DO/(Km_O2_aob+DO)) * (1 - exp(-((275-45)/(2*0.008314*(T+273)))))",
           "mg-N/L/day"
         ],
-        "parameter_names": ["k_aob", "Km_NH4", "Km_O2_aob"],
+        "parameter_names": ["k_aob", "Km_NH4-N", "Km_O2_aob"],
         "parameter_values": {
           "k_aob": 15.0,
-          "Km_NH4": 0.5,
+          "Km_NH4-N": 0.5,
           "Km_O2_aob": 0.3
         },
         "_notes": "F_T ≈ 1.0, process is O2 limited, not thermodynamically limited"
@@ -67,18 +67,18 @@
 
       "2": {
         "_name": "nitrite_oxidation",
-        "_description": "NO2- oxidation to NO3- by nitrite oxidizing bacteria (NOB)",
-        "_reaction": "NO2- + 0.5 O2 -> NO3-",
-        "consumed": "NO2_N",
-        "produced": "NO3_N",
+        "_description": "NO2-N- oxidation to NO3-N- by nitrite oxidizing bacteria (NOB)",
+        "_reaction": "NO2-N- + 0.5 O2 -> NO3-N-",
+        "consumed": "NO2-N",
+        "produced": "NO3-N",
         "kinetics": [
-          "k_nob * X_nob * (NO2_N/(Km_NO2+NO2_N)) * (DO/(Km_O2_nob+DO)) * (1 - exp(-((74-45)/(2*0.008314*(T+273)))))",
+          "k_nob * X_nob * (NO2-N/(Km_NO2-N+NO2-N)) * (DO/(Km_O2_nob+DO)) * (1 - exp(-((74-45)/(2*0.008314*(T+273)))))",
           "mg-N/L/day"
         ],
-        "parameter_names": ["k_nob", "Km_NO2", "Km_O2_nob"],
+        "parameter_names": ["k_nob", "Km_NO2-N", "Km_O2_nob"],
         "parameter_values": {
           "k_nob": 20.0,
-          "Km_NO2": 0.2,
+          "Km_NO2-N": 0.2,
           "Km_O2_nob": 0.5
         },
         "_notes": [
@@ -90,17 +90,17 @@
 
       "3": {
         "_name": "aob_growth",
-        "consumed": "NH4_N",
+        "consumed": "NH4-N",
         "produced": "X_aob",
         "kinetics": [
-          "Y_aob * k_aob * X_aob * (NH4_N/(Km_NH4+NH4_N)) * (DO/(Km_O2_aob+DO)) * (1 - exp(-((275-45)/(2*0.008314*(T+273)))))",
+          "Y_aob * k_aob * X_aob * (NH4-N/(Km_NH4-N+NH4-N)) * (DO/(Km_O2_aob+DO)) * (1 - exp(-((275-45)/(2*0.008314*(T+273)))))",
           "mg/L/day"
         ],
-        "parameter_names": ["Y_aob", "k_aob", "Km_NH4", "Km_O2_aob"],
+        "parameter_names": ["Y_aob", "k_aob", "Km_NH4-N", "Km_O2_aob"],
         "parameter_values": {
           "Y_aob": 0.15,
           "k_aob": 15.0,
-          "Km_NH4": 0.5,
+          "Km_NH4-N": 0.5,
           "Km_O2_aob": 0.3
         },
         "_notes": "Low yield - autotrophs use CO2 fixation"
@@ -108,26 +108,26 @@
 
       "4": {
         "_name": "nob_growth",
-        "consumed": "NO2_N",
+        "consumed": "NO2-N",
         "produced": "X_nob",
         "kinetics": [
-          "Y_nob * k_nob * X_nob * (NO2_N/(Km_NO2+NO2_N)) * (DO/(Km_O2_nob+DO)) * (1 - exp(-((74-45)/(2*0.008314*(T+273)))))",
+          "Y_nob * k_nob * X_nob * (NO2-N/(Km_NO2-N+NO2-N)) * (DO/(Km_O2_nob+DO)) * (1 - exp(-((74-45)/(2*0.008314*(T+273)))))",
           "mg/L/day"
         ],
-        "parameter_names": ["Y_nob", "k_nob", "Km_NO2", "Km_O2_nob"],
+        "parameter_names": ["Y_nob", "k_nob", "Km_NO2-N", "Km_O2_nob"],
         "parameter_values": {
           "Y_nob": 0.05,
           "k_nob": 20.0,
-          "Km_NO2": 0.2,
+          "Km_NO2-N": 0.2,
           "Km_O2_nob": 0.5
         },
-        "_notes": "Even lower yield than AOB due to less energy from NO2 oxidation"
+        "_notes": "Even lower yield than AOB due to less energy from NO2-N oxidation"
       },
 
       "5": {
         "_name": "aob_decay",
         "consumed": "X_aob",
-        "produced": "NH4_N",
+        "produced": "NH4-N",
         "kinetics": ["k_decay_aob * X_aob", "mg/L/day"],
         "parameter_names": ["k_decay_aob"],
         "parameter_values": {"k_decay_aob": 0.05}
@@ -136,7 +136,7 @@
       "6": {
         "_name": "nob_decay",
         "consumed": "X_nob",
-        "produced": "NH4_N",
+        "produced": "NH4-N",
         "kinetics": ["k_decay_nob * X_nob", "mg/L/day"],
         "parameter_names": ["k_decay_nob"],
         "parameter_values": {"k_decay_nob": 0.05}

@@ -5,17 +5,17 @@
 
   "BIOGEOCHEMISTRY_CONFIGURATION": {
     "CHEMICAL_SPECIES": {
-      "NH4_N": {
+      "NH4-N": {
         "DESCRIPTION": "Ammonium nitrogen",
         "UNITS": "mg/L as N",
         "INITIAL_CONDITION": 0.5
       },
-      "NO3_N": {
+      "NO3-N": {
         "DESCRIPTION": "Nitrate nitrogen",
         "UNITS": "mg/L as N",
         "INITIAL_CONDITION": 2.0
       },
-      "NO2_N": {
+      "NO2-N": {
         "DESCRIPTION": "Nitrite nitrogen",
         "UNITS": "mg/L as N",
         "INITIAL_CONDITION": 0.01
@@ -62,28 +62,28 @@
 
         "DON_MINERALIZATION": {
           "CONSUMED": "DON",
-          "PRODUCED": "NH4_N",
+          "PRODUCED": "NH4-N",
           "KINETICS": "k_min * DON * 1.08^(T - 20)",
           "PARAMETERS": {
             "k_min": {
               "VALUE": 0.08,
               "UNITS": "1/day",
               "RANGE": [0.02, 0.3],
-              "DESCRIPTION": "DON mineralization to NH4"
+              "DESCRIPTION": "DON mineralization to NH4-N"
             }
           }
         },
 
         "NITRIFICATION_STEP1": {
-          "CONSUMED": "NH4_N",
-          "PRODUCED": "NO2_N",
-          "KINETICS": "k_nitrif1 * NH4_N * (DO / (K_O2_nitrif + DO)) * 1.08^(T - 20)",
+          "CONSUMED": "NH4-N",
+          "PRODUCED": "NO2-N",
+          "KINETICS": "k_nitrif1 * NH4-N * (DO / (K_O2_nitrif + DO)) * 1.08^(T - 20)",
           "PARAMETERS": {
             "k_nitrif1": {
               "VALUE": 0.15,
               "UNITS": "1/day",
               "RANGE": [0.05, 0.5],
-              "DESCRIPTION": "NH4 to NO2 rate (Nitrosomonas)"
+              "DESCRIPTION": "NH4-N to NO2-N rate (Nitrosomonas)"
             },
             "K_O2_nitrif": {
               "VALUE": 0.5,
@@ -95,39 +95,39 @@
         },
 
         "NITRIFICATION_STEP2": {
-          "CONSUMED": "NO2_N",
-          "PRODUCED": "NO3_N",
-          "KINETICS": "k_nitrif2 * NO2_N * (DO / (K_O2_nitrif + DO)) * 1.08^(T - 20)",
+          "CONSUMED": "NO2-N",
+          "PRODUCED": "NO3-N",
+          "KINETICS": "k_nitrif2 * NO2-N * (DO / (K_O2_nitrif + DO)) * 1.08^(T - 20)",
           "PARAMETERS": {
             "k_nitrif2": {
               "VALUE": 0.5,
               "UNITS": "1/day",
               "RANGE": [0.2, 2.0],
-              "DESCRIPTION": "NO2 to NO3 rate (Nitrobacter)"
+              "DESCRIPTION": "NO2-N to NO3-N rate (Nitrobacter)"
             },
             "K_O2_nitrif": {
               "VALUE": 0.5,
               "UNITS": "mg/L"
             }
           },
-          "NOTES": "Nitrobacter typically faster than Nitrosomonas, so NO2 doesn't accumulate"
+          "NOTES": "Nitrobacter typically faster than Nitrosomonas, so NO2-N doesn't accumulate"
         },
 
         "NITRIFICATION_O2_DEMAND": {
           "CONSUMED": "DO",
           "PRODUCED": "NONE",
-          "KINETICS": "4.57 * k_nitrif1 * NH4_N * (DO / (K_O2_nitrif + DO)) * 1.08^(T - 20)",
+          "KINETICS": "4.57 * k_nitrif1 * NH4-N * (DO / (K_O2_nitrif + DO)) * 1.08^(T - 20)",
           "PARAMETERS": {
             "k_nitrif1": {"VALUE": 0.15, "UNITS": "1/day"},
             "K_O2_nitrif": {"VALUE": 0.5, "UNITS": "mg/L"}
           },
-          "NOTES": "Stoichiometry: 4.57 mg O2 per mg NH4-N oxidized"
+          "NOTES": "Stoichiometry: 4.57 mg O2 per mg NH4-N-N oxidized"
         },
 
         "DENITRIFICATION": {
-          "CONSUMED": "NO3_N",
+          "CONSUMED": "NO3-N",
           "PRODUCED": "N2_loss",
-          "KINETICS": "k_denitrif * NO3_N * (K_O2_inhib / (K_O2_inhib + DO)) * 1.07^(T - 20)",
+          "KINETICS": "k_denitrif * NO3-N * (K_O2_inhib / (K_O2_inhib + DO)) * 1.07^(T - 20)",
           "PARAMETERS": {
             "k_denitrif": {
               "VALUE": 0.1,
@@ -145,9 +145,9 @@
         },
 
         "N2O_PRODUCTION_DENITRIF": {
-          "CONSUMED": "NO3_N",
+          "CONSUMED": "NO3-N",
           "PRODUCED": "N2O",
-          "KINETICS": "f_N2O * k_denitrif * NO3_N * (K_O2_inhib / (K_O2_inhib + DO)) * 1.07^(T - 20)",
+          "KINETICS": "f_N2O * k_denitrif * NO3-N * (K_O2_inhib / (K_O2_inhib + DO)) * 1.07^(T - 20)",
           "PARAMETERS": {
             "f_N2O": {
               "VALUE": 0.05,
@@ -174,9 +174,9 @@
         },
 
         "VOLATILIZATION": {
-          "CONSUMED": "NH4_N",
+          "CONSUMED": "NH4-N",
           "PRODUCED": "NH3_loss",
-          "KINETICS": "k_vol * NH4_N * f_pH",
+          "KINETICS": "k_vol * NH4-N * f_pH",
           "PARAMETERS": {
             "k_vol": {
               "VALUE": 0.01,
@@ -192,10 +192,10 @@
           "NOTES": "Significant only at high pH (>8.5)"
         },
 
-        "PLANT_UPTAKE_NH4": {
-          "CONSUMED": "NH4_N",
+        "PLANT_UPTAKE_NH4-N": {
+          "CONSUMED": "NH4-N",
           "PRODUCED": "NONE",
-          "KINETICS": "k_uptake * NH4_N * (NH4_N / (NH4_N + NO3_N + 0.01)) * f_season * 1.05^(T - 20)",
+          "KINETICS": "k_uptake * NH4-N * (NH4-N / (NH4-N + NO3-N + 0.01)) * f_season * 1.05^(T - 20)",
           "PARAMETERS": {
             "k_uptake": {
               "VALUE": 0.1,
@@ -211,10 +211,10 @@
           }
         },
 
-        "PLANT_UPTAKE_NO3": {
-          "CONSUMED": "NO3_N",
+        "PLANT_UPTAKE_NO3-N": {
+          "CONSUMED": "NO3-N",
           "PRODUCED": "NONE",
-          "KINETICS": "k_uptake * NO3_N * (NO3_N / (NH4_N + NO3_N + 0.01)) * f_season * 1.05^(T - 20)",
+          "KINETICS": "k_uptake * NO3-N * (NO3-N / (NH4-N + NO3-N + 0.01)) * f_season * 1.05^(T - 20)",
           "PARAMETERS": {
             "k_uptake": {"VALUE": 0.1, "UNITS": "1/day"},
             "f_season": {"VALUE": 1.0}
@@ -222,9 +222,9 @@
         },
 
         "IMMOBILIZATION": {
-          "CONSUMED": "NH4_N",
+          "CONSUMED": "NH4-N",
           "PRODUCED": "DON",
-          "KINETICS": "k_immob * NH4_N * 1.05^(T - 20)",
+          "KINETICS": "k_immob * NH4-N * 1.05^(T - 20)",
           "PARAMETERS": {
             "k_immob": {
               "VALUE": 0.02,

@@ -8,10 +8,10 @@
     "REDOX_LADDER": [
       "In nature, electron acceptors are used in order of energy yield:",
       "1. O2 (aerobic respiration)     ΔG° = -125 kJ/mol e-",
-      "2. NO3 (denitrification)        ΔG° = -119 kJ/mol e-",
+      "2. NO3-N (denitrification)        ΔG° = -119 kJ/mol e-",
       "3. Mn(IV) (Mn reduction)        ΔG° = -95 kJ/mol e-",
       "4. Fe(III) (Fe reduction)       ΔG° = -50 kJ/mol e-",
-      "5. SO4 (sulfate reduction)      ΔG° = -25 kJ/mol e-",
+      "5. SO4-S (sulfate reduction)      ΔG° = -25 kJ/mol e-",
       "6. CO2 (methanogenesis)         ΔG° = -20 kJ/mol e-"
     ],
     "THERMODYNAMIC_CONTROL": [
@@ -26,8 +26,8 @@
   "CHEMICAL_SPECIES": {
     "list": {
       "1": "DO",
-      "2": "NO3_N",
-      "3": "SO4",
+      "2": "NO3-N",
+      "3": "SO4-S",
       "4": "DOC",
       "5": "CO2",
       "6": "H2S",
@@ -36,7 +36,7 @@
       "9": "X_denit",
       "10": "X_srb"
     },
-    "BGC_GENERAL_MOBILE_SPECIES": ["DO", "NO3_N", "SO4", "DOC", "CO2", "H2S"]
+    "BGC_GENERAL_MOBILE_SPECIES": ["DO", "NO3-N", "SO4-S", "DOC", "CO2", "H2S"]
   },
 
   "CYCLING_FRAMEWORKS": {
@@ -84,18 +84,18 @@
 
       "2": {
         "_name": "denitrification",
-        "_reaction": "5 CH2O + 4 NO3- + 4 H+ -> 5 CO2 + 2 N2 + 7 H2O",
+        "_reaction": "5 CH2O + 4 NO3-N- + 4 H+ -> 5 CO2 + 2 N2 + 7 H2O",
         "_deltaG0": "-119 kJ/mol e-",
-        "consumed": "NO3_N",
+        "consumed": "NO3-N",
         "produced": "N2_loss",
         "kinetics": [
-          "k_denit * X_denit * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC_denit+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119 - 45)/(2*0.008314*(T+273)))))",
+          "k_denit * X_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC_denit+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119 - 45)/(2*0.008314*(T+273)))))",
           "mg-N/L/day"
         ],
-        "parameter_names": ["k_denit", "Km_NO3", "Km_DOC_denit", "Ki_O2"],
+        "parameter_names": ["k_denit", "Km_NO3-N", "Km_DOC_denit", "Ki_O2"],
         "parameter_values": {
           "k_denit": 15.0,
-          "Km_NO3": 0.5,
+          "Km_NO3-N": 0.5,
           "Km_DOC_denit": 2.0,
           "Ki_O2": 0.5
         },
@@ -108,25 +108,25 @@
 
       "3": {
         "_name": "sulfate_reduction",
-        "_reaction": "2 CH2O + SO4-- + 2 H+ -> 2 CO2 + H2S + 2 H2O",
+        "_reaction": "2 CH2O + SO4-S-- + 2 H+ -> 2 CO2 + H2S + 2 H2O",
         "_deltaG0": "-25 kJ/mol e-",
-        "consumed": "SO4",
+        "consumed": "SO4-S",
         "produced": "H2S",
         "kinetics": [
-          "k_srb * X_srb * (SO4/(Km_SO4+SO4)) * (DOC/(Km_DOC_srb+DOC)) * (Ki_O2_srb/(Ki_O2_srb+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-(max(0, (25 - 45 + 30*log(max(0.001,DOC)/max(0.001,H2S+0.001))))/(2*0.008314*(T+273)))))",
+          "k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC_srb+DOC)) * (Ki_O2_srb/(Ki_O2_srb+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-(max(0, (25 - 45 + 30*log(max(0.001,DOC)/max(0.001,H2S+0.001))))/(2*0.008314*(T+273)))))",
           "mg-S/L/day"
         ],
-        "parameter_names": ["k_srb", "Km_SO4", "Km_DOC_srb", "Ki_O2_srb", "Ki_NO3"],
+        "parameter_names": ["k_srb", "Km_SO4-S", "Km_DOC_srb", "Ki_O2_srb", "Ki_NO3-N"],
         "parameter_values": {
           "k_srb": 5.0,
-          "Km_SO4": 5.0,
+          "Km_SO4-S": 5.0,
           "Km_DOC_srb": 3.0,
           "Ki_O2_srb": 0.1,
-          "Ki_NO3": 0.2
+          "Ki_NO3-N": 0.2
         },
         "_notes": [
           "Lower ΔG° means F_T is more sensitive to conditions",
-          "Inhibited by both O2 and NO3 (competitive exclusion)",
+          "Inhibited by both O2 and NO3-N (competitive exclusion)",
           "F_T includes concentration-dependent ΔG adjustment",
           "log term approximates RT*ln(Q) correction"
         ]
@@ -154,14 +154,14 @@
         "consumed": "DOC",
         "produced": "X_denit",
         "kinetics": [
-          "Y_denit * k_denit * X_denit * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC_denit+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119 - 45)/(2*0.008314*(T+273)))))",
+          "Y_denit * k_denit * X_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC_denit+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119 - 45)/(2*0.008314*(T+273)))))",
           "mg/L/day"
         ],
-        "parameter_names": ["Y_denit", "k_denit", "Km_NO3", "Km_DOC_denit", "Ki_O2"],
+        "parameter_names": ["Y_denit", "k_denit", "Km_NO3-N", "Km_DOC_denit", "Ki_O2"],
         "parameter_values": {
           "Y_denit": 0.3,
           "k_denit": 15.0,
-          "Km_NO3": 0.5,
+          "Km_NO3-N": 0.5,
           "Km_DOC_denit": 2.0,
           "Ki_O2": 0.5
         }
@@ -172,17 +172,17 @@
         "consumed": "DOC",
         "produced": "X_srb",
         "kinetics": [
-          "Y_srb * k_srb * X_srb * (SO4/(Km_SO4+SO4)) * (DOC/(Km_DOC_srb+DOC)) * (Ki_O2_srb/(Ki_O2_srb+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (1 - exp(-(max(0, (25 - 45 + 30*log(max(0.001,DOC)/max(0.001,H2S+0.001))))/(2*0.008314*(T+273)))))",
+          "Y_srb * k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC_srb+DOC)) * (Ki_O2_srb/(Ki_O2_srb+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-(max(0, (25 - 45 + 30*log(max(0.001,DOC)/max(0.001,H2S+0.001))))/(2*0.008314*(T+273)))))",
           "mg/L/day"
         ],
-        "parameter_names": ["Y_srb", "k_srb", "Km_SO4", "Km_DOC_srb", "Ki_O2_srb", "Ki_NO3"],
+        "parameter_names": ["Y_srb", "k_srb", "Km_SO4-S", "Km_DOC_srb", "Ki_O2_srb", "Ki_NO3-N"],
         "parameter_values": {
           "Y_srb": 0.2,
           "k_srb": 5.0,
-          "Km_SO4": 5.0,
+          "Km_SO4-S": 5.0,
           "Km_DOC_srb": 3.0,
           "Ki_O2_srb": 0.1,
-          "Ki_NO3": 0.2
+          "Ki_NO3-N": 0.2
         }
       },
 
@@ -217,22 +217,22 @@
 
   "_EXPECTED_BEHAVIOR": {
     "SCENARIO_1_OXIC": {
-      "CONDITIONS": "DO > 2 mg/L, NO3 = 5 mg/L, SO4 = 50 mg/L",
+      "CONDITIONS": "DO > 2 mg/L, NO3-N = 5 mg/L, SO4-S = 50 mg/L",
       "RESULT": "Aerobic respiration dominates, denitrification and SR suppressed",
       "MECHANISM": "O2 inhibition terms + thermodynamic favorability"
     },
     "SCENARIO_2_HYPOXIC": {
-      "CONDITIONS": "DO < 0.5 mg/L, NO3 = 5 mg/L, SO4 = 50 mg/L",
-      "RESULT": "Denitrification activates, SR still suppressed by NO3",
-      "MECHANISM": "O2 inhibition released, NO3 inhibits SRB"
+      "CONDITIONS": "DO < 0.5 mg/L, NO3-N = 5 mg/L, SO4-S = 50 mg/L",
+      "RESULT": "Denitrification activates, SR still suppressed by NO3-N",
+      "MECHANISM": "O2 inhibition released, NO3-N inhibits SRB"
     },
     "SCENARIO_3_ANOXIC": {
-      "CONDITIONS": "DO ≈ 0, NO3 < 0.1 mg/L, SO4 = 50 mg/L",
+      "CONDITIONS": "DO ≈ 0, NO3-N < 0.1 mg/L, SO4-S = 50 mg/L",
       "RESULT": "Sulfate reduction activates",
-      "MECHANISM": "Both O2 and NO3 inhibition released, F_T > 0"
+      "MECHANISM": "Both O2 and NO3-N inhibition released, F_T > 0"
     },
     "SCENARIO_4_SULFIDIC": {
-      "CONDITIONS": "DO ≈ 0, NO3 ≈ 0, SO4 = 50 mg/L, H2S = 5 mg/L",
+      "CONDITIONS": "DO ≈ 0, NO3-N ≈ 0, SO4-S = 50 mg/L, H2S = 5 mg/L",
       "RESULT": "Sulfate reduction slows due to product inhibition",
       "MECHANISM": "F_T decreases as H2S accumulates (ΔG less negative)"
     }
@@ -240,7 +240,7 @@
 
   "_COMPARISON_TO_PURE_KINETIC": {
     "PURE_KINETIC_APPROACH": [
-      "Uses only inhibition terms (Ki_O2, Ki_NO3)",
+      "Uses only inhibition terms (Ki_O2, Ki_NO3-N)",
       "Reactions can proceed even at thermodynamic equilibrium",
       "Requires careful tuning of inhibition constants",
       "No product feedback on reaction rates"

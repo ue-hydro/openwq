@@ -142,6 +142,15 @@ bgc_module_name = "NATIVE_BGC_FLEX"
 #     ... (see folder for more)
 path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/BGC_templates/NATIVE_BGC_FLEX/popular_models/SWAT_full_nutrients.json"
 
+# NOTE on species naming:
+#   Templates use the "as element" convention for nutrients:
+#     NO3-N (nitrate as nitrogen, mg-N/L),  NH4-N, NO2-N
+#     PO4-P (phosphate as phosphorus, mg-P/L),  SO4-S
+#   GRQA observations report the full ion (e.g. NO3 in mg-NO3/L).
+#   The stoichiometric conversion is applied automatically:
+#     model_value = GRQA_value × MW(element) / MW(ion)
+#   See BGC_templates/README.md for the full conversion table.
+
 # ── PHREEQC settings ──
 # ⚠ Only used if bgc_module_name = "PHREEQC"; ignored otherwise.
 phreeqc_input_filepath = "config_support_lib/examples_PHREEQC/phreeqc_river.pqi"

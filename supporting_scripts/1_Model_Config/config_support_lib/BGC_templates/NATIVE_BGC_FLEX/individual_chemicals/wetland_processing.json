@@ -21,11 +21,11 @@
 
   "CHEMICAL_SPECIES": {
     "list": {
-      "1": "NO3_N",
-      "2": "NH4_N",
+      "1": "NO3-N",
+      "2": "NH4-N",
       "3": "N_ORG",
       "4": "N2_gas",
-      "5": "PO4_P",
+      "5": "PO4-P",
       "6": "P_ORG",
       "7": "P_SED",
       "8": "TSS",
@@ -39,7 +39,7 @@
       "16": "LITTER"
     },
     "BGC_GENERAL_MOBILE_SPECIES": [
-      "NO3_N", "NH4_N", "N_ORG", "PO4_P", "P_ORG",
+      "NO3-N", "NH4-N", "N_ORG", "PO4-P", "P_ORG",
       "TSS", "BOD", "DO", "PATHOGEN", "DOC", "POC"
     ]
   },
@@ -66,12 +66,12 @@
       "1": {
         "_name": "denitrification_wetland",
         "_description": "Microbial denitrification in anoxic zones",
-        "_reaction": "NO3 + C -> N2 (gas loss)",
+        "_reaction": "NO3-N + C -> N2 (gas loss)",
         "_notes": "Primary permanent N removal mechanism",
-        "consumed": "NO3_N",
+        "consumed": "NO3-N",
         "produced": "N2_gas",
         "kinetics": [
-          "k_denit_wet * NO3_N * (DOC / (Ks_C + DOC)) * (Ks_O2 / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+          "k_denit_wet * NO3-N * (DOC / (Ks_C + DOC)) * (Ks_O2 / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
           "mg-N/L/day"
         ],
         "parameter_names": ["k_denit_wet", "Ks_C", "Ks_O2", "theta"],
@@ -88,12 +88,12 @@
 
       "2": {
         "_name": "nitrification_wetland",
-        "_description": "NH4 oxidation in aerobic zones",
-        "_reaction": "NH4 + 2O2 -> NO3",
-        "consumed": "NH4_N",
-        "produced": "NO3_N",
+        "_description": "NH4-N oxidation in aerobic zones",
+        "_reaction": "NH4-N + 2O2 -> NO3-N",
+        "consumed": "NH4-N",
+        "produced": "NO3-N",
         "kinetics": [
-          "k_nitrif_wet * NH4_N * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+          "k_nitrif_wet * NH4-N * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
           "mg-N/L/day"
         ],
         "parameter_names": ["k_nitrif_wet", "Ks_O2", "theta"],
@@ -108,10 +108,10 @@
         "_name": "n_plant_uptake",
         "_description": "Nitrogen uptake by emergent vegetation",
         "_notes": "Typha, Phragmites, Scirpus uptake 200-300 kg N/ha/yr",
-        "consumed": "NO3_N",
+        "consumed": "NO3-N",
         "produced": "PLANT_N",
         "kinetics": [
-          "k_uptake_N * (NO3_N + NH4_N) / (Ks_N + NO3_N + NH4_N) * f_veg * f_season",
+          "k_uptake_N * (NO3-N + NH4-N) / (Ks_N + NO3-N + NH4-N) * f_veg * f_season",
           "mg-N/L/day"
         ],
         "parameter_names": ["k_uptake_N", "Ks_N", "f_veg", "f_season"],
@@ -141,9 +141,9 @@
 
       "5": {
         "_name": "n_mineralization",
-        "_description": "Organic N mineralization to NH4",
+        "_description": "Organic N mineralization to NH4-N",
         "consumed": "N_ORG",
-        "produced": "NH4_N",
+        "produced": "NH4-N",
         "kinetics": [
           "k_min_N * N_ORG * theta^(Treach_K - 293)",
           "mg-N/L/day"
@@ -207,12 +207,12 @@
 
       "2": {
         "_name": "p_sorption",
-        "_description": "PO4 adsorption to sediments and Fe/Al oxides",
+        "_description": "PO4-P adsorption to sediments and Fe/Al oxides",
         "_notes": "Langmuir isotherm - finite capacity",
-        "consumed": "PO4_P",
+        "consumed": "PO4-P",
         "produced": "P_SED",
         "kinetics": [
-          "k_sorp_P * PO4_P * (1 - P_SED / Smax_P)",
+          "k_sorp_P * PO4-P * (1 - P_SED / Smax_P)",
           "mg-P/L/day"
         ],
         "parameter_names": ["k_sorp_P", "Smax_P"],
@@ -228,10 +228,10 @@
       "3": {
         "_name": "p_plant_uptake",
         "_description": "P uptake by wetland vegetation",
-        "consumed": "PO4_P",
+        "consumed": "PO4-P",
         "produced": "PLANT_P",
         "kinetics": [
-          "k_uptake_P * PO4_P / (Ks_P + PO4_P) * f_veg * f_season",
+          "k_uptake_P * PO4-P / (Ks_P + PO4-P) * f_veg * f_season",
           "mg-P/L/day"
         ],
         "parameter_names": ["k_uptake_P", "Ks_P", "f_veg", "f_season"],
@@ -248,7 +248,7 @@
         "_description": "P release from saturated sediments",
         "_notes": "Can occur under anoxic conditions or high loading",
         "consumed": "P_SED",
-        "produced": "PO4_P",
+        "produced": "PO4-P",
         "kinetics": [
           "k_desorp * P_SED * (Ks_O2 / (Ks_O2 + DO))",
           "mg-P/L/day"
@@ -264,7 +264,7 @@
         "_name": "p_mineralization",
         "_description": "Organic P mineralization",
         "consumed": "P_ORG",
-        "produced": "PO4_P",
+        "produced": "PO4-P",
         "kinetics": [
           "k_min_P * P_ORG * theta^(Treach_K - 293)",
           "mg-P/L/day"

@@ -8,12 +8,12 @@
   "BIOGEOCHEMISTRY_CONFIGURATION": {
     "CHEMICAL_SPECIES": {
       "_NITROGEN_POOLS": "Five N pools following SWAT structure",
-      "NO3_N": {
+      "NO3-N": {
         "DESCRIPTION": "Nitrate nitrogen",
         "UNITS": "mg/L (or kg/ha for soil)",
         "INITIAL_CONDITION": 5.0
       },
-      "NH4_N": {
+      "NH4-N": {
         "DESCRIPTION": "Ammonium nitrogen",
         "UNITS": "mg/L",
         "INITIAL_CONDITION": 1.0
@@ -35,17 +35,17 @@
       },
 
       "_PHOSPHORUS_POOLS": "Six P pools following SWAT structure",
-      "PO4_P_sol": {
+      "PO4-P_sol": {
         "DESCRIPTION": "Solution phosphorus",
         "UNITS": "mg/L",
         "INITIAL_CONDITION": 0.05
       },
-      "PO4_P_active": {
+      "PO4-P_active": {
         "DESCRIPTION": "Active mineral phosphorus",
         "UNITS": "mg/L",
         "INITIAL_CONDITION": 5.0
       },
-      "PO4_P_stable": {
+      "PO4-P_stable": {
         "DESCRIPTION": "Stable mineral phosphorus",
         "UNITS": "mg/L",
         "INITIAL_CONDITION": 20.0
@@ -99,7 +99,7 @@
 
         "MINERALIZATION_ACTIVE": {
           "CONSUMED": "ORG_N_active",
-          "PRODUCED": "NH4_N",
+          "PRODUCED": "NH4-N",
           "KINETICS": "beta_min * sqrt(gamma_tmp * gamma_sw) * ORG_N_active",
           "PARAMETERS": {
             "beta_min": {
@@ -121,7 +121,7 @@
 
         "MINERALIZATION_FRESH": {
           "CONSUMED": "ORG_N_fresh",
-          "PRODUCED": "NH4_N",
+          "PRODUCED": "NH4-N",
           "KINETICS": "beta_rsd * sqrt(gamma_tmp * gamma_sw) * ORG_N_fresh * (1 - f_hp)",
           "PARAMETERS": {
             "beta_rsd": {
@@ -148,9 +148,9 @@
         },
 
         "NITRIFICATION": {
-          "CONSUMED": "NH4_N",
-          "PRODUCED": "NO3_N",
-          "KINETICS": "k_nit * gamma_tmp * gamma_sw * (1 - exp(-c_n * NH4_N)) * NH4_N",
+          "CONSUMED": "NH4-N",
+          "PRODUCED": "NO3-N",
+          "KINETICS": "k_nit * gamma_tmp * gamma_sw * (1 - exp(-c_n * NH4-N)) * NH4-N",
           "PARAMETERS": {
             "k_nit": {
               "VALUE": 0.1,
@@ -166,9 +166,9 @@
         },
 
         "VOLATILIZATION": {
-          "CONSUMED": "NH4_N",
+          "CONSUMED": "NH4-N",
           "PRODUCED": "NH3_loss",
-          "KINETICS": "k_vol * gamma_tmp * NH4_N * depth_factor",
+          "KINETICS": "k_vol * gamma_tmp * NH4-N * depth_factor",
           "PARAMETERS": {
             "k_vol": {
               "VALUE": 0.01,
@@ -184,9 +184,9 @@
         },
 
         "DENITRIFICATION": {
-          "CONSUMED": "NO3_N",
+          "CONSUMED": "NO3-N",
           "PRODUCED": "N2_loss",
-          "KINETICS": "k_den * gamma_tmp * ORG_C_active * (1 - exp(-c_den * NO3_N))",
+          "KINETICS": "k_den * gamma_tmp * ORG_C_active * (1 - exp(-c_den * NO3-N))",
           "PARAMETERS": {
             "k_den": {
               "VALUE": 0.05,
@@ -202,19 +202,19 @@
           "NOTES": "Only active when soil water > field capacity"
         },
 
-        "PLANT_UPTAKE_NO3": {
-          "CONSUMED": "NO3_N",
+        "PLANT_UPTAKE_NO3-N": {
+          "CONSUMED": "NO3-N",
           "PRODUCED": "PLANT_N",
-          "KINETICS": "U_N * f_NO3 * f_growth",
+          "KINETICS": "U_N * f_NO3-N * f_growth",
           "PARAMETERS": {
             "U_N": {
               "VALUE": 0.1,
               "UNITS": "mg/L/day",
               "DESCRIPTION": "Total N uptake demand"
             },
-            "f_NO3": {
+            "f_NO3-N": {
               "VALUE": 0.8,
-              "DESCRIPTION": "Fraction of uptake from NO3 (vs NH4)"
+              "DESCRIPTION": "Fraction of uptake from NO3-N (vs NH4-N)"
             },
             "f_growth": {
               "VALUE": 1.0,
@@ -223,20 +223,20 @@
           }
         },
 
-        "PLANT_UPTAKE_NH4": {
-          "CONSUMED": "NH4_N",
+        "PLANT_UPTAKE_NH4-N": {
+          "CONSUMED": "NH4-N",
           "PRODUCED": "PLANT_N",
-          "KINETICS": "U_N * (1 - f_NO3) * f_growth",
+          "KINETICS": "U_N * (1 - f_NO3-N) * f_growth",
           "PARAMETERS": {
             "U_N": {"VALUE": 0.1, "UNITS": "mg/L/day"},
-            "f_NO3": {"VALUE": 0.8},
+            "f_NO3-N": {"VALUE": 0.8},
             "f_growth": {"VALUE": 1.0}
           }
         },
 
         "N_FIXATION": {
           "CONSUMED": "NONE",
-          "PRODUCED": "NH4_N",
+          "PRODUCED": "NH4-N",
           "KINETICS": "k_fix * f_growth * f_nfix",
           "PARAMETERS": {
             "k_fix": {
@@ -257,7 +257,7 @@
 
         "P_MINERALIZATION_ACTIVE": {
           "CONSUMED": "ORG_P_humus",
-          "PRODUCED": "PO4_P_sol",
+          "PRODUCED": "PO4-P_sol",
           "KINETICS": "beta_min * sqrt(gamma_tmp * gamma_sw) * ORG_P_humus",
           "PARAMETERS": {
             "beta_min": {"VALUE": 0.0003, "UNITS": "1/day"}
@@ -266,7 +266,7 @@
 
         "P_MINERALIZATION_FRESH": {
           "CONSUMED": "ORG_P_fresh",
-          "PRODUCED": "PO4_P_sol",
+          "PRODUCED": "PO4-P_sol",
           "KINETICS": "beta_rsd * sqrt(gamma_tmp * gamma_sw) * ORG_P_fresh * 0.8",
           "PARAMETERS": {
             "beta_rsd": {"VALUE": 0.05, "UNITS": "1/day"}
@@ -283,9 +283,9 @@
         },
 
         "P_SORPTION": {
-          "CONSUMED": "PO4_P_sol",
-          "PRODUCED": "PO4_P_active",
-          "KINETICS": "k_ads_P * (PO4_P_sol - PSP * PO4_P_active / (1 - PSP))",
+          "CONSUMED": "PO4-P_sol",
+          "PRODUCED": "PO4-P_active",
+          "KINETICS": "k_ads_P * (PO4-P_sol - PSP * PO4-P_active / (1 - PSP))",
           "PARAMETERS": {
             "k_ads_P": {
               "VALUE": 0.5,
@@ -302,9 +302,9 @@
         },
 
         "P_ACTIVE_TO_STABLE": {
-          "CONSUMED": "PO4_P_active",
-          "PRODUCED": "PO4_P_stable",
-          "KINETICS": "beta_eq * (PO4_P_active * (1 - pai) / pai - PO4_P_stable)",
+          "CONSUMED": "PO4-P_active",
+          "PRODUCED": "PO4-P_stable",
+          "KINETICS": "beta_eq * (PO4-P_active * (1 - pai) / pai - PO4-P_stable)",
           "PARAMETERS": {
             "beta_eq": {
               "VALUE": 0.0001,
@@ -319,7 +319,7 @@
         },
 
         "P_PLANT_UPTAKE": {
-          "CONSUMED": "PO4_P_sol",
+          "CONSUMED": "PO4-P_sol",
           "PRODUCED": "PLANT_P",
           "KINETICS": "U_P * f_growth",
           "PARAMETERS": {
@@ -368,7 +368,7 @@
         "_DESCRIPTION": "In-stream nutrient processes",
 
         "ALGAE_GROWTH": {
-          "CONSUMED": "NO3_N",
+          "CONSUMED": "NO3-N",
           "PRODUCED": "ALGAE",
           "KINETICS": "mu_max * ALGAE * f_L * f_N * f_P * f_T",
           "PARAMETERS": {
@@ -386,7 +386,7 @@
 
         "ALGAE_RESPIRATION": {
           "CONSUMED": "ALGAE",
-          "PRODUCED": "NH4_N",
+          "PRODUCED": "NH4-N",
           "KINETICS": "rho_a * ALGAE * 1.047^(T - 20) * r_N_alg",
           "PARAMETERS": {
             "rho_a": {
@@ -431,13 +431,13 @@
 
         "BENTHIC_N_FLUX": {
           "CONSUMED": "NONE",
-          "PRODUCED": "NH4_N",
+          "PRODUCED": "NH4-N",
           "KINETICS": "sigma_3 / depth * 1.074^(T - 20)",
           "PARAMETERS": {
             "sigma_3": {
               "VALUE": 0.5,
               "UNITS": "mg/m2/day",
-              "DESCRIPTION": "Benthic NH4 source rate"
+              "DESCRIPTION": "Benthic NH4-N source rate"
             },
             "depth": {"VALUE": 1.0, "UNITS": "m"}
           }
@@ -445,7 +445,7 @@
 
         "BENTHIC_P_FLUX": {
           "CONSUMED": "NONE",
-          "PRODUCED": "PO4_P_sol",
+          "PRODUCED": "PO4-P_sol",
           "KINETICS": "sigma_4 / depth * 1.074^(T - 20)",
           "PARAMETERS": {
             "sigma_4": {
@@ -467,7 +467,7 @@
         },
 
         "SED_BOUND_P": {
-          "FORMULA": "conc_sed_P = (PO4_P_active + PO4_P_stable + ORG_P_humus) * enrich_ratio",
+          "FORMULA": "conc_sed_P = (PO4-P_active + PO4-P_stable + ORG_P_humus) * enrich_ratio",
           "NOTES": "Enrichment ratio typically 1.5-3.0"
         }
       }

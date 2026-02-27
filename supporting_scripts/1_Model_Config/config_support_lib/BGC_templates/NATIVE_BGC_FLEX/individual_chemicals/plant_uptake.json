@@ -3,7 +3,7 @@
   "_REFERENCE": "SWAT (Neitsch et al. 2011); HYPE (Lindstrom et al. 2010); INCA-N (Wade et al. 2002); EPIC crop model",
   "_VERSION": "1.0",
   "_PROCESSES": {
-    "N_UPTAKE": "Nitrogen uptake by vegetation (NO3 preferentially, then NH4)",
+    "N_UPTAKE": "Nitrogen uptake by vegetation (NO3-N preferentially, then NH4-N)",
     "P_UPTAKE": "Phosphorus uptake by vegetation",
     "GROWTH_LIMITATION": "Nutrient and water stress effects on uptake",
     "SEASONAL_DYNAMICS": "Temperature and day-length effects on plant activity",
@@ -21,9 +21,9 @@
 
   "CHEMICAL_SPECIES": {
     "list": {
-      "1": "NO3_N",
-      "2": "NH4_N",
-      "3": "PO4_P",
+      "1": "NO3-N",
+      "2": "NH4-N",
+      "3": "PO4-P",
       "4": "N_ORG_active",
       "5": "P_ORG_active",
       "6": "PLANT_N",
@@ -32,7 +32,7 @@
       "9": "LITTER_N",
       "10": "LITTER_P"
     },
-    "BGC_GENERAL_MOBILE_SPECIES": ["NO3_N", "NH4_N", "PO4_P", "N_ORG_active", "P_ORG_active"]
+    "BGC_GENERAL_MOBILE_SPECIES": ["NO3-N", "NH4-N", "PO4-P", "N_ORG_active", "P_ORG_active"]
   },
 
   "CYCLING_FRAMEWORKS": {
@@ -74,12 +74,12 @@
       "1": {
         "_name": "no3_uptake",
         "_description": "Nitrate uptake by plant roots",
-        "_reaction": "NO3(soil) -> PLANT_N",
-        "_notes": "NO3 is mobile and easily taken up but requires reduction (energy cost)",
-        "consumed": "NO3_N",
+        "_reaction": "NO3-N(soil) -> PLANT_N",
+        "_notes": "NO3-N is mobile and easily taken up but requires reduction (energy cost)",
+        "consumed": "NO3-N",
         "produced": "PLANT_N",
         "kinetics": [
-          "k_uptake_no3 * NO3_N / (Ks_N + NO3_N + NH4_N) * f_growth * f_temp * f_moisture",
+          "k_uptake_no3 * NO3-N / (Ks_N + NO3-N + NH4-N) * f_growth * f_temp * f_moisture",
           "mg-N/L/day"
         ],
         "parameter_names": ["k_uptake_no3", "Ks_N", "f_growth", "f_temp", "f_moisture"],
@@ -104,38 +104,38 @@
       "2": {
         "_name": "nh4_uptake",
         "_description": "Ammonium uptake by plant roots (preferred N source)",
-        "_reaction": "NH4(soil) -> PLANT_N",
-        "_notes": "NH4 is preferred because it requires less energy to assimilate than NO3",
-        "consumed": "NH4_N",
+        "_reaction": "NH4-N(soil) -> PLANT_N",
+        "_notes": "NH4-N is preferred because it requires less energy to assimilate than NO3-N",
+        "consumed": "NH4-N",
         "produced": "PLANT_N",
         "kinetics": [
-          "k_uptake_nh4 * NH4_N / (Ks_N + NO3_N + NH4_N) * Pref_NH4 * f_growth * f_temp * f_moisture",
+          "k_uptake_nh4 * NH4-N / (Ks_N + NO3-N + NH4-N) * Pref_NH4-N * f_growth * f_temp * f_moisture",
           "mg-N/L/day"
         ],
-        "parameter_names": ["k_uptake_nh4", "Ks_N", "Pref_NH4", "f_growth", "f_temp", "f_moisture"],
+        "parameter_names": ["k_uptake_nh4", "Ks_N", "Pref_NH4-N", "f_growth", "f_temp", "f_moisture"],
         "parameter_values": {
           "k_uptake_nh4": 0.5,
           "Ks_N": 0.5,
-          "Pref_NH4": 1.5,
+          "Pref_NH4-N": 1.5,
           "f_growth": 1.0,
           "f_temp": 1.0,
           "f_moisture": 1.0
         },
         "_parameter_ranges": {
           "k_uptake_nh4": {"min": 0.1, "max": 2.0, "units": "1/day"},
-          "Pref_NH4": {"min": 1.0, "max": 3.0, "units": "dimensionless", "source": "NH4 preference factor"}
+          "Pref_NH4-N": {"min": 1.0, "max": 3.0, "units": "dimensionless", "source": "NH4-N preference factor"}
         }
       },
 
       "3": {
         "_name": "po4_uptake",
         "_description": "Phosphate uptake by plant roots",
-        "_reaction": "PO4(soil) -> PLANT_P",
+        "_reaction": "PO4-P(soil) -> PLANT_P",
         "_notes": "P uptake is often diffusion-limited in soil; mycorrhizae enhance uptake",
-        "consumed": "PO4_P",
+        "consumed": "PO4-P",
         "produced": "PLANT_P",
         "kinetics": [
-          "k_uptake_p * PO4_P / (Ks_P + PO4_P) * f_growth * f_temp * f_moisture",
+          "k_uptake_p * PO4-P / (Ks_P + PO4-P) * f_growth * f_temp * f_moisture",
           "mg-P/L/day"
         ],
         "parameter_names": ["k_uptake_p", "Ks_P", "f_growth", "f_temp", "f_moisture"],
@@ -199,11 +199,11 @@
 
       "6": {
         "_name": "litter_n_mineralization",
-        "_description": "Decomposition of litter organic N to mineral N (NH4)",
-        "_reaction": "LITTER_N -> NH4_N",
+        "_description": "Decomposition of litter organic N to mineral N (NH4-N)",
+        "_reaction": "LITTER_N -> NH4-N",
         "_notes": "Microbially-mediated; rate depends on litter C:N ratio and moisture",
         "consumed": "LITTER_N",
-        "produced": "NH4_N",
+        "produced": "NH4-N",
         "kinetics": [
           "k_litter_N * LITTER_N * theta_litter^(Treach_K - 293)",
           "mg-N/L/day"
@@ -221,10 +221,10 @@
 
       "7": {
         "_name": "litter_p_mineralization",
-        "_description": "Decomposition of litter organic P to mineral P (PO4)",
-        "_reaction": "LITTER_P -> PO4_P",
+        "_description": "Decomposition of litter organic P to mineral P (PO4-P)",
+        "_reaction": "LITTER_P -> PO4-P",
         "consumed": "LITTER_P",
-        "produced": "PO4_P",
+        "produced": "PO4-P",
         "kinetics": [
           "k_litter_P * LITTER_P * theta_litter^(Treach_K - 293)",
           "mg-P/L/day"
@@ -274,9 +274,9 @@
       "1": {
         "_name": "total_n_uptake",
         "_description": "Lumped N uptake from all mineral N pools",
-        "consumed": "NO3_N",
+        "consumed": "NO3-N",
         "produced": "N_ORG_active",
-        "kinetics": ["k_uptake_N * (NO3_N + NH4_N) * f_season", "mg-N/L/day"],
+        "kinetics": ["k_uptake_N * (NO3-N + NH4-N) * f_season", "mg-N/L/day"],
         "parameter_names": ["k_uptake_N", "f_season"],
         "parameter_values": {
           "k_uptake_N": 0.3,
@@ -288,9 +288,9 @@
       "2": {
         "_name": "total_p_uptake",
         "_description": "Lumped P uptake",
-        "consumed": "PO4_P",
+        "consumed": "PO4-P",
         "produced": "P_ORG_active",
-        "kinetics": ["k_uptake_P * PO4_P * f_season", "mg-P/L/day"],
+        "kinetics": ["k_uptake_P * PO4-P * f_season", "mg-P/L/day"],
         "parameter_names": ["k_uptake_P", "f_season"],
         "parameter_values": {
           "k_uptake_P": 0.2,
@@ -302,7 +302,7 @@
         "_name": "organic_n_return",
         "_description": "Return of organic N to soil from plant turnover",
         "consumed": "N_ORG_active",
-        "produced": "NH4_N",
+        "produced": "NH4-N",
         "kinetics": ["k_return_N * N_ORG_active", "mg-N/L/day"],
         "parameter_names": ["k_return_N"],
         "parameter_values": {
@@ -314,7 +314,7 @@
         "_name": "organic_p_return",
         "_description": "Return of organic P to soil from plant turnover",
         "consumed": "P_ORG_active",
-        "produced": "PO4_P",
+        "produced": "PO4-P",
         "kinetics": ["k_return_P * P_ORG_active", "mg-P/L/day"],
         "parameter_names": ["k_return_P"],
         "parameter_values": {
@@ -339,11 +339,11 @@
 
       "1": {
         "_name": "riparian_no3_uptake",
-        "_description": "Enhanced NO3 uptake in riparian vegetation zone",
-        "consumed": "NO3_N",
+        "_description": "Enhanced NO3-N uptake in riparian vegetation zone",
+        "consumed": "NO3-N",
         "produced": "PLANT_N",
         "kinetics": [
-          "k_riparian_uptake * NO3_N * f_buffer_width * f_season",
+          "k_riparian_uptake * NO3-N * f_buffer_width * f_season",
           "mg-N/L/day"
         ],
         "parameter_names": ["k_riparian_uptake", "f_buffer_width", "f_season"],
@@ -361,12 +361,12 @@
       "2": {
         "_name": "riparian_denitrification",
         "_description": "Denitrification in saturated riparian zone",
-        "_reaction": "NO3 -> N2 (under anoxic conditions)",
+        "_reaction": "NO3-N -> N2 (under anoxic conditions)",
         "_notes": "Major N sink in riparian buffers; requires organic C and anoxic conditions",
-        "consumed": "NO3_N",
+        "consumed": "NO3-N",
         "produced": "N2_gas",
         "kinetics": [
-          "k_denit_riparian * NO3_N * (DOC / (Ks_DOC + DOC)) * f_anoxic * theta_denit^(Treach_K - 293)",
+          "k_denit_riparian * NO3-N * (DOC / (Ks_DOC + DOC)) * f_anoxic * theta_denit^(Treach_K - 293)",
           "mg-N/L/day"
         ],
         "parameter_names": ["k_denit_riparian", "Ks_DOC", "f_anoxic", "theta_denit"],
@@ -385,10 +385,10 @@
       "3": {
         "_name": "riparian_p_retention",
         "_description": "Phosphorus retention through sedimentation and sorption in riparian zone",
-        "consumed": "PO4_P",
+        "consumed": "PO4-P",
         "produced": "P_SED",
         "kinetics": [
-          "k_p_retention * PO4_P * f_buffer_width",
+          "k_p_retention * PO4-P * f_buffer_width",
           "mg-P/L/day"
         ],
         "parameter_names": ["k_p_retention", "f_buffer_width"],

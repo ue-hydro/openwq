@@ -45,7 +45,7 @@
         "UNITS": "mg/L",
         "INITIAL_CONDITION": 0.0
       },
-      "PO4_P": {
+      "PO4-P": {
         "DESCRIPTION": "Phosphate (Fe-P coupling)",
         "UNITS": "mg/L",
         "INITIAL_CONDITION": 0.1
@@ -213,7 +213,7 @@
           "NOTES": "Mn reduction occurs at higher Eh than Fe reduction"
         },
 
-        "MNO2_SETTLING": {
+        "MNO2-N_SETTLING": {
           "CONSUMED": "MnO2",
           "PRODUCED": "SED_Mn",
           "KINETICS": "v_s / depth * MnO2",
@@ -244,9 +244,9 @@
         "_DESCRIPTION": "Iron-phosphorus interactions",
 
         "P_SORPTION_TO_FE": {
-          "CONSUMED": "PO4_P",
+          "CONSUMED": "PO4-P",
           "PRODUCED": "Fe_P",
-          "KINETICS": "k_ads_P_Fe * PO4_P * Fe_oxy",
+          "KINETICS": "k_ads_P_Fe * PO4-P * Fe_oxy",
           "PARAMETERS": {
             "k_ads_P_Fe": {
               "VALUE": 0.5,
@@ -258,7 +258,7 @@
 
         "P_RELEASE_FROM_FE": {
           "CONSUMED": "Fe_P",
-          "PRODUCED": "PO4_P",
+          "PRODUCED": "PO4-P",
           "KINETICS": "k_des_P_Fe * Fe_P * (K_O2_inhib / (K_O2_inhib + DO))",
           "PARAMETERS": {
             "k_des_P_Fe": {
@@ -278,10 +278,10 @@
 
         "SEQUENCE": [
           {"TEA": "O2", "Eh_range": ">300 mV", "Process": "Aerobic respiration"},
-          {"TEA": "NO3-", "Eh_range": "100-300 mV", "Process": "Denitrification"},
+          {"TEA": "NO3-N-", "Eh_range": "100-300 mV", "Process": "Denitrification"},
           {"TEA": "MnO2", "Eh_range": "0-200 mV", "Process": "Mn reduction"},
           {"TEA": "FeOOH", "Eh_range": "-100-100 mV", "Process": "Fe reduction"},
-          {"TEA": "SO4--", "Eh_range": "-200-0 mV", "Process": "Sulfate reduction"},
+          {"TEA": "SO4-S--", "Eh_range": "-200-0 mV", "Process": "Sulfate reduction"},
           {"TEA": "CO2", "Eh_range": "<-200 mV", "Process": "Methanogenesis"}
         ]
       }

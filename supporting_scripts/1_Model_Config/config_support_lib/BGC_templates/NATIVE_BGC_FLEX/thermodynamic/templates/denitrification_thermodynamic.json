@@ -8,13 +8,13 @@
 
   "CHEMICAL_SPECIES": {
     "list": {
-      "1": "NO3_N",
+      "1": "NO3-N",
       "2": "DOC",
       "3": "N2_loss",
       "4": "CO2",
       "5": "X_denit"
     },
-    "BGC_GENERAL_MOBILE_SPECIES": ["NO3_N", "DOC", "CO2"]
+    "BGC_GENERAL_MOBILE_SPECIES": ["NO3-N", "DOC", "CO2"]
   },
 
   "CYCLING_FRAMEWORKS": {
@@ -26,8 +26,8 @@
       },
 
       "_DOCUMENTATION": {
-        "REACTION": "NO3- + 1.25 CH2O + H+ -> 0.5 N2 + 1.25 CO2 + 1.75 H2O",
-        "DELTA_G0": "-112.6 kJ/mol NO3 at pH 7, 25C",
+        "REACTION": "NO3-N- + 1.25 CH2O + H+ -> 0.5 N2 + 1.25 CO2 + 1.75 H2O",
+        "DELTA_G0": "-112.6 kJ/mol NO3-N at pH 7, 25C",
         "DELTA_G_ATP": "~45-50 kJ/mol (minimum energy for ATP synthesis)",
         "CHI": "2 (average stoichiometric number)",
 
@@ -38,22 +38,22 @@
 
       "1": {
         "_name": "denitrification",
-        "_description": "NO3 reduction to N2 with organic carbon as electron donor",
-        "consumed": "NO3_N",
+        "_description": "NO3-N reduction to N2 with organic carbon as electron donor",
+        "consumed": "NO3-N",
         "produced": "N2_loss",
         "kinetics": [
-          "k_max * X_denit * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
+          "k_max * X_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
           "mg-N/L/day"
         ],
-        "parameter_names": ["k_max", "Km_NO3", "Km_DOC"],
+        "parameter_names": ["k_max", "Km_NO3-N", "Km_DOC"],
         "parameter_values": {
           "k_max": 15.0,
-          "Km_NO3": 0.5,
+          "Km_NO3-N": 0.5,
           "Km_DOC": 2.0
         },
         "_parameter_docs": {
           "k_max": "Maximum specific denitrification rate (1/day) - literature: 5-25",
-          "Km_NO3": "Half-saturation for NO3 (mg-N/L) - literature: 0.1-2.0",
+          "Km_NO3-N": "Half-saturation for NO3-N (mg-N/L) - literature: 0.1-2.0",
           "Km_DOC": "Half-saturation for DOC (mg-C/L) - literature: 1-5",
           "F_T_term": "(1 - exp(-67.6/(2*0.008314*T_K))) ≈ 0.99 at 20C - thermodynamics not limiting under standard conditions"
         }
@@ -65,14 +65,14 @@
         "consumed": "DOC",
         "produced": "X_denit",
         "kinetics": [
-          "Y_denit * k_max * X_denit * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
+          "Y_denit * k_max * X_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
           "mg/L/day"
         ],
-        "parameter_names": ["Y_denit", "k_max", "Km_NO3", "Km_DOC"],
+        "parameter_names": ["Y_denit", "k_max", "Km_NO3-N", "Km_DOC"],
         "parameter_values": {
           "Y_denit": 0.3,
           "k_max": 15.0,
-          "Km_NO3": 0.5,
+          "Km_NO3-N": 0.5,
           "Km_DOC": 2.0
         },
         "_parameter_docs": {
@@ -113,7 +113,7 @@
     "WHEN_F_T_IS_IMPORTANT": [
       "Low substrate concentrations (ΔG approaches ΔG_min)",
       "High product concentrations (reaction quotient Q increases)",
-      "Competition between electron acceptors (O2 vs NO3 vs SO4)",
+      "Competition between electron acceptors (O2 vs NO3-N vs SO4-S)",
       "Sediments and anoxic zones where redox gradients matter"
     ],
     "WHEN_F_T_CAN_BE_IGNORED": [

@@ -20,12 +20,12 @@
         "UNITS": "mg/L as C",
         "INITIAL_CONDITION": 0.5
       },
-      "PO4_P": {
+      "PO4-P": {
         "DESCRIPTION": "Phosphate (diatom nutrient)",
         "UNITS": "mg/L as P",
         "INITIAL_CONDITION": 0.05
       },
-      "NO3_N": {
+      "NO3-N": {
         "DESCRIPTION": "Nitrate (diatom nutrient)",
         "UNITS": "mg/L as N",
         "INITIAL_CONDITION": 1.0
@@ -56,11 +56,11 @@
               }
             },
             "f_N": {
-              "FORMULA": "NO3_N / (K_N + NO3_N)",
+              "FORMULA": "NO3-N / (K_N + NO3-N)",
               "K_N": {"VALUE": 0.02, "UNITS": "mg/L"}
             },
             "f_P": {
-              "FORMULA": "PO4_P / (K_P + PO4_P)",
+              "FORMULA": "PO4-P / (K_P + PO4-P)",
               "K_P": {"VALUE": 0.005, "UNITS": "mg/L"}
             },
             "f_light": {"VALUE": 0.5, "DESCRIPTION": "Light limitation (0-1)"},

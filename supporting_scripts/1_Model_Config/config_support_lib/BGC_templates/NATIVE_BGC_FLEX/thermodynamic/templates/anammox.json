@@ -1,7 +1,7 @@
 {
   "_DESCRIPTION": "Anaerobic Ammonium Oxidation (Anammox) with Thermodynamic Control",
   "_REFERENCE": "Jin & Bethke (2007); Strous et al. (1999)",
-  "_REACTION": "NH4+ + NO2- -> N2 + 2 H2O",
+  "_REACTION": "NH4-N+ + NO2-N- -> N2 + 2 H2O",
   "_DELTA_G0": "-357 kJ/mol (highly exergonic)",
   "_IMPORTANCE": "Major pathway for N removal in anoxic marine environments",
 
@@ -9,13 +9,13 @@
 
   "CHEMICAL_SPECIES": {
     "list": {
-      "1": "NH4_N",
-      "2": "NO2_N",
+      "1": "NH4-N",
+      "2": "NO2-N",
       "3": "N2_loss",
       "4": "DO",
       "5": "X_anammox"
     },
-    "BGC_GENERAL_MOBILE_SPECIES": ["NH4_N", "NO2_N"]
+    "BGC_GENERAL_MOBILE_SPECIES": ["NH4-N", "NO2-N"]
   },
 
   "CYCLING_FRAMEWORKS": {
@@ -42,42 +42,42 @@
 
       "1": {
         "_name": "anammox",
-        "_description": "Anaerobic oxidation of NH4+ using NO2- as electron acceptor",
-        "_reaction": "NH4+ + NO2- -> N2 + 2 H2O",
-        "consumed": "NH4_N",
+        "_description": "Anaerobic oxidation of NH4-N+ using NO2-N- as electron acceptor",
+        "_reaction": "NH4-N+ + NO2-N- -> N2 + 2 H2O",
+        "consumed": "NH4-N",
         "produced": "N2_loss",
         "kinetics": [
-          "k_anmx * X_anammox * (NH4_N/(Km_NH4+NH4_N)) * (NO2_N/(Km_NO2+NO2_N)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((357-45)/(2*0.008314*(T+273)))))",
+          "k_anmx * X_anammox * (NH4-N/(Km_NH4-N+NH4-N)) * (NO2-N/(Km_NO2-N+NO2-N)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((357-45)/(2*0.008314*(T+273)))))",
           "mg-N/L/day"
         ],
-        "parameter_names": ["k_anmx", "Km_NH4", "Km_NO2", "Ki_O2"],
+        "parameter_names": ["k_anmx", "Km_NH4-N", "Km_NO2-N", "Ki_O2"],
         "parameter_values": {
           "k_anmx": 2.0,
-          "Km_NH4": 0.1,
-          "Km_NO2": 0.05,
+          "Km_NH4-N": 0.1,
+          "Km_NO2-N": 0.05,
           "Ki_O2": 0.01
         },
         "_notes": [
           "Very low k_anmx reflects slow anammox growth",
           "Very low Ki_O2 - strict anaerobe",
-          "Requires both NH4 and NO2 - often coupled with partial nitrification"
+          "Requires both NH4-N and NO2-N - often coupled with partial nitrification"
         ]
       },
 
       "2": {
         "_name": "anammox_growth",
-        "consumed": "NH4_N",
+        "consumed": "NH4-N",
         "produced": "X_anammox",
         "kinetics": [
-          "Y_anmx * k_anmx * X_anammox * (NH4_N/(Km_NH4+NH4_N)) * (NO2_N/(Km_NO2+NO2_N)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((357-45)/(2*0.008314*(T+273)))))",
+          "Y_anmx * k_anmx * X_anammox * (NH4-N/(Km_NH4-N+NH4-N)) * (NO2-N/(Km_NO2-N+NO2-N)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((357-45)/(2*0.008314*(T+273)))))",
           "mg/L/day"
         ],
-        "parameter_names": ["Y_anmx", "k_anmx", "Km_NH4", "Km_NO2", "Ki_O2"],
+        "parameter_names": ["Y_anmx", "k_anmx", "Km_NH4-N", "Km_NO2-N", "Ki_O2"],
         "parameter_values": {
           "Y_anmx": 0.11,
           "k_anmx": 2.0,
-          "Km_NH4": 0.1,
-          "Km_NO2": 0.05,
+          "Km_NH4-N": 0.1,
+          "Km_NO2-N": 0.05,
           "Ki_O2": 0.01
         },
         "_notes": "Low yield - autotrophic metabolism"
@@ -86,7 +86,7 @@
       "3": {
         "_name": "anammox_decay",
         "consumed": "X_anammox",
-        "produced": "NH4_N",
+        "produced": "NH4-N",
         "kinetics": ["k_decay * X_anammox", "mg/L/day"],
         "parameter_names": ["k_decay"],
         "parameter_values": {"k_decay": 0.01},
@@ -97,7 +97,7 @@
 
   "_USE_CASES": [
     "Oxygen minimum zones (OMZ) in oceans",
-    "Anoxic sediments with NO2 supply from incomplete denitrification",
+    "Anoxic sediments with NO2-N supply from incomplete denitrification",
     "Wastewater treatment (DEMON, SHARON-Anammox processes)",
     "Stratified lakes with anoxic hypolimnion"
   ]

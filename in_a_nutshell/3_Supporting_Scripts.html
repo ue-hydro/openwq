@@ -460,7 +460,7 @@ python calibration_config_template.py [flags]
                 <div class="highlight-box info" style="margin-bottom: 14px;">
                     <strong>Recommended Approach:</strong>
                     <ol style="margin: 8px 0 0 18px; font-size: 0.92rem; line-height: 1.6;">
-                        <li>Start with <code>model_config_template.py</code> to work out your desired general model configuration (modules, source/sink approach, output settings). You can run test simulations directly through this template. <span style="color: var(--primary); font-weight: 500;">Designed for local machine exploration &mdash; Docker only.</span></li>
+                        <li>Start with <code>model_config_template.py</code> to work out your desired general model configuration (modules, source/sink approach, output settings). You can run test simulations directly through this template, and it will generate an HTML report to help you better understand the selected model configuration. <span style="color: var(--primary); font-weight: 500;">Designed for local machine exploration &mdash; Docker only.</span></li>
                         <li>Examine results using <code>reading_plotting_results_template.py</code> to visualize outputs and verify the model is behaving as expected. <span style="color: var(--primary); font-weight: 500;">Run locally on the same machine.</span></li>
                         <li>Once you are happy with the general configuration, use <code>calibration_config_template.py</code> to perform parameter sensitivity analysis and calibration. <span style="color: var(--primary); font-weight: 500;">Supports both Docker (local) and Apptainer (HPC).</span></li>
                     </ol>

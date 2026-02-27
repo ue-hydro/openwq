@@ -15,12 +15,12 @@ These templates implement thermodynamic control of biogeochemical reaction rates
 | Template | Reaction | ΔG° (kJ/mol e-) | F_T at 20°C |
 |----------|----------|-----------------|-------------|
 | `aerobic_respiration.json` | O2 → H2O | -125 | ≈ 1.0 |
-| `nitrification.json` | NH4 → NO2 → NO3 | -275 / -74 | ≈ 1.0 |
-| `denitrification_thermodynamic.json` | NO3 → N2 | -119 | ≈ 1.0 |
-| `anammox.json` | NH4 + NO2 → N2 | -357 | ≈ 1.0 |
+| `nitrification.json` | NH4-N → NO2-N → NO3-N | -275 / -74 | ≈ 1.0 |
+| `denitrification_thermodynamic.json` | NO3-N → N2 | -119 | ≈ 1.0 |
+| `anammox.json` | NH4-N + NO2-N → N2 | -357 | ≈ 1.0 |
 | `manganese_reduction.json` | Mn(IV) → Mn(II) | -95 | ≈ 1.0 |
 | `iron_reduction.json` | Fe(III) → Fe(II) | -50 | ≈ 0.64 |
-| `sulfate_reduction.json` | SO4 → H2S | -25 | < 0 * |
+| `sulfate_reduction.json` | SO4-S → H2S | -25 | < 0 * |
 | `methanogenesis.json` | CO2 → CH4 | -20 | < 0 * |
 
 \* These processes require concentration-dependent ΔG adjustment to proceed
@@ -29,7 +29,7 @@ These templates implement thermodynamic control of biogeochemical reaction rates
 
 | Template | Description |
 |----------|-------------|
-| `redox_cascade_thermodynamic.json` | O2, NO3, SO4 competition |
+| `redox_cascade_thermodynamic.json` | O2, NO3-N, SO4-S competition |
 | `full_sediment_diagenesis.json` | Complete redox ladder with 13 reactions |
 
 ### Documentation
@@ -44,10 +44,10 @@ Electron acceptors are used in order of energy yield:
 
 ```
 1. O2      ΔG° = -125 kJ/mol e-  (always favorable)
-2. NO3     ΔG° = -119 kJ/mol e-  (always favorable)
+2. NO3-N     ΔG° = -119 kJ/mol e-  (always favorable)
 3. Mn(IV)  ΔG° = -95  kJ/mol e-  (always favorable)
 4. Fe(III) ΔG° = -50  kJ/mol e-  (moderately limited)
-5. SO4     ΔG° = -25  kJ/mol e-  (strongly limited)
+5. SO4-S     ΔG° = -25  kJ/mol e-  (strongly limited)
 6. CO2     ΔG° = -20  kJ/mol e-  (most limited)
 ```
 
@@ -116,12 +116,12 @@ Users can already implement this using the exprtk parser:
 ```json
 {
   "DENITRIFICATION": {
-    "CONSUMED": "NO3_N",
+    "CONSUMED": "NO3-N",
     "PRODUCED": "N2",
-    "KINETICS": "k_max * X_denit * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-(deltaG_denit - 45)/(2*8.314*T_K/1000)))",
+    "KINETICS": "k_max * X_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-(deltaG_denit - 45)/(2*8.314*T_K/1000)))",
     "PARAMETERS": {
       "k_max": {"VALUE": 10.0, "UNITS": "1/day"},
-      "Km_NO3": {"VALUE": 0.5, "UNITS": "mg/L"},
+      "Km_NO3-N": {"VALUE": 0.5, "UNITS": "mg/L"},
       "Km_DOC": {"VALUE": 2.0, "UNITS": "mg/L"},
       "X_denit": {"VALUE": 1.0, "UNITS": "mg/L", "DESCRIPTION": "Denitrifier biomass"},
       "deltaG_denit": {"VALUE": -110, "UNITS": "kJ/mol", "DESCRIPTION": "ΔG of denitrification"}
@@ -139,16 +139,16 @@ Add a new optional block that auto-calculates ΔG from species concentrations:
 ```json
 {
   "DENITRIFICATION": {
-    "CONSUMED": "NO3_N",
+    "CONSUMED": "NO3-N",
     "PRODUCED": "N2",
 
     "THERMODYNAMIC": {
-      "REACTION": "NO3- + 1.25 CH2O + H+ -> 0.5 N2 + 1.25 CO2 + 1.75 H2O",
+      "REACTION": "NO3-N- + 1.25 CH2O + H+ -> 0.5 N2 + 1.25 CO2 + 1.75 H2O",
       "DELTA_G0": -110.0,
       "CHI": 2,
       "DELTA_G_MIN": 45.0,
       "SPECIES_MAPPING": {
-        "NO3-": "NO3_N",
+        "NO3-N-": "NO3-N",
         "CH2O": "DOC",
         "H+": "pH",
         "N2": "ATMOSPHERIC",
@@ -157,12 +157,12 @@ Add a new optional block that auto-calculates ΔG from species concentrations:
     },
 
     "KINETICS": "k_max * X * F_D * F_A * F_T",
-    "F_D": "NO3_N / (Km_NO3 + NO3_N)",
+    "F_D": "NO3-N / (Km_NO3-N + NO3-N)",
     "F_A": "DOC / (Km_DOC + DOC)",
 
     "PARAMETERS": {
       "k_max": {"VALUE": 10.0, "UNITS": "1/day"},
-      "Km_NO3": {"VALUE": 0.5, "UNITS": "mg/L"},
+      "Km_NO3-N": {"VALUE": 0.5, "UNITS": "mg/L"},
       "Km_DOC": {"VALUE": 2.0, "UNITS": "mg/L"},
       "X": {"VALUE": 1.0, "UNITS": "mg/L"}
     }
@@ -182,7 +182,7 @@ The code would automatically:
 | Reaction | ΔG° (kJ/mol e-) |
 |----------|-----------------|
 | Aerobic respiration (O2) | -125 |
-| Denitrification (NO3→N2) | -110 |
+| Denitrification (NO3-N→N2) | -110 |
 | Mn(IV) reduction | -95 |
 | Fe(III) reduction | -50 |
 | Sulfate reduction | -25 |
@@ -190,9 +190,9 @@ The code would automatically:
 
 ### Why This Matters
 
-In an anoxic sediment with both NO3 and SO4:
+In an anoxic sediment with both NO3-N and SO4-S:
 - **Pure kinetic model**: Both denitrification and sulfate reduction proceed simultaneously based on k values
-- **Thermodynamic model**: Denitrification dominates because ΔG is more negative; sulfate reduction is suppressed until NO3 is depleted
+- **Thermodynamic model**: Denitrification dominates because ΔG is more negative; sulfate reduction is suppressed until NO3-N is depleted
 
 This correctly captures the **redox ladder** observed in nature.
 
@@ -231,14 +231,14 @@ where Q = ([C]^c · [D]^d) / ([A]^a · [B]^b)
 
 ### Simple Kinetic (Current)
 ```json
-"KINETICS": "k_denitrif * NO3_N * 1.07^(T - 20)"
+"KINETICS": "k_denitrif * NO3-N * 1.07^(T - 20)"
 ```
 - **Pros**: Simple, fewer parameters
 - **Cons**: Rate proceeds regardless of thermodynamic feasibility
 
 ### Thermodynamic-Kinetic (Proposed)
 ```json
-"KINETICS": "k_max * (NO3_N/(Km+NO3_N)) * (DOC/(Km_DOC+DOC)) * F_T"
+"KINETICS": "k_max * (NO3-N/(Km+NO3-N)) * (DOC/(Km_DOC+DOC)) * F_T"
 ```
 With automatic F_T calculation from ΔG.
 
