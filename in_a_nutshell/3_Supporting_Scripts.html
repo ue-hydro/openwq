@@ -418,14 +418,21 @@ pip install -r requirements.txt
             </div>
         </div>
 
-        <!-- Slide 5: Template Workflow Pattern + Recommended Approach -->
-        <div class="slide" data-slide="5">
+        <!-- Slide 5: Section - Configuration -->
+        <div class="slide section-slide" data-slide="5">
+            <div class="section-number">01</div>
+            <h2>Model Configuration</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+        </div>
+
+        <!-- Slide 6: Template Workflow Pattern -->
+        <div class="slide" data-slide="6">
             <div class="slide-header">
                 <h2>Template Workflow Pattern</h2>
             </div>
             <div class="slide-content">
                 <p style="font-size: 1.1rem; margin-bottom: 20px;">
-                    All supporting scripts follow the same <strong>Copy &rarr; Edit &rarr; Run</strong> workflow:
+                    All supporting scripts follow the same <strong>Copy → Edit → Run</strong> workflow:
                 </p>
                 <div class="three-column" style="gap: 20px; margin-bottom: 20px;">
                     <div class="card teal">
@@ -434,7 +441,7 @@ pip install -r requirements.txt
                         <pre style="font-size: 0.7rem; padding: 8px;">
 <span class="comment"># Copy and edit</span>
 python model_config_template.py
-<span class="comment"># &rarr; All JSON files generated</span>
+<span class="comment"># → All JSON files generated</span>
                         </pre>
                     </div>
                     <div class="card primary">
@@ -443,7 +450,7 @@ python model_config_template.py
                         <pre style="font-size: 0.7rem; padding: 8px;">
 <span class="comment"># Copy and edit paths</span>
 python reading_plotting_results_template.py
-<span class="comment"># &rarr; Plots and maps</span>
+<span class="comment"># → Plots and maps</span>
                         </pre>
                     </div>
                     <div class="card rose">
@@ -457,29 +464,14 @@ python calibration_config_template.py [flags]
                         </pre>
                     </div>
                 </div>
-                <div class="highlight-box info" style="margin-bottom: 14px;">
-                    <strong>Recommended Approach:</strong>
-                    <ol style="margin: 8px 0 0 18px; font-size: 0.92rem; line-height: 1.6;">
-                        <li>Start with <code>model_config_template.py</code> to work out your desired general model configuration (modules, source/sink approach, output settings). It generates all JSON configs and an <strong>interactive HTML report</strong> to review the configuration. The report includes ready-to-copy Docker commands and Python visualization code. <span style="color: var(--primary); font-weight: 500;">Designed for local machine exploration.</span></li>
-                        <li>The HTML report already includes copy-paste code snippets for reading and visualizing results (time series, WebGL 3D maps). <code>reading_plotting_results_template.py</code> is still useful for more custom analysis, but the report provides the essential visualization code. <span style="color: var(--primary); font-weight: 500;">Run locally on the same machine.</span></li>
-                        <li>Once you are happy with the general configuration, use <code>calibration_config_template.py</code> to perform parameter sensitivity analysis and calibration. <span style="color: var(--primary); font-weight: 500;">Supports both Docker (local) and Apptainer (HPC).</span></li>
-                    </ol>
-                </div>
                 <div class="highlight-box success">
-                    <strong>Key Principle:</strong> Never edit library files (<code>*_lib/</code> folders) &mdash; copy templates to your working directory and customize them.
+                    <strong>Key Principle:</strong> Never edit library files (<code>*_lib/</code> folders) — copy templates to your working directory and customize them. This keeps your configurations separate from the library code.
                 </div>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">5</div>
+                <div class="page-number">6</div>
             </div>
-        </div>
-
-        <!-- Slide 6: Section - Configuration -->
-        <div class="slide section-slide" data-slide="6">
-            <div class="section-number">01</div>
-            <h2>Model Configuration</h2>
-            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 7: Configuration Template -->
@@ -493,7 +485,7 @@ python calibration_config_template.py [flags]
                         Edit <span style="color: #60a5fa;">one file</span> &rarr; run it &rarr; done.
                     </p>
                     <p style="font-size: 0.95rem; opacity: 0.85; margin: 6px 0 0 0;">
-                        All JSON configuration files and an interactive HTML report are generated automatically.
+                        All JSON configuration files, model execution, and HTML report are handled automatically.
                     </p>
                 </div>
                 <div class="two-column" style="gap: 30px;">
@@ -537,8 +529,8 @@ python calibration_config_template.py [flags]
                         <div class="workflow-step">
                             <div class="number" style="background: var(--rose);">6</div>
                             <div class="content">
-                                <h4>Run it!</h4>
-                                <p><code style="font-size: 1rem; font-weight: 600;">python model_config_template.py</code></p>
+                                <h4>Generate report</h4>
+                                <p>Model configuration summary, run instructions, and how to examine results</p>
                             </div>
                         </div>
                     </div>
@@ -558,13 +550,13 @@ python calibration_config_template.py [flags]
                             <p style="font-size: 0.82rem;">1) General Info &middot; 2) Computational &middot;
                             3) Initial Conditions &middot; 4) Modules (BGC, TD, LE, TS, SI) &middot;
                             5) Source/Sink &middot; 6) External Fluxes &middot; 7) Output &middot;
-                            <strong>8) Docker Settings</strong> &middot; <strong>9) Report</strong></p>
+                            <strong>8) Model Execution</strong> &middot; <strong>9) Report</strong></p>
                         </div>
                         <div class="highlight-box success" style="margin-top: 10px;">
                             <strong style="font-size: 1rem;">That's it!</strong><br>
                             <span style="font-size: 0.9rem;">
-                                The script generates all JSON configs and an interactive HTML report
-                                with Docker commands and visualization code snippets.
+                                The script generates all JSON configs, optionally runs the model
+                                (Docker/Apptainer), and creates an interactive HTML report.
                             </span>
                         </div>
                     </div>
@@ -706,15 +698,74 @@ ss_ml_training_data_csv = \
             </div>
         </div>
 
-        <!-- Slide 10: Section - Reading Results -->
-        <div class="slide section-slide blue" data-slide="10">
+        <!-- Slide 10: Report Generation -->
+        <div class="slide" data-slide="10">
+            <div class="slide-header">
+                <h2>HTML Report Generation (Section 9)</h2>
+            </div>
+            <div class="slide-content">
+                <p style="font-size: 1.05rem; margin-bottom: 15px;">
+                    After the simulation completes, the template auto-generates an <strong>interactive HTML report</strong>.
+                </p>
+                <div class="two-column" style="gap: 35px;">
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+<span class="comment"># ======= 9. REPORT SETTINGS (optional) =======</span>
+generate_report = <span class="keyword">True</span>
+
+<span class="comment"># River network shapefile (for basin map)</span>
+<span class="comment"># Set None to skip map section</span>
+shapefile_path = <span class="string">"/path/to/river_network.shp"</span>
+shapefile_reach_id_col = <span class="string">"seg_id"</span>
+                        </pre>
+                        <div class="card secondary" style="margin-top: 15px;">
+                            <h3>Report Sections</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;">Model configuration summary table</li>
+                                <li style="font-size: 0.9rem;">Interactive basin map (Leaflet.js)</li>
+                                <li style="font-size: 0.9rem;">Time series charts (Plotly.js)</li>
+                                <li style="font-size: 0.9rem;">Spatial statistics per species</li>
+                                <li style="font-size: 0.9rem;">Source/sink load summary</li>
+                                <li style="font-size: 0.9rem;">Run metadata (runtime, exit code, MPI)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card teal">
+                            <h3>Features</h3>
+                            <ul style="margin-left: 15px;">
+                                <li style="font-size: 0.9rem;"><strong>Self-contained</strong> — single HTML file, no server needed</li>
+                                <li style="font-size: 0.9rem;"><strong>Interactive</strong> — zoom, hover, pan on all charts and maps</li>
+                                <li style="font-size: 0.9rem;"><strong>Dark/light theme</strong> toggle</li>
+                                <li style="font-size: 0.9rem;"><strong>Optional basin map</strong> — provide a shapefile or skip</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box success" style="margin-top: 15px;">
+                            <strong>Output:</strong> <code>{dir2save_input_files}/openwq_report.html</code><br>
+                            Open in any browser — no additional software required!
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 10px;">
+                            <strong>Note:</strong> Report generation requires <code>run_model = True</code>.
+                            The full pipeline is: generate configs → run model → generate report.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">10</div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Section - Reading Results -->
+        <div class="slide section-slide blue" data-slide="11">
             <div class="section-number">02</div>
             <h2>Reading Model Results</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 11: Read_h5_driver -->
-        <div class="slide" data-slide="11">
+        <!-- Slide 12: Read_h5_driver -->
+        <div class="slide" data-slide="12">
             <div class="slide-header">
                 <h2>Reading HDF5 Output (Read_h5_driver)</h2>
             </div>
@@ -766,19 +817,19 @@ results = h5_rlib.Read_h5_driver(
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">11</div>
+                <div class="page-number">12</div>
             </div>
         </div>
 
-        <!-- Slide 12: Section - Plotting -->
-        <div class="slide section-slide purple" data-slide="12">
+        <!-- Slide 13: Section - Plotting -->
+        <div class="slide section-slide purple" data-slide="13">
             <div class="section-number">03</div>
             <h2>Plotting Time Series</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 13: Plot_h5_driver -->
-        <div class="slide" data-slide="13">
+        <!-- Slide 14: Plot_h5_driver -->
+        <div class="slide" data-slide="14">
             <div class="slide-header">
                 <h2>Time Series Plots (Plot_h5_driver)</h2>
             </div>
@@ -842,19 +893,19 @@ h5_plib.Plot_h5_driver(
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">13</div>
+                <div class="page-number">14</div>
             </div>
         </div>
 
-        <!-- Slide 14: Section - Mapping -->
-        <div class="slide section-slide green" data-slide="14">
+        <!-- Slide 15: Section - Mapping -->
+        <div class="slide section-slide green" data-slide="15">
             <div class="section-number">04</div>
             <h2>Spatial Mapping & GIFs</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 15: Map_h5_driver -->
-        <div class="slide" data-slide="15">
+        <!-- Slide 16: Map_h5_driver -->
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Spatial Maps (Map_h5_driver)</h2>
             </div>
@@ -916,12 +967,12 @@ h5_mplib.Map_h5_driver(
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
-        <!-- Slide 16: Complete Workflow -->
-        <div class="slide" data-slide="16">
+        <!-- Slide 17: Complete Workflow -->
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Complete Post-Processing Workflow</h2>
             </div>
@@ -960,12 +1011,12 @@ h5_mplib.Map_h5_driver(
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
-        <!-- Slide 17: Debug Mode -->
-        <div class="slide" data-slide="17">
+        <!-- Slide 18: Debug Mode -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Debug Mode Outputs</h2>
             </div>
@@ -1008,12 +1059,12 @@ transport_flux = results[<span class="string">'d_transport'</span>]
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 18: Tips & Best Practices -->
-        <div class="slide" data-slide="18">
+        <!-- Slide 19: Tips & Best Practices -->
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Tips & Best Practices</h2>
             </div>
@@ -1052,12 +1103,12 @@ transport_flux = results[<span class="string">'d_transport'</span>]
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">18</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
-        <!-- Slide 19: AI Assistance -->
-        <div class="slide" data-slide="19">
+        <!-- Slide 20: AI Assistance -->
+        <div class="slide" data-slide="20">
             <div class="slide-header">
                 <h2>AI-Powered Assistance</h2>
             </div>
@@ -1109,12 +1160,12 @@ cd /path/to/openwq/ && claude
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">19</div>
+                <div class="page-number">20</div>
             </div>
         </div>
 
-        <!-- Slide 20: Model Execution -->
-        <div class="slide" data-slide="20">
+        <!-- Slide 21: Model Execution -->
+        <div class="slide" data-slide="21">
             <div class="slide-header">
                 <h2>Model Execution (Section 8)</h2>
             </div>
@@ -1175,58 +1226,6 @@ mpi_np = <span class="keyword">2</span>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">20</div>
-            </div>
-        </div>
-
-        <!-- Slide 21: Interactive HTML Report -->
-        <div class="slide" data-slide="21">
-            <div class="slide-header">
-                <h2>Interactive HTML Report</h2>
-            </div>
-            <div class="slide-content">
-                <p style="font-size: 1.05rem; margin-bottom: 15px;">
-                    The template generates a comprehensive <strong>interactive HTML report</strong> &mdash; a configuration review and execution guide tool.
-                </p>
-                <div class="two-column" style="gap: 35px;">
-                    <div class="column">
-                        <div class="card secondary">
-                            <h3>Report Content</h3>
-                            <ul style="margin-left: 15px;">
-                                <li style="font-size: 0.85rem;"><strong>Project &amp; Configuration Summary</strong> &mdash; modules, species, compartments, solver</li>
-                                <li style="font-size: 0.85rem;"><strong>Interactive Basin Map</strong> &mdash; Leaflet.js map with river network, basin polygons, and GRQA monitoring stations</li>
-                                <li style="font-size: 0.85rem;"><strong>GRQA Observation Data</strong> &mdash; stations, observations, species matched from the Global River Water Quality Archive</li>
-                                <li style="font-size: 0.85rem;"><strong>Module Parameter Details</strong> &mdash; collapsible sections for BGC, transport, sorption, sediment parameters</li>
-                                <li style="font-size: 0.85rem;"><strong>Source/Sink Setup</strong> &mdash; method, per-species statistics, total loads</li>
-                                <li style="font-size: 0.85rem;"><strong>Time Series &amp; Spatial Statistics</strong> &mdash; if model was run separately, shows Plotly.js interactive charts</li>
-                                <li style="font-size: 0.85rem;"><strong>Next Steps with Copy Buttons</strong> &mdash; Docker commands (start container, run model) and Python code snippets (read HDF5, generate WebGL 3D map, plot time series per species, all species in single plot)</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="column">
-                        <div class="card teal">
-                            <h3>Key Features</h3>
-                            <ul style="margin-left: 15px;">
-                                <li style="font-size: 0.85rem;"><strong>Self-contained</strong> &mdash; single HTML file, no server needed</li>
-                                <li style="font-size: 0.85rem;"><strong>Dark/light theme</strong> toggle with localStorage persistence</li>
-                                <li style="font-size: 0.85rem;"><strong>Copy-to-clipboard buttons</strong> on all code snippets</li>
-                                <li style="font-size: 0.85rem;"><strong>Error-resilient</strong> &mdash; if any section fails, the rest of the report still renders with inline error messages</li>
-                                <li style="font-size: 0.85rem;"><strong>GRQA integration</strong> &mdash; automatic extraction of nearby monitoring stations from the Global River Water Quality Archive</li>
-                                <li style="font-size: 0.85rem;"><strong>Auto-detected outputs</strong> &mdash; if HDF5 files exist on disk, time series and statistics are included</li>
-                            </ul>
-                        </div>
-                        <div class="highlight-box success" style="margin-top: 15px;">
-                            <strong>Output:</strong> <code>{dir2save_input_files}/openwq_report.html</code><br>
-                            Open in any browser &mdash; no additional software required!
-                        </div>
-                        <div class="highlight-box info" style="margin-top: 10px;">
-                            <strong>Workflow:</strong> Use the report to review your configuration, then copy the Docker commands to run the model, and the Python snippets to visualize results.
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="slide-footer">
-                <div class="logo">Open<span>WQ</span></div>
                 <div class="page-number">21</div>
             </div>
         </div>
@@ -1240,20 +1239,20 @@ mpi_np = <span class="keyword">2</span>
                 <div class="three-column">
                     <div class="card teal" style="text-align: center;">
                         <h3 style="justify-content: center;">🔧 Configure</h3>
-                        <p><code>model_config_template.py</code><br>&rarr; All JSON files + interactive HTML report</p>
+                        <p><code>model_config_template.py</code><br>→ All JSON files auto-generated</p>
                     </div>
                     <div class="card primary" style="text-align: center;">
                         <h3 style="justify-content: center;">🚀 Run</h3>
-                        <p>Copy Docker commands from the report<br>&rarr; Execute in Docker container</p>
+                        <p><code>run_model = True</code><br>→ Execute in Docker/Apptainer</p>
                     </div>
                     <div class="card secondary" style="text-align: center;">
-                        <h3 style="justify-content: center;">📊 Visualize</h3>
-                        <p>Copy Python snippets from the report<br>&rarr; Time series, WebGL 3D maps</p>
+                        <h3 style="justify-content: center;">📊 Report</h3>
+                        <p><code>generate_report = True</code><br>→ Interactive HTML report</p>
                     </div>
                 </div>
                 <div class="highlight-box success" style="margin-top: 25px; text-align: center; font-size: 1.1rem;">
-                    <strong>One command:</strong> <code>python model_config_template.py</code><br>
-                    generates configs + an interactive report with everything you need to run and visualize.
+                    <strong>One command does it all:</strong> <code>python model_config_template.py</code><br>
+                    generates configs → runs the model → produces an interactive report!
                 </div>
             </div>
             <div class="slide-footer">
