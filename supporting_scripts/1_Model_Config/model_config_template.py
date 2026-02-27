@@ -78,7 +78,7 @@ hostmodel = "mizuroute"
 # (openwq_out/) are generated in the same directory as the executable.
 executable_path = (
     "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/"
-    "route/build/openwq/openwq/bin/mizuroute_openwq_Release"
+    "route/build/openwq/openwq/bin/mizuroute_lakes_openwq_Release"
 )
 
 # Full path to the mizuRoute/SUMMA control file (on the HOST machine).
