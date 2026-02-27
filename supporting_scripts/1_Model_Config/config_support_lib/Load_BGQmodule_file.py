@@ -75,4 +75,4 @@ def load_bgq_module_json(
         # Add newline at end of file
         f.write("\n")
 
-    print(f"✓ Biogeochemistry cycling framework file saved to: {bgc_config_filepath}")
+    print(f"  Biogeochemistry cycling framework file saved to: {bgc_config_filepath}")

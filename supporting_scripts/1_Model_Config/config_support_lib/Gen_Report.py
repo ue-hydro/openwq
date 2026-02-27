@@ -244,23 +244,45 @@ def _render_module_params(module_data, module_name):
             H.append('</table>')
 
     # --- BGC (NATIVE_BGC_FLEX) ---
-    elif 'BIOGEOCHEMISTRY_CONFIGURATION' in module_data:
-        bgc = module_data['BIOGEOCHEMISTRY_CONFIGURATION']
+    elif ('CHEMICAL_SPECIES' in module_data
+          or 'BIOGEOCHEMISTRY_CONFIGURATION' in module_data):
+        # Support both runtime format (top-level CHEMICAL_SPECIES)
+        # and legacy format (nested under BIOGEOCHEMISTRY_CONFIGURATION)
+        if 'BIOGEOCHEMISTRY_CONFIGURATION' in module_data:
+            bgc = module_data['BIOGEOCHEMISTRY_CONFIGURATION']
+        else:
+            bgc = module_data
 
         if 'CHEMICAL_SPECIES' in bgc:
-            species = bgc['CHEMICAL_SPECIES']
+            chem_section = bgc['CHEMICAL_SPECIES']
             H.append('<h4>Chemical Species</h4>')
             H.append('<table class="param-table">')
             H.append('<tr><th>Species</th><th>Description</th>'
                      '<th>Units</th><th>Initial Condition</th></tr>')
-            for k, v in species.items():
-                if k.startswith('_') or not isinstance(v, dict):
-                    continue
-                H.append(
-                    f'<tr><td><code>{k}</code></td>'
-                    f'<td>{v.get("DESCRIPTION", "")}</td>'
-                    f'<td>{v.get("UNITS", "")}</td>'
-                    f'<td class="num">{v.get("INITIAL_CONDITION", "")}</td></tr>')
+
+            # Runtime format: LIST + _SPECIES_INFO metadata
+            if 'LIST' in chem_section:
+                for idx in sorted(chem_section['LIST'].keys(),
+                                  key=lambda x: int(x)):
+                    name = chem_section['LIST'][idx]
+                    info = chem_section.get(f'_{name}_INFO', {})
+                    H.append(
+                        f'<tr><td><code>{name}</code></td>'
+                        f'<td>{info.get("DESCRIPTION", "")}</td>'
+                        f'<td>{info.get("UNITS", "")}</td>'
+                        f'<td class="num">'
+                        f'{info.get("INITIAL_CONDITION", "")}</td></tr>')
+            else:
+                # Legacy format
+                for k, v in chem_section.items():
+                    if k.startswith('_') or not isinstance(v, dict):
+                        continue
+                    H.append(
+                        f'<tr><td><code>{k}</code></td>'
+                        f'<td>{v.get("DESCRIPTION", "")}</td>'
+                        f'<td>{v.get("UNITS", "")}</td>'
+                        f'<td class="num">'
+                        f'{v.get("INITIAL_CONDITION", "")}</td></tr>')
             H.append('</table>')
 
         if 'CYCLING_FRAMEWORKS' in bgc:
@@ -275,23 +297,50 @@ def _render_module_params(module_data, module_name):
                 H.append('<table class="param-table">')
                 H.append('<tr><th>Transformation</th><th>Consumed</th>'
                          '<th>Produced</th><th>Kinetics</th></tr>')
-                for t_name, t_data in fw_data.items():
-                    if t_name.startswith('_') or not isinstance(t_data, dict):
-                        continue
-                    if 'KINETICS' not in t_data and 'FORMULA' not in t_data:
-                        continue
-                    consumed = t_data.get('CONSUMED', '')
-                    produced = t_data.get('PRODUCED', '')
-                    kinetics = t_data.get('KINETICS', t_data.get('FORMULA', ''))
-                    H.append(
-                        f'<tr><td><code>{t_name}</code></td>'
-                        f'<td>{consumed}</td>'
-                        f'<td>{produced}</td>'
-                        f'<td><code style="font-size:.75rem">{kinetics}</code></td></tr>')
+
+                # Runtime format: numbered entries with LIST_TRANSFORMATIONS
+                if 'LIST_TRANSFORMATIONS' in fw_data:
+                    lt = fw_data['LIST_TRANSFORMATIONS']
+                    for idx in sorted(lt.keys(), key=lambda x: int(x)):
+                        t_data = fw_data.get(idx, {})
+                        t_name = t_data.get('_NAME', lt[idx])
+                        consumed = t_data.get('CONSUMED', '')
+                        produced = t_data.get('PRODUCED', '')
+                        kin = t_data.get('KINETICS', '')
+                        if isinstance(kin, list):
+                            kin = f'{kin[0]} [{kin[1]}]'
+                        H.append(
+                            f'<tr><td><code>{t_name}</code></td>'
+                            f'<td>{consumed}</td>'
+                            f'<td>{produced}</td>'
+                            f'<td><code style="font-size:.75rem">'
+                            f'{kin}</code></td></tr>')
+                else:
+                    # Legacy format
+                    for t_name, t_data in fw_data.items():
+                        if t_name.startswith('_'):
+                            continue
+                        if not isinstance(t_data, dict):
+                            continue
+                        if ('KINETICS' not in t_data
+                                and 'FORMULA' not in t_data):
+                            continue
+                        consumed = t_data.get('CONSUMED', '')
+                        produced = t_data.get('PRODUCED', '')
+                        kinetics = t_data.get(
+                            'KINETICS', t_data.get('FORMULA', ''))
+                        H.append(
+                            f'<tr><td><code>{t_name}</code></td>'
+                            f'<td>{consumed}</td>'
+                            f'<td>{produced}</td>'
+                            f'<td><code style="font-size:.75rem">'
+                            f'{kinetics}</code></td></tr>')
                 H.append('</table></details>')
 
-        if 'COMPARTMENT_ASSIGNMENT' in bgc:
-            ca = bgc['COMPARTMENT_ASSIGNMENT']
+        # Compartment assignment (runtime: _COMPARTMENT_ASSIGNMENT, legacy: COMPARTMENT_ASSIGNMENT)
+        ca = bgc.get('COMPARTMENT_ASSIGNMENT',
+                      bgc.get('_COMPARTMENT_ASSIGNMENT'))
+        if ca:
             H.append('<h4>Compartment Assignment</h4>')
             H.append('<table class="param-table">')
             H.append('<tr><th>Compartment</th><th>Frameworks</th></tr>')

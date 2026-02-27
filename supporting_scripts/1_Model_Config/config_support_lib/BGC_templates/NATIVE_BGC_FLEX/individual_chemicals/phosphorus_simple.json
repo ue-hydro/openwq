@@ -1,118 +1,190 @@
 {
-  "_DESCRIPTION": "Simple Phosphorus Cycle - Basic PO4-P/Org-P transformations",
-  "_REFERENCE": "Chapra (2008), HYPE model",
-  "_VERSION": "1.0",
-
-  "BIOGEOCHEMISTRY_CONFIGURATION": {
+    "_DESCRIPTION": "Simple Phosphorus Cycle - Basic PO4-P/Org-P transformations",
+    "_REFERENCE": "Chapra (2008), HYPE model",
+    "_VERSION": "1.0",
     "CHEMICAL_SPECIES": {
-      "PO4-P": {
-        "DESCRIPTION": "Dissolved reactive phosphorus (orthophosphate)",
-        "UNITS": "mg/L as P",
-        "INITIAL_CONDITION": 0.05
-      },
-      "ORG_P": {
-        "DESCRIPTION": "Organic phosphorus (dissolved + particulate)",
-        "UNITS": "mg/L as P",
-        "INITIAL_CONDITION": 0.1
-      },
-      "PART_P": {
-        "DESCRIPTION": "Particulate/sorbed phosphorus",
-        "UNITS": "mg/L as P",
-        "INITIAL_CONDITION": 0.1
-      }
-    },
-
-    "CYCLING_FRAMEWORKS": {
-      "SIMPLE_P_CYCLE": {
-        "_DESCRIPTION": "Three-pool phosphorus cycle",
-
-        "MINERALIZATION": {
-          "CONSUMED": "ORG_P",
-          "PRODUCED": "PO4-P",
-          "KINETICS": "k_min_P * ORG_P * 1.06^(T - 20)",
-          "PARAMETERS": {
-            "k_min_P": {
-              "VALUE": 0.02,
-              "UNITS": "1/day",
-              "RANGE": [0.005, 0.1],
-              "DESCRIPTION": "Organic P mineralization rate at 20C"
-            }
-          }
+        "LIST": {
+            "1": "PO4-P",
+            "2": "ORG_P",
+            "3": "PART_P"
         },
-
-        "SORPTION": {
-          "CONSUMED": "PO4-P",
-          "PRODUCED": "PART_P",
-          "KINETICS": "k_ads * PO4-P",
-          "PARAMETERS": {
-            "k_ads": {
-              "VALUE": 0.5,
-              "UNITS": "1/day",
-              "RANGE": [0.1, 2.0],
-              "DESCRIPTION": "P adsorption rate"
-            }
-          },
-          "NOTES": "Rapid sorption to sediments/particles"
-        },
-
-        "DESORPTION": {
-          "CONSUMED": "PART_P",
-          "PRODUCED": "PO4-P",
-          "KINETICS": "k_des * PART_P",
-          "PARAMETERS": {
-            "k_des": {
-              "VALUE": 0.05,
-              "UNITS": "1/day",
-              "RANGE": [0.01, 0.2],
-              "DESCRIPTION": "P desorption rate"
-            }
-          },
-          "NOTES": "Slow release from sediments"
-        },
-
-        "PLANT_UPTAKE": {
-          "CONSUMED": "PO4-P",
-          "PRODUCED": "NONE",
-          "KINETICS": "k_uptake_P * PO4-P * f_season",
-          "PARAMETERS": {
-            "k_uptake_P": {
-              "VALUE": 0.05,
-              "UNITS": "1/day",
-              "RANGE": [0.0, 0.2],
-              "DESCRIPTION": "Plant P uptake rate"
-            },
-            "f_season": {
-              "VALUE": 1.0,
-              "DESCRIPTION": "Seasonal uptake factor (0-1)"
-            }
-          }
-        },
-
-        "SEDIMENTATION": {
-          "CONSUMED": "PART_P",
-          "PRODUCED": "SED_P_loss",
-          "KINETICS": "v_s / depth * PART_P",
-          "PARAMETERS": {
-            "v_s": {
-              "VALUE": 1.0,
-              "UNITS": "m/day",
-              "RANGE": [0.1, 5.0],
-              "DESCRIPTION": "Settling velocity"
-            },
-            "depth": {
-              "VALUE": 2.0,
-              "UNITS": "m",
-              "DESCRIPTION": "Water depth"
-            }
-          }
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "PO4-P",
+            "ORG_P",
+            "PART_P"
+        ],
+        "_LIST_DESCRIPTIONS": {
+            "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
+            "ORG_P": "Organic phosphorus (dissolved + particulate)",
+            "PART_P": "Particulate/sorbed phosphorus"
         }
-      }
     },
-
-    "COMPARTMENT_ASSIGNMENT": {
-      "SOIL": ["SIMPLE_P_CYCLE"],
-      "RIVER": ["SIMPLE_P_CYCLE"],
-      "LAKE": ["SIMPLE_P_CYCLE"]
+    "CYCLING_FRAMEWORKS": {
+        "SIMPLE_P_CYCLE": {
+            "_DESCRIPTION": "Three-pool phosphorus cycle",
+            "LIST_TRANSFORMATIONS": {
+                "1": "MINERALIZATION",
+                "2": "SORPTION",
+                "3": "DESORPTION",
+                "4": "PLANT_UPTAKE",
+                "5": "SEDIMENTATION"
+            },
+            "1": {
+                "_NAME": "MINERALIZATION",
+                "CONSUMED": "ORG_P",
+                "PRODUCED": "PO4-P",
+                "KINETICS": [
+                    "k_min_P * ORG_P * 1.06^(T - 20)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_min_P"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_min_P": 0.02
+                },
+                "_PARAMETERS_INFO": {
+                    "k_min_P": {
+                        "VALUE": 0.02,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.005,
+                            0.1
+                        ],
+                        "DESCRIPTION": "Organic P mineralization rate at 20C"
+                    }
+                }
+            },
+            "2": {
+                "_NAME": "SORPTION",
+                "CONSUMED": "PO4-P",
+                "PRODUCED": "PART_P",
+                "KINETICS": [
+                    "k_ads * PO4-P",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_ads"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_ads": 0.5
+                },
+                "_NOTES": "Rapid sorption to sediments/particles",
+                "_PARAMETERS_INFO": {
+                    "k_ads": {
+                        "VALUE": 0.5,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.1,
+                            2.0
+                        ],
+                        "DESCRIPTION": "P adsorption rate"
+                    }
+                }
+            },
+            "3": {
+                "_NAME": "DESORPTION",
+                "CONSUMED": "PART_P",
+                "PRODUCED": "PO4-P",
+                "KINETICS": [
+                    "k_des * PART_P",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_des"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_des": 0.05
+                },
+                "_NOTES": "Slow release from sediments",
+                "_PARAMETERS_INFO": {
+                    "k_des": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.01,
+                            0.2
+                        ],
+                        "DESCRIPTION": "P desorption rate"
+                    }
+                }
+            },
+            "4": {
+                "_NAME": "PLANT_UPTAKE",
+                "CONSUMED": "PO4-P",
+                "PRODUCED": "NONE",
+                "KINETICS": [
+                    "k_uptake_P * PO4-P * f_season",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_uptake_P",
+                    "f_season"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_uptake_P": 0.05,
+                    "f_season": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "k_uptake_P": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.0,
+                            0.2
+                        ],
+                        "DESCRIPTION": "Plant P uptake rate"
+                    },
+                    "f_season": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Seasonal uptake factor (0-1)"
+                    }
+                }
+            },
+            "5": {
+                "_NAME": "SEDIMENTATION",
+                "CONSUMED": "PART_P",
+                "PRODUCED": "SED_P_loss",
+                "KINETICS": [
+                    "v_s / depth * PART_P",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "v_s",
+                    "depth"
+                ],
+                "PARAMETER_VALUES": {
+                    "v_s": 1.0,
+                    "depth": 2.0
+                },
+                "_PARAMETERS_INFO": {
+                    "v_s": {
+                        "VALUE": 1.0,
+                        "UNITS": "m/day",
+                        "RANGE": [
+                            0.1,
+                            5.0
+                        ],
+                        "DESCRIPTION": "Settling velocity"
+                    },
+                    "depth": {
+                        "VALUE": 2.0,
+                        "UNITS": "m",
+                        "DESCRIPTION": "Water depth"
+                    }
+                }
+            }
+        }
+    },
+    "_COMPARTMENT_ASSIGNMENT": {
+        "SOIL": [
+            "SIMPLE_P_CYCLE"
+        ],
+        "RIVER": [
+            "SIMPLE_P_CYCLE"
+        ],
+        "LAKE": [
+            "SIMPLE_P_CYCLE"
+        ]
     }
-  }
 }

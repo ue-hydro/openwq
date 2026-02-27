@@ -1,111 +1,144 @@
 {
-  "_DESCRIPTION": "Sulfate Reduction with Thermodynamic Control",
-  "_REFERENCE": "Jin & Bethke (2007); Thullner et al. (2007)",
-  "_REACTION": "2 CH2O + SO4-S-- + 2 H+ -> 2 CO2 + H2S + 2 H2O",
-  "_DELTA_G0": "-25 kJ/mol e- (low energy yield - sensitive to thermodynamic control)",
-
-  "MODULE_NAME": "NATIVE_BGC_FLEX",
-
-  "CHEMICAL_SPECIES": {
-    "list": {
-      "1": "SO4-S",
-      "2": "H2S",
-      "3": "DOC",
-      "4": "CO2",
-      "5": "DO",
-      "6": "NO3-N",
-      "7": "X_srb"
-    },
-    "BGC_GENERAL_MOBILE_SPECIES": ["SO4-S", "H2S", "DOC", "CO2"]
-  },
-
-  "CYCLING_FRAMEWORKS": {
-    "SULFATE_REDUCTION_THERMO": {
-      "list_transformations": {
-        "1": "sulfate_reduction",
-        "2": "srb_growth",
-        "3": "srb_decay",
-        "4": "sulfide_oxidation"
-      },
-
-      "_THERMODYNAMIC_CONSTANTS": {
-        "deltaG0": -25.0,
-        "deltaG_ATP": 45.0,
-        "deltaG_min_observed": -19.1,
-        "chi": 2,
-        "R_kJ": 0.008314,
-        "NOTES": [
-          "Low ΔG° means F_T is very sensitive to conditions",
-          "At standard conditions: F_T = 1 - exp(-(25-45)/(2*0.008314*293))",
-          "= 1 - exp(20/4.87) = 1 - exp(4.1) < 0 → F_T = 0",
-          "Reaction only proceeds when ΔG is made more negative by:",
-          "- High DOC (electron donor)",
-          "- Low H2S (product removal)",
-          "- Absence of competing electron acceptors (O2, NO3-N)"
-        ]
-      },
-
-      "1": {
-        "_name": "sulfate_reduction",
-        "_description": "SO4-S reduction to H2S - thermodynamically controlled",
-        "consumed": "SO4-S",
-        "produced": "H2S",
-        "kinetics": [
-          "k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * max(0, (1 - exp(-(max(0, 25 + 20*log10(max(0.001,(DOC/12)/(H2S/32+0.001)))) - 20)/(2*0.008314*(T+273)))))",
-          "mg-S/L/day"
-        ],
-        "parameter_names": ["k_srb", "Km_SO4-S", "Km_DOC", "Ki_O2", "Ki_NO3-N"],
-        "parameter_values": {
-          "k_srb": 8.0,
-          "Km_SO4-S": 5.0,
-          "Km_DOC": 3.0,
-          "Ki_O2": 0.1,
-          "Ki_NO3-N": 0.2
+    "_DESCRIPTION": "Sulfate Reduction with Thermodynamic Control",
+    "_REFERENCE": "Jin & Bethke (2007); Thullner et al. (2007)",
+    "_REACTION": "2 CH2O + SO4-S-- + 2 H+ -> 2 CO2 + H2S + 2 H2O",
+    "_DELTA_G0": "-25 kJ/mol e- (low energy yield - sensitive to thermodynamic control)",
+    "MODULE_NAME": "NATIVE_BGC_FLEX",
+    "CHEMICAL_SPECIES": {
+        "LIST": {
+            "1": "SO4-S",
+            "2": "H2S",
+            "3": "DOC",
+            "4": "CO2",
+            "5": "DO",
+            "6": "NO3-N",
+            "7": "X_srb"
         },
-        "_notes": [
-          "log10 term approximates concentration-dependent ΔG correction",
-          "Ki terms for O2 and NO3-N inhibition (competitive exclusion)",
-          "max(0,...) ensures F_T doesn't go negative"
-        ]
-      },
-
-      "2": {
-        "_name": "srb_growth",
-        "consumed": "DOC",
-        "produced": "X_srb",
-        "kinetics": [
-          "Y_srb * k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * max(0, (1 - exp(-(max(0, 25 + 20*log10(max(0.001,(DOC/12)/(H2S/32+0.001)))) - 20)/(2*0.008314*(T+273)))))",
-          "mg/L/day"
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "SO4-S",
+            "H2S",
+            "DOC",
+            "CO2"
         ],
-        "parameter_names": ["Y_srb", "k_srb", "Km_SO4-S", "Km_DOC", "Ki_O2", "Ki_NO3-N"],
-        "parameter_values": {
-          "Y_srb": 0.2,
-          "k_srb": 8.0,
-          "Km_SO4-S": 5.0,
-          "Km_DOC": 3.0,
-          "Ki_O2": 0.1,
-          "Ki_NO3-N": 0.2
+        "_LIST_DESCRIPTIONS": {
+            "SO4-S": "Sulfate sulfur",
+            "H2S": "Dissolved hydrogen sulfide",
+            "DOC": "Dissolved organic carbon",
+            "CO2": "Dissolved carbon dioxide",
+            "DO": "Dissolved oxygen",
+            "NO3-N": "Nitrate nitrogen",
+            "X_srb": "Sulfate-reducing bacteria biomass"
         }
-      },
-
-      "3": {
-        "_name": "srb_decay",
-        "consumed": "X_srb",
-        "produced": "DOC",
-        "kinetics": ["k_decay * X_srb", "mg/L/day"],
-        "parameter_names": ["k_decay"],
-        "parameter_values": {"k_decay": 0.03}
-      },
-
-      "4": {
-        "_name": "sulfide_oxidation",
-        "_description": "Chemical oxidation of H2S when O2 present",
-        "consumed": "H2S",
-        "produced": "SO4-S",
-        "kinetics": ["k_ox * H2S * DO", "mg-S/L/day"],
-        "parameter_names": ["k_ox"],
-        "parameter_values": {"k_ox": 5.0}
-      }
+    },
+    "CYCLING_FRAMEWORKS": {
+        "SULFATE_REDUCTION_THERMO": {
+            "LIST_TRANSFORMATIONS": {
+                "1": "sulfate_reduction",
+                "2": "srb_growth",
+                "3": "srb_decay",
+                "4": "sulfide_oxidation"
+            },
+            "_THERMODYNAMIC_CONSTANTS": {
+                "deltaG0": -25.0,
+                "deltaG_ATP": 45.0,
+                "deltaG_min_observed": -19.1,
+                "chi": 2,
+                "R_kJ": 0.008314,
+                "NOTES": [
+                    "Low \u0394G\u00b0 means F_T is very sensitive to conditions",
+                    "At standard conditions: F_T = 1 - exp(-(25-45)/(2*0.008314*293))",
+                    "= 1 - exp(20/4.87) = 1 - exp(4.1) < 0 \u2192 F_T = 0",
+                    "Reaction only proceeds when \u0394G is made more negative by:",
+                    "- High DOC (electron donor)",
+                    "- Low H2S (product removal)",
+                    "- Absence of competing electron acceptors (O2, NO3-N)"
+                ]
+            },
+            "1": {
+                "_name": "sulfate_reduction",
+                "_description": "SO4-S reduction to H2S - thermodynamically controlled",
+                "CONSUMED": "SO4-S",
+                "PRODUCED": "H2S",
+                "KINETICS": [
+                    "k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * max(0, (1 - exp(-(max(0, 25 + 20*log10(max(0.001,(DOC/12)/(H2S/32+0.001)))) - 20)/(2*0.008314*(T+273)))))",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_srb",
+                    "Km_SO4-S",
+                    "Km_DOC",
+                    "Ki_O2",
+                    "Ki_NO3-N"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_srb": 8.0,
+                    "Km_SO4-S": 5.0,
+                    "Km_DOC": 3.0,
+                    "Ki_O2": 0.1,
+                    "Ki_NO3-N": 0.2
+                },
+                "_notes": [
+                    "log10 term approximates concentration-dependent \u0394G correction",
+                    "Ki terms for O2 and NO3-N inhibition (competitive exclusion)",
+                    "max(0,...) ensures F_T doesn't go negative"
+                ]
+            },
+            "2": {
+                "_name": "srb_growth",
+                "CONSUMED": "DOC",
+                "PRODUCED": "X_srb",
+                "KINETICS": [
+                    "Y_srb * k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * max(0, (1 - exp(-(max(0, 25 + 20*log10(max(0.001,(DOC/12)/(H2S/32+0.001)))) - 20)/(2*0.008314*(T+273)))))",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "Y_srb",
+                    "k_srb",
+                    "Km_SO4-S",
+                    "Km_DOC",
+                    "Ki_O2",
+                    "Ki_NO3-N"
+                ],
+                "PARAMETER_VALUES": {
+                    "Y_srb": 0.2,
+                    "k_srb": 8.0,
+                    "Km_SO4-S": 5.0,
+                    "Km_DOC": 3.0,
+                    "Ki_O2": 0.1,
+                    "Ki_NO3-N": 0.2
+                }
+            },
+            "3": {
+                "_name": "srb_decay",
+                "CONSUMED": "X_srb",
+                "PRODUCED": "DOC",
+                "KINETICS": [
+                    "k_decay * X_srb",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_decay"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_decay": 0.03
+                }
+            },
+            "4": {
+                "_name": "sulfide_oxidation",
+                "_description": "Chemical oxidation of H2S when O2 present",
+                "CONSUMED": "H2S",
+                "PRODUCED": "SO4-S",
+                "KINETICS": [
+                    "k_ox * H2S * DO",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_ox"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_ox": 5.0
+                }
+            }
+        }
     }
-  }
 }

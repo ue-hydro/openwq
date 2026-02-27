@@ -1,250 +1,418 @@
 {
-  "_DESCRIPTION": "Complete Phosphorus Cycle - All P forms with redox-dependent release",
-  "_REFERENCE": "WASP8, CE-QUAL-W2, Chapra (2008)",
-  "_VERSION": "1.0",
-
-  "BIOGEOCHEMISTRY_CONFIGURATION": {
+    "_DESCRIPTION": "Complete Phosphorus Cycle - All P forms with redox-dependent release",
+    "_REFERENCE": "WASP8, CE-QUAL-W2, Chapra (2008)",
+    "_VERSION": "1.0",
     "CHEMICAL_SPECIES": {
-      "PO4-P": {
-        "DESCRIPTION": "Dissolved reactive phosphorus (orthophosphate)",
-        "UNITS": "mg/L as P",
-        "INITIAL_CONDITION": 0.05
-      },
-      "DOP": {
-        "DESCRIPTION": "Dissolved organic phosphorus",
-        "UNITS": "mg/L as P",
-        "INITIAL_CONDITION": 0.03
-      },
-      "POP": {
-        "DESCRIPTION": "Particulate organic phosphorus (detritus)",
-        "UNITS": "mg/L as P",
-        "INITIAL_CONDITION": 0.05
-      },
-      "PIP": {
-        "DESCRIPTION": "Particulate inorganic P (sorbed to minerals)",
-        "UNITS": "mg/L as P",
-        "INITIAL_CONDITION": 0.1
-      },
-      "ALGAE_P": {
-        "DESCRIPTION": "Algal phosphorus",
-        "UNITS": "mg/L as P",
-        "INITIAL_CONDITION": 0.02
-      },
-      "DO": {
-        "DESCRIPTION": "Dissolved oxygen",
-        "UNITS": "mg/L",
-        "INITIAL_CONDITION": 8.0
-      },
-      "Fe_II": {
-        "DESCRIPTION": "Ferrous iron (for redox-P coupling)",
-        "UNITS": "mg/L",
-        "INITIAL_CONDITION": 0.1
-      }
-    },
-
-    "CYCLING_FRAMEWORKS": {
-      "FULL_P_CYCLE": {
-        "_DESCRIPTION": "Complete phosphorus cycle with algae and redox coupling",
-
-        "POP_HYDROLYSIS": {
-          "CONSUMED": "POP",
-          "PRODUCED": "DOP",
-          "KINETICS": "k_hydrol_P * POP * 1.05^(T - 20)",
-          "PARAMETERS": {
-            "k_hydrol_P": {
-              "VALUE": 0.05,
-              "UNITS": "1/day",
-              "RANGE": [0.01, 0.2],
-              "DESCRIPTION": "POP hydrolysis rate"
-            }
-          }
+        "LIST": {
+            "1": "PO4-P",
+            "2": "DOP",
+            "3": "POP",
+            "4": "PIP",
+            "5": "ALGAE_P",
+            "6": "DO",
+            "7": "Fe_II"
         },
-
-        "DOP_MINERALIZATION": {
-          "CONSUMED": "DOP",
-          "PRODUCED": "PO4-P",
-          "KINETICS": "k_min_P * DOP * 1.06^(T - 20)",
-          "PARAMETERS": {
-            "k_min_P": {
-              "VALUE": 0.03,
-              "UNITS": "1/day",
-              "RANGE": [0.01, 0.15],
-              "DESCRIPTION": "DOP mineralization rate"
-            }
-          }
-        },
-
-        "P_ADSORPTION": {
-          "CONSUMED": "PO4-P",
-          "PRODUCED": "PIP",
-          "KINETICS": "k_ads_P * PO4-P * (PIP_max - PIP) / PIP_max",
-          "PARAMETERS": {
-            "k_ads_P": {
-              "VALUE": 1.0,
-              "UNITS": "1/day",
-              "RANGE": [0.1, 5.0],
-              "DESCRIPTION": "P adsorption rate"
-            },
-            "PIP_max": {
-              "VALUE": 1.0,
-              "UNITS": "mg/L",
-              "DESCRIPTION": "Maximum PIP capacity (Langmuir)"
-            }
-          },
-          "NOTES": "Langmuir-type sorption with capacity limit"
-        },
-
-        "P_DESORPTION": {
-          "CONSUMED": "PIP",
-          "PRODUCED": "PO4-P",
-          "KINETICS": "k_des_P * PIP * 1.04^(T - 20)",
-          "PARAMETERS": {
-            "k_des_P": {
-              "VALUE": 0.02,
-              "UNITS": "1/day",
-              "RANGE": [0.005, 0.1],
-              "DESCRIPTION": "P desorption rate"
-            }
-          }
-        },
-
-        "REDOX_P_RELEASE": {
-          "CONSUMED": "PIP",
-          "PRODUCED": "PO4-P",
-          "KINETICS": "k_redox_P * PIP * (K_O2_P / (K_O2_P + DO)) * 1.08^(T - 20)",
-          "PARAMETERS": {
-            "k_redox_P": {
-              "VALUE": 0.1,
-              "UNITS": "1/day",
-              "RANGE": [0.01, 0.5],
-              "DESCRIPTION": "Anoxic P release rate"
-            },
-            "K_O2_P": {
-              "VALUE": 1.0,
-              "UNITS": "mg/L",
-              "RANGE": [0.5, 2.0],
-              "DESCRIPTION": "O2 threshold for P release"
-            }
-          },
-          "NOTES": "Fe-bound P released under anoxic conditions"
-        },
-
-        "ALGAE_P_UPTAKE": {
-          "CONSUMED": "PO4-P",
-          "PRODUCED": "ALGAE_P",
-          "KINETICS": "mu_max * ALGAE_P * (PO4-P / (K_P + PO4-P)) * f_light * f_temp",
-          "PARAMETERS": {
-            "mu_max": {
-              "VALUE": 1.5,
-              "UNITS": "1/day",
-              "RANGE": [0.5, 3.0],
-              "DESCRIPTION": "Maximum algal growth rate"
-            },
-            "K_P": {
-              "VALUE": 0.01,
-              "UNITS": "mg/L",
-              "RANGE": [0.005, 0.05],
-              "DESCRIPTION": "Half-saturation P for algae"
-            },
-            "f_light": {
-              "VALUE": 1.0,
-              "DESCRIPTION": "Light limitation factor (0-1)"
-            },
-            "f_temp": {
-              "VALUE": 1.0,
-              "DESCRIPTION": "Temperature factor"
-            }
-          }
-        },
-
-        "ALGAE_RESPIRATION": {
-          "CONSUMED": "ALGAE_P",
-          "PRODUCED": "PO4-P",
-          "KINETICS": "k_resp * ALGAE_P * 1.08^(T - 20)",
-          "PARAMETERS": {
-            "k_resp": {
-              "VALUE": 0.1,
-              "UNITS": "1/day",
-              "RANGE": [0.05, 0.2],
-              "DESCRIPTION": "Algal respiration rate"
-            }
-          }
-        },
-
-        "ALGAE_DEATH": {
-          "CONSUMED": "ALGAE_P",
-          "PRODUCED": "POP",
-          "KINETICS": "k_death * ALGAE_P",
-          "PARAMETERS": {
-            "k_death": {
-              "VALUE": 0.05,
-              "UNITS": "1/day",
-              "RANGE": [0.02, 0.15],
-              "DESCRIPTION": "Algal death/senescence rate"
-            }
-          }
-        },
-
-        "POP_SETTLING": {
-          "CONSUMED": "POP",
-          "PRODUCED": "SED_P_loss",
-          "KINETICS": "v_s_POP / depth * POP",
-          "PARAMETERS": {
-            "v_s_POP": {
-              "VALUE": 0.5,
-              "UNITS": "m/day",
-              "RANGE": [0.1, 2.0],
-              "DESCRIPTION": "POP settling velocity"
-            },
-            "depth": {
-              "VALUE": 2.0,
-              "UNITS": "m"
-            }
-          }
-        },
-
-        "PIP_SETTLING": {
-          "CONSUMED": "PIP",
-          "PRODUCED": "SED_P_loss",
-          "KINETICS": "v_s_PIP / depth * PIP",
-          "PARAMETERS": {
-            "v_s_PIP": {
-              "VALUE": 1.0,
-              "UNITS": "m/day",
-              "RANGE": [0.2, 3.0],
-              "DESCRIPTION": "PIP settling velocity (denser)"
-            },
-            "depth": {"VALUE": 2.0, "UNITS": "m"}
-          }
-        },
-
-        "SEDIMENT_P_FLUX": {
-          "CONSUMED": "NONE",
-          "PRODUCED": "PO4-P",
-          "KINETICS": "J_P / depth * (K_O2_sed / (K_O2_sed + DO))",
-          "PARAMETERS": {
-            "J_P": {
-              "VALUE": 5.0,
-              "UNITS": "mg/m2/day",
-              "RANGE": [1.0, 50.0],
-              "DESCRIPTION": "Sediment P flux (anoxic max)"
-            },
-            "K_O2_sed": {
-              "VALUE": 2.0,
-              "UNITS": "mg/L",
-              "DESCRIPTION": "O2 threshold for sediment release"
-            },
-            "depth": {"VALUE": 2.0, "UNITS": "m"}
-          },
-          "NOTES": "Internal loading from sediments under anoxia"
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "PO4-P",
+            "DOP",
+            "POP",
+            "PIP",
+            "ALGAE_P",
+            "DO",
+            "Fe_II"
+        ],
+        "_LIST_DESCRIPTIONS": {
+            "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
+            "DOP": "Dissolved organic phosphorus",
+            "POP": "Particulate organic phosphorus (detritus)",
+            "PIP": "Particulate inorganic P (sorbed to minerals)",
+            "ALGAE_P": "Algal phosphorus",
+            "DO": "Dissolved oxygen",
+            "Fe_II": "Ferrous iron (for redox-P coupling)"
         }
-      }
     },
-
-    "COMPARTMENT_ASSIGNMENT": {
-      "LAKE": ["FULL_P_CYCLE"],
-      "RESERVOIR": ["FULL_P_CYCLE"],
-      "RIVER": ["FULL_P_CYCLE"]
+    "CYCLING_FRAMEWORKS": {
+        "FULL_P_CYCLE": {
+            "_DESCRIPTION": "Complete phosphorus cycle with algae and redox coupling",
+            "LIST_TRANSFORMATIONS": {
+                "1": "POP_HYDROLYSIS",
+                "2": "DOP_MINERALIZATION",
+                "3": "P_ADSORPTION",
+                "4": "P_DESORPTION",
+                "5": "REDOX_P_RELEASE",
+                "6": "ALGAE_P_UPTAKE",
+                "7": "ALGAE_RESPIRATION",
+                "8": "ALGAE_DEATH",
+                "9": "POP_SETTLING",
+                "10": "PIP_SETTLING",
+                "11": "SEDIMENT_P_FLUX"
+            },
+            "1": {
+                "_NAME": "POP_HYDROLYSIS",
+                "CONSUMED": "POP",
+                "PRODUCED": "DOP",
+                "KINETICS": [
+                    "k_hydrol_P * POP * 1.05^(T - 20)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_hydrol_P"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_hydrol_P": 0.05
+                },
+                "_PARAMETERS_INFO": {
+                    "k_hydrol_P": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.01,
+                            0.2
+                        ],
+                        "DESCRIPTION": "POP hydrolysis rate"
+                    }
+                }
+            },
+            "2": {
+                "_NAME": "DOP_MINERALIZATION",
+                "CONSUMED": "DOP",
+                "PRODUCED": "PO4-P",
+                "KINETICS": [
+                    "k_min_P * DOP * 1.06^(T - 20)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_min_P"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_min_P": 0.03
+                },
+                "_PARAMETERS_INFO": {
+                    "k_min_P": {
+                        "VALUE": 0.03,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.01,
+                            0.15
+                        ],
+                        "DESCRIPTION": "DOP mineralization rate"
+                    }
+                }
+            },
+            "3": {
+                "_NAME": "P_ADSORPTION",
+                "CONSUMED": "PO4-P",
+                "PRODUCED": "PIP",
+                "KINETICS": [
+                    "k_ads_P * PO4-P * (PIP_max - PIP) / PIP_max",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_ads_P",
+                    "PIP_max"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_ads_P": 1.0,
+                    "PIP_max": 1.0
+                },
+                "_NOTES": "Langmuir-type sorption with capacity limit",
+                "_PARAMETERS_INFO": {
+                    "k_ads_P": {
+                        "VALUE": 1.0,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.1,
+                            5.0
+                        ],
+                        "DESCRIPTION": "P adsorption rate"
+                    },
+                    "PIP_max": {
+                        "VALUE": 1.0,
+                        "UNITS": "mg/L",
+                        "DESCRIPTION": "Maximum PIP capacity (Langmuir)"
+                    }
+                }
+            },
+            "4": {
+                "_NAME": "P_DESORPTION",
+                "CONSUMED": "PIP",
+                "PRODUCED": "PO4-P",
+                "KINETICS": [
+                    "k_des_P * PIP * 1.04^(T - 20)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_des_P"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_des_P": 0.02
+                },
+                "_PARAMETERS_INFO": {
+                    "k_des_P": {
+                        "VALUE": 0.02,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.005,
+                            0.1
+                        ],
+                        "DESCRIPTION": "P desorption rate"
+                    }
+                }
+            },
+            "5": {
+                "_NAME": "REDOX_P_RELEASE",
+                "CONSUMED": "PIP",
+                "PRODUCED": "PO4-P",
+                "KINETICS": [
+                    "k_redox_P * PIP * (K_O2_P / (K_O2_P + DO)) * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_redox_P",
+                    "K_O2_P"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_redox_P": 0.1,
+                    "K_O2_P": 1.0
+                },
+                "_NOTES": "Fe-bound P released under anoxic conditions",
+                "_PARAMETERS_INFO": {
+                    "k_redox_P": {
+                        "VALUE": 0.1,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.01,
+                            0.5
+                        ],
+                        "DESCRIPTION": "Anoxic P release rate"
+                    },
+                    "K_O2_P": {
+                        "VALUE": 1.0,
+                        "UNITS": "mg/L",
+                        "RANGE": [
+                            0.5,
+                            2.0
+                        ],
+                        "DESCRIPTION": "O2 threshold for P release"
+                    }
+                }
+            },
+            "6": {
+                "_NAME": "ALGAE_P_UPTAKE",
+                "CONSUMED": "PO4-P",
+                "PRODUCED": "ALGAE_P",
+                "KINETICS": [
+                    "mu_max * ALGAE_P * (PO4-P / (K_P + PO4-P)) * f_light * f_temp",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "mu_max",
+                    "K_P",
+                    "f_light",
+                    "f_temp"
+                ],
+                "PARAMETER_VALUES": {
+                    "mu_max": 1.5,
+                    "K_P": 0.01,
+                    "f_light": 1.0,
+                    "f_temp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "mu_max": {
+                        "VALUE": 1.5,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.5,
+                            3.0
+                        ],
+                        "DESCRIPTION": "Maximum algal growth rate"
+                    },
+                    "K_P": {
+                        "VALUE": 0.01,
+                        "UNITS": "mg/L",
+                        "RANGE": [
+                            0.005,
+                            0.05
+                        ],
+                        "DESCRIPTION": "Half-saturation P for algae"
+                    },
+                    "f_light": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Light limitation factor (0-1)"
+                    },
+                    "f_temp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor"
+                    }
+                }
+            },
+            "7": {
+                "_NAME": "ALGAE_RESPIRATION",
+                "CONSUMED": "ALGAE_P",
+                "PRODUCED": "PO4-P",
+                "KINETICS": [
+                    "k_resp * ALGAE_P * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_resp"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_resp": 0.1
+                },
+                "_PARAMETERS_INFO": {
+                    "k_resp": {
+                        "VALUE": 0.1,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.05,
+                            0.2
+                        ],
+                        "DESCRIPTION": "Algal respiration rate"
+                    }
+                }
+            },
+            "8": {
+                "_NAME": "ALGAE_DEATH",
+                "CONSUMED": "ALGAE_P",
+                "PRODUCED": "POP",
+                "KINETICS": [
+                    "k_death * ALGAE_P",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_death"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_death": 0.05
+                },
+                "_PARAMETERS_INFO": {
+                    "k_death": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.02,
+                            0.15
+                        ],
+                        "DESCRIPTION": "Algal death/senescence rate"
+                    }
+                }
+            },
+            "9": {
+                "_NAME": "POP_SETTLING",
+                "CONSUMED": "POP",
+                "PRODUCED": "SED_P_loss",
+                "KINETICS": [
+                    "v_s_POP / depth * POP",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "v_s_POP",
+                    "depth"
+                ],
+                "PARAMETER_VALUES": {
+                    "v_s_POP": 0.5,
+                    "depth": 2.0
+                },
+                "_PARAMETERS_INFO": {
+                    "v_s_POP": {
+                        "VALUE": 0.5,
+                        "UNITS": "m/day",
+                        "RANGE": [
+                            0.1,
+                            2.0
+                        ],
+                        "DESCRIPTION": "POP settling velocity"
+                    },
+                    "depth": {
+                        "VALUE": 2.0,
+                        "UNITS": "m"
+                    }
+                }
+            },
+            "10": {
+                "_NAME": "PIP_SETTLING",
+                "CONSUMED": "PIP",
+                "PRODUCED": "SED_P_loss",
+                "KINETICS": [
+                    "v_s_PIP / depth * PIP",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "v_s_PIP",
+                    "depth"
+                ],
+                "PARAMETER_VALUES": {
+                    "v_s_PIP": 1.0,
+                    "depth": 2.0
+                },
+                "_PARAMETERS_INFO": {
+                    "v_s_PIP": {
+                        "VALUE": 1.0,
+                        "UNITS": "m/day",
+                        "RANGE": [
+                            0.2,
+                            3.0
+                        ],
+                        "DESCRIPTION": "PIP settling velocity (denser)"
+                    },
+                    "depth": {
+                        "VALUE": 2.0,
+                        "UNITS": "m"
+                    }
+                }
+            },
+            "11": {
+                "_NAME": "SEDIMENT_P_FLUX",
+                "CONSUMED": "NONE",
+                "PRODUCED": "PO4-P",
+                "KINETICS": [
+                    "J_P / depth * (K_O2_sed / (K_O2_sed + DO))",
+                    "mg/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "J_P",
+                    "K_O2_sed",
+                    "depth"
+                ],
+                "PARAMETER_VALUES": {
+                    "J_P": 5.0,
+                    "K_O2_sed": 2.0,
+                    "depth": 2.0
+                },
+                "_NOTES": "Internal loading from sediments under anoxia",
+                "_PARAMETERS_INFO": {
+                    "J_P": {
+                        "VALUE": 5.0,
+                        "UNITS": "mg/m2/day",
+                        "RANGE": [
+                            1.0,
+                            50.0
+                        ],
+                        "DESCRIPTION": "Sediment P flux (anoxic max)"
+                    },
+                    "K_O2_sed": {
+                        "VALUE": 2.0,
+                        "UNITS": "mg/L",
+                        "DESCRIPTION": "O2 threshold for sediment release"
+                    },
+                    "depth": {
+                        "VALUE": 2.0,
+                        "UNITS": "m"
+                    }
+                }
+            }
+        }
+    },
+    "_COMPARTMENT_ASSIGNMENT": {
+        "LAKE": [
+            "FULL_P_CYCLE"
+        ],
+        "RESERVOIR": [
+            "FULL_P_CYCLE"
+        ],
+        "RIVER": [
+            "FULL_P_CYCLE"
+        ]
     }
-  }
 }

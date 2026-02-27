@@ -163,14 +163,28 @@ def extract_species_from_bgc(
         with open(path2selected_NATIVE_BGC_FLEX_framework, 'r') as f:
             bgc_data = json.load(f)
 
-        chem_species_dict = (bgc_data
-                             .get("BIOGEOCHEMISTRY_CONFIGURATION", {})
-                             .get("CHEMICAL_SPECIES", {}))
-
-        # Keys starting with '_' are comments/descriptions, skip them
-        species = [k for k in chem_species_dict.keys()
-                   if not k.startswith("_")]
-        return species
+        # Runtime format: CHEMICAL_SPECIES.LIST at top level
+        # Legacy format: BIOGEOCHEMISTRY_CONFIGURATION.CHEMICAL_SPECIES
+        if "CHEMICAL_SPECIES" in bgc_data:
+            chem_section = bgc_data["CHEMICAL_SPECIES"]
+            if "LIST" in chem_section:
+                # Runtime format: LIST is a numbered dict {"1": "NO3-N", ...}
+                species = list(chem_section["LIST"].values())
+                return species
+            else:
+                # Old descriptive format at top level
+                species = [k for k in chem_section.keys()
+                           if not k.startswith("_")]
+                return species
+        elif "BIOGEOCHEMISTRY_CONFIGURATION" in bgc_data:
+            chem_species_dict = (bgc_data
+                                 .get("BIOGEOCHEMISTRY_CONFIGURATION", {})
+                                 .get("CHEMICAL_SPECIES", {}))
+            species = [k for k in chem_species_dict.keys()
+                       if not k.startswith("_")]
+            return species
+        else:
+            return []
 
     elif bgc_module_name == "PHREEQC":
         if phreeqc_mobile_species and len(phreeqc_mobile_species) > 0:
@@ -187,6 +201,43 @@ def extract_species_from_bgc(
             f"Cannot extract species: unknown bgc_module_name '{bgc_module_name}'. "
             f"Expected 'NATIVE_BGC_FLEX' or 'PHREEQC'."
         )
+
+
+def extract_cycling_frameworks_from_bgc(
+        path2selected_NATIVE_BGC_FLEX_framework: str,
+) -> List[str]:
+    """Extract cycling framework names from a NATIVE_BGC_FLEX JSON file.
+
+    Parameters
+    ----------
+    path2selected_NATIVE_BGC_FLEX_framework : str
+        Path to the NATIVE_BGC_FLEX JSON file.
+
+    Returns
+    -------
+    list of str
+        Framework names (keys of ``CYCLING_FRAMEWORKS``, excluding
+        underscore-prefixed metadata keys).
+    """
+    if not path2selected_NATIVE_BGC_FLEX_framework:
+        raise ValueError(
+            "extract_cycling_frameworks_from_bgc requires "
+            "path2selected_NATIVE_BGC_FLEX_framework to be set."
+        )
+    if not os.path.isfile(path2selected_NATIVE_BGC_FLEX_framework):
+        raise FileNotFoundError(
+            f"BGC framework file not found: "
+            f"{path2selected_NATIVE_BGC_FLEX_framework}"
+        )
+
+    with open(path2selected_NATIVE_BGC_FLEX_framework, 'r') as f:
+        bgc_data = json.load(f)
+
+    frameworks_section = bgc_data.get("CYCLING_FRAMEWORKS", {})
+    # Filter out metadata keys starting with underscore
+    framework_names = [k for k in frameworks_section.keys()
+                       if not k.startswith("_")]
+    return framework_names
 
 
 def _parse_docker_volume_mount(docker_compose_path: str) -> tuple:
@@ -627,13 +678,17 @@ def Gen_Input_Driver(
             ic_all_units=ic_all_units,
         )
     else:
-        # NATIVE_BGC_FLEX path (original)
+        # NATIVE_BGC_FLEX path
+        # Extract cycling framework names dynamically from the BGC template
+        cycling_fw_names = extract_cycling_frameworks_from_bgc(
+            path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework
+        )
         cJSON_lib.create_config_json(
             config_file_fullpath=config_file_fullpath,
             json_header_comment=json_header_comment,
             compartment_names=compartment_names,
-            cycling_framework=["N_cycle"],
-            chemical_species_names=["NO3-N", "NH4-N", "N_ORG_fresh", "N_ORG_stable", "N_ORG_active", "OUT"],
+            cycling_framework=cycling_fw_names,
+            chemical_species_names=chemical_species,
             ic_all_value=ic_all_value,
             ic_all_units=ic_all_units,
         )
