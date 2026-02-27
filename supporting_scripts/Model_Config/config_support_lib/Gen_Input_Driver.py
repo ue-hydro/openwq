@@ -40,6 +40,90 @@ def uniform_param(value):
     return {"0": ["IX", "IY", "IZ", "VALUE"], "1": ["ALL", 1, 1, value]}
 
 
+# Copernicus ESA CCI Land Cover availability range
+COPERNICUS_LC_YEAR_MIN = 1992
+COPERNICUS_LC_YEAR_MAX = 2022
+
+
+def parse_sim_period_from_control_file(
+        file_manager_path: str,
+        hostmodel: str,
+) -> List[int]:
+    """Extract simulation start/end years from a host-model control file.
+
+    Supports two formats:
+      - **mizuRoute**: ``<sim_start> YYYY-MM-DD HH:MM:SS``
+      - **SUMMA**:     ``simStartTime  'YYYY-MM-DD HH:MM'``
+
+    Parameters
+    ----------
+    file_manager_path : str
+        Path to the host-model control file on the HOST machine.
+    hostmodel : str
+        ``"mizuroute"`` or ``"summa"``.
+
+    Returns
+    -------
+    list of int
+        ``[start_year, end_year]`` clamped to the Copernicus CCI LC range
+        (1992–2022).
+
+    Raises
+    ------
+    FileNotFoundError
+        If *file_manager_path* does not exist.
+    ValueError
+        If the expected tags cannot be found in the file.
+    """
+    if not os.path.isfile(file_manager_path):
+        raise FileNotFoundError(
+            f"Cannot auto-detect simulation period: "
+            f"control file not found: {file_manager_path}"
+        )
+
+    with open(file_manager_path, 'r') as f:
+        content = f.read()
+
+    hm = hostmodel.strip().lower()
+    start_year = end_year = None
+
+    if hm == "mizuroute":
+        # Format:  <sim_start>  YYYY-MM-DD HH:MM:SS  ! comment
+        m_start = re.search(r'<sim_start>\s+(\d{4})-', content)
+        m_end = re.search(r'<sim_end>\s+(\d{4})-', content)
+        if m_start:
+            start_year = int(m_start.group(1))
+        if m_end:
+            end_year = int(m_end.group(1))
+
+    elif hm == "summa":
+        # Format:  simStartTime  'YYYY-MM-DD HH:MM'  ! comment
+        m_start = re.search(r"simStartTime\s+'(\d{4})-", content)
+        m_end = re.search(r"simEndTime\s+'(\d{4})-", content)
+        if m_start:
+            start_year = int(m_start.group(1))
+        if m_end:
+            end_year = int(m_end.group(1))
+
+    else:
+        raise ValueError(
+            f"Cannot auto-detect simulation period: "
+            f"unknown hostmodel '{hostmodel}'. Expected 'mizuroute' or 'summa'."
+        )
+
+    if start_year is None or end_year is None:
+        raise ValueError(
+            f"Cannot auto-detect simulation period from '{file_manager_path}'.\n"
+            f"  Expected tags: "
+            + ("<sim_start>/<sim_end>" if hm == "mizuroute"
+               else "simStartTime/simEndTime")
+            + " with YYYY-MM-DD format.\n"
+            f"  Set ss_method_copernicus_period = [start_year, end_year] manually."
+        )
+
+    return [start_year, end_year]
+
+
 def _parse_docker_volume_mount(docker_compose_path: str) -> tuple:
     """
     Parse docker-compose.yml to extract the volume mount mapping.
@@ -561,6 +645,100 @@ def Gen_Input_Driver(
     ###############
     # Call gen_ss_driver
     ###############
+
+    # ── Auto-detect Copernicus period from host-model control file ─────
+    if ss_method in ("using_copernicus_lulc_with_static_coeff",
+                     "using_copernicus_lulc_with_dynamic_coeff"):
+
+        if ss_method_copernicus_period is None:
+            # Auto-detect from the host-model control file
+            _fm_path = kwargs.get('file_manager_path')
+            if _fm_path is None:
+                raise ValueError(
+                    "ss_method_copernicus_period is None (auto-detect), but "
+                    "file_manager_path was not provided. Either set "
+                    "ss_method_copernicus_period = [start_year, end_year] "
+                    "or provide file_manager_path."
+                )
+            ss_method_copernicus_period = parse_sim_period_from_control_file(
+                file_manager_path=_fm_path,
+                hostmodel=hostmodel,
+            )
+            print(f"\n  ℹ  Copernicus period auto-detected from control file:")
+            print(f"     Simulation period: {ss_method_copernicus_period[0]}"
+                  f"–{ss_method_copernicus_period[1]}")
+
+        # Report Copernicus availability vs requested period
+        req_start = int(ss_method_copernicus_period[0])
+        req_end = int(ss_method_copernicus_period[1])
+        cop_start = max(req_start, COPERNICUS_LC_YEAR_MIN)
+        cop_end = min(req_end, COPERNICUS_LC_YEAR_MAX)
+
+        # User preference: use proxy year when outside Copernicus range?
+        _use_proxy = kwargs.get('ss_method_copernicus_use_proxy_if_outside_range', True)
+
+        _is_fully_outside = (req_start > COPERNICUS_LC_YEAR_MAX
+                             or req_end < COPERNICUS_LC_YEAR_MIN)
+        _is_partially_outside = (req_start < COPERNICUS_LC_YEAR_MIN
+                                 or req_end > COPERNICUS_LC_YEAR_MAX)
+
+        print(f"\n  ── Copernicus ESA CCI Land Cover ──")
+        print(f"     Available range:  {COPERNICUS_LC_YEAR_MIN}–{COPERNICUS_LC_YEAR_MAX}")
+        print(f"     Requested period: {req_start}–{req_end}")
+        print(f"     Use proxy year if outside range: {_use_proxy}")
+
+        if _is_fully_outside:
+            cop_start = min(max(req_start, COPERNICUS_LC_YEAR_MIN), COPERNICUS_LC_YEAR_MAX)
+            cop_end = cop_start
+            if _use_proxy:
+                print(f"     ⚠  WARNING: Simulation period ({req_start}–{req_end}) "
+                      f"is entirely outside Copernicus range "
+                      f"({COPERNICUS_LC_YEAR_MIN}–{COPERNICUS_LC_YEAR_MAX}).")
+                print(f"        → Using nearest available year ({cop_start}) as proxy.")
+                print(f"          (ss_method_copernicus_use_proxy_if_outside_range = True)")
+            else:
+                raise ValueError(
+                    f"\n  ✗  ABORTED: Simulation period ({req_start}–{req_end}) "
+                    f"is entirely outside Copernicus range "
+                    f"({COPERNICUS_LC_YEAR_MIN}–{COPERNICUS_LC_YEAR_MAX}).\n"
+                    f"     Proxy years are disabled "
+                    f"(ss_method_copernicus_use_proxy_if_outside_range = False).\n"
+                    f"     Options:\n"
+                    f"       1. Set ss_method_copernicus_use_proxy_if_outside_range = True "
+                    f"to use the nearest available year as proxy.\n"
+                    f"       2. Set ss_method_copernicus_period = [{COPERNICUS_LC_YEAR_MIN}, "
+                    f"{COPERNICUS_LC_YEAR_MAX}] to use the full Copernicus range.\n"
+                    f"       3. Use ss_method = 'load_from_csv' to provide your own load data."
+                )
+        elif _is_partially_outside:
+            if _use_proxy:
+                print(f"     ⚠  Note: Simulation extends beyond Copernicus range.")
+                print(f"        → Using Copernicus data for: {cop_start}–{cop_end}")
+                print(f"          Years outside {COPERNICUS_LC_YEAR_MIN}–{COPERNICUS_LC_YEAR_MAX} "
+                      f"will use the nearest available year as proxy.")
+                print(f"          (ss_method_copernicus_use_proxy_if_outside_range = True)")
+            else:
+                raise ValueError(
+                    f"\n  ✗  ABORTED: Simulation period ({req_start}–{req_end}) "
+                    f"extends beyond Copernicus range "
+                    f"({COPERNICUS_LC_YEAR_MIN}–{COPERNICUS_LC_YEAR_MAX}).\n"
+                    f"     Proxy years are disabled "
+                    f"(ss_method_copernicus_use_proxy_if_outside_range = False).\n"
+                    f"     Options:\n"
+                    f"       1. Set ss_method_copernicus_use_proxy_if_outside_range = True "
+                    f"to use the nearest available year for out-of-range periods.\n"
+                    f"       2. Set ss_method_copernicus_period = [{cop_start}, {cop_end}] "
+                    f"to restrict to the available range.\n"
+                    f"       3. Use ss_method = 'load_from_csv' to provide your own load data."
+                )
+        else:
+            print(f"     ✓  Full coverage: Copernicus data available for "
+                  f"{cop_start}–{cop_end}")
+
+        # Clamp the period to what Copernicus actually has
+        ss_method_copernicus_period = [cop_start, cop_end]
+        print()
+
     if (ss_method == "load_from_csv"):
 
         ssJSON_lib.set_ss_from_csv(
