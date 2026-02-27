@@ -376,12 +376,22 @@ ss_method_copernicus_compartment_name_for_load = "RIVER_NETWORK_REACHES"
 # Path to Copernicus ESA CCI Land Cover data.
 #   None → auto-download from CDS (requires: pip install cdsapi + ~/.cdsapirc)
 #          Downloads the global file (~2.2 GB), clips to basin bbox, deletes global.
-#          See: https://cds.climate.copernicus.eu/how-to-api
+#          API setup: https://cds.climate.copernicus.eu/how-to-api
 #   path → use a local directory with pre-downloaded NetCDF/GeoTIFF files.
+#          Manual download: https://cds.climate.copernicus.eu/datasets/satellite-land-cover
 ss_method_copernicus_nc_lc_dir = '/Users/diogocosta/Documents/ESACCI-LC/'
 
 # Simulation period [start_year, end_year].
-ss_method_copernicus_period = [1993, 1994]
+#   None → auto-detected from the host-model control file (file_manager_path).
+#          Reads <sim_start>/<sim_end> for mizuRoute or simStartTime/simEndTime for SUMMA.
+#   [start, end] → override with explicit years (e.g., [1993, 2020]).
+#   Copernicus ESA CCI LC is available for 1992–2022.
+ss_method_copernicus_period = None
+
+# What to do if the simulation period falls outside the Copernicus range (1992–2022)?
+#   True  → use the nearest available year as proxy (e.g., 1985 → uses 1992 data)
+#   False → abort with an error explaining the mismatch
+ss_method_copernicus_use_proxy_if_outside_range = True
 
 # Use built-in export coefficients (literature-based defaults)?
 #   True  → uses internal lookup table of nutrient loads per LULC class.
@@ -570,9 +580,9 @@ river_network_shapefile = None   # e.g., "/path/to/river_network.shp"
 grqa_local_data_path = None
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  END OF USER CONFIGURATION — do not edit below this line                 ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# ╔════════════════════════════════════════════════════════════════════════╗
+# ║  END OF USER CONFIGURATION — do not edit below this line               ║
+# ╚════════════════════════════════════════════════════════════════════════╝
 
 import webbrowser
 from Run_Model import run_model_in_container
