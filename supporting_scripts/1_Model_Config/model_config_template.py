@@ -572,15 +572,19 @@ open_report = True   # Automatically open the report in your browser when done.
 # River network shapefile — used for the interactive map in the report.
 # Set to None to skip the map, or provide a path to .shp or .gpkg.
 # Basin polygons are automatically loaded from ss_method_copernicus_basin_info above.
-river_network_shapefile = None   # e.g., "/path/to/river_network.shp"
+river_network_shapefile = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/mizuSegId.shp"   # e.g., "/path/to/river_network.shp"
 
 # GRQA observation data (Global River Water Quality Archive).
-# Used to overlay real monitoring station data on your simulation results.
-#   None → auto-download from Zenodo (one-time ~1.2 GB download, cached locally).
-#          Only CSVs matching your species are extracted from the archive.
-#   path → path to a pre-downloaded GRQA folder.
-#          Download: https://zenodo.org/records/15335450
-grqa_local_data_path = None
+# Used to overlay real monitoring station locations on the map and
+# generate a data availability report for your species.
+#
+# Options:
+#   "auto" → auto-download from Zenodo (one-time ~1.2 GB download, cached locally).
+#            Only CSVs matching your species are extracted from the archive.
+#   "/path/to/grqa/" → use a pre-downloaded GRQA folder.
+#            Download: https://zenodo.org/records/15335450
+#   "skip"  → skip GRQA entirely (no station overlay, no data report)
+grqa_local_data_path = "auto"
 
 
 # ╔════════════════════════════════════════════════════════════════════════╗

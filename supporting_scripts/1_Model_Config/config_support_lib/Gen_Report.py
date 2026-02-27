@@ -32,16 +32,16 @@ import datetime
 import glob as _glob
 import numpy as np
 
-# HDF5 reader — add Read_Outputs to path
+# HDF5 reader — add 2_Read_Outputs to path
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 _read_outputs_dir = os.path.normpath(
-    os.path.join(_this_dir, '..', '..', 'Read_Outputs', 'hdf5_support_lib'))
+    os.path.join(_this_dir, '..', '..', '2_Read_Outputs', 'hdf5_support_lib'))
 if _read_outputs_dir not in sys.path:
     sys.path.insert(0, _read_outputs_dir)
 
-# GRQA extraction tools — add Calibration path
+# GRQA extraction tools — add 3_Calibration path
 _calibration_dir = os.path.normpath(
-    os.path.join(_this_dir, '..', '..', 'Calibration'))
+    os.path.join(_this_dir, '..', '..', '3_Calibration'))
 if _calibration_dir not in sys.path:
     sys.path.insert(0, _calibration_dir)
 
@@ -509,8 +509,8 @@ def _build_map_layers(river_network_shapefile, basin_shapefile):
             layers.append({
                 'geojson_str': json.dumps(geojson),
                 'label': 'Basin',
-                'style': {'color': '#2d6a4f', 'weight': 1.5, 'opacity': 0.7,
-                          'fillOpacity': 0.15},
+                'style': {'color': '#ffffff', 'weight': 1.5, 'opacity': 0.9,
+                          'fillOpacity': 0.08},
                 'type': 'polygon',
             })
             all_bounds.append(bounds)
@@ -715,9 +715,10 @@ def generate_simulation_report(
         river_network_shapefile: path to river network shapefile (.shp/.gpkg)
         basin_shapefile: path to basin/catchment shapefile (auto-loaded from
             ss_method_copernicus_basin_info if available)
-        grqa_local_data_path: path to pre-downloaded GRQA data folder, or None
-            to download automatically. If river_network_shapefile is also set,
-            GRQA observation stations will be extracted and shown on the map.
+        grqa_local_data_path: "auto" or None to download from Zenodo,
+            a path to pre-downloaded GRQA folder, or "skip" to disable.
+            When enabled and river_network_shapefile is set, GRQA observation
+            stations are shown on the map and a data availability report is generated.
 
     Returns the path to the generated HTML file.
     """
@@ -738,11 +739,20 @@ def generate_simulation_report(
     # GRQA observation stations
     grqa_geojson_str = None
     grqa_stats = None
-    if river_network_shapefile:
+    _grqa_skip = (isinstance(grqa_local_data_path, str)
+                  and grqa_local_data_path.strip().lower() == "skip")
+    if river_network_shapefile and not _grqa_skip:
         print("  Extracting GRQA observation stations...")
+        # "auto" or None → download from Zenodo; anything else → treat as path
+        _grqa_path = None
+        if isinstance(grqa_local_data_path, str) and \
+                grqa_local_data_path.strip().lower() not in ("auto", ""):
+            _grqa_path = grqa_local_data_path
         grqa_geojson_str, grqa_stats = _extract_grqa_for_report(
             river_network_shapefile, chemical_species,
-            output_dir, grqa_local_data_path)
+            output_dir, _grqa_path)
+    elif _grqa_skip:
+        print("  GRQA: skipped by user (grqa_local_data_path = 'skip').")
 
     # Read source/sink config for summary
     ss_config_path = os.path.join(output_dir, 'openwq_in',
@@ -1458,7 +1468,7 @@ Plotly.newPlot('{plot_id}',{json.dumps(traces)},
   var topoTile = L.tileLayer('https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png',{{
     attribution:'OpenTopoMap', maxZoom:17}});
 {chr(10).join(layer_js_blocks)}
-  L.control.layers({{'Satellite':satTile,'Light':lightTile,'Topo':topoTile}}, {overlay_obj}).addTo(map);
+  L.control.layers({{'Satellite':satTile,'Light':lightTile,'Topo':topoTile}}, {overlay_obj}, {{collapsed:false}}).addTo(map);
   var _fitBounds = null;
   try{{ _fitBounds = {fit_var}.getBounds(); map.fitBounds(_fitBounds); }}catch(e){{}}
   L.control.scale().addTo(map);
