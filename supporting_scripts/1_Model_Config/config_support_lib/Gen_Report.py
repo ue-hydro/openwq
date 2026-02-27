@@ -539,30 +539,40 @@ def _build_map_layers(river_network_shapefile, basin_shapefile):
     return layers, map_center
 
 
-def _extract_grqa_for_report(river_network_shapefile, chemical_species,
-                              output_dir, grqa_local_data_path=None):
+def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
+                              chemical_species, output_dir,
+                              grqa_local_data_path=None,
+                              grqa_buffer_km=10):
     """Extract GRQA observation stations for the simulated species.
 
-    Uses the GRQACalibrationExtractor to find monitoring stations near the
-    river network that have observations for the species being simulated.
+    Search strategy:
+      1. If a basin shapefile is provided, use it as the search area
+         (with a user-defined buffer around the basin boundary).
+      2. Otherwise use the buffer around the river network.
+
+    After extraction the clipped observations are saved to
+    ``openwq_in/grqa_clipped_data/`` and the raw cache (full GRQA CSVs)
+    is deleted to free disk space.
 
     Parameters:
-        river_network_shapefile: path to river network shapefile
-        chemical_species: list of model species names (e.g. ['NO3-N', 'NH4-N'])
-        output_dir: directory to cache GRQA extraction results
+        river_network_shapefile: path to river network shapefile (or None)
+        basin_shapefile: path to basin/catchment shapefile (or None)
+        chemical_species: list of model species names
+        output_dir: base directory (where openwq_in/ lives)
         grqa_local_data_path: path to pre-downloaded GRQA data (or None)
+        grqa_buffer_km: buffer distance in km around basin/river network
 
     Returns:
         (stations_geojson_str, grqa_stats) or (None, None) on failure.
-        grqa_stats is a dict with keys: n_stations, n_observations,
-        species_stats (list), year_range, etc.
     """
     if not _GRQA_AVAILABLE:
         print("  GRQA tools not available (missing geopandas/shapely). Skipping.")
         return None, None
 
-    if not river_network_shapefile or not os.path.isfile(river_network_shapefile):
-        print("  No river network shapefile — skipping GRQA extraction.")
+    # Need at least one shapefile to define the search area
+    shp_for_search = basin_shapefile or river_network_shapefile
+    if not shp_for_search or not os.path.isfile(shp_for_search):
+        print("  No shapefile available for GRQA spatial search. Skipping.")
         return None, None
 
     # Build species mapping: GRQA code → model species name
@@ -577,39 +587,82 @@ def _extract_grqa_for_report(river_network_shapefile, chemical_species,
         return None, None
 
     grqa_params = list(species_mapping.keys())
+    buffer_m = grqa_buffer_km * 1000
     print(f"  GRQA species mapping: {species_mapping}")
     print(f"  Will extract {len(grqa_params)} GRQA parameters: {', '.join(grqa_params)}")
+    print(f"  Search buffer: {grqa_buffer_km} km")
     if grqa_local_data_path is None:
         print("  No local GRQA data provided — will download from Zenodo (one-time, ~1.2 GB).")
         print("  Tip: set grqa_local_data_path to skip future downloads.")
 
-    grqa_output_dir = os.path.join(output_dir, 'openwq_in', 'grqa_report_data')
+    grqa_output_dir = os.path.join(output_dir, 'openwq_in', 'grqa_clipped_data')
 
     try:
+        import shutil
+        import geopandas as gpd
+        from shapely.geometry import mapping
+        from shapely.ops import unary_union
+        import pandas as pd
+
+        # ── Determine search buffer ──
+        if basin_shapefile and os.path.isfile(basin_shapefile):
+            print(f"  Using basin shapefile for GRQA search area (+ {grqa_buffer_km} km buffer).")
+            basin_gdf = gpd.read_file(basin_shapefile)
+            if basin_gdf.crs and not basin_gdf.crs.is_geographic:
+                basin_gdf = basin_gdf.to_crs(epsg=4326)
+            # Buffer in a projected CRS (UTM)
+            centroid = basin_gdf.geometry.unary_union.centroid
+            utm_zone = int((centroid.x + 180) / 6) + 1
+            hemi = 'north' if centroid.y >= 0 else 'south'
+            utm_epsg = 32600 + utm_zone if hemi == 'north' else 32700 + utm_zone
+            basin_proj = basin_gdf.to_crs(epsg=utm_epsg)
+            search_geom = unary_union(basin_proj.geometry).buffer(buffer_m)
+            search_gdf = gpd.GeoDataFrame(geometry=[search_geom], crs=f'EPSG:{utm_epsg}')
+            search_gdf = search_gdf.to_crs(epsg=4326)
+        else:
+            print(f"  Using river network with {grqa_buffer_km} km buffer for GRQA search area.")
+
         mapper = SpeciesMapper(mapping=species_mapping)
         extractor = GRQACalibrationExtractor(
             output_dir=grqa_output_dir,
             species_mapper=mapper,
             local_data_path=grqa_local_data_path,
-            buffer_distance_m=1000,
+            buffer_distance_m=buffer_m,
         )
 
-        # Load river network — CRS reprojection to WGS84 is handled
-        # automatically by the extractor's load_river_network() method.
-        river_gdf = extractor.load_river_network(river_network_shapefile)
+        if basin_shapefile and os.path.isfile(basin_shapefile):
+            stations, observations = extractor.extract_stations_and_observations(
+                search_gdf)
+        else:
+            river_gdf = extractor.load_river_network(river_network_shapefile)
+            buffer_gdf = extractor.create_buffer(river_gdf)
+            stations, observations = extractor.extract_stations_and_observations(
+                buffer_gdf)
 
-        buffer_gdf = extractor.create_buffer(river_gdf)
-        stations, observations = extractor.extract_stations_and_observations(buffer_gdf)
+        # ── Clean up: delete the large raw cache files ──
+        cache_dir = os.path.join(grqa_output_dir, 'grqa_cache')
+        if os.path.isdir(cache_dir):
+            print(f"  Cleaning up GRQA cache ({cache_dir})...")
+            shutil.rmtree(cache_dir, ignore_errors=True)
 
         if stations is None or stations.empty:
-            print("  No GRQA stations found near the river network.")
-            return None, None
+            print("  No GRQA stations found in the search area.")
+            grqa_stats = {
+                'n_stations': 0,
+                'n_observations': 0,
+                'year_start': None,
+                'year_end': None,
+                'species_stats': [],
+                'output_dir': grqa_output_dir,
+                'searched_species': list(species_mapping.values()),
+                'buffer_km': grqa_buffer_km,
+            }
+            return None, grqa_stats
 
-        # Generate files (shapefile + CSV)
-        extractor.generate_calibration_files(prefix="report_grqa")
+        # Generate clipped observation files (CSV)
+        extractor.generate_calibration_files(prefix="grqa_clipped")
 
         # Build GeoJSON for map
-        from shapely.geometry import mapping
         features = []
         for _, row in stations.iterrows():
             props = {k: (str(v) if v is not None else '')
@@ -622,7 +675,6 @@ def _extract_grqa_for_report(river_network_shapefile, chemical_species,
         stations_geojson = {'type': 'FeatureCollection', 'features': features}
 
         # Compute statistics
-        import pandas as pd
         site_col = extractor.column_map.get('site_id', 'site_id')
         date_col = extractor.column_map.get('obs_date', 'obs_date')
 
@@ -647,6 +699,7 @@ def _extract_grqa_for_report(river_network_shapefile, chemical_species,
             'year_end': int(dates.max().year) if not dates.isna().all() else None,
             'species_stats': species_stats,
             'output_dir': grqa_output_dir,
+            'buffer_km': grqa_buffer_km,
         }
 
         return json.dumps(stations_geojson), grqa_stats
@@ -704,6 +757,7 @@ def generate_simulation_report(
         river_network_shapefile=None,
         basin_shapefile=None,
         grqa_local_data_path=None,
+        grqa_buffer_km=10,
         container_runtime="docker",
         mpi_np=2,
         run_time_seconds=0.0,
@@ -717,8 +771,7 @@ def generate_simulation_report(
             ss_method_copernicus_basin_info if available)
         grqa_local_data_path: "auto" or None to download from Zenodo,
             a path to pre-downloaded GRQA folder, or "skip" to disable.
-            When enabled and river_network_shapefile is set, GRQA observation
-            stations are shown on the map and a data availability report is generated.
+        grqa_buffer_km: buffer distance in km around basin/river for GRQA search
 
     Returns the path to the generated HTML file.
     """
@@ -741,7 +794,7 @@ def generate_simulation_report(
     grqa_stats = None
     _grqa_skip = (isinstance(grqa_local_data_path, str)
                   and grqa_local_data_path.strip().lower() == "skip")
-    if river_network_shapefile and not _grqa_skip:
+    if (river_network_shapefile or basin_shapefile) and not _grqa_skip:
         print("  Extracting GRQA observation stations...")
         # "auto" or None → download from Zenodo; anything else → treat as path
         _grqa_path = None
@@ -749,8 +802,8 @@ def generate_simulation_report(
                 grqa_local_data_path.strip().lower() not in ("auto", ""):
             _grqa_path = grqa_local_data_path
         grqa_geojson_str, grqa_stats = _extract_grqa_for_report(
-            river_network_shapefile, chemical_species,
-            output_dir, _grqa_path)
+            river_network_shapefile, basin_shapefile, chemical_species,
+            output_dir, _grqa_path, grqa_buffer_km=grqa_buffer_km)
     elif _grqa_skip:
         print("  GRQA: skipped by user (grqa_local_data_path = 'skip').")
 
@@ -1137,39 +1190,49 @@ Time series, spatial statistics, and runtime metadata are not available.
     # --- SECTION: GRQA Observations ---
     if grqa_stats:
         H.append('<div class="section" id="grqa"><h2>GRQA Observation Data</h2>')
-        H.append('<div class="highlight-box info">'
-                 '<strong>Global River Water Quality Archive (GRQA)</strong> — '
-                 'Monitoring stations near the river network with observations '
-                 'for the simulated species. '
-                 '<a href="https://zenodo.org/records/15335450" target="_blank">'
-                 'GRQA Dataset</a></div>')
+        _buf_km = grqa_stats.get('buffer_km', '?')
+        H.append(f'<div class="highlight-box info">'
+                 f'<strong>Global River Water Quality Archive (GRQA)</strong> — '
+                 f'Monitoring stations within {_buf_km} km of the basin/river network. '
+                 f'<a href="https://zenodo.org/records/15335450" target="_blank">'
+                 f'GRQA Dataset</a></div>')
 
-        # Summary KPIs
-        yr_range = ''
-        if grqa_stats.get('year_start') and grqa_stats.get('year_end'):
-            yr_range = f"{grqa_stats['year_start']}&ndash;{grqa_stats['year_end']}"
-        H.append(f"""<div class="kpi-grid" style="margin:1rem 0">
+        if grqa_stats['n_stations'] == 0:
+            # No stations found — show searched species
+            searched = grqa_stats.get('searched_species', [])
+            sp_list = ', '.join(f'<code>{s}</code>' for s in searched) if searched else 'N/A'
+            H.append(f'<div class="highlight-box" style="border-left-color:var(--accent);">'
+                     f'<strong>No GRQA monitoring stations found</strong> within '
+                     f'the basin area for the searched species: {sp_list}. '
+                     f'This is common for remote catchments with limited monitoring '
+                     f'infrastructure.</div>')
+        else:
+            # Summary KPIs
+            yr_range = ''
+            if grqa_stats.get('year_start') and grqa_stats.get('year_end'):
+                yr_range = f"{grqa_stats['year_start']}&ndash;{grqa_stats['year_end']}"
+            H.append(f"""<div class="kpi-grid" style="margin:1rem 0">
 <div class="kpi"><div class="icon">&#x1f4cd;</div><div class="value">{grqa_stats['n_stations']}</div><div class="label">Stations</div></div>
 <div class="kpi"><div class="icon">&#x1f4c8;</div><div class="value">{grqa_stats['n_observations']:,}</div><div class="label">Observations</div></div>
 <div class="kpi"><div class="icon">&#x1f4c5;</div><div class="value">{yr_range}</div><div class="label">Period</div></div>
 <div class="kpi"><div class="icon">&#x1f9ea;</div><div class="value">{len(grqa_stats.get('species_stats', []))}</div><div class="label">Species Matched</div></div>
 </div>""")
 
-        # Per-species table
-        if grqa_stats.get('species_stats'):
-            H.append('<div class="card primary"><div class="table-wrap"><table>')
-            H.append('<tr><th>Species</th><th>Stations</th><th>Observations</th>'
-                     '<th>Period</th></tr>')
-            for sp in grqa_stats['species_stats']:
-                yr = ''
-                if sp.get('year_start') and sp.get('year_end'):
-                    yr = f"{sp['year_start']}&ndash;{sp['year_end']}"
-                H.append(
-                    f'<tr><td><span class="badge badge-primary">{sp["species"]}</span></td>'
-                    f'<td class="num">{sp["n_stations"]}</td>'
-                    f'<td class="num">{sp["n_observations"]:,}</td>'
-                    f'<td>{yr}</td></tr>')
-            H.append('</table></div></div>')
+            # Per-species table
+            if grqa_stats.get('species_stats'):
+                H.append('<div class="card primary"><div class="table-wrap"><table>')
+                H.append('<tr><th>Species</th><th>Stations</th><th>Observations</th>'
+                         '<th>Period</th></tr>')
+                for sp in grqa_stats['species_stats']:
+                    yr = ''
+                    if sp.get('year_start') and sp.get('year_end'):
+                        yr = f"{sp['year_start']}&ndash;{sp['year_end']}"
+                    H.append(
+                        f'<tr><td><span class="badge badge-primary">{sp["species"]}</span></td>'
+                        f'<td class="num">{sp["n_stations"]}</td>'
+                        f'<td class="num">{sp["n_observations"]:,}</td>'
+                        f'<td>{yr}</td></tr>')
+                H.append('</table></div></div>')
 
         H.append('</div>')
 
@@ -1548,6 +1611,7 @@ def generate_report(
         river_network_shapefile=None,
         basin_shapefile=None,
         grqa_local_data_path=None,
+        grqa_buffer_km=10,
         container_runtime="docker",
         mpi_np=2,
         run_time_seconds=0.0,
@@ -1560,7 +1624,8 @@ def generate_report(
     Parameters:
         river_network_shapefile: path to river network shapefile
         basin_shapefile: path to basin/catchment shapefile
-        grqa_local_data_path: path to pre-downloaded GRQA data (or None)
+        grqa_local_data_path: "auto"/path/"skip"
+        grqa_buffer_km: buffer distance in km for GRQA station search
 
     Returns:
         str: Path to the generated HTML report, or None on failure
@@ -1591,6 +1656,7 @@ def generate_report(
             river_network_shapefile=river_network_shapefile,
             basin_shapefile=basin_shapefile,
             grqa_local_data_path=grqa_local_data_path,
+            grqa_buffer_km=grqa_buffer_km,
             container_runtime=container_runtime,
             mpi_np=mpi_np,
             run_time_seconds=run_time_seconds,
