@@ -15,8 +15,8 @@
       "2": "CH4",
       "3": "CO2",
       "4": "DO",
-      "5": "NO3_N",
-      "6": "SO4",
+      "5": "NO3-N",
+      "6": "SO4-S",
       "7": "X_meth"
     },
     "BGC_GENERAL_MOBILE_SPECIES": ["DOC", "CH4", "CO2"]
@@ -53,19 +53,19 @@
         "consumed": "DOC",
         "produced": "CH4",
         "kinetics": [
-          "k_meth * X_meth * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (Ki_SO4/(Ki_SO4+SO4)) * max(0, (1 - exp(-(max(0, 31 + 15*log10(max(0.001,(DOC/12)/(CH4/16+0.001)))) - 11)/(2*0.008314*(T+273)))))",
+          "k_meth * X_meth * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (Ki_SO4-S/(Ki_SO4-S+SO4-S)) * max(0, (1 - exp(-(max(0, 31 + 15*log10(max(0.001,(DOC/12)/(CH4/16+0.001)))) - 11)/(2*0.008314*(T+273)))))",
           "mg-C/L/day"
         ],
-        "parameter_names": ["k_meth", "Km_DOC", "Ki_O2", "Ki_NO3", "Ki_SO4"],
+        "parameter_names": ["k_meth", "Km_DOC", "Ki_O2", "Ki_NO3-N", "Ki_SO4-S"],
         "parameter_values": {
           "k_meth": 3.0,
           "Km_DOC": 5.0,
           "Ki_O2": 0.05,
-          "Ki_NO3": 0.1,
-          "Ki_SO4": 1.0
+          "Ki_NO3-N": 0.1,
+          "Ki_SO4-S": 1.0
         },
         "_notes": [
-          "Triple inhibition: O2, NO3, and SO4 all suppress methanogenesis",
+          "Triple inhibition: O2, NO3-N, and SO4-S all suppress methanogenesis",
           "Lower ΔG_min (11 kJ/mol) reflects methanogen physiology",
           "Slow rate constant reflects slow growth of methanogens"
         ]
@@ -76,17 +76,17 @@
         "consumed": "DOC",
         "produced": "X_meth",
         "kinetics": [
-          "Y_meth * k_meth * X_meth * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3/(Ki_NO3+NO3_N)) * (Ki_SO4/(Ki_SO4+SO4)) * max(0, (1 - exp(-(max(0, 31 + 15*log10(max(0.001,(DOC/12)/(CH4/16+0.001)))) - 11)/(2*0.008314*(T+273)))))",
+          "Y_meth * k_meth * X_meth * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (Ki_SO4-S/(Ki_SO4-S+SO4-S)) * max(0, (1 - exp(-(max(0, 31 + 15*log10(max(0.001,(DOC/12)/(CH4/16+0.001)))) - 11)/(2*0.008314*(T+273)))))",
           "mg/L/day"
         ],
-        "parameter_names": ["Y_meth", "k_meth", "Km_DOC", "Ki_O2", "Ki_NO3", "Ki_SO4"],
+        "parameter_names": ["Y_meth", "k_meth", "Km_DOC", "Ki_O2", "Ki_NO3-N", "Ki_SO4-S"],
         "parameter_values": {
           "Y_meth": 0.1,
           "k_meth": 3.0,
           "Km_DOC": 5.0,
           "Ki_O2": 0.05,
-          "Ki_NO3": 0.1,
-          "Ki_SO4": 1.0
+          "Ki_NO3-N": 0.1,
+          "Ki_SO4-S": 1.0
         },
         "_notes": "Low yield reflects low energy gain from methanogenesis"
       },

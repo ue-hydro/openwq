@@ -25,12 +25,12 @@
       "1": "DO",
       "2": "BOD_fast",
       "3": "BOD_slow",
-      "4": "NH4_N",
-      "5": "NO3_N",
+      "4": "NH4-N",
+      "5": "NO3-N",
       "6": "PHYTO",
       "7": "COD"
     },
-    "BGC_GENERAL_MOBILE_SPECIES": ["DO", "BOD_fast", "BOD_slow", "NH4_N", "NO3_N", "COD"]
+    "BGC_GENERAL_MOBILE_SPECIES": ["DO", "BOD_fast", "BOD_slow", "NH4-N", "NO3-N", "COD"]
   },
 
   "CYCLING_FRAMEWORKS": {
@@ -210,12 +210,12 @@
       "7": {
         "_name": "nitrification_NOD",
         "_description": "Nitrogenous oxygen demand from ammonia oxidation",
-        "_reaction": "NH4+ + 2O2 -> NO3- + H2O + 2H+",
-        "_stoichiometry": "4.57 mg O2 consumed per mg NH4-N oxidized",
+        "_reaction": "NH4-N+ + 2O2 -> NO3-N- + H2O + 2H+",
+        "_stoichiometry": "4.57 mg O2 consumed per mg NH4-N-N oxidized",
         "consumed": "DO",
-        "produced": "NO3_N",
+        "produced": "NO3-N",
         "kinetics": [
-          "k_nitrif * NH4_N * (DO / (Ks_DO_nitrif + DO)) * rO2_N * theta_nitrif^(Treach_K - 293)",
+          "k_nitrif * NH4-N * (DO / (Ks_DO_nitrif + DO)) * rO2_N * theta_nitrif^(Treach_K - 293)",
           "mg-O2/L/day"
         ],
         "parameter_names": ["k_nitrif", "Ks_DO_nitrif", "rO2_N", "theta_nitrif"],
@@ -267,7 +267,7 @@
         "_name": "cod_oxidation",
         "_description": "Immediate chemical oxygen demand from reduced substances",
         "_reaction": "Reduced compounds + O2 -> Oxidized compounds",
-        "_examples": "Fe2+ -> Fe3+, S2- -> SO4, Mn2+ -> Mn4+",
+        "_examples": "Fe2+ -> Fe3+, S2- -> SO4-S, Mn2+ -> Mn4+",
         "consumed": "DO",
         "produced": "OXIDIZED",
         "kinetics": [

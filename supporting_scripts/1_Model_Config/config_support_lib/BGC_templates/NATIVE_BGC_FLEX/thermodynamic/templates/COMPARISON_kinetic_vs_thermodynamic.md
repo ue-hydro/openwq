@@ -2,25 +2,25 @@
 
 ## The Same Reaction - Two Approaches
 
-### Denitrification: NO3 + organic C → N2 + CO2
+### Denitrification: NO3-N + organic C → N2 + CO2
 
 ---
 
 ## Approach 1: Pure Kinetic (Current BGC_FLEX)
 
 ```json
-"kinetics": ["k_denit * NO3_N * 1.07^(T - 20)", "mg-N/L/day"]
+"kinetics": ["k_denit * NO3-N * 1.07^(T - 20)", "mg-N/L/day"]
 ```
 
 **Rate equation:**
 ```
-Rate = k × [NO3] × θ^(T-20)
+Rate = k × [NO3-N] × θ^(T-20)
 ```
 
 **Characteristics:**
 - Simple first-order kinetics
-- Rate depends only on NO3 concentration and temperature
-- Reaction proceeds as long as NO3 > 0
+- Rate depends only on NO3-N concentration and temperature
+- Reaction proceeds as long as NO3-N > 0
 - No consideration of:
   - Electron donor (DOC) availability
   - Product accumulation (N2)
@@ -34,12 +34,12 @@ Rate = k × [NO3] × θ^(T-20)
 ## Approach 2: Michaelis-Menten with Inhibition (Common Enhancement)
 
 ```json
-"kinetics": ["k_max * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO))", "mg-N/L/day"]
+"kinetics": ["k_max * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO))", "mg-N/L/day"]
 ```
 
 **Rate equation:**
 ```
-Rate = k_max × [NO3]/(Km+[NO3]) × [DOC]/(Km_DOC+[DOC]) × Ki_O2/(Ki_O2+[O2])
+Rate = k_max × [NO3-N]/(Km+[NO3-N]) × [DOC]/(Km_DOC+[DOC]) × Ki_O2/(Ki_O2+[O2])
 ```
 
 **Characteristics:**
@@ -49,14 +49,14 @@ Rate = k_max × [NO3]/(Km+[NO3]) × [DOC]/(Km_DOC+[DOC]) × Ki_O2/(Ki_O2+[O2])
 - Still no thermodynamic constraint
 - Reaction can proceed even at equilibrium
 
-**Parameters to calibrate:** 4 (k_max, Km_NO3, Km_DOC, Ki_O2)
+**Parameters to calibrate:** 4 (k_max, Km_NO3-N, Km_DOC, Ki_O2)
 
 ---
 
 ## Approach 3: Thermodynamic-Kinetic (Proposed)
 
 ```json
-"kinetics": ["k_max * X * (NO3_N/(Km_NO3+NO3_N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((119-45)/(2*0.008314*(T+273)))))", "mg-N/L/day"]
+"kinetics": ["k_max * X * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((119-45)/(2*0.008314*(T+273)))))", "mg-N/L/day"]
 ```
 
 **Rate equation:**
@@ -64,7 +64,7 @@ Rate = k_max × [NO3]/(Km+[NO3]) × [DOC]/(Km_DOC+[DOC]) × Ki_O2/(Ki_O2+[O2])
 Rate = k_max × [X] × F_D × F_A × F_T
 
 where:
-  F_D = [NO3]/(Km + [NO3])           # Donor limitation
+  F_D = [NO3-N]/(Km + [NO3-N])           # Donor limitation
   F_A = [DOC]/(Km_DOC + [DOC])       # Acceptor limitation
   F_T = 1 - exp(-(ΔG - ΔG_min)/(χRT)) # Thermodynamic factor
 ```
@@ -78,7 +78,7 @@ where:
 - Rate naturally decreases as products accumulate
 - No need for arbitrary inhibition constants
 
-**Parameters:** 4 kinetic (k_max, Km_NO3, Km_DOC, X) + 2 thermodynamic (ΔG°, χ)
+**Parameters:** 4 kinetic (k_max, Km_NO3-N, Km_DOC, X) + 2 thermodynamic (ΔG°, χ)
 
 **But:** ΔG° is known from thermodynamic tables, not calibrated!
 
@@ -90,11 +90,11 @@ where:
 
 | Parameter | Value |
 |-----------|-------|
-| NO3 | 2.0 mg-N/L |
+| NO3-N | 2.0 mg-N/L |
 | DOC | 5.0 mg-C/L |
 | O2 | 0.1 mg/L |
 | k_max | 15 /day |
-| Km_NO3 | 0.5 mg-N/L |
+| Km_NO3-N | 0.5 mg-N/L |
 | Km_DOC | 2.0 mg-C/L |
 
 ### Pure Kinetic (k = 0.1 /day)
@@ -134,7 +134,7 @@ If DOC is limiting and N2 accumulates (closed system):
 
 ```
 ΔG = ΔG° + RT×ln(Q)
-   = -119 + 2.5×ln([N2][CO2]/[NO3][DOC])
+   = -119 + 2.5×ln([N2][CO2]/[NO3-N][DOC])
 ```
 
 As products accumulate, ΔG becomes less negative, F_T decreases.
@@ -145,7 +145,7 @@ As products accumulate, ΔG becomes less negative, F_T decreases.
 - Aerobic: F_T_aer = 1 - exp(-(125-45)/(2×0.008314×293)) ≈ 1.0
 - Denitrif: F_T_den = suppressed by O2 inhibition anyway
 
-**Without O2, with NO3 present:**
+**Without O2, with NO3-N present:**
 - Denitrif: F_T = 1.0 (proceeds)
 - Sulfate red: F_T = 1 - exp(-(25-45)/(2×0.008314×293))
             = 1 - exp(+20/4.87) = 1 - exp(4.1) ≈ **negative → 0**
@@ -184,11 +184,11 @@ This is the key insight: F_T automatically enforces the redox ladder.
 | Reaction | ΔG° (kJ/mol e-) | χ | ΔG_min |
 |----------|-----------------|---|--------|
 | O2 → H2O | -125 | 2 | 45 |
-| NO3 → N2 | -119 | 2 | 45 |
-| NO3 → NO2 | -92 | 2 | 45 |
+| NO3-N → N2 | -119 | 2 | 45 |
+| NO3-N → NO2-N | -92 | 2 | 45 |
 | Mn(IV) → Mn(II) | -95 | 2 | 45 |
 | Fe(III) → Fe(II) | -50 | 2 | 45 |
-| SO4 → H2S | -25 | 2 | 45 |
+| SO4-S → H2S | -25 | 2 | 45 |
 | CO2 → CH4 | -20 | 2 | 45 |
 
 **Source:** Jin & Bethke (2007), Thullner et al. (2007)

@@ -21,14 +21,14 @@
     "list": {
       "1": "PHYTO",
       "2": "DO",
-      "3": "NO3_N",
-      "4": "NH4_N",
-      "5": "PO4_P",
+      "3": "NO3-N",
+      "4": "NH4-N",
+      "5": "PO4-P",
       "6": "ZOO",
       "7": "DOC",
       "8": "Chla"
     },
-    "BGC_GENERAL_MOBILE_SPECIES": ["PHYTO", "DO", "NO3_N", "NH4_N", "PO4_P", "DOC", "Chla"]
+    "BGC_GENERAL_MOBILE_SPECIES": ["PHYTO", "DO", "NO3-N", "NH4-N", "PO4-P", "DOC", "Chla"]
   },
 
   "CYCLING_FRAMEWORKS": {
@@ -36,8 +36,8 @@
       "_description": "Multi-nutrient phytoplankton growth model with light limitation",
 
       "list_transformations": {
-        "1": "phyto_growth_NO3",
-        "2": "phyto_growth_NH4",
+        "1": "phyto_growth_NO3-N",
+        "2": "phyto_growth_NH4-N",
         "3": "phyto_P_uptake",
         "4": "phyto_respiration",
         "5": "phyto_mortality",
@@ -62,20 +62,20 @@
 
       "_NUTRIENT_LIMITATION": {
         "DESCRIPTION": "Michaelis-Menten kinetics with multiplicative or minimum limitation",
-        "NITROGEN": "f_N = (NO3_N + NH4_N) / (Ks_N + NO3_N + NH4_N)",
-        "PHOSPHORUS": "f_P = PO4_P / (Ks_P + PO4_P)",
+        "NITROGEN": "f_N = (NO3-N + NH4-N) / (Ks_N + NO3-N + NH4-N)",
+        "PHOSPHORUS": "f_P = PO4-P / (Ks_P + PO4-P)",
         "COMBINED": "Use min(f_N, f_P) for Liebig's law or f_N * f_P for multiplicative"
       },
 
       "1": {
-        "_name": "phyto_growth_NO3",
+        "_name": "phyto_growth_NO3-N",
         "_description": "Phytoplankton growth using nitrate as N source (with O2 production)",
-        "_reaction": "CO2 + NO3 + PO4 + light -> PHYTO + O2",
-        "_stoichiometry": "106 CO2 + 16 NO3 + 1 PO4 -> C106H263O110N16P (Redfield)",
-        "consumed": "NO3_N",
+        "_reaction": "CO2 + NO3-N + PO4-P + light -> PHYTO + O2",
+        "_stoichiometry": "106 CO2 + 16 NO3-N + 1 PO4-P -> C106H263O110N16P (Redfield)",
+        "consumed": "NO3-N",
         "produced": "PHYTO",
         "kinetics": [
-          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3_N+NH4_N)/(Ks_N+NO3_N+NH4_N), PO4_P/(Ks_P+PO4_P)) * (NO3_N/(NO3_N+NH4_N+0.001)) * theta_growth^(Treach_K - 293)",
+          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (NO3-N/(NO3-N+NH4-N+0.001)) * theta_growth^(Treach_K - 293)",
           "mg-C/L/day"
         ],
         "parameter_names": ["mu_max", "Iopt", "Ks_N", "Ks_P", "theta_growth"],
@@ -95,34 +95,34 @@
       },
 
       "2": {
-        "_name": "phyto_growth_NH4",
+        "_name": "phyto_growth_NH4-N",
         "_description": "Phytoplankton growth using ammonium (preferred N source)",
-        "_reaction": "CO2 + NH4 + PO4 + light -> PHYTO + O2",
-        "consumed": "NH4_N",
+        "_reaction": "CO2 + NH4-N + PO4-P + light -> PHYTO + O2",
+        "consumed": "NH4-N",
         "produced": "PHYTO",
         "kinetics": [
-          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3_N+NH4_N)/(Ks_N+NO3_N+NH4_N), PO4_P/(Ks_P+PO4_P)) * (NH4_N/(NO3_N+NH4_N+0.001)) * Pref_NH4 * theta_growth^(Treach_K - 293)",
+          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (NH4-N/(NO3-N+NH4-N+0.001)) * Pref_NH4-N * theta_growth^(Treach_K - 293)",
           "mg-C/L/day"
         ],
-        "parameter_names": ["mu_max", "Iopt", "Ks_N", "Ks_P", "Pref_NH4", "theta_growth"],
+        "parameter_names": ["mu_max", "Iopt", "Ks_N", "Ks_P", "Pref_NH4-N", "theta_growth"],
         "parameter_values": {
           "mu_max": 2.0,
           "Iopt": 300.0,
           "Ks_N": 0.025,
           "Ks_P": 0.005,
-          "Pref_NH4": 1.5,
+          "Pref_NH4-N": 1.5,
           "theta_growth": 1.068
         },
-        "_notes": "NH4 is preferred over NO3 (less energy required for assimilation)"
+        "_notes": "NH4-N is preferred over NO3-N (less energy required for assimilation)"
       },
 
       "3": {
         "_name": "phyto_P_uptake",
         "_description": "Phosphorus uptake by phytoplankton",
-        "consumed": "PO4_P",
+        "consumed": "PO4-P",
         "produced": "PHYTO",
         "kinetics": [
-          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3_N+NH4_N)/(Ks_N+NO3_N+NH4_N), PO4_P/(Ks_P+PO4_P)) * (1/rCP) * theta_growth^(Treach_K - 293)",
+          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (1/rCP) * theta_growth^(Treach_K - 293)",
           "mg-P/L/day"
         ],
         "parameter_names": ["mu_max", "Iopt", "Ks_N", "Ks_P", "rCP", "theta_growth"],
@@ -140,9 +140,9 @@
       "4": {
         "_name": "phyto_respiration",
         "_description": "Algal dark respiration (basal metabolism)",
-        "_reaction": "PHYTO + O2 -> CO2 + NH4 + PO4",
+        "_reaction": "PHYTO + O2 -> CO2 + NH4-N + PO4-P",
         "consumed": "PHYTO",
-        "produced": "NH4_N",
+        "produced": "NH4-N",
         "kinetics": [
           "k_resp * PHYTO * theta_resp^(Treach_K - 293)",
           "mg-C/L/day"
@@ -217,7 +217,7 @@
         "_name": "zoo_respiration",
         "_description": "Zooplankton respiration",
         "consumed": "ZOO",
-        "produced": "NH4_N",
+        "produced": "NH4-N",
         "kinetics": [
           "k_resp_zoo * ZOO * theta_zoo^(Treach_K - 293)",
           "mg-C/L/day"
@@ -252,7 +252,7 @@
         "consumed": "PHYTO",
         "produced": "Chla",
         "kinetics": [
-          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3_N+NH4_N)/(Ks_N+NO3_N+NH4_N), PO4_P/(Ks_P+PO4_P)) * ratio_Chla_C * theta_growth^(Treach_K - 293)",
+          "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * ratio_Chla_C * theta_growth^(Treach_K - 293)",
           "ug-Chla/L/day"
         ],
         "parameter_names": ["mu_max", "Iopt", "Ks_N", "Ks_P", "ratio_Chla_C", "theta_growth"],

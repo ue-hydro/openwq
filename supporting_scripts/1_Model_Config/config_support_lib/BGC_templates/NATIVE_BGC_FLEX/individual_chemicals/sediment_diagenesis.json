@@ -12,7 +12,7 @@
   "_NOTES": [
     "Sediment diagenesis controls internal nutrient loading in lakes",
     "Multi-G model: 3 organic matter pools (labile, semi-labile, refractory)",
-    "Redox sequence: O2 > NO3 > Mn > Fe > SO4 > CO2",
+    "Redox sequence: O2 > NO3-N > Mn > Fe > SO4-S > CO2",
     "P release enhanced under anoxic conditions due to Fe-P dissolution",
     "Temperature strongly affects reaction rates (Q10 ~ 2)"
   ],
@@ -25,24 +25,24 @@
       "2": "OM_semilabile",
       "3": "OM_refractory",
       "4": "DO",
-      "5": "NO3_N",
-      "6": "NH4_N",
+      "5": "NO3-N",
+      "6": "NH4-N",
       "7": "Mn_IV",
       "8": "Mn_II",
       "9": "Fe_III",
       "10": "Fe_II",
-      "11": "SO4_S",
+      "11": "SO4-S",
       "12": "H2S",
       "13": "CH4",
       "14": "CO2",
-      "15": "PO4_P",
+      "15": "PO4-P",
       "16": "Fe_P",
       "17": "DIC",
       "18": "ALK"
     },
     "BGC_GENERAL_MOBILE_SPECIES": [
-      "DO", "NO3_N", "NH4_N", "Mn_II", "Fe_II",
-      "SO4_S", "H2S", "CH4", "CO2", "PO4_P", "DIC", "ALK"
+      "DO", "NO3-N", "NH4-N", "Mn_II", "Fe_II",
+      "SO4-S", "H2S", "CH4", "CO2", "PO4-P", "DIC", "ALK"
     ]
   },
 
@@ -174,18 +174,18 @@
       "2": {
         "_name": "denitrification",
         "_description": "OM oxidation with nitrate",
-        "_reaction": "5CH2O + 4NO3- + 4H+ -> 5CO2 + 2N2 + 7H2O",
+        "_reaction": "5CH2O + 4NO3-N- + 4H+ -> 5CO2 + 2N2 + 7H2O",
         "_deltaG": "-119 kJ/mol",
         "consumed": "OM_labile",
         "produced": "CO2",
         "kinetics": [
-          "k_denit * OM_labile * (NO3_N / (Ks_NO3 + NO3_N)) * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
+          "k_denit * OM_labile * (NO3-N / (Ks_NO3-N + NO3-N)) * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
           "mg-C/L/day"
         ],
-        "parameter_names": ["k_denit", "Ks_NO3", "Ks_O2_inhib", "theta"],
+        "parameter_names": ["k_denit", "Ks_NO3-N", "Ks_O2_inhib", "theta"],
         "parameter_values": {
           "k_denit": 0.15,
-          "Ks_NO3": 0.5,
+          "Ks_NO3-N": 0.5,
           "Ks_O2_inhib": 0.5,
           "theta": 1.08
         }
@@ -235,18 +235,18 @@
       "5": {
         "_name": "sulfate_reduction",
         "_description": "OM oxidation with sulfate",
-        "_reaction": "2CH2O + SO4^2- + 2H+ -> 2CO2 + H2S + 2H2O",
+        "_reaction": "2CH2O + SO4-S^2- + 2H+ -> 2CO2 + H2S + 2H2O",
         "_deltaG": "-25 kJ/mol",
         "consumed": "OM_labile",
         "produced": "CO2",
         "kinetics": [
-          "k_so4 * OM_labile * (SO4_S / (Ks_SO4 + SO4_S)) * f_anoxic * theta^(Treach_K - 293)",
+          "k_so4 * OM_labile * (SO4-S / (Ks_SO4-S + SO4-S)) * f_anoxic * theta^(Treach_K - 293)",
           "mg-C/L/day"
         ],
-        "parameter_names": ["k_so4", "Ks_SO4", "f_anoxic", "theta"],
+        "parameter_names": ["k_so4", "Ks_SO4-S", "f_anoxic", "theta"],
         "parameter_values": {
           "k_so4": 0.05,
-          "Ks_SO4": 1.0,
+          "Ks_SO4-S": 1.0,
           "f_anoxic": 1.0,
           "theta": 1.08
         }
@@ -260,14 +260,14 @@
         "consumed": "OM_labile",
         "produced": "CH4",
         "kinetics": [
-          "k_meth * OM_labile * f_anoxic * (Ks_SO4_inhib / (Ks_SO4_inhib + SO4_S)) * theta^(Treach_K - 293)",
+          "k_meth * OM_labile * f_anoxic * (Ks_SO4-S_inhib / (Ks_SO4-S_inhib + SO4-S)) * theta^(Treach_K - 293)",
           "mg-C/L/day"
         ],
-        "parameter_names": ["k_meth", "f_anoxic", "Ks_SO4_inhib", "theta"],
+        "parameter_names": ["k_meth", "f_anoxic", "Ks_SO4-S_inhib", "theta"],
         "parameter_values": {
           "k_meth": 0.02,
           "f_anoxic": 1.0,
-          "Ks_SO4_inhib": 0.5,
+          "Ks_SO4-S_inhib": 0.5,
           "theta": 1.10
         }
       },
@@ -308,7 +308,7 @@
         "_name": "sulfide_oxidation",
         "_description": "Oxidation of H2S",
         "consumed": "H2S",
-        "produced": "SO4_S",
+        "produced": "SO4-S",
         "kinetics": [
           "k_h2s_ox * H2S * (DO / (Ks_O2 + DO))",
           "mg/L/day"
@@ -355,11 +355,11 @@
 
       "1": {
         "_name": "p_binding_to_fe",
-        "_description": "PO4 adsorption to Fe(III) oxides",
-        "consumed": "PO4_P",
+        "_description": "PO4-P adsorption to Fe(III) oxides",
+        "consumed": "PO4-P",
         "produced": "Fe_P",
         "kinetics": [
-          "k_p_ads * PO4_P * Fe_III / (Ks_Fe_ads + Fe_III) * (DO / (Ks_O2 + DO))",
+          "k_p_ads * PO4-P * Fe_III / (Ks_Fe_ads + Fe_III) * (DO / (Ks_O2 + DO))",
           "mg-P/L/day"
         ],
         "parameter_names": ["k_p_ads", "Ks_Fe_ads", "Ks_O2"],
@@ -372,10 +372,10 @@
 
       "2": {
         "_name": "p_release_from_fe",
-        "_description": "PO4 release during Fe(III) reduction",
+        "_description": "PO4-P release during Fe(III) reduction",
         "_notes": "Main driver of internal P loading",
         "consumed": "Fe_P",
-        "produced": "PO4_P",
+        "produced": "PO4-P",
         "kinetics": [
           "k_p_rel * Fe_P * (Ks_O2_rel / (Ks_O2_rel + DO))",
           "mg-P/L/day"
@@ -392,11 +392,11 @@
 
       "3": {
         "_name": "p_diffusive_flux",
-        "_description": "Diffusive flux of PO4 from sediment porewater",
-        "consumed": "PO4_P_porewater",
-        "produced": "PO4_P",
+        "_description": "Diffusive flux of PO4-P from sediment porewater",
+        "consumed": "PO4-P_porewater",
+        "produced": "PO4-P",
         "kinetics": [
-          "D_p * (PO4_P_porewater - PO4_P) / dz",
+          "D_p * (PO4-P_porewater - PO4-P) / dz",
           "mg-P/L/day"
         ],
         "parameter_names": ["D_p", "dz"],
@@ -409,10 +409,10 @@
       "4": {
         "_name": "p_adsorption",
         "_description": "General P adsorption to sediments",
-        "consumed": "PO4_P",
+        "consumed": "PO4-P",
         "produced": "P_adsorbed",
         "kinetics": [
-          "k_ads * PO4_P * (1 - P_adsorbed/Smax)",
+          "k_ads * PO4-P * (1 - P_adsorbed/Smax)",
           "mg-P/L/day"
         ],
         "parameter_names": ["k_ads", "Smax"],
@@ -435,9 +435,9 @@
 
       "1": {
         "_name": "ammonification",
-        "_description": "OM mineralization releasing NH4",
+        "_description": "OM mineralization releasing NH4-N",
         "consumed": "OM_labile",
-        "produced": "NH4_N",
+        "produced": "NH4-N",
         "kinetics": [
           "k_ammon * OM_labile * rN_C * theta^(Treach_K - 293)",
           "mg-N/L/day"
@@ -452,11 +452,11 @@
 
       "2": {
         "_name": "nitrification_sed",
-        "_description": "NH4 oxidation to NO3 in oxic sediments",
-        "consumed": "NH4_N",
-        "produced": "NO3_N",
+        "_description": "NH4-N oxidation to NO3-N in oxic sediments",
+        "consumed": "NH4-N",
+        "produced": "NO3-N",
         "kinetics": [
-          "k_nitrif * NH4_N * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+          "k_nitrif * NH4-N * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
           "mg-N/L/day"
         ],
         "parameter_names": ["k_nitrif", "Ks_O2", "theta"],
@@ -469,11 +469,11 @@
 
       "3": {
         "_name": "denitrification_sed",
-        "_description": "NO3 reduction to N2 in anoxic sediments",
-        "consumed": "NO3_N",
+        "_description": "NO3-N reduction to N2 in anoxic sediments",
+        "consumed": "NO3-N",
         "produced": "N2_gas",
         "kinetics": [
-          "k_denit_sed * NO3_N * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
+          "k_denit_sed * NO3-N * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
           "mg-N/L/day"
         ],
         "parameter_names": ["k_denit_sed", "Ks_O2_inhib", "theta"],
@@ -486,11 +486,11 @@
 
       "4": {
         "_name": "n_diffusive_flux",
-        "_description": "NH4 diffusive flux from sediments",
-        "consumed": "NH4_N_porewater",
-        "produced": "NH4_N",
+        "_description": "NH4-N diffusive flux from sediments",
+        "consumed": "NH4-N_porewater",
+        "produced": "NH4-N",
         "kinetics": [
-          "D_n * (NH4_N_porewater - NH4_N) / dz",
+          "D_n * (NH4-N_porewater - NH4-N) / dz",
           "mg-N/L/day"
         ],
         "parameter_names": ["D_n", "dz"],

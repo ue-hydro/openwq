@@ -52,20 +52,101 @@ try:
 except ImportError:
     _GRQA_AVAILABLE = False
 
-# Auto-mapping: model species name → GRQA parameter code
+# Auto-mapping: model species name → GRQA parameter code.
+#
+# BGC templates use the "-N" / "-P" / "-S" convention to indicate that the
+# species is reported "as element" using stoichiometry:
+#   NO3-N  = nitrate as nitrogen   (mg-N/L)
+#   NH4-N  = ammonium as nitrogen  (mg-N/L)
+#   PO4-P  = phosphate as phosphorus (mg-P/L)
+#   SO4-S  = sulfate as sulfur     (mg-S/L)
+#
+# GRQA reports the full ion (e.g. NO3 in mg-NO3/L).
+# Conversion:  model_value = grqa_value × MW(element) / MW(ion)
+_GRQA_TO_MODEL_FACTOR = {
+    # GRQA code    factor          explanation
+    'NO3':       14.007 / 62.004,  # N / NO3  ≈ 0.226
+    'NH4':       14.007 / 18.039,  # N / NH4  ≈ 0.776
+    'NO2':       14.007 / 46.006,  # N / NO2  ≈ 0.304
+    'PO4':       30.974 / 94.971,  # P / PO4  ≈ 0.326
+    'SO4':       32.065 / 96.06,   # S / SO4  ≈ 0.334
+    # All other GRQA parameters: factor = 1.0 (no conversion needed)
+}
+
 _MODEL_SPECIES_TO_GRQA = {
-    'NO3-N': 'NO3', 'NO3': 'NO3', 'Nitrate': 'NO3',
-    'NH4-N': 'NH4', 'NH4': 'NH4', 'Ammonium': 'NH4',
-    'NO2-N': 'NO2', 'NO2': 'NO2',
-    'TN': 'TN', 'Total Nitrogen': 'TN',
-    'DON': 'DON', 'DIN': 'DIN', 'TKN': 'TKN',
-    'PO4-P': 'PO4', 'PO4': 'PO4', 'Phosphate': 'PO4',
-    'TP': 'TP', 'Total Phosphorus': 'TP', 'DP': 'DP',
-    'DO': 'DO', 'Dissolved Oxygen': 'DO',
+    # ── "as N" species (templates use -N suffix) ──
+    'NO3-N': 'NO3', 'NH4-N': 'NH4', 'NO2-N': 'NO2',
+    'NO3-N_soil': 'NO3', 'NO3-N_tile': 'NO3',
+    'NH4-N_soil': 'NH4', 'SED_NH4': 'NH4',
+    # ── "as P" species (templates use -P suffix) ──
+    'PO4-P': 'PO4',
+    'PO4-P_sol': 'PO4', 'PO4-P_active': 'PO4', 'PO4-P_stable': 'PO4',
+    'PO4-P_soil': 'PO4', 'PO4-P_tile': 'PO4',
+    # ── "as S" species ──
+    'SO4-S': 'SO4',
+    # ── Direct GRQA codes (WASP8 and similar use full-ion names) ──
+    'NO3': 'NO3', 'NH4': 'NH4', 'NO2': 'NO2', 'PO4': 'PO4', 'SO4': 'SO4',
+    'DO': 'DO', 'DON': 'DON', 'DIN': 'DIN', 'TKN': 'TKN',
+    'TN': 'TN', 'TP': 'TP', 'DP': 'DP', 'DOP': 'DOP', 'PP': 'PP',
     'BOD': 'BOD', 'BOD5': 'BOD5', 'COD': 'COD',
-    'DOC': 'DOC', 'TOC': 'TOC', 'DIC': 'DIC',
-    'TSS': 'TSS', 'TDS': 'TDS',
-    'N_ORG_active': 'DON', 'N_ORG_fresh': 'DON', 'N_ORG_stable': 'TKN',
+    'DOC': 'DOC', 'TOC': 'TOC', 'DIC': 'DIC', 'POC': 'POC',
+    'TSS': 'TSS', 'TDS': 'TDS', 'SS': 'SS',
+    # ── Sub-pool aggregations ──
+    'BOD_fast': 'BOD', 'BOD_slow': 'BOD',
+    'CBOD': 'BOD', 'CBOD_fast': 'BOD', 'CBOD_slow': 'BOD',
+    'DOC_labile': 'DOC', 'DOC_refrac': 'DOC',
+    'DOC_soil': 'DOC', 'DOC_tile': 'DOC',
+    'POC_labile': 'POC', 'POC_refrac': 'POC',
+    'TSS_tile': 'TSS', 'SED': 'TSS',
+    'PON': 'PN', 'SED_PON1': 'PN', 'SED_PON2': 'PN',
+    'DSi': 'Si', 'BSi': 'Si',
+    'ALK': 'Alk', 'Chla': 'Chl_a', 'EC_generic': 'EC',
+    # ── Organic-N / organic-P pool names ──
+    'ORG_N': 'DON', 'ON': 'DON', 'ON_labile': 'DON', 'ON_refrac': 'TKN',
+    'N_ORG': 'DON', 'N_ORG_active': 'DON', 'N_ORG_fresh': 'DON',
+    'N_ORG_stable': 'TKN', 'N_ORG_soil': 'TKN',
+    'ORG_N_active': 'DON', 'ORG_N_fresh': 'DON', 'ORG_N_stable': 'TKN',
+    'ORG_P': 'DP', 'ORG_P_humus': 'DP', 'ORG_P_fresh': 'DP',
+    'P_ORG': 'DP', 'P_ORG_active': 'DP',
+    'OP_labile': 'DOP', 'OP_refrac': 'DP',
+    'ORG_C_active': 'DOC', 'ORG_C_fresh': 'DOC', 'ORG_C_stable': 'TOC',
+    'PART_P': 'PP', 'P_PART': 'PP', 'PartP': 'PP',
+    # ── HYPE model names ──
+    'IN': 'DIN', 'SP': 'PO4',
+    'fastN': 'DIN', 'humusN': 'TKN', 'fastP': 'PO4', 'humusP': 'DP',
+    # ── QUAL2E model names ──
+    'DISS_P': 'DP',
+    # ── Legacy / alternative names (user convenience) ──
+    'NO3_N': 'NO3', 'NH4_N': 'NH4', 'NO2_N': 'NO2', 'PO4_P': 'PO4',
+    'SO4_S': 'SO4',
+    'Nitrate': 'NO3', 'Ammonium': 'NH4', 'Phosphate': 'PO4',
+    'Dissolved Oxygen': 'DO', 'Total Nitrogen': 'TN',
+    'Total Phosphorus': 'TP',
+}
+
+# Full set of GRQA parameters available in the archive (for the report).
+_GRQA_AVAILABLE_PARAMS = {
+    'TN': 'Total Nitrogen', 'DN': 'Dissolved Nitrogen',
+    'NO3': 'Nitrate', 'NO2': 'Nitrite', 'NH4': 'Ammonium',
+    'NO3_NO2': 'Nitrate + Nitrite', 'DIN': 'Dissolved Inorganic N',
+    'DON': 'Dissolved Organic N', 'TKN': 'Total Kjeldahl N',
+    'PN': 'Particulate N',
+    'TP': 'Total Phosphorus', 'DP': 'Dissolved Phosphorus',
+    'DIP': 'Dissolved Inorganic P', 'PO4': 'Phosphate',
+    'DOP': 'Dissolved Organic P', 'PP': 'Particulate P',
+    'DO': 'Dissolved Oxygen', 'DO_sat': 'DO Saturation',
+    'BOD': 'Biochemical O Demand', 'BOD5': 'BOD (5-day)',
+    'COD': 'Chemical O Demand', 'CODMn': 'COD (Permanganate)',
+    'DOC': 'Dissolved Organic C', 'TOC': 'Total Organic C',
+    'TC': 'Total Carbon', 'TIC': 'Total Inorganic C',
+    'DIC': 'Dissolved Inorganic C', 'POC': 'Particulate Organic C',
+    'PC': 'Particulate Carbon',
+    'TSS': 'Total Suspended Solids', 'TDS': 'Total Dissolved Solids',
+    'SS': 'Suspended Solids', 'Turbidity': 'Turbidity',
+    'Temp': 'Water Temperature', 'pH': 'pH',
+    'EC': 'Electrical Conductivity', 'SC': 'Specific Conductance',
+    'Chl_a': 'Chlorophyll-a',
+    'Si': 'Silica', 'SO4': 'Sulfate', 'Cl': 'Chloride', 'Alk': 'Alkalinity',
 }
 
 
@@ -1283,6 +1364,78 @@ Time series, spatial statistics, and runtime metadata are not available.
                     f'style="border-left-color:var(--text-light);">'
                     f'The following model species are <strong>not available'
                     f'</strong> in the GRQA database: {_um_list}.</div>')
+
+        # Stoichiometric conversion note
+        H.append(
+            '<details style="margin-top:1rem;">'
+            '<summary style="cursor:pointer;font-weight:600;'
+            'color:var(--primary);font-size:0.95rem;">'
+            'Stoichiometric Conversion: GRQA &rarr; Model Units</summary>'
+            '<div class="card primary" style="margin-top:0.5rem;">'
+            '<p style="margin-bottom:0.5rem;">GRQA reports concentrations '
+            'of the full ion (e.g.&nbsp;mg&#8209;NO<sub>3</sub>/L), while '
+            'the model uses the <strong>&ldquo;as element&rdquo;</strong> '
+            'convention (e.g.&nbsp;NO3&#8209;N in mg&#8209;N/L). The '
+            'conversion uses stoichiometry:</p>'
+            '<p style="text-align:center;font-size:0.95rem;margin:0.5rem 0;">'
+            '<code>model_value = GRQA_value &times; MW(element) / '
+            'MW(ion)</code></p>'
+            '<div class="table-wrap"><table>'
+            '<tr><th>GRQA</th><th>Model</th>'
+            '<th>Factor</th><th>Formula</th></tr>')
+        for grqa_code, factor in _GRQA_TO_MODEL_FACTOR.items():
+            elem = {'NO3': 'N', 'NH4': 'N', 'NO2': 'N',
+                    'PO4': 'P', 'SO4': 'S'}[grqa_code]
+            model_name = f'{grqa_code}-{elem}'
+            H.append(
+                f'<tr><td><code>{grqa_code}</code> '
+                f'(mg&#8209;{grqa_code}/L)</td>'
+                f'<td><code>{model_name}</code> '
+                f'(mg&#8209;{elem}/L)</td>'
+                f'<td class="num">{factor:.4f}</td>'
+                f'<td>MW({elem}) / MW({grqa_code})</td></tr>')
+        H.append('</table></div></div></details>')
+
+        # Collapsible table of all GRQA parameters available
+        _grqa_groups = {}
+        for code, name in _GRQA_AVAILABLE_PARAMS.items():
+            # Derive group from the code category
+            if code in ('TN', 'DN', 'NO3', 'NO2', 'NH4', 'NO3_NO2',
+                        'DIN', 'DON', 'TKN', 'PN'):
+                grp = 'Nitrogen'
+            elif code in ('TP', 'DP', 'DIP', 'PO4', 'DOP', 'PP'):
+                grp = 'Phosphorus'
+            elif code in ('DO', 'DO_sat', 'BOD', 'BOD5', 'COD', 'CODMn'):
+                grp = 'Oxygen'
+            elif code in ('DOC', 'TOC', 'TC', 'TIC', 'DIC', 'POC', 'PC'):
+                grp = 'Carbon'
+            elif code in ('TSS', 'TDS', 'SS', 'Turbidity'):
+                grp = 'Sediment'
+            elif code in ('Temp', 'pH', 'EC', 'SC'):
+                grp = 'Physical'
+            else:
+                grp = 'Other'
+            _grqa_groups.setdefault(grp, []).append((code, name))
+
+        H.append(
+            '<details style="margin-top:1rem;">'
+            '<summary style="cursor:pointer;font-weight:600;'
+            'color:var(--primary);font-size:0.95rem;">'
+            'All GRQA Parameters Available in the Archive '
+            f'({len(_GRQA_AVAILABLE_PARAMS)} parameters)</summary>'
+            '<div class="card teal" style="margin-top:0.5rem;">'
+            '<div class="table-wrap"><table>'
+            '<tr><th>Group</th><th>Code</th><th>Parameter</th></tr>')
+        for grp in ('Nitrogen', 'Phosphorus', 'Oxygen', 'Carbon',
+                    'Sediment', 'Physical', 'Other'):
+            params = _grqa_groups.get(grp, [])
+            for i, (code, name) in enumerate(params):
+                grp_cell = (f'<td rowspan="{len(params)}" '
+                            f'style="font-weight:600;">{grp}</td>'
+                            if i == 0 else '')
+                H.append(f'<tr>{grp_cell}<td><code>{code}</code></td>'
+                         f'<td>{name}</td></tr>')
+        H.append('</table></div></div></details>')
 
         H.append('</div>')
 

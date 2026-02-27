@@ -68,6 +68,40 @@ Copy the template and modify the SOLUTION, EQUILIBRIUM_PHASES, and KINETICS bloc
 cp phreeqc_templates/nitrogen_speciation.pqi /path/to/your/openwq/config/phreeqc_input.pqi
 ```
 
+## Species Naming Convention
+
+Templates use the **"as element"** convention for nutrient species, following
+standard water quality practice:
+
+| Template Name | Meaning | Units |
+|---------------|---------|-------|
+| `NO3-N` | Nitrate as nitrogen | mg-N/L |
+| `NH4-N` | Ammonium as nitrogen | mg-N/L |
+| `NO2-N` | Nitrite as nitrogen | mg-N/L |
+| `PO4-P` | Phosphate as phosphorus | mg-P/L |
+| `SO4-S` | Sulfate as sulfur | mg-S/L |
+
+This convention separates the ion from its element using a hyphen (e.g. `NO3-N`).
+The GRQA observation database reports the full ion (e.g. `NO3` in mg-NO3/L).
+To compare model output with GRQA observations, a stoichiometric conversion is
+applied:
+
+```
+model_value (mg-N/L) = GRQA_value (mg-NO3/L) × MW(N) / MW(NO3)
+```
+
+| GRQA → Model | Factor | Formula |
+|-------------|--------|---------|
+| NO3 → NO3-N | 0.2259 | 14.007 / 62.004 |
+| NH4 → NH4-N | 0.7764 | 14.007 / 18.039 |
+| NO2 → NO2-N | 0.3045 | 14.007 / 46.006 |
+| PO4 → PO4-P | 0.3261 | 30.974 / 94.971 |
+| SO4 → SO4-S | 0.3338 | 32.065 / 96.06 |
+
+Note: Some templates (e.g. WASP8) use full-ion names (`NO3`, `NH4`, `PO4`)
+without the element suffix. These correspond directly to GRQA codes and need
+no conversion.
+
 ## Parameter Conventions
 
 All templates use consistent parameter naming:

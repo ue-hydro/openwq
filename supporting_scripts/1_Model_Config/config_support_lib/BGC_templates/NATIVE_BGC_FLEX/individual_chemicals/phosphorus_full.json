@@ -5,7 +5,7 @@
 
   "BIOGEOCHEMISTRY_CONFIGURATION": {
     "CHEMICAL_SPECIES": {
-      "PO4_P": {
+      "PO4-P": {
         "DESCRIPTION": "Dissolved reactive phosphorus (orthophosphate)",
         "UNITS": "mg/L as P",
         "INITIAL_CONDITION": 0.05
@@ -62,7 +62,7 @@
 
         "DOP_MINERALIZATION": {
           "CONSUMED": "DOP",
-          "PRODUCED": "PO4_P",
+          "PRODUCED": "PO4-P",
           "KINETICS": "k_min_P * DOP * 1.06^(T - 20)",
           "PARAMETERS": {
             "k_min_P": {
@@ -75,9 +75,9 @@
         },
 
         "P_ADSORPTION": {
-          "CONSUMED": "PO4_P",
+          "CONSUMED": "PO4-P",
           "PRODUCED": "PIP",
-          "KINETICS": "k_ads_P * PO4_P * (PIP_max - PIP) / PIP_max",
+          "KINETICS": "k_ads_P * PO4-P * (PIP_max - PIP) / PIP_max",
           "PARAMETERS": {
             "k_ads_P": {
               "VALUE": 1.0,
@@ -96,7 +96,7 @@
 
         "P_DESORPTION": {
           "CONSUMED": "PIP",
-          "PRODUCED": "PO4_P",
+          "PRODUCED": "PO4-P",
           "KINETICS": "k_des_P * PIP * 1.04^(T - 20)",
           "PARAMETERS": {
             "k_des_P": {
@@ -110,7 +110,7 @@
 
         "REDOX_P_RELEASE": {
           "CONSUMED": "PIP",
-          "PRODUCED": "PO4_P",
+          "PRODUCED": "PO4-P",
           "KINETICS": "k_redox_P * PIP * (K_O2_P / (K_O2_P + DO)) * 1.08^(T - 20)",
           "PARAMETERS": {
             "k_redox_P": {
@@ -130,9 +130,9 @@
         },
 
         "ALGAE_P_UPTAKE": {
-          "CONSUMED": "PO4_P",
+          "CONSUMED": "PO4-P",
           "PRODUCED": "ALGAE_P",
-          "KINETICS": "mu_max * ALGAE_P * (PO4_P / (K_P + PO4_P)) * f_light * f_temp",
+          "KINETICS": "mu_max * ALGAE_P * (PO4-P / (K_P + PO4-P)) * f_light * f_temp",
           "PARAMETERS": {
             "mu_max": {
               "VALUE": 1.5,
@@ -159,7 +159,7 @@
 
         "ALGAE_RESPIRATION": {
           "CONSUMED": "ALGAE_P",
-          "PRODUCED": "PO4_P",
+          "PRODUCED": "PO4-P",
           "KINETICS": "k_resp * ALGAE_P * 1.08^(T - 20)",
           "PARAMETERS": {
             "k_resp": {
@@ -220,7 +220,7 @@
 
         "SEDIMENT_P_FLUX": {
           "CONSUMED": "NONE",
-          "PRODUCED": "PO4_P",
+          "PRODUCED": "PO4-P",
           "KINETICS": "J_P / depth * (K_O2_sed / (K_O2_sed + DO))",
           "PARAMETERS": {
             "J_P": {
