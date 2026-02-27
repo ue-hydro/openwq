@@ -418,21 +418,14 @@ pip install -r requirements.txt
             </div>
         </div>
 
-        <!-- Slide 5: Section - Configuration -->
-        <div class="slide section-slide" data-slide="5">
-            <div class="section-number">01</div>
-            <h2>Model Configuration</h2>
-            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
-        </div>
-
-        <!-- Slide 6: Template Workflow Pattern -->
-        <div class="slide" data-slide="6">
+        <!-- Slide 5: Template Workflow Pattern + Recommended Approach -->
+        <div class="slide" data-slide="5">
             <div class="slide-header">
                 <h2>Template Workflow Pattern</h2>
             </div>
             <div class="slide-content">
                 <p style="font-size: 1.1rem; margin-bottom: 20px;">
-                    All supporting scripts follow the same <strong>Copy → Edit → Run</strong> workflow:
+                    All supporting scripts follow the same <strong>Copy &rarr; Edit &rarr; Run</strong> workflow:
                 </p>
                 <div class="three-column" style="gap: 20px; margin-bottom: 20px;">
                     <div class="card teal">
@@ -441,7 +434,7 @@ pip install -r requirements.txt
                         <pre style="font-size: 0.7rem; padding: 8px;">
 <span class="comment"># Copy and edit</span>
 python model_config_template.py
-<span class="comment"># → All JSON files generated</span>
+<span class="comment"># &rarr; All JSON files generated</span>
                         </pre>
                     </div>
                     <div class="card primary">
@@ -450,7 +443,7 @@ python model_config_template.py
                         <pre style="font-size: 0.7rem; padding: 8px;">
 <span class="comment"># Copy and edit paths</span>
 python reading_plotting_results_template.py
-<span class="comment"># → Plots and maps</span>
+<span class="comment"># &rarr; Plots and maps</span>
                         </pre>
                     </div>
                     <div class="card rose">
@@ -464,14 +457,29 @@ python calibration_config_template.py [flags]
                         </pre>
                     </div>
                 </div>
+                <div class="highlight-box info" style="margin-bottom: 14px;">
+                    <strong>Recommended Approach:</strong>
+                    <ol style="margin: 8px 0 0 18px; font-size: 0.92rem; line-height: 1.6;">
+                        <li>Start with <code>model_config_template.py</code> to work out your desired general model configuration (modules, source/sink approach, output settings). You can run test simulations directly through this template.</li>
+                        <li>Examine results using <code>reading_plotting_results_template.py</code> to visualize outputs and verify the model is behaving as expected.</li>
+                        <li>Once you are happy with the general configuration, use <code>calibration_config_template.py</code> to perform parameter sensitivity analysis and calibration.</li>
+                    </ol>
+                </div>
                 <div class="highlight-box success">
-                    <strong>Key Principle:</strong> Never edit library files (<code>*_lib/</code> folders) — copy templates to your working directory and customize them. This keeps your configurations separate from the library code.
+                    <strong>Key Principle:</strong> Never edit library files (<code>*_lib/</code> folders) &mdash; copy templates to your working directory and customize them.
                 </div>
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">6</div>
+                <div class="page-number">5</div>
             </div>
+        </div>
+
+        <!-- Slide 6: Section - Configuration -->
+        <div class="slide section-slide" data-slide="6">
+            <div class="section-number">01</div>
+            <h2>Model Configuration</h2>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
         <!-- Slide 7: Configuration Template -->
