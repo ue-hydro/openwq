@@ -583,7 +583,7 @@ def _extract_grqa_for_report(river_network_shapefile, chemical_species,
         print("  No local GRQA data provided — will download from Zenodo (one-time, ~1.2 GB).")
         print("  Tip: set grqa_local_data_path to skip future downloads.")
 
-    grqa_output_dir = os.path.join(output_dir, 'grqa_report_data')
+    grqa_output_dir = os.path.join(output_dir, 'openwq_in', 'grqa_report_data')
 
     try:
         mapper = SpeciesMapper(mapping=species_mapping)
