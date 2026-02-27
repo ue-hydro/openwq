@@ -1,209 +1,377 @@
 {
-  "_DESCRIPTION": "Silica Cycling - Dissolved silica dynamics for diatom modeling",
-  "_REFERENCE": "CE-QUAL-W2, Chapra (2008)",
-  "_VERSION": "1.0",
-
-  "BIOGEOCHEMISTRY_CONFIGURATION": {
+    "_DESCRIPTION": "Silica Cycling - Dissolved silica dynamics for diatom modeling",
+    "_REFERENCE": "CE-QUAL-W2, Chapra (2008)",
+    "_VERSION": "1.0",
     "CHEMICAL_SPECIES": {
-      "DSi": {
-        "DESCRIPTION": "Dissolved silica (silicic acid)",
-        "UNITS": "mg/L as SiO2",
-        "INITIAL_CONDITION": 5.0
-      },
-      "BSi": {
-        "DESCRIPTION": "Biogenic silica (diatom frustules)",
-        "UNITS": "mg/L as SiO2",
-        "INITIAL_CONDITION": 1.0
-      },
-      "DIATOM": {
-        "DESCRIPTION": "Diatom biomass",
-        "UNITS": "mg/L as C",
-        "INITIAL_CONDITION": 0.5
-      },
-      "PO4-P": {
-        "DESCRIPTION": "Phosphate (diatom nutrient)",
-        "UNITS": "mg/L as P",
-        "INITIAL_CONDITION": 0.05
-      },
-      "NO3-N": {
-        "DESCRIPTION": "Nitrate (diatom nutrient)",
-        "UNITS": "mg/L as N",
-        "INITIAL_CONDITION": 1.0
-      }
+        "LIST": {
+            "1": "DSi",
+            "2": "BSi",
+            "3": "DIATOM",
+            "4": "PO4-P",
+            "5": "NO3-N"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "DSi",
+            "BSi",
+            "DIATOM",
+            "PO4-P",
+            "NO3-N"
+        ],
+        "_LIST_DESCRIPTIONS": {
+            "DSi": "Dissolved silica (silicic acid)",
+            "BSi": "Biogenic silica (diatom frustules)",
+            "DIATOM": "Diatom biomass",
+            "PO4-P": "Phosphate (diatom nutrient)",
+            "NO3-N": "Nitrate (diatom nutrient)"
+        }
     },
-
     "CYCLING_FRAMEWORKS": {
-      "SILICA_CYCLE": {
-        "_DESCRIPTION": "Silica cycling with diatom dynamics",
-
-        "DIATOM_GROWTH": {
-          "CONSUMED": "DSi",
-          "PRODUCED": "DIATOM",
-          "KINETICS": "mu_max * DIATOM * f_Si * f_N * f_P * f_light * f_temp",
-          "PARAMETERS": {
-            "mu_max": {
-              "VALUE": 2.0,
-              "UNITS": "1/day",
-              "RANGE": [1.0, 3.0],
-              "DESCRIPTION": "Maximum diatom growth rate"
+        "SILICA_CYCLE": {
+            "_DESCRIPTION": "Silica cycling with diatom dynamics",
+            "LIST_TRANSFORMATIONS": {
+                "1": "DIATOM_GROWTH",
+                "2": "SI_UPTAKE_STOICH",
+                "3": "DIATOM_RESPIRATION",
+                "4": "DIATOM_DEATH",
+                "5": "BSI_DISSOLUTION",
+                "6": "BSI_SETTLING",
+                "7": "DIATOM_SETTLING",
+                "8": "SEDIMENT_SI_FLUX"
             },
-            "f_Si": {
-              "FORMULA": "DSi / (K_Si + DSi)",
-              "K_Si": {
-                "VALUE": 0.1,
-                "UNITS": "mg/L",
-                "DESCRIPTION": "Half-saturation for Si"
-              }
+            "1": {
+                "_NAME": "DIATOM_GROWTH",
+                "CONSUMED": "DSi",
+                "PRODUCED": "DIATOM",
+                "KINETICS": [
+                    "mu_max * DIATOM * f_Si * f_N * f_P * f_light * f_temp",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "mu_max",
+                    "f_Si",
+                    "f_N",
+                    "f_P",
+                    "f_light",
+                    "f_temp"
+                ],
+                "PARAMETER_VALUES": {
+                    "mu_max": 2.0,
+                    "f_Si": 0.0,
+                    "f_N": 0.0,
+                    "f_P": 0.0,
+                    "f_light": 0.5,
+                    "f_temp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "mu_max": {
+                        "VALUE": 2.0,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            1.0,
+                            3.0
+                        ],
+                        "DESCRIPTION": "Maximum diatom growth rate"
+                    },
+                    "f_Si": {
+                        "FORMULA": "DSi / (K_Si + DSi)",
+                        "K_Si": {
+                            "VALUE": 0.1,
+                            "UNITS": "mg/L",
+                            "DESCRIPTION": "Half-saturation for Si"
+                        }
+                    },
+                    "f_N": {
+                        "FORMULA": "NO3-N / (K_N + NO3-N)",
+                        "K_N": {
+                            "VALUE": 0.02,
+                            "UNITS": "mg/L"
+                        }
+                    },
+                    "f_P": {
+                        "FORMULA": "PO4-P / (K_P + PO4-P)",
+                        "K_P": {
+                            "VALUE": 0.005,
+                            "UNITS": "mg/L"
+                        }
+                    },
+                    "f_light": {
+                        "VALUE": 0.5,
+                        "DESCRIPTION": "Light limitation (0-1)"
+                    },
+                    "f_temp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor"
+                    }
+                }
             },
-            "f_N": {
-              "FORMULA": "NO3-N / (K_N + NO3-N)",
-              "K_N": {"VALUE": 0.02, "UNITS": "mg/L"}
+            "2": {
+                "_NAME": "SI_UPTAKE_STOICH",
+                "CONSUMED": "DSi",
+                "PRODUCED": "NONE",
+                "KINETICS": [
+                    "r_Si_C * mu_max * DIATOM * f_Si * f_N * f_P * f_light * f_temp",
+                    "1"
+                ],
+                "PARAMETER_NAMES": [
+                    "r_Si_C",
+                    "mu_max",
+                    "f_Si",
+                    "f_N",
+                    "f_P",
+                    "f_light",
+                    "f_temp"
+                ],
+                "PARAMETER_VALUES": {
+                    "r_Si_C": 0.5,
+                    "mu_max": 2.0,
+                    "f_Si": 1.0,
+                    "f_N": 1.0,
+                    "f_P": 1.0,
+                    "f_light": 0.5,
+                    "f_temp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "r_Si_C": {
+                        "VALUE": 0.5,
+                        "UNITS": "mg Si/mg C",
+                        "RANGE": [
+                            0.2,
+                            1.0
+                        ],
+                        "DESCRIPTION": "Si:C ratio in diatoms"
+                    },
+                    "mu_max": {
+                        "VALUE": 2.0,
+                        "UNITS": "1/day"
+                    },
+                    "f_Si": {
+                        "VALUE": 1.0
+                    },
+                    "f_N": {
+                        "VALUE": 1.0
+                    },
+                    "f_P": {
+                        "VALUE": 1.0
+                    },
+                    "f_light": {
+                        "VALUE": 0.5
+                    },
+                    "f_temp": {
+                        "VALUE": 1.0
+                    }
+                }
             },
-            "f_P": {
-              "FORMULA": "PO4-P / (K_P + PO4-P)",
-              "K_P": {"VALUE": 0.005, "UNITS": "mg/L"}
+            "3": {
+                "_NAME": "DIATOM_RESPIRATION",
+                "CONSUMED": "DIATOM",
+                "PRODUCED": "CO2",
+                "KINETICS": [
+                    "k_resp * DIATOM * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_resp"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_resp": 0.1
+                },
+                "_PARAMETERS_INFO": {
+                    "k_resp": {
+                        "VALUE": 0.1,
+                        "UNITS": "1/day",
+                        "DESCRIPTION": "Diatom respiration rate"
+                    }
+                }
             },
-            "f_light": {"VALUE": 0.5, "DESCRIPTION": "Light limitation (0-1)"},
-            "f_temp": {"VALUE": 1.0, "DESCRIPTION": "Temperature factor"}
-          }
-        },
-
-        "SI_UPTAKE_STOICH": {
-          "CONSUMED": "DSi",
-          "PRODUCED": "NONE",
-          "KINETICS": "r_Si_C * mu_max * DIATOM * f_Si * f_N * f_P * f_light * f_temp",
-          "PARAMETERS": {
-            "r_Si_C": {
-              "VALUE": 0.5,
-              "UNITS": "mg Si/mg C",
-              "RANGE": [0.2, 1.0],
-              "DESCRIPTION": "Si:C ratio in diatoms"
+            "4": {
+                "_NAME": "DIATOM_DEATH",
+                "CONSUMED": "DIATOM",
+                "PRODUCED": "BSi",
+                "KINETICS": [
+                    "k_death * DIATOM * r_Si_C",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_death",
+                    "r_Si_C"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_death": 0.05,
+                    "r_Si_C": 0.5
+                },
+                "_NOTES": "Si in frustules becomes BSi upon death",
+                "_PARAMETERS_INFO": {
+                    "k_death": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day",
+                        "DESCRIPTION": "Diatom mortality rate"
+                    },
+                    "r_Si_C": {
+                        "VALUE": 0.5,
+                        "UNITS": "mg Si/mg C"
+                    }
+                }
             },
-            "mu_max": {"VALUE": 2.0, "UNITS": "1/day"},
-            "f_Si": {"VALUE": 1.0},
-            "f_N": {"VALUE": 1.0},
-            "f_P": {"VALUE": 1.0},
-            "f_light": {"VALUE": 0.5},
-            "f_temp": {"VALUE": 1.0}
-          }
-        },
-
-        "DIATOM_RESPIRATION": {
-          "CONSUMED": "DIATOM",
-          "PRODUCED": "CO2",
-          "KINETICS": "k_resp * DIATOM * 1.08^(T - 20)",
-          "PARAMETERS": {
-            "k_resp": {
-              "VALUE": 0.1,
-              "UNITS": "1/day",
-              "DESCRIPTION": "Diatom respiration rate"
+            "5": {
+                "_NAME": "BSI_DISSOLUTION",
+                "CONSUMED": "BSi",
+                "PRODUCED": "DSi",
+                "KINETICS": [
+                    "k_diss * BSi * (1 - DSi / DSi_sat) * 1.08^(T - 20)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_diss",
+                    "DSi_sat"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_diss": 0.02,
+                    "DSi_sat": 60
+                },
+                "_NOTES": "Dissolution slows as DSi approaches saturation",
+                "_PARAMETERS_INFO": {
+                    "k_diss": {
+                        "VALUE": 0.02,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.005,
+                            0.1
+                        ],
+                        "DESCRIPTION": "BSi dissolution rate"
+                    },
+                    "DSi_sat": {
+                        "VALUE": 60,
+                        "UNITS": "mg/L",
+                        "DESCRIPTION": "DSi saturation (amorphous silica)"
+                    }
+                }
+            },
+            "6": {
+                "_NAME": "BSI_SETTLING",
+                "CONSUMED": "BSi",
+                "PRODUCED": "SED_Si",
+                "KINETICS": [
+                    "v_s_diatom / depth * BSi",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "v_s_diatom",
+                    "depth"
+                ],
+                "PARAMETER_VALUES": {
+                    "v_s_diatom": 0.5,
+                    "depth": 5.0
+                },
+                "_PARAMETERS_INFO": {
+                    "v_s_diatom": {
+                        "VALUE": 0.5,
+                        "UNITS": "m/day",
+                        "RANGE": [
+                            0.1,
+                            2.0
+                        ],
+                        "DESCRIPTION": "Diatom/frustule settling velocity"
+                    },
+                    "depth": {
+                        "VALUE": 5.0,
+                        "UNITS": "m"
+                    }
+                }
+            },
+            "7": {
+                "_NAME": "DIATOM_SETTLING",
+                "CONSUMED": "DIATOM",
+                "PRODUCED": "SED_DIATOM",
+                "KINETICS": [
+                    "v_s_diatom / depth * DIATOM",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "v_s_diatom",
+                    "depth"
+                ],
+                "PARAMETER_VALUES": {
+                    "v_s_diatom": 0.5,
+                    "depth": 5.0
+                },
+                "_PARAMETERS_INFO": {
+                    "v_s_diatom": {
+                        "VALUE": 0.5,
+                        "UNITS": "m/day"
+                    },
+                    "depth": {
+                        "VALUE": 5.0,
+                        "UNITS": "m"
+                    }
+                }
+            },
+            "8": {
+                "_NAME": "SEDIMENT_SI_FLUX",
+                "CONSUMED": "NONE",
+                "PRODUCED": "DSi",
+                "KINETICS": [
+                    "J_Si / depth * (1 - DSi / DSi_sat)",
+                    "mg/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "J_Si",
+                    "depth",
+                    "DSi_sat"
+                ],
+                "PARAMETER_VALUES": {
+                    "J_Si": 10.0,
+                    "depth": 5.0,
+                    "DSi_sat": 60
+                },
+                "_PARAMETERS_INFO": {
+                    "J_Si": {
+                        "VALUE": 10.0,
+                        "UNITS": "mg/m2/day",
+                        "RANGE": [
+                            1.0,
+                            50.0
+                        ],
+                        "DESCRIPTION": "Sediment Si flux"
+                    },
+                    "depth": {
+                        "VALUE": 5.0,
+                        "UNITS": "m"
+                    },
+                    "DSi_sat": {
+                        "VALUE": 60,
+                        "UNITS": "mg/L"
+                    }
+                }
             }
-          }
         },
-
-        "DIATOM_DEATH": {
-          "CONSUMED": "DIATOM",
-          "PRODUCED": "BSi",
-          "KINETICS": "k_death * DIATOM * r_Si_C",
-          "PARAMETERS": {
-            "k_death": {
-              "VALUE": 0.05,
-              "UNITS": "1/day",
-              "DESCRIPTION": "Diatom mortality rate"
+        "SI_RATIOS": {
+            "_DESCRIPTION": "Typical Si:C ratios for different diatom species",
+            "LIST_TRANSFORMATIONS": {},
+            "_MARINE_DIATOMS_INFO": {
+                "Si_C_ratio": 0.13,
+                "UNITS": "mol Si / mol C",
+                "NOTES": "Lower in marine (Si limitation)"
             },
-            "r_Si_C": {"VALUE": 0.5, "UNITS": "mg Si/mg C"}
-          },
-          "NOTES": "Si in frustules becomes BSi upon death"
-        },
-
-        "BSI_DISSOLUTION": {
-          "CONSUMED": "BSi",
-          "PRODUCED": "DSi",
-          "KINETICS": "k_diss * BSi * (1 - DSi / DSi_sat) * 1.08^(T - 20)",
-          "PARAMETERS": {
-            "k_diss": {
-              "VALUE": 0.02,
-              "UNITS": "1/day",
-              "RANGE": [0.005, 0.1],
-              "DESCRIPTION": "BSi dissolution rate"
+            "_FRESHWATER_DIATOMS_INFO": {
+                "Si_C_ratio": 0.25,
+                "UNITS": "mol Si / mol C",
+                "NOTES": "Higher in freshwater"
             },
-            "DSi_sat": {
-              "VALUE": 60,
-              "UNITS": "mg/L",
-              "DESCRIPTION": "DSi saturation (amorphous silica)"
+            "_MASS_RATIO_CONVERSION_INFO": {
+                "Si_C_mass": "Si_C_mol * 28.09 / 12.01 = Si_C_mol * 2.34",
+                "NOTES": "Convert molar to mass ratio"
             }
-          },
-          "NOTES": "Dissolution slows as DSi approaches saturation"
-        },
-
-        "BSI_SETTLING": {
-          "CONSUMED": "BSi",
-          "PRODUCED": "SED_Si",
-          "KINETICS": "v_s_diatom / depth * BSi",
-          "PARAMETERS": {
-            "v_s_diatom": {
-              "VALUE": 0.5,
-              "UNITS": "m/day",
-              "RANGE": [0.1, 2.0],
-              "DESCRIPTION": "Diatom/frustule settling velocity"
-            },
-            "depth": {"VALUE": 5.0, "UNITS": "m"}
-          }
-        },
-
-        "DIATOM_SETTLING": {
-          "CONSUMED": "DIATOM",
-          "PRODUCED": "SED_DIATOM",
-          "KINETICS": "v_s_diatom / depth * DIATOM",
-          "PARAMETERS": {
-            "v_s_diatom": {"VALUE": 0.5, "UNITS": "m/day"},
-            "depth": {"VALUE": 5.0, "UNITS": "m"}
-          }
-        },
-
-        "SEDIMENT_SI_FLUX": {
-          "CONSUMED": "NONE",
-          "PRODUCED": "DSi",
-          "KINETICS": "J_Si / depth * (1 - DSi / DSi_sat)",
-          "PARAMETERS": {
-            "J_Si": {
-              "VALUE": 10.0,
-              "UNITS": "mg/m2/day",
-              "RANGE": [1.0, 50.0],
-              "DESCRIPTION": "Sediment Si flux"
-            },
-            "depth": {"VALUE": 5.0, "UNITS": "m"},
-            "DSi_sat": {"VALUE": 60, "UNITS": "mg/L"}
-          }
         }
-      },
-
-      "SI_RATIOS": {
-        "_DESCRIPTION": "Typical Si:C ratios for different diatom species",
-
-        "MARINE_DIATOMS": {
-          "Si_C_ratio": 0.13,
-          "UNITS": "mol Si / mol C",
-          "NOTES": "Lower in marine (Si limitation)"
-        },
-
-        "FRESHWATER_DIATOMS": {
-          "Si_C_ratio": 0.25,
-          "UNITS": "mol Si / mol C",
-          "NOTES": "Higher in freshwater"
-        },
-
-        "MASS_RATIO_CONVERSION": {
-          "Si_C_mass": "Si_C_mol * 28.09 / 12.01 = Si_C_mol * 2.34",
-          "NOTES": "Convert molar to mass ratio"
-        }
-      }
     },
-
-    "COMPARTMENT_ASSIGNMENT": {
-      "LAKE": ["SILICA_CYCLE"],
-      "RESERVOIR": ["SILICA_CYCLE"],
-      "ESTUARY": ["SILICA_CYCLE"]
+    "_COMPARTMENT_ASSIGNMENT": {
+        "LAKE": [
+            "SILICA_CYCLE"
+        ],
+        "RESERVOIR": [
+            "SILICA_CYCLE"
+        ],
+        "ESTUARY": [
+            "SILICA_CYCLE"
+        ]
     }
-  }
 }
