@@ -798,11 +798,8 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
 
         return json.dumps(stations_geojson), grqa_stats
 
-    except Exception as e:
-        print(f"  WARNING: GRQA extraction failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return None, None
+    except Exception:
+        raise
 
 
 def _compute_spatial_stats(results):
@@ -857,8 +854,6 @@ def generate_simulation_report(
         docker_container_name="docker_openwq",
         executable_path=None,
         file_manager_path=None,
-        console_log=None,
-        has_errors=False,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -869,8 +864,6 @@ def generate_simulation_report(
         grqa_local_data_path: "auto" or None to download from Zenodo,
             a path to pre-downloaded GRQA folder, or "skip" to disable.
         grqa_buffer_km: buffer distance in km around basin/river for GRQA search
-        console_log: captured console output from config generation (str or None)
-        has_errors: True if errors were encountered during config generation
 
     Returns the path to the generated HTML file.
     """
@@ -913,15 +906,19 @@ def generate_simulation_report(
     _grqa_skip = (isinstance(grqa_local_data_path, str)
                   and grqa_local_data_path.strip().lower() == "skip")
     if (river_network_shapefile or basin_shapefile) and not _grqa_skip:
-        print("  Extracting GRQA observation stations...")
-        # "auto" or None → download from Zenodo; anything else → treat as path
-        _grqa_path = None
-        if isinstance(grqa_local_data_path, str) and \
-                grqa_local_data_path.strip().lower() not in ("auto", ""):
-            _grqa_path = grqa_local_data_path
-        grqa_geojson_str, grqa_stats = _extract_grqa_for_report(
-            river_network_shapefile, basin_shapefile, chemical_species,
-            output_dir, _grqa_path, grqa_buffer_km=grqa_buffer_km)
+        try:
+            print("  Extracting GRQA observation stations...")
+            # "auto" or None → download from Zenodo; anything else → treat as path
+            _grqa_path = None
+            if isinstance(grqa_local_data_path, str) and \
+                    grqa_local_data_path.strip().lower() not in ("auto", ""):
+                _grqa_path = grqa_local_data_path
+            grqa_geojson_str, grqa_stats = _extract_grqa_for_report(
+                river_network_shapefile, basin_shapefile, chemical_species,
+                output_dir, _grqa_path, grqa_buffer_km=grqa_buffer_km)
+        except Exception as _e:
+            print(f"  WARNING: GRQA extraction failed: {_e}")
+            _section_errors['grqa'] = str(_e)
     elif _grqa_skip:
         print("  GRQA: skipped by user (grqa_local_data_path = 'skip').")
 
@@ -982,6 +979,7 @@ def generate_simulation_report(
                 })
         except Exception as e:
             print(f"  WARNING: Could not parse SS config: {e}")
+            _section_errors['sources'] = str(e)
 
     # =========================================================================
     # Build HTML
@@ -1263,9 +1261,10 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     if ss_summary:
         nav_items.append(('sources', 'Source/Sink Setup'))
     nav_items.append(('metadata', 'Run Metadata'))
-    if has_errors and console_log:
-        nav_items.append(('consoleerrors', 'Console Errors'))
-    if not has_errors:
+    _any_errors = bool(_section_errors)
+    if _any_errors:
+        nav_items.append(('consoleerrors', 'Errors'))
+    if not _any_errors:
         nav_items.append(('nextsteps', 'Next Steps'))
 
     H.append('<div class="layout">')
@@ -1644,24 +1643,30 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append(f'<tr><td>Output Timestep</td><td>{timestep[0]} {timestep[1]}</td></tr>')
         H.append('</table></div></div></div>')
 
-    # --- SECTION: Console Errors (only when errors occurred) ---
-    if has_errors and console_log:
-        with _SectionGuard(H, 'consoleerrors', 'Console Errors'):
+    # --- SECTION: Errors (when any errors occurred) ---
+    if _any_errors:
+        with _SectionGuard(H, 'consoleerrors', 'Errors'):
             H.append('<div class="section" id="consoleerrors">'
-                     '<h2>Console Errors</h2>')
+                     '<h2>Errors</h2>')
             H.append('<div class="card" style="border-left:4px solid #e74c3c;'
                      'background:rgba(231,76,60,.06)">')
             H.append('<p style="color:#e74c3c;font-weight:600;margin:0 0 .8rem 0">'
-                     '&#x26a0; Errors were encountered during configuration generation. '
-                     'Please fix the issues below before running the model.</p>')
-            _safe_log = _html_mod.escape(console_log)
-            H.append(f'<pre style="font-size:.8rem;overflow-x:auto;'
-                     f'background:var(--glass);padding:.8rem;border-radius:6px;'
-                     f'white-space:pre-wrap;word-wrap:break-word">{_safe_log}</pre>')
+                     '&#x26a0; Errors were encountered. '
+                     'Please fix the issues and re-run your copy of <code>model_config_template.py</code> '
+                     'to generate all the necessary input files.</p>')
+            # Show per-section errors
+            if _section_errors:
+                for _sec_id, _sec_msg in _section_errors.items():
+                    _safe_msg = _html_mod.escape(str(_sec_msg))
+                    H.append(f'<div style="margin:.6rem 0;padding:.5rem .8rem;'
+                             f'background:var(--glass);border-radius:6px;'
+                             f'font-size:.85rem">'
+                             f'<strong>{_html_mod.escape(_sec_id)}:</strong> '
+                             f'{_safe_msg}</div>')
             H.append('</div></div>')
 
     # --- SECTION: Next Steps (skipped when errors occurred) ---
-    if has_errors:
+    if _any_errors:
         pass  # Next Steps omitted — errors must be fixed first
     else:
       with _SectionGuard(H, 'nextsteps', 'Next Steps'):
@@ -2143,8 +2148,6 @@ def generate_report(
         docker_container_name="docker_openwq",
         executable_path=None,
         file_manager_path=None,
-        console_log=None,
-        has_errors=False,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -2155,8 +2158,6 @@ def generate_report(
         basin_shapefile: path to basin/catchment shapefile
         grqa_local_data_path: "auto"/path/"skip"
         grqa_buffer_km: buffer distance in km for GRQA station search
-        console_log: captured console output from config generation (str or None)
-        has_errors: True if errors were encountered during config generation
 
     Returns:
         str: Path to the generated HTML report, or None on failure
@@ -2193,8 +2194,6 @@ def generate_report(
             docker_container_name=docker_container_name,
             executable_path=executable_path,
             file_manager_path=file_manager_path,
-            console_log=console_log,
-            has_errors=has_errors,
         )
 
         print(f"  Report saved: {report_path}")

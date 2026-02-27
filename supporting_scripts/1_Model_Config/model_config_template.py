@@ -603,22 +603,65 @@ if (isinstance(chemical_species, str) and chemical_species.lower() == "all") or 
         phreeqc_mobile_species=locals().get('phreeqc_mobile_species'),
     )
 
-# 1) Generate configuration files — capture console output for the report
+# 1) Generate config files + report — capture ALL console output
 _console_log = io.StringIO()
 _has_errors = False
+_report_path = None
 
 import contextlib
+import traceback as _tb
+
 with contextlib.redirect_stdout(_console_log), contextlib.redirect_stderr(_console_log):
+    # 1a) Generate configuration files
     try:
         _excluded = {'sys', 'os', 'io', 'webbrowser', 'gJSON_lib', 'uniform_param',
-                     '_generate_report', 'contextlib', '_console_log', '_has_errors'}
+                     '_generate_report', 'contextlib', '_console_log', '_has_errors',
+                     '_report_path', '_tb'}
         _config = {k: v for k, v in locals().items()
                    if not k.startswith('_') and k not in _excluded}
         gJSON_lib.Gen_Input_Driver(**_config)
     except Exception as _e:
         _has_errors = True
-        import traceback
-        traceback.print_exc()
+        _tb.print_exc()
+
+    # 1b) Generate report (captures GRQA, map, SS, and all other warnings/errors)
+    if generate_report:
+        _basin_shp = None
+        try:
+            _basin_shp = ss_method_copernicus_basin_info.get('path_to_shp')
+        except (NameError, AttributeError):
+            pass
+
+        try:
+            _report_path = _generate_report(
+                dir2save_input_files=dir2save_input_files,
+                project_name=project_name,
+                authors=authors,
+                date=date,
+                comment=comment,
+                hostmodel=hostmodel,
+                bgc_module_name=bgc_module_name,
+                td_module_name=td_module_name,
+                le_module_name=le_module_name,
+                ts_module_name=ts_module_name,
+                si_module_name=si_module_name,
+                ss_method=ss_method,
+                solver=solver,
+                chemical_species=chemical_species,
+                units=units,
+                compartments_and_cells=compartments_and_cells,
+                timestep=timestep,
+                river_network_shapefile=river_network_shapefile,
+                basin_shapefile=_basin_shp,
+                grqa_local_data_path=grqa_local_data_path,
+                grqa_buffer_km=grqa_buffer_km,
+                mpi_np=mpi_np,
+                executable_path=executable_path,
+                file_manager_path=file_manager_path,
+            )
+        except Exception as _e:
+            _has_errors = True
+            _tb.print_exc()
 
 _console_output = _console_log.getvalue()
 
@@ -635,47 +678,8 @@ if not _has_errors:
     print(f"  Input files:      {dir2save_input_files}/openwq_in/")
 else:
     print("\n" + "=" * 60)
-    print("CONFIG GENERATION ENCOUNTERED ERRORS")
+    print("ERRORS ENCOUNTERED — check the report for details")
     print("=" * 60)
-
-# 2) Generate report (optional)
-_report_path = None
-if generate_report:
-    # Basin shapefile from Copernicus config (if available)
-    _basin_shp = None
-    try:
-        _basin_shp = ss_method_copernicus_basin_info.get('path_to_shp')
-    except (NameError, AttributeError):
-        pass
-
-    _report_path = _generate_report(
-        dir2save_input_files=dir2save_input_files,
-        project_name=project_name,
-        authors=authors,
-        date=date,
-        comment=comment,
-        hostmodel=hostmodel,
-        bgc_module_name=bgc_module_name,
-        td_module_name=td_module_name,
-        le_module_name=le_module_name,
-        ts_module_name=ts_module_name,
-        si_module_name=si_module_name,
-        ss_method=ss_method,
-        solver=solver,
-        chemical_species=chemical_species,
-        units=units,
-        compartments_and_cells=compartments_and_cells,
-        timestep=timestep,
-        river_network_shapefile=river_network_shapefile,
-        basin_shapefile=_basin_shp,
-        grqa_local_data_path=grqa_local_data_path,
-        grqa_buffer_km=grqa_buffer_km,
-        mpi_np=mpi_np,
-        executable_path=executable_path,
-        file_manager_path=file_manager_path,
-        console_log=_console_output if _console_output else None,
-        has_errors=_has_errors,
-    )
 
 print("\n" + "=" * 60)
 print("DONE")
