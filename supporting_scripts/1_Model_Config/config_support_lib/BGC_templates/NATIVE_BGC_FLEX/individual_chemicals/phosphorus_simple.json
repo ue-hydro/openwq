@@ -6,17 +6,20 @@
         "LIST": {
             "1": "PO4-P",
             "2": "ORG_P",
-            "3": "PART_P"
+            "3": "PART_P",
+            "4": "SED_P_loss"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PO4-P",
             "ORG_P",
-            "PART_P"
+            "PART_P",
+            "SED_P_loss"
         ],
         "_LIST_DESCRIPTIONS": {
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
             "ORG_P": "Organic phosphorus (dissolved + particulate)",
-            "PART_P": "Particulate/sorbed phosphorus"
+            "PART_P": "Particulate/sorbed phosphorus",
+            "SED_P_loss": "SED loss to atmosphere/sediment"
         }
     },
     "CYCLING_FRAMEWORKS": {

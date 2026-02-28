@@ -6,17 +6,20 @@
         "LIST": {
             "1": "NH4-N",
             "2": "NO3-N",
-            "3": "ORG_N"
+            "3": "ORG_N",
+            "4": "N2_loss"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NH4-N",
             "NO3-N",
-            "ORG_N"
+            "ORG_N",
+            "N2_loss"
         ],
         "_LIST_DESCRIPTIONS": {
             "NH4-N": "Ammonium nitrogen",
             "NO3-N": "Nitrate nitrogen",
-            "ORG_N": "Organic nitrogen (dissolved + particulate)"
+            "ORG_N": "Organic nitrogen (dissolved + particulate)",
+            "N2_loss": "N2 loss to atmosphere/sediment"
         }
     },
     "CYCLING_FRAMEWORKS": {

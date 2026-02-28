@@ -31,10 +31,8 @@
             "10": "DO",
             "11": "PATHOGEN",
             "12": "DOC",
-            "13": "POC",
-            "14": "PLANT_N",
-            "15": "PLANT_P",
-            "16": "LITTER"
+            "13": "PLANT_N",
+            "14": "PLANT_P"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NO3-N",
@@ -46,8 +44,7 @@
             "BOD",
             "DO",
             "PATHOGEN",
-            "DOC",
-            "POC"
+            "DOC"
         ],
         "_LIST_DESCRIPTIONS": {
             "NO3-N": "Nitrate nitrogen",
@@ -62,10 +59,8 @@
             "DO": "Dissolved oxygen",
             "PATHOGEN": "Pathogen indicator organisms",
             "DOC": "Dissolved organic carbon",
-            "POC": "Particulate organic carbon",
             "PLANT_N": "Plant nitrogen pool",
-            "PLANT_P": "Plant phosphorus pool",
-            "LITTER": "Litter organic matter"
+            "PLANT_P": "Plant phosphorus pool"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -164,7 +159,7 @@
                 "_name": "n_sedimentation",
                 "_description": "Particulate organic N settling",
                 "CONSUMED": "N_ORG",
-                "PRODUCED": "N_SED",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "v_settle * N_ORG / depth",
                     "1/day"
@@ -347,17 +342,17 @@
                 "_name": "tss_settling",
                 "_description": "Gravitational settling of suspended solids",
                 "CONSUMED": "TSS",
-                "PRODUCED": "TSS_SED",
+                "PRODUCED": "NONE",
                 "KINETICS": [
-                    "v_settle_TSS * TSS / depth",
+                    "v_settle_tss * TSS / depth",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "v_settle_TSS",
+                    "v_settle_tss",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
-                    "v_settle_TSS": 1.0,
+                    "v_settle_tss": 1.0,
                     "depth": 0.5
                 }
             },
@@ -365,7 +360,7 @@
                 "_name": "tss_filtration",
                 "_description": "Filtration by emergent vegetation stems",
                 "CONSUMED": "TSS",
-                "PRODUCED": "TSS_SED",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_filt * TSS * f_veg_density",
                     "1/day"
@@ -382,7 +377,7 @@
             "3": {
                 "_name": "tss_resuspension",
                 "_description": "Wind-driven or bioturbation resuspension",
-                "CONSUMED": "TSS_SED",
+                "CONSUMED": "NONE",
                 "PRODUCED": "TSS",
                 "KINETICS": [
                     "k_resusp * TSS_SED * f_wind",
@@ -408,18 +403,18 @@
                 "_name": "bod_decay",
                 "_description": "Microbial BOD decomposition",
                 "CONSUMED": "BOD",
-                "PRODUCED": "CO2",
+                "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_BOD * BOD * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+                    "k_bod * BOD * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "k_BOD",
+                    "k_bod",
                     "Ks_O2",
                     "theta"
                 ],
                 "PARAMETER_VALUES": {
-                    "k_BOD": 0.2,
+                    "k_bod": 0.2,
                     "Ks_O2": 0.5,
                     "theta": 1.06
                 }
@@ -428,7 +423,7 @@
                 "_name": "bod_settling",
                 "_description": "Particulate BOD settling",
                 "CONSUMED": "BOD",
-                "PRODUCED": "BOD_SED",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "f_part * v_settle * BOD / depth",
                     "1/day"
@@ -457,7 +452,7 @@
                 "_name": "pathogen_dieoff",
                 "_description": "Natural pathogen die-off",
                 "CONSUMED": "PATHOGEN",
-                "PRODUCED": "PATHOGEN_dead",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_dieoff * PATHOGEN * theta^(Treach_K - 293)",
                     "1/day"
@@ -475,7 +470,7 @@
                 "_name": "pathogen_uv",
                 "_description": "UV inactivation of pathogens",
                 "CONSUMED": "PATHOGEN",
-                "PRODUCED": "PATHOGEN_dead",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_uv * PATHOGEN * (SWrad_Wm2 / 500) * f_depth",
                     "1/day"
@@ -493,7 +488,7 @@
                 "_name": "pathogen_settling",
                 "_description": "Pathogen attachment to particles and settling",
                 "CONSUMED": "PATHOGEN",
-                "PRODUCED": "PATHOGEN_sed",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_attach * PATHOGEN * TSS * v_settle / depth",
                     "1/day"
@@ -525,8 +520,8 @@
             "1": {
                 "_name": "generic_removal",
                 "_description": "Generic first-order removal with background",
-                "CONSUMED": "POLLUTANT",
-                "PRODUCED": "POLLUTANT_removed",
+                "CONSUMED": "NONE",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_removal * (POLLUTANT - C_star)",
                     "1/day"

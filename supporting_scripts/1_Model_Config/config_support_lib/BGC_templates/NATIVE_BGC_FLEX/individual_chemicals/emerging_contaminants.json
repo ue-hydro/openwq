@@ -35,8 +35,7 @@
             "14": "EDC_estrogen",
             "15": "EDC_bisphenol",
             "16": "METAB_generic",
-            "17": "CO2",
-            "18": "DOC"
+            "17": "CO2"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PHARMA_antibiotic",
@@ -73,8 +72,7 @@
             "EDC_estrogen": "Endocrine disruptor (estrogen)",
             "EDC_bisphenol": "Endocrine disruptor (bisphenol)",
             "METAB_generic": "Generic metabolite / degradation product",
-            "CO2": "Dissolved carbon dioxide",
-            "DOC": "Dissolved organic carbon"
+            "CO2": "Dissolved carbon dioxide"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -307,7 +305,7 @@
                 "_description": "Volatilization of synthetic musks and fragrances",
                 "_notes": "Henry's law constant determines air-water exchange",
                 "CONSUMED": "PPCP_fragrance",
-                "PRODUCED": "PPCP_fragrance_atm",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_vol * PPCP_fragrance * (Treach_K / 293)",
                     "1/day"
@@ -439,7 +437,7 @@
                 "_description": "PFOA sorption to sediments and organic matter",
                 "_notes": "Kd ~ 10-100 L/kg depending on organic carbon content",
                 "CONSUMED": "PFAS_PFOA",
-                "PRODUCED": "PFAS_PFOA_sorbed",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_sorp_pfoa * PFAS_PFOA * (1 - PFAS_PFOA / Smax_pfoa)",
                     "1/day"
@@ -470,7 +468,7 @@
                 "_description": "PFOS sorption - higher affinity than PFOA",
                 "_notes": "PFOS is more hydrophobic, stronger sorption",
                 "CONSUMED": "PFAS_PFOS",
-                "PRODUCED": "PFAS_PFOS_sorbed",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_sorp_pfos * PFAS_PFOS * (1 - PFAS_PFOS / Smax_pfos)",
                     "1/day"
@@ -489,7 +487,7 @@
                 "_description": "GenX (HFPO-DA) sorption - less sorptive than legacy PFAS",
                 "_notes": "Shorter chain, more mobile in environment",
                 "CONSUMED": "PFAS_GenX",
-                "PRODUCED": "PFAS_GenX_sorbed",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_sorp_genx * PFAS_GenX",
                     "1/day"
@@ -506,7 +504,7 @@
                 "_description": "PFAS uptake by plants (bioaccumulation pathway)",
                 "_notes": "PFAS accumulate in plant tissues, especially leaves",
                 "CONSUMED": "PFAS_PFOA",
-                "PRODUCED": "PFAS_plant",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_plant_pfas * PFAS_PFOA * f_season",
                     "1/day"
@@ -567,7 +565,7 @@
                 "_description": "Gravitational settling of microplastic fibers",
                 "_notes": "Fibers settle slowly due to high surface area:volume ratio",
                 "CONSUMED": "MP_fiber",
-                "PRODUCED": "MP_fiber_sed",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "v_settle_fiber * MP_fiber / depth",
                     "1/day"
@@ -594,7 +592,7 @@
                 "_description": "Settling of microplastic fragments",
                 "_notes": "Settling depends on size, shape, density, biofouling",
                 "CONSUMED": "MP_fragment",
-                "PRODUCED": "MP_fragment_sed",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "v_settle_fragment * MP_fragment / depth",
                     "1/day"
@@ -613,7 +611,7 @@
                 "_description": "Settling of microbeads (spherical)",
                 "_notes": "Beads settle faster due to compact shape",
                 "CONSUMED": "MP_bead",
-                "PRODUCED": "MP_bead_sed",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "v_settle_bead * MP_bead / depth",
                     "1/day"
@@ -632,7 +630,7 @@
                 "_description": "Aggregation of MPs with suspended sediment and organic matter",
                 "_notes": "Heteroaggregation increases effective settling",
                 "CONSUMED": "MP_fragment",
-                "PRODUCED": "MP_aggregate",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_agg * MP_fragment * TSS",
                     "1/day"
@@ -663,7 +661,7 @@
                 "_description": "UV-induced fragmentation of MPs to smaller particles",
                 "_notes": "Creates secondary microplastics and nanoplastics",
                 "CONSUMED": "MP_fragment",
-                "PRODUCED": "MP_nanoplastic",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_frag * MP_fragment * (SWrad_Wm2 / 500)",
                     "1/day"
@@ -688,7 +686,7 @@
                 "_description": "Biofilm growth on MP surfaces increasing density",
                 "_notes": "Biofouling increases settling by increasing particle density",
                 "CONSUMED": "MP_fragment",
-                "PRODUCED": "MP_biofouled",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_biofoul * MP_fragment * theta_bio^(Treach_K - 293)",
                     "1/day"
@@ -804,7 +802,7 @@
             "1": {
                 "_name": "generic_biodegradation",
                 "_description": "Generic first-order biodegradation",
-                "CONSUMED": "EC_generic",
+                "CONSUMED": "NONE",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
                     "k_bio * EC_generic * theta^(Treach_K - 293)",
@@ -830,7 +828,7 @@
             "2": {
                 "_name": "generic_photolysis",
                 "_description": "Generic photolysis",
-                "CONSUMED": "EC_generic",
+                "CONSUMED": "NONE",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
                     "k_photo * EC_generic * (SWrad_Wm2 / 500)",
@@ -846,8 +844,8 @@
             "3": {
                 "_name": "generic_sorption",
                 "_description": "Generic sorption to sediments",
-                "CONSUMED": "EC_generic",
-                "PRODUCED": "EC_sorbed",
+                "CONSUMED": "NONE",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_sorp * EC_generic * Kd_norm",
                     "1/day"

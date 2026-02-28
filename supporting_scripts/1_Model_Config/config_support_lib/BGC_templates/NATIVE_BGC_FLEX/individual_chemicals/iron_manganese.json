@@ -12,7 +12,10 @@
             "6": "MnO2",
             "7": "DO",
             "8": "H2S",
-            "9": "PO4-P"
+            "9": "PO4-P",
+            "10": "Fe_P",
+            "11": "SED_Fe",
+            "12": "SED_Mn"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "Fe_II",
@@ -23,7 +26,10 @@
             "MnO2",
             "DO",
             "H2S",
-            "PO4-P"
+            "PO4-P",
+            "Fe_P",
+            "SED_Fe",
+            "SED_Mn"
         ],
         "_LIST_DESCRIPTIONS": {
             "Fe_II": "Ferrous iron (reduced, soluble)",
@@ -34,7 +40,10 @@
             "MnO2": "Particulate manganese dioxide",
             "DO": "Dissolved oxygen",
             "H2S": "Hydrogen sulfide",
-            "PO4-P": "Phosphate (Fe-P coupling)"
+            "PO4-P": "Phosphate (Fe-P coupling)",
+            "Fe_P": "Fe P",
+            "SED_Fe": "Settled Fe (sediment sink)",
+            "SED_Mn": "Settled Mn (sediment sink)"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -263,7 +272,7 @@
                 "1": "MN_OXIDATION",
                 "2": "MN_PRECIPITATION",
                 "3": "MN_REDUCTION",
-                "4": "MNO2-N_SETTLING",
+                "4": "MNO2_SETTLING",
                 "5": "MN_SEDIMENT_FLUX"
             },
             "1": {
@@ -355,7 +364,7 @@
                 }
             },
             "4": {
-                "_NAME": "MNO2-N_SETTLING",
+                "_NAME": "MNO2_SETTLING",
                 "CONSUMED": "MnO2",
                 "PRODUCED": "SED_Mn",
                 "KINETICS": [

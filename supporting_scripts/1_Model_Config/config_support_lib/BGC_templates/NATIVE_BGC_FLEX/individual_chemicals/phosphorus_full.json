@@ -10,7 +10,7 @@
             "4": "PIP",
             "5": "ALGAE_P",
             "6": "DO",
-            "7": "Fe_II"
+            "7": "SED_P_loss"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PO4-P",
@@ -19,7 +19,7 @@
             "PIP",
             "ALGAE_P",
             "DO",
-            "Fe_II"
+            "SED_P_loss"
         ],
         "_LIST_DESCRIPTIONS": {
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
@@ -28,7 +28,7 @@
             "PIP": "Particulate inorganic P (sorbed to minerals)",
             "ALGAE_P": "Algal phosphorus",
             "DO": "Dissolved oxygen",
-            "Fe_II": "Ferrous iron (for redox-P coupling)"
+            "SED_P_loss": "SED loss to atmosphere/sediment"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -104,16 +104,16 @@
                 "CONSUMED": "PO4-P",
                 "PRODUCED": "PIP",
                 "KINETICS": [
-                    "k_ads_P * PO4-P * (PIP_max - PIP) / PIP_max",
+                    "k_ads_P * PO4-P * (pip_max - PIP) / pip_max",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_ads_P",
-                    "PIP_max"
+                    "pip_max"
                 ],
                 "PARAMETER_VALUES": {
                     "k_ads_P": 1.0,
-                    "PIP_max": 1.0
+                    "pip_max": 1.0
                 },
                 "_NOTES": "Langmuir-type sorption with capacity limit",
                 "_PARAMETERS_INFO": {
@@ -126,7 +126,7 @@
                         ],
                         "DESCRIPTION": "P adsorption rate"
                     },
-                    "PIP_max": {
+                    "pip_max": {
                         "VALUE": 1.0,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "Maximum PIP capacity (Langmuir)"
@@ -303,19 +303,19 @@
                 "CONSUMED": "POP",
                 "PRODUCED": "SED_P_loss",
                 "KINETICS": [
-                    "v_s_POP / depth * POP",
+                    "v_s_pop / depth * POP",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "v_s_POP",
+                    "v_s_pop",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
-                    "v_s_POP": 0.5,
+                    "v_s_pop": 0.5,
                     "depth": 2.0
                 },
                 "_PARAMETERS_INFO": {
-                    "v_s_POP": {
+                    "v_s_pop": {
                         "VALUE": 0.5,
                         "UNITS": "m/day",
                         "RANGE": [
@@ -335,19 +335,19 @@
                 "CONSUMED": "PIP",
                 "PRODUCED": "SED_P_loss",
                 "KINETICS": [
-                    "v_s_PIP / depth * PIP",
+                    "v_s_pip / depth * PIP",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "v_s_PIP",
+                    "v_s_pip",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
-                    "v_s_PIP": 1.0,
+                    "v_s_pip": 1.0,
                     "depth": 2.0
                 },
                 "_PARAMETERS_INFO": {
-                    "v_s_PIP": {
+                    "v_s_pip": {
                         "VALUE": 1.0,
                         "UNITS": "m/day",
                         "RANGE": [

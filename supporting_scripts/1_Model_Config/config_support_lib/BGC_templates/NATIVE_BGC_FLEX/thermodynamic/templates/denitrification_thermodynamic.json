@@ -9,19 +9,16 @@
             "1": "NO3-N",
             "2": "DOC",
             "3": "N2_loss",
-            "4": "CO2",
-            "5": "X_denit"
+            "4": "X_denit"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NO3-N",
-            "DOC",
-            "CO2"
+            "DOC"
         ],
         "_LIST_DESCRIPTIONS": {
             "NO3-N": "Nitrate nitrogen",
             "DOC": "Dissolved organic carbon",
             "N2_loss": "Dinitrogen gas loss (denitrification product)",
-            "CO2": "Dissolved carbon dioxide",
             "X_denit": "Denitrifier biomass"
         }
     },
@@ -47,18 +44,18 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "N2_loss",
                 "KINETICS": [
-                    "k_max * X_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
+                    "k_max * X_denit * (NO3-N/(Km_NO3N+NO3-N)) * (DOC/(Km_doc+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_max",
-                    "Km_NO3-N",
-                    "Km_DOC"
+                    "Km_NO3N",
+                    "Km_doc"
                 ],
                 "PARAMETER_VALUES": {
                     "k_max": 15.0,
-                    "Km_NO3-N": 0.5,
-                    "Km_DOC": 2.0
+                    "Km_NO3N": 0.5,
+                    "Km_doc": 2.0
                 },
                 "_parameter_docs": {
                     "k_max": "Maximum specific denitrification rate (1/day) - literature: 5-25",
@@ -73,20 +70,20 @@
                 "CONSUMED": "DOC",
                 "PRODUCED": "X_denit",
                 "KINETICS": [
-                    "Y_denit * k_max * X_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
+                    "Y_denit * k_max * X_denit * (NO3-N/(Km_NO3N+NO3-N)) * (DOC/(Km_doc+DOC)) * (1 - exp(-((112.6 - 45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_denit",
                     "k_max",
-                    "Km_NO3-N",
-                    "Km_DOC"
+                    "Km_NO3N",
+                    "Km_doc"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_denit": 0.3,
                     "k_max": 15.0,
-                    "Km_NO3-N": 0.5,
-                    "Km_DOC": 2.0
+                    "Km_NO3N": 0.5,
+                    "Km_doc": 2.0
                 },
                 "_parameter_docs": {
                     "Y_denit": "Yield coefficient (mg biomass / mg DOC consumed) - literature: 0.2-0.5"

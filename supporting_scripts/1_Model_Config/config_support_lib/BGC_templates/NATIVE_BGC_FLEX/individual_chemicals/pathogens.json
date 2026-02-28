@@ -7,28 +7,40 @@
             "1": "E_coli",
             "2": "Fecal_coliform",
             "3": "Enterococci",
-            "4": "Total_coliform",
-            "5": "Virus",
-            "6": "Cryptosporidium",
-            "7": "Giardia"
+            "4": "Virus",
+            "5": "Cryptosporidium",
+            "6": "Giardia",
+            "7": "SED_Crypto",
+            "8": "SED_Ecoli",
+            "9": "SED_FC",
+            "10": "SED_Giardia",
+            "11": "Virus_part"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "E_coli",
             "Fecal_coliform",
             "Enterococci",
-            "Total_coliform",
             "Virus",
             "Cryptosporidium",
-            "Giardia"
+            "Giardia",
+            "SED_Crypto",
+            "SED_Ecoli",
+            "SED_FC",
+            "SED_Giardia",
+            "Virus_part"
         ],
         "_LIST_DESCRIPTIONS": {
             "E_coli": "Escherichia coli",
             "Fecal_coliform": "Fecal coliform bacteria",
             "Enterococci": "Enterococcus bacteria",
-            "Total_coliform": "Total coliform bacteria",
             "Virus": "Enteric viruses",
             "Cryptosporidium": "Cryptosporidium oocysts",
-            "Giardia": "Giardia cysts"
+            "Giardia": "Giardia cysts",
+            "SED_Crypto": "Settled Crypto (sediment sink)",
+            "SED_Ecoli": "Settled Ecoli (sediment sink)",
+            "SED_FC": "Settled FC (sediment sink)",
+            "SED_Giardia": "Settled Giardia (sediment sink)",
+            "Virus_part": "Virus part"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -147,18 +159,18 @@
                 "CONSUMED": "NONE",
                 "PRODUCED": "E_coli",
                 "KINETICS": [
-                    "k_resus * SED_Ecoli / depth",
+                    "k_resus * sed_ecoli_conc / depth",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_resus",
-                    "SED_Ecoli",
+                    "sed_ecoli_conc",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
                     "k_resus": 0.1,
-                    "SED_Ecoli": 10000,
-                    "depth": 2.0
+                    "depth": 2.0,
+                    "sed_ecoli_conc": 10000
                 },
                 "_NOTES": "Flow-dependent; increases during storms",
                 "_PARAMETERS_INFO": {
@@ -171,14 +183,14 @@
                         ],
                         "DESCRIPTION": "Resuspension rate from sediments"
                     },
-                    "SED_Ecoli": {
-                        "VALUE": 10000,
-                        "UNITS": "CFU/m2",
-                        "DESCRIPTION": "Sediment E. coli concentration"
-                    },
                     "depth": {
                         "VALUE": 2.0,
                         "UNITS": "m"
+                    },
+                    "sed_ecoli_conc": {
+                        "VALUE": 10000,
+                        "UNITS": "CFU/m2",
+                        "DESCRIPTION": "Sediment E. coli concentration"
                     }
                 }
             }

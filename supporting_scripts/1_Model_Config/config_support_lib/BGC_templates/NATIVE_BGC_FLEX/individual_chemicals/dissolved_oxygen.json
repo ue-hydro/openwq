@@ -89,19 +89,19 @@
                 "_description": "Oxygen exchange with atmosphere (deficit-driven flux)",
                 "_reaction": "O2(atm) <-> O2(aq)",
                 "_formula": "Flux = ka * (DOsat - DO)",
-                "CONSUMED": "DO_DEFICIT",
+                "CONSUMED": "NONE",
                 "PRODUCED": "DO",
                 "KINETICS": [
-                    "ka_20 * 1.024^(Treach_K - 293) * (DOsat_20 * (1 - 0.0035*(Treach_K - 293)) - DO)",
+                    "ka_20 * 1.024^(Treach_K - 293) * (dosat_20 * (1 - 0.0035*(Treach_K - 293)) - DO)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "ka_20",
-                    "DOsat_20"
+                    "dosat_20"
                 ],
                 "PARAMETER_VALUES": {
                     "ka_20": 3.0,
-                    "DOsat_20": 9.1
+                    "dosat_20": 9.1
                 },
                 "_parameter_ranges": {
                     "ka_20": {
@@ -127,7 +127,7 @@
                 "_description": "Oxygen production by phytoplankton photosynthesis",
                 "_reaction": "CO2 + H2O + light -> CH2O + O2",
                 "_stoichiometry": "1.0 mg C fixed produces ~2.67 mg O2 (32/12 mass ratio)",
-                "CONSUMED": "LIGHT_ENERGY",
+                "CONSUMED": "NONE",
                 "PRODUCED": "DO",
                 "KINETICS": [
                     "P_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * rO2_C * theta_p^(Treach_K - 293)",
@@ -156,7 +156,7 @@
                 "_description": "Oxygen consumption by algal dark respiration",
                 "_reaction": "CH2O + O2 -> CO2 + H2O",
                 "CONSUMED": "DO",
-                "PRODUCED": "CO2",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_resp_algae * PHYTO * rO2_C * theta_r^(Treach_K - 293)",
                     "1/day"
@@ -178,19 +178,19 @@
                 "_description": "Oxidation of rapidly degradable organic matter (CBOD)",
                 "_reaction": "BOD + O2 -> CO2 + H2O (microbial)",
                 "CONSUMED": "DO",
-                "PRODUCED": "CO2",
+                "PRODUCED": "NONE",
                 "KINETICS": [
-                    "kd_fast * BOD_fast * (DO / (Ks_DO + DO)) * theta_bod^(Treach_K - 293)",
+                    "kd_fast * BOD_fast * (DO / (Ks_do + DO)) * theta_bod^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "kd_fast",
-                    "Ks_DO",
+                    "Ks_do",
                     "theta_bod"
                 ],
                 "PARAMETER_VALUES": {
                     "kd_fast": 0.3,
-                    "Ks_DO": 0.5,
+                    "Ks_do": 0.5,
                     "theta_bod": 1.047
                 },
                 "_parameter_ranges": {
@@ -213,19 +213,19 @@
                 "_name": "bod_decay_slow",
                 "_description": "Oxidation of slowly degradable organic matter",
                 "CONSUMED": "DO",
-                "PRODUCED": "CO2",
+                "PRODUCED": "NONE",
                 "KINETICS": [
-                    "kd_slow * BOD_slow * (DO / (Ks_DO + DO)) * theta_bod^(Treach_K - 293)",
+                    "kd_slow * BOD_slow * (DO / (Ks_do + DO)) * theta_bod^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "kd_slow",
-                    "Ks_DO",
+                    "Ks_do",
                     "theta_bod"
                 ],
                 "PARAMETER_VALUES": {
                     "kd_slow": 0.02,
-                    "Ks_DO": 0.5,
+                    "Ks_do": 0.5,
                     "theta_bod": 1.047
                 },
                 "_notes": "Refractory BOD fraction - decays 10-20x slower than fast BOD"
@@ -235,7 +235,7 @@
                 "_description": "Particulate BOD settling to sediments",
                 "_notes": "Removes BOD from water column but contributes to SOD",
                 "CONSUMED": "BOD_fast",
-                "PRODUCED": "BOD_SED",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "v_s_bod * BOD_fast / depth",
                     "1/day"
@@ -264,18 +264,18 @@
                 "CONSUMED": "DO",
                 "PRODUCED": "NO3-N",
                 "KINETICS": [
-                    "k_nitrif * NH4-N * (DO / (Ks_DO_nitrif + DO)) * rO2_N * theta_nitrif^(Treach_K - 293)",
+                    "k_nitrif * NH4-N * (DO / (Ks_do_nitrif + DO)) * rO2_N * theta_nitrif^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_nitrif",
-                    "Ks_DO_nitrif",
+                    "Ks_do_nitrif",
                     "rO2_N",
                     "theta_nitrif"
                 ],
                 "PARAMETER_VALUES": {
                     "k_nitrif": 0.1,
-                    "Ks_DO_nitrif": 1.0,
+                    "Ks_do_nitrif": 1.0,
                     "rO2_N": 4.57,
                     "theta_nitrif": 1.08
                 },
@@ -290,21 +290,21 @@
                 "_description": "Benthic oxygen consumption from sediment respiration",
                 "_reaction": "Sediment organic matter + O2 -> CO2 + nutrients",
                 "CONSUMED": "DO",
-                "PRODUCED": "CO2",
+                "PRODUCED": "NONE",
                 "KINETICS": [
-                    "SOD_20 / depth * (DO / (Ks_DO_sed + DO)) * theta_sod^(Treach_K - 293)",
+                    "SOD_20 / depth * (DO / (Ks_do_sed + DO)) * theta_sod^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "SOD_20",
                     "depth",
-                    "Ks_DO_sed",
+                    "Ks_do_sed",
                     "theta_sod"
                 ],
                 "PARAMETER_VALUES": {
                     "SOD_20": 1.5,
                     "depth": 2.0,
-                    "Ks_DO_sed": 1.0,
+                    "Ks_do_sed": 1.0,
                     "theta_sod": 1.065
                 },
                 "_parameter_ranges": {
@@ -327,18 +327,18 @@
                 "_reaction": "Reduced compounds + O2 -> Oxidized compounds",
                 "_examples": "Fe2+ -> Fe3+, S2- -> SO4-S, Mn2+ -> Mn4+",
                 "CONSUMED": "DO",
-                "PRODUCED": "OXIDIZED",
+                "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_cod * COD * (DO / (Ks_DO + DO))",
+                    "k_cod * COD * (DO / (Ks_do + DO))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_cod",
-                    "Ks_DO"
+                    "Ks_do"
                 ],
                 "PARAMETER_VALUES": {
                     "k_cod": 5.0,
-                    "Ks_DO": 0.5
+                    "Ks_do": 0.5
                 },
                 "_notes": "COD typically fast - often instantaneous oxygen demand"
             }
@@ -352,25 +352,25 @@
             },
             "1": {
                 "_name": "reaeration_simple",
-                "CONSUMED": "DO_DEFICIT",
+                "CONSUMED": "NONE",
                 "PRODUCED": "DO",
                 "KINETICS": [
-                    "ka * (DOsat - DO)",
+                    "ka * (dosat - DO)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "ka",
-                    "DOsat"
+                    "dosat"
                 ],
                 "PARAMETER_VALUES": {
                     "ka": 2.0,
-                    "DOsat": 9.0
+                    "dosat": 9.0
                 }
             },
             "2": {
                 "_name": "bod_decay_simple",
                 "CONSUMED": "DO",
-                "PRODUCED": "CO2",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "kd * BOD_fast",
                     "1/day"
@@ -385,7 +385,7 @@
             "3": {
                 "_name": "sod_simple",
                 "CONSUMED": "DO",
-                "PRODUCED": "CO2",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "SOD / depth",
                     "1/day"

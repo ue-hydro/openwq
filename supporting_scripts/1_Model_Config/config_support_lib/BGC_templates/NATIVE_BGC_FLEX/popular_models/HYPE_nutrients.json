@@ -15,8 +15,13 @@
             "7": "humusP",
             "8": "fastP",
             "9": "PartP",
-            "10": "TOC",
-            "11": "SS"
+            "10": "SS",
+            "11": "CROP_N",
+            "12": "CROP_P",
+            "13": "N2_loss",
+            "14": "SED_N",
+            "15": "SED_P",
+            "16": "SED_SS"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "IN",
@@ -28,8 +33,13 @@
             "humusP",
             "fastP",
             "PartP",
-            "TOC",
-            "SS"
+            "SS",
+            "CROP_N",
+            "CROP_P",
+            "N2_loss",
+            "SED_N",
+            "SED_P",
+            "SED_SS"
         ],
         "_LIST_DESCRIPTIONS": {
             "IN": "Inorganic nitrogen (NO3 + NH4)",
@@ -41,8 +51,13 @@
             "humusP": "Soil humus phosphorus pool",
             "fastP": "Fast-cycling organic P pool",
             "PartP": "Soil particulate P (mineral)",
-            "TOC": "Total organic carbon",
-            "SS": "Suspended sediment"
+            "SS": "Suspended sediment",
+            "CROP_N": "Crop uptake of N",
+            "CROP_P": "Crop uptake of P",
+            "N2_loss": "N2 loss to atmosphere/sediment",
+            "SED_N": "Settled N (sediment sink)",
+            "SED_P": "Settled P (sediment sink)",
+            "SED_SS": "Settled SS (sediment sink)"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -130,19 +145,19 @@
                 "CONSUMED": "IN",
                 "PRODUCED": "N2_loss",
                 "KINETICS": [
-                    "denitrlu * denitr * tmpfcn * smfcn_sat * IN / (IN + halfsatIN)",
+                    "denitrlu * denitr * tmpfcn * smfcn_sat * IN / (IN + halfsatin)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "denitrlu",
                     "denitr",
-                    "halfsatIN",
+                    "halfsatin",
                     "smfcn_sat"
                 ],
                 "PARAMETER_VALUES": {
                     "denitrlu": 1.0,
                     "denitr": 0.003,
-                    "halfsatIN": 1.0,
+                    "halfsatin": 1.0,
                     "smfcn_sat": 0.5
                 },
                 "_PARAMETERS_INFO": {
@@ -159,7 +174,7 @@
                         ],
                         "DESCRIPTION": "Denitrification rate parameter"
                     },
-                    "halfsatIN": {
+                    "halfsatin": {
                         "VALUE": 1.0,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "Half-saturation for IN"
@@ -175,20 +190,20 @@
                 "CONSUMED": "IN",
                 "PRODUCED": "CROP_N",
                 "KINETICS": [
-                    "uptakelu * uptakeN * cropcover * tmpfcn * IN / (IN + halfsatIN)",
+                    "uptakelu * uptakeN * cropcover * tmpfcn * IN / (IN + halfsatin)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "uptakelu",
                     "uptakeN",
                     "cropcover",
-                    "halfsatIN"
+                    "halfsatin"
                 ],
                 "PARAMETER_VALUES": {
                     "uptakelu": 1.0,
                     "uptakeN": 0.05,
                     "cropcover": 0.5,
-                    "halfsatIN": 1.0
+                    "halfsatin": 1.0
                 },
                 "_PARAMETERS_INFO": {
                     "uptakelu": {
@@ -204,7 +219,7 @@
                         "VALUE": 0.5,
                         "DESCRIPTION": "Crop cover fraction"
                     },
-                    "halfsatIN": {
+                    "halfsatin": {
                         "VALUE": 1.0,
                         "UNITS": "mg/L"
                     }
@@ -324,16 +339,16 @@
                 "CONSUMED": "SP",
                 "PRODUCED": "PartP",
                 "KINETICS": [
-                    "freession * freession * (SP - eqSP)",
+                    "freession * freession * (SP - eqsp)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "freession",
-                    "eqSP"
+                    "eqsp"
                 ],
                 "PARAMETER_VALUES": {
                     "freession": 0.1,
-                    "eqSP": 0.01
+                    "eqsp": 0.01
                 },
                 "_NOTES": "Net sorption when SP > eqSP",
                 "_PARAMETERS_INFO": {
@@ -342,7 +357,7 @@
                         "UNITS": "1/day",
                         "DESCRIPTION": "P sorption rate"
                     },
-                    "eqSP": {
+                    "eqsp": {
                         "VALUE": 0.01,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "Equilibrium SP concentration"
@@ -354,16 +369,16 @@
                 "CONSUMED": "SP",
                 "PRODUCED": "CROP_P",
                 "KINETICS": [
-                    "uptakelu * uptakeP * cropcover * tmpfcn * SP / (SP + halfsatSP)",
+                    "uptakelu * uptakeP * cropcover * tmpfcn * SP / (SP + halfsatsp)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "uptakeP",
-                    "halfsatSP"
+                    "halfsatsp"
                 ],
                 "PARAMETER_VALUES": {
                     "uptakeP": 0.01,
-                    "halfsatSP": 0.02
+                    "halfsatsp": 0.02
                 },
                 "_PARAMETERS_INFO": {
                     "uptakeP": {
@@ -371,7 +386,7 @@
                         "UNITS": "1/day",
                         "DESCRIPTION": "Plant P uptake rate"
                     },
-                    "halfsatSP": {
+                    "halfsatsp": {
                         "VALUE": 0.02,
                         "UNITS": "mg/L"
                     }
@@ -445,19 +460,19 @@
                 "CONSUMED": "PP",
                 "PRODUCED": "SED_P",
                 "KINETICS": [
-                    "sedPP * PP / depth",
+                    "sedpp * PP / depth",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "sedPP",
+                    "sedpp",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
-                    "sedPP": 0.5,
+                    "sedpp": 0.5,
                     "depth": 1.0
                 },
                 "_PARAMETERS_INFO": {
-                    "sedPP": {
+                    "sedpp": {
                         "VALUE": 0.5,
                         "UNITS": "m/day",
                         "RANGE": [
@@ -477,19 +492,19 @@
                 "CONSUMED": "SS",
                 "PRODUCED": "SED_SS",
                 "KINETICS": [
-                    "sedSS * SS / depth",
+                    "sedss * SS / depth",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "sedSS",
+                    "sedss",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
-                    "sedSS": 1.0,
+                    "sedss": 1.0,
                     "depth": 1.0
                 },
                 "_PARAMETERS_INFO": {
-                    "sedSS": {
+                    "sedss": {
                         "VALUE": 1.0,
                         "UNITS": "m/day",
                         "DESCRIPTION": "SS settling velocity"
@@ -629,19 +644,19 @@
                 "CONSUMED": "PP",
                 "PRODUCED": "SED_P",
                 "KINETICS": [
-                    "sedPP * PP / depth",
+                    "sedpp * PP / depth",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "sedPP",
+                    "sedpp",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
-                    "sedPP": 0.5,
+                    "sedpp": 0.5,
                     "depth": 5.0
                 },
                 "_PARAMETERS_INFO": {
-                    "sedPP": {
+                    "sedpp": {
                         "VALUE": 0.5,
                         "UNITS": "m/day"
                     },
@@ -656,19 +671,19 @@
                 "CONSUMED": "ON",
                 "PRODUCED": "SED_N",
                 "KINETICS": [
-                    "sedON * ON / depth",
+                    "sedon * ON / depth",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "sedON",
+                    "sedon",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
-                    "sedON": 0.3,
+                    "sedon": 0.3,
                     "depth": 5.0
                 },
                 "_PARAMETERS_INFO": {
-                    "sedON": {
+                    "sedon": {
                         "VALUE": 0.3,
                         "UNITS": "m/day",
                         "DESCRIPTION": "ON settling velocity"

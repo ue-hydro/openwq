@@ -52,19 +52,19 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "N2_loss",
                 "KINETICS": [
-                    "k_anmx * X_anammox * (NH4-N/(Km_NH4-N+NH4-N)) * (NO2-N/(Km_NO2-N+NO2-N)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((357-45)/(2*0.008314*(T+273)))))",
+                    "k_anmx * X_anammox * (NH4-N/(Km_NH4N+NH4-N)) * (NO2-N/(Km_NO2N+NO2-N)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((357-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_anmx",
-                    "Km_NH4-N",
-                    "Km_NO2-N",
+                    "Km_NH4N",
+                    "Km_NO2N",
                     "Ki_O2"
                 ],
                 "PARAMETER_VALUES": {
                     "k_anmx": 2.0,
-                    "Km_NH4-N": 0.1,
-                    "Km_NO2-N": 0.05,
+                    "Km_NH4N": 0.1,
+                    "Km_NO2N": 0.05,
                     "Ki_O2": 0.01
                 },
                 "_notes": [
@@ -78,21 +78,21 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "X_anammox",
                 "KINETICS": [
-                    "Y_anmx * k_anmx * X_anammox * (NH4-N/(Km_NH4-N+NH4-N)) * (NO2-N/(Km_NO2-N+NO2-N)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((357-45)/(2*0.008314*(T+273)))))",
+                    "Y_anmx * k_anmx * X_anammox * (NH4-N/(Km_NH4N+NH4-N)) * (NO2-N/(Km_NO2N+NO2-N)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((357-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_anmx",
                     "k_anmx",
-                    "Km_NH4-N",
-                    "Km_NO2-N",
+                    "Km_NH4N",
+                    "Km_NO2N",
                     "Ki_O2"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_anmx": 0.11,
                     "k_anmx": 2.0,
-                    "Km_NH4-N": 0.1,
-                    "Km_NO2-N": 0.05,
+                    "Km_NH4N": 0.1,
+                    "Km_NO2N": 0.05,
                     "Ki_O2": 0.01
                 },
                 "_notes": "Low yield - autotrophic metabolism"

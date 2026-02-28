@@ -83,18 +83,18 @@
                 "CONSUMED": "DO",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_aer * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_DOC_aer+DOC)) * (1 - exp(-((125 - 45)/(2*0.008314*(T+273)))))",
+                    "k_aer * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_doc_aer+DOC)) * (1 - exp(-((125 - 45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_aer",
                     "Km_O2",
-                    "Km_DOC_aer"
+                    "Km_doc_aer"
                 ],
                 "PARAMETER_VALUES": {
                     "k_aer": 20.0,
                     "Km_O2": 0.5,
-                    "Km_DOC_aer": 1.0
+                    "Km_doc_aer": 1.0
                 },
                 "_notes": "F_T \u2248 1.0 (aerobic respiration always thermodynamically favorable)"
             },
@@ -105,19 +105,19 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "N2_loss",
                 "KINETICS": [
-                    "k_denit * X_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC_denit+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119 - 45)/(2*0.008314*(T+273)))))",
+                    "k_denit * X_denit * (NO3-N/(Km_NO3N+NO3-N)) * (DOC/(Km_doc_denit+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119 - 45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_denit",
-                    "Km_NO3-N",
-                    "Km_DOC_denit",
+                    "Km_NO3N",
+                    "Km_doc_denit",
                     "Ki_O2"
                 ],
                 "PARAMETER_VALUES": {
                     "k_denit": 15.0,
-                    "Km_NO3-N": 0.5,
-                    "Km_DOC_denit": 2.0,
+                    "Km_NO3N": 0.5,
+                    "Km_doc_denit": 2.0,
                     "Ki_O2": 0.5
                 },
                 "_notes": [
@@ -133,22 +133,22 @@
                 "CONSUMED": "SO4-S",
                 "PRODUCED": "H2S",
                 "KINETICS": [
-                    "k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC_srb+DOC)) * (Ki_O2_srb/(Ki_O2_srb+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-(max(0, (25 - 45 + 30*log(max(0.001,DOC)/max(0.001,H2S+0.001))))/(2*0.008314*(T+273)))))",
+                    "k_srb * X_srb * (SO4-S/(Km_SO4S+SO4-S)) * (DOC/(Km_doc_srb+DOC)) * (Ki_O2_srb/(Ki_O2_srb+DO)) * (Ki_NO3N/(Ki_NO3N+NO3-N)) * (1 - exp(-(max(0, (25 - 45 + 30*log(max(0.001,DOC)/max(0.001,H2S+0.001))))/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_srb",
-                    "Km_SO4-S",
-                    "Km_DOC_srb",
+                    "Km_SO4S",
+                    "Km_doc_srb",
                     "Ki_O2_srb",
-                    "Ki_NO3-N"
+                    "Ki_NO3N"
                 ],
                 "PARAMETER_VALUES": {
                     "k_srb": 5.0,
-                    "Km_SO4-S": 5.0,
-                    "Km_DOC_srb": 3.0,
+                    "Km_SO4S": 5.0,
+                    "Km_doc_srb": 3.0,
                     "Ki_O2_srb": 0.1,
-                    "Ki_NO3-N": 0.2
+                    "Ki_NO3N": 0.2
                 },
                 "_notes": [
                     "Lower \u0394G\u00b0 means F_T is more sensitive to conditions",
@@ -162,20 +162,20 @@
                 "CONSUMED": "DOC",
                 "PRODUCED": "X_aer",
                 "KINETICS": [
-                    "Y_aer * k_aer * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_DOC_aer+DOC)) * (1 - exp(-((125 - 45)/(2*0.008314*(T+273)))))",
+                    "Y_aer * k_aer * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_doc_aer+DOC)) * (1 - exp(-((125 - 45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_aer",
                     "k_aer",
                     "Km_O2",
-                    "Km_DOC_aer"
+                    "Km_doc_aer"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_aer": 0.4,
                     "k_aer": 20.0,
                     "Km_O2": 0.5,
-                    "Km_DOC_aer": 1.0
+                    "Km_doc_aer": 1.0
                 }
             },
             "5": {
@@ -183,21 +183,21 @@
                 "CONSUMED": "DOC",
                 "PRODUCED": "X_denit",
                 "KINETICS": [
-                    "Y_denit * k_denit * X_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC_denit+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119 - 45)/(2*0.008314*(T+273)))))",
+                    "Y_denit * k_denit * X_denit * (NO3-N/(Km_NO3N+NO3-N)) * (DOC/(Km_doc_denit+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119 - 45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_denit",
                     "k_denit",
-                    "Km_NO3-N",
-                    "Km_DOC_denit",
+                    "Km_NO3N",
+                    "Km_doc_denit",
                     "Ki_O2"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_denit": 0.3,
                     "k_denit": 15.0,
-                    "Km_NO3-N": 0.5,
-                    "Km_DOC_denit": 2.0,
+                    "Km_NO3N": 0.5,
+                    "Km_doc_denit": 2.0,
                     "Ki_O2": 0.5
                 }
             },
@@ -206,24 +206,24 @@
                 "CONSUMED": "DOC",
                 "PRODUCED": "X_srb",
                 "KINETICS": [
-                    "Y_srb * k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC_srb+DOC)) * (Ki_O2_srb/(Ki_O2_srb+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-(max(0, (25 - 45 + 30*log(max(0.001,DOC)/max(0.001,H2S+0.001))))/(2*0.008314*(T+273)))))",
+                    "Y_srb * k_srb * X_srb * (SO4-S/(Km_SO4S+SO4-S)) * (DOC/(Km_doc_srb+DOC)) * (Ki_O2_srb/(Ki_O2_srb+DO)) * (Ki_NO3N/(Ki_NO3N+NO3-N)) * (1 - exp(-(max(0, (25 - 45 + 30*log(max(0.001,DOC)/max(0.001,H2S+0.001))))/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_srb",
                     "k_srb",
-                    "Km_SO4-S",
-                    "Km_DOC_srb",
+                    "Km_SO4S",
+                    "Km_doc_srb",
                     "Ki_O2_srb",
-                    "Ki_NO3-N"
+                    "Ki_NO3N"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_srb": 0.2,
                     "k_srb": 5.0,
-                    "Km_SO4-S": 5.0,
-                    "Km_DOC_srb": 3.0,
+                    "Km_SO4S": 5.0,
+                    "Km_doc_srb": 3.0,
                     "Ki_O2_srb": 0.1,
-                    "Ki_NO3-N": 0.2
+                    "Ki_NO3N": 0.2
                 }
             },
             "7": {

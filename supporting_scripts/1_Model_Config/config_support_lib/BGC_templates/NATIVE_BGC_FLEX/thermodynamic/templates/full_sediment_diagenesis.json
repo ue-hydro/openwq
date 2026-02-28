@@ -13,21 +13,19 @@
             "5": "SO4-S",
             "6": "DOC",
             "7": "POC",
-            "8": "NH4-N",
-            "9": "Mn_II",
-            "10": "Fe_II",
-            "11": "H2S",
-            "12": "CH4",
-            "13": "CO2",
-            "14": "N2_loss",
-            "15": "FeS"
+            "8": "Mn_II",
+            "9": "Fe_II",
+            "10": "H2S",
+            "11": "CH4",
+            "12": "CO2",
+            "13": "N2_loss",
+            "14": "FeS"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
             "NO3-N",
             "SO4-S",
             "DOC",
-            "NH4-N",
             "Mn_II",
             "Fe_II",
             "H2S",
@@ -42,7 +40,6 @@
             "SO4-S": "Sulfate sulfur",
             "DOC": "Dissolved organic carbon",
             "POC": "Particulate organic carbon",
-            "NH4-N": "Ammonium nitrogen",
             "Mn_II": "Dissolved manganese(II) (reduced)",
             "Fe_II": "Dissolved iron(II) (reduced)",
             "H2S": "Dissolved hydrogen sulfide",
@@ -118,18 +115,18 @@
                 "CONSUMED": "DO",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_aer * (DO/(Km_O2+DO)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((125-45)/(2*0.008314*(T+273)))))",
+                    "k_aer * (DO/(Km_O2+DO)) * (DOC/(Km_doc+DOC)) * (1 - exp(-((125-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_aer",
                     "Km_O2",
-                    "Km_DOC"
+                    "Km_doc"
                 ],
                 "PARAMETER_VALUES": {
                     "k_aer": 50.0,
                     "Km_O2": 0.02,
-                    "Km_DOC": 1.0
+                    "Km_doc": 1.0
                 }
             },
             "3": {
@@ -139,19 +136,19 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "N2_loss",
                 "KINETICS": [
-                    "k_denit * (NO3-N/(Km_NO3-N+NO3-N)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119-45)/(2*0.008314*(T+273)))))",
+                    "k_denit * (NO3-N/(Km_NO3N+NO3-N)) * (DOC/(Km_doc+DOC)) * (Ki_O2/(Ki_O2+DO)) * (1 - exp(-((119-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_denit",
-                    "Km_NO3-N",
-                    "Km_DOC",
+                    "Km_NO3N",
+                    "Km_doc",
                     "Ki_O2"
                 ],
                 "PARAMETER_VALUES": {
                     "k_denit": 30.0,
-                    "Km_NO3-N": 0.01,
-                    "Km_DOC": 1.0,
+                    "Km_NO3N": 0.01,
+                    "Km_doc": 1.0,
                     "Ki_O2": 0.02
                 }
             },
@@ -162,22 +159,22 @@
                 "CONSUMED": "Mn_IV",
                 "PRODUCED": "Mn_II",
                 "KINETICS": [
-                    "k_mn * (Mn_IV/(Km_Mn4+Mn_IV)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-((95-45)/(2*0.008314*(T+273)))))",
+                    "k_mn * (Mn_IV/(Km_Mn4+Mn_IV)) * (DOC/(Km_doc+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3N/(Ki_NO3N+NO3-N)) * (1 - exp(-((95-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_mn",
                     "Km_Mn4",
-                    "Km_DOC",
+                    "Km_doc",
                     "Ki_O2",
-                    "Ki_NO3-N"
+                    "Ki_NO3N"
                 ],
                 "PARAMETER_VALUES": {
                     "k_mn": 20.0,
                     "Km_Mn4": 1.0,
-                    "Km_DOC": 1.0,
+                    "Km_doc": 1.0,
                     "Ki_O2": 0.02,
-                    "Ki_NO3-N": 0.01
+                    "Ki_NO3N": 0.01
                 }
             },
             "5": {
@@ -187,22 +184,22 @@
                 "CONSUMED": "Fe_III",
                 "PRODUCED": "Fe_II",
                 "KINETICS": [
-                    "k_fe * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
+                    "k_fe * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_doc+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3N/(Ki_NO3N+NO3-N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_fe",
                     "Km_Fe3",
-                    "Km_DOC",
+                    "Km_doc",
                     "Ki_O2",
-                    "Ki_NO3-N"
+                    "Ki_NO3N"
                 ],
                 "PARAMETER_VALUES": {
                     "k_fe": 10.0,
                     "Km_Fe3": 5.0,
-                    "Km_DOC": 1.0,
+                    "Km_doc": 1.0,
                     "Ki_O2": 0.02,
-                    "Ki_NO3-N": 0.01
+                    "Ki_NO3N": 0.01
                 },
                 "_notes": "F_T \u2248 0.64 at standard conditions - moderately thermodynamically limited"
             },
@@ -213,23 +210,23 @@
                 "CONSUMED": "SO4-S",
                 "PRODUCED": "H2S",
                 "KINETICS": [
-                    "k_so4 * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (Ki_Fe3/(Ki_Fe3+Fe_III)) * max(0, (1 - exp(-(max(0, 25 - 20 + 10*log10(max(0.001,DOC)/(max(0.001,H2S)+0.001)))/(2*0.008314*(T+273))))))",
+                    "k_so4 * (SO4-S/(Km_SO4S+SO4-S)) * (DOC/(Km_doc+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3N/(Ki_NO3N+NO3-N)) * (Ki_Fe3/(Ki_Fe3+Fe_III)) * max(0, (1 - exp(-(max(0, 25 - 20 + 10*log10(max(0.001,DOC)/(max(0.001,H2S)+0.001)))/(2*0.008314*(T+273))))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_so4",
-                    "Km_SO4-S",
-                    "Km_DOC",
+                    "Km_SO4S",
+                    "Km_doc",
                     "Ki_O2",
-                    "Ki_NO3-N",
+                    "Ki_NO3N",
                     "Ki_Fe3"
                 ],
                 "PARAMETER_VALUES": {
                     "k_so4": 5.0,
-                    "Km_SO4-S": 1.0,
-                    "Km_DOC": 1.0,
+                    "Km_SO4S": 1.0,
+                    "Km_doc": 1.0,
                     "Ki_O2": 0.02,
-                    "Ki_NO3-N": 0.01,
+                    "Ki_NO3N": 0.01,
                     "Ki_Fe3": 1.0
                 }
             },
@@ -240,22 +237,22 @@
                 "CONSUMED": "DOC",
                 "PRODUCED": "CH4",
                 "KINETICS": [
-                    "k_meth * (DOC/(Km_DOC_meth+DOC)) * (Ki_O2_m/(Ki_O2_m+DO)) * (Ki_NO3-N_m/(Ki_NO3-N_m+NO3-N)) * (Ki_SO4-S/(Ki_SO4-S+SO4-S)) * max(0, (1 - exp(-(max(0, 20 - 11 + 8*log10(max(0.001,DOC)/(max(0.001,CH4)+0.001)))/(2*0.008314*(T+273))))))",
+                    "k_meth * (DOC/(Km_doc_meth+DOC)) * (Ki_O2_m/(Ki_O2_m+DO)) * (Ki_NO3N_m/(Ki_NO3N_m+NO3-N)) * (Ki_SO4S/(Ki_SO4S+SO4-S)) * max(0, (1 - exp(-(max(0, 20 - 11 + 8*log10(max(0.001,DOC)/(max(0.001,CH4)+0.001)))/(2*0.008314*(T+273))))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_meth",
-                    "Km_DOC_meth",
+                    "Km_doc_meth",
                     "Ki_O2_m",
-                    "Ki_NO3-N_m",
-                    "Ki_SO4-S"
+                    "Ki_NO3N_m",
+                    "Ki_SO4S"
                 ],
                 "PARAMETER_VALUES": {
                     "k_meth": 1.0,
-                    "Km_DOC_meth": 2.0,
+                    "Km_doc_meth": 2.0,
                     "Ki_O2_m": 0.01,
-                    "Ki_NO3-N_m": 0.01,
-                    "Ki_SO4-S": 0.5
+                    "Ki_NO3N_m": 0.01,
+                    "Ki_SO4S": 0.5
                 }
             },
             "8": {

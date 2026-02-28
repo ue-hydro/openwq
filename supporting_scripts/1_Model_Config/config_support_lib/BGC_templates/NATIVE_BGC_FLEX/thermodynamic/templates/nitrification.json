@@ -61,17 +61,17 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "NO2-N",
                 "KINETICS": [
-                    "k_aob * X_aob * (NH4-N/(Km_NH4-N+NH4-N)) * (DO/(Km_O2_aob+DO)) * (1 - exp(-((275-45)/(2*0.008314*(T+273)))))",
+                    "k_aob * X_aob * (NH4-N/(Km_NH4N+NH4-N)) * (DO/(Km_O2_aob+DO)) * (1 - exp(-((275-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_aob",
-                    "Km_NH4-N",
+                    "Km_NH4N",
                     "Km_O2_aob"
                 ],
                 "PARAMETER_VALUES": {
                     "k_aob": 15.0,
-                    "Km_NH4-N": 0.5,
+                    "Km_NH4N": 0.5,
                     "Km_O2_aob": 0.3
                 },
                 "_notes": "F_T \u2248 1.0, process is O2 limited, not thermodynamically limited"
@@ -83,17 +83,17 @@
                 "CONSUMED": "NO2-N",
                 "PRODUCED": "NO3-N",
                 "KINETICS": [
-                    "k_nob * X_nob * (NO2-N/(Km_NO2-N+NO2-N)) * (DO/(Km_O2_nob+DO)) * (1 - exp(-((74-45)/(2*0.008314*(T+273)))))",
+                    "k_nob * X_nob * (NO2-N/(Km_NO2N+NO2-N)) * (DO/(Km_O2_nob+DO)) * (1 - exp(-((74-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_nob",
-                    "Km_NO2-N",
+                    "Km_NO2N",
                     "Km_O2_nob"
                 ],
                 "PARAMETER_VALUES": {
                     "k_nob": 20.0,
-                    "Km_NO2-N": 0.2,
+                    "Km_NO2N": 0.2,
                     "Km_O2_nob": 0.5
                 },
                 "_notes": [
@@ -107,19 +107,19 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "X_aob",
                 "KINETICS": [
-                    "Y_aob * k_aob * X_aob * (NH4-N/(Km_NH4-N+NH4-N)) * (DO/(Km_O2_aob+DO)) * (1 - exp(-((275-45)/(2*0.008314*(T+273)))))",
+                    "Y_aob * k_aob * X_aob * (NH4-N/(Km_NH4N+NH4-N)) * (DO/(Km_O2_aob+DO)) * (1 - exp(-((275-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_aob",
                     "k_aob",
-                    "Km_NH4-N",
+                    "Km_NH4N",
                     "Km_O2_aob"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_aob": 0.15,
                     "k_aob": 15.0,
-                    "Km_NH4-N": 0.5,
+                    "Km_NH4N": 0.5,
                     "Km_O2_aob": 0.3
                 },
                 "_notes": "Low yield - autotrophs use CO2 fixation"
@@ -129,19 +129,19 @@
                 "CONSUMED": "NO2-N",
                 "PRODUCED": "X_nob",
                 "KINETICS": [
-                    "Y_nob * k_nob * X_nob * (NO2-N/(Km_NO2-N+NO2-N)) * (DO/(Km_O2_nob+DO)) * (1 - exp(-((74-45)/(2*0.008314*(T+273)))))",
+                    "Y_nob * k_nob * X_nob * (NO2-N/(Km_NO2N+NO2-N)) * (DO/(Km_O2_nob+DO)) * (1 - exp(-((74-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_nob",
                     "k_nob",
-                    "Km_NO2-N",
+                    "Km_NO2N",
                     "Km_O2_nob"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_nob": 0.05,
                     "k_nob": 20.0,
-                    "Km_NO2-N": 0.2,
+                    "Km_NO2N": 0.2,
                     "Km_O2_nob": 0.5
                 },
                 "_notes": "Even lower yield than AOB due to less energy from NO2-N oxidation"

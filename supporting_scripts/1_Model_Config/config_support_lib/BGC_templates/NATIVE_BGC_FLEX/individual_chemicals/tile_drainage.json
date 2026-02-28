@@ -21,35 +21,22 @@
         "LIST": {
             "1": "NO3-N_soil",
             "2": "NO3-N_tile",
-            "3": "NH4-N_soil",
-            "4": "N_ORG_soil",
-            "5": "PO4-P_soil",
-            "6": "PO4-P_tile",
-            "7": "P_PART",
-            "8": "DOC_soil",
-            "9": "DOC_tile",
-            "10": "TSS_tile",
-            "11": "TRACER_conservative"
+            "3": "PO4-P_soil",
+            "4": "PO4-P_tile",
+            "5": "P_PART",
+            "6": "DOC_soil"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NO3-N_tile",
-            "PO4-P_tile",
-            "DOC_tile",
-            "TSS_tile",
-            "TRACER_conservative"
+            "PO4-P_tile"
         ],
         "_LIST_DESCRIPTIONS": {
             "NO3-N_soil": "Soil porewater nitrate nitrogen",
             "NO3-N_tile": "Tile drainage nitrate nitrogen",
-            "NH4-N_soil": "Soil adsorbed ammonium nitrogen",
-            "N_ORG_soil": "Soil organic nitrogen",
             "PO4-P_soil": "Soil phosphorus",
             "PO4-P_tile": "Tile drainage phosphorus",
             "P_PART": "Particulate phosphorus",
-            "DOC_soil": "Soil dissolved organic carbon",
-            "DOC_tile": "Tile drainage dissolved organic carbon",
-            "TSS_tile": "Tile drainage total suspended solids",
-            "TRACER_conservative": "Conservative tracer"
+            "DOC_soil": "Soil dissolved organic carbon"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -131,7 +118,7 @@
                 "_description": "NO3-N export from tile drain to stream",
                 "_notes": "Tile outflow concentration",
                 "CONSUMED": "NO3-N_tile",
-                "PRODUCED": "NO3-N_stream",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "q_tile * NO3-N_tile",
                     "1/day"
@@ -148,7 +135,7 @@
                 "_description": "Denitrification in saturated zone near tiles",
                 "_notes": "Can remove 10-50% of NO3-N before reaching tiles",
                 "CONSUMED": "NO3-N_soil",
-                "PRODUCED": "N2_gas",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_denit_tile * NO3-N_soil * (DOC_soil / (Ks_C + DOC_soil)) * f_sat * theta^(Treach_K - 293)",
                     "1/day"
@@ -239,7 +226,7 @@
                 "_description": "Particulate P transport through macropores",
                 "_notes": "P-enriched particles can move through macropores",
                 "CONSUMED": "P_PART",
-                "PRODUCED": "P_PART_tile",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_part_P * P_PART * f_macropore * q_drain_intense",
                     "1/day"
@@ -259,7 +246,7 @@
                 "_name": "p_legacy_release",
                 "_description": "Slow release of legacy P from enriched soils",
                 "_notes": "Decades of P application create legacy P reservoir",
-                "CONSUMED": "P_LEGACY",
+                "CONSUMED": "NONE",
                 "PRODUCED": "PO4-P_soil",
                 "KINETICS": [
                     "k_legacy * P_LEGACY * (1 - PO4-P_soil / EPC0)",
@@ -298,7 +285,7 @@
             "1": {
                 "_name": "snowmelt_no3_flush",
                 "_description": "NO3-N flush during snowmelt events",
-                "CONSUMED": "NO3-N_snow",
+                "CONSUMED": "NONE",
                 "PRODUCED": "NO3-N_tile",
                 "KINETICS": [
                     "k_flush_N * NO3-N_snow * q_melt",
@@ -318,7 +305,7 @@
                 "_name": "snowmelt_p_flush",
                 "_description": "P flush during snowmelt",
                 "_notes": "P release from frozen vegetation contributes",
-                "CONSUMED": "PO4-P_snow",
+                "CONSUMED": "NONE",
                 "PRODUCED": "PO4-P_tile",
                 "KINETICS": [
                     "k_flush_P * PO4-P_snow * q_melt",
@@ -337,8 +324,8 @@
                 "_name": "frozen_soil_bypass",
                 "_description": "Preferential flow over frozen soil",
                 "_notes": "Frozen conditions increase macropore connectivity",
-                "CONSUMED": "NUTRIENT_surface",
-                "PRODUCED": "NUTRIENT_tile",
+                "CONSUMED": "NONE",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_bypass * NUTRIENT_surface * f_frozen * q_runoff",
                     "1/day"
@@ -397,7 +384,7 @@
                 "_description": "Enhanced denitrification under wetter conditions",
                 "_notes": "Higher water table increases anoxic volume",
                 "CONSUMED": "NO3-N_soil",
-                "PRODUCED": "N2_gas",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_denit_enhanced * NO3-N_soil * f_control * (DOC_soil / (Ks_C + DOC_soil))",
                     "1/day"
@@ -429,7 +416,7 @@
                 "_name": "buffer_denitrification",
                 "_description": "Denitrification in saturated buffer",
                 "CONSUMED": "NO3-N_tile",
-                "PRODUCED": "N2_gas",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_denit_buffer * NO3-N_tile * (DOC_buffer / (Ks_C + DOC_buffer)) * HRT_buffer / HRT_ref",
                     "1/day"
@@ -453,7 +440,7 @@
                 "_name": "buffer_plant_uptake",
                 "_description": "Plant uptake in buffer zone",
                 "CONSUMED": "NO3-N_tile",
-                "PRODUCED": "PLANT_N",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_uptake_buffer * NO3-N_tile * f_season_buffer",
                     "1/day"

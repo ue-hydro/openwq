@@ -10,7 +10,10 @@
             "4": "METAB_1",
             "5": "METAB_2",
             "6": "DOC",
-            "7": "TSS"
+            "7": "TSS",
+            "8": "CO2_loss",
+            "9": "PEST_atm_loss",
+            "10": "SED_PEST"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PEST_diss",
@@ -19,7 +22,10 @@
             "METAB_1",
             "METAB_2",
             "DOC",
-            "TSS"
+            "TSS",
+            "CO2_loss",
+            "PEST_atm_loss",
+            "SED_PEST"
         ],
         "_LIST_DESCRIPTIONS": {
             "PEST_diss": "Dissolved pesticide in water",
@@ -28,7 +34,10 @@
             "METAB_1": "Primary metabolite",
             "METAB_2": "Secondary metabolite",
             "DOC": "Dissolved organic carbon",
-            "TSS": "Total suspended solids"
+            "TSS": "Total suspended solids",
+            "CO2_loss": "CO2 loss to atmosphere/sediment",
+            "PEST_atm_loss": "PEST loss to atmosphere/sediment",
+            "SED_PEST": "Settled PEST (sediment sink)"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -269,18 +278,18 @@
                 "CONSUMED": "PEST_diss",
                 "PRODUCED": "PEST_DOC",
                 "KINETICS": [
-                    "k_DOC * PEST_diss * DOC",
+                    "k_doc * PEST_diss * DOC",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "k_DOC"
+                    "k_doc"
                 ],
                 "PARAMETER_VALUES": {
-                    "k_DOC": 0.1
+                    "k_doc": 0.1
                 },
                 "_NOTES": "DOC-bound fraction is mobile but not bioavailable",
                 "_PARAMETERS_INFO": {
-                    "k_DOC": {
+                    "k_doc": {
                         "VALUE": 0.1,
                         "UNITS": "L/mg/day",
                         "RANGE": [
@@ -296,17 +305,17 @@
                 "CONSUMED": "PEST_DOC",
                 "PRODUCED": "PEST_diss",
                 "KINETICS": [
-                    "k_des_DOC * PEST_DOC",
+                    "k_des_doc * PEST_DOC",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "k_des_DOC"
+                    "k_des_doc"
                 ],
                 "PARAMETER_VALUES": {
-                    "k_des_DOC": 0.2
+                    "k_des_doc": 0.2
                 },
                 "_PARAMETERS_INFO": {
-                    "k_des_DOC": {
+                    "k_des_doc": {
                         "VALUE": 0.2,
                         "UNITS": "1/day"
                     }

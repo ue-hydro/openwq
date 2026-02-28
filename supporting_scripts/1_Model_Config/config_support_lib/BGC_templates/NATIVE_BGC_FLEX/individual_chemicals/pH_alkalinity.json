@@ -25,12 +25,9 @@
             "4": "HCO3",
             "5": "CO3",
             "6": "H_ion",
-            "7": "OH_ion",
-            "8": "Ca",
-            "9": "Cite",
-            "10": "ACID_strong",
-            "11": "BASE_strong",
-            "12": "DOC_acid"
+            "7": "Ca",
+            "8": "ACID_strong",
+            "9": "DOC_acid"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "ALK",
@@ -40,7 +37,6 @@
             "CO3",
             "Ca",
             "ACID_strong",
-            "BASE_strong",
             "DOC_acid"
         ],
         "_LIST_DESCRIPTIONS": {
@@ -50,11 +46,8 @@
             "HCO3": "Bicarbonate ion",
             "CO3": "Carbonate ion",
             "H_ion": "Hydrogen ion (pH proxy)",
-            "OH_ion": "Hydroxide ion",
             "Ca": "Dissolved calcium",
-            "Cite": "Citrate / organic acid anion",
             "ACID_strong": "Strong acid input",
-            "BASE_strong": "Strong base input",
             "DOC_acid": "Dissolved organic acid carbon"
         }
     },
@@ -132,7 +125,7 @@
                 "_description": "CO2 exchange with atmosphere",
                 "_reaction": "CO2(g) <-> CO2(aq)",
                 "_notes": "Henry's Law equilibrium",
-                "CONSUMED": "CO2_atm",
+                "CONSUMED": "NONE",
                 "PRODUCED": "CO2_aq",
                 "KINETICS": [
                     "k_CO2 * (KH * pCO2_atm - CO2_aq)",
@@ -196,7 +189,7 @@
                 "_description": "Carbonate mineral dissolution",
                 "_reaction": "CaCO3 + CO2 + H2O -> Ca2+ + 2HCO3-",
                 "_notes": "Major source of alkalinity in limestone regions",
-                "CONSUMED": "CaCO3_solid",
+                "CONSUMED": "NONE",
                 "PRODUCED": "ALK",
                 "KINETICS": [
                     "k_weather_carb * (1 - IAP/Ksp_calcite) * SA_calcite",
@@ -225,7 +218,7 @@
                 "_description": "Silicate mineral weathering",
                 "_reaction": "CaAl2Si2O8 + 2CO2 + 3H2O -> Ca2+ + 2HCO3- + Al2Si2O5(OH)4",
                 "_notes": "Slower than carbonate weathering but important in igneous terrain",
-                "CONSUMED": "SILICATE_solid",
+                "CONSUMED": "NONE",
                 "PRODUCED": "ALK",
                 "KINETICS": [
                     "k_weather_sil * (H_ion / H_ref)^n_sil",
@@ -249,18 +242,18 @@
                 "CONSUMED": "CO2_aq",
                 "PRODUCED": "ALK",
                 "KINETICS": [
-                    "k_photo * PHYTO * I_light / (Ks_I + I_light) * (DIC / (Ks_DIC + DIC)) * (NO3 / (NO3 + NH4))",
+                    "k_photo * PHYTO * I_light / (Ks_I + I_light) * (DIC / (Ks_dic + DIC)) * (NO3 / (NO3 + NH4))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_photo",
                     "Ks_I",
-                    "Ks_DIC"
+                    "Ks_dic"
                 ],
                 "PARAMETER_VALUES": {
                     "k_photo": 0.1,
                     "Ks_I": 100.0,
-                    "Ks_DIC": 0.5
+                    "Ks_dic": 0.5
                 }
             },
             "4": {
@@ -268,7 +261,7 @@
                 "_description": "Alkalinity production from denitrification",
                 "_reaction": "5CH2O + 4NO3- + 4H+ -> 5CO2 + 2N2 + 7H2O",
                 "_notes": "Consumes H+, generates 1 eq ALK per mol NO3- reduced",
-                "CONSUMED": "NO3",
+                "CONSUMED": "NONE",
                 "PRODUCED": "ALK",
                 "KINETICS": [
                     "k_denit * OM * (NO3 / (Ks_NO3 + NO3)) * (Ks_O2 / (Ks_O2 + DO)) * 1.0",
@@ -291,7 +284,7 @@
                 "_description": "Alkalinity production from sulfate reduction",
                 "_reaction": "2CH2O + SO4-- + 2H+ -> 2CO2 + H2S + 2H2O",
                 "_notes": "Generates 2 eq ALK per mol SO4 reduced",
-                "CONSUMED": "SO4",
+                "CONSUMED": "NONE",
                 "PRODUCED": "ALK",
                 "KINETICS": [
                     "k_sr * OM * (SO4 / (Ks_SO4 + SO4)) * (Ks_O2 / (Ks_O2 + DO)) * (Ks_NO3 / (Ks_NO3 + NO3)) * 2.0",
@@ -372,7 +365,7 @@
                 "_reaction": "Ca2+ + 2HCO3- -> CaCO3 + CO2 + H2O",
                 "_notes": "IAP = [Ca2+][CO3--]; precipitation when IAP > Ksp",
                 "CONSUMED": "ALK",
-                "PRODUCED": "CaCO3_solid",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_precip * (IAP / Ksp_calcite - 1) * f_precip_site",
                     "1/day"
@@ -392,7 +385,7 @@
                 "_name": "respiration_alk",
                 "_description": "Alkalinity change from respiration with NH4 release",
                 "_notes": "Organic N mineralization releases NH4+, slightly increases ALK",
-                "CONSUMED": "OM",
+                "CONSUMED": "NONE",
                 "PRODUCED": "ALK",
                 "KINETICS": [
                     "k_resp * OM * (DO / (Ks_O2 + DO)) * rN_OM * 1.0",
@@ -430,7 +423,7 @@
                 "_description": "Pyrite oxidation generating acidity",
                 "_reaction": "FeS2 + 3.5O2 + H2O -> Fe2+ + 2SO4-- + 2H+",
                 "_notes": "Rate increases at low pH due to Fe3+ oxidation pathway",
-                "CONSUMED": "FeS2",
+                "CONSUMED": "NONE",
                 "PRODUCED": "ACID_strong",
                 "KINETICS": [
                     "k_pyrite * FeS2 * (DO / (Ks_O2 + DO)) * (1 + k_Fe3 * Fe3 / (Ks_Fe3 + Fe3))",
@@ -455,7 +448,7 @@
                 "_description": "Fe2+ oxidation and hydrolysis",
                 "_reaction": "4Fe2+ + O2 + 10H2O -> 4Fe(OH)3 + 8H+",
                 "_notes": "Generates additional acidity",
-                "CONSUMED": "Fe2",
+                "CONSUMED": "NONE",
                 "PRODUCED": "ACID_strong",
                 "KINETICS": [
                     "k_Fe_ox * Fe2 * (DO / (Ks_O2 + DO)) * 2.0",
@@ -598,7 +591,7 @@
                 "_description": "Acid Neutralizing Capacity tracking",
                 "_notes": "ANC is diagnostic; computed from other species",
                 "CONSUMED": "ALK",
-                "PRODUCED": "ANC",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "0.0",
                     "1/day"

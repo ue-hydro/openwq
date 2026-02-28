@@ -34,9 +34,7 @@
             "13": "CH4",
             "14": "CO2",
             "15": "PO4-P",
-            "16": "Fe_P",
-            "17": "DIC",
-            "18": "ALK"
+            "16": "Fe_P"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -48,9 +46,7 @@
             "H2S",
             "CH4",
             "CO2",
-            "PO4-P",
-            "DIC",
-            "ALK"
+            "PO4-P"
         ],
         "_LIST_DESCRIPTIONS": {
             "OM_labile": "Labile organic matter",
@@ -68,9 +64,7 @@
             "CH4": "Dissolved methane",
             "CO2": "Dissolved carbon dioxide",
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
-            "Fe_P": "Iron-bound phosphorus",
-            "DIC": "Dissolved inorganic carbon",
-            "ALK": "Alkalinity"
+            "Fe_P": "Iron-bound phosphorus"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -163,7 +157,7 @@
                 "_name": "om_burial",
                 "_description": "Permanent burial of organic matter",
                 "CONSUMED": "OM_refractory",
-                "PRODUCED": "OM_buried",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_burial * OM_refractory",
                     "1/day"
@@ -221,18 +215,18 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_denit * OM_labile * (NO3-N / (Ks_NO3-N + NO3-N)) * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
+                    "k_denit * OM_labile * (NO3-N / (Ks_NO3N + NO3-N)) * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_denit",
-                    "Ks_NO3-N",
+                    "Ks_NO3N",
                     "Ks_O2_inhib",
                     "theta"
                 ],
                 "PARAMETER_VALUES": {
                     "k_denit": 0.15,
-                    "Ks_NO3-N": 0.5,
+                    "Ks_NO3N": 0.5,
                     "Ks_O2_inhib": 0.5,
                     "theta": 1.08
                 }
@@ -294,18 +288,18 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_so4 * OM_labile * (SO4-S / (Ks_SO4-S + SO4-S)) * f_anoxic * theta^(Treach_K - 293)",
+                    "k_so4 * OM_labile * (SO4-S / (Ks_SO4S + SO4-S)) * f_anoxic * theta^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_so4",
-                    "Ks_SO4-S",
+                    "Ks_SO4S",
                     "f_anoxic",
                     "theta"
                 ],
                 "PARAMETER_VALUES": {
                     "k_so4": 0.05,
-                    "Ks_SO4-S": 1.0,
+                    "Ks_SO4S": 1.0,
                     "f_anoxic": 1.0,
                     "theta": 1.08
                 }
@@ -318,19 +312,19 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CH4",
                 "KINETICS": [
-                    "k_meth * OM_labile * f_anoxic * (Ks_SO4-S_inhib / (Ks_SO4-S_inhib + SO4-S)) * theta^(Treach_K - 293)",
+                    "k_meth * OM_labile * f_anoxic * (Ks_SO4S_inhib / (Ks_SO4S_inhib + SO4-S)) * theta^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_meth",
                     "f_anoxic",
-                    "Ks_SO4-S_inhib",
+                    "Ks_SO4S_inhib",
                     "theta"
                 ],
                 "PARAMETER_VALUES": {
                     "k_meth": 0.02,
                     "f_anoxic": 1.0,
-                    "Ks_SO4-S_inhib": 0.5,
+                    "Ks_SO4S_inhib": 0.5,
                     "theta": 1.1
                 }
             },
@@ -471,7 +465,7 @@
             "3": {
                 "_name": "p_diffusive_flux",
                 "_description": "Diffusive flux of PO4-P from sediment porewater",
-                "CONSUMED": "PO4-P_porewater",
+                "CONSUMED": "NONE",
                 "PRODUCED": "PO4-P",
                 "KINETICS": [
                     "D_p * (PO4-P_porewater - PO4-P) / dz",
@@ -490,7 +484,7 @@
                 "_name": "p_adsorption",
                 "_description": "General P adsorption to sediments",
                 "CONSUMED": "PO4-P",
-                "PRODUCED": "P_adsorbed",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_ads * PO4-P * (1 - P_adsorbed/Smax)",
                     "1/day"
@@ -557,7 +551,7 @@
                 "_name": "denitrification_sed",
                 "_description": "NO3-N reduction to N2 in anoxic sediments",
                 "CONSUMED": "NO3-N",
-                "PRODUCED": "N2_gas",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_denit_sed * NO3-N * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
                     "1/day"
@@ -576,7 +570,7 @@
             "4": {
                 "_name": "n_diffusive_flux",
                 "_description": "NH4-N diffusive flux from sediments",
-                "CONSUMED": "NH4-N_porewater",
+                "CONSUMED": "NONE",
                 "PRODUCED": "NH4-N",
                 "KINETICS": [
                     "D_n * (NH4-N_porewater - NH4-N) / dz",
@@ -603,36 +597,36 @@
                 "_name": "ch4_ebullition",
                 "_description": "CH4 bubble release when supersaturated",
                 "CONSUMED": "CH4",
-                "PRODUCED": "CH4_atm",
+                "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_ebull * max(0, CH4 - CH4_sat)",
+                    "k_ebull * max(0, CH4 - ch4_sat)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_ebull",
-                    "CH4_sat"
+                    "ch4_sat"
                 ],
                 "PARAMETER_VALUES": {
                     "k_ebull": 1.0,
-                    "CH4_sat": 20.0
+                    "ch4_sat": 20.0
                 }
             },
             "2": {
                 "_name": "ch4_dissolution",
                 "_description": "CH4 bubble dissolution during rise",
-                "CONSUMED": "CH4_bubble",
+                "CONSUMED": "NONE",
                 "PRODUCED": "CH4",
                 "KINETICS": [
-                    "k_diss * CH4_bubble * (CH4_sat - CH4) / CH4_sat",
+                    "k_diss * CH4_bubble * (ch4_sat - CH4) / ch4_sat",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_diss",
-                    "CH4_sat"
+                    "ch4_sat"
                 ],
                 "PARAMETER_VALUES": {
                     "k_diss": 0.5,
-                    "CH4_sat": 20.0
+                    "ch4_sat": 20.0
                 }
             }
         }

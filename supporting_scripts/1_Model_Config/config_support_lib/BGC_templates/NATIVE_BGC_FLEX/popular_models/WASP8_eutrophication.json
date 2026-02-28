@@ -21,12 +21,11 @@
             "13": "CYANO",
             "14": "DSi",
             "15": "PSi",
-            "16": "DOC",
-            "17": "POC_labile",
-            "18": "POC_refrac",
-            "19": "SED_PON1",
-            "20": "SED_PON2",
-            "21": "SED_NH4"
+            "16": "POC_labile",
+            "17": "SED_PON1",
+            "18": "SED_PON2",
+            "19": "SED_NH4",
+            "20": "N2_loss"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -44,12 +43,11 @@
             "CYANO",
             "DSi",
             "PSi",
-            "DOC",
             "POC_labile",
-            "POC_refrac",
             "SED_PON1",
             "SED_PON2",
-            "SED_NH4"
+            "SED_NH4",
+            "N2_loss"
         ],
         "_LIST_DESCRIPTIONS": {
             "DO": "Dissolved oxygen",
@@ -67,12 +65,11 @@
             "CYANO": "Cyanobacteria biomass",
             "DSi": "Dissolved silica",
             "PSi": "Particulate biogenic silica",
-            "DOC": "Dissolved organic carbon",
             "POC_labile": "Labile particulate organic carbon",
-            "POC_refrac": "Refractory particulate organic carbon",
             "SED_PON1": "Sediment labile PON (layer 1)",
             "SED_PON2": "Sediment refractory PON (layer 2)",
-            "SED_NH4": "Sediment porewater NH4"
+            "SED_NH4": "Sediment porewater NH4",
+            "N2_loss": "N2 loss to atmosphere/sediment"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -91,16 +88,16 @@
                 "CONSUMED": "NONE",
                 "PRODUCED": "DO",
                 "KINETICS": [
-                    "Ka * (DOsat - DO)",
+                    "Ka * (dosat - DO)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Ka",
-                    "DOsat"
+                    "dosat"
                 ],
                 "PARAMETER_VALUES": {
                     "Ka": 2.5,
-                    "DOsat": 9.0
+                    "dosat": 9.0
                 },
                 "_PARAMETERS_INFO": {
                     "Ka": {
@@ -113,7 +110,7 @@
                         "DESCRIPTION": "Reaeration coefficient",
                         "TEMP_COEFF": 1.024
                     },
-                    "DOsat": {
+                    "dosat": {
                         "VALUE": 9.0,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "DO saturation (temp dependent)"
@@ -409,21 +406,21 @@
                 "CONSUMED": "NONE",
                 "PRODUCED": "NH4",
                 "KINETICS": [
-                    "JNH4 * (Kdno2_sed / (Kdno2_sed + DO)) / depth",
+                    "Jnh4 * (Kdno2_sed / (Kdno2_sed + DO)) / depth",
                     "mg/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "JNH4",
+                    "Jnh4",
                     "Kdno2_sed",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
-                    "JNH4": 10.0,
+                    "Jnh4": 10.0,
                     "Kdno2_sed": 2.0,
                     "depth": 2.0
                 },
                 "_PARAMETERS_INFO": {
-                    "JNH4": {
+                    "Jnh4": {
                         "VALUE": 10.0,
                         "UNITS": "mg N/m2/day",
                         "RANGE": [
@@ -504,22 +501,22 @@
                 "CONSUMED": "NONE",
                 "PRODUCED": "PO4",
                 "KINETICS": [
-                    "JPO4 * (Kdp / (Kdp + DO)) / depth",
+                    "Jpo4 * (Kdp / (Kdp + DO)) / depth",
                     "mg/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "JPO4",
+                    "Jpo4",
                     "Kdp",
                     "depth"
                 ],
                 "PARAMETER_VALUES": {
-                    "JPO4": 2.0,
+                    "Jpo4": 2.0,
                     "Kdp": 1.0,
                     "depth": 2.0
                 },
                 "_NOTES": "P release increases under anoxia",
                 "_PARAMETERS_INFO": {
-                    "JPO4": {
+                    "Jpo4": {
                         "VALUE": 2.0,
                         "UNITS": "mg P/m2/day",
                         "RANGE": [
@@ -843,16 +840,16 @@
                 "CONSUMED": "PSi",
                 "PRODUCED": "DSi",
                 "KINETICS": [
-                    "Ksi * PSi * (1 - DSi/DSi_sat)",
+                    "Ksi * PSi * (1 - DSi/dsi_sat)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Ksi",
-                    "DSi_sat"
+                    "dsi_sat"
                 ],
                 "PARAMETER_VALUES": {
                     "Ksi": 0.03,
-                    "DSi_sat": 60
+                    "dsi_sat": 60
                 },
                 "_PARAMETERS_INFO": {
                     "Ksi": {
@@ -860,7 +857,7 @@
                         "UNITS": "1/day",
                         "DESCRIPTION": "Biogenic silica dissolution rate"
                     },
-                    "DSi_sat": {
+                    "dsi_sat": {
                         "VALUE": 60,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "Amorphous silica saturation"

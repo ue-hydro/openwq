@@ -9,22 +9,19 @@
             "1": "SO4-S",
             "2": "H2S",
             "3": "DOC",
-            "4": "CO2",
-            "5": "DO",
-            "6": "NO3-N",
-            "7": "X_srb"
+            "4": "DO",
+            "5": "NO3-N",
+            "6": "X_srb"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "SO4-S",
             "H2S",
-            "DOC",
-            "CO2"
+            "DOC"
         ],
         "_LIST_DESCRIPTIONS": {
             "SO4-S": "Sulfate sulfur",
             "H2S": "Dissolved hydrogen sulfide",
             "DOC": "Dissolved organic carbon",
-            "CO2": "Dissolved carbon dioxide",
             "DO": "Dissolved oxygen",
             "NO3-N": "Nitrate nitrogen",
             "X_srb": "Sulfate-reducing bacteria biomass"
@@ -60,22 +57,22 @@
                 "CONSUMED": "SO4-S",
                 "PRODUCED": "H2S",
                 "KINETICS": [
-                    "k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * max(0, (1 - exp(-(max(0, 25 + 20*log10(max(0.001,(DOC/12)/(H2S/32+0.001)))) - 20)/(2*0.008314*(T+273)))))",
+                    "k_srb * X_srb * (SO4-S/(Km_SO4S+SO4-S)) * (DOC/(Km_doc+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3N/(Ki_NO3N+NO3-N)) * max(0, (1 - exp(-(max(0, 25 + 20*log10(max(0.001,(DOC/12)/(H2S/32+0.001)))) - 20)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_srb",
-                    "Km_SO4-S",
-                    "Km_DOC",
+                    "Km_SO4S",
+                    "Km_doc",
                     "Ki_O2",
-                    "Ki_NO3-N"
+                    "Ki_NO3N"
                 ],
                 "PARAMETER_VALUES": {
                     "k_srb": 8.0,
-                    "Km_SO4-S": 5.0,
-                    "Km_DOC": 3.0,
+                    "Km_SO4S": 5.0,
+                    "Km_doc": 3.0,
                     "Ki_O2": 0.1,
-                    "Ki_NO3-N": 0.2
+                    "Ki_NO3N": 0.2
                 },
                 "_notes": [
                     "log10 term approximates concentration-dependent \u0394G correction",
@@ -88,24 +85,24 @@
                 "CONSUMED": "DOC",
                 "PRODUCED": "X_srb",
                 "KINETICS": [
-                    "Y_srb * k_srb * X_srb * (SO4-S/(Km_SO4-S+SO4-S)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * max(0, (1 - exp(-(max(0, 25 + 20*log10(max(0.001,(DOC/12)/(H2S/32+0.001)))) - 20)/(2*0.008314*(T+273)))))",
+                    "Y_srb * k_srb * X_srb * (SO4-S/(Km_SO4S+SO4-S)) * (DOC/(Km_doc+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3N/(Ki_NO3N+NO3-N)) * max(0, (1 - exp(-(max(0, 25 + 20*log10(max(0.001,(DOC/12)/(H2S/32+0.001)))) - 20)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_srb",
                     "k_srb",
-                    "Km_SO4-S",
-                    "Km_DOC",
+                    "Km_SO4S",
+                    "Km_doc",
                     "Ki_O2",
-                    "Ki_NO3-N"
+                    "Ki_NO3N"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_srb": 0.2,
                     "k_srb": 8.0,
-                    "Km_SO4-S": 5.0,
-                    "Km_DOC": 3.0,
+                    "Km_SO4S": 5.0,
+                    "Km_doc": 3.0,
                     "Ki_O2": 0.1,
-                    "Ki_NO3-N": 0.2
+                    "Ki_NO3N": 0.2
                 }
             },
             "3": {
