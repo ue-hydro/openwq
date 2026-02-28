@@ -7,22 +7,25 @@
             "1": "DSi",
             "2": "BSi",
             "3": "DIATOM",
-            "4": "PO4-P",
-            "5": "NO3-N"
+            "4": "CO2",
+            "5": "SED_DIATOM",
+            "6": "SED_Si"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DSi",
             "BSi",
             "DIATOM",
-            "PO4-P",
-            "NO3-N"
+            "CO2",
+            "SED_DIATOM",
+            "SED_Si"
         ],
         "_LIST_DESCRIPTIONS": {
             "DSi": "Dissolved silica (silicic acid)",
             "BSi": "Biogenic silica (diatom frustules)",
             "DIATOM": "Diatom biomass",
-            "PO4-P": "Phosphate (diatom nutrient)",
-            "NO3-N": "Nitrate (diatom nutrient)"
+            "CO2": "CO2",
+            "SED_DIATOM": "Settled DIATOM (sediment sink)",
+            "SED_Si": "Settled Si (sediment sink)"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -217,16 +220,16 @@
                 "CONSUMED": "BSi",
                 "PRODUCED": "DSi",
                 "KINETICS": [
-                    "k_diss * BSi * (1 - DSi / DSi_sat) * 1.08^(T - 20)",
+                    "k_diss * BSi * (1 - DSi / dsi_sat) * 1.08^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_diss",
-                    "DSi_sat"
+                    "dsi_sat"
                 ],
                 "PARAMETER_VALUES": {
                     "k_diss": 0.02,
-                    "DSi_sat": 60
+                    "dsi_sat": 60
                 },
                 "_NOTES": "Dissolution slows as DSi approaches saturation",
                 "_PARAMETERS_INFO": {
@@ -239,7 +242,7 @@
                         ],
                         "DESCRIPTION": "BSi dissolution rate"
                     },
-                    "DSi_sat": {
+                    "dsi_sat": {
                         "VALUE": 60,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "DSi saturation (amorphous silica)"
@@ -310,18 +313,18 @@
                 "CONSUMED": "NONE",
                 "PRODUCED": "DSi",
                 "KINETICS": [
-                    "J_Si / depth * (1 - DSi / DSi_sat)",
+                    "J_Si / depth * (1 - DSi / dsi_sat)",
                     "mg/day"
                 ],
                 "PARAMETER_NAMES": [
                     "J_Si",
                     "depth",
-                    "DSi_sat"
+                    "dsi_sat"
                 ],
                 "PARAMETER_VALUES": {
                     "J_Si": 10.0,
                     "depth": 5.0,
-                    "DSi_sat": 60
+                    "dsi_sat": 60
                 },
                 "_PARAMETERS_INFO": {
                     "J_Si": {
@@ -337,7 +340,7 @@
                         "VALUE": 5.0,
                         "UNITS": "m"
                     },
-                    "DSi_sat": {
+                    "dsi_sat": {
                         "VALUE": 60,
                         "UNITS": "mg/L"
                     }

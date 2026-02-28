@@ -15,7 +15,10 @@
             "7": "ORG_P",
             "8": "DISS_P",
             "9": "ALGAE",
-            "10": "FECAL_COLIFORM"
+            "10": "FECAL_COLIFORM",
+            "11": "SED_CBOD",
+            "12": "SED_N",
+            "13": "SED_P"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -27,7 +30,10 @@
             "ORG_P",
             "DISS_P",
             "ALGAE",
-            "FECAL_COLIFORM"
+            "FECAL_COLIFORM",
+            "SED_CBOD",
+            "SED_N",
+            "SED_P"
         ],
         "_LIST_DESCRIPTIONS": {
             "DO": "Dissolved oxygen",
@@ -39,7 +45,10 @@
             "ORG_P": "Organic phosphorus",
             "DISS_P": "Dissolved phosphorus (orthophosphate)",
             "ALGAE": "Algal biomass (chlorophyll-a proxy)",
-            "FECAL_COLIFORM": "Fecal coliform bacteria"
+            "FECAL_COLIFORM": "Fecal coliform bacteria",
+            "SED_CBOD": "Settled CBOD (sediment sink)",
+            "SED_N": "Settled N (sediment sink)",
+            "SED_P": "Settled P (sediment sink)"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -57,16 +66,16 @@
                 "CONSUMED": "NONE",
                 "PRODUCED": "DO",
                 "KINETICS": [
-                    "K2 * (DO_sat - DO)",
+                    "K2 * (do_sat - DO)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "K2",
-                    "DO_sat"
+                    "do_sat"
                 ],
                 "PARAMETER_VALUES": {
                     "K2": 3.0,
-                    "DO_sat": 9.0
+                    "do_sat": 9.0
                 },
                 "_NOTES": "K2 can be calculated from O'Connor-Dobbins, Churchill, or Owens-Gibbs",
                 "_PARAMETERS_INFO": {
@@ -80,7 +89,7 @@
                         "DESCRIPTION": "Reaeration coefficient",
                         "TEMP_COEFF": 1.024
                     },
-                    "DO_sat": {
+                    "do_sat": {
                         "VALUE": 9.0,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "DO saturation"
@@ -645,18 +654,18 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "alpha_1 * mu * ALGAE * P_NH4-N",
+                    "alpha_1 * mu * ALGAE * P_NH4N",
                     "1"
                 ],
                 "PARAMETER_NAMES": [
                     "alpha_1",
                     "mu",
-                    "P_NH4-N"
+                    "P_NH4N"
                 ],
                 "PARAMETER_VALUES": {
                     "alpha_1": 0.08,
                     "mu": 2.0,
-                    "P_NH4-N": 0.5
+                    "P_NH4N": 0.5
                 },
                 "_PARAMETERS_INFO": {
                     "alpha_1": {
@@ -667,7 +676,7 @@
                         "VALUE": 2.0,
                         "UNITS": "1/day"
                     },
-                    "P_NH4-N": {
+                    "P_NH4N": {
                         "VALUE": 0.5,
                         "DESCRIPTION": "Preference for NH4-N over NO3-N"
                     }

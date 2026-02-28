@@ -135,13 +135,13 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "PLANT_N",
                 "KINETICS": [
-                    "k_uptake_nh4 * NH4-N / (Ks_N + NO3-N + NH4-N) * Pref_NH4-N * f_growth * f_temp * f_moisture",
+                    "k_uptake_nh4 * NH4-N / (Ks_N + NO3-N + NH4-N) * Pref_NH4N * f_growth * f_temp * f_moisture",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_uptake_nh4",
                     "Ks_N",
-                    "Pref_NH4-N",
+                    "Pref_NH4N",
                     "f_growth",
                     "f_temp",
                     "f_moisture"
@@ -149,7 +149,7 @@
                 "PARAMETER_VALUES": {
                     "k_uptake_nh4": 0.5,
                     "Ks_N": 0.5,
-                    "Pref_NH4-N": 1.5,
+                    "Pref_NH4N": 1.5,
                     "f_growth": 1.0,
                     "f_temp": 1.0,
                     "f_moisture": 1.0
@@ -338,7 +338,7 @@
                 "_reaction": "LITTER_C -> CO2",
                 "_notes": "Drives overall litter decomposition; produces CO2 and microbial biomass",
                 "CONSUMED": "LITTER_C",
-                "PRODUCED": "CO2",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_litter_C * LITTER_C * theta_litter^(Treach_K - 293)",
                     "1/day"
@@ -490,7 +490,7 @@
                 "_reaction": "NO3-N -> N2 (under anoxic conditions)",
                 "_notes": "Major N sink in riparian buffers; requires organic C and anoxic conditions",
                 "CONSUMED": "NO3-N",
-                "PRODUCED": "N2_gas",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_denit_riparian * NO3-N * (DOC / (Ks_DOC + DOC)) * f_anoxic * theta_denit^(Treach_K - 293)",
                     "1/day"
@@ -525,7 +525,7 @@
                 "_name": "riparian_p_retention",
                 "_description": "Phosphorus retention through sedimentation and sorption in riparian zone",
                 "CONSUMED": "PO4-P",
-                "PRODUCED": "P_SED",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_p_retention * PO4-P * f_buffer_width",
                     "1/day"

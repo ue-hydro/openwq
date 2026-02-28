@@ -18,17 +18,15 @@
     "CHEMICAL_SPECIES": {
         "LIST": {
             "1": "PHYTO",
-            "2": "DO",
-            "3": "NO3-N",
-            "4": "NH4-N",
-            "5": "PO4-P",
-            "6": "ZOO",
-            "7": "DOC",
-            "8": "Chla"
+            "2": "NO3-N",
+            "3": "NH4-N",
+            "4": "PO4-P",
+            "5": "ZOO",
+            "6": "DOC",
+            "7": "Chla"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PHYTO",
-            "DO",
             "NO3-N",
             "NH4-N",
             "PO4-P",
@@ -37,7 +35,6 @@
         ],
         "_LIST_DESCRIPTIONS": {
             "PHYTO": "Phytoplankton biomass",
-            "DO": "Dissolved oxygen",
             "NO3-N": "Nitrate nitrogen",
             "NH4-N": "Ammonium nitrogen",
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
@@ -137,7 +134,7 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "PHYTO",
                 "KINETICS": [
-                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (NH4-N/(NO3-N+NH4-N+0.001)) * Pref_NH4-N * theta_growth^(Treach_K - 293)",
+                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (NH4-N/(NO3-N+NH4-N+0.001)) * Pref_NH4N * theta_growth^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -145,7 +142,7 @@
                     "Iopt",
                     "Ks_N",
                     "Ks_P",
-                    "Pref_NH4-N",
+                    "Pref_NH4N",
                     "theta_growth"
                 ],
                 "PARAMETER_VALUES": {
@@ -153,7 +150,7 @@
                     "Iopt": 300.0,
                     "Ks_N": 0.025,
                     "Ks_P": 0.005,
-                    "Pref_NH4-N": 1.5,
+                    "Pref_NH4N": 1.5,
                     "theta_growth": 1.068
                 },
                 "_notes": "NH4-N is preferred over NO3-N (less energy required for assimilation)"
@@ -240,7 +237,7 @@
                 "_description": "Gravitational settling of phytoplankton",
                 "_notes": "Settling flux = v_s * PHYTO / H, where H is depth",
                 "CONSUMED": "PHYTO",
-                "PRODUCED": "PHYTO_SED",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "v_settle * PHYTO / depth",
                     "1/day"
@@ -326,7 +323,7 @@
                 "CONSUMED": "PHYTO",
                 "PRODUCED": "Chla",
                 "KINETICS": [
-                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * ratio_Chla_C * theta_growth^(Treach_K - 293)",
+                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * ratio_chla_C * theta_growth^(Treach_K - 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -334,7 +331,7 @@
                     "Iopt",
                     "Ks_N",
                     "Ks_P",
-                    "ratio_Chla_C",
+                    "ratio_chla_C",
                     "theta_growth"
                 ],
                 "PARAMETER_VALUES": {
@@ -342,7 +339,7 @@
                     "Iopt": 300.0,
                     "Ks_N": 0.025,
                     "Ks_P": 0.005,
-                    "ratio_Chla_C": 20.0,
+                    "ratio_chla_C": 20.0,
                     "theta_growth": 1.068
                 },
                 "_notes": "ratio_Chla_C = Chla:C in \u00b5g Chla / mg C (typically 10-50, varies with light)"

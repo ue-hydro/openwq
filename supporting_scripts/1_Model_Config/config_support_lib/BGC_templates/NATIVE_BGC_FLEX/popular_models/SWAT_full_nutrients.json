@@ -9,24 +9,27 @@
             "1": "NO3-N",
             "2": "NH4-N",
             "3": "ORG_N_active",
-            "4": "ORG_N_stable",
-            "5": "ORG_N_fresh",
-            "6": "PO4-P_sol",
-            "7": "PO4-P_active",
-            "8": "PO4-P_stable",
-            "9": "ORG_P_humus",
-            "10": "ORG_P_fresh",
-            "11": "ORG_C_active",
-            "12": "ORG_C_stable",
-            "13": "ORG_C_fresh",
-            "14": "SED",
-            "15": "DO"
+            "4": "ORG_N_fresh",
+            "5": "PO4-P_sol",
+            "6": "PO4-P_active",
+            "7": "PO4-P_stable",
+            "8": "ORG_P_humus",
+            "9": "ORG_P_fresh",
+            "10": "ORG_C_active",
+            "11": "ORG_C_fresh",
+            "12": "ALGAE",
+            "13": "CO2_loss",
+            "14": "N2_loss",
+            "15": "NH3_loss",
+            "16": "PLANT_P",
+            "17": "SED_N",
+            "18": "SED_P",
+            "19": "PLANT_N"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NO3-N",
             "NH4-N",
             "ORG_N_active",
-            "ORG_N_stable",
             "ORG_N_fresh",
             "PO4-P_sol",
             "PO4-P_active",
@@ -34,16 +37,20 @@
             "ORG_P_humus",
             "ORG_P_fresh",
             "ORG_C_active",
-            "ORG_C_stable",
             "ORG_C_fresh",
-            "SED",
-            "DO"
+            "ALGAE",
+            "CO2_loss",
+            "N2_loss",
+            "NH3_loss",
+            "PLANT_P",
+            "SED_N",
+            "SED_P",
+            "PLANT_N"
         ],
         "_LIST_DESCRIPTIONS": {
             "NO3-N": "Nitrate nitrogen",
             "NH4-N": "Ammonium nitrogen",
             "ORG_N_active": "Active organic nitrogen (humus)",
-            "ORG_N_stable": "Stable organic nitrogen (humus)",
             "ORG_N_fresh": "Fresh organic nitrogen (residue)",
             "PO4-P_sol": "Solution phosphorus",
             "PO4-P_active": "Active mineral phosphorus",
@@ -51,10 +58,15 @@
             "ORG_P_humus": "Organic phosphorus in humus",
             "ORG_P_fresh": "Fresh organic phosphorus (residue)",
             "ORG_C_active": "Active organic carbon",
-            "ORG_C_stable": "Stable organic carbon",
             "ORG_C_fresh": "Fresh organic carbon (residue)",
-            "SED": "Suspended sediment",
-            "DO": "Dissolved oxygen"
+            "ALGAE": "ALGAE",
+            "CO2_loss": "CO2 loss to atmosphere/sediment",
+            "N2_loss": "N2 loss to atmosphere/sediment",
+            "NH3_loss": "NH3 loss to atmosphere/sediment",
+            "PLANT_P": "Plant uptake of P",
+            "SED_N": "Settled N (sediment sink)",
+            "SED_P": "Settled P (sediment sink)",
+            "PLANT_N": "Plant uptake of N"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -269,17 +281,17 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "PLANT_N",
                 "KINETICS": [
-                    "U_N * f_NO3-N * f_growth",
+                    "U_N * frac_NO3 * f_growth",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "U_N",
-                    "f_NO3-N",
+                    "frac_NO3",
                     "f_growth"
                 ],
                 "PARAMETER_VALUES": {
                     "U_N": 0.1,
-                    "f_NO3-N": 0.8,
+                    "frac_NO3": 0.8,
                     "f_growth": 1.0
                 },
                 "_PARAMETERS_INFO": {
@@ -288,7 +300,7 @@
                         "UNITS": "mg/L/day",
                         "DESCRIPTION": "Total N uptake demand"
                     },
-                    "f_NO3-N": {
+                    "frac_NO3": {
                         "VALUE": 0.8,
                         "DESCRIPTION": "Fraction of uptake from NO3-N (vs NH4-N)"
                     },
@@ -303,17 +315,17 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "PLANT_N",
                 "KINETICS": [
-                    "U_N * (1 - f_NO3-N) * f_growth",
+                    "U_N * (1 - frac_NO3) * f_growth",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "U_N",
-                    "f_NO3-N",
+                    "frac_NO3",
                     "f_growth"
                 ],
                 "PARAMETER_VALUES": {
                     "U_N": 0.1,
-                    "f_NO3-N": 0.8,
+                    "frac_NO3": 0.8,
                     "f_growth": 1.0
                 },
                 "_PARAMETERS_INFO": {
@@ -321,7 +333,7 @@
                         "VALUE": 0.1,
                         "UNITS": "mg/L/day"
                     },
-                    "f_NO3-N": {
+                    "frac_NO3": {
                         "VALUE": 0.8
                     },
                     "f_growth": {

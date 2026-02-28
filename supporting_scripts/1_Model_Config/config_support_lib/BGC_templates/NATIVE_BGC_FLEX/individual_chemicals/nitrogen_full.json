@@ -10,7 +10,10 @@
             "4": "DON",
             "5": "PON",
             "6": "N2O",
-            "7": "DO"
+            "7": "DO",
+            "8": "N2O_atm_loss",
+            "9": "N2_loss",
+            "10": "NH3_loss"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NH4-N",
@@ -19,7 +22,10 @@
             "DON",
             "PON",
             "N2O",
-            "DO"
+            "DO",
+            "N2O_atm_loss",
+            "N2_loss",
+            "NH3_loss"
         ],
         "_LIST_DESCRIPTIONS": {
             "NH4-N": "Ammonium nitrogen",
@@ -28,7 +34,10 @@
             "DON": "Dissolved organic nitrogen",
             "PON": "Particulate organic nitrogen",
             "N2O": "Nitrous oxide (GHG emission tracker)",
-            "DO": "Dissolved oxygen (required for O2-limited reactions)"
+            "DO": "Dissolved oxygen (required for O2-limited reactions)",
+            "N2O_atm_loss": "N2O loss to atmosphere/sediment",
+            "N2_loss": "N2 loss to atmosphere/sediment",
+            "NH3_loss": "NH3 loss to atmosphere/sediment"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -241,21 +250,21 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "N2O",
                 "KINETICS": [
-                    "f_N2O * k_denitrif * NO3-N * (K_O2_inhib / (K_O2_inhib + DO)) * 1.07^(T - 20)",
+                    "f_n2o * k_denitrif * NO3-N * (K_O2_inhib / (K_O2_inhib + DO)) * 1.07^(T - 20)",
                     "1"
                 ],
                 "PARAMETER_NAMES": [
-                    "f_N2O",
+                    "f_n2o",
                     "k_denitrif",
                     "K_O2_inhib"
                 ],
                 "PARAMETER_VALUES": {
-                    "f_N2O": 0.05,
+                    "f_n2o": 0.05,
                     "k_denitrif": 0.1,
                     "K_O2_inhib": 0.5
                 },
                 "_PARAMETERS_INFO": {
-                    "f_N2O": {
+                    "f_n2o": {
                         "VALUE": 0.05,
                         "UNITS": "fraction",
                         "RANGE": [
@@ -279,17 +288,17 @@
                 "CONSUMED": "N2O",
                 "PRODUCED": "N2O_atm_loss",
                 "KINETICS": [
-                    "k_N2O_emit * N2O",
+                    "k_n2o_emit * N2O",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "k_N2O_emit"
+                    "k_n2o_emit"
                 ],
                 "PARAMETER_VALUES": {
-                    "k_N2O_emit": 1.0
+                    "k_n2o_emit": 1.0
                 },
                 "_PARAMETERS_INFO": {
-                    "k_N2O_emit": {
+                    "k_n2o_emit": {
                         "VALUE": 1.0,
                         "UNITS": "1/day",
                         "DESCRIPTION": "N2O emission rate to atmosphere"

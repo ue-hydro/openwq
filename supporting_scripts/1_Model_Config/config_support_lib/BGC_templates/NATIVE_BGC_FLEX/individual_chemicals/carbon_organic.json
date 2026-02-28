@@ -11,7 +11,10 @@
             "5": "DIC",
             "6": "CH4",
             "7": "DO",
-            "8": "ALGAE_C"
+            "8": "ALGAE_C",
+            "9": "CH4_atm_loss",
+            "10": "CO2_atm",
+            "11": "SED_C_loss"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DOC_labile",
@@ -21,7 +24,10 @@
             "DIC",
             "CH4",
             "DO",
-            "ALGAE_C"
+            "ALGAE_C",
+            "CH4_atm_loss",
+            "CO2_atm",
+            "SED_C_loss"
         ],
         "_LIST_DESCRIPTIONS": {
             "DOC_labile": "Labile dissolved organic carbon",
@@ -31,7 +37,10 @@
             "DIC": "Dissolved inorganic carbon (CO2 + HCO3 + CO3)",
             "CH4": "Methane (dissolved)",
             "DO": "Dissolved oxygen",
-            "ALGAE_C": "Algal carbon biomass"
+            "ALGAE_C": "Algal carbon biomass",
+            "CH4_atm_loss": "CH4 loss to atmosphere/sediment",
+            "CO2_atm": "CO2 atm",
+            "SED_C_loss": "SED loss to atmosphere/sediment"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -243,19 +252,19 @@
                 "CONSUMED": "CH4",
                 "PRODUCED": "DIC",
                 "KINETICS": [
-                    "k_CH4_ox * CH4 * (DO / (K_O2_CH4 + DO)) * 1.08^(T - 20)",
+                    "k_ch4_ox * CH4 * (DO / (K_O2_ch4 + DO)) * 1.08^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "k_CH4_ox",
-                    "K_O2_CH4"
+                    "k_ch4_ox",
+                    "K_O2_ch4"
                 ],
                 "PARAMETER_VALUES": {
-                    "k_CH4_ox": 0.5,
-                    "K_O2_CH4": 0.5
+                    "k_ch4_ox": 0.5,
+                    "K_O2_ch4": 0.5
                 },
                 "_PARAMETERS_INFO": {
-                    "k_CH4_ox": {
+                    "k_ch4_ox": {
                         "VALUE": 0.5,
                         "UNITS": "1/day",
                         "RANGE": [
@@ -264,7 +273,7 @@
                         ],
                         "DESCRIPTION": "Methane oxidation rate"
                     },
-                    "K_O2_CH4": {
+                    "K_O2_ch4": {
                         "VALUE": 0.5,
                         "UNITS": "mg/L"
                     }
@@ -275,16 +284,16 @@
                 "CONSUMED": "CH4",
                 "PRODUCED": "CH4_atm_loss",
                 "KINETICS": [
-                    "k_ebull * max(0, CH4 - CH4_sat)",
+                    "k_ebull * max(0, CH4 - ch4_sat)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_ebull",
-                    "CH4_sat"
+                    "ch4_sat"
                 ],
                 "PARAMETER_VALUES": {
                     "k_ebull": 10.0,
-                    "CH4_sat": 0.02
+                    "ch4_sat": 0.02
                 },
                 "_PARAMETERS_INFO": {
                     "k_ebull": {
@@ -292,7 +301,7 @@
                         "UNITS": "1/day",
                         "DESCRIPTION": "Ebullition rate when supersaturated"
                     },
-                    "CH4_sat": {
+                    "ch4_sat": {
                         "VALUE": 0.02,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "CH4 saturation concentration"
@@ -304,18 +313,18 @@
                 "CONSUMED": "DIC",
                 "PRODUCED": "ALGAE_C",
                 "KINETICS": [
-                    "mu_max * ALGAE_C * (DIC / (K_DIC + DIC)) * f_light * f_nutrient * 1.066^(T - 20)",
+                    "mu_max * ALGAE_C * (DIC / (K_dic + DIC)) * f_light * f_nutrient * 1.066^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "mu_max",
-                    "K_DIC",
+                    "K_dic",
                     "f_light",
                     "f_nutrient"
                 ],
                 "PARAMETER_VALUES": {
                     "mu_max": 2.0,
-                    "K_DIC": 1.0,
+                    "K_dic": 1.0,
                     "f_light": 0.5,
                     "f_nutrient": 0.8
                 },
@@ -325,7 +334,7 @@
                         "UNITS": "1/day",
                         "DESCRIPTION": "Maximum algal growth rate"
                     },
-                    "K_DIC": {
+                    "K_dic": {
                         "VALUE": 1.0,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "Half-saturation for DIC uptake"

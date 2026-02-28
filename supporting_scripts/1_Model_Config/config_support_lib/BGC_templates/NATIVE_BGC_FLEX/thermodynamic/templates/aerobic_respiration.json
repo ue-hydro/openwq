@@ -43,18 +43,18 @@
                 "CONSUMED": "DO",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_resp * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((125-45)/(2*0.008314*(T+273)))))",
+                    "k_resp * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_doc+DOC)) * (1 - exp(-((125-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_resp",
                     "Km_O2",
-                    "Km_DOC"
+                    "Km_doc"
                 ],
                 "PARAMETER_VALUES": {
                     "k_resp": 25.0,
                     "Km_O2": 0.5,
-                    "Km_DOC": 2.0
+                    "Km_doc": 2.0
                 },
                 "_notes": "F_T \u2248 1.0 - aerobic respiration is always thermodynamically favorable"
             },
@@ -63,20 +63,20 @@
                 "CONSUMED": "DOC",
                 "PRODUCED": "X_aer",
                 "KINETICS": [
-                    "Y_aer * k_resp * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_DOC+DOC)) * (1 - exp(-((125-45)/(2*0.008314*(T+273)))))",
+                    "Y_aer * k_resp * X_aer * (DO/(Km_O2+DO)) * (DOC/(Km_doc+DOC)) * (1 - exp(-((125-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_aer",
                     "k_resp",
                     "Km_O2",
-                    "Km_DOC"
+                    "Km_doc"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_aer": 0.4,
                     "k_resp": 25.0,
                     "Km_O2": 0.5,
-                    "Km_DOC": 2.0
+                    "Km_doc": 2.0
                 }
             },
             "3": {
@@ -97,19 +97,19 @@
             "4": {
                 "_name": "reaeration",
                 "_description": "Gas exchange with atmosphere",
-                "CONSUMED": "ATMOSPHERE",
+                "CONSUMED": "NONE",
                 "PRODUCED": "DO",
                 "KINETICS": [
-                    "k_reaer * (DO_sat - DO)",
+                    "k_reaer * (do_sat - DO)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_reaer",
-                    "DO_sat"
+                    "do_sat"
                 ],
                 "PARAMETER_VALUES": {
                     "k_reaer": 2.0,
-                    "DO_sat": 9.0
+                    "do_sat": 9.0
                 }
             }
         }

@@ -16,7 +16,13 @@
             "10": "Hg_part",
             "11": "MeHg",
             "12": "TSS",
-            "13": "DOC"
+            "13": "DOC",
+            "14": "Hg0_loss",
+            "15": "SED_Cd_loss",
+            "16": "SED_Cu_loss",
+            "17": "SED_Hg_loss",
+            "18": "SED_Pb_loss",
+            "19": "SED_Zn_loss"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "Cu_diss",
@@ -31,7 +37,13 @@
             "Hg_part",
             "MeHg",
             "TSS",
-            "DOC"
+            "DOC",
+            "Hg0_loss",
+            "SED_Cd_loss",
+            "SED_Cu_loss",
+            "SED_Hg_loss",
+            "SED_Pb_loss",
+            "SED_Zn_loss"
         ],
         "_LIST_DESCRIPTIONS": {
             "Cu_diss": "Dissolved copper",
@@ -46,7 +58,13 @@
             "Hg_part": "Particulate mercury",
             "MeHg": "Methylmercury",
             "TSS": "Total suspended solids",
-            "DOC": "Dissolved organic carbon (complexation)"
+            "DOC": "Dissolved organic carbon (complexation)",
+            "Hg0_loss": "Hg0 loss to atmosphere/sediment",
+            "SED_Cd_loss": "SED loss to atmosphere/sediment",
+            "SED_Cu_loss": "SED loss to atmosphere/sediment",
+            "SED_Hg_loss": "SED loss to atmosphere/sediment",
+            "SED_Pb_loss": "SED loss to atmosphere/sediment",
+            "SED_Zn_loss": "SED loss to atmosphere/sediment"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -442,16 +460,16 @@
                 "CONSUMED": "Hg_diss",
                 "PRODUCED": "MeHg",
                 "KINETICS": [
-                    "k_meth_Hg * Hg_diss * DOC / (K_DOC + DOC)",
+                    "k_meth_Hg * Hg_diss * DOC / (K_doc + DOC)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_meth_Hg",
-                    "K_DOC"
+                    "K_doc"
                 ],
                 "PARAMETER_VALUES": {
                     "k_meth_Hg": 0.01,
-                    "K_DOC": 2.0
+                    "K_doc": 2.0
                 },
                 "_NOTES": "Methylation enhanced by DOC and anoxia",
                 "_PARAMETERS_INFO": {
@@ -464,7 +482,7 @@
                         ],
                         "DESCRIPTION": "Mercury methylation rate"
                     },
-                    "K_DOC": {
+                    "K_doc": {
                         "VALUE": 2.0,
                         "UNITS": "mg/L",
                         "DESCRIPTION": "DOC half-saturation for methylation"

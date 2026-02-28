@@ -26,13 +26,12 @@
             "3": "AGE_old",
             "4": "CFC11",
             "5": "CFC12",
-            "6": "CFC113",
-            "7": "SF6",
-            "8": "TRITIUM",
-            "9": "HELIUM3_trit",
-            "10": "CARBON14",
-            "11": "TRACER_conservative",
-            "12": "TRACER_reactive"
+            "6": "SF6",
+            "7": "TRITIUM",
+            "8": "HELIUM3_trit",
+            "9": "CARBON14",
+            "10": "TRACER_conservative",
+            "11": "TRACER_reactive"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "AGE_mean",
@@ -40,7 +39,6 @@
             "AGE_old",
             "CFC11",
             "CFC12",
-            "CFC113",
             "SF6",
             "TRITIUM",
             "HELIUM3_trit",
@@ -54,7 +52,6 @@
             "AGE_old": "Old water fraction",
             "CFC11": "CFC-11 tracer (trichlorofluoromethane)",
             "CFC12": "CFC-12 tracer (dichlorodifluoromethane)",
-            "CFC113": "CFC-113 tracer (trichlorotrifluoroethane)",
             "SF6": "Sulfur hexafluoride tracer",
             "TRITIUM": "Tritium tracer (3H)",
             "HELIUM3_trit": "Tritiogenic helium-3",
@@ -196,16 +193,16 @@
                 "CONSUMED": "CFC11",
                 "PRODUCED": "CFC11",
                 "KINETICS": [
-                    "k_equil * (CFC11_atm - CFC11)",
+                    "k_equil * (cfc11_atm - CFC11)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_equil",
-                    "CFC11_atm"
+                    "cfc11_atm"
                 ],
                 "PARAMETER_VALUES": {
                     "k_equil": 0.1,
-                    "CFC11_atm": 250
+                    "cfc11_atm": 250
                 },
                 "_parameter_ranges": {
                     "CFC11_atm": {
@@ -222,16 +219,16 @@
                 "CONSUMED": "CFC12",
                 "PRODUCED": "CFC12",
                 "KINETICS": [
-                    "k_equil * (CFC12_atm - CFC12)",
+                    "k_equil * (cfc12_atm - CFC12)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_equil",
-                    "CFC12_atm"
+                    "cfc12_atm"
                 ],
                 "PARAMETER_VALUES": {
                     "k_equil": 0.1,
-                    "CFC12_atm": 550
+                    "cfc12_atm": 550
                 }
             },
             "3": {
@@ -239,7 +236,7 @@
                 "_description": "CFC-11 degradation under anoxic conditions",
                 "_notes": "CFCs can degrade in anoxic/sulfidic environments",
                 "CONSUMED": "CFC11",
-                "PRODUCED": "CFC11_degraded",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_deg_cfc * CFC11 * (Ks_DO / (Ks_DO + DO))",
                     "1/day"
@@ -265,7 +262,7 @@
                 "_name": "cfc12_degradation",
                 "_description": "CFC-12 degradation (slower than CFC-11)",
                 "CONSUMED": "CFC12",
-                "PRODUCED": "CFC12_degraded",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_deg_cfc12 * CFC12 * (Ks_DO / (Ks_DO + DO))",
                     "1/day"
@@ -299,16 +296,16 @@
                 "CONSUMED": "SF6",
                 "PRODUCED": "SF6",
                 "KINETICS": [
-                    "k_equil * (SF6_atm - SF6)",
+                    "k_equil * (sf6_atm - SF6)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_equil",
-                    "SF6_atm"
+                    "sf6_atm"
                 ],
                 "PARAMETER_VALUES": {
                     "k_equil": 0.1,
-                    "SF6_atm": 2.5
+                    "sf6_atm": 2.5
                 },
                 "_parameter_ranges": {
                     "SF6_atm": {
@@ -323,7 +320,7 @@
                 "_name": "sf6_terrigenic_source",
                 "_description": "Terrigenic SF6 from igneous rocks",
                 "_notes": "Can cause apparent ages too young",
-                "CONSUMED": "SF6_terrigenic",
+                "CONSUMED": "NONE",
                 "PRODUCED": "SF6",
                 "KINETICS": [
                     "k_terrigenic",
@@ -397,7 +394,7 @@
                 "_description": "3He loss via degassing in unsaturated zone",
                 "_notes": "f_unsat = 0 in saturated zone, 1 in unsaturated",
                 "CONSUMED": "HELIUM3_trit",
-                "PRODUCED": "HELIUM3_atm",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_degas * HELIUM3_trit * f_unsat",
                     "1/day"
@@ -430,7 +427,7 @@
                 "_description": "Radioactive decay of 14C",
                 "_reaction": "14C -> 14N + beta",
                 "CONSUMED": "CARBON14",
-                "PRODUCED": "C14_decayed",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "lambda_C14 * CARBON14",
                     "1/day"
@@ -454,7 +451,7 @@
                 "_description": "14C dilution by dead carbon from carbonate dissolution",
                 "_notes": "Carbonates have 0 pmC, diluting DIC 14C content",
                 "CONSUMED": "CARBON14",
-                "PRODUCED": "CARBON14_corrected",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_dilution * CARBON14 * (DIC_carb / DIC_total)",
                     "1/day"
@@ -495,7 +492,7 @@
                 "_name": "reactive_decay",
                 "_description": "First-order decay of reactive tracer",
                 "CONSUMED": "TRACER_reactive",
-                "PRODUCED": "TRACER_product",
+                "PRODUCED": "NONE",
                 "KINETICS": [
                     "k_decay * TRACER_reactive",
                     "1/day"

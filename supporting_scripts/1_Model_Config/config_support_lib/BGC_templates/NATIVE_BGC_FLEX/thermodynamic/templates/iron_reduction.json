@@ -9,21 +9,18 @@
             "1": "Fe_III",
             "2": "Fe_II",
             "3": "DOC",
-            "4": "CO2",
-            "5": "DO",
-            "6": "NO3-N",
-            "7": "X_irb"
+            "4": "DO",
+            "5": "NO3-N",
+            "6": "X_irb"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "Fe_II",
-            "DOC",
-            "CO2"
+            "DOC"
         ],
         "_LIST_DESCRIPTIONS": {
             "Fe_III": "Iron(III) oxide/hydroxide (oxidized)",
             "Fe_II": "Dissolved iron(II) (reduced)",
             "DOC": "Dissolved organic carbon",
-            "CO2": "Dissolved carbon dioxide",
             "DO": "Dissolved oxygen",
             "NO3-N": "Nitrate nitrogen",
             "X_irb": "Iron-reducing bacteria biomass"
@@ -55,22 +52,22 @@
                 "CONSUMED": "Fe_III",
                 "PRODUCED": "Fe_II",
                 "KINETICS": [
-                    "k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
+                    "k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_doc+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3N/(Ki_NO3N+NO3-N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "k_irb",
                     "Km_Fe3",
-                    "Km_DOC",
+                    "Km_doc",
                     "Ki_O2",
-                    "Ki_NO3-N"
+                    "Ki_NO3N"
                 ],
                 "PARAMETER_VALUES": {
                     "k_irb": 10.0,
                     "Km_Fe3": 10.0,
-                    "Km_DOC": 2.0,
+                    "Km_doc": 2.0,
                     "Ki_O2": 0.2,
-                    "Ki_NO3-N": 0.5
+                    "Ki_NO3N": 0.5
                 },
                 "_notes": [
                     "F_T = 1 - exp(-5/(2*0.008314*293)) = 1 - exp(-1.03) \u2248 0.64",
@@ -83,24 +80,24 @@
                 "CONSUMED": "DOC",
                 "PRODUCED": "X_irb",
                 "KINETICS": [
-                    "Y_irb * k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_DOC+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3-N/(Ki_NO3-N+NO3-N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
+                    "Y_irb * k_irb * X_irb * (Fe_III/(Km_Fe3+Fe_III)) * (DOC/(Km_doc+DOC)) * (Ki_O2/(Ki_O2+DO)) * (Ki_NO3N/(Ki_NO3N+NO3-N)) * (1 - exp(-((50-45)/(2*0.008314*(T+273)))))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
                     "Y_irb",
                     "k_irb",
                     "Km_Fe3",
-                    "Km_DOC",
+                    "Km_doc",
                     "Ki_O2",
-                    "Ki_NO3-N"
+                    "Ki_NO3N"
                 ],
                 "PARAMETER_VALUES": {
                     "Y_irb": 0.25,
                     "k_irb": 10.0,
                     "Km_Fe3": 10.0,
-                    "Km_DOC": 2.0,
+                    "Km_doc": 2.0,
                     "Ki_O2": 0.2,
-                    "Ki_NO3-N": 0.5
+                    "Ki_NO3N": 0.5
                 }
             },
             "3": {
