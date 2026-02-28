@@ -876,6 +876,88 @@ def _compute_spatial_stats(results):
     return stats
 
 
+def _parse_hostmodel_output_info(file_manager_path, hostmodel, host_exe_dir):
+    """Parse the host-model control file to find the output directory and file prefix.
+
+    For mizuRoute: reads ``<output_dir>`` and ``<case_name>`` tags.
+    For SUMMA:     reads ``outputPath`` and ``outFilePrefix`` keys.
+
+    Container paths (starting with ``/code/...``) are converted to host paths
+    by matching path components with the known *host_exe_dir*.
+
+    Returns (host_output_dir, file_prefix) or (None, None) on failure.
+    """
+    if not file_manager_path or not os.path.isfile(file_manager_path):
+        return None, None
+
+    try:
+        with open(file_manager_path) as f:
+            lines = f.readlines()
+    except Exception:
+        return None, None
+
+    output_dir_raw = None
+    file_prefix = None
+
+    if hostmodel.lower() == "mizuroute":
+        for line in lines:
+            s = line.strip()
+            if s.startswith('<output_dir>'):
+                output_dir_raw = s.split('<output_dir>')[1].split('!')[0].strip()
+            elif s.startswith('<case_name>'):
+                file_prefix = s.split('<case_name>')[1].split('!')[0].strip()
+    elif hostmodel.lower() == "summa":
+        for line in lines:
+            parts = line.strip().split()
+            if len(parts) >= 2:
+                if parts[0] == 'outputPath':
+                    output_dir_raw = parts[1].strip("'\"")
+                elif parts[0] == 'outFilePrefix':
+                    file_prefix = parts[1].strip("'\"")
+
+    if not output_dir_raw:
+        return None, None
+
+    # --- Resolve container path to host path ---
+    norm = output_dir_raw.replace('//', '/').rstrip('/')
+
+    # 1. Already a valid host path?
+    if os.path.isdir(norm):
+        return norm, file_prefix or ""
+
+    # 2. Match path components against host_exe_dir to find the mount mapping.
+    #    e.g. container "/code/proj/bin/mizuroute_out" vs host "/Users/.../proj/bin"
+    #    → shared tail "proj/bin", extra = "mizuroute_out"
+    #    → host result = "/Users/.../proj/bin/mizuroute_out"
+    c_parts = [p for p in norm.split('/') if p]
+    h_parts = [p for p in os.path.normpath(host_exe_dir).split(os.sep) if p]
+
+    best_host_path = None
+    best_match = 0
+    for ci in range(len(c_parts)):
+        for hi in range(len(h_parts)):
+            ml = 0
+            while (ci + ml < len(c_parts) and hi + ml < len(h_parts)
+                   and c_parts[ci + ml] == h_parts[hi + ml]):
+                ml += 1
+            if ml > best_match:
+                best_match = ml
+                remaining = c_parts[ci + ml:]
+                best_host_path = os.path.join(host_exe_dir, *remaining) if remaining else host_exe_dir
+
+    if best_host_path and best_match >= 2 and os.path.isdir(best_host_path):
+        return best_host_path, file_prefix or ""
+
+    # 3. Fallback: try appending the last 1-3 components to host_exe_dir.
+    for n in range(1, min(4, len(c_parts) + 1)):
+        candidate = os.path.join(host_exe_dir, *c_parts[-n:])
+        if os.path.isdir(candidate):
+            return candidate, file_prefix or ""
+
+    # 4. Return raw path as last resort.
+    return norm, file_prefix or ""
+
+
 def generate_simulation_report(
         output_dir,
         project_name,
@@ -922,24 +1004,8 @@ def generate_simulation_report(
     # Track errors for each section so the report can still be generated
     _section_errors = {}   # section_id → error message
 
-    results = {}
-    # Read HDF5 outputs if they exist (model may have been run separately)
-    try:
-        _h5_dir = os.path.join(output_dir, 'openwq_out', 'HDF5')
-        if os.path.isdir(_h5_dir) and any(f.endswith('.h5') for f in os.listdir(_h5_dir)):
-            print(f"  Reading HDF5 outputs...")
-            results = _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, units)
-    except Exception as _e:
-        print(f"  WARNING: HDF5 reading failed: {_e}")
-        _section_errors['timeseries'] = str(_e)
-
-    # Spatial statistics
-    spatial_stats = []
-    try:
-        spatial_stats = _compute_spatial_stats(results)
-    except Exception as _e:
-        print(f"  WARNING: Spatial statistics failed: {_e}")
-        _section_errors['spatial'] = str(_e)
+    # (Time Series and Spatial Statistics sections removed — they require
+    #  a completed model run which is not available at config time.)
 
     # Basin map layers (river network + basin polygons)
     map_layers, map_center = [], None
@@ -1166,9 +1232,7 @@ a{color:var(--primary);text-decoration:none}
 
 /* Container + Sections */
 .container{max-width:1100px;margin:0 auto;padding:2rem 2rem 3rem}
-.section{margin-bottom:2.5rem;opacity:0;transform:translateY(16px);
-  transition:opacity .5s ease,transform .5s ease}
-.section.visible{opacity:1;transform:none}
+.section{margin-bottom:2.5rem}
 .section h2{font-size:1.2rem;font-weight:700;color:var(--text);margin-bottom:1rem;
   display:flex;align-items:center;gap:.5rem;letter-spacing:-.3px}
 .section h2::before{content:'';width:5px;height:1.2em;border-radius:3px;
@@ -1303,10 +1367,6 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     if grqa_stats:
         nav_items.append(('grqa', 'GRQA Observations'))
     nav_items.append(('config', 'Configuration'))
-    if results:
-        nav_items.append(('timeseries', 'Time Series'))
-    if spatial_stats:
-        nav_items.append(('spatial', 'Spatial Statistics'))
     if ss_summary:
         nav_items.append(('sources', 'Source/Sink Setup'))
     nav_items.append(('metadata', 'Run Metadata'))
@@ -1373,7 +1433,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         n_compartments = len(compartments_and_cells)
         n_cells = sum(1 for cmp in compartments_and_cells.values()
                       for _ in cmp.values())
-        n_outputs = len(results) if results else n_species
+        n_outputs = n_species
 
         H.append(f"""<div class="section" id="summary">
 <h2>Summary</h2>
@@ -1604,42 +1664,6 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
         H.append('</div>')  # close section
 
-    # --- SECTION: Time Series ---
-    with _SectionGuard(H, 'timeseries', 'Time Series'):
-        if 'timeseries' in _section_errors:
-            H.append(f'<div class="section" id="timeseries"><h2>Time Series</h2>'
-                     f'{_error_card("Time Series", _section_errors["timeseries"])}</div>')
-        elif results:
-            H.append('<div class="section" id="timeseries"><h2>Time Series</h2>')
-            for i, (species, df) in enumerate(results.items()):
-                plot_id = f"plotTS_{i}"
-                H.append(f'<div class="card accent" style="margin-bottom:1rem">')
-                H.append(f'<h3>{species}</h3>')
-                H.append(f'<div id="{plot_id}" class="plot-container"></div>')
-                H.append('</div>')
-            H.append('</div>')
-
-    # --- SECTION: Spatial Statistics ---
-    with _SectionGuard(H, 'spatial', 'Spatial Statistics'):
-        if 'spatial' in _section_errors:
-            H.append(f'<div class="section" id="spatial"><h2>Spatial Statistics</h2>'
-                     f'{_error_card("Spatial Statistics", _section_errors["spatial"])}</div>')
-        elif spatial_stats:
-            H.append('<div class="section" id="spatial"><h2>Spatial Statistics</h2>')
-            H.append('<div class="card secondary"><div class="table-wrap"><table>')
-            H.append('<tr><th>Species</th><th>Min</th><th>Max</th><th>Mean</th>'
-                     '<th>Std</th><th>Median</th><th>Cells</th><th>Timesteps</th></tr>')
-            for s in spatial_stats:
-                H.append(f'<tr><td>{s["species"]}</td>'
-                         f'<td class="num">{s["min"]:.4g}</td>'
-                         f'<td class="num">{s["max"]:.4g}</td>'
-                         f'<td class="num">{s["mean"]:.4g}</td>'
-                         f'<td class="num">{s["std"]:.4g}</td>'
-                         f'<td class="num">{s["median"]:.4g}</td>'
-                         f'<td class="num">{s["n_cells"]}</td>'
-                         f'<td class="num">{s["n_timesteps"]}</td></tr>')
-            H.append('</table></div></div></div>')
-
     # --- SECTION: Source/Sink Summary ---
     with _SectionGuard(H, 'sources', 'Source/Sink Setup'):
         if ss_summary:
@@ -1743,10 +1767,11 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                     f'setTimeout(function(){{this.textContent=\'Copy\'}}.bind(this),1500)">'
                     f'Copy</button></div>')
 
-        H.append('<div class="section" id="nextsteps"><h2>Next Steps</h2>')
+        H.append('<div class="section visible" id="nextsteps"><h2>Next Steps</h2>')
         H.append('<div class="card primary">')
         H.append('<p>If you are happy with this configuration, follow these steps '
-                 'to run the model using Docker.</p>')
+                 'to run the model using Docker. '
+                 'Just copy-paste the code snippets below into your terminal!</p>')
 
         # Step 1: Start Docker container
         _script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1806,21 +1831,19 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                      'Could not build Docker command &mdash; executable_path '
                      'or file_manager_path not provided.</p>')
 
-        H.append('<p style="margin-top:.6rem;font-size:.82rem;color:var(--muted)">'
-                 'Or set <code>run_model = True</code> in your template and re-run it '
-                 '&mdash; the command above will be executed automatically.</p>')
-
         # Step 3: Check outputs
         H.append('<h3 style="margin-top:1rem">3. Check outputs</h3>')
         _h5_dir = os.path.join(output_dir, 'openwq_out', 'HDF5')
         H.append('<p>After a successful run, HDF5 results will be saved to:</p>')
-        H.append(_code_block(_h5_dir))
+        H.append(_code_block(f'cd {_h5_dir}'))
 
         # Step 4: Read & visualize results
         _read_outputs_dir = os.path.normpath(
             os.path.join(_script_dir, '..', '..', '2_Read_Outputs'))
         _hdf5_lib_dir = os.path.join(_read_outputs_dir, 'hdf5_support_lib')
         _abs_output_dir = os.path.abspath(output_dir)
+        _supporting_scripts_dir = os.path.normpath(
+            os.path.join(_script_dir, '..', '..'))
 
         # Build species list string
         _species_list = chemical_species if isinstance(chemical_species, (list, tuple)) \
@@ -1836,13 +1859,18 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _shp_path = river_network_shapefile or ''
         _shp_key = 'SegId'  # default for mizuRoute
 
-        H.append('<h3 style="margin-top:1rem">4. Read &amp; visualize results</h3>')
+        # --- Self-contained terminal snippet building blocks ---
+        # Venv activation line (try .venv first, fall back to venv)
+        _venv_activate = (
+            f'source "{_supporting_scripts_dir}/.venv/bin/activate" 2>/dev/null || '
+            f'source "{_supporting_scripts_dir}/venv/bin/activate"'
+        )
 
-        # --- 4a: Common setup (read HDF5) ---
-        _read_setup = (
+        # Common Python preamble: imports + HDF5 reading (included in every snippet)
+        _sed_flag = ts_module_name.upper() != "NONE"
+        _python_preamble = (
             f'import sys\n'
             f'sys.path.insert(0, "{_hdf5_lib_dir}")\n'
-            f'\n'
             f'import Read_h5_driver as h5_rlib\n'
             f'\n'
             f'openwq_results = h5_rlib.Read_h5_driver(\n'
@@ -1857,16 +1885,47 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    chemSpec=[{_species_str}],\n'
             f'    chemUnits="{units}",\n'
             f'    noDataFlag=-9999,\n'
-            f'    sediment_as_well={ts_module_name.upper() != "NONE"}\n'
+            f'    sediment_as_well={_sed_flag}\n'
             f')'
         )
-        H.append('<p><strong>a)</strong> Read HDF5 outputs (run this first &mdash; '
-                 'needed by all steps below):</p>')
-        H.append(_code_block(_read_setup))
 
-        # --- 4b: WebGL 3D map ---
-        _webgl_cmd = (
+        def _terminal_snippet(python_body):
+            """Wrap Python code into a self-contained terminal command."""
+            return (
+                f'{_venv_activate}\n'
+                f"python3 << 'PYEOF'\n"
+                f'{python_body}\n'
+                f'PYEOF'
+            )
+
+        H.append('<h3 style="margin-top:1rem">4. Read &amp; visualize results</h3>')
+        H.append('<p style="font-size:.85rem;color:var(--muted)">'
+                 'Each snippet below is <strong>self-contained</strong> &mdash; '
+                 'copy it into your terminal and it will run as-is '
+                 '(activates the venv, reads HDF5, and produces output).</p>')
+
+        # --- 4a: WebGL 3D map ---
+        # Resolve host-model output path from the control file
+        _hm_out_dir, _hm_prefix = _parse_hostmodel_output_info(
+            file_manager_path, hostmodel, _abs_output_dir)
+        _hm_out_dir = _hm_out_dir or os.path.join(_abs_output_dir, "mizuroute_out")
+        _hm_prefix = _hm_prefix or ""
+        _hm_glob = os.path.join(_hm_out_dir, f"{_hm_prefix}*.nc")
+
+        _webgl_body = (
+            f'{_python_preamble}\n'
+            f'\n'
+            f'import glob\n'
             f'import WebGL_h5_driver as h5_wlib\n'
+            f'\n'
+            f'# Find host-model NetCDF output\n'
+            f'_nc_files = sorted(glob.glob("{_hm_glob}"))\n'
+            f'if not _nc_files:\n'
+            f'    raise FileNotFoundError(\n'
+            f'        "No NetCDF files matching {_hm_glob}. "\n'
+            f'        "Make sure the model has been run first.")\n'
+            f'_nc_path = _nc_files[0]\n'
+            f'print(f"Using host-model output: {{_nc_path}}")\n'
             f'\n'
             f'h5_wlib.WebGL_h5_driver(\n'
             f'    what2map="openwq",\n'
@@ -1877,30 +1936,42 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    }},\n'
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
-            f'    sediment_as_well={ts_module_name.upper() != "NONE"},\n'
+            f'    sediment_as_well={_sed_flag},\n'
             f'    hydromodel_info={{\n'
-            f'        "path_to_results": "<path_to_mizuroute_netcdf>",\n'
+            f'        "path_to_results": _nc_path,\n'
             f'        "mapping_key": "reachID"\n'
             f'    }},\n'
             f'    hydromodel_var2print="DWroutedRunoff",\n'
-            f'    output_dir="{os.path.join(_abs_output_dir, "openwq_out", "webgl_viewer")}",\n'
+            f'    output_dir="{os.path.join(_abs_output_dir, "openwq_out", "openwq_webgl_viewer")}",\n'
             f'    timeframes=50\n'
             f')\n'
+            f'print("WebGL viewer generated!")\n'
             f'\n'
-            f'# Then open the viewer:\n'
-            f'# cd {os.path.join(_abs_output_dir, "openwq_out", "webgl_viewer")}\n'
-            f'# python3 -m http.server 8080\n'
-            f'# Open http://localhost:8080 in your browser'
+            f'import subprocess, webbrowser, time\n'
+            f'_webgl_dir = "{os.path.join(_abs_output_dir, "openwq_out", "openwq_webgl_viewer")}"\n'
+            f'_srv = subprocess.Popen(["python3", "-m", "http.server", "8080"], cwd=_webgl_dir,\n'
+            f'                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n'
+            f'time.sleep(1)\n'
+            f'webbrowser.open("http://localhost:8080")\n'
+            f'print("WebGL viewer opened in browser (http://localhost:8080)")\n'
+            f'print("Press Ctrl+C to stop the server")\n'
+            f'try:\n'
+            f'    _srv.wait()\n'
+            f'except KeyboardInterrupt:\n'
+            f'    _srv.terminate()'
         )
-        H.append('<p style="margin-top:1rem"><strong>b)</strong> Generate interactive '
-                 'WebGL 3D map with all observations:</p>')
-        H.append(_code_block(_webgl_cmd))
+        H.append('<p style="margin-top:1rem"><strong>a)</strong> Generate interactive '
+                 'WebGL 3D map:</p>')
+        H.append(_code_block(_terminal_snippet(_webgl_body)))
 
-        # --- 4c: Time series per species (one button each) ---
-        H.append('<p style="margin-top:1rem"><strong>c)</strong> Plot time series '
+        # --- 4b: Time series per species (one button each) ---
+        H.append('<p style="margin-top:1rem"><strong>b)</strong> Plot time series '
                  'per species:</p>')
         for sp in _species_list:
-            _plot_single = (
+            _out_png = os.path.join(_abs_output_dir, "openwq_out", f"timeseries_{sp}.png")
+            _plot_body = (
+                f'{_python_preamble}\n'
+                f'\n'
                 f'import Plot_h5_driver as h5_plib\n'
                 f'\n'
                 f'h5_plib.Plot_h5_driver(\n'
@@ -1910,14 +1981,21 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 f'    openwq_results=openwq_results,\n'
                 f'    chemSpec=["{sp}"],\n'
                 f'    debugmode=False,\n'
-                f'    output_path="{os.path.join(_abs_output_dir, "openwq_out", f"timeseries_{sp}.png")}"\n'
-                f')'
+                f'    output_path="{_out_png}"\n'
+                f')\n'
+                f'print("Plot saved to: {_out_png}")\n'
+                f'\n'
+                f'import webbrowser\n'
+                f'webbrowser.open("file://{_out_png}")'
             )
             H.append(f'<p style="margin:.4rem 0;font-size:.85rem">{sp}:</p>')
-            H.append(_code_block(_plot_single))
+            H.append(_code_block(_terminal_snippet(_plot_body)))
 
-        # --- 4d: All species in one plot ---
-        _plot_all = (
+        # --- 4c: All species in one plot ---
+        _out_all_png = os.path.join(_abs_output_dir, "openwq_out", "timeseries_all_species.png")
+        _plot_all_body = (
+            f'{_python_preamble}\n'
+            f'\n'
             f'import Plot_h5_driver as h5_plib\n'
             f'\n'
             f'h5_plib.Plot_h5_driver(\n'
@@ -1927,12 +2005,16 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
             f'    debugmode=False,\n'
-            f'    output_path="{os.path.join(_abs_output_dir, "openwq_out", "timeseries_all_species.png")}"\n'
-            f')'
+            f'    output_path="{_out_all_png}"\n'
+            f')\n'
+            f'print("Plot saved to: {_out_all_png}")\n'
+            f'\n'
+            f'import webbrowser\n'
+            f'webbrowser.open("file://{_out_all_png}")'
         )
-        H.append('<p style="margin-top:1rem"><strong>d)</strong> All species '
+        H.append('<p style="margin-top:1rem"><strong>c)</strong> All species '
                  'in a single plot:</p>')
-        H.append(_code_block(_plot_all))
+        H.append(_code_block(_terminal_snippet(_plot_all_body)))
 
         H.append('</div></div>')
 
@@ -1999,43 +2081,6 @@ function _owqRelayoutAll(){
     });}catch(e){}
   });
 }
-""")
-
-        # Time series plots
-        if results:
-            for i, (species, df) in enumerate(results.items()):
-                plot_id = f"plotTS_{i}"
-                H.append(f'window._owqPlotIds.push("{plot_id}");')
-
-                # Select up to 10 representative columns
-                cols = list(df.columns)
-                if len(cols) > 10:
-                    step = max(1, len(cols) // 10)
-                    cols = cols[::step][:10]
-
-                timestamps = df.index.tolist()
-                ts_strings = [str(t) for t in timestamps]
-
-                traces = []
-                for col in cols:
-                    vals = df[col].tolist()
-                    # Replace NaN with None for JSON
-                    vals = [None if (isinstance(v, float) and np.isnan(v)) else v for v in vals]
-                    traces.append({
-                        'x': ts_strings,
-                        'y': vals,
-                        'name': col,
-                        'type': 'scatter',
-                        'mode': 'lines',
-                    })
-
-                H.append(f"""
-Plotly.newPlot('{plot_id}',{json.dumps(traces)},
-  _owqLayout({{
-    title:'{species} ({units})',
-    xaxis:{{title:'Time'}},
-    yaxis:{{title:'{units}'}}
-  }}),PCFG);
 """)
 
         # Basin map — river network + basin + GRQA stations

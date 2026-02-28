@@ -587,7 +587,6 @@ grqa_buffer_km = 10
 # ║  END OF USER CONFIGURATION — do not edit below this line               ║
 # ╚════════════════════════════════════════════════════════════════════════╝
 
-import io
 import webbrowser
 from Gen_Report import generate_report as _generate_report
 
@@ -603,71 +602,62 @@ if (isinstance(chemical_species, str) and chemical_species.lower() == "all") or 
         phreeqc_mobile_species=locals().get('phreeqc_mobile_species'),
     )
 
-# 1) Generate config files + report — capture ALL console output
-_console_log = io.StringIO()
+# 1) Generate config files + report
 _has_errors = False
 _report_path = None
 
-import contextlib
 import traceback as _tb
 
-with contextlib.redirect_stdout(_console_log), contextlib.redirect_stderr(_console_log):
-    # 1a) Generate configuration files
+# 1a) Generate configuration files
+try:
+    _excluded = {'sys', 'os', 'io', 'webbrowser', 'gJSON_lib', 'uniform_param',
+                 '_generate_report', '_has_errors',
+                 '_report_path', '_tb'}
+    _config = {k: v for k, v in locals().items()
+               if not k.startswith('_') and k not in _excluded}
+    gJSON_lib.Gen_Input_Driver(**_config)
+except Exception as _e:
+    _has_errors = True
+    _tb.print_exc()
+
+# 1b) Generate report
+if generate_report:
+    _basin_shp = None
     try:
-        _excluded = {'sys', 'os', 'io', 'webbrowser', 'gJSON_lib', 'uniform_param',
-                     '_generate_report', 'contextlib', '_console_log', '_has_errors',
-                     '_report_path', '_tb'}
-        _config = {k: v for k, v in locals().items()
-                   if not k.startswith('_') and k not in _excluded}
-        gJSON_lib.Gen_Input_Driver(**_config)
+        _basin_shp = ss_method_copernicus_basin_info.get('path_to_shp')
+    except (NameError, AttributeError):
+        pass
+
+    try:
+        _report_path = _generate_report(
+            dir2save_input_files=dir2save_input_files,
+            project_name=project_name,
+            authors=authors,
+            date=date,
+            comment=comment,
+            hostmodel=hostmodel,
+            bgc_module_name=bgc_module_name,
+            td_module_name=td_module_name,
+            le_module_name=le_module_name,
+            ts_module_name=ts_module_name,
+            si_module_name=si_module_name,
+            ss_method=ss_method,
+            solver=solver,
+            chemical_species=chemical_species,
+            units=units,
+            compartments_and_cells=compartments_and_cells,
+            timestep=timestep,
+            river_network_shapefile=river_network_shapefile,
+            basin_shapefile=_basin_shp,
+            grqa_local_data_path=grqa_local_data_path,
+            grqa_buffer_km=grqa_buffer_km,
+            mpi_np=mpi_np,
+            executable_path=executable_path,
+            file_manager_path=file_manager_path,
+        )
     except Exception as _e:
         _has_errors = True
         _tb.print_exc()
-
-    # 1b) Generate report (captures GRQA, map, SS, and all other warnings/errors)
-    if generate_report:
-        _basin_shp = None
-        try:
-            _basin_shp = ss_method_copernicus_basin_info.get('path_to_shp')
-        except (NameError, AttributeError):
-            pass
-
-        try:
-            _report_path = _generate_report(
-                dir2save_input_files=dir2save_input_files,
-                project_name=project_name,
-                authors=authors,
-                date=date,
-                comment=comment,
-                hostmodel=hostmodel,
-                bgc_module_name=bgc_module_name,
-                td_module_name=td_module_name,
-                le_module_name=le_module_name,
-                ts_module_name=ts_module_name,
-                si_module_name=si_module_name,
-                ss_method=ss_method,
-                solver=solver,
-                chemical_species=chemical_species,
-                units=units,
-                compartments_and_cells=compartments_and_cells,
-                timestep=timestep,
-                river_network_shapefile=river_network_shapefile,
-                basin_shapefile=_basin_shp,
-                grqa_local_data_path=grqa_local_data_path,
-                grqa_buffer_km=grqa_buffer_km,
-                mpi_np=mpi_np,
-                executable_path=executable_path,
-                file_manager_path=file_manager_path,
-            )
-        except Exception as _e:
-            _has_errors = True
-            _tb.print_exc()
-
-_console_output = _console_log.getvalue()
-
-# Print captured output to the real console so the user can still see it
-if _console_output:
-    print(_console_output, end='')
 
 if not _has_errors:
     print("\n" + "=" * 60)
