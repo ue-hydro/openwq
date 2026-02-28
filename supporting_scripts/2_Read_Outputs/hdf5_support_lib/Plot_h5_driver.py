@@ -237,8 +237,15 @@ def Plot_h5_driver(what2map=None,
             ax.set_ylabel(ylabel, fontsize=12)
             ax.set_title(plot_title, fontsize=14, pad=20)
 
-            if len(feature_data) > 1:
-                ax.legend(loc='best', fontsize=10)
+            n_features = len(feature_data)
+            if 1 < n_features <= 20:
+                ax.legend(loc='best', fontsize=max(6, 10 - n_features // 5),
+                          ncol=max(1, n_features // 10))
+            elif n_features > 20:
+                ax.annotate(f'{n_features} features plotted',
+                            xy=(0.99, 0.01), xycoords='axes fraction',
+                            ha='right', va='bottom', fontsize=8,
+                            color='grey', style='italic')
 
             ax.grid(True, alpha=0.3)
 
@@ -384,18 +391,25 @@ def Plot_h5_driver(what2map=None,
                     feature_data = {}
                     missing_features = []
 
-                    # ttdata columns are like 'REACH_200005899'
-                    for fid in mapping_key_values:
-                        # Find column matching this feature ID
-                        matching_cols = [col for col in ttdata.columns if str(fid) in col.split('_')[-1]]
-
-                        if len(matching_cols) > 0:
-                            data = ttdata[matching_cols[0]]
-                            feature_data[fid] = data
+                    # Handle "all" — use every column in ttdata
+                    if mapping_key_values == ["all"] or mapping_key_values == "all":
+                        for col in ttdata.columns:
+                            fid = col.split('_')[-1]
+                            feature_data[fid] = ttdata[col]
                             print(f"    ✓ Found data for feature {fid}")
-                        else:
-                            missing_features.append(fid)
-                            print(f"    ✗ Feature {fid} not found")
+                    else:
+                        # ttdata columns are like 'REACH_200005899'
+                        for fid in mapping_key_values:
+                            # Find column matching this feature ID
+                            matching_cols = [col for col in ttdata.columns if str(fid) in col.split('_')[-1]]
+
+                            if len(matching_cols) > 0:
+                                data = ttdata[matching_cols[0]]
+                                feature_data[fid] = data
+                                print(f"    ✓ Found data for feature {fid}")
+                            else:
+                                missing_features.append(fid)
+                                print(f"    ✗ Feature {fid} not found")
 
                     if len(feature_data) == 0:
                         print(f"    ✗ No data found for any requested features")
@@ -421,8 +435,15 @@ def Plot_h5_driver(what2map=None,
                     ax.set_ylabel(ylabel_text, fontsize=12)
                     ax.set_title(plot_title, fontsize=14, pad=20)
 
-                    if len(feature_data) > 1:
-                        ax.legend(loc='best', fontsize=10)
+                    n_features = len(feature_data)
+                    if 1 < n_features <= 20:
+                        ax.legend(loc='best', fontsize=max(6, 10 - n_features // 5),
+                                  ncol=max(1, n_features // 10))
+                    elif n_features > 20:
+                        ax.annotate(f'{n_features} features plotted',
+                                    xy=(0.99, 0.01), xycoords='axes fraction',
+                                    ha='right', va='bottom', fontsize=8,
+                                    color='grey', style='italic')
 
                     ax.grid(True, alpha=0.3)
 

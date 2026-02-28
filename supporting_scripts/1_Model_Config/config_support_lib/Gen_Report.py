@@ -2001,12 +2001,11 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         # --- 4c: All species in one plot ---
         # Plot_h5_driver appends _{species}_main per species, so we use a generic base
         _out_all_base = os.path.join(_abs_output_dir, "openwq_out", "plotSeries.png")
-        _out_all_dir = os.path.join(_abs_output_dir, "openwq_out")
+        _out_all_actual = os.path.join(_abs_output_dir, "openwq_out")
         _plot_all_body = (
             f'{_python_preamble()}\n'
             f'\n'
             f'import Plot_h5_driver as h5_plib\n'
-            f'import glob\n'
             f'\n'
             f'h5_plib.Plot_h5_driver(\n'
             f'    what2map="openwq",\n'
@@ -2017,9 +2016,10 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    debugmode=False,\n'
             f'    output_path="{_out_all_base}"\n'
             f')\n'
+            f'print("Plots saved to: {_out_all_actual}")\n'
             f'\n'
-            f'import webbrowser\n'
-            f'for _png in sorted(glob.glob("{_out_all_dir}/plotSeries_*_main.png")):\n'
+            f'import glob, webbrowser\n'
+            f'for _png in sorted(glob.glob("{_out_all_actual}/plotSeries_*_main.png")):\n'
             f'    print(f"Opening: {{_png}}")\n'
             f'    webbrowser.open("file://" + _png)'
         )
