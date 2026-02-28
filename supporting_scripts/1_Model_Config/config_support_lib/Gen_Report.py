@@ -1866,28 +1866,32 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'source "{_supporting_scripts_dir}/venv/bin/activate"'
         )
 
-        # Common Python preamble: imports + HDF5 reading (included in every snippet)
+        # Common Python preamble builder: imports + HDF5 reading
         _sed_flag = ts_module_name.upper() != "NONE"
-        _python_preamble = (
-            f'import sys\n'
-            f'sys.path.insert(0, "{_hdf5_lib_dir}")\n'
-            f'import Read_h5_driver as h5_rlib\n'
-            f'\n'
-            f'openwq_results = h5_rlib.Read_h5_driver(\n'
-            f'    openwq_info={{\n'
-            f'        "path_to_results": "{os.path.join(_abs_output_dir, "openwq_out")}",\n'
-            f'        "mapping_key": "reachID"\n'
-            f'    }},\n'
-            f'    output_format="HDF5",\n'
-            f'    debugmode=False,\n'
-            f'    cmp=[{_cmp_str}],\n'
-            f'    space_elem="all",\n'
-            f'    chemSpec=[{_species_str}],\n'
-            f'    chemUnits="{units}",\n'
-            f'    noDataFlag=-9999,\n'
-            f'    sediment_as_well={_sed_flag}\n'
-            f')'
-        )
+
+        def _python_preamble(chem_spec_str=None):
+            """Build the preamble with a specific chemSpec list."""
+            cs = chem_spec_str if chem_spec_str is not None else _species_str
+            return (
+                f'import sys\n'
+                f'sys.path.insert(0, "{_hdf5_lib_dir}")\n'
+                f'import Read_h5_driver as h5_rlib\n'
+                f'\n'
+                f'openwq_results = h5_rlib.Read_h5_driver(\n'
+                f'    openwq_info={{\n'
+                f'        "path_to_results": "{os.path.join(_abs_output_dir, "openwq_out")}",\n'
+                f'        "mapping_key": "reachID"\n'
+                f'    }},\n'
+                f'    output_format="HDF5",\n'
+                f'    debugmode=False,\n'
+                f'    cmp=[{_cmp_str}],\n'
+                f'    space_elem="all",\n'
+                f'    chemSpec=[{cs}],\n'
+                f'    chemUnits="{units}",\n'
+                f'    noDataFlag=-9999,\n'
+                f'    sediment_as_well={_sed_flag}\n'
+                f')'
+            )
 
         def _terminal_snippet(python_body):
             """Wrap Python code into a self-contained terminal command."""
@@ -1913,7 +1917,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _hm_glob = os.path.join(_hm_out_dir, f"{_hm_prefix}*.nc")
 
         _webgl_body = (
-            f'{_python_preamble}\n'
+            f'{_python_preamble()}\n'
             f'\n'
             f'import glob\n'
             f'import WebGL_h5_driver as h5_wlib\n'
@@ -1968,9 +1972,12 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append('<p style="margin-top:1rem"><strong>b)</strong> Plot time series '
                  'per species:</p>')
         for sp in _species_list:
-            _out_png = os.path.join(_abs_output_dir, "openwq_out", f"timeseries_{sp}.png")
+            # Plot_h5_driver appends _{species}_main to the base name,
+            # so we use a generic base and compute the actual output path
+            _out_base = os.path.join(_abs_output_dir, "openwq_out", "plotSeries.png")
+            _out_actual = os.path.join(_abs_output_dir, "openwq_out", f"plotSeries_{sp}_main.png")
             _plot_body = (
-                f'{_python_preamble}\n'
+                f'{_python_preamble(chr(34) + sp + chr(34))}\n'
                 f'\n'
                 f'import Plot_h5_driver as h5_plib\n'
                 f'\n'
@@ -1981,22 +1988,25 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 f'    openwq_results=openwq_results,\n'
                 f'    chemSpec=["{sp}"],\n'
                 f'    debugmode=False,\n'
-                f'    output_path="{_out_png}"\n'
+                f'    output_path="{_out_base}"\n'
                 f')\n'
-                f'print("Plot saved to: {_out_png}")\n'
+                f'print("Plot saved to: {_out_actual}")\n'
                 f'\n'
                 f'import webbrowser\n'
-                f'webbrowser.open("file://{_out_png}")'
+                f'webbrowser.open("file://{_out_actual}")'
             )
             H.append(f'<p style="margin:.4rem 0;font-size:.85rem">{sp}:</p>')
             H.append(_code_block(_terminal_snippet(_plot_body)))
 
         # --- 4c: All species in one plot ---
-        _out_all_png = os.path.join(_abs_output_dir, "openwq_out", "timeseries_all_species.png")
+        # Plot_h5_driver appends _{species}_main per species, so we use a generic base
+        _out_all_base = os.path.join(_abs_output_dir, "openwq_out", "plotSeries.png")
+        _out_all_dir = os.path.join(_abs_output_dir, "openwq_out")
         _plot_all_body = (
-            f'{_python_preamble}\n'
+            f'{_python_preamble()}\n'
             f'\n'
             f'import Plot_h5_driver as h5_plib\n'
+            f'import glob\n'
             f'\n'
             f'h5_plib.Plot_h5_driver(\n'
             f'    what2map="openwq",\n'
@@ -2005,12 +2015,13 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
             f'    debugmode=False,\n'
-            f'    output_path="{_out_all_png}"\n'
+            f'    output_path="{_out_all_base}"\n'
             f')\n'
-            f'print("Plot saved to: {_out_all_png}")\n'
             f'\n'
             f'import webbrowser\n'
-            f'webbrowser.open("file://{_out_all_png}")'
+            f'for _png in sorted(glob.glob("{_out_all_dir}/plotSeries_*_main.png")):\n'
+            f'    print(f"Opening: {{_png}}")\n'
+            f'    webbrowser.open("file://" + _png)'
         )
         H.append('<p style="margin-top:1rem"><strong>c)</strong> All species '
                  'in a single plot:</p>')
