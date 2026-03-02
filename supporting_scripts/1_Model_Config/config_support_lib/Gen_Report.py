@@ -2256,40 +2256,9 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                  'WebGL 3D map:</p>')
         H.append(_code_block(_terminal_snippet(_webgl_body)))
 
-        # --- 4b: Time series per species (one button each) ---
-        H.append('<p style="margin-top:1rem"><strong>b)</strong> Plot time series '
-                 'per species:</p>')
-        for sp in _species_list:
-            # Plot_h5_driver appends _{species}_main to the base name,
-            # so we use a generic base and compute the actual output path
-            _out_base = os.path.join(_abs_output_dir, "openwq_out", "plotSeries.png")
-            _out_actual = os.path.join(_abs_output_dir, "openwq_out", f"plotSeries_{sp}_main.png")
-            _plot_body = (
-                f'{_python_preamble(chr(34) + sp + chr(34))}\n'
-                f'\n'
-                f'import Plot_h5_driver as h5_plib\n'
-                f'\n'
-                f'h5_plib.Plot_h5_driver(\n'
-                f'    what2map="openwq",\n'
-                f'    hostmodel="{hostmodel}",\n'
-                f'    mapping_key_values="all",\n'
-                f'    openwq_results=openwq_results,\n'
-                f'    chemSpec=["{sp}"],\n'
-                f'    debugmode=False,\n'
-                f'    output_path="{_out_base}"\n'
-                f')\n'
-                f'print("Plot saved to: {_out_actual}")\n'
-                f'\n'
-                f'import webbrowser\n'
-                f'webbrowser.open("{_file_uri(_out_actual)}")'
-            )
-            H.append(f'<p style="margin:.4rem 0;font-size:.85rem">{sp}:</p>')
-            H.append(_code_block(_terminal_snippet(_plot_body)))
-
-        # --- 4c: All species in one plot ---
-        # Plot_h5_driver appends _{species}_main per species, so we use a generic base
-        _out_all_base = os.path.join(_abs_output_dir, "openwq_out", "plotSeries.png")
-        _out_all_actual = os.path.join(_abs_output_dir, "openwq_out")
+        # --- 4b: Interactive time series (all species) ---
+        _out_all_html = os.path.join(_abs_output_dir, "openwq_out",
+                                     "plotSeries.html")
         _plot_all_body = (
             f'{_python_preamble()}\n'
             f'\n'
@@ -2302,17 +2271,14 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
             f'    debugmode=False,\n'
-            f'    output_path="{_out_all_base}"\n'
+            f'    output_path="{_out_all_html}"\n'
             f')\n'
-            f'print("Plots saved to: {_out_all_actual}")\n'
             f'\n'
-            f'import glob, webbrowser\n'
-            f'for _png in sorted(glob.glob("{_out_all_actual}/plotSeries_*_main.png")):\n'
-            f'    print(f"Opening: {{_png}}")\n'
-            f'    webbrowser.open("{_file_uri_prefix}" + _png.replace(chr(92), "/"))'
+            f'import webbrowser\n'
+            f'webbrowser.open("{_file_uri(_out_all_html)}")'
         )
-        H.append('<p style="margin-top:1rem"><strong>c)</strong> All species '
-                 'in a single plot:</p>')
+        H.append('<p style="margin-top:1rem"><strong>b)</strong> Plot interactive '
+                 'time series (all species):</p>')
         H.append(_code_block(_terminal_snippet(_plot_all_body)))
 
         H.append('</div></div>')
