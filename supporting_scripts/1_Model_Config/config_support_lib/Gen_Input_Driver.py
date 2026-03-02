@@ -895,7 +895,8 @@ def Gen_Input_Driver(
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
             ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
-            use_cellid_mapping=ss_use_cellid_mapping
+            use_cellid_mapping=ss_use_cellid_mapping,
+            simulation_period=[req_start, req_end]
         )
     elif (ss_method == "using_copernicus_lulc_with_dynamic_coeff"):
 
@@ -919,7 +920,8 @@ def Gen_Input_Driver(
             temp_q10=ss_climate_temp_q10,
             temp_reference_c=ss_climate_temp_reference_c,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
-            use_cellid_mapping=ss_use_cellid_mapping
+            use_cellid_mapping=ss_use_cellid_mapping,
+            simulation_period=[req_start, req_end]
         )
 
     elif (ss_method == "ml_model"):

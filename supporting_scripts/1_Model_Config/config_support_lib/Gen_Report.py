@@ -1680,6 +1680,18 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                     H.append(f'<tr><td>{mk}</td><td>{mv}</td></tr>')
                 H.append('</table></div></div>')
 
+            # Proxy year warning (when Copernicus proxy data is used)
+            if ss_metadata.get('Proxy_Years'):
+                H.append(
+                    '<div class="card" style="border-left:4px solid #f39c12;'
+                    'background:rgba(243,156,18,.08);margin-bottom:1rem;'
+                    'padding:.8rem 1rem">'
+                    '<p style="color:#e67e22;font-weight:600;margin:0 0 .4rem 0">'
+                    '&#x26a0; Proxy Year Warning</p>'
+                    f'<p style="margin:0;font-size:.85rem">'
+                    f'{_html_mod.escape(str(ss_metadata["Proxy_Years"]))}</p>'
+                    '</div>')
+
             # Per-species detail table
             H.append('<div class="card accent"><div class="table-wrap"><table>')
             H.append('<tr><th>Chemical</th><th>Compartment</th><th>Type</th>'
