@@ -28,3 +28,6 @@ wikipage/build/
 
 # Century basins scripts (project-specific, not for distribution)
 supporting_scripts/Calibration/century_basins_scripts/
+
+# User-specific config template copies (keep only the original template)
+supporting_scripts/1_Model_Config/model_config_template_test.py

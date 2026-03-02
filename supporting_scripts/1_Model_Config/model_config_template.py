@@ -565,22 +565,64 @@ open_report = True   # Automatically open the report in your browser when done.
 # Basin polygons are automatically loaded from ss_method_copernicus_basin_info above.
 river_network_shapefile = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/mizuSegId.shp"   # e.g., "/path/to/river_network.shp"
 
+# ── Observation data source ──
+# Choose between GRQA (Global River Water Quality Archive) or a user-provided
+# CSV file with custom observation data.
+#
+# Options:
+#   "grqa"  → use the GRQA database (see grqa_local_data_path below)
+#   "user_csv" → use a user-provided CSV file (see user_observation_csv below)
+#   "skip"  → skip observation data entirely (no station overlay, no data report)
+observation_data_source = "grqa"
+
 # GRQA observation data (Global River Water Quality Archive).
 # Used to overlay real monitoring station locations on the map and
 # generate a data availability report for your species.
+# Only used when observation_data_source = "grqa".
 #
 # Options:
 #   "auto" → auto-download from Zenodo (one-time ~1.2 GB download, cached locally).
 #            Only CSVs matching your species are extracted from the archive.
 #   "/path/to/grqa/" → use a pre-downloaded GRQA folder.
 #            Download: https://zenodo.org/records/15335450
-#   "skip"  → skip GRQA entirely (no station overlay, no data report)
 grqa_local_data_path = "auto"
 
 # Buffer distance [km] around the basin boundary (or river network if no basin
 # shapefile is provided) for searching GRQA monitoring stations.
 # Increase for remote catchments with sparse monitoring coverage.
 grqa_buffer_km = 10
+
+# User-provided observation CSV file.
+# Only used when observation_data_source = "user_csv".
+#
+# The CSV header MUST contain exactly these 10 column names (case-insensitive).
+# Columns may appear in any order, but every name must be present:
+#
+#   station_id, lat, lon, parameter, year, month, day, minute, value, units
+#
+# Column descriptions:
+#   station_id  — unique identifier for the monitoring station (string)
+#   lat         — latitude in decimal degrees, WGS84 (numeric)
+#   lon         — longitude in decimal degrees, WGS84 (numeric)
+#   parameter   — species/parameter name; must match the BGC template names
+#                  exactly (e.g. "NO3-N", "PO4-P", "DO", "TSS")
+#   year        — observation year (integer)
+#   month       — observation month, 1–12 (integer)
+#   day         — observation day, 1–31 (integer)
+#   minute      — minute of day, 0–1439; use 0 if not available (integer)
+#   value       — observed value (numeric)
+#   units       — measurement units (string, e.g. "mg/L")
+#
+# Example CSV (note: column order does not matter):
+#
+#   station_id,lat,lon,parameter,year,month,day,minute,value,units
+#   STN001,45.123,-73.456,NO3-N,2020,6,15,720,1.23,mg/L
+#   STN001,45.123,-73.456,DO,2020,6,15,720,8.5,mg/L
+#   STN002,45.200,-73.500,NO3-N,2020,7,1,0,0.98,mg/L
+#
+# If any required column is missing the report will print an error and skip
+# the observation overlay.
+user_observation_csv = None   # e.g., "/path/to/my_observations.csv"
 
 
 # ╔════════════════════════════════════════════════════════════════════════╗
@@ -649,8 +691,10 @@ if generate_report:
             timestep=timestep,
             river_network_shapefile=river_network_shapefile,
             basin_shapefile=_basin_shp,
+            observation_data_source=observation_data_source,
             grqa_local_data_path=grqa_local_data_path,
             grqa_buffer_km=grqa_buffer_km,
+            user_observation_csv=user_observation_csv,
             mpi_np=mpi_np,
             executable_path=executable_path,
             file_manager_path=file_manager_path,
