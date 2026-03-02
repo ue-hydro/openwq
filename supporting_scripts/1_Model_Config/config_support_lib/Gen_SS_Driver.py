@@ -2217,15 +2217,14 @@ def create_openwq_ss_json_from_loads(
                 )
 
                 # Create data entries for each time point
-                # Format: [YYYY, MM, DD, HH, min, sec, ix/cell_id, iy, iz, load, "discrete"]
-                # Use "all" for minutes and seconds (always 0) to compress JSON
+                # Format: [YYYY, MM, DD, HH, MIN, SEC, ix/cell_id, iy, iz, load, "discrete"]
                 # YYYY is the simulation year (not the Copernicus year)
                 for month, day, hour, load_kg in temporal_entries:
                     if use_cellid_mapping:
-                        # cell_id in ix position, "all" for iy and iz
+                        # Format: [YYYY, MM, DD, HH, MIN, SEC, cell_id, iy, iz, load, type]
                         data_entries[str(sub_idx)] = [
-                            sim_year, int(month), int(day), int(hour),
-                            spatial_id, "all", "all", 1, 1,
+                            sim_year, int(month), int(day), int(hour), 1, 1,
+                            spatial_id, "all", "all",
                             float(load_kg),
                             "discrete"
                         ]
@@ -2233,7 +2232,7 @@ def create_openwq_ss_json_from_loads(
                         # Legacy: use (ix, iy, iz) tuple
                         ix, iy, iz = spatial_id
                         data_entries[str(sub_idx)] = [
-                            sim_year, int(month), int(day), int(hour), "all", "all",
+                            sim_year, int(month), int(day), int(hour), 1, 1,
                             ix, iy, iz,
                             float(load_kg),
                             "discrete"
