@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 import netCDF4
 import os
+import platform
 import json
 import re
 import datetime
@@ -85,7 +86,7 @@ def _build_traces(feature_data, n_visible=10):
     return traces
 
 
-def _build_html(plots, what2map, hostmodel):
+def _build_html(plots, what2map, hostmodel, output_path=None):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -96,6 +97,9 @@ def _build_html(plots, what2map, hostmodel):
         'hostmodel' or 'openwq'.
     hostmodel : str
         Host model name (e.g. 'mizuroute').
+    output_path : str, optional
+        Path to the output HTML file — used to resolve the relative path
+        to the WebGL 3D viewer (``openwq_webgl_viewer/index.html``).
 
     Returns
     -------
@@ -105,6 +109,14 @@ def _build_html(plots, what2map, hostmodel):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     n_plots = len(plots)
 
+    # Detect WebGL 3D viewer — look for index.html relative to output_path
+    _webgl_rel = None
+    if output_path:
+        _out_dir = os.path.dirname(os.path.abspath(output_path))
+        _webgl_abs = os.path.join(_out_dir, 'openwq_webgl_viewer', 'index.html')
+        if os.path.isfile(_webgl_abs):
+            _webgl_rel = 'openwq_webgl_viewer/index.html'
+
     H = []
 
     # --- HEAD ---
@@ -113,7 +125,7 @@ def _build_html(plots, what2map, hostmodel):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OpenWQ Time Series</title>
+<title>OpenWQ Results</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
@@ -186,8 +198,10 @@ a{color:var(--primary);text-decoration:none}
     # --- SIDEBAR ---
     H.append('<div class="layout">')
     H.append('<aside class="sidebar">')
-    H.append('<div class="logo">Open<span>WQ</span> Plots</div>')
+    H.append('<div class="logo">Open<span>WQ</span> Results</div>')
     H.append('<nav>')
+    if _webgl_rel:
+        H.append('<a href="#viewer3d">3D River Viewer</a>')
     for p in plots:
         H.append(f'<a href="#{p["id"]}">{p["title"]}</a>')
     H.append('</nav>')
@@ -213,8 +227,8 @@ a{color:var(--primary);text-decoration:none}
     mode_label = what2map.upper() if what2map else 'N/A'
     host_label = (hostmodel or 'N/A').upper()
     H.append(f"""<div class="header">
-<h1>Open<span>WQ</span> &mdash; Time Series</h1>
-<p class="subtitle">{mode_label} mode &mdash; {n_plots} plot(s)</p>
+<h1>Open<span>WQ</span> &mdash; Results</h1>
+<p class="subtitle">{mode_label} mode &mdash; {n_plots} time-series plot(s){' + 3D viewer' if _webgl_rel else ''}</p>
 <div class="meta">
 <span>Host Model: {host_label}</span>
 <span>Generated: {now}</span>
@@ -222,6 +236,42 @@ a{color:var(--primary);text-decoration:none}
 </div>""")
 
     H.append('<div class="container">')
+
+    # --- 3D RIVER VIEWER (WebGL iframe or launch prompt) ---
+    if _webgl_rel:
+        # Compute the absolute path to the WebGL viewer directory
+        # for the "python -m http.server" command shown on file://
+        _webgl_dir_abs = os.path.dirname(os.path.join(
+            os.path.abspath(output_path), '..', _webgl_rel))
+        _webgl_dir_abs = os.path.normpath(_webgl_dir_abs)
+
+        # OS-aware terminal command for starting the HTTP server
+        _is_win = (platform.system() == 'Windows')
+        if _is_win:
+            _webgl_cmd = f'cd /d "{_webgl_dir_abs}" & python -m http.server 8080'
+        else:
+            # Use forward slashes (macOS/Linux native)
+            _webgl_cmd = f'cd "{_webgl_dir_abs}" && python3 -m http.server 8080'
+
+        H.append(f"""<div class="section" id="viewer3d">
+<h2>3D River Viewer</h2>
+<div id="webgl-http" class="card" style="padding:0;overflow:hidden;display:none">
+<iframe id="webglFrame" src="{_webgl_rel}"
+  style="width:100%;height:600px;border:none;display:block"></iframe>
+</div>
+<div id="webgl-file" class="card" style="display:none;padding:2rem;text-align:center">
+<p style="font-size:1rem;margin-bottom:1rem">The 3D viewer requires a local HTTP server
+(browser security blocks WebGL resources on <code>file://</code>).</p>
+<p style="margin-bottom:.6rem">Run this in your terminal, then click the link:</p>
+<code id="webgl-cmd" style="display:inline-block;background:var(--bg);border:1px solid var(--border);
+  border-radius:8px;padding:.6rem 1.2rem;font-size:.85rem;cursor:pointer;user-select:all"
+  onclick="navigator.clipboard.writeText(this.textContent)"
+>{_webgl_cmd}</code>
+<p style="font-size:.78rem;color:var(--text2);margin-top:.4rem">(click to copy)</p>
+<p style="margin-top:1rem"><a href="http://localhost:8080" target="_blank"
+  style="font-size:1rem;font-weight:600">&#x1f310; Open 3D Viewer (localhost:8080)</a></p>
+</div>
+</div>""")
 
     # --- PLOT SECTIONS ---
     for p in plots:
@@ -317,6 +367,21 @@ function _owqRelayoutAll(){
     PCFG);
   _owqRegister('{div_id}');
 }})();
+""")
+
+    # 3D viewer: show iframe on HTTP, show launch prompt on file://
+    if _webgl_rel:
+        H.append("""
+(function(){
+  var httpDiv = document.getElementById('webgl-http');
+  var fileDiv = document.getElementById('webgl-file');
+  if(!httpDiv||!fileDiv) return;
+  if(location.protocol==='file:'){
+    fileDiv.style.display='';
+  }else{
+    httpDiv.style.display='';
+  }
+})();
 """)
 
     # Sidebar active state on scroll
@@ -699,7 +764,8 @@ def Plot_h5_driver(what2map=None,
     print(f"Building interactive HTML with {len(plots)} plot(s)...")
     print("=" * 70)
 
-    html_content = _build_html(plots, what2map, hostmodel)
+    html_content = _build_html(plots, what2map, hostmodel,
+                               output_path=output_path)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)

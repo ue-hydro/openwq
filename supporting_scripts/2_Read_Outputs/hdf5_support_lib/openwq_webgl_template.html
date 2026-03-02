@@ -1376,26 +1376,33 @@ class FloodViewer3D {
     }
 
     async init() {
-        let resp;
-        try {
-            resp = await fetch('data/metadata.json');
-        } catch (netErr) {
-            const err = new Error('Network error fetching metadata.json — the server may be unreachable or blocking CORS.');
-            err.url = 'data/metadata.json';
-            throw err;
-        }
-        if (!resp.ok) {
-            const err = new Error('Server returned HTTP ' + resp.status + ' for metadata.json');
-            err.url = resp.url;
-            err.status = resp.status;
-            throw err;
-        }
-        try {
-            this.meta = await resp.json();
-        } catch (parseErr) {
-            const err = new Error('metadata.json is not valid JSON — server may be returning an HTML error page.');
-            err.url = resp.url;
-            throw err;
+        // Metadata is inlined in <head> by WebGL_h5_driver.py to avoid
+        // fetch() CORS issues when opened via file:// protocol.
+        // Falls back to fetch() if the inlined variable is not present.
+        if (window.__OPENWQ_METADATA__) {
+            this.meta = window.__OPENWQ_METADATA__;
+        } else {
+            let resp;
+            try {
+                resp = await fetch('data/metadata.json');
+            } catch (netErr) {
+                const err = new Error('Network error fetching metadata.json — the server may be unreachable or blocking CORS.');
+                err.url = 'data/metadata.json';
+                throw err;
+            }
+            if (!resp.ok) {
+                const err = new Error('Server returned HTTP ' + resp.status + ' for metadata.json');
+                err.url = resp.url;
+                err.status = resp.status;
+                throw err;
+            }
+            try {
+                this.meta = await resp.json();
+            } catch (parseErr) {
+                const err = new Error('metadata.json is not valid JSON — server may be returning an HTML error page.');
+                err.url = resp.url;
+                throw err;
+            }
         }
         const m = this.meta;
 
