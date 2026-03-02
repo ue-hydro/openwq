@@ -1713,7 +1713,8 @@ def set_ss_climate_adjusted_export_coefficients(
         optional_load_coefficients: Optional[Dict[int, Dict[str, float]]] = None,
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc',
-        use_cellid_mapping: bool = True
+        use_cellid_mapping: bool = True,
+        simulation_period: Optional[List[int]] = None
 ) -> None:
     """
     Generate climate-adjusted source/sink JSON from Copernicus LULC data.
@@ -1852,6 +1853,8 @@ def set_ss_climate_adjusted_export_coefficients(
     exclude_cols = [shp_hru_id_column, 'Year']
     nutrient_cols = [col for col in pivot_df.columns if col not in exclude_cols]
 
+    cop_years_in_csv = sorted(int(y) for y in pivot_df['Year'].unique())
+
     config = {
         "METADATA": {
             "Comment": ss_metadata_comment,
@@ -1875,14 +1878,39 @@ def set_ss_climate_adjusted_export_coefficients(
         print(f"    (using climate data from {nearest} for year {yr})")
         return climate_data[nearest]
 
+    # Build year mapping: simulation years → Copernicus data years
+    if simulation_period is not None:
+        sim_start, sim_end = int(simulation_period[0]), int(simulation_period[1])
+        sim_years = list(range(sim_start, sim_end + 1))
+    else:
+        sim_years = cop_years_in_csv
+
+    year_mapping = {}
+    for sy in sim_years:
+        year_mapping[sy] = min(cop_years_in_csv, key=lambda cy: abs(cy - sy))
+
+    proxy_years = {sy: cy for sy, cy in year_mapping.items() if sy != cy}
+    if proxy_years:
+        print(f"\n  ⚠  Proxy year mapping (sim year → Copernicus data year):")
+        for sy in sorted(proxy_years):
+            print(f"      {sy} → {proxy_years[sy]}")
+        # Add proxy year warning to METADATA so the report can display it
+        config["METADATA"]["Proxy_Years"] = (
+            f"Simulation years {sorted(proxy_years.keys())} use proxy data from Copernicus. "
+            f"Mapping: {', '.join(f'{sy}→{cy}' for sy, cy in sorted(proxy_years.items()))}"
+        )
+
     entry_idx = 1
 
-    for year in sorted(pivot_df['Year'].unique()):
-        year_data = pivot_df[pivot_df['Year'] == year]
-        climate = _get_climate_for_year(int(year))
+    for sim_year in sim_years:
+        cop_year = year_mapping[sim_year]
+        is_proxy = (sim_year != cop_year)
+        year_data = pivot_df[pivot_df['Year'] == cop_year]
+        climate = _get_climate_for_year(sim_year)
 
         for nutrient in nutrient_cols:
-            print(f"\n  Processing: Year {year}, Nutrient {nutrient}")
+            proxy_tag = f" (proxy→{cop_year})" if is_proxy else ""
+            print(f"\n  Processing: Year {sim_year}{proxy_tag}, Nutrient {nutrient}")
 
             nutrient_loads = year_data[[shp_hru_id_column, nutrient]].copy()
             nutrient_loads = nutrient_loads[nutrient_loads[nutrient] > 0]
@@ -1910,7 +1938,7 @@ def set_ss_climate_adjusted_export_coefficients(
                 # Climate-adjusted temporal distribution
                 temporal_entries = _apply_climate_adjustment(
                     annual_load_kg=annual_load_kg,
-                    year=int(year),
+                    year=sim_year,
                     monthly_precip_mm=climate['precip_mm'],
                     monthly_temp_c=climate['temp_c'],
                     precip_scaling_power=precip_scaling_power,
@@ -1922,7 +1950,7 @@ def set_ss_climate_adjusted_export_coefficients(
                     if use_cellid_mapping:
                         # Use cell_id string in ix position, dummy values for iy/iz
                         data_entries[str(sub_idx)] = [
-                            int(year), int(month), int(day), int(hour), "all", "all",
+                            sim_year, int(month), int(day), int(hour), "all", "all",
                             spatial_id, 1, 1,  # cell_id, iy=1, iz=1 (ignored by OpenWQ)
                             float(load_kg),
                             "discrete"
@@ -1931,7 +1959,7 @@ def set_ss_climate_adjusted_export_coefficients(
                         # Legacy: use (ix, iy, iz) tuple
                         ix, iy, iz = spatial_id
                         data_entries[str(sub_idx)] = [
-                            int(year), int(month), int(day), int(hour), "all", "all",
+                            sim_year, int(month), int(day), int(hour), "all", "all",
                             ix, iy, iz,
                             float(load_kg),
                             "discrete"
@@ -1941,10 +1969,17 @@ def set_ss_climate_adjusted_export_coefficients(
             if len(data_entries) == 0:
                 continue
 
+            # Build COMMENT — note proxy source when year is outside Copernicus range
+            if is_proxy:
+                comment = (f"Climate-adjusted loading for {nutrient} in {sim_year} "
+                           f"(proxy from Copernicus year {cop_year})")
+            else:
+                comment = f"Climate-adjusted loading for {nutrient} in {sim_year}"
+
             config[str(entry_idx)] = {
                 "CHEMICAL_NAME": nutrient,
                 "COMPARTMENT_NAME": ss_method_copernicus_compartment_name_for_load,
-                "COMMENT": f"Climate-adjusted loading for {nutrient}",
+                "COMMENT": comment,
                 "TYPE": "source",
                 "UNITS": "kg",
                 "DATA_FORMAT": "JSON",
@@ -1993,7 +2028,8 @@ def create_openwq_ss_json_from_loads(
         ss_method_copernicus_annual_to_seasonal_loads_method: str = "uniform",
         ss_metadata_comment: str = "Nutrient loading from land use/land cover",
         ss_metadata_source: str = "Copernicus LULC analysis",
-        use_cellid_mapping: bool = True
+        use_cellid_mapping: bool = True,
+        simulation_period: Optional[List[int]] = None
 ) -> None:
     """
     Generate OpenWQ source/sink JSON configuration from nutrient loads.
@@ -2095,7 +2131,29 @@ def create_openwq_ss_json_from_loads(
     nutrient_cols = [col for col in pivot_df.columns if col not in exclude_cols]
 
     print(f"\nNutrient species found: {nutrient_cols}")
-    print(f"Years found: {sorted(pivot_df['Year'].unique())}")
+    cop_years_in_csv = sorted(int(y) for y in pivot_df['Year'].unique())
+    print(f"Copernicus years in CSV: {cop_years_in_csv}")
+
+    # Build year mapping: simulation years → Copernicus data years
+    # Years inside the Copernicus range use actual data; years outside use
+    # the nearest available Copernicus year as proxy.
+    if simulation_period is not None:
+        sim_start, sim_end = int(simulation_period[0]), int(simulation_period[1])
+        sim_years = list(range(sim_start, sim_end + 1))
+    else:
+        sim_years = cop_years_in_csv  # no remapping needed
+
+    year_mapping = {}  # {sim_year: cop_year}
+    for sy in sim_years:
+        year_mapping[sy] = min(cop_years_in_csv, key=lambda cy: abs(cy - sy))
+
+    # Log proxy years
+    proxy_years = {sy: cy for sy, cy in year_mapping.items() if sy != cy}
+    if proxy_years:
+        print(f"\n  ⚠  Proxy year mapping (sim year → Copernicus data year):")
+        for sy in sorted(proxy_years):
+            print(f"      {sy} → {proxy_years[sy]}")
+    print(f"  Simulation years to write: {sim_years[0]}–{sim_years[-1]}")
 
     # Build JSON structure
     config = {
@@ -2105,21 +2163,31 @@ def create_openwq_ss_json_from_loads(
         }
     }
 
+    # Add proxy year warning to METADATA so the report can display it
+    if proxy_years:
+        config["METADATA"]["Proxy_Years"] = (
+            f"Simulation years {sorted(proxy_years.keys())} use proxy data from Copernicus. "
+            f"Mapping: {', '.join(f'{sy}→{cy}' for sy, cy in sorted(proxy_years.items()))}"
+        )
+
     entry_idx = 1
 
-    # Group by year and process each nutrient
-    for year in sorted(pivot_df['Year'].unique()):
-        year_data = pivot_df[pivot_df['Year'] == year]
+    # Group by simulation year and process each nutrient
+    for sim_year in sim_years:
+        cop_year = year_mapping[sim_year]
+        is_proxy = (sim_year != cop_year)
+        year_data = pivot_df[pivot_df['Year'] == cop_year]
 
         for nutrient in nutrient_cols:
-            print(f"\n  Processing: Year {year}, Nutrient {nutrient}")
+            proxy_tag = f" (proxy→{cop_year})" if is_proxy else ""
+            print(f"\n  Processing: Year {sim_year}{proxy_tag}, Nutrient {nutrient}")
 
-            # Get non-zero loads for this year and nutrient
+            # Get non-zero loads for this Copernicus year and nutrient
             nutrient_loads = year_data[[shp_hru_id_column, nutrient]].copy()
             nutrient_loads = nutrient_loads[nutrient_loads[nutrient] > 0]  # Only non-zero loads
 
             if len(nutrient_loads) == 0:
-                print(f"    ⚠ No non-zero loads for {nutrient} in {year}, skipping...")
+                print(f"    ⚠ No non-zero loads for {nutrient} in {cop_year}, skipping...")
                 continue
 
             # Create data entries
@@ -2144,18 +2212,19 @@ def create_openwq_ss_json_from_loads(
                 # Calculate temporal distribution of annual load
                 temporal_entries = _calculate_temporal_load_distribution(
                     annual_load_kg=annual_load_kg,
-                    year=int(year),
+                    year=sim_year,
                     method=ss_method_copernicus_annual_to_seasonal_loads_method
                 )
 
                 # Create data entries for each time point
                 # Format: [YYYY, MM, DD, HH, min, sec, ix/cell_id, iy, iz, load, "discrete"]
                 # Use "all" for minutes and seconds (always 0) to compress JSON
+                # YYYY is the simulation year (not the Copernicus year)
                 for month, day, hour, load_kg in temporal_entries:
                     if use_cellid_mapping:
                         # Use cell_id string in ix position, dummy values for iy/iz
                         data_entries[str(sub_idx)] = [
-                            int(year), int(month), int(day), int(hour), "all", "all",
+                            sim_year, int(month), int(day), int(hour), "all", "all",
                             spatial_id, 1, 1,  # cell_id, iy=1, iz=1 (ignored by OpenWQ)
                             float(load_kg),
                             "discrete"
@@ -2164,7 +2233,7 @@ def create_openwq_ss_json_from_loads(
                         # Legacy: use (ix, iy, iz) tuple
                         ix, iy, iz = spatial_id
                         data_entries[str(sub_idx)] = [
-                            int(year), int(month), int(day), int(hour), "all", "all",
+                            sim_year, int(month), int(day), int(hour), "all", "all",
                             ix, iy, iz,
                             float(load_kg),
                             "discrete"
@@ -2172,21 +2241,28 @@ def create_openwq_ss_json_from_loads(
                     sub_idx += 1
 
             if len(data_entries) == 0:
-                print(f"    ⚠ No valid entries for {nutrient} in {year}, skipping...")
+                print(f"    ⚠ No valid entries for {nutrient} in {sim_year}, skipping...")
                 continue
+
+            # Build COMMENT — note proxy source when year is outside Copernicus range
+            if is_proxy:
+                comment = (f"Copernicus LULC-based loading for {nutrient} in {sim_year} "
+                           f"(proxy from Copernicus year {cop_year})")
+            else:
+                comment = f"Copernicus LULC-based loading for {nutrient} in {sim_year}"
 
             # Add to config
             config[str(entry_idx)] = {
                 "CHEMICAL_NAME": nutrient,
                 "COMPARTMENT_NAME": ss_method_copernicus_compartment_name_for_load,
-                "COMMENT": f"Copernicus LULC-based loading for {nutrient} in {year}",
+                "COMMENT": comment,
                 "TYPE": "source",
                 "UNITS": "kg",
                 "DATA_FORMAT": "JSON",
                 "DATA": data_entries
             }
 
-            print(f"    Added {len(data_entries)} load entries for {nutrient} in {year}")
+            print(f"    Added {len(data_entries)} load entries for {nutrient} in {sim_year}")
             entry_idx += 1
 
     # Convert to JSON string with standard formatting
@@ -2312,7 +2388,8 @@ def set_ss_from_copernicus_lulc_with_loads(
         optional_load_coefficients: Optional[Dict[int, Dict[str, float]]] = None,
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc',
-        use_cellid_mapping: bool = True
+        use_cellid_mapping: bool = True,
+        simulation_period: Optional[List[int]] = None
 ):
     """
     Process Copernicus LULC data, calculate nutrient loads, and generate OpenWQ JSON.
@@ -2415,7 +2492,8 @@ def set_ss_from_copernicus_lulc_with_loads(
         ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
         ss_metadata_comment=ss_metadata_comment,
         ss_metadata_source=ss_metadata_source,
-        use_cellid_mapping=use_cellid_mapping
+        use_cellid_mapping=use_cellid_mapping,
+        simulation_period=simulation_period
     )
 
     return results, summaries, rasters, loads_df
