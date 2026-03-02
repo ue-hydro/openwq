@@ -1616,6 +1616,16 @@ def WebGL_h5_driver(shpfile_info=None,
     print("=" * 70)
 
     html = _generate_openwq_webgl_html(fluxos_viewer_path)
+
+    # Inline metadata JSON into the HTML so the viewer works on file://
+    # (fetch() is blocked by CORS on file:// protocol).
+    # The template checks for window.__OPENWQ_METADATA__ before fetch().
+    _meta_json_str = _json.dumps(metadata)
+    _inline_script = (
+        f'\n<script>window.__OPENWQ_METADATA__ = {_meta_json_str};</script>\n'
+    )
+    html = html.replace('</head>', f'{_inline_script}</head>', 1)
+
     html_path = os.path.join(output_dir, "index.html")
     with open(html_path, "w") as f:
         f.write(html)

@@ -256,34 +256,57 @@ def _render_module_params(module_data, module_name):
 
         if 'CHEMICAL_SPECIES' in bgc:
             chem_section = bgc['CHEMICAL_SPECIES']
-            H.append('<h4>Chemical Species</h4>')
-            H.append('<table class="param-table">')
-            H.append('<tr><th>Species</th><th>Description</th>'
-                     '<th>Units</th><th>Initial Condition</th></tr>')
+            # Collect rows first, then decide which columns to render
+            _list_descs = chem_section.get('_LIST_DESCRIPTIONS', {})
+            _rows = []  # list of (name, description, units, ic)
 
-            # Runtime format: LIST + _SPECIES_INFO metadata
             if 'LIST' in chem_section:
                 for idx in sorted(chem_section['LIST'].keys(),
                                   key=lambda x: int(x)):
                     name = chem_section['LIST'][idx]
                     info = chem_section.get(f'_{name}_INFO', {})
-                    H.append(
-                        f'<tr><td><code>{name}</code></td>'
-                        f'<td>{info.get("DESCRIPTION", "")}</td>'
-                        f'<td>{info.get("UNITS", "")}</td>'
-                        f'<td class="num">'
-                        f'{info.get("INITIAL_CONDITION", "")}</td></tr>')
+                    desc = (_list_descs.get(name, '')
+                            or info.get('DESCRIPTION', ''))
+                    units = info.get('UNITS', '')
+                    ic = info.get('INITIAL_CONDITION', '')
+                    _rows.append((name, desc, units, ic))
             else:
-                # Legacy format
                 for k, v in chem_section.items():
                     if k.startswith('_') or not isinstance(v, dict):
                         continue
-                    H.append(
-                        f'<tr><td><code>{k}</code></td>'
-                        f'<td>{v.get("DESCRIPTION", "")}</td>'
-                        f'<td>{v.get("UNITS", "")}</td>'
-                        f'<td class="num">'
-                        f'{v.get("INITIAL_CONDITION", "")}</td></tr>')
+                    desc = (_list_descs.get(k, '')
+                            or v.get('DESCRIPTION', ''))
+                    _rows.append((k, desc,
+                                  v.get('UNITS', ''),
+                                  v.get('INITIAL_CONDITION', '')))
+
+            # Determine which optional columns have data
+            _has_desc = any(r[1] for r in _rows)
+            _has_units = any(r[2] for r in _rows)
+            _has_ic = any(r[3] for r in _rows)
+
+            H.append('<h4>Chemical Species</h4>')
+            H.append('<table class="param-table">')
+            _hdr = '<tr><th>Species</th>'
+            if _has_desc:
+                _hdr += '<th>Description</th>'
+            if _has_units:
+                _hdr += '<th>Units</th>'
+            if _has_ic:
+                _hdr += '<th>Initial Condition</th>'
+            _hdr += '</tr>'
+            H.append(_hdr)
+
+            for name, desc, units, ic in _rows:
+                _row = f'<tr><td><code>{name}</code></td>'
+                if _has_desc:
+                    _row += f'<td>{desc}</td>'
+                if _has_units:
+                    _row += f'<td>{units}</td>'
+                if _has_ic:
+                    _row += f'<td class="num">{ic}</td>'
+                _row += '</tr>'
+                H.append(_row)
             H.append('</table>')
 
         if 'CYCLING_FRAMEWORKS' in bgc:
@@ -2142,17 +2165,30 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         # Common Python preamble builder: imports + HDF5 reading
         _sed_flag = ts_module_name.upper() != "NONE"
 
+        def _py_path(p):
+            """Normalize a filesystem path for safe embedding in Python code.
+
+            Python accepts forward slashes on all platforms, so converting
+            backslashes avoids Windows paths like ``C:\\Users\\foo`` being
+            misinterpreted as escape sequences (``\\U``, ``\\f``, etc.)
+            when embedded inside string literals.
+            """
+            return p.replace('\\', '/')
+
         def _python_preamble(chem_spec_str=None):
             """Build the preamble with a specific chemSpec list."""
             cs = chem_spec_str if chem_spec_str is not None else _species_str
+            _lib_dir_safe = _py_path(_hdf5_lib_dir)
+            _results_dir_safe = _py_path(
+                os.path.join(_abs_output_dir, "openwq_out"))
             return (
                 f'import sys\n'
-                f'sys.path.insert(0, "{_hdf5_lib_dir}")\n'
+                f'sys.path.insert(0, "{_lib_dir_safe}")\n'
                 f'import Read_h5_driver as h5_rlib\n'
                 f'\n'
                 f'openwq_results = h5_rlib.Read_h5_driver(\n'
                 f'    openwq_info={{\n'
-                f'        "path_to_results": "{os.path.join(_abs_output_dir, "openwq_out")}",\n'
+                f'        "path_to_results": "{_results_dir_safe}",\n'
                 f'        "mapping_key": "reachID"\n'
                 f'    }},\n'
                 f'    output_format="HDF5",\n'
@@ -2192,73 +2228,15 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
         H.append('<h3 style="margin-top:1rem">4. Read &amp; visualize results</h3>')
         H.append('<p style="font-size:.85rem;color:var(--muted)">'
-                 'Each snippet below is <strong>self-contained</strong> &mdash; '
+                 'The snippet below is <strong>self-contained</strong> &mdash; '
                  'copy it into your terminal and it will run as-is '
-                 '(activates the venv, reads HDF5, and produces output).</p>')
+                 '(activates the venv, reads HDF5, and produces an interactive '
+                 'HTML results report with time-series plots and a 3D viewer).</p>')
 
-        # --- 4a: WebGL 3D map ---
-        # Resolve host-model output path from the control file
-        _hm_out_dir, _hm_prefix = _parse_hostmodel_output_info(
-            file_manager_path, hostmodel, _abs_output_dir)
-        _hm_out_dir = _hm_out_dir or os.path.join(_abs_output_dir, "mizuroute_out")
-        _hm_prefix = _hm_prefix or ""
-        _hm_glob = os.path.join(_hm_out_dir, f"{_hm_prefix}*.nc")
-
-        _webgl_body = (
-            f'{_python_preamble()}\n'
-            f'\n'
-            f'import glob\n'
-            f'import WebGL_h5_driver as h5_wlib\n'
-            f'\n'
-            f'# Find host-model NetCDF output\n'
-            f'_nc_files = sorted(glob.glob("{_hm_glob}"))\n'
-            f'if not _nc_files:\n'
-            f'    raise FileNotFoundError(\n'
-            f'        "No NetCDF files matching {_hm_glob}. "\n'
-            f'        "Make sure the model has been run first.")\n'
-            f'_nc_path = _nc_files[0]\n'
-            f'print(f"Using host-model output: {{_nc_path}}")\n'
-            f'\n'
-            f'h5_wlib.WebGL_h5_driver(\n'
-            f'    what2map="openwq",\n'
-            f'    hostmodel="{hostmodel}",\n'
-            f'    shpfile_info={{\n'
-            f'        "path_to_shp": "{_shp_path}",\n'
-            f'        "mapping_key": "{_shp_key}"\n'
-            f'    }},\n'
-            f'    openwq_results=openwq_results,\n'
-            f'    chemSpec=[{_species_str}],\n'
-            f'    sediment_as_well={_sed_flag},\n'
-            f'    hydromodel_info={{\n'
-            f'        "path_to_results": _nc_path,\n'
-            f'        "mapping_key": "reachID"\n'
-            f'    }},\n'
-            f'    hydromodel_var2print="DWroutedRunoff",\n'
-            f'    output_dir="{os.path.join(_abs_output_dir, "openwq_out", "openwq_webgl_viewer")}",\n'
-            f'    timeframes=50\n'
-            f')\n'
-            f'print("WebGL viewer generated!")\n'
-            f'\n'
-            f'import subprocess, webbrowser, time\n'
-            f'_webgl_dir = "{os.path.join(_abs_output_dir, "openwq_out", "openwq_webgl_viewer")}"\n'
-            f'_srv = subprocess.Popen(["{_py_bin}", "-m", "http.server", "8080"], cwd=_webgl_dir,\n'
-            f'                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n'
-            f'time.sleep(1)\n'
-            f'webbrowser.open("http://localhost:8080")\n'
-            f'print("WebGL viewer opened in browser (http://localhost:8080)")\n'
-            f'print("Press Ctrl+C to stop the server")\n'
-            f'try:\n'
-            f'    _srv.wait()\n'
-            f'except KeyboardInterrupt:\n'
-            f'    _srv.terminate()'
-        )
-        H.append('<p style="margin-top:1rem"><strong>a)</strong> Generate interactive '
-                 'WebGL 3D map:</p>')
-        H.append(_code_block(_terminal_snippet(_webgl_body)))
-
-        # --- 4b: Interactive time series (all species) ---
+        # --- Interactive time series (all species) ---
         _out_all_html = os.path.join(_abs_output_dir, "openwq_out",
                                      "plotSeries.html")
+        _out_all_html_safe = _py_path(_out_all_html)
         _plot_all_body = (
             f'{_python_preamble()}\n'
             f'\n'
@@ -2271,14 +2249,12 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
             f'    debugmode=False,\n'
-            f'    output_path="{_out_all_html}"\n'
+            f'    output_path="{_out_all_html_safe}"\n'
             f')\n'
             f'\n'
             f'import webbrowser\n'
             f'webbrowser.open("{_file_uri(_out_all_html)}")'
         )
-        H.append('<p style="margin-top:1rem"><strong>b)</strong> Plot interactive '
-                 'time series (all species):</p>')
         H.append(_code_block(_terminal_snippet(_plot_all_body)))
 
         H.append('</div></div>')
