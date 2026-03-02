@@ -15,18 +15,340 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-OpenWQ Simplified Time-Series Plotting Tool
-Clean interface for plotting time-series
-Supports multiple chemical species (one plot per species per extension)
+OpenWQ Interactive Time-Series Plotting Tool
+Generates a self-contained HTML report with interactive Plotly.js charts.
+Supports multiple chemical species (all plots in a single HTML file).
 """
 
 import numpy as np
 import pandas as pd
 import netCDF4
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import os
+import json
+import re
+import datetime
 
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+
+def _sanitize_id(name):
+    """Convert a species/extension name to a valid HTML element id."""
+    return re.sub(r'[^a-zA-Z0-9_]', '_', str(name))
+
+
+def _build_traces(feature_data, n_visible=10):
+    """Build Plotly trace dicts from a {fid: pd.Series} dictionary.
+
+    Parameters
+    ----------
+    feature_data : dict
+        {feature_id: pd.Series} — each Series has a time index.
+    n_visible : int
+        When more than 20 features, only the first *n_visible* are shown
+        by default; the rest are set to ``'legendonly'``.
+
+    Returns
+    -------
+    list[dict]
+        Plotly trace dicts ready for ``json.dumps()``.
+    """
+    traces = []
+    n_features = len(feature_data)
+
+    for idx, (fid, series) in enumerate(feature_data.items()):
+        # Convert time index to ISO strings for Plotly
+        if isinstance(series.index, pd.DatetimeIndex):
+            x_vals = series.index.strftime('%Y-%m-%dT%H:%M:%S').tolist()
+        else:
+            x_vals = series.index.tolist()
+
+        # Convert NaN to None (JSON null) so Plotly renders gaps
+        y_vals = [None if (isinstance(v, float) and np.isnan(v)) else float(v)
+                  for v in series.values]
+
+        trace = {
+            'x': x_vals,
+            'y': y_vals,
+            'mode': 'lines',
+            'name': f'Feature {fid}',
+            'hovertemplate': f'Feature {fid}<br>%{{x}}<br>%{{y:.4g}}<extra></extra>',
+        }
+
+        # For >20 features, hide extras behind legend toggle
+        if n_features > 20 and idx >= n_visible:
+            trace['visible'] = 'legendonly'
+
+        traces.append(trace)
+
+    return traces
+
+
+def _build_html(plots, what2map, hostmodel):
+    """Build a self-contained HTML string with interactive Plotly.js charts.
+
+    Parameters
+    ----------
+    plots : list[dict]
+        Each dict has keys: id, title, traces, ylabel, xtype, caption.
+    what2map : str
+        'hostmodel' or 'openwq'.
+    hostmodel : str
+        Host model name (e.g. 'mizuroute').
+
+    Returns
+    -------
+    str
+        Complete HTML document as a string.
+    """
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    n_plots = len(plots)
+
+    H = []
+
+    # --- HEAD ---
+    H.append("""<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenWQ Time Series</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root,[data-theme="light"]{
+  --primary:#0066cc;--primary-dark:#004499;
+  --secondary:#00a86b;--accent:#ff6b35;
+  --bg:#f0f2f5;--surface:#fff;--text:#2d3436;--text2:#636e72;
+  --border:#e2e8f0;--border2:#d0d4da;
+  --shadow:0 4px 20px rgba(0,0,0,.06);--shadow-lg:0 10px 40px rgba(0,0,0,.08);
+  --glass:rgba(255,255,255,.85);
+  --plot-bg:#fff;--plot-grid:#f0f0f0;--plot-font:#333;
+}
+[data-theme="dark"]{
+  --primary:#4d9ee8;--primary-dark:#3a8bd4;
+  --secondary:#34d399;--accent:#fb923c;
+  --bg:#0f1117;--surface:#1a1b2e;--text:#e2e8f0;--text2:#a0aec0;
+  --border:#2a2b3d;--border2:#3a3b4d;
+  --shadow:0 4px 20px rgba(0,0,0,.3);--shadow-lg:0 10px 40px rgba(0,0,0,.4);
+  --glass:rgba(15,17,23,.92);
+  --plot-bg:#1e1f2e;--plot-grid:#2d2e42;--plot-font:#ccc;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);
+  color:var(--text);line-height:1.65;transition:background .3s,color .3s}
+a{color:var(--primary);text-decoration:none}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:220px;position:sticky;top:0;height:100vh;background:var(--glass);
+  backdrop-filter:blur(12px);border-right:1px solid var(--border);padding:1.2rem .8rem;
+  display:flex;flex-direction:column;z-index:10;overflow-y:auto;transition:background .3s,border .3s}
+.sidebar .logo{font-weight:700;font-size:1.1rem;margin-bottom:1.2rem;
+  padding-left:.7rem;letter-spacing:-.3px;color:var(--text)}
+.sidebar .logo span{color:var(--primary)}
+.sidebar nav{display:flex;flex-direction:column;gap:2px}
+.sidebar nav a{display:block;padding:.4rem .7rem;border-radius:6px;font-size:.82rem;
+  color:var(--text2);transition:all .15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar nav a:hover{background:rgba(0,102,204,.06);color:var(--primary)}
+.sidebar nav a.active{background:rgba(0,102,204,.1);color:var(--primary);font-weight:600}
+.theme-toggle{margin-top:auto;padding-top:1rem;border-top:1px solid var(--border)}
+.theme-btn{display:flex;align-items:center;gap:.5rem;width:100%;padding:.45rem .7rem;
+  border:1px solid var(--border);border-radius:8px;background:var(--surface);
+  color:var(--text2);font-size:.78rem;cursor:pointer;transition:all .15s;font-family:inherit}
+.theme-btn:hover{border-color:var(--primary);color:var(--primary)}
+.theme-btn svg{width:16px;height:16px;flex-shrink:0}
+.main{flex:1;min-width:0;overflow-x:hidden}
+.header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+  color:#fff;padding:3rem 2.5rem 2rem;position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 80% 20%,rgba(255,255,255,.08) 0%,transparent 60%)}
+.header h1{font-size:2rem;font-weight:700;letter-spacing:-.5px;position:relative}
+.header h1 span{color:var(--primary)}
+.header .subtitle{opacity:.8;font-size:.92rem;margin-top:.4rem;position:relative}
+.header .meta{display:flex;gap:1.2rem;margin-top:1rem;font-size:.78rem;opacity:.7;
+  flex-wrap:wrap;position:relative}
+.header .meta span{background:rgba(255,255,255,.1);padding:.2rem .6rem;border-radius:20px}
+.container{max-width:1100px;margin:0 auto;padding:2rem 2rem 3rem}
+.section{margin-bottom:2.5rem}
+.section h2{font-size:1.2rem;font-weight:700;color:var(--text);margin-bottom:1rem;
+  display:flex;align-items:center;gap:.5rem;letter-spacing:-.3px}
+.section h2::before{content:'';width:5px;height:1.2em;border-radius:3px;
+  background:linear-gradient(180deg,var(--primary),var(--primary-dark));flex-shrink:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:1.5rem;box-shadow:var(--shadow);transition:transform .3s,box-shadow .3s}
+.card:hover{box-shadow:var(--shadow-lg);border-color:var(--border2)}
+.plot-caption{font-size:.82rem;color:var(--text2);margin-top:.5rem;text-align:right}
+</style>
+</head>
+<body>""")
+
+    # --- SIDEBAR ---
+    H.append('<div class="layout">')
+    H.append('<aside class="sidebar">')
+    H.append('<div class="logo">Open<span>WQ</span> Plots</div>')
+    H.append('<nav>')
+    for p in plots:
+        H.append(f'<a href="#{p["id"]}">{p["title"]}</a>')
+    H.append('</nav>')
+    H.append("""<div class="theme-toggle">
+<button class="theme-btn" onclick="toggleTheme()">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round">
+<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/>
+<line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/>
+<line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+</svg>
+<span>Toggle Theme</span>
+</button>
+</div>""")
+    H.append('</aside>')
+
+    # --- MAIN ---
+    H.append('<div class="main">')
+
+    # Header
+    mode_label = what2map.upper() if what2map else 'N/A'
+    host_label = (hostmodel or 'N/A').upper()
+    H.append(f"""<div class="header">
+<h1>Open<span>WQ</span> &mdash; Time Series</h1>
+<p class="subtitle">{mode_label} mode &mdash; {n_plots} plot(s)</p>
+<div class="meta">
+<span>Host Model: {host_label}</span>
+<span>Generated: {now}</span>
+</div>
+</div>""")
+
+    H.append('<div class="container">')
+
+    # --- PLOT SECTIONS ---
+    for p in plots:
+        div_id = f'{p["id"]}_div'
+        H.append(f"""<div class="section" id="{p['id']}">
+<h2>{p['title']}</h2>
+<div class="card">
+<div id="{div_id}" style="width:100%;min-height:500px"></div>
+<p class="plot-caption">{p.get('caption', '')}</p>
+</div>
+</div>""")
+
+    H.append('</div>')  # container
+    H.append('</div>')  # main
+    H.append('</div>')  # layout
+
+    # --- JAVASCRIPT ---
+    H.append('<script>')
+
+    # Theme restore (immediate, before render)
+    H.append("""
+(function(){
+  var saved = localStorage.getItem('owq_theme');
+  if(saved) document.documentElement.setAttribute('data-theme', saved);
+})();
+""")
+
+    # Theme toggle
+    H.append("""
+function toggleTheme(){
+  var el = document.documentElement;
+  var t = el.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+  el.setAttribute('data-theme', t);
+  localStorage.setItem('owq_theme', t);
+  _owqRelayoutAll();
+}
+""")
+
+    # Plotly layout helper
+    H.append("""
+function _owqLayout(extra){
+  var t = document.documentElement.getAttribute('data-theme')==='dark';
+  var base = {
+    margin:{l:60,r:25,t:30,b:45},
+    plot_bgcolor: t?'#1e1f2e':'#fff',
+    paper_bgcolor: t?'#1e1f2e':'#fff',
+    font:{color:t?'#ccc':'#333',family:'Inter,sans-serif',size:12},
+    colorway:['#0066cc','#00a86b','#ff6b35','#004499','#34d399','#fb923c',
+              '#667eea','#764ba2','#e63946','#2ec4b6','#e9c46a','#264653'],
+    xaxis:{gridcolor:t?'#2a2b3d':'#eee'},
+    yaxis:{gridcolor:t?'#2a2b3d':'#eee'},
+    legend:{font:{size:11}}
+  };
+  if(extra){for(var k in extra){base[k]=extra[k];}}
+  return base;
+}
+
+var PCFG = {responsive:true, displayModeBar:true,
+  modeBarButtonsToRemove:['lasso2d','select2d'],
+  toImageButtonOptions:{format:'svg',filename:'openwq_plot'}};
+
+window._owqPlotIds = [];
+function _owqRegister(id){ window._owqPlotIds.push(id); }
+
+function _owqRelayoutAll(){
+  var t=document.documentElement.getAttribute('data-theme')==='dark';
+  window._owqPlotIds.forEach(function(id){
+    try{Plotly.relayout(id,{
+      'plot_bgcolor':t?'#1e1f2e':'#fff',
+      'paper_bgcolor':t?'#1e1f2e':'#fff',
+      'font.color':t?'#ccc':'#333',
+      'xaxis.gridcolor':t?'#2a2b3d':'#eee',
+      'yaxis.gridcolor':t?'#2a2b3d':'#eee'
+    });}catch(e){}
+  });
+}
+""")
+
+    # Per-plot data + Plotly.newPlot calls
+    for p in plots:
+        div_id = f'{p["id"]}_div'
+        traces_json = json.dumps(p['traces'])
+        xaxis_cfg = "title:'Time'"
+        if p.get('xtype') == 'date':
+            xaxis_cfg += ",type:'date'"
+
+        H.append(f"""
+(function(){{
+  var traces = {traces_json};
+  Plotly.newPlot('{div_id}', traces,
+    _owqLayout({{xaxis:{{{xaxis_cfg}}},yaxis:{{title:'{p["ylabel"]}'}},
+      hovermode:'x unified'}}),
+    PCFG);
+  _owqRegister('{div_id}');
+}})();
+""")
+
+    # Sidebar active state on scroll
+    H.append("""
+(function(){
+  var links = document.querySelectorAll('.sidebar a');
+  window.addEventListener('scroll',function(){
+    var fromTop=window.scrollY+80;
+    links.forEach(function(link){
+      var id=link.getAttribute('href');
+      if(!id||!id.startsWith('#'))return;
+      var sec=document.querySelector(id);
+      if(!sec)return;
+      if(sec.offsetTop<=fromTop && sec.offsetTop+sec.offsetHeight>fromTop){
+        link.classList.add('active');
+      }else{
+        link.classList.remove('active');
+      }
+    });
+  });
+})();
+""")
+
+    H.append('</script>')
+    H.append('</body></html>')
+
+    return '\n'.join(H)
+
+
+# ---------------------------------------------------------------------------
+# Main driver
+# ---------------------------------------------------------------------------
 
 def Plot_h5_driver(what2map=None,
                    hostmodel=None,
@@ -41,79 +363,53 @@ def Plot_h5_driver(what2map=None,
                    combine_features=True,
                    figsize=(12, 6)):
     """
-    Plot time-series for specific features
-    For OpenWQ: Creates one plot per chemical species per extension
+    Generate interactive HTML time-series plots (Plotly.js).
 
-    Parameters:
-    -----------
+    Produces a single self-contained HTML file with one interactive chart
+    per chemical species (or host-model variable).  The file uses Plotly.js
+    loaded from CDN — no extra Python packages are required.
+
+    Parameters
+    ----------
     what2map : str
         'hostmodel' or 'openwq'
     hostmodel : str
         'mizuroute' or 'summa'
     mapping_key_values : list
         List of feature IDs to plot (e.g., [200005899, 200002273])
+        Use ["all"] to plot every feature in the data.
     openwq_results : dict
-        OpenWQ results dictionary from Read_h5_driver
-        Used if what2map='openwq'
+        OpenWQ results dictionary from Read_h5_driver.
+        Used if what2map='openwq'.
     chemSpec : list or str
-        Chemical species to plot (e.g., ['NO3-N', 'NH4-N'] or 'NO3-N')
-        Creates one plot per species per extension
-        Used if what2map='openwq'
+        Chemical species to plot (e.g., ['NO3-N', 'NH4-N'] or 'NO3-N').
+        Used if what2map='openwq'.
     hydromodel_info : dict
-        Dictionary with:
-            - 'path_to_shp': Path to NetCDF file
-            - 'mapping_key': Variable for IDs (e.g., 'reachID')
-        Used if what2map='hostmodel'
+        Dictionary with 'path_to_results' and 'mapping_key'.
+        Used if what2map='hostmodel'.
     hydromodel_var2print : str
-        Variable to plot (e.g., 'basRunoff', 'DWroutedRunoff')
-        Used if what2map='hostmodel'
+        Variable to plot (e.g., 'basRunoff', 'DWroutedRunoff').
+        Used if what2map='hostmodel'.
     output_path : str
-        Path where plot will be saved
-        For multiple species/extensions, names are appended
+        Path where the HTML file will be saved.
+        Legacy .png extensions are automatically converted to .html.
     debugmode : bool
-        If False: only process 'main' extension (default)
-        If True: process 'main' + all debug extensions:
-                 - d_output_dt_chemistry
-                 - d_output_dt_transport
-                 - d_output_dt_ss
-                 - d_output_dt_ewf
-                 - d_output_dt_ic
+        If True, process all debug extensions in addition to 'main'.
     sediment_as_well : bool
-        If True, also plot sediment transport results (requires sediment_as_well=True
-        in Read_h5_driver so that openwq_results contains 'COMPARTMENT@Sediment' entries).
+        If True, also plot sediment transport results.
     combine_features : bool
-        If True, plot all features on one graph (default: True)
+        Kept for backward compatibility (ignored — features are always combined).
     figsize : tuple
-        Figure size (width, height) in inches (default: (12, 6))
+        Kept for backward compatibility (ignored — Plotly charts are responsive).
 
-    Returns:
-    --------
-    str or list : Path(s) to created plot(s)
-        - Single path for hostmodel
-        - List of paths for openwq (one per species per extension)
-
-    Examples:
-    ---------
-    # Normal mode (only 'main')
-    h5_mplib.Plot_h5_driver(
-        what2map='openwq',
-        hostmodel='mizuroute',
-        mapping_key_values=[200005899, 200002273],
-        openwq_results=openwq_results,
-        chemSpec=['NO3-N', 'NH4-N'],
-        hydromodel_info=hydromodel_info,
-        hydromodel_var2print='DWroutedRunoff',
-        output_path='plots/nutrients.png',
-        debugmode=False,
-        sediment_as_well=True   # also plot sediment
-    )
-    # Creates: plots/nutrients_NO3-N_main.png
-    #          plots/nutrients_NH4-N_main.png
-    #          plots/nutrients_Sediment_main.png
+    Returns
+    -------
+    str or None
+        Path to the generated HTML file, or None if no plots were created.
     """
 
     print("=" * 70)
-    print("TIME-SERIES PLOTTING")
+    print("TIME-SERIES PLOTTING (Interactive HTML)")
     print(f"Mode: {what2map.upper()}")
     if what2map == 'openwq':
         print(f"Debug mode: {debugmode}")
@@ -134,13 +430,29 @@ def Plot_h5_driver(what2map=None,
 
     print(f"Features to plot: {mapping_key_values}")
 
-    # Create output directory if needed
-    if output_path:
-        output_dir = os.path.dirname(output_path)
-        if output_dir and not os.path.exists(output_dir):
-            os.makedirs(output_dir, exist_ok=True)
+    # Resolve output path (.png → .html migration)
+    if output_path is None:
+        output_path = 'timeseries_results.html'
+    else:
+        base, ext = os.path.splitext(output_path)
+        if ext.lower() == '.png':
+            output_path = base + '.html'
+            print(f"  NOTE: Output format changed from .png to .html")
+            print(f"        Interactive plots are now saved as: {output_path}")
+        elif ext.lower() != '.html':
+            output_path = base + '.html'
 
-    # BRANCH: Load data based on what2map
+    # Create output directory if needed
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    # Collect all plot data
+    plots = []
+
+    # =====================================================================
+    # HOSTMODEL MODE
+    # =====================================================================
     if what2map == 'hostmodel':
         print("\n" + "=" * 70)
         print("Loading hostmodel data...")
@@ -161,26 +473,22 @@ def Plot_h5_driver(what2map=None,
         print(f"  Variable: {hydromodel_var2print}")
         print(f"  Mapping key: {mapping_key}")
 
-        # Open NetCDF
         nc = netCDF4.Dataset(nc_path, 'r')
 
         try:
-            # Get IDs and find indices for requested features
             all_ids = np.array(nc.variables[mapping_key][:])
-
             print(f"  Total features in file: {len(all_ids)}")
 
-            # Get data variable
             data_var = nc.variables[hydromodel_var2print]
 
-            # Get time
+            # Get time index
             if 'time' in nc.variables:
                 time_var = nc.variables['time']
                 time_data = time_var[:]
-
                 if hasattr(time_var, 'units'):
                     from netCDF4 import num2date
-                    dates = num2date(time_data, time_var.units, only_use_cftime_datetimes=False)
+                    dates = num2date(time_data, time_var.units,
+                                     only_use_cftime_datetimes=False)
                     time_index = pd.DatetimeIndex(dates)
                 else:
                     time_index = pd.RangeIndex(len(time_data))
@@ -190,17 +498,16 @@ def Plot_h5_driver(what2map=None,
             print(f"  Time range: {time_index[0]} to {time_index[-1]}")
             print(f"  Time steps: {len(time_index)}")
 
-            # Get units
-            units = nc.variables[hydromodel_var2print].units if hasattr(nc.variables[hydromodel_var2print],
-                                                                        'units') else 'units'
+            units = (nc.variables[hydromodel_var2print].units
+                     if hasattr(nc.variables[hydromodel_var2print], 'units')
+                     else 'units')
 
-            # Extract data for requested features
+            # Extract feature data
             feature_data = {}
             missing_features = []
 
             for fid in mapping_key_values:
                 idx = np.where(all_ids == fid)[0]
-
                 if len(idx) > 0:
                     data = data_var[:, idx[0]]
                     feature_data[fid] = pd.Series(data, index=time_index)
@@ -218,75 +525,29 @@ def Plot_h5_driver(what2map=None,
             if missing_features:
                 print(f"\n⚠ Warning: Missing features: {missing_features}")
 
-            # CREATE PLOT FOR HOSTMODEL
-            print("\n" + "=" * 70)
-            print("Creating plot...")
-            print("=" * 70)
-
-            fig, ax = plt.subplots(figsize=figsize)
-
-            # Plot each feature
-            for fid, data in feature_data.items():
-                ax.plot(data.index, data.values, label=f'Feature {fid}', linewidth=2)
-
-            # Format plot
-            plot_title = f'{hostmodel.upper()} - {hydromodel_var2print} Time Series'
-            ylabel = f'{hydromodel_var2print} ({units})'
-
-            ax.set_xlabel('Time', fontsize=12)
-            ax.set_ylabel(ylabel, fontsize=12)
-            ax.set_title(plot_title, fontsize=14, pad=20)
-
-            n_features = len(feature_data)
-            if 1 < n_features <= 20:
-                ax.legend(loc='best', fontsize=max(6, 10 - n_features // 5),
-                          ncol=max(1, n_features // 10))
-            elif n_features > 20:
-                ax.annotate(f'{n_features} features plotted',
-                            xy=(0.99, 0.01), xycoords='axes fraction',
-                            ha='right', va='bottom', fontsize=8,
-                            color='grey', style='italic')
-
-            ax.grid(True, alpha=0.3)
-
-            # Format x-axis for dates
-            if isinstance(time_index, pd.DatetimeIndex):
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-                fig.autofmt_xdate()
-
-            plt.tight_layout()
-
-            # Save plot
-            if output_path is None:
-                output_path = f'timeseries_{hydromodel_var2print}.png'
-            else:
-                # Insert hydromodel_var2print name and extension before file extension
-                base_path = os.path.splitext(output_path)[0]
-                extension = os.path.splitext(output_path)[1]
-                hydro_output_path = f'{base_path}_{hydromodel_var2print}{extension}'
-
-
-            plt.savefig(hydro_output_path, dpi=150, bbox_inches='tight')
-            plt.close()
-
-            print(f"\n✓ Plot saved: {hydro_output_path}")
-
-            # Summary
-            print("\n" + "=" * 70)
-            print("✓ COMPLETE!")
-            print("=" * 70)
-            print(f"  Features plotted: {len(feature_data)}")
-            print(f"  Output: {output_path}")
-            print("=" * 70)
-
-            return output_path
+            # Build plot entry
+            traces = _build_traces(feature_data)
+            plot_id = f'plot_{_sanitize_id(hydromodel_var2print)}'
+            time_range = (f'{time_index[0]} to {time_index[-1]}'
+                          if len(time_index) > 0 else '')
+            plots.append({
+                'id': plot_id,
+                'title': f'{hostmodel.upper()} — {hydromodel_var2print}',
+                'traces': traces,
+                'ylabel': f'{hydromodel_var2print} ({units})',
+                'xtype': 'date' if isinstance(time_index, pd.DatetimeIndex) else 'linear',
+                'caption': f'{len(feature_data)} features | {time_range}',
+            })
 
         except Exception as e:
             print(f"✗ Error loading hostmodel data: {e}")
             nc.close()
             return None
 
-    else:  # what2map == 'openwq'
+    # =====================================================================
+    # OPENWQ MODE
+    # =====================================================================
+    else:
         print("\n" + "=" * 70)
         print("Loading OpenWQ data...")
         print("=" * 70)
@@ -299,15 +560,13 @@ def Plot_h5_driver(what2map=None,
             print("✗ Error: chemSpec must be specified for openwq mode")
             return None
 
-        # Convert chemSpec to list if string
         if isinstance(chemSpec, str):
             chemSpec = [chemSpec]
 
-        # Append sediment if requested
         if sediment_as_well and 'Sediment' not in chemSpec:
             chemSpec = list(chemSpec) + ['Sediment']
 
-        # Define extensions to process based on debugmode
+        # Extensions to process
         if debugmode:
             file_extensions = [
                 'main',
@@ -324,10 +583,7 @@ def Plot_h5_driver(what2map=None,
         print(f"  Extensions to process: {file_extensions}")
         print(f"  Will create {len(chemSpec) * len(file_extensions)} plot(s)")
 
-        # Store all created plots
-        all_output_paths = []
-
-        # LOOP THROUGH EACH CHEMICAL SPECIES
+        # Loop through species and extensions
         for spec_idx, spec in enumerate(chemSpec):
             print(f"\n{'=' * 70}")
             print(f"Processing species {spec_idx + 1}/{len(chemSpec)}: {spec}")
@@ -349,31 +605,26 @@ def Plot_h5_driver(what2map=None,
                         print(f"    - {key}")
                     continue
 
-                # Parse units from species_key (do once per species)
-                # Chemical species format: COMPARTMENT@CHEMNAME#UNITS
-                # Sediment format:         COMPARTMENT@Sediment (no #UNITS)
+                # Parse units
                 parts = species_key.split('#')
                 if len(parts) > 1:
                     units = parts[1]
                 else:
-                    # Sediment results have no #UNITS part
                     units = 'kg' if 'Sediment' in species_key else 'concentration'
 
-                # Get chemical/variable name
+                # Get chemical name
                 chem_parts = species_key.split('@')
-                if len(chem_parts) > 1:
-                    chem_name = chem_parts[1].split('#')[0]
-                else:
-                    chem_name = spec
+                chem_name = chem_parts[1].split('#')[0] if len(chem_parts) > 1 else spec
 
-                # LOOP THROUGH EACH FILE EXTENSION
+                # Loop through extensions
                 for ext_idx, file_extension in enumerate(file_extensions):
                     print(f"\n  {'- ' * 33}")
                     print(f"  Processing extension {ext_idx + 1}/{len(file_extensions)}: {file_extension}")
                     print(f"  {'- ' * 33}")
 
-                    # Extract data from openwq_results structure
+                    # Extract data
                     data_found = False
+                    ttdata = None
                     for ext, data_list in openwq_results[species_key]:
                         if ext == file_extension:
                             if data_list and len(data_list) > 0:
@@ -387,25 +638,21 @@ def Plot_h5_driver(what2map=None,
                         print(f"    ✗ No data found for extension '{file_extension}'")
                         continue
 
-                    # Extract data for requested features
+                    # Extract feature data
                     feature_data = {}
                     missing_features = []
 
-                    # Handle "all" — use every column in ttdata
                     if mapping_key_values == ["all"] or mapping_key_values == "all":
                         for col in ttdata.columns:
                             fid = col.split('_')[-1]
                             feature_data[fid] = ttdata[col]
                             print(f"    ✓ Found data for feature {fid}")
                     else:
-                        # ttdata columns are like 'REACH_200005899'
                         for fid in mapping_key_values:
-                            # Find column matching this feature ID
-                            matching_cols = [col for col in ttdata.columns if str(fid) in col.split('_')[-1]]
-
+                            matching_cols = [col for col in ttdata.columns
+                                             if str(fid) in col.split('_')[-1]]
                             if len(matching_cols) > 0:
-                                data = ttdata[matching_cols[0]]
-                                feature_data[fid] = data
+                                feature_data[fid] = ttdata[matching_cols[0]]
                                 print(f"    ✓ Found data for feature {fid}")
                             else:
                                 missing_features.append(fid)
@@ -418,57 +665,22 @@ def Plot_h5_driver(what2map=None,
                     if missing_features:
                         print(f"    ⚠ Missing features: {missing_features}")
 
-                    # CREATE PLOT FOR THIS SPECIES AND EXTENSION
-                    print(f"\n    Creating plot for {chem_name} ({file_extension})...")
+                    # Build plot entry
+                    traces = _build_traces(feature_data)
+                    plot_id = f'plot_{_sanitize_id(spec)}_{_sanitize_id(file_extension)}'
+                    time_range = (f'{ttdata.index[0]} to {ttdata.index[-1]}'
+                                  if len(ttdata.index) > 0 else '')
+                    plots.append({
+                        'id': plot_id,
+                        'title': f'{chem_name} ({file_extension})',
+                        'traces': traces,
+                        'ylabel': f'{chem_name} ({units})',
+                        'xtype': ('date' if isinstance(ttdata.index, pd.DatetimeIndex)
+                                  else 'linear'),
+                        'caption': f'{len(feature_data)} features | {time_range}',
+                    })
 
-                    fig, ax = plt.subplots(figsize=figsize)
-
-                    # Plot each feature
-                    for fid, data in feature_data.items():
-                        ax.plot(data.index, data.values, label=f'Feature {fid}', linewidth=2)
-
-                    # Format plot
-                    plot_title = f'{chem_name} Concentrations Time Series ({file_extension})'
-                    ylabel_text = f'{chem_name} ({units})'
-
-                    ax.set_xlabel('Time', fontsize=12)
-                    ax.set_ylabel(ylabel_text, fontsize=12)
-                    ax.set_title(plot_title, fontsize=14, pad=20)
-
-                    n_features = len(feature_data)
-                    if 1 < n_features <= 20:
-                        ax.legend(loc='best', fontsize=max(6, 10 - n_features // 5),
-                                  ncol=max(1, n_features // 10))
-                    elif n_features > 20:
-                        ax.annotate(f'{n_features} features plotted',
-                                    xy=(0.99, 0.01), xycoords='axes fraction',
-                                    ha='right', va='bottom', fontsize=8,
-                                    color='grey', style='italic')
-
-                    ax.grid(True, alpha=0.3)
-
-                    # Format x-axis for dates
-                    if isinstance(ttdata.index, pd.DatetimeIndex):
-                        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-                        fig.autofmt_xdate()
-
-                    plt.tight_layout()
-
-                    # Generate output path for this species and extension
-                    if output_path is None:
-                        species_output_path = f'timeseries_{spec}_{file_extension}.png'
-                    else:
-                        # Insert species name and extension before file extension
-                        base_path = os.path.splitext(output_path)[0]
-                        extension = os.path.splitext(output_path)[1]
-                        species_output_path = f'{base_path}_{spec}_{file_extension}{extension}'
-
-                    # Save plot
-                    plt.savefig(species_output_path, dpi=150, bbox_inches='tight')
-                    plt.close()
-
-                    print(f"    ✓ Plot saved: {species_output_path}")
-                    all_output_paths.append(species_output_path)
+                    print(f"    ✓ Plot data collected for {chem_name} ({file_extension})")
 
             except Exception as e:
                 print(f"  ✗ Error processing species {spec}: {e}")
@@ -476,23 +688,31 @@ def Plot_h5_driver(what2map=None,
                 traceback.print_exc()
                 continue
 
-        # Summary
-        print("\n" + "=" * 70)
-        print("✓ COMPLETE!")
-        print("=" * 70)
-        print(f"  Species requested: {len(chemSpec)}")
-        print(f"  Extensions processed: {len(file_extensions)}")
-        print(f"  Plots created: {len(all_output_paths)}")
-        if len(all_output_paths) > 0:
-            print(f"\n  Output files:")
-            for path in all_output_paths:
-                print(f"    - {os.path.basename(path)}")
-        print("=" * 70)
+    # =====================================================================
+    # BUILD HTML AND WRITE
+    # =====================================================================
+    if len(plots) == 0:
+        print("\n✗ No plots were created.")
+        return None
 
-        # Return list of created plots or None
-        if len(all_output_paths) == 0:
-            return None
-        elif len(all_output_paths) == 1:
-            return all_output_paths[0]
-        else:
-            return all_output_paths
+    print(f"\n{'=' * 70}")
+    print(f"Building interactive HTML with {len(plots)} plot(s)...")
+    print("=" * 70)
+
+    html_content = _build_html(plots, what2map, hostmodel)
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+
+    # Summary
+    print(f"\n{'=' * 70}")
+    print("✓ COMPLETE!")
+    print("=" * 70)
+    print(f"  Plots created: {len(plots)}")
+    print(f"  Output: {output_path}")
+    for p in plots:
+        print(f"    - {p['title']}")
+    print("=" * 70)
+    print("  Open the HTML file in a browser for interactive charts.")
+
+    return output_path

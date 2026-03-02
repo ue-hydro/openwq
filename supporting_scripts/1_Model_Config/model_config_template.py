@@ -590,7 +590,7 @@ grqa_local_data_path = "auto"
 # Buffer distance [km] around the basin boundary (or river network if no basin
 # shapefile is provided) for searching GRQA monitoring stations.
 # Increase for remote catchments with sparse monitoring coverage.
-grqa_buffer_km = 10
+grqa_buffer_km = 100
 
 # User-provided observation CSV file.
 # Only used when observation_data_source = "user_csv".
