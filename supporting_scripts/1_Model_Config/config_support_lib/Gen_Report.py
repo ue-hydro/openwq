@@ -30,6 +30,7 @@ import sys
 import json
 import datetime
 import glob as _glob
+import platform
 import numpy as np
 
 # HDF5 reader — add 2_Read_Outputs to path
@@ -1779,17 +1780,58 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                     f'setTimeout(function(){{this.textContent=\'Copy\'}}.bind(this),1500)">'
                     f'Copy</button></div>')
 
+        # --- OS detection (early, so all subsequent code can use these) ---
+        _os_platform = platform.system()   # 'Darwin', 'Linux', or 'Windows'
+        _is_windows = (_os_platform == 'Windows')
+
+        if _os_platform == 'Darwin':
+            _os_label = 'macOS (Darwin)'
+        elif _os_platform == 'Linux':
+            _os_label = 'Linux'
+        elif _os_platform == 'Windows':
+            _os_label = 'Windows'
+        else:
+            _os_label = _os_platform
+
+        # Python binary: Windows typically uses "python", Unix uses "python3"
+        _py_bin = 'python' if _is_windows else 'python3'
+
+        # cd command: Windows CMD needs /d flag for cross-drive navigation
+        def _cd_cmd(path):
+            return f'cd /d {path}' if _is_windows else f'cd {path}'
+
+        # file:// URI helpers
+        def _file_uri(path):
+            """Build a file:// URI from an absolute path."""
+            if _is_windows:
+                return 'file:///' + path.replace('\\', '/')
+            return 'file://' + path
+
+        _file_uri_prefix = 'file:///' if _is_windows else 'file://'
+
         H.append('<div class="section visible" id="nextsteps"><h2>Next Steps</h2>')
         H.append('<div class="card primary">')
         H.append('<p>If you are happy with this configuration, follow these steps '
                  'to run the model using Docker. '
                  'Just copy-paste the code snippets below into your terminal!</p>')
 
+        # OS badge indicating which platform the snippets target
+        _badge_bg = '#0078d4' if _is_windows else '#2d7d46'
+        H.append(
+            f'<p style="margin-top:.5rem;font-size:.82rem;">'
+            f'<span style="display:inline-block;background:{_badge_bg};color:#fff;'
+            f'padding:2px 10px;border-radius:12px;font-size:.78rem;font-weight:600;">'
+            f'&#x1F4BB; {_os_label}'
+            f'</span> '
+            f'These snippets are generated for <strong>{_os_label}</strong>. '
+            f'If you are running on a different OS, some commands may need adjustment.</p>'
+        )
+
         # Step 1: Start Docker container
         _script_dir = os.path.dirname(os.path.abspath(__file__))
         _containers_dir = os.path.normpath(
             os.path.join(_script_dir, '..', '..', '..', 'containers'))
-        _step1_cmd = f'cd {_containers_dir}\ndocker compose up -d'
+        _step1_cmd = f'{_cd_cmd(_containers_dir)}\ndocker compose up -d'
         H.append('<h3 style="margin-top:1rem">1. Start the Docker container</h3>')
         H.append('<p>If the container is not already running:</p>')
         H.append(_code_block(_step1_cmd))
@@ -1847,7 +1889,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append('<h3 style="margin-top:1rem">3. Check outputs</h3>')
         _h5_dir = os.path.join(output_dir, 'openwq_out', 'HDF5')
         H.append('<p>After a successful run, HDF5 results will be saved to:</p>')
-        H.append(_code_block(f'cd {_h5_dir}'))
+        H.append(_code_block(_cd_cmd(_h5_dir)))
 
         # Step 4: Read & visualize results
         _read_outputs_dir = os.path.normpath(
@@ -1871,12 +1913,17 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _shp_path = river_network_shapefile or ''
         _shp_key = 'SegId'  # default for mizuRoute
 
-        # --- Self-contained terminal snippet building blocks ---
-        # Venv activation line (try .venv first, fall back to venv)
-        _venv_activate = (
-            f'source "{_supporting_scripts_dir}/.venv/bin/activate" 2>/dev/null || '
-            f'source "{_supporting_scripts_dir}/venv/bin/activate"'
-        )
+        # --- Venv activation (OS-aware, uses _is_windows from earlier block) ---
+        if _is_windows:
+            _venv_activate = (
+                f'"{_supporting_scripts_dir}\\.venv\\Scripts\\activate.bat" 2>NUL || '
+                f'"{_supporting_scripts_dir}\\venv\\Scripts\\activate.bat"'
+            )
+        else:
+            _venv_activate = (
+                f'source "{_supporting_scripts_dir}/.venv/bin/activate" 2>/dev/null || '
+                f'source "{_supporting_scripts_dir}/venv/bin/activate"'
+            )
 
         # Common Python preamble builder: imports + HDF5 reading
         _sed_flag = ts_module_name.upper() != "NONE"
@@ -1906,13 +1953,28 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             )
 
         def _terminal_snippet(python_body):
-            """Wrap Python code into a self-contained terminal command."""
-            return (
-                f'{_venv_activate}\n'
-                f"python3 << 'PYEOF'\n"
-                f'{python_body}\n'
-                f'PYEOF'
-            )
+            """Wrap Python code into a self-contained terminal command.
+
+            On macOS/Linux: uses a bash heredoc.
+            On Windows: writes to a temporary .py file via PowerShell, then executes it.
+            """
+            if _is_windows:
+                _tmp = '%TEMP%\\_openwq_snippet.py'
+                return (
+                    f'{_venv_activate}\n'
+                    f"powershell -Command \"Set-Content -Path '{_tmp}' -Value @'\n"
+                    f'{python_body}\n'
+                    f"'@\"\n"
+                    f'{_py_bin} {_tmp}\n'
+                    f'del {_tmp}'
+                )
+            else:
+                return (
+                    f'{_venv_activate}\n'
+                    f"{_py_bin} << 'PYEOF'\n"
+                    f'{python_body}\n'
+                    f'PYEOF'
+                )
 
         H.append('<h3 style="margin-top:1rem">4. Read &amp; visualize results</h3>')
         H.append('<p style="font-size:.85rem;color:var(--muted)">'
@@ -1965,7 +2027,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'\n'
             f'import subprocess, webbrowser, time\n'
             f'_webgl_dir = "{os.path.join(_abs_output_dir, "openwq_out", "openwq_webgl_viewer")}"\n'
-            f'_srv = subprocess.Popen(["python3", "-m", "http.server", "8080"], cwd=_webgl_dir,\n'
+            f'_srv = subprocess.Popen(["{_py_bin}", "-m", "http.server", "8080"], cwd=_webgl_dir,\n'
             f'                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n'
             f'time.sleep(1)\n'
             f'webbrowser.open("http://localhost:8080")\n'
@@ -2005,7 +2067,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 f'print("Plot saved to: {_out_actual}")\n'
                 f'\n'
                 f'import webbrowser\n'
-                f'webbrowser.open("file://{_out_actual}")'
+                f'webbrowser.open("{_file_uri(_out_actual)}")'
             )
             H.append(f'<p style="margin:.4rem 0;font-size:.85rem">{sp}:</p>')
             H.append(_code_block(_terminal_snippet(_plot_body)))
@@ -2033,7 +2095,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'import glob, webbrowser\n'
             f'for _png in sorted(glob.glob("{_out_all_actual}/plotSeries_*_main.png")):\n'
             f'    print(f"Opening: {{_png}}")\n'
-            f'    webbrowser.open("file://" + _png)'
+            f'    webbrowser.open("{_file_uri_prefix}" + _png.replace(chr(92), "/"))'
         )
         H.append('<p style="margin-top:1rem"><strong>c)</strong> All species '
                  'in a single plot:</p>')
