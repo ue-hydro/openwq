@@ -852,6 +852,137 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
         raise
 
 
+def _load_user_observations_for_report(user_observation_csv, chemical_species):
+    """Load user-provided observation data from a CSV file.
+
+    Expected CSV columns:
+        station_id, lat, lon, parameter, year, month, day, minute, value, units
+
+    The ``parameter`` column must contain species names that match the BGC
+    template (e.g. "NO3-N", "PO4-P", "DO", "TSS").
+
+    Parameters:
+        user_observation_csv: path to the CSV file
+        chemical_species: list of model species names (used for filtering/matching)
+
+    Returns:
+        (stations_geojson_str, obs_stats) or (None, None) on failure.
+        obs_stats has the same structure as grqa_stats for interoperability.
+    """
+    if not user_observation_csv or not os.path.isfile(user_observation_csv):
+        print(f"  User observation CSV not found: {user_observation_csv}")
+        return None, None
+
+    try:
+        import pandas as pd
+
+        required_cols = {'station_id', 'lat', 'lon', 'parameter',
+                         'year', 'month', 'day', 'minute', 'value', 'units'}
+
+        df = pd.read_csv(user_observation_csv)
+        df.columns = df.columns.str.strip().str.lower()
+
+        missing = required_cols - set(df.columns)
+        if missing:
+            print(f"  ERROR: User CSV missing required columns: {missing}")
+            return None, None
+
+        # Strip whitespace from string columns
+        for col in ('station_id', 'parameter', 'units'):
+            df[col] = df[col].astype(str).str.strip()
+
+        # Filter to species present in the model configuration
+        chem_set = set(chemical_species)
+        df_matched = df[df['parameter'].isin(chem_set)]
+        unmapped_csv = sorted(set(df['parameter'].unique()) - chem_set)
+        unmatched_model = sorted(chem_set - set(df['parameter'].unique()))
+
+        if df_matched.empty:
+            print("  No matching species found between CSV and model configuration.")
+            obs_stats = {
+                'n_stations': 0,
+                'n_observations': 0,
+                'year_start': None,
+                'year_end': None,
+                'species_stats': [],
+                'buffer_km': None,
+                'no_data_species': list(chem_set),
+                'unmapped_species': unmapped_csv,
+                'searched_species': list(chem_set),
+            }
+            return None, obs_stats
+
+        n_observations = len(df_matched)
+        stations = df_matched.groupby('station_id').first()[['lat', 'lon']]
+        n_stations = len(stations)
+
+        year_min = int(df_matched['year'].min())
+        year_max = int(df_matched['year'].max())
+
+        # Per-species statistics
+        species_stats = []
+        found_species = set()
+        for param, grp in df_matched.groupby('parameter'):
+            sp_stations = grp['station_id'].nunique()
+            sp_obs = len(grp)
+            sp_yr_min = int(grp['year'].min())
+            sp_yr_max = int(grp['year'].max())
+            species_stats.append({
+                'species': param,
+                'n_stations': sp_stations,
+                'n_observations': sp_obs,
+                'year_start': sp_yr_min,
+                'year_end': sp_yr_max,
+            })
+            found_species.add(param)
+
+        no_data_species = sorted(chem_set - found_species)
+
+        # Build GeoJSON for station markers
+        features = []
+        for stn_id, row in stations.iterrows():
+            # Collect parameters at this station
+            stn_params = df_matched[df_matched['station_id'] == stn_id]['parameter'].unique()
+            features.append({
+                'type': 'Feature',
+                'geometry': {
+                    'type': 'Point',
+                    'coordinates': [float(row['lon']), float(row['lat'])],
+                },
+                'properties': {
+                    'station_id': str(stn_id),
+                    'parameters': ', '.join(sorted(stn_params)),
+                    'n_observations': int(
+                        df_matched[df_matched['station_id'] == stn_id].shape[0]),
+                },
+            })
+
+        stations_geojson = {
+            'type': 'FeatureCollection',
+            'features': features,
+        }
+
+        obs_stats = {
+            'n_stations': n_stations,
+            'n_observations': n_observations,
+            'year_start': year_min,
+            'year_end': year_max,
+            'species_stats': species_stats,
+            'buffer_km': None,
+            'no_data_species': no_data_species,
+            'unmapped_species': unmapped_csv,
+            'searched_species': list(chem_set),
+        }
+
+        print(f"  Loaded {n_observations} observations from {n_stations} stations "
+              f"({len(species_stats)} species matched).")
+
+        return json.dumps(stations_geojson), obs_stats
+
+    except Exception:
+        raise
+
+
 def _compute_spatial_stats(results):
     """Compute spatial statistics (min/max/mean/std) per species across all cells."""
     stats = []
@@ -979,8 +1110,10 @@ def generate_simulation_report(
         timestep,
         river_network_shapefile=None,
         basin_shapefile=None,
+        observation_data_source="grqa",
         grqa_local_data_path=None,
         grqa_buffer_km=10,
+        user_observation_csv=None,
         container_runtime="docker",
         mpi_np=2,
         docker_container_name="docker_openwq",
@@ -993,9 +1126,11 @@ def generate_simulation_report(
         river_network_shapefile: path to river network shapefile (.shp/.gpkg)
         basin_shapefile: path to basin/catchment shapefile (auto-loaded from
             ss_method_copernicus_basin_info if available)
+        observation_data_source: "grqa", "user_csv", or "skip"
         grqa_local_data_path: "auto" or None to download from Zenodo,
-            a path to pre-downloaded GRQA folder, or "skip" to disable.
+            a path to pre-downloaded GRQA folder.
         grqa_buffer_km: buffer distance in km around basin/river for GRQA search
+        user_observation_csv: path to user-provided CSV observation file
 
     Returns the path to the generated HTML file.
     """
@@ -1016,27 +1151,47 @@ def generate_simulation_report(
         print(f"  WARNING: Map layers failed: {_e}")
         _section_errors['map'] = str(_e)
 
-    # GRQA observation stations
-    grqa_geojson_str = None
-    grqa_stats = None
-    _grqa_skip = (isinstance(grqa_local_data_path, str)
-                  and grqa_local_data_path.strip().lower() == "skip")
-    if (river_network_shapefile or basin_shapefile) and not _grqa_skip:
+    # Observation stations (GRQA or user-provided CSV)
+    obs_geojson_str = None
+    obs_stats = None
+    _obs_source = (observation_data_source or "grqa").strip().lower()
+    _valid_obs_sources = {"grqa", "user_csv", "skip"}
+    if _obs_source not in _valid_obs_sources:
+        print(f"  WARNING: Unrecognised observation_data_source = '{observation_data_source}'. "
+              f"Valid options: {', '.join(sorted(_valid_obs_sources))}. Defaulting to 'skip'.")
+        _obs_source = "skip"
+    _obs_label = "GRQA"   # human-readable label for the observation source
+
+    if _obs_source == "skip":
+        print("  Observations: skipped by user (observation_data_source = 'skip').")
+    elif _obs_source == "user_csv":
+        _obs_label = "User CSV"
         try:
-            print("  Extracting GRQA observation stations...")
-            # "auto" or None → download from Zenodo; anything else → treat as path
-            _grqa_path = None
-            if isinstance(grqa_local_data_path, str) and \
-                    grqa_local_data_path.strip().lower() not in ("auto", ""):
-                _grqa_path = grqa_local_data_path
-            grqa_geojson_str, grqa_stats = _extract_grqa_for_report(
-                river_network_shapefile, basin_shapefile, chemical_species,
-                output_dir, _grqa_path, grqa_buffer_km=grqa_buffer_km)
+            print("  Loading user-provided observation CSV...")
+            obs_geojson_str, obs_stats = _load_user_observations_for_report(
+                user_observation_csv, chemical_species)
         except Exception as _e:
-            print(f"  WARNING: GRQA extraction failed: {_e}")
-            _section_errors['grqa'] = str(_e)
-    elif _grqa_skip:
-        print("  GRQA: skipped by user (grqa_local_data_path = 'skip').")
+            print(f"  WARNING: User CSV observation loading failed: {_e}")
+            _section_errors['observations'] = str(_e)
+    else:
+        # Default: GRQA
+        _obs_label = "GRQA"
+        if river_network_shapefile or basin_shapefile:
+            try:
+                print("  Extracting GRQA observation stations...")
+                # "auto" or None → download from Zenodo; anything else → treat as path
+                _grqa_path = None
+                if isinstance(grqa_local_data_path, str) and \
+                        grqa_local_data_path.strip().lower() not in ("auto", ""):
+                    _grqa_path = grqa_local_data_path
+                obs_geojson_str, obs_stats = _extract_grqa_for_report(
+                    river_network_shapefile, basin_shapefile, chemical_species,
+                    output_dir, _grqa_path, grqa_buffer_km=grqa_buffer_km)
+            except Exception as _e:
+                print(f"  WARNING: GRQA extraction failed: {_e}")
+                _section_errors['observations'] = str(_e)
+        else:
+            print("  No shapefile available for GRQA spatial search. Skipping.")
 
     # Read source/sink config for summary
     ss_config_path = os.path.join(output_dir, 'openwq_in',
@@ -1363,10 +1518,11 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         ('project', 'Project'),
         ('summary', 'Summary'),
     ]
-    if map_layers or grqa_geojson_str:
+    if map_layers or obs_geojson_str:
         nav_items.append(('map', 'Basin Map'))
-    if grqa_stats:
-        nav_items.append(('grqa', 'GRQA Observations'))
+    if obs_stats:
+        _obs_nav = f'{_obs_label} Observations' if _obs_label != "GRQA" else 'GRQA Observations'
+        nav_items.append(('observations', _obs_nav))
     nav_items.append(('config', 'Configuration'))
     if ss_summary:
         nav_items.append(('sources', 'Source/Sink Setup'))
@@ -1455,7 +1611,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         if 'map' in _section_errors:
             H.append(f'<div class="section" id="map"><h2>Basin Map</h2>'
                      f'{_error_card("Basin Map", _section_errors["map"])}</div>')
-        elif map_layers or grqa_geojson_str:
+        elif map_layers or obs_geojson_str:
             H.append(f"""<div class="section" id="map">
 <h2>Basin Map</h2>
 <div class="card secondary">
@@ -1466,60 +1622,93 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append(f'<div class="section" id="map"><h2>Basin Map</h2>'
                  f'{_error_card("Basin Map", _e, _tb_mod.format_exc())}</div>')
 
-    # --- SECTION: GRQA Observations ---
-    with _SectionGuard(H, 'grqa', 'GRQA Observation Data'):
-        if grqa_stats:
-            H.append('<div class="section" id="grqa"><h2>GRQA Observation Data</h2>')
-            _buf_km = grqa_stats.get('buffer_km', '?')
-            H.append(f'<div class="highlight-box info">'
-                     f'<strong>Global River Water Quality Archive (GRQA)</strong> — '
-                     f'Monitoring stations within {_buf_km} km of the basin/river network. '
-                     f'<a href="https://zenodo.org/records/15335450" target="_blank">'
-                     f'GRQA Dataset</a></div>')
+    # --- SECTION: Observation Data (GRQA or User CSV) ---
+    _obs_section_title = f'{_obs_label} Observation Data'
+    with _SectionGuard(H, 'observations', _obs_section_title):
+        if obs_stats:
+            H.append(f'<div class="section" id="observations">'
+                     f'<h2>{_obs_section_title}</h2>')
 
-            _no_data = grqa_stats.get('no_data_species', [])
-            _unmapped = grqa_stats.get('unmapped_species', [])
+            # Source-specific intro box
+            if _obs_source == "user_csv":
+                _csv_name = os.path.basename(user_observation_csv) \
+                    if user_observation_csv else 'N/A'
+                H.append(f'<div class="highlight-box info">'
+                         f'<strong>User-Provided Observations</strong> — '
+                         f'Loaded from <code>{_csv_name}</code>.</div>')
+            else:
+                _buf_km = obs_stats.get('buffer_km', '?')
+                H.append(f'<div class="highlight-box info">'
+                         f'<strong>Global River Water Quality Archive '
+                         f'(GRQA)</strong> — '
+                         f'Monitoring stations within {_buf_km} km of the '
+                         f'basin/river network. '
+                         f'<a href="https://zenodo.org/records/15335450" '
+                         f'target="_blank">GRQA Dataset</a></div>')
 
-            if grqa_stats['n_stations'] == 0:
-                # No stations found — distinguish between GRQA-supported vs unsupported
-                searched = grqa_stats.get('searched_species', [])
+            _no_data = obs_stats.get('no_data_species', [])
+            _unmapped = obs_stats.get('unmapped_species', [])
+
+            if obs_stats['n_stations'] == 0:
+                # No stations/observations found
+                searched = obs_stats.get('searched_species', [])
                 sp_list = ', '.join(f'<code>{s}</code>' for s in searched) \
                     if searched else 'N/A'
-                H.append(
-                    f'<div class="highlight-box" style="border-left-color:var(--accent);">'
-                    f'<strong>No GRQA monitoring stations found</strong> within '
-                    f'{_buf_km} km of the basin/river network for the following '
-                    f'GRQA-supported species: {sp_list}. '
-                    f'Try increasing <code>grqa_buffer_km</code> to widen the '
-                    f'search area.</div>')
-                if _unmapped:
-                    _um_list = ', '.join(f'<code>{s}</code>' for s in _unmapped)
+                if _obs_source == "user_csv":
                     H.append(
                         f'<div class="highlight-box" '
-                        f'style="border-left-color:var(--text-light);">'
-                        f'The following model species are <strong>not available'
-                        f'</strong> in the GRQA database and were excluded from '
-                        f'the search: {_um_list}.</div>')
+                        f'style="border-left-color:var(--accent);">'
+                        f'<strong>No matching observations found</strong> in '
+                        f'the CSV for the following model species: {sp_list}. '
+                        f'Make sure the <code>parameter</code> column in '
+                        f'the CSV matches your BGC template species names.'
+                        f'</div>')
+                else:
+                    _buf_km = obs_stats.get('buffer_km', '?')
+                    H.append(
+                        f'<div class="highlight-box" '
+                        f'style="border-left-color:var(--accent);">'
+                        f'<strong>No GRQA monitoring stations found</strong> '
+                        f'within {_buf_km} km of the basin/river network for '
+                        f'the following GRQA-supported species: {sp_list}. '
+                        f'Try increasing <code>grqa_buffer_km</code> to widen '
+                        f'the search area.</div>')
+                if _unmapped:
+                    _um_list = ', '.join(f'<code>{s}</code>' for s in _unmapped)
+                    if _obs_source == "user_csv":
+                        H.append(
+                            f'<div class="highlight-box" '
+                            f'style="border-left-color:var(--text-light);">'
+                            f'The following species in the CSV are <strong>not '
+                            f'in the model configuration</strong> and were '
+                            f'excluded: {_um_list}.</div>')
+                    else:
+                        H.append(
+                            f'<div class="highlight-box" '
+                            f'style="border-left-color:var(--text-light);">'
+                            f'The following model species are <strong>not '
+                            f'available</strong> in the GRQA database and were '
+                            f'excluded from the search: {_um_list}.</div>')
             else:
                 # Summary KPIs
                 yr_range = ''
-                if grqa_stats.get('year_start') and grqa_stats.get('year_end'):
-                    yr_range = (f"{grqa_stats['year_start']}&ndash;"
-                                f"{grqa_stats['year_end']}")
+                if obs_stats.get('year_start') and obs_stats.get('year_end'):
+                    yr_range = (f"{obs_stats['year_start']}&ndash;"
+                                f"{obs_stats['year_end']}")
                 H.append(f"""<div class="kpi-grid" style="margin:1rem 0">
-<div class="kpi"><div class="icon">&#x1f4cd;</div><div class="value">{grqa_stats['n_stations']}</div><div class="label">Stations</div></div>
-<div class="kpi"><div class="icon">&#x1f4c8;</div><div class="value">{grqa_stats['n_observations']:,}</div><div class="label">Observations</div></div>
+<div class="kpi"><div class="icon">&#x1f4cd;</div><div class="value">{obs_stats['n_stations']}</div><div class="label">Stations</div></div>
+<div class="kpi"><div class="icon">&#x1f4c8;</div><div class="value">{obs_stats['n_observations']:,}</div><div class="label">Observations</div></div>
 <div class="kpi"><div class="icon">&#x1f4c5;</div><div class="value">{yr_range}</div><div class="label">Period</div></div>
-<div class="kpi"><div class="icon">&#x1f9ea;</div><div class="value">{len(grqa_stats.get('species_stats', []))}</div><div class="label">Species Matched</div></div>
+<div class="kpi"><div class="icon">&#x1f9ea;</div><div class="value">{len(obs_stats.get('species_stats', []))}</div><div class="label">Species Matched</div></div>
 </div>""")
 
                 # Per-species table
-                if grqa_stats.get('species_stats'):
+                if obs_stats.get('species_stats'):
                     H.append('<div class="card primary"><div class="table-wrap">'
                              '<table>')
                     H.append('<tr><th>Species</th><th>Stations</th>'
                              '<th>Observations</th><th>Period</th></tr>')
-                    for sp in grqa_stats['species_stats']:
+                    for sp in obs_stats['species_stats']:
                         yr = ''
                         if sp.get('year_start') and sp.get('year_end'):
                             yr = f"{sp['year_start']}&ndash;{sp['year_end']}"
@@ -1531,97 +1720,122 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                             f'<td>{yr}</td></tr>')
                     H.append('</table></div></div>')
 
-                # Species searched but with no data within the buffer
+                # Species with no data
                 if _no_data:
                     _nd_list = ', '.join(f'<code>{s}</code>' for s in _no_data)
-                    H.append(
-                        f'<div class="highlight-box" '
-                        f'style="border-left-color:var(--accent);">'
-                        f'The following species exist in the GRQA database but '
-                        f'<strong>no stations were found</strong> within '
-                        f'{_buf_km} km: {_nd_list}. '
-                        f'Try increasing <code>grqa_buffer_km</code>.</div>')
+                    if _obs_source == "user_csv":
+                        H.append(
+                            f'<div class="highlight-box" '
+                            f'style="border-left-color:var(--accent);">'
+                            f'The following model species have <strong>no '
+                            f'observations</strong> in the CSV: {_nd_list}.'
+                            f'</div>')
+                    else:
+                        _buf_km = obs_stats.get('buffer_km', '?')
+                        H.append(
+                            f'<div class="highlight-box" '
+                            f'style="border-left-color:var(--accent);">'
+                            f'The following species exist in the GRQA database '
+                            f'but <strong>no stations were found</strong> '
+                            f'within {_buf_km} km: {_nd_list}. '
+                            f'Try increasing <code>grqa_buffer_km</code>.'
+                            f'</div>')
 
-                # Species not available in GRQA at all
+                # Unmapped species
                 if _unmapped:
                     _um_list = ', '.join(f'<code>{s}</code>' for s in _unmapped)
-                    H.append(
-                        f'<div class="highlight-box" '
-                        f'style="border-left-color:var(--text-light);">'
-                        f'The following model species are <strong>not available'
-                        f'</strong> in the GRQA database: {_um_list}.</div>')
+                    if _obs_source == "user_csv":
+                        H.append(
+                            f'<div class="highlight-box" '
+                            f'style="border-left-color:var(--text-light);">'
+                            f'The following species in the CSV are <strong>not '
+                            f'in the model configuration</strong>: '
+                            f'{_um_list}.</div>')
+                    else:
+                        H.append(
+                            f'<div class="highlight-box" '
+                            f'style="border-left-color:var(--text-light);">'
+                            f'The following model species are <strong>not '
+                            f'available</strong> in the GRQA database: '
+                            f'{_um_list}.</div>')
 
-            # Stoichiometric conversion note
-            H.append(
-                '<details style="margin-top:1rem;">'
-                '<summary style="cursor:pointer;font-weight:600;'
-                'color:var(--primary);font-size:0.95rem;">'
-                'Stoichiometric Conversion: GRQA &rarr; Model Units</summary>'
-                '<div class="card primary" style="margin-top:0.5rem;">'
-                '<p style="margin-bottom:0.5rem;">GRQA reports concentrations '
-                'of the full ion (e.g.&nbsp;mg&#8209;NO<sub>3</sub>/L), while '
-                'the model uses the <strong>&ldquo;as element&rdquo;</strong> '
-                'convention (e.g.&nbsp;NO3&#8209;N in mg&#8209;N/L). The '
-                'conversion uses stoichiometry:</p>'
-                '<p style="text-align:center;font-size:0.95rem;margin:0.5rem 0;">'
-                '<code>model_value = GRQA_value &times; MW(element) / '
-                'MW(ion)</code></p>'
-                '<div class="table-wrap"><table>'
-                '<tr><th>GRQA</th><th>Model</th>'
-                '<th>Factor</th><th>Formula</th></tr>')
-            for grqa_code, factor in _GRQA_TO_MODEL_FACTOR.items():
-                elem = {'NO3': 'N', 'NH4': 'N', 'NO2': 'N',
-                        'PO4': 'P', 'SO4': 'S'}[grqa_code]
-                model_name = f'{grqa_code}-{elem}'
+            # GRQA-specific extras (stoichiometric conversion + parameter list)
+            if _obs_source != "user_csv":
                 H.append(
-                    f'<tr><td><code>{grqa_code}</code> '
-                    f'(mg&#8209;{grqa_code}/L)</td>'
-                    f'<td><code>{model_name}</code> '
-                    f'(mg&#8209;{elem}/L)</td>'
-                    f'<td class="num">{factor:.4f}</td>'
-                    f'<td>MW({elem}) / MW({grqa_code})</td></tr>')
-            H.append('</table></div></div></details>')
+                    '<details style="margin-top:1rem;">'
+                    '<summary style="cursor:pointer;font-weight:600;'
+                    'color:var(--primary);font-size:0.95rem;">'
+                    'Stoichiometric Conversion: GRQA &rarr; Model Units'
+                    '</summary>'
+                    '<div class="card primary" style="margin-top:0.5rem;">'
+                    '<p style="margin-bottom:0.5rem;">GRQA reports '
+                    'concentrations of the full ion '
+                    '(e.g.&nbsp;mg&#8209;NO<sub>3</sub>/L), while '
+                    'the model uses the <strong>&ldquo;as element&rdquo;'
+                    '</strong> convention '
+                    '(e.g.&nbsp;NO3&#8209;N in mg&#8209;N/L). The '
+                    'conversion uses stoichiometry:</p>'
+                    '<p style="text-align:center;font-size:0.95rem;'
+                    'margin:0.5rem 0;">'
+                    '<code>model_value = GRQA_value &times; MW(element) / '
+                    'MW(ion)</code></p>'
+                    '<div class="table-wrap"><table>'
+                    '<tr><th>GRQA</th><th>Model</th>'
+                    '<th>Factor</th><th>Formula</th></tr>')
+                for grqa_code, factor in _GRQA_TO_MODEL_FACTOR.items():
+                    elem = {'NO3': 'N', 'NH4': 'N', 'NO2': 'N',
+                            'PO4': 'P', 'SO4': 'S'}[grqa_code]
+                    model_name = f'{grqa_code}-{elem}'
+                    H.append(
+                        f'<tr><td><code>{grqa_code}</code> '
+                        f'(mg&#8209;{grqa_code}/L)</td>'
+                        f'<td><code>{model_name}</code> '
+                        f'(mg&#8209;{elem}/L)</td>'
+                        f'<td class="num">{factor:.4f}</td>'
+                        f'<td>MW({elem}) / MW({grqa_code})</td></tr>')
+                H.append('</table></div></div></details>')
 
-            # Collapsible table of all GRQA parameters available
-            _grqa_groups = {}
-            for code, name in _GRQA_AVAILABLE_PARAMS.items():
-                # Derive group from the code category
-                if code in ('TN', 'DN', 'NO3', 'NO2', 'NH4', 'NO3_NO2',
-                            'DIN', 'DON', 'TKN', 'PN'):
-                    grp = 'Nitrogen'
-                elif code in ('TP', 'DP', 'DIP', 'PO4', 'DOP', 'PP'):
-                    grp = 'Phosphorus'
-                elif code in ('DO', 'DO_sat', 'BOD', 'BOD5', 'COD', 'CODMn'):
-                    grp = 'Oxygen'
-                elif code in ('DOC', 'TOC', 'TC', 'TIC', 'DIC', 'POC', 'PC'):
-                    grp = 'Carbon'
-                elif code in ('TSS', 'TDS', 'SS', 'Turbidity'):
-                    grp = 'Sediment'
-                elif code in ('Temp', 'pH', 'EC', 'SC'):
-                    grp = 'Physical'
-                else:
-                    grp = 'Other'
-                _grqa_groups.setdefault(grp, []).append((code, name))
+                # Collapsible table of all GRQA parameters available
+                _grqa_groups = {}
+                for code, name in _GRQA_AVAILABLE_PARAMS.items():
+                    if code in ('TN', 'DN', 'NO3', 'NO2', 'NH4', 'NO3_NO2',
+                                'DIN', 'DON', 'TKN', 'PN'):
+                        grp = 'Nitrogen'
+                    elif code in ('TP', 'DP', 'DIP', 'PO4', 'DOP', 'PP'):
+                        grp = 'Phosphorus'
+                    elif code in ('DO', 'DO_sat', 'BOD', 'BOD5', 'COD',
+                                  'CODMn'):
+                        grp = 'Oxygen'
+                    elif code in ('DOC', 'TOC', 'TC', 'TIC', 'DIC', 'POC',
+                                  'PC'):
+                        grp = 'Carbon'
+                    elif code in ('TSS', 'TDS', 'SS', 'Turbidity'):
+                        grp = 'Sediment'
+                    elif code in ('Temp', 'pH', 'EC', 'SC'):
+                        grp = 'Physical'
+                    else:
+                        grp = 'Other'
+                    _grqa_groups.setdefault(grp, []).append((code, name))
 
-            H.append(
-                '<details style="margin-top:1rem;">'
-                '<summary style="cursor:pointer;font-weight:600;'
-                'color:var(--primary);font-size:0.95rem;">'
-                'All GRQA Parameters Available in the Archive '
-                f'({len(_GRQA_AVAILABLE_PARAMS)} parameters)</summary>'
-                '<div class="card teal" style="margin-top:0.5rem;">'
-                '<div class="table-wrap"><table>'
-                '<tr><th>Group</th><th>Code</th><th>Parameter</th></tr>')
-            for grp in ('Nitrogen', 'Phosphorus', 'Oxygen', 'Carbon',
-                        'Sediment', 'Physical', 'Other'):
-                params = _grqa_groups.get(grp, [])
-                for i, (code, name) in enumerate(params):
-                    grp_cell = (f'<td rowspan="{len(params)}" '
-                                f'style="font-weight:600;">{grp}</td>'
-                                if i == 0 else '')
-                    H.append(f'<tr>{grp_cell}<td><code>{code}</code></td>'
-                             f'<td>{name}</td></tr>')
-            H.append('</table></div></div></details>')
+                H.append(
+                    '<details style="margin-top:1rem;">'
+                    '<summary style="cursor:pointer;font-weight:600;'
+                    'color:var(--primary);font-size:0.95rem;">'
+                    'All GRQA Parameters Available in the Archive '
+                    f'({len(_GRQA_AVAILABLE_PARAMS)} parameters)</summary>'
+                    '<div class="card teal" style="margin-top:0.5rem;">'
+                    '<div class="table-wrap"><table>'
+                    '<tr><th>Group</th><th>Code</th><th>Parameter</th></tr>')
+                for grp in ('Nitrogen', 'Phosphorus', 'Oxygen', 'Carbon',
+                            'Sediment', 'Physical', 'Other'):
+                    params = _grqa_groups.get(grp, [])
+                    for i, (code, name) in enumerate(params):
+                        grp_cell = (f'<td rowspan="{len(params)}" '
+                                    f'style="font-weight:600;">{grp}</td>'
+                                    if i == 0 else '')
+                        H.append(f'<tr>{grp_cell}<td><code>{code}</code></td>'
+                                 f'<td>{name}</td></tr>')
+                H.append('</table></div></div></details>')
 
             H.append('</div>')
 
@@ -2169,7 +2383,7 @@ function _owqRelayoutAll(){
 """)
 
         # Basin map — river network + basin + GRQA stations
-        if (map_layers and map_center) or grqa_geojson_str:
+        if (map_layers and map_center) or obs_geojson_str:
             layer_js_blocks = []
             overlay_entries = []
             fit_var = None
@@ -2201,26 +2415,29 @@ function _owqRelayoutAll(){
                 if fit_var is None:
                     fit_var = var_name
 
-            # GRQA stations layer (circle markers)
-            if grqa_geojson_str:
-                layer_js_blocks.append(f"  var gj_grqa = {grqa_geojson_str};")
-                layer_js_blocks.append("""  var lyr_grqa = L.geoJSON(gj_grqa, {
-    pointToLayer: function(f, latlng){
-      return L.circleMarker(latlng, {
+            # Observation stations layer (circle markers)
+            if obs_geojson_str:
+                _stn_popup_title = ('Observation Station' if _obs_source == 'user_csv'
+                                    else 'GRQA Station')
+                _stn_layer_label = (f'{_obs_label} Stations').replace("'", "\\'")
+                layer_js_blocks.append(f"  var gj_obs = {obs_geojson_str};")
+                layer_js_blocks.append(f"""  var lyr_obs = L.geoJSON(gj_obs, {{
+    pointToLayer: function(f, latlng){{
+      return L.circleMarker(latlng, {{
         radius: 7, fillColor: '#e63946', color: '#333',
         weight: 1.5, opacity: 0.9, fillOpacity: 0.85
-      });
-    },
-    onEachFeature: function(f,l){
+      }});
+    }},
+    onEachFeature: function(f,l){{
       var props = f.properties;
-      var html = '<b>GRQA Station</b><br>';
-      for(var k in props){ if(props[k]!==null && props[k]!=='') html += '<b>'+k+'</b>: '+props[k]+'<br>'; }
+      var html = '<b>{_stn_popup_title}</b><br>';
+      for(var k in props){{ if(props[k]!==null && props[k]!=='') html += '<b>'+k+'</b>: '+props[k]+'<br>'; }}
       l.bindPopup(html);
-    }
-  }).addTo(map);""")
-                overlay_entries.append("'GRQA Stations': lyr_grqa")
+    }}
+  }}).addTo(map);""")
+                overlay_entries.append(f"'{_stn_layer_label}': lyr_obs")
                 if fit_var is None:
-                    fit_var = "lyr_grqa"
+                    fit_var = "lyr_obs"
 
             overlay_obj = "{" + ", ".join(overlay_entries) + "}"
             center_js = _js(map_center) if map_center else "[0, 0]"
@@ -2320,8 +2537,10 @@ def generate_report(
         timestep,
         river_network_shapefile=None,
         basin_shapefile=None,
+        observation_data_source="grqa",
         grqa_local_data_path=None,
         grqa_buffer_km=10,
+        user_observation_csv=None,
         container_runtime="docker",
         mpi_np=2,
         docker_container_name="docker_openwq",
@@ -2335,8 +2554,10 @@ def generate_report(
     Parameters:
         river_network_shapefile: path to river network shapefile
         basin_shapefile: path to basin/catchment shapefile
-        grqa_local_data_path: "auto"/path/"skip"
+        observation_data_source: "grqa", "user_csv", or "skip"
+        grqa_local_data_path: "auto"/path for GRQA
         grqa_buffer_km: buffer distance in km for GRQA station search
+        user_observation_csv: path to user-provided CSV file
 
     Returns:
         str: Path to the generated HTML report, or None on failure
@@ -2366,8 +2587,10 @@ def generate_report(
             timestep=timestep,
             river_network_shapefile=river_network_shapefile,
             basin_shapefile=basin_shapefile,
+            observation_data_source=observation_data_source,
             grqa_local_data_path=grqa_local_data_path,
             grqa_buffer_km=grqa_buffer_km,
+            user_observation_csv=user_observation_csv,
             container_runtime=container_runtime,
             mpi_np=mpi_np,
             docker_container_name=docker_container_name,
