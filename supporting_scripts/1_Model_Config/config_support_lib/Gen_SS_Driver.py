@@ -1948,10 +1948,10 @@ def set_ss_climate_adjusted_export_coefficients(
 
                 for month, day, hour, load_kg in temporal_entries:
                     if use_cellid_mapping:
-                        # Use cell_id string in ix position, dummy values for iy/iz
+                        # cell_id in ix position, "all" for iy and iz
                         data_entries[str(sub_idx)] = [
-                            sim_year, int(month), int(day), int(hour), "all", "all",
-                            spatial_id, 1, 1,  # cell_id, iy=1, iz=1 (ignored by OpenWQ)
+                            sim_year, int(month), int(day), int(hour),
+                            spatial_id, "all", "all", 1, 1,
                             float(load_kg),
                             "discrete"
                         ]
@@ -2222,10 +2222,10 @@ def create_openwq_ss_json_from_loads(
                 # YYYY is the simulation year (not the Copernicus year)
                 for month, day, hour, load_kg in temporal_entries:
                     if use_cellid_mapping:
-                        # Use cell_id string in ix position, dummy values for iy/iz
+                        # cell_id in ix position, "all" for iy and iz
                         data_entries[str(sub_idx)] = [
-                            sim_year, int(month), int(day), int(hour), "all", "all",
-                            spatial_id, 1, 1,  # cell_id, iy=1, iz=1 (ignored by OpenWQ)
+                            sim_year, int(month), int(day), int(hour),
+                            spatial_id, "all", "all", 1, 1,
                             float(load_kg),
                             "discrete"
                         ]
