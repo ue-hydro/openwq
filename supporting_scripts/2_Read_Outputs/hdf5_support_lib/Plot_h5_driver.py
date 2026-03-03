@@ -274,7 +274,7 @@ a{color:var(--primary);text-decoration:none}
 <div class="map-legend" id="mapLegend"></div>
 </div>
 <p class="plot-caption" style="margin-top:.4rem;font-size:.78rem;color:var(--text2)">
-Click a river segment to isolate that feature in all plots below. Click again to restore all.</p>
+Click a river segment to isolate that feature in all plots below.</p>
 </div>""")
 
     # --- PLOT SECTIONS ---
@@ -467,8 +467,8 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
       btn.style.cssText='padding:4px 10px;background:var(--surface,#fff);border:none;'
         +'border-radius:4px;cursor:pointer;font-size:12px;line-height:20px;text-align:center;'
         +'box-shadow:0 1px 5px rgba(0,0,0,.3);color:var(--text,#333);white-space:nowrap;font-weight:600;';
-      btn.title='Activate all features on map and plots';
-      btn.innerHTML='Show All Features';
+      btn.title='Restore all features on map and plots';
+      btn.innerHTML='Restore All Features';
       L.DomEvent.disableClickPropagation(btn);
       btn.addEventListener('click',function(){{
         if(typeof _owqSelectFeature==='function') _owqSelectFeature(null);
