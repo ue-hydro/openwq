@@ -2232,6 +2232,25 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                  'copy each into your terminal and it will run as-is '
                  '(activates the venv, reads HDF5, and produces output).</p>')
 
+        # --- Species checkboxes ---
+        import html as _html_mod
+        H.append('<p style="font-weight:600;margin-top:1rem">Select chemical species to visualize:</p>')
+        H.append('<div id="speciesCbRow" style="display:flex;flex-wrap:wrap;gap:.5rem .8rem;'
+                 'margin:.5rem 0 1rem;align-items:center">')
+        for _sp in _species_list:
+            _sp_esc = _html_mod.escape(_sp)
+            H.append(
+                f'<label style="display:inline-flex;align-items:center;gap:.3rem;'
+                f'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'
+                f'border:1px solid var(--border);border-radius:6px;'
+                f'background:var(--surface);transition:border-color .15s">'
+                f'<input type="checkbox" class="species-cb" '
+                f'data-species="{_sp_esc}" checked> {_sp_esc}</label>')
+        H.append('<a href="#" id="speciesToggleAll" '
+                 'style="font-size:.78rem;margin-left:.5rem;color:var(--primary)">'
+                 'Deselect all</a>')
+        H.append('</div>')
+
         # --- 4a: Interactive 3D River Viewer (WebGL) ---
         _webgl_out_dir = os.path.join(_abs_output_dir, "openwq_out",
                                        "openwq_webgl_viewer")
@@ -2359,14 +2378,51 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append('<div style="flex:1;min-width:0">')
         H.append('<p style="font-weight:600">Generate interactive '
                  '3D river viewer:</p>')
+        _cb_id_4a = f'_cb{_copy_id_counter[0]}'  # ID before _code_block increments
         H.append(_code_block(_terminal_snippet(_webgl_body)))
         H.append('</div>')
         H.append('<div style="flex:1;min-width:0">')
         H.append('<p style="font-weight:600">Plot interactive '
                  'time series (all species):</p>')
+        _cb_id_4b = f'_cb{_copy_id_counter[0]}'  # ID before _code_block increments
         H.append(_code_block(_terminal_snippet(_plot_all_body)))
         H.append('</div>')
         H.append('</div>')
+
+        # JavaScript: update code snippets when species checkboxes change
+        H.append(f"""<script>
+(function(){{
+  var preIds = ['{_cb_id_4a}', '{_cb_id_4b}'];
+  var origTexts = preIds.map(function(id){{ return document.getElementById(id).textContent; }});
+  var cbs = document.querySelectorAll('.species-cb');
+  var toggleLink = document.getElementById('speciesToggleAll');
+  var re = /chemSpec=\\[.*?\\]/g;
+
+  function updateSnippets(){{
+    var checked = [];
+    cbs.forEach(function(cb){{ if(cb.checked) checked.push('"'+cb.dataset.species+'"'); }});
+    var newSpec = 'chemSpec=[' + checked.join(', ') + ']';
+    preIds.forEach(function(id, idx){{
+      var el = document.getElementById(id);
+      el.textContent = origTexts[idx].replace(re, newSpec);
+    }});
+    if(toggleLink){{
+      toggleLink.textContent = checked.length === cbs.length ? 'Deselect all' : 'Select all';
+    }}
+  }}
+
+  cbs.forEach(function(cb){{ cb.addEventListener('change', updateSnippets); }});
+
+  if(toggleLink){{
+    toggleLink.addEventListener('click', function(e){{
+      e.preventDefault();
+      var allChecked = Array.from(cbs).every(function(cb){{ return cb.checked; }});
+      cbs.forEach(function(cb){{ cb.checked = !allChecked; }});
+      updateSnippets();
+    }});
+  }}
+}})();
+</script>""")
 
         H.append('</div></div>')
 
