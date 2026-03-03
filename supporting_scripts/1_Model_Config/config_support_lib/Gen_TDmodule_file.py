@@ -54,6 +54,9 @@ def create_td_module_json(
             D_eff = D_avg / L^2, where D_avg = (Dx + Dy + Dz) / 3.
     """
 
+    if td_module_name == "NONE":
+        return
+
     dispersion_x = td_module_dispersion_xyz[0]
     dispersion_y = td_module_dispersion_xyz[1]
     dispersion_z = td_module_dispersion_xyz[2]

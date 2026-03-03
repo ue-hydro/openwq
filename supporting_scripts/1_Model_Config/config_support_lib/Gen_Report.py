@@ -1142,6 +1142,7 @@ def generate_simulation_report(
         docker_container_name="docker_openwq",
         executable_path=None,
         file_manager_path=None,
+        config_errors=None,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -1162,6 +1163,10 @@ def generate_simulation_report(
 
     # Track errors for each section so the report can still be generated
     _section_errors = {}   # section_id → error message
+
+    # Merge any config-generation errors passed from the caller
+    if config_errors:
+        _section_errors.update(config_errors)
 
     # (Time Series and Spatial Statistics sections removed — they require
     #  a completed model run which is not available at config time.)
@@ -2697,6 +2702,7 @@ def generate_report(
         docker_container_name="docker_openwq",
         executable_path=None,
         file_manager_path=None,
+        config_errors=None,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -2747,6 +2753,7 @@ def generate_report(
             docker_container_name=docker_container_name,
             executable_path=executable_path,
             file_manager_path=file_manager_path,
+            config_errors=config_errors,
         )
 
         print(f"  Report saved: {report_path}")

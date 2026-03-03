@@ -56,11 +56,9 @@ def create_si_module_json(
     """
 
     if si_module_name == "NONE":
-        # Create minimal config file
-        config = {
-            "MODULE_NAME": "NONE"
-        }
-    elif si_module_name == "FREUNDLICH":
+        return
+
+    if si_module_name == "FREUNDLICH":
         species_block = {}
         if si_species_params:
             for species_name, params in si_species_params.items():
