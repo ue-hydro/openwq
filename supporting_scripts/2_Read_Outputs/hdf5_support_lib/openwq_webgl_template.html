@@ -104,8 +104,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
     </div>
     <div class="ctrl-row">
         <label>Exaggeration</label>
-        <input type="range" id="sl-exag" min="0" max="100" value="25">
-        <span class="val" id="v-exag">0.100x</span>
+        <input type="range" id="sl-exag" min="0" max="100" value="12">
+        <span class="val" id="v-exag">0.012x</span>
     </div>
     <div class="ctrl-row" style="justify-content:center; gap:8px; margin-top:6px;">
         <button class="btn active" id="btn-water">&#128167; Water</button>
@@ -1348,7 +1348,7 @@ class FloodViewer3D {
         this.pointSize = 1.5;
         this.particleRes = 128;
         this.numParticles = 128 * 128;
-        this.exaggeration = 0.1;
+        this.exaggeration = 0.012;
         this.frameCache = new Map();
         this.frameCacheMax = 12;
         this.speedFactor = 0.5;

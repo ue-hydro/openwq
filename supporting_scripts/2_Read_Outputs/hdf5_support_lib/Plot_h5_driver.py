@@ -24,7 +24,6 @@ import numpy as np
 import pandas as pd
 import netCDF4
 import os
-import platform
 import json
 import re
 import datetime
@@ -86,7 +85,8 @@ def _build_traces(feature_data, n_visible=10):
     return traces
 
 
-def _build_html(plots, what2map, hostmodel, output_path=None):
+def _build_html(plots, what2map, hostmodel, river_geojson=None,
+                map_center=None, map_bounds=None, mapping_key='SegId'):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -97,9 +97,14 @@ def _build_html(plots, what2map, hostmodel, output_path=None):
         'hostmodel' or 'openwq'.
     hostmodel : str
         Host model name (e.g. 'mizuroute').
-    output_path : str, optional
-        Path to the output HTML file — used to resolve the relative path
-        to the WebGL 3D viewer (``openwq_webgl_viewer/index.html``).
+    river_geojson : dict or None
+        GeoJSON FeatureCollection for the river network.
+    map_center : list or None
+        [lat, lng] for the initial map center.
+    map_bounds : tuple or None
+        (minx, miny, maxx, maxy) for auto-fitting the map.
+    mapping_key : str
+        Property name in the GeoJSON features that matches feature IDs in plots.
 
     Returns
     -------
@@ -109,13 +114,22 @@ def _build_html(plots, what2map, hostmodel, output_path=None):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     n_plots = len(plots)
 
-    # Detect WebGL 3D viewer — look for index.html relative to output_path
-    _webgl_rel = None
-    if output_path:
-        _out_dir = os.path.dirname(os.path.abspath(output_path))
-        _webgl_abs = os.path.join(_out_dir, 'openwq_webgl_viewer', 'index.html')
-        if os.path.isfile(_webgl_abs):
-            _webgl_rel = 'openwq_webgl_viewer/index.html'
+    # Build a stable fid → color mapping so map and plots use identical colors.
+    _colorway = ['#0066cc','#00a86b','#ff6b35','#004499','#34d399','#fb923c',
+                 '#667eea','#764ba2','#e63946','#2ec4b6','#e9c46a','#264653']
+    _all_fids_set = set()
+    for p in plots:
+        for t in p['traces']:
+            _all_fids_set.add(t['name'].replace('Feature ', ''))
+    _all_fids_sorted = sorted(_all_fids_set)
+    _fid_color = {fid: _colorway[i % len(_colorway)]
+                  for i, fid in enumerate(_all_fids_sorted)}
+
+    # Stamp explicit line colors onto every trace so Plotly matches the map
+    for p in plots:
+        for t in p['traces']:
+            fid = t['name'].replace('Feature ', '')
+            t['line'] = {'color': _fid_color.get(fid, '#888')}
 
     H = []
 
@@ -129,6 +143,8 @@ def _build_html(plots, what2map, hostmodel, output_path=None):
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root,[data-theme="light"]{
   --primary:#0066cc;--primary-dark:#004499;
@@ -191,6 +207,17 @@ a{color:var(--primary);text-decoration:none}
   padding:1.5rem;box-shadow:var(--shadow);transition:transform .3s,box-shadow .3s}
 .card:hover{box-shadow:var(--shadow-lg);border-color:var(--border2)}
 .plot-caption{font-size:.82rem;color:var(--text2);margin-top:.5rem;text-align:right}
+#mapContainer{width:100%;height:420px;border-radius:12px;z-index:1}
+.map-legend{position:absolute;bottom:12px;right:12px;background:var(--glass);
+  backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:10px;
+  padding:.6rem .8rem;font-size:.75rem;max-height:300px;overflow-y:auto;z-index:800;
+  color:var(--text)}
+.map-legend .ml-title{font-weight:600;margin-bottom:.3rem;font-size:.8rem}
+.map-legend .ml-item{display:flex;align-items:center;gap:.4rem;padding:2px 4px;
+  border-radius:4px;cursor:pointer;transition:background .15s}
+.map-legend .ml-item:hover{background:rgba(0,102,204,.08)}
+.map-legend .ml-item.active{background:rgba(0,102,204,.15);font-weight:600}
+.map-legend .ml-swatch{width:14px;height:4px;border-radius:2px;flex-shrink:0}
 </style>
 </head>
 <body>""")
@@ -200,8 +227,8 @@ a{color:var(--primary);text-decoration:none}
     H.append('<aside class="sidebar">')
     H.append('<div class="logo">Open<span>WQ</span> Results</div>')
     H.append('<nav>')
-    if _webgl_rel:
-        H.append('<a href="#viewer3d">3D River Viewer</a>')
+    if river_geojson:
+        H.append('<a href="#rivermap">River Network Map</a>')
     for p in plots:
         H.append(f'<a href="#{p["id"]}">{p["title"]}</a>')
     H.append('</nav>')
@@ -228,7 +255,7 @@ a{color:var(--primary);text-decoration:none}
     host_label = (hostmodel or 'N/A').upper()
     H.append(f"""<div class="header">
 <h1>Open<span>WQ</span> &mdash; Results</h1>
-<p class="subtitle">{mode_label} mode &mdash; {n_plots} time-series plot(s){' + 3D viewer' if _webgl_rel else ''}</p>
+<p class="subtitle">{mode_label} mode &mdash; {n_plots} time-series plot(s)</p>
 <div class="meta">
 <span>Host Model: {host_label}</span>
 <span>Generated: {now}</span>
@@ -237,40 +264,16 @@ a{color:var(--primary);text-decoration:none}
 
     H.append('<div class="container">')
 
-    # --- 3D RIVER VIEWER (WebGL iframe or launch prompt) ---
-    if _webgl_rel:
-        # Compute the absolute path to the WebGL viewer directory
-        # for the "python -m http.server" command shown on file://
-        _webgl_dir_abs = os.path.dirname(os.path.join(
-            os.path.abspath(output_path), '..', _webgl_rel))
-        _webgl_dir_abs = os.path.normpath(_webgl_dir_abs)
-
-        # OS-aware terminal command for starting the HTTP server
-        _is_win = (platform.system() == 'Windows')
-        if _is_win:
-            _webgl_cmd = f'cd /d "{_webgl_dir_abs}" & python -m http.server 8080'
-        else:
-            # Use forward slashes (macOS/Linux native)
-            _webgl_cmd = f'cd "{_webgl_dir_abs}" && python3 -m http.server 8080'
-
-        H.append(f"""<div class="section" id="viewer3d">
-<h2>3D River Viewer</h2>
-<div id="webgl-http" class="card" style="padding:0;overflow:hidden;display:none">
-<iframe id="webglFrame" src="{_webgl_rel}"
-  style="width:100%;height:600px;border:none;display:block"></iframe>
+    # --- RIVER NETWORK MAP ---
+    if river_geojson:
+        H.append("""<div class="section" id="rivermap">
+<h2>River Network Map</h2>
+<div class="card" style="padding:0;overflow:hidden;position:relative">
+<div id="mapContainer"></div>
+<div class="map-legend" id="mapLegend"></div>
 </div>
-<div id="webgl-file" class="card" style="display:none;padding:2rem;text-align:center">
-<p style="font-size:1rem;margin-bottom:1rem">The 3D viewer requires a local HTTP server
-(browser security blocks WebGL resources on <code>file://</code>).</p>
-<p style="margin-bottom:.6rem">Run this in your terminal, then click the link:</p>
-<code id="webgl-cmd" style="display:inline-block;background:var(--bg);border:1px solid var(--border);
-  border-radius:8px;padding:.6rem 1.2rem;font-size:.85rem;cursor:pointer;user-select:all"
-  onclick="navigator.clipboard.writeText(this.textContent)"
->{_webgl_cmd}</code>
-<p style="font-size:.78rem;color:var(--text2);margin-top:.4rem">(click to copy)</p>
-<p style="margin-top:1rem"><a href="http://localhost:8080" target="_blank"
-  style="font-size:1rem;font-weight:600">&#x1f310; Open 3D Viewer (localhost:8080)</a></p>
-</div>
+<p class="plot-caption" style="margin-top:.4rem;font-size:.78rem;color:var(--text2)">
+Click a river segment to isolate that feature in all plots below. Click again to restore all.</p>
 </div>""")
 
     # --- PLOT SECTIONS ---
@@ -350,6 +353,29 @@ function _owqRelayoutAll(){
 }
 """)
 
+    # Legend click: single-click isolates a trace (others become 'legendonly',
+    # i.e. grayed out in legend but still clickable); click same trace again
+    # to restore all.  Also broadcasts to map via _owqSelectFeature.
+    H.append("""
+function _owqLegendClick(gd){
+  gd.on('plotly_legendclick',function(e){
+    var d=gd.data, n=d.length, ci=e.curveNumber;
+    // Is this trace currently the only fully-visible one?
+    var vis=d.map(function(t){return t.visible===undefined||t.visible===true});
+    var onlyMe=vis.filter(Boolean).length===1 && vis[ci];
+    var newVis=d.map(function(_,i){return onlyMe?true:(i===ci?true:'legendonly')});
+    Plotly.restyle(gd,{visible:newVis});
+    // Broadcast to map
+    if(typeof _owqSelectFeature==='function'){
+      var name=d[ci].name||'';
+      var fid=name.replace('Feature ','');
+      _owqSelectFeature(onlyMe?null:fid);
+    }
+    return false;   // prevent Plotly default toggle
+  });
+}
+""")
+
     # Per-plot data + Plotly.newPlot calls
     for p in plots:
         div_id = f'{p["id"]}_div'
@@ -361,27 +387,212 @@ function _owqRelayoutAll(){
         H.append(f"""
 (function(){{
   var traces = {traces_json};
-  Plotly.newPlot('{div_id}', traces,
+  var gd = document.getElementById('{div_id}');
+  Plotly.newPlot(gd, traces,
     _owqLayout({{xaxis:{{{xaxis_cfg}}},yaxis:{{title:'{p["ylabel"]}'}},
       hovermode:'x unified'}}),
     PCFG);
   _owqRegister('{div_id}');
+  _owqLegendClick(gd);
 }})();
 """)
 
-    # 3D viewer: show iframe on HTTP, show launch prompt on file://
-    if _webgl_rel:
+    # --- LEAFLET MAP INITIALIZATION ---
+    if river_geojson:
+        geojson_str = json.dumps(river_geojson)
+        _fid_color_json = json.dumps(_fid_color)
+        _fid_list_json = json.dumps(_all_fids_sorted)
+
+        H.append(f"""
+// --- River Network Map ---
+(function(){{
+  var mapEl=document.getElementById('mapContainer');
+  if(!mapEl) return;
+  var isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  var tileUrl=isDark
+    ?'https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png'
+    :'https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png';
+  // Start with interactions disabled (locked view)
+  var map=L.map('mapContainer',{{
+    zoomControl:false,dragging:false,scrollWheelZoom:false,
+    doubleClickZoom:false,touchZoom:false,boxZoom:false,keyboard:false
+  }});
+  var tileLayer=L.tileLayer(tileUrl,{{
+    attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:18}}).addTo(map);
+
+  // Lock / unlock control (top-left)
+  var mapLocked=true;
+  var LockCtrl=L.Control.extend({{
+    options:{{position:'topleft'}},
+    onAdd:function(){{
+      var btn=L.DomUtil.create('button','leaflet-bar');
+      btn.style.cssText='width:34px;height:34px;background:var(--surface,#fff);border:none;'
+        +'border-radius:4px;cursor:pointer;font-size:16px;line-height:34px;text-align:center;'
+        +'box-shadow:0 1px 5px rgba(0,0,0,.3);';
+      btn.title='Toggle map lock';
+      btn.innerHTML='&#x1F512;';  // locked icon
+      L.DomEvent.disableClickPropagation(btn);
+      btn.addEventListener('click',function(){{
+        mapLocked=!mapLocked;
+        if(mapLocked){{
+          map.dragging.disable();map.scrollWheelZoom.disable();
+          map.doubleClickZoom.disable();map.touchZoom.disable();
+          map.boxZoom.disable();map.keyboard.disable();
+          btn.innerHTML='&#x1F512;';btn.title='Unlock map';
+        }}else{{
+          map.dragging.enable();map.scrollWheelZoom.enable();
+          map.doubleClickZoom.enable();map.touchZoom.enable();
+          map.boxZoom.enable();map.keyboard.enable();
+          btn.innerHTML='&#x1F513;';btn.title='Lock map';
+        }}
+      }});
+      return btn;
+    }}
+  }});
+  new LockCtrl().addTo(map);
+  // Show-all control (top-right) — restores all features in map + plots
+  var ShowAllCtrl=L.Control.extend({{
+    options:{{position:'topright'}},
+    onAdd:function(){{
+      var btn=L.DomUtil.create('button','leaflet-bar');
+      btn.style.cssText='padding:4px 10px;background:var(--surface,#fff);border:none;'
+        +'border-radius:4px;cursor:pointer;font-size:12px;line-height:20px;text-align:center;'
+        +'box-shadow:0 1px 5px rgba(0,0,0,.3);color:var(--text,#333);white-space:nowrap;font-weight:600;';
+      btn.title='Activate all features on map and plots';
+      btn.innerHTML='Show All Features';
+      L.DomEvent.disableClickPropagation(btn);
+      btn.addEventListener('click',function(){{
+        if(typeof _owqSelectFeature==='function') _owqSelectFeature(null);
+      }});
+      return btn;
+    }}
+  }});
+  new ShowAllCtrl().addTo(map);
+  L.control.zoom({{position:'topleft'}}).addTo(map);
+
+  var geojsonData={geojson_str};
+  var mapKey='{mapping_key}';
+  var fidColor={_fid_color_json};
+  var plotFids={_fid_list_json};
+
+  var featureLayers={{}};  // fid → Leaflet layer
+  var selectedFid=null;
+
+  var geoLayer=L.geoJSON(geojsonData,{{
+    style:function(feature){{
+      var fid=String(feature.properties[mapKey]||'');
+      var c=fidColor[fid]||'#888';
+      return {{color:c,weight:3,opacity:0.85}};
+    }},
+    onEachFeature:function(feature,layer){{
+      var fid=String(feature.properties[mapKey]||'');
+      featureLayers[fid]=layer;
+      // Tooltip with feature name on hover
+      layer.bindTooltip('Feature '+fid,{{sticky:true,direction:'top',opacity:0.9}});
+      layer.on('click',function(){{
+        if(selectedFid===fid){{
+          _owqSelectFeature(null);  // deselect → restore all
+        }}else{{
+          _owqSelectFeature(fid);   // select this feature
+        }}
+      }});
+      layer.on('mouseover',function(){{ layer.setStyle({{weight:5,opacity:1}}); }});
+      layer.on('mouseout',function(){{
+        var w=(selectedFid&&selectedFid!==fid)?1.5:3;
+        var o=(selectedFid&&selectedFid!==fid)?0.3:0.85;
+        layer.setStyle({{weight:w,opacity:o}});
+      }});
+    }}
+  }}).addTo(map);
+
+  // Fit map to data bounds
+  var _fitBounds=null;
+  try{{ _fitBounds=geoLayer.getBounds(); map.fitBounds(_fitBounds,{{padding:[20,20]}}); }}catch(e){{}}
+
+  // Re-center control (top-left)
+  var RecenterCtrl=L.Control.extend({{
+    options:{{position:'topleft'}},
+    onAdd:function(){{
+      var btn=L.DomUtil.create('button','leaflet-bar');
+      btn.style.cssText='width:34px;height:34px;background:var(--surface,#fff);border:none;'
+        +'border-radius:4px;cursor:pointer;font-size:18px;line-height:34px;text-align:center;'
+        +'box-shadow:0 1px 5px rgba(0,0,0,.3);color:var(--text,#333);';
+      btn.title='Re-center map';
+      btn.innerHTML='&#x2316;';  // ⌖ crosshair
+      L.DomEvent.disableClickPropagation(btn);
+      btn.addEventListener('click',function(){{
+        if(_fitBounds) map.fitBounds(_fitBounds,{{padding:[20,20]}});
+      }});
+      return btn;
+    }}
+  }});
+  new RecenterCtrl().addTo(map);
+
+  // Build map legend
+  var legendEl=document.getElementById('mapLegend');
+  if(legendEl){{
+    var html='<div class="ml-title">Features</div>';
+    plotFids.forEach(function(fid){{
+      var c=fidColor[fid]||'#888';
+      html+='<div class="ml-item" data-fid="'+fid+'">'
+           +'<span class="ml-swatch" style="background:'+c+'"></span>'
+           +'<span>'+fid+'</span></div>';
+    }});
+    legendEl.innerHTML=html;
+    legendEl.querySelectorAll('.ml-item').forEach(function(el){{
+      el.addEventListener('click',function(){{
+        var fid=el.getAttribute('data-fid');
+        if(selectedFid===fid){{ _owqSelectFeature(null); }}
+        else{{ _owqSelectFeature(fid); }}
+      }});
+    }});
+  }}
+
+  // Global selection function — called by legend clicks, map clicks, plot legend clicks
+  window._owqSelectFeature=function(fid){{
+    selectedFid=fid;
+    // 1) Update map styles
+    for(var f in featureLayers){{
+      var ly=featureLayers[f];
+      if(!fid){{ ly.setStyle({{weight:3,opacity:0.85}}); }}
+      else if(f===fid){{ ly.setStyle({{weight:5,opacity:1}}); }}
+      else{{ ly.setStyle({{weight:1.5,opacity:0.3}}); }}
+    }}
+    // 2) Update map legend highlights
+    if(legendEl){{
+      legendEl.querySelectorAll('.ml-item').forEach(function(el){{
+        el.classList.toggle('active',el.getAttribute('data-fid')===fid);
+      }});
+    }}
+    // 3) Update ALL Plotly plots
+    window._owqPlotIds.forEach(function(id){{
+      var gd=document.getElementById(id);
+      if(!gd||!gd.data) return;
+      var newVis=gd.data.map(function(t){{
+        var tfid=(t.name||'').replace('Feature ','');
+        if(!fid) return true;       // restore all
+        return tfid===fid?true:'legendonly';
+      }});
+      Plotly.restyle(gd,{{visible:newVis}});
+    }});
+  }};
+
+  // Theme toggle: swap tile layer
+  var origToggle=window.toggleTheme;
+  window.toggleTheme=function(){{
+    origToggle();
+    var d=document.documentElement.getAttribute('data-theme')==='dark';
+    var url=d
+      ?'https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png'
+      :'https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png';
+    tileLayer.setUrl(url);
+  }};
+}})();
+""")
+    else:
+        # No map — provide a no-op so legend click broadcasts don't error
         H.append("""
-(function(){
-  var httpDiv = document.getElementById('webgl-http');
-  var fileDiv = document.getElementById('webgl-file');
-  if(!httpDiv||!fileDiv) return;
-  if(location.protocol==='file:'){
-    fileDiv.style.display='';
-  }else{
-    httpDiv.style.display='';
-  }
-})();
+window._owqSelectFeature = window._owqSelectFeature || function(){};
 """)
 
     # Sidebar active state on scroll
@@ -426,7 +637,9 @@ def Plot_h5_driver(what2map=None,
                    debugmode=False,
                    sediment_as_well=False,
                    combine_features=True,
-                   figsize=(12, 6)):
+                   figsize=(12, 6),
+                   river_network_shp=None,
+                   mapping_key='SegId'):
     """
     Generate interactive HTML time-series plots (Plotly.js).
 
@@ -764,8 +977,79 @@ def Plot_h5_driver(what2map=None,
     print(f"Building interactive HTML with {len(plots)} plot(s)...")
     print("=" * 70)
 
+    # Load river network shapefile for interactive map (optional)
+    _river_geojson = None
+    _map_center = None
+    _map_bounds = None
+    if river_network_shp and os.path.isfile(river_network_shp):
+        try:
+            import fiona
+            from shapely.geometry import shape, mapping as shp_mapping
+
+            features = []
+            src_proj4 = None
+            with fiona.open(river_network_shp) as src:
+                if src.crs:
+                    if isinstance(src.crs, dict):
+                        parts = []
+                        for k, v in src.crs.items():
+                            parts.append(f'+{k}' if v is True else f'+{k}={v}')
+                        src_proj4 = ' '.join(parts)
+                    else:
+                        try:
+                            src_proj4 = src.crs.to_proj4()
+                        except Exception:
+                            src_proj4 = None
+                for feat in src:
+                    geom = shape(feat['geometry'])
+                    features.append({
+                        'type': 'Feature',
+                        'geometry': geom,
+                        'properties': dict(feat['properties']),
+                    })
+
+            if features:
+                # Check if reprojection needed
+                sb = features[0]['geometry'].bounds
+                if (abs(sb[0]) > 360 or abs(sb[1]) > 360) and src_proj4:
+                    print("  Reprojecting shapefile to WGS84...")
+                    try:
+                        from pyproj import Proj
+                        from shapely.ops import transform as shp_transform
+                        src_p = Proj(src_proj4)
+                        def _to_wgs(x, y):
+                            return src_p(x, y, inverse=True)
+                        for f in features:
+                            f['geometry'] = shp_transform(_to_wgs, f['geometry'])
+                    except Exception as _re:
+                        print(f"  WARNING: Reprojection failed: {_re}")
+
+                gj_features = []
+                for f in features:
+                    gj_features.append({
+                        'type': 'Feature',
+                        'geometry': shp_mapping(f['geometry']),
+                        'properties': {k: (str(v) if v is not None else '')
+                                       for k, v in f['properties'].items()},
+                    })
+                _river_geojson = {'type': 'FeatureCollection',
+                                  'features': gj_features}
+                all_b = [f['geometry'].bounds for f in features]
+                _map_bounds = (min(b[0] for b in all_b), min(b[1] for b in all_b),
+                               max(b[2] for b in all_b), max(b[3] for b in all_b))
+                _map_center = [(_map_bounds[1]+_map_bounds[3])/2,
+                               (_map_bounds[0]+_map_bounds[2])/2]
+                print(f"  ✓ Loaded river network: {len(gj_features)} features")
+        except ImportError:
+            print("  WARNING: fiona/shapely not installed — skipping map")
+        except Exception as _e:
+            print(f"  WARNING: Failed to load shapefile: {_e}")
+
     html_content = _build_html(plots, what2map, hostmodel,
-                               output_path=output_path)
+                               river_geojson=_river_geojson,
+                               map_center=_map_center,
+                               map_bounds=_map_bounds,
+                               mapping_key=mapping_key)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
