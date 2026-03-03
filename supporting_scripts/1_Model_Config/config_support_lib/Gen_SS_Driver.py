@@ -2039,7 +2039,9 @@ def create_openwq_ss_json_from_loads(
         ss_metadata_comment: str = "Nutrient loading from land use/land cover",
         ss_metadata_source: str = "Copernicus LULC analysis",
         use_cellid_mapping: bool = True,
-        simulation_period: Optional[List[int]] = None
+        simulation_period: Optional[List[int]] = None,
+        bgc_engine_label: str = "",
+        chemical_species_list: Optional[List[str]] = None
 ) -> None:
     """
     Generate OpenWQ source/sink JSON configuration from nutrient loads.
@@ -2506,7 +2508,9 @@ def set_ss_from_copernicus_lulc_with_loads(
         ss_metadata_comment=ss_metadata_comment,
         ss_metadata_source=ss_metadata_source,
         use_cellid_mapping=use_cellid_mapping,
-        simulation_period=simulation_period
+        simulation_period=simulation_period,
+        bgc_engine_label=bgc_engine_label,
+        chemical_species_list=chemical_species_list,
     )
 
     return results, summaries, rasters, loads_df
