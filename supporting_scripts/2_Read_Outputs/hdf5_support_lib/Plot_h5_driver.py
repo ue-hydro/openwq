@@ -142,9 +142,9 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
 <title>OpenWQ Results</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js" defer></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <style>
 :root,[data-theme="light"]{
   --primary:#0066cc;--primary-dark:#004499;
@@ -166,7 +166,8 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);
-  color:var(--text);line-height:1.65;transition:background .3s,color .3s}
+  color:var(--text);line-height:1.65}
+html{scroll-behavior:smooth}
 a{color:var(--primary);text-decoration:none}
 .layout{display:flex;min-height:100vh}
 .sidebar{width:220px;position:sticky;top:0;height:100vh;background:var(--glass);
@@ -292,15 +293,17 @@ Click a river segment to isolate that feature in all plots below. Click again to
     H.append('</div>')  # layout
 
     # --- JAVASCRIPT ---
-    H.append('<script>')
-
-    # Theme restore (immediate, before render)
-    H.append("""
+    # Theme restore runs immediately (before deferred scripts)
+    H.append("""<script>
 (function(){
   var saved = localStorage.getItem('owq_theme');
   if(saved) document.documentElement.setAttribute('data-theme', saved);
 })();
-""")
+</script>""")
+
+    # Everything else waits for deferred scripts via DOMContentLoaded
+    H.append('<script>')
+    H.append('document.addEventListener("DOMContentLoaded",function(){')
 
     # Theme toggle
     H.append("""
@@ -376,7 +379,19 @@ function _owqLegendClick(gd){
 }
 """)
 
-    # Per-plot data + Plotly.newPlot calls
+    # Per-plot data — staggered via requestAnimationFrame for responsiveness
+    H.append("""
+var _owqPlotQueue = [];
+function _owqFlushQueue(){
+  if(!_owqPlotQueue.length) return;
+  var job = _owqPlotQueue.shift();
+  var gd = document.getElementById(job.id);
+  Plotly.react(gd, job.traces, job.layout, PCFG);
+  _owqRegister(job.id);
+  _owqLegendClick(gd);
+  if(_owqPlotQueue.length) requestAnimationFrame(_owqFlushQueue);
+}
+""")
     for p in plots:
         div_id = f'{p["id"]}_div'
         traces_json = json.dumps(p['traces'])
@@ -385,17 +400,11 @@ function _owqLegendClick(gd){
             xaxis_cfg += ",type:'date'"
 
         H.append(f"""
-(function(){{
-  var traces = {traces_json};
-  var gd = document.getElementById('{div_id}');
-  Plotly.newPlot(gd, traces,
-    _owqLayout({{xaxis:{{{xaxis_cfg}}},yaxis:{{title:'{p["ylabel"]}'}},
-      hovermode:'x unified'}}),
-    PCFG);
-  _owqRegister('{div_id}');
-  _owqLegendClick(gd);
-}})();
+_owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
+  layout:_owqLayout({{xaxis:{{{xaxis_cfg}}},yaxis:{{title:'{p["ylabel"]}'}},
+    hovermode:'x unified'}})}});
 """)
+    H.append("requestAnimationFrame(_owqFlushQueue);")
 
     # --- LEAFLET MAP INITIALIZATION ---
     if river_geojson:
@@ -548,32 +557,39 @@ function _owqLegendClick(gd){
     }});
   }}
 
-  // Global selection function — called by legend clicks, map clicks, plot legend clicks
+  // Global selection function — debounced to avoid rapid Plotly restyles
+  var _selTimer=null;
   window._owqSelectFeature=function(fid){{
     selectedFid=fid;
-    // 1) Update map styles
+    // 1) Update map styles (cheap — do immediately)
     for(var f in featureLayers){{
       var ly=featureLayers[f];
       if(!fid){{ ly.setStyle({{weight:3,opacity:0.85}}); }}
       else if(f===fid){{ ly.setStyle({{weight:5,opacity:1}}); }}
       else{{ ly.setStyle({{weight:1.5,opacity:0.3}}); }}
     }}
-    // 2) Update map legend highlights
+    // 2) Update map legend highlights (cheap — do immediately)
     if(legendEl){{
       legendEl.querySelectorAll('.ml-item').forEach(function(el){{
         el.classList.toggle('active',el.getAttribute('data-fid')===fid);
       }});
     }}
-    // 3) Update ALL Plotly plots
-    window._owqPlotIds.forEach(function(id){{
-      var gd=document.getElementById(id);
-      if(!gd||!gd.data) return;
-      var newVis=gd.data.map(function(t){{
-        var tfid=(t.name||'').replace('Feature ','');
-        if(!fid) return true;       // restore all
-        return tfid===fid?true:'legendonly';
-      }});
-      Plotly.restyle(gd,{{visible:newVis}});
+    // 3) Debounce Plotly restyles (expensive)
+    if(_selTimer) cancelAnimationFrame(_selTimer);
+    _selTimer=requestAnimationFrame(function(){{
+      var ids=window._owqPlotIds, i=0;
+      function _nextRestyle(){{
+        if(i>=ids.length) return;
+        var gd=document.getElementById(ids[i++]);
+        if(!gd||!gd.data){{ _nextRestyle(); return; }}
+        var newVis=gd.data.map(function(t){{
+          var tfid=(t.name||'').replace('Feature ','');
+          if(!fid) return true;
+          return tfid===fid?true:'legendonly';
+        }});
+        Plotly.restyle(gd,{{visible:newVis}}).then(_nextRestyle);
+      }}
+      _nextRestyle();
     }});
   }};
 
@@ -595,27 +611,53 @@ function _owqLegendClick(gd){
 window._owqSelectFeature = window._owqSelectFeature || function(){};
 """)
 
-    # Sidebar active state on scroll
+    # Sidebar active state on scroll (throttled) + click-to-scroll
     H.append("""
 (function(){
-  var links = document.querySelectorAll('.sidebar a');
-  window.addEventListener('scroll',function(){
-    var fromTop=window.scrollY+80;
-    links.forEach(function(link){
-      var id=link.getAttribute('href');
-      if(!id||!id.startsWith('#'))return;
-      var sec=document.querySelector(id);
-      if(!sec)return;
-      if(sec.offsetTop<=fromTop && sec.offsetTop+sec.offsetHeight>fromTop){
-        link.classList.add('active');
-      }else{
-        link.classList.remove('active');
-      }
+  var links = document.querySelectorAll('.sidebar nav a');
+  // Cache section elements once
+  var sectionMap = [];
+  links.forEach(function(link){
+    var id = link.getAttribute('href');
+    if(!id||!id.startsWith('#')) return;
+    var sec = document.querySelector(id);
+    if(sec) sectionMap.push({link:link, sec:sec});
+  });
+
+  // Click handler: smooth-scroll to section
+  links.forEach(function(link){
+    link.addEventListener('click', function(e){
+      var id = link.getAttribute('href');
+      if(!id||!id.startsWith('#')) return;
+      e.preventDefault();
+      var target = document.querySelector(id);
+      if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+
+  // Throttled scroll listener for active state
+  var _scrollTick = false;
+  window.addEventListener('scroll', function(){
+    if(_scrollTick) return;
+    _scrollTick = true;
+    requestAnimationFrame(function(){
+      var fromTop = window.scrollY + 80;
+      sectionMap.forEach(function(item){
+        var t = item.sec.offsetTop, h = item.sec.offsetHeight;
+        if(t <= fromTop && t + h > fromTop){
+          item.link.classList.add('active');
+        } else {
+          item.link.classList.remove('active');
+        }
+      });
+      _scrollTick = false;
     });
   });
 })();
 """)
 
+    # Close DOMContentLoaded wrapper
+    H.append('});')  # end DOMContentLoaded
     H.append('</script>')
     H.append('</body></html>')
 
