@@ -1013,6 +1013,16 @@ def Plot_h5_driver(what2map=None,
     # =====================================================================
     if len(plots) == 0:
         print("\n✗ No plots were created.")
+        print("  Check that the model has been run and HDF5 output files exist")
+        print(f"  for the requested species: {chemSpec}")
+        # Remove stale report from a previous run so it cannot be
+        # accidentally opened and mistaken for current results.
+        if output_path and os.path.isfile(output_path):
+            try:
+                os.remove(output_path)
+                print(f"  Removed stale report: {output_path}")
+            except OSError:
+                pass
         return None
 
     print(f"\n{'=' * 70}")
