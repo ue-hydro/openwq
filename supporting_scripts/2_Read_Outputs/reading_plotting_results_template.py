@@ -99,7 +99,7 @@ h5_mplib.Map_h5_driver(
 
 import Plot_h5_driver as h5_plib
 
-h5_plib.Plot_h5_driver(
+_result = h5_plib.Plot_h5_driver(
     # 1) What results to plot?
     what2map='openwq',  # hostmodel or openwq
     hostmodel='mizuroute',
@@ -118,6 +118,12 @@ h5_plib.Plot_h5_driver(
     river_network_shp=shpfile_info['path_to_shp'],
     mapping_key=shpfile_info['mapping_key']
     )
+
+if _result:
+    print(f"\nReport saved to: {_result}")
+else:
+    print("\nNo plots were generated.")
+    print("Check that the model has been run and HDF5 output files exist.")
 
 ############################################
 # Exporting interactive WebGL 3D viewer
