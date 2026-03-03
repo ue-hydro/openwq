@@ -2228,14 +2228,110 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
         H.append('<h3 style="margin-top:1rem">4. Read &amp; visualize results</h3>')
         H.append('<p style="font-size:.85rem;color:var(--muted)">'
-                 'The snippet below is <strong>self-contained</strong> &mdash; '
-                 'copy it into your terminal and it will run as-is '
-                 '(activates the venv, reads HDF5, and produces an interactive '
-                 'HTML results report with time-series plots and a 3D viewer).</p>')
+                 'The snippets below are <strong>self-contained</strong> &mdash; '
+                 'copy each into your terminal and it will run as-is '
+                 '(activates the venv, reads HDF5, and produces output).</p>')
 
-        # --- Interactive time series (all species) ---
+        # --- 4a: Interactive 3D River Viewer (WebGL) ---
+        _webgl_out_dir = os.path.join(_abs_output_dir, "openwq_out",
+                                       "openwq_webgl_viewer")
+        _webgl_out_dir_safe = _py_path(_webgl_out_dir)
+        _srv_dir_safe = _py_path(os.path.join(_abs_output_dir, "openwq_out"))
+        _shp_path_safe = _py_path(river_network_shapefile) if river_network_shapefile else ''
+
+        # Try to find the host-model output directory for hydromodel_info
+        _hm_out_dir_safe = ''
+        _hm_prefix = ''
+        if file_manager_path and executable_path:
+            try:
+                _hm_dir, _hm_pfx = _parse_hostmodel_output_info(
+                    file_manager_path, hostmodel,
+                    os.path.dirname(os.path.abspath(executable_path)))
+                if _hm_dir:
+                    _hm_out_dir_safe = _py_path(os.path.abspath(_hm_dir))
+                    _hm_prefix = _hm_pfx or ''
+            except Exception:
+                pass
+
+        _webgl_body = (
+            f'{_python_preamble()}\n'
+            f'\n'
+            f'# --- Build 3D WebGL viewer ---\n'
+            f'import glob, os\n'
+            f'\n'
+            f'shpfile_info = {{\n'
+            f'    "path_to_shp": "{_shp_path_safe}",\n'
+            f'    "mapping_key": "SegId"\n'
+            f'}}\n'
+            f'\n'
+        )
+
+        # Add hydromodel_info: auto-detect .nc file if we know the output dir
+        if _hm_out_dir_safe:
+            _webgl_body += (
+                f'# Auto-detect host-model output (netCDF)\n'
+                f'_nc_files = sorted(glob.glob("{_hm_out_dir_safe}/{_hm_prefix}*.nc"))\n'
+                f'if not _nc_files:\n'
+                f'    print("WARNING: No .nc files found in {_hm_out_dir_safe}")\n'
+                f'    print("  The 3D viewer will still work but without flow animation.")\n'
+                f'hydromodel_info = {{\n'
+                f'    "path_to_results": _nc_files[0] if _nc_files else "",\n'
+                f'    "mapping_key": "reachID"\n'
+                f'}}\n'
+                f'\n'
+            )
+        else:
+            _webgl_body += (
+                f'# TODO: set the path to the host-model netCDF output below\n'
+                f'hydromodel_info = {{\n'
+                f'    "path_to_results": "<path/to/hostmodel_output.nc>",\n'
+                f'    "mapping_key": "reachID"\n'
+                f'}}\n'
+                f'\n'
+            )
+
+        _webgl_body += (
+            f'import WebGL_h5_driver as h5_wlib\n'
+            f'\n'
+            f'h5_wlib.WebGL_h5_driver(\n'
+            f'    what2map="openwq",\n'
+            f'    hostmodel="{hostmodel}",\n'
+            f'    shpfile_info=shpfile_info,\n'
+            f'    openwq_results=openwq_results,\n'
+            f'    chemSpec=[{_species_str}],\n'
+            f'    sediment_as_well={_sed_flag},\n'
+            f'    hydromodel_info=hydromodel_info,\n'
+            f'    hydromodel_var2print="DWroutedRunoff",\n'
+            f'    output_dir="{_webgl_out_dir_safe}",\n'
+            f'    timeframes=50,\n'
+            f'    n_particles=65536,\n'
+            f'    river_width_cells=3,\n'
+            f'    grid_resolution=None,\n'
+            f'    satellite_resolution=2\n'
+            f')\n'
+            f'\n'
+            f'# Start local HTTP server and open the 3D viewer\n'
+            f'import threading, http.server, functools, time, webbrowser\n'
+            f'_handler = functools.partial(\n'
+            f'    http.server.SimpleHTTPRequestHandler,\n'
+            f'    directory="{_srv_dir_safe}")\n'
+            f'_httpd = http.server.HTTPServer(("localhost", 8080), _handler)\n'
+            f'threading.Thread(target=_httpd.serve_forever, daemon=True).start()\n'
+            f'print("Serving at http://localhost:8080")\n'
+            f'webbrowser.open("http://localhost:8080/openwq_webgl_viewer/index.html")\n'
+            f'\n'
+            f'print("Press Ctrl+C to stop the server...")\n'
+            f'try:\n'
+            f'    while True: time.sleep(1)\n'
+            f'except KeyboardInterrupt:\n'
+            f'    _httpd.shutdown()\n'
+            f'    print("\\nServer stopped.")'
+        )
+
+        # --- 4b: Interactive time-series plots (all species) ---
+        _report_name = "openwq_simulation_report.html"
         _out_all_html = os.path.join(_abs_output_dir, "openwq_out",
-                                     "plotSeries.html")
+                                     _report_name)
         _out_all_html_safe = _py_path(_out_all_html)
         _plot_all_body = (
             f'{_python_preamble()}\n'
@@ -2249,13 +2345,28 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
             f'    debugmode=False,\n'
-            f'    output_path="{_out_all_html_safe}"\n'
+            f'    output_path="{_out_all_html_safe}",\n'
+            f'    river_network_shp="{_shp_path_safe}",\n'
+            f'    mapping_key="{_shp_key}"\n'
             f')\n'
             f'\n'
             f'import webbrowser\n'
             f'webbrowser.open("{_file_uri(_out_all_html)}")'
         )
+
+        # Two-column layout: 4a (left) and 4b (right) side by side
+        H.append('<div style="display:flex;gap:1.5rem;margin-top:1rem;align-items:flex-start">')
+        H.append('<div style="flex:1;min-width:0">')
+        H.append('<p style="font-weight:600">Generate interactive '
+                 '3D river viewer:</p>')
+        H.append(_code_block(_terminal_snippet(_webgl_body)))
+        H.append('</div>')
+        H.append('<div style="flex:1;min-width:0">')
+        H.append('<p style="font-weight:600">Plot interactive '
+                 'time series (all species):</p>')
         H.append(_code_block(_terminal_snippet(_plot_all_body)))
+        H.append('</div>')
+        H.append('</div>')
 
         H.append('</div></div>')
 
@@ -2387,7 +2498,10 @@ function _owqRelayoutAll(){
 
             H.append(f"""
 (function(){{
-  var map = L.map('basinMap').setView({center_js}, {zoom});
+  var map = L.map('basinMap',{{
+    zoomControl:false,dragging:false,scrollWheelZoom:false,
+    doubleClickZoom:false,touchZoom:false,boxZoom:false,keyboard:false
+  }}).setView({center_js}, {zoom});
   var satTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',{{
     attribution:'Esri, Maxar, Earthstar Geographics', maxZoom:19}}).addTo(map);
   var lightTile = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
@@ -2395,6 +2509,37 @@ function _owqRelayoutAll(){
   }});
   var topoTile = L.tileLayer('https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png',{{
     attribution:'OpenTopoMap', maxZoom:17}});
+  // Lock / unlock control (top-left, locked by default)
+  var mapLocked=true;
+  var LockCtrl=L.Control.extend({{
+    options:{{position:'topleft'}},
+    onAdd:function(){{
+      var btn=L.DomUtil.create('button','leaflet-bar');
+      btn.style.cssText='width:34px;height:34px;background:#fff;border:none;'
+        +'border-radius:4px;cursor:pointer;font-size:16px;line-height:34px;text-align:center;'
+        +'box-shadow:0 1px 5px rgba(0,0,0,.3);';
+      btn.title='Unlock map';
+      btn.innerHTML='&#x1F512;';
+      L.DomEvent.disableClickPropagation(btn);
+      btn.addEventListener('click',function(){{
+        mapLocked=!mapLocked;
+        if(mapLocked){{
+          map.dragging.disable();map.scrollWheelZoom.disable();
+          map.doubleClickZoom.disable();map.touchZoom.disable();
+          map.boxZoom.disable();map.keyboard.disable();
+          btn.innerHTML='&#x1F512;';btn.title='Unlock map';
+        }}else{{
+          map.dragging.enable();map.scrollWheelZoom.enable();
+          map.doubleClickZoom.enable();map.touchZoom.enable();
+          map.boxZoom.enable();map.keyboard.enable();
+          btn.innerHTML='&#x1F513;';btn.title='Lock map';
+        }}
+      }});
+      return btn;
+    }}
+  }});
+  new LockCtrl().addTo(map);
+  L.control.zoom({{position:'topleft'}}).addTo(map);
 {chr(10).join(layer_js_blocks)}
   L.control.layers({{'Satellite':satTile,'Light':lightTile,'Topo':topoTile}}, {overlay_obj}, {{collapsed:false}}).addTo(map);
   var _fitBounds = null;

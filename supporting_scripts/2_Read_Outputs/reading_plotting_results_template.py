@@ -113,7 +113,10 @@ h5_plib.Plot_h5_driver(
     hydromodel_info=hydromodel_info,
     hydromodel_var2print='DWroutedRunoff',
     # 4) output config
-    output_path='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out/plotSeries.html'
+    output_path='/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/openwq_out/openwq_simulation_report.html',
+    # 5) river network shapefile for interactive map (optional)
+    river_network_shp=shpfile_info['path_to_shp'],
+    mapping_key=shpfile_info['mapping_key']
     )
 
 ############################################
