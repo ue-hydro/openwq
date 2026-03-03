@@ -72,7 +72,11 @@ def set_ss_from_csv(
         ss_metadata_comment: str,
 
         # List of source/sink configurations
-        ss_method_csv_config: List[Dict[str, Union[str, int]]]
+        ss_method_csv_config: List[Dict[str, Union[str, int]]],
+
+        # BGC engine info (for METADATA traceability)
+        bgc_engine_label: str = "",
+        chemical_species_list: Optional[List[str]] = None
 
 ) -> None:
     """
@@ -100,7 +104,9 @@ def set_ss_from_csv(
     config = {
         "METADATA": {
             "Comment": ss_metadata_comment,
-            "Source": ss_metadata_source
+            "Source": ss_metadata_source,
+            "BGC_Engine": bgc_engine_label,
+            "Chemical_Species": chemical_species_list or []
         }
     }
 
@@ -1714,7 +1720,9 @@ def set_ss_climate_adjusted_export_coefficients(
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc',
         use_cellid_mapping: bool = True,
-        simulation_period: Optional[List[int]] = None
+        simulation_period: Optional[List[int]] = None,
+        bgc_engine_label: str = "",
+        chemical_species_list: Optional[List[str]] = None
 ) -> None:
     """
     Generate climate-adjusted source/sink JSON from Copernicus LULC data.
@@ -1859,6 +1867,8 @@ def set_ss_climate_adjusted_export_coefficients(
         "METADATA": {
             "Comment": ss_metadata_comment,
             "Source": ss_metadata_source,
+            "BGC_Engine": bgc_engine_label,
+            "Chemical_Species": chemical_species_list or [],
             "Climate_Adjustment": {
                 "precip_scaling_power": precip_scaling_power,
                 "temp_Q10": temp_q10,
@@ -2159,7 +2169,9 @@ def create_openwq_ss_json_from_loads(
     config = {
         "METADATA": {
             "Comment": ss_metadata_comment,
-            "Source": ss_metadata_source
+            "Source": ss_metadata_source,
+            "BGC_Engine": bgc_engine_label,
+            "Chemical_Species": chemical_species_list or []
         }
     }
 
@@ -2388,7 +2400,9 @@ def set_ss_from_copernicus_lulc_with_loads(
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc',
         use_cellid_mapping: bool = True,
-        simulation_period: Optional[List[int]] = None
+        simulation_period: Optional[List[int]] = None,
+        bgc_engine_label: str = "",
+        chemical_species_list: Optional[List[str]] = None
 ):
     """
     Process Copernicus LULC data, calculate nutrient loads, and generate OpenWQ JSON.

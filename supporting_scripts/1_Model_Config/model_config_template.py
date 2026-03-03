@@ -646,6 +646,7 @@ if (isinstance(chemical_species, str) and chemical_species.lower() == "all") or 
 
 # 1) Generate config files + report
 _has_errors = False
+_config_error_msg = None
 _report_path = None
 
 import traceback as _tb
@@ -653,13 +654,14 @@ import traceback as _tb
 # 1a) Generate configuration files
 try:
     _excluded = {'sys', 'os', 'io', 'webbrowser', 'gJSON_lib', 'uniform_param',
-                 '_generate_report', '_has_errors',
+                 '_generate_report', '_has_errors', '_config_error_msg',
                  '_report_path', '_tb'}
     _config = {k: v for k, v in locals().items()
                if not k.startswith('_') and k not in _excluded}
     gJSON_lib.Gen_Input_Driver(**_config)
 except Exception as _e:
     _has_errors = True
+    _config_error_msg = str(_e)
     _tb.print_exc()
 
 # 1b) Generate report
@@ -698,6 +700,7 @@ if generate_report:
             mpi_np=mpi_np,
             executable_path=executable_path,
             file_manager_path=file_manager_path,
+            config_errors={"Configuration": _config_error_msg} if _config_error_msg else None,
         )
     except Exception as _e:
         _has_errors = True
@@ -712,7 +715,10 @@ if not _has_errors:
     print(f"  Input files:      {dir2save_input_files}/openwq_in/")
 else:
     print("\n" + "=" * 60)
-    print("ERRORS ENCOUNTERED — check the report for details")
+    if generate_report:
+        print("ERRORS ENCOUNTERED — check the report for details")
+    else:
+        print("ERRORS ENCOUNTERED — see traceback above for details")
     print("=" * 60)
 
 print("\n" + "=" * 60)

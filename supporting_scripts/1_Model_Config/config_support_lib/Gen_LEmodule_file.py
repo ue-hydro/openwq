@@ -51,6 +51,9 @@ def create_le_module_json(
             - K_val: Exchange coefficient value
     """
 
+    if le_module_name == "NONE":
+        return
+
     # Create the directory path if it doesn't exist
     output_path = Path(le_config_filepath)
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -565,10 +565,10 @@ def Gen_Input_Driver(
     general_json_input_dir = os.path.join(f'{dir2save_input_files}', "openwq_in")
     config_file_fullpath = os.path.join(f'{general_json_input_dir}', "openWQ_config.json")
     bgc_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{bgc_module_name}.json")
-    td_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{td_module_name}.json")
-    le_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{le_module_name}.json")
-    ts_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{ts_module_name}.json")
-    si_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{si_module_name}.json")
+    td_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{td_module_name}.json") if td_module_name != "NONE" else ""
+    le_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{le_module_name}.json") if le_module_name != "NONE" else ""
+    ts_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{ts_module_name}.json") if ts_module_name != "NONE" else ""
+    si_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{si_module_name}.json") if si_module_name != "NONE" else ""
     ss_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_SS_{ss_method}.json")
     ewf_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_EWF_fixed_value.json")
     output_file_fullpath = os.path.join(f'{dir2save_input_files}', "openwq_out/")
@@ -583,10 +583,10 @@ def Gen_Input_Driver(
     # This replaces the old Docker absolute-path correction for master JSON content.
     rel_config_file = "openwq_in/openWQ_config.json"
     rel_bgc_config  = f"openwq_in/openWQ_MODULE_{bgc_module_name}.json"
-    rel_td_config   = f"openwq_in/openWQ_MODULE_{td_module_name}.json"
-    rel_le_config   = f"openwq_in/openWQ_MODULE_{le_module_name}.json"
-    rel_ts_config   = f"openwq_in/openWQ_MODULE_{ts_module_name}.json"
-    rel_si_config   = f"openwq_in/openWQ_MODULE_{si_module_name}.json"
+    rel_td_config   = f"openwq_in/openWQ_MODULE_{td_module_name}.json" if td_module_name != "NONE" else ""
+    rel_le_config   = f"openwq_in/openWQ_MODULE_{le_module_name}.json" if le_module_name != "NONE" else ""
+    rel_ts_config   = f"openwq_in/openWQ_MODULE_{ts_module_name}.json" if ts_module_name != "NONE" else ""
+    rel_si_config   = f"openwq_in/openWQ_MODULE_{si_module_name}.json" if si_module_name != "NONE" else ""
     rel_ss_config   = f"openwq_in/openWQ_SS_{ss_method}.json"
     rel_ewf_config  = f"openwq_in/openWQ_EWF_fixed_value.json"
     rel_output      = "openwq_out/"
@@ -697,55 +697,59 @@ def Gen_Input_Driver(
     # Call create_td_module_json
     ###############
 
-    tdmJSON_lib.create_td_module_json(
-        td_config_filepath=td_config_filepath,
-        json_header_comment=json_header_comment,
-        td_module_name=td_module_name,
-        td_module_dispersion_xyz=td_module_dispersion_xyz,
-        td_module_characteristic_length_m=td_module_characteristic_length_m
-    )
+    if td_module_name != "NONE":
+        tdmJSON_lib.create_td_module_json(
+            td_config_filepath=td_config_filepath,
+            json_header_comment=json_header_comment,
+            td_module_name=td_module_name,
+            td_module_dispersion_xyz=td_module_dispersion_xyz,
+            td_module_characteristic_length_m=td_module_characteristic_length_m
+        )
 
     ###############
     # Call create_le_module_json
     ###############
 
-    lemJSON_lib.create_le_module_json(
-        le_config_filepath=le_config_filepath,
-        json_header_comment=json_header_comment,
-        le_module_name=le_module_name,
-        le_module_config=le_module_config
-    )
+    if le_module_name != "NONE":
+        lemJSON_lib.create_le_module_json(
+            le_config_filepath=le_config_filepath,
+            json_header_comment=json_header_comment,
+            le_module_name=le_module_name,
+            le_module_config=le_module_config
+        )
 
     ###############
     # Call create_ts_module_json
     ###############
 
-    tsmJSON_lib.create_ts_module_json(
-        ts_config_filepath=ts_config_filepath,
-        json_header_comment=json_header_comment,
-        ts_module_name=ts_module_name,
-        ts_direction=ts_direction,
-        ts_erosion_inhibit_compartment=ts_erosion_inhibit_compartment,
-        ts_data_format=ts_data_format,
-        ts_mmf_defaults=ts_mmf_defaults,
-        ts_mmf_parameters=ts_mmf_parameters,
-        ts_hbvsed_defaults=ts_hbvsed_defaults,
-        ts_hbvsed_parameters=ts_hbvsed_parameters,
-        ts_hbvsed_monthly_erosion_factor=ts_hbvsed_monthly_erosion_factor
-    )
+    if ts_module_name != "NONE":
+        tsmJSON_lib.create_ts_module_json(
+            ts_config_filepath=ts_config_filepath,
+            json_header_comment=json_header_comment,
+            ts_module_name=ts_module_name,
+            ts_direction=ts_direction,
+            ts_erosion_inhibit_compartment=ts_erosion_inhibit_compartment,
+            ts_data_format=ts_data_format,
+            ts_mmf_defaults=ts_mmf_defaults,
+            ts_mmf_parameters=ts_mmf_parameters,
+            ts_hbvsed_defaults=ts_hbvsed_defaults,
+            ts_hbvsed_parameters=ts_hbvsed_parameters,
+            ts_hbvsed_monthly_erosion_factor=ts_hbvsed_monthly_erosion_factor
+        )
 
     ###############
     # Call create_si_module_json
     ###############
 
-    simJSON_lib.create_si_module_json(
-        si_config_filepath=si_config_filepath,
-        json_header_comment=json_header_comment,
-        si_module_name=si_module_name,
-        si_bulk_density_kg_m3=si_bulk_density_kg_m3,
-        si_layer_thickness_m=si_layer_thickness_m,
-        si_species_params=si_species_params
-    )
+    if si_module_name != "NONE":
+        simJSON_lib.create_si_module_json(
+            si_config_filepath=si_config_filepath,
+            json_header_comment=json_header_comment,
+            si_module_name=si_module_name,
+            si_bulk_density_kg_m3=si_bulk_density_kg_m3,
+            si_layer_thickness_m=si_layer_thickness_m,
+            si_species_params=si_species_params
+        )
 
     ###############
     # Call BGC module setup (NATIVE_BGC_FLEX or PHREEQC)
@@ -871,6 +875,15 @@ def Gen_Input_Driver(
         ss_method_copernicus_period = [cop_start, cop_end]
         print()
 
+    # Build BGC engine label for SS METADATA traceability
+    if bgc_module_name == "NATIVE_BGC_FLEX":
+        _bgc_engine_label = f"NATIVE_BGC_FLEX: {path2selected_NATIVE_BGC_FLEX_framework}"
+    elif bgc_module_name == "PHREEQC":
+        _bgc_engine_label = "PHREEQC"
+    else:
+        _bgc_engine_label = bgc_module_name or ""
+    _chem_species_list = list(chemical_species) if isinstance(chemical_species, (list, tuple)) else [chemical_species]
+
     if (ss_method == "load_from_csv"):
 
         ssJSON_lib.set_ss_from_csv(
@@ -879,6 +892,8 @@ def Gen_Input_Driver(
             ss_metadata_source=ss_metadata_source,
             ss_metadata_comment=ss_metadata_comment,
             ss_method_csv_config=ss_method_csv_config,
+            bgc_engine_label=_bgc_engine_label,
+            chemical_species_list=_chem_species_list,
         )
     elif (ss_method == "using_copernicus_lulc_with_static_coeff"):
 
@@ -896,7 +911,9 @@ def Gen_Input_Driver(
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
             ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
             use_cellid_mapping=ss_use_cellid_mapping,
-            simulation_period=[req_start, req_end]
+            simulation_period=[req_start, req_end],
+            bgc_engine_label=_bgc_engine_label,
+            chemical_species_list=_chem_species_list,
         )
     elif (ss_method == "using_copernicus_lulc_with_dynamic_coeff"):
 
@@ -921,7 +938,9 @@ def Gen_Input_Driver(
             temp_reference_c=ss_climate_temp_reference_c,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
             use_cellid_mapping=ss_use_cellid_mapping,
-            simulation_period=[req_start, req_end]
+            simulation_period=[req_start, req_end],
+            bgc_engine_label=_bgc_engine_label,
+            chemical_species_list=_chem_species_list,
         )
 
     elif (ss_method == "ml_model"):
