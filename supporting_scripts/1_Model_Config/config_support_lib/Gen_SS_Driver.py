@@ -1945,6 +1945,13 @@ def set_ss_climate_adjusted_export_coefficients(
     exclude_cols = [shp_hru_id_column, 'Year']
     nutrient_cols = [col for col in pivot_df.columns if col not in exclude_cols]
 
+    # Filter to only species that exist in the BGC template
+    if chemical_species_list:
+        _skipped = [c for c in nutrient_cols if c not in chemical_species_list]
+        nutrient_cols = [c for c in nutrient_cols if c in chemical_species_list]
+        if _skipped:
+            print(f"\n  ⚠ Skipping SS species not in BGC template: {', '.join(_skipped)}")
+
     cop_years_in_csv = sorted(int(y) for y in pivot_df['Year'].unique())
 
     # No METADATA key in JSON body — C++ parser counts all top-level keys
@@ -2228,6 +2235,13 @@ def create_openwq_ss_json_from_loads(
     # Get nutrient columns (exclude HRU_ID and Year columns)
     exclude_cols = [shp_hru_id_column, 'Year']
     nutrient_cols = [col for col in pivot_df.columns if col not in exclude_cols]
+
+    # Filter to only species that exist in the BGC template
+    if chemical_species_list:
+        _skipped = [c for c in nutrient_cols if c not in chemical_species_list]
+        nutrient_cols = [c for c in nutrient_cols if c in chemical_species_list]
+        if _skipped:
+            print(f"\n  ⚠ Skipping SS species not in BGC template: {', '.join(_skipped)}")
 
     print(f"\nNutrient species found: {nutrient_cols}")
     cop_years_in_csv = sorted(int(y) for y in pivot_df['Year'].unique())

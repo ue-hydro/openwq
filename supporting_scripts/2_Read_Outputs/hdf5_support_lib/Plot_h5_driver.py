@@ -335,6 +335,40 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
             if p_meta:
                 _obs_meta[div_id] = p_meta
 
+    # --- Compute summary stats for header KPI boxes ---
+    _species_list = []
+    _seen_species = set()
+    for p in plots:
+        s = p.get('species', p.get('title', ''))
+        if s and s not in _seen_species:
+            _seen_species.add(s)
+            _species_list.append(s)
+    _n_features = len(_all_fids_sorted)
+
+    # Time range from traces
+    _date_strs = []
+    for p in plots:
+        for t in p['traces']:
+            if t.get('x'):
+                _date_strs.extend([str(x) for x in t['x'] if x])
+    if _date_strs:
+        _date_strs_sorted = sorted(_date_strs)
+        _time_range_str = (f"{_date_strs_sorted[0][:10]} &rarr; "
+                           f"{_date_strs_sorted[-1][:10]}")
+    else:
+        _time_range_str = "N/A"
+
+    # Observation count
+    _n_obs_stations = 0
+    _n_obs_records = 0
+    if observation_data:
+        _obs_stn_set = set()
+        for plot_obs_list in observation_data.values():
+            for od in plot_obs_list:
+                _obs_stn_set.add(od.get('station_id'))
+                _n_obs_records += len(od.get('y', []))
+        _n_obs_stations = len(_obs_stn_set)
+
     H = []
 
     # --- HEAD ---
@@ -470,12 +504,20 @@ a{color:var(--primary);text-decoration:none}
     # Header
     mode_label = what2map.upper() if what2map else 'N/A'
     host_label = (hostmodel or 'N/A').upper()
+    _obs_label = (f'{_n_obs_stations} station(s), {_n_obs_records} records'
+                  if _n_obs_stations else 'None')
+    _species_str = ', '.join(_species_list) if _species_list else 'N/A'
+
     H.append(f"""<div class="header">
 <h1>Open<span>WQ</span> &mdash; Results</h1>
 <p class="subtitle">{mode_label} mode &mdash; {n_plots} time-series plot(s)</p>
 <div class="meta">
 <span>Host Model: {host_label}</span>
 <span>Generated: {now}</span>
+<span>Species: {_species_str}</span>
+<span>Features: {_n_features}</span>
+<span>Period: {_time_range_str}</span>
+<span>Observations: {_obs_label}</span>
 </div>
 </div>""")
 

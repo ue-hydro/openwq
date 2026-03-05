@@ -701,6 +701,7 @@ if generate_report:
             executable_path=executable_path,
             file_manager_path=file_manager_path,
             config_errors={"Configuration": _config_error_msg} if _config_error_msg else None,
+            bgc_template_path=locals().get('path2selected_NATIVE_BGC_FLEX_framework'),
         )
     except Exception as _e:
         _has_errors = True
