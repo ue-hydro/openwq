@@ -63,6 +63,20 @@ class OpenWQ_couplercalls{
         OpenWQ_output& OpenWQ_output);
 
     // #######################
+    // Parse SS and EWF data
+    // Called AFTER cell_id registration so that cell_id lookups succeed
+    // #######################
+    void ParseEWFandSS(
+        OpenWQ_json& OpenWQ_json,
+        OpenWQ_vars& OpenWQ_vars,
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_units& OpenWQ_units,
+        OpenWQ_utils& OpenWQ_utils,
+        OpenWQ_output& OpenWQ_output,
+        OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss);
+
+    // #######################
     // Calls all functions required inside time loop
     // But BEFORE space loop is initiated
     // #######################
