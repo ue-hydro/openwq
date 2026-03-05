@@ -1143,6 +1143,7 @@ def generate_simulation_report(
         executable_path=None,
         file_manager_path=None,
         config_errors=None,
+        bgc_template_path=None,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -1701,8 +1702,20 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     try:
         n_species = len(chemical_species)
         n_compartments = len(compartments_and_cells)
-        n_cells = sum(1 for cmp in compartments_and_cells.values()
-                      for _ in cmp.values())
+        # Count spatial elements from river network shapefile if available,
+        # otherwise fall back to counting config output entries.
+        n_cells = 0
+        for layer in map_layers:
+            if layer.get('label') == 'River Network':
+                try:
+                    _rn_geojson = json.loads(layer['geojson_str'])
+                    n_cells = len(_rn_geojson.get('features', []))
+                except Exception:
+                    pass
+                break
+        if n_cells == 0:
+            n_cells = sum(1 for cmp in compartments_and_cells.values()
+                          for _ in cmp.values())
         n_outputs = n_species
         comp_names = ', '.join(compartments_and_cells.keys())
 
@@ -1715,15 +1728,36 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         except Exception:
             pass
 
+        # Count active (non-NONE) modules
+        _all_modules = [bgc_module_name, td_module_name, le_module_name,
+                        ts_module_name, si_module_name]
+        _n_active = sum(1 for m in _all_modules
+                        if m and m.upper() != 'NONE')
+        _active_str = f'{_n_active}/{len(_all_modules)}'
+
+        # Source/sink load count
+        _n_ss = len(ss_summary) if ss_summary else 0
+
+        # Runtime info
+        _runtime_str = (f'{container_runtime}'
+                        if container_runtime else 'N/A')
+
+        # Observation stations
+        _n_obs_stn = obs_stats['n_stations'] if obs_stats else 0
+
         H.append(f"""<div class="section" id="summary">
 <h2>Summary</h2>
 <div class="kpi-grid">
-<div class="kpi"><div class="icon">&#x1f9ea;</div><div class="value">{n_species}</div><div class="label">Chemical Species</div></div>
+<div class="kpi"><div class="icon">&#x1f9ea;</div><div class="value">{n_species}</div><div class="label">Chemical Species</div><div style="font-size:0.7rem;color:#888;margin-top:2px;">({bgc_module_name})</div>{f'<div style="font-size:0.65rem;color:#888;margin-top:1px;">{os.path.basename(bgc_template_path)}</div>' if bgc_template_path else ''}</div>
 <div class="kpi"><div class="icon">&#x1f4e6;</div><div class="value">{n_compartments}</div><div class="label">Compartments</div><div style="font-size:0.7rem;color:#888;margin-top:2px;">{comp_names}</div></div>
 <div class="kpi"><div class="icon">&#x2699;</div><div class="value">{solver}</div><div class="label">Solver</div></div>
 <div class="kpi"><div class="icon">&#x1f4ca;</div><div class="value">{n_outputs}</div><div class="label">Output Species</div></div>
 <div class="kpi"><div class="icon">&#x1f552;</div><div class="value">{timestep[0]} {timestep[1]}</div><div class="label">Output Timestep</div></div>
 <div class="kpi"><div class="icon">&#x1f4c5;</div><div class="value">{sim_period_str}</div><div class="label">Simulation Period</div></div>
+<div class="kpi"><div class="icon">&#x1f310;</div><div class="value">{n_cells}</div><div class="label">Spatial Elements</div></div>
+<div class="kpi"><div class="icon">&#x1f9e9;</div><div class="value">{_active_str}</div><div class="label">Active Modules</div></div>
+<div class="kpi"><div class="icon">&#x1f4a7;</div><div class="value">{_n_ss}</div><div class="label">Source/Sink Loads</div></div>
+<div class="kpi"><div class="icon">&#x1f4cd;</div><div class="value">{_n_obs_stn}</div><div class="label">Obs Stations</div></div>
 </div>
 </div>""")
     except Exception as _e:
@@ -2811,6 +2845,7 @@ def generate_report(
         executable_path=None,
         file_manager_path=None,
         config_errors=None,
+        bgc_template_path=None,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -2862,6 +2897,7 @@ def generate_report(
             executable_path=executable_path,
             file_manager_path=file_manager_path,
             config_errors=config_errors,
+            bgc_template_path=bgc_template_path,
         )
 
         print(f"  Report saved: {report_path}")
