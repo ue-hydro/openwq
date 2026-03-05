@@ -737,19 +737,20 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
             // which is wrong, so need to send warning messsage
             // and skip entry
             if (ix_json == -1){
-                // Through a warning invalid entry           
-                msg_string = 
-                    "<OpenWQ> WARNING: SS '" 
-                    + elemName 
-                    + "' cannot be zero. It needs to start in one (entry skipped): File=" 
+                // Through a warning invalid entry
+                msg_string =
+                    "<OpenWQ> WARNING: SS '"
+                    + elemName
+                    + "' cannot be zero. It needs to start in one (entry skipped): File="
                     + std::to_string(ssf+1)
                     + ", Sub_structure=" + std::to_string(ssi+1)
-                    + ", Data_row=" + std::to_string(di + 1);   
+                    + ", Data_row=" + std::to_string(di + 1);
 
                 OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
                 continue; // skip entry
             }
+
 
         }catch(...){
 
@@ -762,6 +763,13 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
             else if (DataFormat.compare("ASCII")==0){
                 entryVal = ASCIIRowElemEntry[
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IX")];}
+
+            // Strip surrounding quotes (CSV may preserve them)
+            if (entryVal.size() >= 2
+                && (entryVal.front() == '"' || entryVal.front() == '\'')
+                && (entryVal.back() == '"' || entryVal.back() == '\'')) {
+                entryVal = entryVal.substr(1, entryVal.size() - 2);
+            }
 
             // Convert to uppercase for "ALL" comparison
             std::string entryVal_upper = OpenWQ_utils.ConvertStringToUpperCase(entryVal);
