@@ -1704,15 +1704,26 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         n_cells = sum(1 for cmp in compartments_and_cells.values()
                       for _ in cmp.values())
         n_outputs = n_species
+        comp_names = ', '.join(compartments_and_cells.keys())
+
+        # Extract simulation period from host-model control file
+        sim_period_str = 'N/A'
+        try:
+            from Gen_Input_Driver import parse_sim_period_from_control_file
+            sp = parse_sim_period_from_control_file(file_manager_path, hostmodel)
+            sim_period_str = f"{sp[0]}&ndash;{sp[1]}" if sp[0] != sp[1] else str(sp[0])
+        except Exception:
+            pass
 
         H.append(f"""<div class="section" id="summary">
 <h2>Summary</h2>
 <div class="kpi-grid">
 <div class="kpi"><div class="icon">&#x1f9ea;</div><div class="value">{n_species}</div><div class="label">Chemical Species</div></div>
-<div class="kpi"><div class="icon">&#x1f4e6;</div><div class="value">{n_compartments}</div><div class="label">Compartments</div></div>
+<div class="kpi"><div class="icon">&#x1f4e6;</div><div class="value">{n_compartments}</div><div class="label">Compartments</div><div style="font-size:0.7rem;color:#888;margin-top:2px;">{comp_names}</div></div>
 <div class="kpi"><div class="icon">&#x2699;</div><div class="value">{solver}</div><div class="label">Solver</div></div>
 <div class="kpi"><div class="icon">&#x1f4ca;</div><div class="value">{n_outputs}</div><div class="label">Output Species</div></div>
 <div class="kpi"><div class="icon">&#x1f552;</div><div class="value">{timestep[0]} {timestep[1]}</div><div class="label">Output Timestep</div></div>
+<div class="kpi"><div class="icon">&#x1f4c5;</div><div class="value">{sim_period_str}</div><div class="label">Simulation Period</div></div>
 </div>
 </div>""")
     except Exception as _e:
@@ -2446,6 +2457,17 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _out_all_html = os.path.join(_abs_output_dir, "openwq_out",
                                      _report_name)
         _out_all_html_safe = _py_path(_out_all_html)
+        # Build optional observation parameter for the plotting snippet
+        _obs_plot_param = ''
+        if _obs_source == "grqa" and obs_stats and obs_stats.get('n_stations', 0) > 0:
+            _grqa_clip_dir = os.path.join(_abs_output_dir, 'openwq_in',
+                                          'grqa_clipped_data')
+            _obs_plot_param = (
+                f'    observation_dir="{_py_path(_grqa_clip_dir)}",\n')
+        elif _obs_source == "user_csv" and user_observation_csv:
+            _obs_plot_param = (
+                f'    observation_csv="{_py_path(os.path.abspath(user_observation_csv))}",\n')
+
         _plot_all_body = (
             f'{_python_preamble()}\n'
             f'\n'
@@ -2460,7 +2482,8 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    debugmode=False,\n'
             f'    output_path="{_out_all_html_safe}",\n'
             f'    river_network_shp="{_shp_path_safe}",\n'
-            f'    mapping_key="{_shp_key}"\n'
+            f'    mapping_key="{_shp_key}",\n'
+            f'{_obs_plot_param}'
             f')\n'
             f'\n'
             f'if _result:\n'

@@ -27,6 +27,8 @@ import os
 import json
 import re
 import datetime
+import math
+from collections import defaultdict
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +38,171 @@ import datetime
 def _sanitize_id(name):
     """Convert a species/extension name to a valid HTML element id."""
     return re.sub(r'[^a-zA-Z0-9_]', '_', str(name))
+
+
+def _haversine(lat1, lon1, lat2, lon2):
+    """Haversine distance in km between two lat/lon points."""
+    R = 6371
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _extract_coords(geom):
+    """Flatten all coordinate pairs from a GeoJSON geometry dict."""
+    gtype = geom.get('type', '')
+    coords = geom.get('coordinates', [])
+    if gtype == 'Point':
+        return [coords]
+    elif gtype == 'LineString':
+        return coords
+    elif gtype in ('MultiLineString', 'Polygon'):
+        return [c for ring in coords for c in ring]
+    elif gtype == 'MultiPolygon':
+        return [c for poly in coords for ring in poly for c in ring]
+    return []
+
+
+def _match_stations_to_features(station_locations, river_geojson, mapping_key):
+    """Match observation stations to their nearest river feature.
+
+    Parameters
+    ----------
+    station_locations : dict
+        {station_id: (lat, lon)}
+    river_geojson : dict
+        GeoJSON FeatureCollection for the river network.
+    mapping_key : str
+        Property key for the feature ID in GeoJSON features.
+
+    Returns
+    -------
+    dict
+        {station_id: feature_id}
+    """
+    matches = {}
+    for stn_id, (slat, slon) in station_locations.items():
+        best_fid = None
+        best_dist = float('inf')
+        for feat in river_geojson['features']:
+            fid = str(feat['properties'].get(mapping_key, ''))
+            for c in _extract_coords(feat['geometry']):
+                d = _haversine(slat, slon, c[1], c[0])
+                if d < best_dist:
+                    best_dist = d
+                    best_fid = fid
+        if best_fid is not None:
+            matches[stn_id] = best_fid
+    return matches
+
+
+def _load_observation_data(obs_dir=None, obs_csv=None):
+    """Load observation data from a GRQA clipped directory or user CSV.
+
+    Returns
+    -------
+    obs_by_species : dict or None
+        {species_name: list of {station_id, datetime, value}}
+    station_locations : dict or None
+        {station_id: (lat, lon)}
+    """
+    obs_by_species = {}
+    station_locations = {}
+
+    if obs_dir and os.path.isdir(obs_dir):
+        obs_csv_path = os.path.join(obs_dir, 'grqa_clipped_observations.csv')
+        stn_csv_path = os.path.join(obs_dir, 'grqa_clipped_stations.csv')
+        if not os.path.isfile(obs_csv_path):
+            print("  No GRQA observations file found in obs dir.")
+            return None, None
+        try:
+            df = pd.read_csv(obs_csv_path)
+            # Station locations
+            if os.path.isfile(stn_csv_path):
+                stn_df = pd.read_csv(stn_csv_path)
+                for _, row in stn_df.iterrows():
+                    sid = str(row.get('site_id', ''))
+                    lat = float(row.get('lat_wgs84', 0))
+                    lon = float(row.get('lon_wgs84', 0))
+                    if sid:
+                        station_locations[sid] = (lat, lon)
+            else:
+                for _, row in df.drop_duplicates('site_id').iterrows():
+                    sid = str(row.get('site_id', ''))
+                    lat = float(row.get('lat_wgs84', 0))
+                    lon = float(row.get('lon_wgs84', 0))
+                    if sid:
+                        station_locations[sid] = (lat, lon)
+            # Group by model_species
+            if 'model_species' in df.columns:
+                for species, grp in df.groupby('model_species'):
+                    records = []
+                    for _, row in grp.iterrows():
+                        try:
+                            records.append({
+                                'station_id': str(row['site_id']),
+                                'datetime': str(row.get('obs_date', '')),
+                                'value': float(row.get('obs_value', 0)),
+                            })
+                        except (ValueError, TypeError):
+                            continue
+                    if records:
+                        obs_by_species[species] = records
+            print(f"  ✓ Loaded GRQA observations: {len(df)} records, "
+                  f"{len(obs_by_species)} species, "
+                  f"{len(station_locations)} stations")
+        except Exception as e:
+            print(f"  WARNING: Failed to load GRQA observations: {e}")
+            return None, None
+
+    elif obs_csv and os.path.isfile(obs_csv):
+        try:
+            df = pd.read_csv(obs_csv)
+            required = ['station_id', 'lat', 'lon', 'parameter', 'value']
+            missing = [c for c in required if c not in df.columns]
+            if missing:
+                print(f"  WARNING: User CSV missing columns: {missing}")
+                return None, None
+            for _, row in df.drop_duplicates('station_id').iterrows():
+                sid = str(row['station_id'])
+                station_locations[sid] = (float(row['lat']), float(row['lon']))
+            date_cols = ['year', 'month', 'day']
+            if all(c in df.columns for c in date_cols):
+                df['_datetime'] = pd.to_datetime(
+                    df[date_cols].assign(hour=0,
+                                         minute=df.get('minute', 0)),
+                    errors='coerce')
+            else:
+                df['_datetime'] = pd.NaT
+            for species, grp in df.groupby('parameter'):
+                records = []
+                for _, row in grp.iterrows():
+                    try:
+                        dt = row['_datetime']
+                        dt_str = (dt.strftime('%Y-%m-%d')
+                                  if pd.notna(dt) else '')
+                        records.append({
+                            'station_id': str(row['station_id']),
+                            'datetime': dt_str,
+                            'value': float(row['value']),
+                        })
+                    except (ValueError, TypeError):
+                        continue
+                if records:
+                    obs_by_species[species] = records
+            print(f"  ✓ Loaded user observations: {len(df)} records, "
+                  f"{len(obs_by_species)} species, "
+                  f"{len(station_locations)} stations")
+        except Exception as e:
+            print(f"  WARNING: Failed to load user observations: {e}")
+            return None, None
+    else:
+        return None, None
+
+    return obs_by_species, station_locations
 
 
 def _build_traces(feature_data, n_visible=10):
@@ -86,7 +253,8 @@ def _build_traces(feature_data, n_visible=10):
 
 
 def _build_html(plots, what2map, hostmodel, river_geojson=None,
-                map_center=None, map_bounds=None, mapping_key='SegId'):
+                map_center=None, map_bounds=None, mapping_key='SegId',
+                observation_data=None):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -130,6 +298,42 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
         for t in p['traces']:
             fid = t['name'].replace('Feature ', '')
             t['line'] = {'color': _fid_color.get(fid, '#888')}
+
+    # --- Merge observation traces (if any) into each plot ---
+    _obs_meta = {}   # {div_id: {trace_index_str: feature_id}}
+    if observation_data:
+        for p in plots:
+            plot_obs = observation_data.get(p['id'], [])
+            if not plot_obs:
+                continue
+            div_id = f'{p["id"]}_div'
+            p_meta = {}
+            base_idx = len(p['traces'])
+            for i, od in enumerate(plot_obs):
+                fid = str(od['feature_id'])
+                color = _fid_color.get(fid, '#888')
+                trace = {
+                    'x': od['x'],
+                    'y': od['y'],
+                    'mode': 'markers',
+                    'name': f'Obs: {od["station_id"]}',
+                    'marker': {
+                        'color': color,
+                        'size': 7,
+                        'symbol': 'circle',
+                        'line': {'width': 1, 'color': '#333'},
+                    },
+                    'hovertemplate': (
+                        f'Station {od["station_id"]}<br>'
+                        f'%{{x}}<br>%{{y:.4g}}'
+                        f'<extra>\u2192 Feature {fid}</extra>'
+                    ),
+                    'showlegend': False,
+                }
+                p['traces'].append(trace)
+                p_meta[str(base_idx + i)] = fid
+            if p_meta:
+                _obs_meta[div_id] = p_meta
 
     H = []
 
@@ -208,6 +412,18 @@ a{color:var(--primary);text-decoration:none}
   padding:1.5rem;box-shadow:var(--shadow);transition:transform .3s,box-shadow .3s}
 .card:hover{box-shadow:var(--shadow-lg);border-color:var(--border2)}
 .plot-caption{font-size:.82rem;color:var(--text2);margin-top:.5rem;text-align:right}
+.plot-toolbar{display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:4px;
+  font-size:.8rem;flex-wrap:wrap}
+.plot-toolbar label{color:var(--text2);font-weight:600}
+.tb-btn{padding:3px 10px;border:1px solid var(--border);border-radius:4px;
+  background:var(--surface);color:var(--text);cursor:pointer;font-size:.78rem;
+  transition:background .15s,color .15s}
+.tb-btn:hover{background:var(--primary);color:#fff}
+.tb-btn.active{background:var(--primary);color:#fff}
+.tb-input{width:80px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;
+  font-size:.78rem;background:var(--surface);color:var(--text)}
+.tb-date{width:120px}
+.tb-sep{width:1px;height:18px;background:var(--border);margin:0 4px}
 #mapContainer{width:100%;height:420px;border-radius:12px;z-index:1}
 .map-legend{position:absolute;bottom:12px;right:12px;background:var(--glass);
   backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:10px;
@@ -282,6 +498,21 @@ Click a river segment to isolate that feature in all plots below.</p>
         div_id = f'{p["id"]}_div'
         H.append(f"""<div class="section" id="{p['id']}">
 <h2>{p['title']}</h2>
+<div class="plot-toolbar" data-plot="{div_id}">
+  <button class="tb-btn" onclick="_owqToggleLog('{div_id}',this)">Y Log</button>
+  <span class="tb-sep"></span>
+  <label>Y:</label>
+  <input type="number" class="tb-input" id="{div_id}_ymin" placeholder="min" step="any">
+  <input type="number" class="tb-input" id="{div_id}_ymax" placeholder="max" step="any">
+  <span class="tb-sep"></span>
+  <label>X:</label>
+  <input type="date" class="tb-input tb-date" id="{div_id}_xmin">
+  <input type="date" class="tb-input tb-date" id="{div_id}_xmax">
+  <span class="tb-sep"></span>
+  <button class="tb-btn" onclick="_owqApplyRange('{div_id}')">Apply</button>
+  <button class="tb-btn" onclick="_owqAxisTight('{div_id}')">Tight</button>
+  <button class="tb-btn" onclick="_owqResetRange('{div_id}',this)">Reset</button>
+</div>
 <div class="card">
 <div id="{div_id}" style="width:100%;min-height:500px"></div>
 <p class="plot-caption">{p.get('caption', '')}</p>
@@ -307,13 +538,13 @@ Click a river segment to isolate that feature in all plots below.</p>
 
     # Theme toggle
     H.append("""
-function toggleTheme(){
+window.toggleTheme = function(){
   var el = document.documentElement;
   var t = el.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
   el.setAttribute('data-theme', t);
   localStorage.setItem('owq_theme', t);
   _owqRelayoutAll();
-}
+};
 """)
 
     # Plotly layout helper
@@ -341,6 +572,8 @@ var PCFG = {responsive:true, displayModeBar:true,
 
 window._owqPlotIds = [];
 function _owqRegister(id){ window._owqPlotIds.push(id); }
+var _owqObsMeta = """ + json.dumps(_obs_meta) + """;
+
 
 function _owqRelayoutAll(){
   var t=document.documentElement.getAttribute('data-theme')==='dark';
@@ -356,6 +589,64 @@ function _owqRelayoutAll(){
 }
 """)
 
+    # Plot toolbar controls: log scale toggle, axis range, reset
+    H.append("""
+window._owqToggleLog = function(plotId, btn){
+  var gd=document.getElementById(plotId);
+  var cur=(gd.layout&&gd.layout.yaxis&&gd.layout.yaxis.type)||'linear';
+  var nxt=cur==='log'?'linear':'log';
+  Plotly.relayout(plotId,{'yaxis.type':nxt});
+  btn.classList.toggle('active',nxt==='log');
+  btn.textContent=nxt==='log'?'Y Log \\u2713':'Y Log';
+};
+window._owqApplyRange = function(plotId){
+  var u={};
+  var ymin=document.getElementById(plotId+'_ymin').value;
+  var ymax=document.getElementById(plotId+'_ymax').value;
+  var xmin=document.getElementById(plotId+'_xmin').value;
+  var xmax=document.getElementById(plotId+'_xmax').value;
+  if(ymin!==''&&ymax!==''){u['yaxis.range']=[parseFloat(ymin),parseFloat(ymax)];u['yaxis.autorange']=false;}
+  if(xmin&&xmax){u['xaxis.range']=[xmin,xmax];u['xaxis.autorange']=false;}
+  if(Object.keys(u).length)Plotly.relayout(plotId,u);
+};
+window._owqResetRange = function(plotId,btn){
+  Plotly.relayout(plotId,{'yaxis.autorange':true,'xaxis.autorange':true,'yaxis.type':'linear'});
+  var tb=btn.parentElement;
+  var lb=tb.querySelector('.tb-btn');
+  if(lb){lb.classList.remove('active');lb.textContent='Y Log';}
+  tb.querySelectorAll('.tb-input').forEach(function(inp){inp.value='';});
+};
+window._owqAxisTight = function(plotId){
+  var gd=document.getElementById(plotId);
+  if(!gd||!gd.data) return;
+  var xmin=null,xmax=null,ymin=Infinity,ymax=-Infinity;
+  gd.data.forEach(function(t){
+    if(t.visible==='legendonly'||t.visible===false) return;
+    if(!t.x||!t.y) return;
+    t.y.forEach(function(v,i){
+      if(v===null||v===undefined) return;
+      v=parseFloat(v); if(isNaN(v)) return;
+      if(v<ymin) ymin=v; if(v>ymax) ymax=v;
+      var xv=t.x[i];
+      if(xv!==null&&xv!==undefined){
+        if(typeof xv==='string'&&xv.match(/^\\d{4}/)){
+          if(!xmin||xv<xmin) xmin=xv;
+          if(!xmax||xv>xmax) xmax=xv;
+        }else{
+          var xn=parseFloat(xv);
+          if(!isNaN(xn)){if(xmin===null||xn<xmin)xmin=xn;if(xmax===null||xn>xmax)xmax=xn;}
+        }
+      }
+    });
+  });
+  if(ymin===Infinity) return;
+  var ypad=(ymax-ymin)*0.05; if(ypad===0) ypad=Math.abs(ymax)*0.05||1;
+  var upd={'yaxis.range':[ymin-ypad,ymax+ypad],'yaxis.autorange':false};
+  if(xmin!==null&&xmax!==null){upd['xaxis.range']=[xmin,xmax];upd['xaxis.autorange']=false;}
+  Plotly.relayout(plotId,upd);
+};
+""")
+
     # Legend click: single-click isolates a trace (others become 'legendonly',
     # i.e. grayed out in legend but still clickable); click same trace again
     # to restore all.  Also broadcasts to map via _owqSelectFeature.
@@ -363,16 +654,25 @@ function _owqRelayoutAll(){
 function _owqLegendClick(gd){
   gd.on('plotly_legendclick',function(e){
     var d=gd.data, n=d.length, ci=e.curveNumber;
-    // Is this trace currently the only fully-visible one?
-    var vis=d.map(function(t){return t.visible===undefined||t.visible===true});
+    var om=_owqObsMeta[gd.id]||{};
+    // Count visible non-obs feature traces
+    var vis=d.map(function(t,idx){
+      if(om[idx]!==undefined) return false;
+      return t.visible===undefined||t.visible===true;
+    });
     var onlyMe=vis.filter(Boolean).length===1 && vis[ci];
-    var newVis=d.map(function(_,i){return onlyMe?true:(i===ci?true:'legendonly')});
+    var clickedFid=(d[ci].name||'').replace('Feature ','');
+    var newVis=d.map(function(t,idx){
+      if(om[idx]!==undefined){
+        if(onlyMe) return true;
+        return om[idx]===clickedFid?true:false;
+      }
+      return onlyMe?true:(idx===ci?true:'legendonly');
+    });
     Plotly.restyle(gd,{visible:newVis});
     // Broadcast to map
     if(typeof _owqSelectFeature==='function'){
-      var name=d[ci].name||'';
-      var fid=name.replace('Feature ','');
-      _owqSelectFeature(onlyMe?null:fid);
+      _owqSelectFeature(onlyMe?null:clickedFid);
     }
     return false;   // prevent Plotly default toggle
   });
@@ -582,7 +882,12 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
         if(i>=ids.length) return;
         var gd=document.getElementById(ids[i++]);
         if(!gd||!gd.data){{ _nextRestyle(); return; }}
-        var newVis=gd.data.map(function(t){{
+        var om=_owqObsMeta[gd.id]||{{}};
+        var newVis=gd.data.map(function(t,tidx){{
+          if(om[tidx]!==undefined){{
+            if(!fid) return true;
+            return om[tidx]===fid?true:false;
+          }}
           var tfid=(t.name||'').replace('Feature ','');
           if(!fid) return true;
           return tfid===fid?true:'legendonly';
@@ -681,7 +986,9 @@ def Plot_h5_driver(what2map=None,
                    combine_features=True,
                    figsize=(12, 6),
                    river_network_shp=None,
-                   mapping_key='SegId'):
+                   mapping_key='SegId',
+                   observation_dir=None,
+                   observation_csv=None):
     """
     Generate interactive HTML time-series plots (Plotly.js).
 
@@ -998,6 +1305,7 @@ def Plot_h5_driver(what2map=None,
                         'xtype': ('date' if isinstance(ttdata.index, pd.DatetimeIndex)
                                   else 'linear'),
                         'caption': f'{len(feature_data)} features | {time_range}',
+                        'species': spec,
                     })
 
                     print(f"    ✓ Plot data collected for {chem_name} ({file_extension})")
@@ -1097,11 +1405,64 @@ def Plot_h5_driver(what2map=None,
         except Exception as _e:
             print(f"  WARNING: Failed to load shapefile: {_e}")
 
+    # --- Load observation data and match to features ---
+    _observation_data = None    # {plot_id: [obs_dict, ...]}
+    if (observation_dir or observation_csv) and _river_geojson:
+        print("\n" + "-" * 40)
+        print("Loading observation data...")
+        obs_by_species, station_locations = _load_observation_data(
+            obs_dir=observation_dir, obs_csv=observation_csv)
+        if obs_by_species and station_locations:
+            station_to_feature = _match_stations_to_features(
+                station_locations, _river_geojson, mapping_key)
+            if station_to_feature:
+                print(f"  Matched {len(station_to_feature)} stations to features:")
+                for sid, fid in station_to_feature.items():
+                    print(f"    Station {sid} → Feature {fid}")
+                _observation_data = {}
+                for p in plots:
+                    p_species = p.get('species')
+                    if not p_species:
+                        continue
+                    species_obs = obs_by_species.get(p_species)
+                    if not species_obs:
+                        continue
+                    # Group by station
+                    stn_groups = defaultdict(lambda: {'x': [], 'y': []})
+                    for rec in species_obs:
+                        stn_groups[rec['station_id']]['x'].append(rec['datetime'])
+                        stn_groups[rec['station_id']]['y'].append(rec['value'])
+                    plot_obs = []
+                    for stn_id, data in stn_groups.items():
+                        fid = station_to_feature.get(stn_id)
+                        if fid is None:
+                            continue
+                        plot_obs.append({
+                            'x': data['x'],
+                            'y': data['y'],
+                            'station_id': stn_id,
+                            'feature_id': str(fid),
+                        })
+                    if plot_obs:
+                        _observation_data[p['id']] = plot_obs
+                        print(f"  ✓ {p_species}: {len(plot_obs)} station(s) "
+                              f"with observations")
+                if not _observation_data:
+                    _observation_data = None
+                    print("  No observations matched any plotted species.")
+            else:
+                print("  No stations could be matched to features.")
+        print("-" * 40)
+    elif (observation_dir or observation_csv) and not _river_geojson:
+        print("  WARNING: Observation data provided but no river network "
+              "shapefile loaded — cannot match stations to features.")
+
     html_content = _build_html(plots, what2map, hostmodel,
                                river_geojson=_river_geojson,
                                map_center=_map_center,
                                map_bounds=_map_bounds,
-                               mapping_key=mapping_key)
+                               mapping_key=mapping_key,
+                               observation_data=_observation_data)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
