@@ -65,32 +65,6 @@ void OpenWQ_couplercalls::InitialConfig(
         OpenWQ_output);
         
     // ##################################
-    // Parse Sink and Source Inputs AND External Water Fluxes
-    // and store them in tuple and arma::mat for quick access
-    // ##################################
-    // SS
-    OpenWQ_extwatflux_ss.Set_EWFandSS_driver(
-        OpenWQ_json.SinkSource, // SS json
-        OpenWQ_vars,
-        OpenWQ_hostModelconfig,
-        OpenWQ_wqconfig,
-        OpenWQ_units,
-        OpenWQ_utils,
-        OpenWQ_output,
-        (std::string) "ss");    // flag for SS
-
-    // EWF
-    OpenWQ_extwatflux_ss.Set_EWFandSS_driver(
-        OpenWQ_json.ExtWatFlux, // EWF json
-        OpenWQ_vars,
-        OpenWQ_hostModelconfig,
-        OpenWQ_wqconfig,
-        OpenWQ_units,
-        OpenWQ_utils,
-        OpenWQ_output,
-        (std::string) "ewf");  // flag for EWF
-
-    // ##################################
     // MODULES
     // ##################################
    
@@ -125,5 +99,48 @@ void OpenWQ_couplercalls::InitialConfig(
     // PARALLEL: Build per-thread copies of exprtk expressions
     // for OpenMP parallelization of BGC spatial loops
     OpenWQ_wqconfig.build_thread_local_expressions(OpenWQ_hostModelconfig);
+
+}
+
+// ################################################################
+// Parse Sink/Source and External Water Flux data
+// Called AFTER cell_id registration so that cell_id lookups succeed
+// ################################################################
+
+void OpenWQ_couplercalls::ParseEWFandSS(
+    OpenWQ_json& OpenWQ_json,
+    OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_units& OpenWQ_units,
+    OpenWQ_utils& OpenWQ_utils,
+    OpenWQ_output& OpenWQ_output,
+    OpenWQ_extwatflux_ss& OpenWQ_extwatflux_ss) {
+
+    // ##################################
+    // Parse Sink and Source Inputs AND External Water Fluxes
+    // and store them in tuple and arma::mat for quick access
+    // ##################################
+    // SS
+    OpenWQ_extwatflux_ss.Set_EWFandSS_driver(
+        OpenWQ_json.SinkSource, // SS json
+        OpenWQ_vars,
+        OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig,
+        OpenWQ_units,
+        OpenWQ_utils,
+        OpenWQ_output,
+        (std::string) "ss");    // flag for SS
+
+    // EWF
+    OpenWQ_extwatflux_ss.Set_EWFandSS_driver(
+        OpenWQ_json.ExtWatFlux, // EWF json
+        OpenWQ_vars,
+        OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig,
+        OpenWQ_units,
+        OpenWQ_utils,
+        OpenWQ_output,
+        (std::string) "ewf");  // flag for EWF
 
 }
