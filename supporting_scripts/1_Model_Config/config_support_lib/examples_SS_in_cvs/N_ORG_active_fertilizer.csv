@@ -1,4 +1,4 @@
 This file is for demonstration purposes
 Chemical species is N_ORG_active
-YYYY,MM,DD,HH,MIN,SEC,ix,iy,iz,load, load_type, time_units
-1961,1,4,1,1,1,all,all,all,100000, discrete
+YYYY,MM,DD,HH,MIN,SEC,ix,iy,iz,load,load_type
+1961,1,4,1,1,1,all,all,all,100000,discrete

@@ -22,6 +22,7 @@ PATCHED VERSION: Includes comprehensive workaround for Python 3.9 tarfile compat
 """
 
 # Comprehensive workaround for tarfile compatibility issues in Python 3.9
+import os
 import sys
 import tarfile
 
@@ -100,15 +101,95 @@ def set_ss_from_csv(
     output_path = Path(ss_config_filepath)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Build the complete JSON structure
-    config = {
-        "METADATA": {
-            "Comment": ss_metadata_comment,
-            "Source": ss_metadata_source,
-            "BGC_Engine": bgc_engine_label,
-            "Chemical_Species": chemical_species_list or []
-        }
-    }
+    # ── Validate CSV configurations ──────────────────────────────────
+    # Required columns the C++ ASCII parser looks up by header name.
+    # If any are missing the parser accesses index -1 → crash (SIGSEGV).
+    _REQUIRED_COLS = {"YYYY", "MM", "DD", "HH", "MIN", "SEC",
+                      "IX", "IY", "IZ", "LOAD", "LOAD_TYPE"}
+
+    for idx, ss_config in enumerate(ss_method_csv_config, start=1):
+        filepath = ss_config.get("Filepath", "")
+        delimiter = ss_config.get("Delimiter", ",")
+        label = ss_config.get("Chemical_name", "?")
+
+        # Check file exists
+        if not os.path.isfile(filepath):
+            print(f"  ⚠  WARNING: SS entry {idx} ({label}) "
+                  f"CSV file not found: {filepath}")
+            print(f"     The model will skip this entry at runtime.")
+            continue
+
+        # Read file and validate header + data
+        try:
+            with open(filepath, 'r') as _f:
+                all_lines = _f.readlines()
+
+            # Find the header row (first line containing "YYYY")
+            header_line = None
+            header_lineno = None
+            data_lines = []
+            for li, line in enumerate(all_lines, start=1):
+                if header_line is None and "YYYY" in line.upper():
+                    header_line = line.strip().upper()
+                    header_lineno = li
+                elif header_line is not None:
+                    stripped = line.strip()
+                    if stripped:
+                        data_lines.append((li, stripped))
+
+            if header_line is None:
+                print(f"  ⚠  WARNING: SS entry {idx} ({label}) CSV has no "
+                      f"header row containing 'YYYY': {filepath}")
+                print(f"     The C++ parser requires a header row with columns:")
+                print(f"     YYYY,MM,DD,HH,MIN,SEC,IX,IY,IZ,LOAD,LOAD_TYPE")
+                continue
+
+            # Parse header columns
+            header_cols = [c.strip() for c in header_line.split(delimiter)]
+            header_set = set(header_cols)
+
+            # Check for missing required columns
+            missing = _REQUIRED_COLS - header_set
+            if missing:
+                print(f"  ⚠  WARNING: SS entry {idx} ({label}) CSV is missing "
+                      f"required columns: {sorted(missing)}")
+                print(f"     File: {filepath}")
+                print(f"     Header found (line {header_lineno}): {header_line}")
+                print(f"     Required columns: "
+                      f"YYYY,MM,DD,HH,MIN,SEC,IX,IY,IZ,LOAD,LOAD_TYPE")
+                print(f"     ─── This WILL crash the model (SIGSEGV). "
+                      f"Please fix the CSV before running. ───")
+
+            # Check data rows have the same number of columns as the header
+            n_hdr = len(header_cols)
+            for lineno, dline in data_lines[:3]:  # check first 3 data rows
+                n_data = len(dline.split(delimiter))
+                if n_data != n_hdr:
+                    print(f"  ⚠  WARNING: SS entry {idx} ({label}) CSV data "
+                          f"row {lineno} has {n_data} columns but header "
+                          f"has {n_hdr}: {filepath}")
+
+        except Exception as _e:
+            print(f"  ⚠  WARNING: SS entry {idx} ({label}) could not "
+                  f"validate CSV: {_e}")
+
+        # Check species name matches BGC config
+        chem_name = ss_config.get("Chemical_name", "")
+        if chemical_species_list and chem_name not in chemical_species_list:
+            print(f"  ⚠  WARNING: SS entry {idx} species '{chem_name}' "
+                  f"not in BGC species list: {chemical_species_list}")
+
+    # Build the complete JSON structure (no METADATA key — C++ parser counts
+    # all top-level keys via .size(), so METADATA would be treated as an entry)
+    config = {}
+
+    # Metadata goes into // comment lines instead (C++ skips with skip_comments=true)
+    metadata_comments = [
+        f"// METADATA - Comment: {ss_metadata_comment}",
+        f"// METADATA - Source: {ss_metadata_source}",
+        f"// METADATA - BGC_Engine: {bgc_engine_label}",
+        f"// METADATA - Chemical_Species: {', '.join(chemical_species_list) if chemical_species_list else ''}",
+    ]
 
     # Add each source/sink configuration with numbered keys
     for idx, ss_config in enumerate(ss_method_csv_config, start=1):
@@ -145,6 +226,9 @@ def set_ss_from_csv(
         # Write comment lines first
         for comment in json_header_comment:
             f.write(comment + "\n")
+        # Write metadata as comment lines (C++ parser ignores these)
+        for mc in metadata_comments:
+            f.write(mc + "\n")
         # Write the JSON content
         f.write(json_string)
         # Add newline at end of file
@@ -1863,19 +1947,19 @@ def set_ss_climate_adjusted_export_coefficients(
 
     cop_years_in_csv = sorted(int(y) for y in pivot_df['Year'].unique())
 
-    config = {
-        "METADATA": {
-            "Comment": ss_metadata_comment,
-            "Source": ss_metadata_source,
-            "BGC_Engine": bgc_engine_label,
-            "Chemical_Species": chemical_species_list or [],
-            "Climate_Adjustment": {
-                "precip_scaling_power": precip_scaling_power,
-                "temp_Q10": temp_q10,
-                "temp_reference_C": temp_reference_c
-            }
-        }
-    }
+    # No METADATA key in JSON body — C++ parser counts all top-level keys
+    # via .size(), so METADATA would be treated as a numbered entry.
+    # Metadata goes into // comment lines instead (C++ skips with skip_comments=true).
+    config = {}
+
+    metadata_comments = [
+        f"// METADATA - Comment: {ss_metadata_comment}",
+        f"// METADATA - Source: {ss_metadata_source}",
+        f"// METADATA - BGC_Engine: {bgc_engine_label}",
+        f"// METADATA - Chemical_Species: {', '.join(chemical_species_list) if chemical_species_list else ''}",
+        f"// METADATA - Climate_Adjustment: precip_scaling_power={precip_scaling_power}, "
+        f"temp_Q10={temp_q10}, temp_reference_C={temp_reference_c}",
+    ]
 
     # Helper: find nearest climate data year
     climate_years = sorted(climate_data.keys())
@@ -1904,10 +1988,10 @@ def set_ss_climate_adjusted_export_coefficients(
         print(f"\n  ⚠  Proxy year mapping (sim year → Copernicus data year):")
         for sy in sorted(proxy_years):
             print(f"      {sy} → {proxy_years[sy]}")
-        # Add proxy year warning to METADATA so the report can display it
-        config["METADATA"]["Proxy_Years"] = (
-            f"Simulation years {sorted(proxy_years.keys())} use proxy data from Copernicus. "
-            f"Mapping: {', '.join(f'{sy}→{cy}' for sy, cy in sorted(proxy_years.items()))}"
+        # Add proxy year warning as a comment line
+        proxy_str = ', '.join(f'{sy}→{cy}' for sy, cy in sorted(proxy_years.items()))
+        metadata_comments.append(
+            f"// METADATA - Proxy_Years: {proxy_str}"
         )
 
     entry_idx = 1
@@ -2018,6 +2102,9 @@ def set_ss_climate_adjusted_export_coefficients(
     with open(ss_config_filepath, 'w') as f:
         for comment in json_header_comment:
             f.write(comment + "\n")
+        # Write metadata as comment lines (C++ parser ignores these)
+        for mc in metadata_comments:
+            f.write(mc + "\n")
         f.write(json_string)
         f.write("\n")
 
@@ -2167,21 +2254,23 @@ def create_openwq_ss_json_from_loads(
             print(f"      {sy} → {proxy_years[sy]}")
     print(f"  Simulation years to write: {sim_years[0]}–{sim_years[-1]}")
 
-    # Build JSON structure
-    config = {
-        "METADATA": {
-            "Comment": ss_metadata_comment,
-            "Source": ss_metadata_source,
-            "BGC_Engine": bgc_engine_label,
-            "Chemical_Species": chemical_species_list or []
-        }
-    }
+    # No METADATA key in JSON body — C++ parser counts all top-level keys
+    # via .size(), so METADATA would be treated as a numbered entry.
+    # Metadata goes into // comment lines instead (C++ skips with skip_comments=true).
+    config = {}
 
-    # Add proxy year warning to METADATA so the report can display it
+    metadata_comments = [
+        f"// METADATA - Comment: {ss_metadata_comment}",
+        f"// METADATA - Source: {ss_metadata_source}",
+        f"// METADATA - BGC_Engine: {bgc_engine_label}",
+        f"// METADATA - Chemical_Species: {', '.join(chemical_species_list) if chemical_species_list else ''}",
+    ]
+
+    # Add proxy year warning as a comment line
     if proxy_years:
-        config["METADATA"]["Proxy_Years"] = (
-            f"Simulation years {sorted(proxy_years.keys())} use proxy data from Copernicus. "
-            f"Mapping: {', '.join(f'{sy}→{cy}' for sy, cy in sorted(proxy_years.items()))}"
+        proxy_str = ', '.join(f'{sy}→{cy}' for sy, cy in sorted(proxy_years.items()))
+        metadata_comments.append(
+            f"// METADATA - Proxy_Years: {proxy_str}"
         )
 
     entry_idx = 1
@@ -2302,6 +2391,9 @@ def create_openwq_ss_json_from_loads(
         # Write comment lines first
         for comment in json_header_comment:
             f.write(comment + "\n")
+        # Write metadata as comment lines (C++ parser ignores these)
+        for mc in metadata_comments:
+            f.write(mc + "\n")
         # Write the JSON content
         f.write(json_string)
         # Add newline at end of file
