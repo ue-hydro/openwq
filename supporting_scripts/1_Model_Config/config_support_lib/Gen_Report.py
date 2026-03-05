@@ -1229,13 +1229,25 @@ def generate_simulation_report(
     if os.path.isfile(ss_config_path):
         try:
             with open(ss_config_path, 'r') as f:
-                lines = [l for l in f.readlines()
-                         if not l.strip().startswith('//')]
-                ss_data = json.loads(''.join(lines))
+                all_lines = f.readlines()
 
-            # Extract metadata block
+            # Extract metadata from // comment lines
+            for l in all_lines:
+                stripped = l.strip()
+                if stripped.startswith('// METADATA - '):
+                    # Parse "// METADATA - Key: Value"
+                    meta_part = stripped[len('// METADATA - '):]
+                    if ': ' in meta_part:
+                        mk, mv = meta_part.split(': ', 1)
+                        ss_metadata[mk.strip()] = mv.strip()
+
+            # Also support legacy METADATA key inside JSON body
+            json_lines = [l for l in all_lines
+                          if not l.strip().startswith('//')]
+            ss_data = json.loads(''.join(json_lines))
+
             if 'METADATA' in ss_data:
-                ss_metadata = ss_data['METADATA']
+                ss_metadata.update(ss_data['METADATA'])
 
             # Entries are stored under numeric keys ("1", "2", ...)
             # or under a "SINKSOURCE" wrapper (legacy format)
@@ -1251,18 +1263,91 @@ def generate_simulation_report(
 
                 # Parse DATA block for statistics
                 data_block = entry.get('DATA', {})
-                n_entries = len(data_block)
+                data_format = entry.get('DATA_FORMAT', '')
+                n_entries = 0
                 cells = set()
                 years = set()
                 total_load = 0.0
-                for _dk, row in data_block.items():
-                    if isinstance(row, list) and len(row) >= 10:
-                        years.add(row[0])
-                        cells.add(str(row[6]))  # cell_id or ix
+
+                if data_format == 'ASCII' and 'FILEPATH' in data_block:
+                    # ASCII/CSV: read the actual CSV file to extract stats
+                    csv_path = data_block['FILEPATH']
+                    csv_delim = data_block.get('DELIMITER', ',')
+
+                    # The JSON stores Docker paths (/code/...) but the report
+                    # runs on the host.  Reverse the mapping if needed.
+                    if not os.path.isfile(csv_path):
                         try:
-                            total_load += float(row[9])
-                        except (ValueError, TypeError):
+                            _rpt_dir = os.path.dirname(os.path.abspath(__file__))
+                            _dc_yml = os.path.normpath(os.path.join(
+                                _rpt_dir, '..', '..', '..',
+                                'containers', 'docker-compose.yml'))
+                            if os.path.isfile(_dc_yml):
+                                import re as _re_mod
+                                with open(_dc_yml, 'r') as _dcf:
+                                    _dc_content = _dcf.read()
+                                _vol_pat = _re_mod.compile(
+                                    r'^\s*-\s+([^:]+):([^:]+)(?::.*)?$',
+                                    _re_mod.MULTILINE)
+                                _vol_matches = _vol_pat.findall(_dc_content)
+                                if _vol_matches:
+                                    _hp, _cp = _vol_matches[0]
+                                    _hp = os.path.normpath(os.path.join(
+                                        os.path.dirname(_dc_yml),
+                                        _hp.strip()))
+                                    if not _hp.endswith('/'):
+                                        _hp += '/'
+                                    _cp = _cp.strip()
+                                    if not _cp.endswith('/'):
+                                        _cp += '/'
+                                    if csv_path.startswith(_cp):
+                                        csv_path = _hp + csv_path[len(_cp):]
+                        except Exception:
                             pass
+
+                    try:
+                        with open(csv_path, 'r') as _cf:
+                            csv_lines = _cf.readlines()
+                        hdr_cols = None
+                        data_rows = []
+                        for _cl in csv_lines:
+                            if hdr_cols is None and 'YYYY' in _cl.upper():
+                                hdr_cols = [c.strip().upper()
+                                            for c in _cl.strip().split(csv_delim)]
+                            elif hdr_cols is not None and _cl.strip():
+                                data_rows.append(_cl.strip().split(csv_delim))
+                        if hdr_cols and data_rows:
+                            col_idx = {name: i for i, name in enumerate(hdr_cols)}
+                            i_yyyy = col_idx.get('YYYY')
+                            i_ix   = col_idx.get('IX')
+                            i_load = col_idx.get('LOAD')
+                            for dr in data_rows:
+                                if i_yyyy is not None and i_yyyy < len(dr):
+                                    try:
+                                        years.add(int(dr[i_yyyy].strip()))
+                                    except ValueError:
+                                        pass
+                                if i_ix is not None and i_ix < len(dr):
+                                    cells.add(dr[i_ix].strip())
+                                if i_load is not None and i_load < len(dr):
+                                    try:
+                                        total_load += float(dr[i_load].strip())
+                                    except ValueError:
+                                        pass
+                            n_entries = len(data_rows)
+                    except Exception:
+                        pass  # file not found — leave stats at zero
+                else:
+                    # JSON format: DATA contains numbered entries
+                    n_entries = len(data_block)
+                    for _dk, row in data_block.items():
+                        if isinstance(row, list) and len(row) >= 10:
+                            years.add(row[0])
+                            cells.add(str(row[6]))  # cell_id or ix
+                            try:
+                                total_load += float(row[9])
+                            except (ValueError, TypeError):
+                                pass
 
                 ss_summary.append({
                     'chemical': entry.get('CHEMICAL_NAME', 'N/A'),

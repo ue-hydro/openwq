@@ -1,4 +1,6 @@
-YYYY,MM,DD,HH,ix,iy,iz,LOAD
-2010,6,5,12,34,1,1,20
-2011,4,28,12,32,1,1,10
-2012,5,6,12,5,1,1,12
+This file is for demonstration purposes
+Chemical species is NO3-N
+YYYY,MM,DD,HH,MIN,SEC,ix,iy,iz,load,load_type
+1961,1,5,12,1,1,34,1,1,20,discrete
+1961,2,5,12,1,1,34,1,1,20,discrete
+1961,3,5,12,1,1,34,1,1,20,discrete
