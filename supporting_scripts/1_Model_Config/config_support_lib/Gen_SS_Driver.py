@@ -43,6 +43,7 @@ if sys.version_info >= (3, 9):
         pass
 
 import json
+import calendar
 from pathlib import Path
 from typing import List, Dict, Union, Optional
 import geopandas as gpd
@@ -2081,22 +2082,22 @@ def set_ss_climate_adjusted_export_coefficients(
                 )
 
                 for month, day, hour, load_kg in temporal_entries:
+                    days = calendar.monthrange(sim_year, int(month))[1]
+                    daily_rate = load_kg / days
                     if use_cellid_mapping:
-                        # Format: [YYYY, MM, DD, HH, MIN, SEC, cell_id, iy, iz, load, type]
                         data_entries[str(sub_idx)] = [
-                            sim_year, int(month), int(day), int(hour), 1, 1,
+                            sim_year, int(month), "all", "all", "all", "all",
                             spatial_id, "all", "all",
-                            float(load_kg),
-                            "discrete"
+                            float(daily_rate),
+                            "continuous", "day"
                         ]
                     else:
-                        # Legacy: use (ix, iy, iz) tuple
                         ix, iy, iz = spatial_id
                         data_entries[str(sub_idx)] = [
-                            sim_year, int(month), int(day), int(hour), 1, 1,
+                            sim_year, int(month), "all", "all", "all", "all",
                             ix, iy, iz,
-                            float(load_kg),
-                            "discrete"
+                            float(daily_rate),
+                            "continuous", "day"
                         ]
                     sub_idx += 1
 
@@ -2216,19 +2217,17 @@ def create_openwq_ss_json_from_loads(
         )
 
     print(f"\nTemporal distribution method: {ss_method_copernicus_annual_to_seasonal_loads_method}")
+    print("  → Load type: continuous (kg/day rate per month)")
     if ss_method_copernicus_annual_to_seasonal_loads_method == "uniform":
-        print("  → Annual loads will be distributed uniformly across 12 months")
-        print("  → Using OpenWQ 'all' keyword for compact JSON (min=0, sec=0)")
+        print("  → Annual loads distributed uniformly across 12 months")
     elif ss_method_copernicus_annual_to_seasonal_loads_method == "seasonal":
         if climate_data:
-            print("  → Annual loads will be climate-weighted (precipitation + temperature)")
+            print("  → Annual loads climate-weighted (precipitation + temperature)")
             print(f"  → Climate data provided for years: {sorted(climate_data.keys())}")
             print(f"  → Parameters: alpha={precip_scaling_power}, Q10={temp_q10}, Tref={temp_reference_c}°C")
         else:
-            print("  → Annual loads will follow seasonal pattern (sine-curve fallback)")
-            print("  → Peak loads in summer (July), lowest in winter (January)")
+            print("  → Annual loads follow seasonal pattern (sine-curve fallback)")
             print("  → TIP: provide ss_climate_data for data-driven distribution")
-        print("  → Using OpenWQ 'all' keyword for compact JSON (min=0, sec=0)")
 
     # Load pivot loads data
     print(f"\nLoading pivot loads from: {pivot_loads_csv_path.name}")
@@ -2381,25 +2380,26 @@ def create_openwq_ss_json_from_loads(
                 )
 
                 # Create data entries for each time point
-                # Format: [YYYY, MM, DD, HH, MIN, SEC, ix/cell_id, iy, iz, load, "discrete"]
+                # Format: [YYYY, MM, "all","all","all","all", cell_id, iy, iz,
+                #          daily_rate, "continuous", "day"]
                 # YYYY is the simulation year (not the Copernicus year)
                 for month, day, hour, load_kg in temporal_entries:
+                    days = calendar.monthrange(sim_year, int(month))[1]
+                    daily_rate = load_kg / days
                     if use_cellid_mapping:
-                        # Format: [YYYY, MM, DD, HH, MIN, SEC, cell_id, iy, iz, load, type]
                         data_entries[str(sub_idx)] = [
-                            sim_year, int(month), int(day), int(hour), 1, 1,
+                            sim_year, int(month), "all", "all", "all", "all",
                             spatial_id, "all", "all",
-                            float(load_kg),
-                            "discrete"
+                            float(daily_rate),
+                            "continuous", "day"
                         ]
                     else:
-                        # Legacy: use (ix, iy, iz) tuple
                         ix, iy, iz = spatial_id
                         data_entries[str(sub_idx)] = [
-                            sim_year, int(month), int(day), int(hour), 1, 1,
+                            sim_year, int(month), "all", "all", "all", "all",
                             ix, iy, iz,
-                            float(load_kg),
-                            "discrete"
+                            float(daily_rate),
+                            "continuous", "day"
                         ]
                     sub_idx += 1
 
