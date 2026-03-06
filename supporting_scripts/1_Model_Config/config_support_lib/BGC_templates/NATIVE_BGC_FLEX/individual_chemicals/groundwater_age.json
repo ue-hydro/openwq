@@ -81,7 +81,7 @@
                 "CONSUMED": "AGE_mean",
                 "PRODUCED": "AGE_mean",
                 "KINETICS": [
-                    "1.0",
+                    "k_age",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
