@@ -1145,6 +1145,7 @@ def generate_simulation_report(
         config_errors=None,
         bgc_template_path=None,
         openwq_h5_mapping_key=None,
+        seasonal_loads_method=None,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -1157,6 +1158,8 @@ def generate_simulation_report(
             a path to pre-downloaded GRQA folder.
         grqa_buffer_km: buffer distance in km around basin/river for GRQA search
         user_observation_csv: path to user-provided CSV observation file
+        seasonal_loads_method: temporal distribution method for annual loads
+            (e.g. 'uniform', 'climate_adjusted')
 
     Returns the path to the generated HTML file.
     """
@@ -2050,6 +2053,10 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 H.append('<tr><th>Property</th><th>Value</th></tr>')
                 H.append(f'<tr><td>Method</td><td><span class="badge badge-secondary">'
                          f'{ss_method}</span></td></tr>')
+                if seasonal_loads_method:
+                    H.append(f'<tr><td>Seasonal Distribution</td><td>'
+                             f'<span class="badge badge-secondary">'
+                             f'{seasonal_loads_method}</span></td></tr>')
                 for mk, mv in ss_metadata.items():
                     H.append(f'<tr><td>{mk}</td><td>{mv}</td></tr>')
                 H.append('</table></div></div>')
@@ -2859,6 +2866,7 @@ def generate_report(
         config_errors=None,
         bgc_template_path=None,
         openwq_h5_mapping_key=None,
+        seasonal_loads_method=None,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -2912,6 +2920,7 @@ def generate_report(
             config_errors=config_errors,
             bgc_template_path=bgc_template_path,
             openwq_h5_mapping_key=openwq_h5_mapping_key,
+            seasonal_loads_method=seasonal_loads_method,
         )
 
         print(f"  Report saved: {report_path}")

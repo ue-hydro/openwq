@@ -440,10 +440,16 @@ ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform'
 ss_use_cellid_mapping = True
 
 
-# ── METHOD 3 only: Climate-adjusted coefficients ─────────────────────────────
-# ⚠ Only used if ss_method = "using_copernicus_lulc_with_dynamic_coeff"; ignored otherwise.
+# ── Climate data for seasonal distribution ────────────────────────────────────
+#  Used in TWO contexts:
+#    1) ss_method_copernicus_annual_to_seasonal_loads_method = "seasonal"
+#       → weights monthly loads by precipitation + temperature
+#       → if climate data is absent for a year, falls back to a sine-curve
+#    2) ss_method = "using_copernicus_lulc_with_dynamic_coeff"
+#       → climate-adjusted export coefficients (always required)
+#
 #  Monthly weight formula: w_m = P_m^alpha × Q10^((T_m − T_ref) / 10)
-#  Requires one entry per year in the simulation period.
+#  Requires one entry per simulation year.  Sum of 12 monthly loads = annual load.
 
 ss_climate_data = {
     1993: {
@@ -677,6 +683,12 @@ if generate_report:
     except (NameError, AttributeError):
         pass
 
+    _seasonal_method = None
+    try:
+        _seasonal_method = ss_method_copernicus_annual_to_seasonal_loads_method
+    except NameError:
+        pass
+
     try:
         _report_path = _generate_report(
             dir2save_input_files=dir2save_input_files,
@@ -708,6 +720,7 @@ if generate_report:
             config_errors={"Configuration": _config_error_msg} if _config_error_msg else None,
             bgc_template_path=locals().get('path2selected_NATIVE_BGC_FLEX_framework'),
             openwq_h5_mapping_key=_h5_mapping_key,
+            seasonal_loads_method=_seasonal_method,
         )
     except Exception as _e:
         _has_errors = True

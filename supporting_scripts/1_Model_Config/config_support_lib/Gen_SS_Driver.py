@@ -1641,7 +1641,11 @@ def calculate_nutrient_loads(
 def _calculate_temporal_load_distribution(
         annual_load_kg: float,
         year: int,
-        method: str = "uniform"
+        method: str = "uniform",
+        climate_data: Optional[Dict] = None,
+        precip_scaling_power: float = 1.0,
+        temp_q10: float = 2.0,
+        temp_reference_c: float = 15.0
 ) -> List[tuple]:
     """
     Calculate temporal distribution of annual nutrient load.
@@ -1654,13 +1658,26 @@ def _calculate_temporal_load_distribution(
         Year for the load
     method : str
         Distribution method:
-        - "uniform": Spread load uniformly throughout the year (monthly)
-        - "seasonal": Sine curve with peak in growing season (summer), low in winter
+        - "uniform": Spread load uniformly throughout the year (equal 1/12 each month)
+        - "seasonal": Climate-weighted distribution using ss_climate_data
+          (precipitation + temperature). Falls back to a sine-curve approximation
+          if no climate data is available for the requested year.
+    climate_data : dict, optional
+        Dict keyed by year: {year: {'precip_mm': [12 floats], 'temp_c': [12 floats]}}.
+        Used when method="seasonal" to weight monthly loads by precipitation
+        and temperature.
+    precip_scaling_power : float
+        Exponent for precipitation scaling (default 1.0 = linear)
+    temp_q10 : float
+        Q10 temperature sensitivity factor (default 2.0)
+    temp_reference_c : float
+        Reference temperature [°C] at which temperature factor = 1.0
 
     Returns:
     --------
     list of tuples : [(month, day, hour, load_kg), ...]
-        List of temporal load entries
+        List of temporal load entries.  The sum of all monthly loads
+        always equals *annual_load_kg*.
     """
     import math
 
@@ -1676,10 +1693,26 @@ def _calculate_temporal_load_distribution(
         return temporal_entries
 
     elif method == "seasonal":
-        # Sine curve: peak in July (growing season), minimum in January (winter)
+        # Preferred: use climate data (precip + temperature) when available
+        if climate_data and year in climate_data:
+            year_data = climate_data[year]
+            if ('precip_mm' in year_data and 'temp_c' in year_data
+                    and len(year_data['precip_mm']) == 12
+                    and len(year_data['temp_c']) == 12):
+                return _apply_climate_adjustment(
+                    annual_load_kg=annual_load_kg,
+                    year=year,
+                    monthly_precip_mm=year_data['precip_mm'],
+                    monthly_temp_c=year_data['temp_c'],
+                    precip_scaling_power=precip_scaling_power,
+                    temp_q10=temp_q10,
+                    temp_reference_c=temp_reference_c
+                )
+
+        # Fallback: sine-curve approximation (no climate data)
         monthly_loads = []
         for month in range(1, 13):
-            # Sine function centered on July (month 7)
+            # Sine function centred on July (month 7)
             angle = 2 * math.pi * (month - 4) / 12
             # Amplitude: min is 0.2 of mean, max is 1.8 of mean
             relative_load = 1.0 + 0.8 * math.sin(angle)
@@ -1699,7 +1732,7 @@ def _calculate_temporal_load_distribution(
     else:
         raise ValueError(
             f"Unknown temporal distribution method: '{method}'. "
-            f"Valid options are 'uniform', 'seasonal', or 'climate_adjusted'."
+            f"Valid options are 'uniform' or 'seasonal'."
         )
 
 
@@ -2135,7 +2168,11 @@ def create_openwq_ss_json_from_loads(
         use_cellid_mapping: bool = True,
         simulation_period: Optional[List[int]] = None,
         bgc_engine_label: str = "",
-        chemical_species_list: Optional[List[str]] = None
+        chemical_species_list: Optional[List[str]] = None,
+        climate_data: Optional[Dict] = None,
+        precip_scaling_power: float = 1.0,
+        temp_q10: float = 2.0,
+        temp_reference_c: float = 15.0
 ) -> None:
     """
     Generate OpenWQ source/sink JSON configuration from nutrient loads.
@@ -2183,8 +2220,14 @@ def create_openwq_ss_json_from_loads(
         print("  → Annual loads will be distributed uniformly across 12 months")
         print("  → Using OpenWQ 'all' keyword for compact JSON (min=0, sec=0)")
     elif ss_method_copernicus_annual_to_seasonal_loads_method == "seasonal":
-        print("  → Annual loads will follow seasonal pattern (sine curve)")
-        print("  → Peak loads in summer (July), lowest in winter (January)")
+        if climate_data:
+            print("  → Annual loads will be climate-weighted (precipitation + temperature)")
+            print(f"  → Climate data provided for years: {sorted(climate_data.keys())}")
+            print(f"  → Parameters: alpha={precip_scaling_power}, Q10={temp_q10}, Tref={temp_reference_c}°C")
+        else:
+            print("  → Annual loads will follow seasonal pattern (sine-curve fallback)")
+            print("  → Peak loads in summer (July), lowest in winter (January)")
+            print("  → TIP: provide ss_climate_data for data-driven distribution")
         print("  → Using OpenWQ 'all' keyword for compact JSON (min=0, sec=0)")
 
     # Load pivot loads data
@@ -2330,7 +2373,11 @@ def create_openwq_ss_json_from_loads(
                 temporal_entries = _calculate_temporal_load_distribution(
                     annual_load_kg=annual_load_kg,
                     year=sim_year,
-                    method=ss_method_copernicus_annual_to_seasonal_loads_method
+                    method=ss_method_copernicus_annual_to_seasonal_loads_method,
+                    climate_data=climate_data,
+                    precip_scaling_power=precip_scaling_power,
+                    temp_q10=temp_q10,
+                    temp_reference_c=temp_reference_c
                 )
 
                 # Create data entries for each time point
@@ -2510,7 +2557,11 @@ def set_ss_from_copernicus_lulc_with_loads(
         use_cellid_mapping: bool = True,
         simulation_period: Optional[List[int]] = None,
         bgc_engine_label: str = "",
-        chemical_species_list: Optional[List[str]] = None
+        chemical_species_list: Optional[List[str]] = None,
+        climate_data: Optional[Dict] = None,
+        precip_scaling_power: float = 1.0,
+        temp_q10: float = 2.0,
+        temp_reference_c: float = 15.0
 ):
     """
     Process Copernicus LULC data, calculate nutrient loads, and generate OpenWQ JSON.
@@ -2554,9 +2605,20 @@ def set_ss_from_copernicus_lulc_with_loads(
         Glob pattern for NetCDF files
     s_method_copernicus_annual_to_seasonal_loads_method : str, default "uniform"
         Temporal distribution method for annual loads:
-        - 'uniform': Distribute loads evenly across 12 months
-        - 'seasonal': Use sine curve with peak in summer (July), minimum in winter (January)
-        Uses OpenWQ 'all' keyword for minutes/seconds to compress JSON file size
+        - 'uniform': Distribute loads evenly across 12 months (equal 1/12)
+        - 'seasonal': Climate-weighted distribution using precipitation + temperature
+          data from climate_data.  Falls back to a sine-curve if climate_data is
+          not provided for a given year.
+        In both cases the sum of 12 monthly loads equals the annual load.
+    climate_data : dict, optional
+        Dict keyed by year: {year: {'precip_mm': [12 floats], 'temp_c': [12 floats]}}.
+        Used when method='seasonal' to weight monthly loads.
+    precip_scaling_power : float
+        Exponent for precipitation scaling (default 1.0)
+    temp_q10 : float
+        Q10 temperature sensitivity (default 2.0)
+    temp_reference_c : float
+        Reference temperature [°C] (default 15.0)
 
     Returns:
     --------
@@ -2617,6 +2679,10 @@ def set_ss_from_copernicus_lulc_with_loads(
         simulation_period=simulation_period,
         bgc_engine_label=bgc_engine_label,
         chemical_species_list=chemical_species_list,
+        climate_data=climate_data,
+        precip_scaling_power=precip_scaling_power,
+        temp_q10=temp_q10,
+        temp_reference_c=temp_reference_c,
     )
 
     return results, summaries, rasters, loads_df

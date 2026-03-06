@@ -914,6 +914,10 @@ def Gen_Input_Driver(
             simulation_period=[req_start, req_end],
             bgc_engine_label=_bgc_engine_label,
             chemical_species_list=_chem_species_list,
+            climate_data=ss_climate_data,
+            precip_scaling_power=ss_climate_precip_scaling_power if ss_climate_data else 1.0,
+            temp_q10=ss_climate_temp_q10 if ss_climate_data else 2.0,
+            temp_reference_c=ss_climate_temp_reference_c if ss_climate_data else 15.0,
         )
     elif (ss_method == "using_copernicus_lulc_with_dynamic_coeff"):
 
