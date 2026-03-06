@@ -1144,6 +1144,7 @@ def generate_simulation_report(
         file_manager_path=None,
         config_errors=None,
         bgc_template_path=None,
+        openwq_h5_mapping_key=None,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -2275,8 +2276,10 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _species_list = chemical_species if isinstance(chemical_species, (list, tuple)) \
             else [chemical_species]
         _species_str_all = ', '.join(f'"{s}"' for s in _species_list)
-        # Default snippet shows only the first species (matching default checkbox state)
-        _species_str = f'"{_species_list[0]}"' if _species_list else _species_str_all
+        # Default snippet shows the first two species (matching default checkbox state)
+        _default_n = min(2, len(_species_list))
+        _species_str = ', '.join(f'"{s}"' for s in _species_list[:_default_n]) \
+            if _species_list else _species_str_all
 
         # Compartment names
         _cmp_names = list(compartments_and_cells.keys()) \
@@ -2285,7 +2288,8 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
         # Shapefile info for mapping
         _shp_path = river_network_shapefile or ''
-        _shp_key = 'SegId'  # default for mizuRoute
+        _shp_key = 'SegId'
+        _feature_label = openwq_h5_mapping_key or _shp_key
 
         # --- Venv activation (OS-aware, uses _is_windows from earlier block) ---
         if _is_windows:
@@ -2372,11 +2376,15 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         # --- Species checkboxes ---
         import html as _html_mod
         H.append('<p style="font-weight:600;margin-top:1rem">Select chemical species to visualize:</p>')
+        H.append('<p style="font-size:.82rem;color:var(--accent);margin:0 0 .5rem">'
+                 '&#x26A0; Selecting many species simultaneously may slow down rendering '
+                 'and increase memory usage. For best performance, keep only a '
+                 'few species active at a time.</p>')
         H.append('<div id="speciesCbRow" style="display:flex;flex-wrap:wrap;gap:.5rem .8rem;'
                  'margin:.5rem 0 1rem;align-items:center">')
         for _i_sp, _sp in enumerate(_species_list):
             _sp_esc = _html_mod.escape(_sp)
-            _chk = " checked" if _i_sp == 0 else ""
+            _chk = " checked" if _i_sp < 2 else ""
             H.append(
                 f'<label style="display:inline-flex;align-items:center;gap:.3rem;'
                 f'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'
@@ -2520,6 +2528,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    output_path="{_out_all_html_safe}",\n'
             f'    river_network_shp="{_shp_path_safe}",\n'
             f'    mapping_key="{_shp_key}",\n'
+            f'    feature_label="{_feature_label}",\n'
             f'{_obs_plot_param}'
             f')\n'
             f'\n'
@@ -2849,6 +2858,7 @@ def generate_report(
         file_manager_path=None,
         config_errors=None,
         bgc_template_path=None,
+        openwq_h5_mapping_key=None,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -2901,6 +2911,7 @@ def generate_report(
             file_manager_path=file_manager_path,
             config_errors=config_errors,
             bgc_template_path=bgc_template_path,
+            openwq_h5_mapping_key=openwq_h5_mapping_key,
         )
 
         print(f"  Report saved: {report_path}")
