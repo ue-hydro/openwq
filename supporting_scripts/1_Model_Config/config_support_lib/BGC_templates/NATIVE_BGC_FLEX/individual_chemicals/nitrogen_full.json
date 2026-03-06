@@ -250,21 +250,21 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "N2O",
                 "KINETICS": [
-                    "f_n2o * k_denitrif * NO3-N * (K_O2_inhib / (K_O2_inhib + DO)) * 1.07^(T - 20)",
+                    "frac_nitrous * k_denitrif * NO3-N * (K_O2_inhib / (K_O2_inhib + DO)) * 1.07^(T - 20)",
                     "1"
                 ],
                 "PARAMETER_NAMES": [
-                    "f_n2o",
+                    "frac_nitrous",
                     "k_denitrif",
                     "K_O2_inhib"
                 ],
                 "PARAMETER_VALUES": {
-                    "f_n2o": 0.05,
+                    "frac_nitrous": 0.05,
                     "k_denitrif": 0.1,
                     "K_O2_inhib": 0.5
                 },
                 "_PARAMETERS_INFO": {
-                    "f_n2o": {
+                    "frac_nitrous": {
                         "VALUE": 0.05,
                         "UNITS": "fraction",
                         "RANGE": [
@@ -288,17 +288,17 @@
                 "CONSUMED": "N2O",
                 "PRODUCED": "N2O_atm_loss",
                 "KINETICS": [
-                    "k_n2o_emit * N2O",
+                    "k_nitrous_emit * N2O",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
-                    "k_n2o_emit"
+                    "k_nitrous_emit"
                 ],
                 "PARAMETER_VALUES": {
-                    "k_n2o_emit": 1.0
+                    "k_nitrous_emit": 1.0
                 },
                 "_PARAMETERS_INFO": {
-                    "k_n2o_emit": {
+                    "k_nitrous_emit": {
                         "VALUE": 1.0,
                         "UNITS": "1/day",
                         "DESCRIPTION": "N2O emission rate to atmosphere"
