@@ -850,8 +850,15 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(7);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
+                entryVal = ASCIIRowElemEntry[
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IY")];}
+
+            // Strip surrounding quotes (CSV may preserve them)
+            if (entryVal.size() >= 2
+                && (entryVal.front() == '"' || entryVal.front() == '\'')
+                && (entryVal.back() == '"' || entryVal.back() == '\'')) {
+                entryVal = entryVal.substr(1, entryVal.size() - 2);
+            }
 
             validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
@@ -919,8 +926,15 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(8);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
+                entryVal = ASCIIRowElemEntry[
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IZ")];}
+
+            // Strip surrounding quotes (CSV may preserve them)
+            if (entryVal.size() >= 2
+                && (entryVal.front() == '"' || entryVal.front() == '\'')
+                && (entryVal.back() == '"' || entryVal.back() == '\'')) {
+                entryVal = entryVal.substr(1, entryVal.size() - 2);
+            }
 
             validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
@@ -993,6 +1007,13 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
 
             loadScheme_str = entryVal;
 
+            // Strip surrounding quotes (CSV may preserve them)
+            if (loadScheme_str.size() >= 2
+                && (loadScheme_str.front() == '"' || loadScheme_str.front() == '\'')
+                && (loadScheme_str.back() == '"' || loadScheme_str.back() == '\'')) {
+                loadScheme_str = loadScheme_str.substr(1, loadScheme_str.size() - 2);
+            }
+
             // loading scheme only needed if SS
             // EWF is in concentration and associated with fluxes
             if (inputType.compare("ss")==0){
@@ -1031,6 +1052,13 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                                 OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"TIME_UNITS")];}
 
                         contDt_str = entryVal;
+
+                        // Strip surrounding quotes (CSV may preserve them)
+                        if (contDt_str.size() >= 2
+                            && (contDt_str.front() == '"' || contDt_str.front() == '\'')
+                            && (contDt_str.back() == '"' || contDt_str.back() == '\'')) {
+                            contDt_str = contDt_str.substr(1, contDt_str.size() - 2);
+                        }
 
                         // Concatenate the time units to the load       
                         ss_units_json += "/";
@@ -1645,8 +1673,14 @@ bool OpenWQ_extwatflux_ss::getModIndex(
     // Local Variable
     bool validEntryFlag = true;
     std::string msg_string;
-    
-    
+
+    // Strip surrounding quotes (CSV may preserve them)
+    if (elemEntry.size() >= 2
+        && (elemEntry.front() == '"' || elemEntry.front() == '\'')
+        && (elemEntry.back() == '"' || elemEntry.back() == '\'')) {
+        elemEntry = elemEntry.substr(1, elemEntry.size() - 2);
+    }
+
     if(elemEntry.compare("ALL") == 0){
         
         elemVal = OpenWQ_wqconfig.get_allSS_flag();

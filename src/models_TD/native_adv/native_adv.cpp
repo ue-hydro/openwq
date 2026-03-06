@@ -54,7 +54,13 @@ void OpenWQ_TD_model::Adv(
         const unsigned int ichem_mob = mobile_species[chemi];
 
         // Chemical mass flux between source and recipient (Advection)
-        const double chemass_flux_adv = conc_factor * chemass_source(ichem_mob)(ix_s,iy_s,iz_s);
+        double chemass_flux_adv = conc_factor * chemass_source(ichem_mob)(ix_s,iy_s,iz_s);
+
+        // Cap at available mass (accounting for prior transport in this time step)
+        // to prevent over-extraction when CFL > 1 or multiple connections export from same cell
+        double available = chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
+                         + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s);
+        chemass_flux_adv = std::fmin(chemass_flux_adv, std::fmax(available, 0.0));
 
         // Remove Chemical mass flux from SOURCE
         d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_adv;
