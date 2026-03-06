@@ -172,8 +172,12 @@ void OpenWQ_CH_model::bgc_flex_transform(
                             if (!is_time_step_0) {
                                 transf_mass *= time_step;
                                 if (has_cons) {
+                                    // Use remaining mass = original + accumulated derivatives (negative)
+                                    // to prevent over-consumption when multiple reactions consume same species
+                                    double available = (*p_chemass_cons)(ix, iy, iz)
+                                                     + (*p_d_chem_cons)(ix, iy, iz);
                                     transf_mass = std::fmin(
-                                        (*p_chemass_cons)(ix, iy, iz),
+                                        std::fmax(available, 0.0),
                                         transf_mass);
                                 }
                             } else {
@@ -220,8 +224,12 @@ void OpenWQ_CH_model::bgc_flex_transform(
                                 if (!is_time_step_0){
                                     transf_mass *= time_step;
                                     if (has_cons) {
+                                        // Use remaining mass = original + accumulated derivatives (negative)
+                                        // to prevent over-consumption when multiple reactions consume same species
+                                        double available = (*p_chemass_cons)(ix,iy,iz)
+                                                         + (*p_d_chem_cons)(ix,iy,iz);
                                         transf_mass = std::fmin(
-                                            (*p_chemass_cons)(ix,iy,iz),
+                                            std::fmax(available, 0.0),
                                             transf_mass);
                                     }
                                 }else{
