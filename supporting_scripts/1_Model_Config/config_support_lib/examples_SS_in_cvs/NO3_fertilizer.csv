@@ -1,6 +1,6 @@
 This file is for demonstration purposes
 Chemical species is NO3-N
 YYYY,MM,DD,HH,MIN,SEC,ix,iy,iz,load,load_type
-1961,1,5,12,1,1,"200011386",1,1,20,discrete
-1961,2,5,12,1,1,"200011386",1,1,20,discrete
-1961,3,5,12,1,1,"200011386",1,1,20,discrete
+1961,1,5,12,1,1,"200010653",1,1,20,discrete
+1961,2,5,12,1,1,"200010653",1,1,20,discrete
+1961,3,5,12,1,1,"200010653",1,1,20,discrete
