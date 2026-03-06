@@ -348,7 +348,7 @@ ss_method_csv_config = [
         "Compartment_name": "RIVER_NETWORK_REACHES",        # Target compartment
         "Type": "source",                                   # "source" (adds) or "sink" (removes)
         "Units": "kg",                                      # Load units per timestep
-        "Filepath": "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/supporting_scripts/Model_Config/config_support_lib/examples_SS_in_cvs/N_ORG_active_fertilizer.csv",
+        "Filepath": "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/supporting_scripts/1_Model_Config/config_support_lib/examples_SS_in_cvs/N_ORG_active_fertilizer.csv",
         "Delimiter": ","
     },
     {
@@ -356,7 +356,7 @@ ss_method_csv_config = [
         "Compartment_name": "RIVER_NETWORK_REACHES",
         "Type": "source",
         "Units": "kg",
-        "Filepath": "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/supporting_scripts/Model_Config/config_support_lib/examples_SS_in_cvs/NH4_fertilizer.csv",
+        "Filepath": "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/supporting_scripts/1_Model_Config/config_support_lib/examples_SS_in_cvs/NH4_fertilizer.csv",
         "Delimiter": ","
     }
 ]
