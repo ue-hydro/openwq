@@ -57,8 +57,13 @@ void OpenWQ_TD_model::AdvDisp(
     const unsigned int numspec = OpenWQ_wqconfig.cached_num_mobile_species;
     const std::vector<unsigned int>& mobile_species = *OpenWQ_wqconfig.cached_mobile_species_ptr;
 
-    // OPTIMIZED: pre-compute advective concentration factor once
-    const double conc_factor = wflux_s2r / wmass_source;
+    // Pre-compute advective concentration factor using exponential decay
+    // (analytical well-mixed CSTR solution): conc_factor = 1 - exp(-Q*dt/V)
+    // For CFL << 1: ≈ CFL (same as linear upwind, difference < 5% for CFL < 0.1)
+    // For CFL = 1:  0.632 (retains 36.8% of mass, prevents full cell flushing)
+    // For CFL >> 1: → 1.0 (asymptotically flushes cell)
+    // This eliminates alternating-zero oscillations when time step ≥ cell residence time
+    const double conc_factor = 1.0 - std::exp(-wflux_s2r / wmass_source);
 
     // Get pre-computed effective dispersion rate [1/s]
     const double D_eff = OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff;
@@ -83,15 +88,17 @@ void OpenWQ_TD_model::AdvDisp(
 
         // ===========================
         // 1) ADVECTIVE FLUX
-        // F_adv = (wflux_s2r / wmass_source) * chemass_source
+        // Uses current available mass (original + accumulated transport from
+        // already-processed upstream reaches) to prevent alternating-zero oscillations
         // ===========================
-        double chemass_flux_adv = conc_factor * chemass_source(ichem_mob)(ix_s,iy_s,iz_s);
-
-        // Cap at available mass (accounting for prior transport in this time step)
-        // to prevent over-extraction when CFL > 1 or multiple connections export from same cell
         double available = chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
                          + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s);
-        chemass_flux_adv = std::fmin(chemass_flux_adv, std::fmax(available, 0.0));
+        double current_mass = std::fmax(available, 0.0);
+
+        double chemass_flux_adv = conc_factor * current_mass;
+
+        // Safety cap: never extract more than what's available
+        chemass_flux_adv = std::fmin(chemass_flux_adv, current_mass);
 
         // Remove advective flux from SOURCE
         d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_adv;
@@ -116,9 +123,16 @@ void OpenWQ_TD_model::AdvDisp(
         // ===========================
         if (D_eff > 0.0 && wmass_recipient > 0.0){
 
-            // Compute concentrations [mass/mass] in source and recipient
-            const double C_source = chemass_source(ichem_mob)(ix_s,iy_s,iz_s) / wmass_source;
-            const double C_recipient = (*OpenWQ_vars.chemass)(recipient)(ichem_mob)(ix_r,iy_r,iz_r) / wmass_recipient;
+            // Compute concentrations using current available mass (after advection)
+            double src_avail_after_adv = std::fmax(
+                chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
+                + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s), 0.0);
+            const double C_source = src_avail_after_adv / wmass_source;
+
+            double recip_current = std::fmax(
+                (*OpenWQ_vars.chemass)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
+                + (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r), 0.0);
+            const double C_recipient = recip_current / wmass_recipient;
 
             // Dispersive mass flux [mass/time]
             double chemass_flux_disp = D_eff * (C_source - C_recipient) * wmass_source;
@@ -126,14 +140,10 @@ void OpenWQ_TD_model::AdvDisp(
             // Cap dispersive flux at available mass to prevent over-extraction
             if (chemass_flux_disp > 0.0) {
                 // Source loses mass: cap at remaining available (after advective removal)
-                double avail_after_adv = chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
-                                       + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s);
-                chemass_flux_disp = std::fmin(chemass_flux_disp, std::fmax(avail_after_adv, 0.0));
+                chemass_flux_disp = std::fmin(chemass_flux_disp, src_avail_after_adv);
             } else if (chemass_flux_disp < 0.0) {
                 // Recipient loses mass: cap at recipient's remaining available
-                double recip_avail = (*OpenWQ_vars.chemass)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
-                                   + (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r);
-                chemass_flux_disp = std::fmax(chemass_flux_disp, -std::fmax(recip_avail, 0.0));
+                chemass_flux_disp = std::fmax(chemass_flux_disp, -recip_current);
             }
 
             // Apply dispersive flux: remove from source, add to recipient

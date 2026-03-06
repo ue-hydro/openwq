@@ -41,8 +41,13 @@ void OpenWQ_TD_model::Adv(
     const unsigned int numspec = OpenWQ_wqconfig.cached_num_mobile_species;
     const std::vector<unsigned int>& mobile_species = *OpenWQ_wqconfig.cached_mobile_species_ptr;
 
-    // OPTIMIZED: pre-compute concentration factor once
-    const double conc_factor = wflux_s2r / wmass_source;
+    // Pre-compute advective concentration factor using exponential decay
+    // (analytical well-mixed CSTR solution): conc_factor = 1 - exp(-Q*dt/V)
+    // For CFL << 1: ≈ CFL (same as linear upwind, difference < 5% for CFL < 0.1)
+    // For CFL = 1:  0.632 (retains 36.8% of mass, prevents full cell flushing)
+    // For CFL >> 1: → 1.0 (asymptotically flushes cell)
+    // This eliminates alternating-zero oscillations when time step ≥ cell residence time
+    const double conc_factor = 1.0 - std::exp(-wflux_s2r / wmass_source);
 
     // OPTIMIZED: pre-fetch field references to avoid repeated pointer dereferencing
     auto& chemass_source = (*OpenWQ_vars.chemass)(source);
@@ -53,14 +58,19 @@ void OpenWQ_TD_model::Adv(
 
         const unsigned int ichem_mob = mobile_species[chemi];
 
-        // Chemical mass flux between source and recipient (Advection)
-        double chemass_flux_adv = conc_factor * chemass_source(ichem_mob)(ix_s,iy_s,iz_s);
-
-        // Cap at available mass (accounting for prior transport in this time step)
-        // to prevent over-extraction when CFL > 1 or multiple connections export from same cell
+        // Use current available mass (original + accumulated transport from
+        // already-processed upstream reaches) for the advective flux calculation.
+        // This prevents alternating-zero oscillations: when a cell receives inflow
+        // before its outflow is computed, the outflow correctly accounts for it.
         double available = chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
                          + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s);
-        chemass_flux_adv = std::fmin(chemass_flux_adv, std::fmax(available, 0.0));
+        double current_mass = std::fmax(available, 0.0);
+
+        // Chemical mass flux between source and recipient (Advection)
+        double chemass_flux_adv = conc_factor * current_mass;
+
+        // Safety cap: never extract more than what's available
+        chemass_flux_adv = std::fmin(chemass_flux_adv, current_mass);
 
         // Remove Chemical mass flux from SOURCE
         d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_adv;
