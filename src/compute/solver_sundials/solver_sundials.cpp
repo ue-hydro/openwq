@@ -77,7 +77,9 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         }
     }
 
-    // OPTIMIZED #10: Copy data from SUNDIALS vector to chemass using memcpy
+    // Copy data from SUNDIALS vector to chemass, clamping negatives to zero
+    // CVODE's Newton solver can probe negative values during iteration;
+    // clamping ensures chemistry expressions (sqrt, exp, etc.) remain valid
     for (unsigned int icmp = 0; icmp < user_data.num_comps; icmp++){
         const auto& [nx, ny, nz] = user_data.comp_dims[icmp];
         const unsigned int offset = user_data.comp_offsets[icmp];
@@ -85,9 +87,10 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
 
         for (unsigned int chemi = 0; chemi < user_data.num_chem; chemi++){
             const unsigned int chem_offset = offset + chemi * cube_size;
-            std::memcpy((*user_data.vars.chemass)(icmp)(chemi).memptr(),
-                       uvec_data + chem_offset,
-                       cube_size * sizeof(double));
+            double* dest = (*user_data.vars.chemass)(icmp)(chemi).memptr();
+            for (unsigned int i = 0; i < cube_size; i++){
+                dest[i] = std::max(0.0, uvec_data[chem_offset + i]);
+            }
         }
     }
 
@@ -132,21 +135,20 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
 
                             // 2. SS (Sink & Sources)
                             dm_ss = d_chemass_ss(ix, iy, iz);
-                            d_chemass_ss_out(ix, iy, iz) += dm_ss;
 
                             // 3. EWF (External Water Fluxes)
                             dm_ewf = d_chemass_ewf(ix, iy, iz);
-                            d_chemass_ewf_out(ix, iy, iz) += dm_ewf;
 
                             // 4. Chemistry derivatives
                             dm_dt_chem = d_chemass_dt_chem(ix, iy, iz);
-                            d_chemass_dt_chem_out(ix, iy, iz) += dm_dt_chem;
 
                             // Transport derivatives
                             dm_dt_trans = d_chemass_dt_transp(ix, iy, iz);
-                            d_chemass_dt_transp_out(ix, iy, iz) += dm_dt_trans;
 
                             // 5. Total derivative
+                            // Note: _out accumulators are NOT updated here because
+                            // CVODE calls this RHS function many times per step;
+                            // they are updated once after CVode() returns
                             d_chemass(ix, iy, iz) = dm_ic + dm_ss + dm_ewf + dm_dt_chem + dm_dt_trans;
                         }
                     }
@@ -300,22 +302,40 @@ void OpenWQ_compute::Solve_with_CVode(
         }
     }
 
-    // SUNDIALS/CVode setup
-    void* cvode_mem = CVodeCreate(CV_ADAMS, sunctx);
+    // SUNDIALS/CVode setup - CV_BDF for stiff chemistry systems.
+    // Uses SPGMR iterative linear solver for Newton iteration.
+    void* cvode_mem = CVodeCreate(CV_BDF, sunctx);
     CVodeInit(cvode_mem, totalFlux, 0, u);
     CVodeSetUserData(cvode_mem, (void*)&user_data);
 
     SUNLinearSolver LS = SUNLinSol_SPGMR(u, SUN_PREC_NONE, 0, sunctx);
     CVodeSetLinearSolver(cvode_mem, LS, NULL);
-    CVodeSStolerances(cvode_mem, 1e-4, 1e-8);
+    CVodeSStolerances(cvode_mem, 1e-2, 1e-4);
+    CVodeSetMaxNumSteps(cvode_mem, 50000);
+    CVodeSetMaxConvFails(cvode_mem, 200);
 
-    // Solve
-    sunrealtype t;
-    if (OpenWQ_hostModelconfig.get_time_step() > 0) {
-        CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
+    // Set small initial step size for robust startup
+    // (without this, CVODE's automatic estimation gives h~1e-39 → immediate failure)
+    if (user_data.time_step > 0) {
+        CVodeSetInitStep(cvode_mem, 1.0);  // Start with 1-second step
     }
 
-    // OPTIMIZED #10: Extract solution using memcpy
+    // Solve (only when we have a real timestep)
+    sunrealtype t = 0;
+    bool cvode_ran = false;
+    if (user_data.time_step > 0) {
+        int flag = CVode(cvode_mem, user_data.time_step, u, &t, CV_NORMAL);
+        cvode_ran = true;
+        if (flag < 0) {
+            std::string msg = "<OpenWQ> WARNING: CVODE chemistry solver returned flag "
+                              + std::to_string(flag) + " at t=" + std::to_string(t)
+                              + ". Using last successful state.";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg, true, true);
+        }
+    }
+
+    // Always extract solution to chemass (including first step with time_step=0,
+    // where the state vector contains initial conditions that need to be applied)
     for (unsigned int icmp = 0; icmp < num_comps; icmp++){
         const auto& [nx, ny, nz] = comp_dims[icmp];
         const unsigned int offset = comp_offsets[icmp];
@@ -323,9 +343,30 @@ void OpenWQ_compute::Solve_with_CVode(
 
         for (unsigned int chemi = 0; chemi < num_chem; chemi++){
             const unsigned int chem_offset = offset + chemi * cube_size;
-            std::memcpy((*OpenWQ_vars.chemass)(icmp)(chemi).memptr(),
-                       udata_ptr + chem_offset,
-                       cube_size * sizeof(double));
+            double* dest = (*OpenWQ_vars.chemass)(icmp)(chemi).memptr();
+            const double* src = udata_ptr + chem_offset;
+
+            // Copy solution (clamped to non-negative)
+            for (unsigned int i = 0; i < cube_size; i++){
+                dest[i] = std::max(0.0, src[i]);
+            }
+
+            // Update output accumulators once per time step (only when CVODE actually ran)
+            if (cvode_ran) {
+                auto& d_chemass_ss = (*OpenWQ_vars.d_chemass_ss)(icmp)(chemi);
+                auto& d_chemass_ss_out = (*OpenWQ_vars.d_chemass_ss_out)(icmp)(chemi);
+                auto& d_chemass_ewf = (*OpenWQ_vars.d_chemass_ewf)(icmp)(chemi);
+                auto& d_chemass_ewf_out = (*OpenWQ_vars.d_chemass_ewf_out)(icmp)(chemi);
+                auto& d_chemass_dt_chem = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi);
+                auto& d_chemass_dt_chem_out = (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp)(chemi);
+                auto& d_chemass_dt_transp = (*OpenWQ_vars.d_chemass_dt_transp)(icmp)(chemi);
+                auto& d_chemass_dt_transp_out = (*OpenWQ_vars.d_chemass_dt_transp_out)(icmp)(chemi);
+
+                d_chemass_ss_out += d_chemass_ss;
+                d_chemass_ewf_out += d_chemass_ewf;
+                d_chemass_dt_chem_out += d_chemass_dt_chem;
+                d_chemass_dt_transp_out += d_chemass_dt_transp;
+            }
         }
     }
 
@@ -403,23 +444,39 @@ void OpenWQ_compute::Solve_with_CVode_Sediment(
     // OPTIMIZED #10: Initialize state vector using memcpy
     std::memcpy(udata_ptr, OpenWQ_vars.sedmass->memptr(), system_size * sizeof(double));
 
-    // SUNDIALS/CVode setup
-    void* cvode_mem = CVodeCreate(CV_ADAMS, sunctx);
+    // SUNDIALS/CVode setup - CV_BDF for sediment transport
+    void* cvode_mem = CVodeCreate(CV_BDF, sunctx);
     CVodeInit(cvode_mem, sedimentFlux, 0, u);
     CVodeSetUserData(cvode_mem, (void*)&user_data);
 
     SUNLinearSolver LS = SUNLinSol_SPGMR(u, SUN_PREC_NONE, 0, sunctx);
     CVodeSetLinearSolver(cvode_mem, LS, NULL);
-    CVodeSStolerances(cvode_mem, 1e-4, 1e-8);
+    CVodeSStolerances(cvode_mem, 1e-2, 1e-4);
+    CVodeSetMaxNumSteps(cvode_mem, 50000);
+    CVodeSetMaxConvFails(cvode_mem, 200);
 
-    // Solve
-    sunrealtype t;
-    if (OpenWQ_hostModelconfig.get_time_step() > 0) {
-        CVode(cvode_mem, OpenWQ_hostModelconfig.get_time_step(), u, &t, CV_NORMAL);
+    // Set small initial step size for robust startup
+    if (user_data.time_step > 0) {
+        CVodeSetInitStep(cvode_mem, 1.0);
     }
 
-    // OPTIMIZED #10: Extract solution using memcpy
-    std::memcpy(OpenWQ_vars.sedmass->memptr(), udata_ptr, system_size * sizeof(double));
+    // Solve
+    sunrealtype t = 0;
+    if (user_data.time_step > 0) {
+        int flag = CVode(cvode_mem, user_data.time_step, u, &t, CV_NORMAL);
+        if (flag < 0) {
+            std::string msg = "<OpenWQ> WARNING: CVODE sediment solver returned flag "
+                              + std::to_string(flag) + " at t=" + std::to_string(t)
+                              + ". Using last successful state.";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg, true, true);
+        }
+    }
+
+    // Extract solution (clamped to non-negative)
+    double* sed_ptr = OpenWQ_vars.sedmass->memptr();
+    for (unsigned int i = 0; i < system_size; i++){
+        sed_ptr[i] = std::max(0.0, udata_ptr[i]);
+    }
 
     // Cleanup
     N_VDestroy(u);
