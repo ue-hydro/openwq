@@ -585,7 +585,7 @@ observation_data_source = "grqa"
 #            Only CSVs matching your species are extracted from the archive.
 #   "/path/to/grqa/" → use a pre-downloaded GRQA folder.
 #            Download: https://zenodo.org/records/15335450
-grqa_local_data_path = "auto"
+grqa_local_data_path = "/Users/diogocosta/Documents/GRQA_data_v1.3"
 
 # Buffer distance [km] around the basin boundary (or river network if no basin
 # shapefile is provided) for searching GRQA monitoring stations.
