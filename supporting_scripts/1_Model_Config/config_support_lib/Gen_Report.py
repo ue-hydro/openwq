@@ -2274,7 +2274,9 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         # Build species list string
         _species_list = chemical_species if isinstance(chemical_species, (list, tuple)) \
             else [chemical_species]
-        _species_str = ', '.join(f'"{s}"' for s in _species_list)
+        _species_str_all = ', '.join(f'"{s}"' for s in _species_list)
+        # Default snippet shows only the first species (matching default checkbox state)
+        _species_str = f'"{_species_list[0]}"' if _species_list else _species_str_all
 
         # Compartment names
         _cmp_names = list(compartments_and_cells.keys()) \
@@ -2372,15 +2374,16 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append('<p style="font-weight:600;margin-top:1rem">Select chemical species to visualize:</p>')
         H.append('<div id="speciesCbRow" style="display:flex;flex-wrap:wrap;gap:.5rem .8rem;'
                  'margin:.5rem 0 1rem;align-items:center">')
-        for _sp in _species_list:
+        for _i_sp, _sp in enumerate(_species_list):
             _sp_esc = _html_mod.escape(_sp)
+            _chk = " checked" if _i_sp == 0 else ""
             H.append(
                 f'<label style="display:inline-flex;align-items:center;gap:.3rem;'
                 f'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'
                 f'border:1px solid var(--border);border-radius:6px;'
                 f'background:var(--surface);transition:border-color .15s">'
                 f'<input type="checkbox" class="species-cb" '
-                f'data-species="{_sp_esc}" checked> {_sp_esc}</label>')
+                f'data-species="{_sp_esc}"{_chk}> {_sp_esc}</label>')
         H.append('<a href="#" id="speciesToggleAll" '
                  'style="font-size:.78rem;margin-left:.5rem;color:var(--primary)">'
                  'Deselect all</a>')
