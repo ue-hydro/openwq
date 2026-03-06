@@ -357,7 +357,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
     _date_strs = []
     for p in plots:
         for t in p['traces']:
-            if t.get('x'):
+            if t.get('x') and t.get('mode') == 'lines':
                 _date_strs.extend([str(x) for x in t['x'] if x])
     if _date_strs:
         _date_strs_sorted = sorted(_date_strs)
