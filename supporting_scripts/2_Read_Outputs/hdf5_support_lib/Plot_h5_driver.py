@@ -205,7 +205,7 @@ def _load_observation_data(obs_dir=None, obs_csv=None):
     return obs_by_species, station_locations
 
 
-def _build_traces(feature_data, n_visible=10):
+def _build_traces(feature_data, n_visible=10, feature_label='Feature'):
     """Build Plotly trace dicts from a {fid: pd.Series} dictionary.
 
     Parameters
@@ -215,6 +215,8 @@ def _build_traces(feature_data, n_visible=10):
     n_visible : int
         When more than 20 features, only the first *n_visible* are shown
         by default; the rest are set to ``'legendonly'``.
+    feature_label : str
+        Label prefix for legend entries (e.g. 'SubId', 'SegId').
 
     Returns
     -------
@@ -239,8 +241,8 @@ def _build_traces(feature_data, n_visible=10):
             'x': x_vals,
             'y': y_vals,
             'mode': 'lines',
-            'name': f'Feature {fid}',
-            'hovertemplate': f'Feature {fid}<br>%{{x}}<br>%{{y:.4g}}<extra></extra>',
+            'name': f'{feature_label} {fid}',
+            'hovertemplate': f'{feature_label} {fid}<br>%{{x}}<br>%{{y:.4g}}<extra></extra>',
         }
 
         # For >20 features, hide extras behind legend toggle
@@ -254,7 +256,7 @@ def _build_traces(feature_data, n_visible=10):
 
 def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 map_center=None, map_bounds=None, mapping_key='SegId',
-                observation_data=None):
+                observation_data=None, feature_label=None):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -273,22 +275,28 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
         (minx, miny, maxx, maxy) for auto-fitting the map.
     mapping_key : str
         Property name in the GeoJSON features that matches feature IDs in plots.
+    feature_label : str or None
+        Display label for features in legends, tooltips, etc.
+        If None, defaults to mapping_key.
 
     Returns
     -------
     str
         Complete HTML document as a string.
     """
+    if feature_label is None:
+        feature_label = mapping_key
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     n_plots = len(plots)
 
     # Build a stable fid → color mapping so map and plots use identical colors.
     _colorway = ['#0066cc','#00a86b','#ff6b35','#004499','#34d399','#fb923c',
                  '#667eea','#764ba2','#e63946','#2ec4b6','#e9c46a','#264653']
+    _label_prefix = f'{feature_label} '
     _all_fids_set = set()
     for p in plots:
         for t in p['traces']:
-            _all_fids_set.add(t['name'].replace('Feature ', ''))
+            _all_fids_set.add(t['name'].replace(_label_prefix, ''))
     _all_fids_sorted = sorted(_all_fids_set)
     _fid_color = {fid: _colorway[i % len(_colorway)]
                   for i, fid in enumerate(_all_fids_sorted)}
@@ -296,7 +304,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
     # Stamp explicit line colors onto every trace so Plotly matches the map
     for p in plots:
         for t in p['traces']:
-            fid = t['name'].replace('Feature ', '')
+            fid = t['name'].replace(_label_prefix, '')
             t['line'] = {'color': _fid_color.get(fid, '#888')}
 
     # --- Merge observation traces (if any) into each plot ---
@@ -326,7 +334,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                     'hovertemplate': (
                         f'Station {od["station_id"]}<br>'
                         f'%{{x}}<br>%{{y:.4g}}'
-                        f'<extra>\u2192 Feature {fid}</extra>'
+                        f'<extra>\u2192 {feature_label} {fid}</extra>'
                     ),
                     'showlegend': False,
                 }
@@ -515,7 +523,7 @@ a{color:var(--primary);text-decoration:none}
 <span>Host Model: {host_label}</span>
 <span>Generated: {now}</span>
 <span>Species: {_species_str}</span>
-<span>Features: {_n_features}</span>
+<span>{feature_label}s: {_n_features}</span>
 <span>Period: {_time_range_str}</span>
 <span>Observations: {_obs_label}</span>
 </div>
@@ -532,7 +540,7 @@ a{color:var(--primary);text-decoration:none}
 <div class="map-legend" id="mapLegend"></div>
 </div>
 <p class="plot-caption" style="margin-top:.4rem;font-size:.78rem;color:var(--text2)">
-Click a river segment to isolate that feature in all plots below.</p>
+Click a river segment to isolate it in all plots below.</p>
 </div>""")
 
     # --- PLOT SECTIONS ---
@@ -588,6 +596,9 @@ window.toggleTheme = function(){
   _owqRelayoutAll();
 };
 """)
+
+    # Feature label prefix (from mapping_key) used by JS for name parsing
+    H.append(f"\nvar _owqFeatureLabel = '{feature_label} ';\n")
 
     # Plotly layout helper
     H.append("""
@@ -703,7 +714,7 @@ function _owqLegendClick(gd){
       return t.visible===undefined||t.visible===true;
     });
     var onlyMe=vis.filter(Boolean).length===1 && vis[ci];
-    var clickedFid=(d[ci].name||'').replace('Feature ','');
+    var clickedFid=(d[ci].name||'').replace(_owqFeatureLabel,'');
     var newVis=d.map(function(t,idx){
       if(om[idx]!==undefined){
         if(onlyMe) return true;
@@ -744,7 +755,7 @@ function _owqFlushQueue(){
         H.append(f"""
 _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   layout:_owqLayout({{xaxis:{{{xaxis_cfg}}},yaxis:{{title:'{p["ylabel"]}'}},
-    hovermode:'x unified'}})}});
+    hovermode:'closest'}})}});
 """)
     H.append("requestAnimationFrame(_owqFlushQueue);")
 
@@ -809,8 +820,8 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
       btn.style.cssText='padding:4px 10px;background:var(--surface,#fff);border:none;'
         +'border-radius:4px;cursor:pointer;font-size:12px;line-height:20px;text-align:center;'
         +'box-shadow:0 1px 5px rgba(0,0,0,.3);color:var(--text,#333);white-space:nowrap;font-weight:600;';
-      btn.title='Restore all features on map and plots';
-      btn.innerHTML='Restore All Features';
+      btn.title='Restore all {feature_label}s on map and plots';
+      btn.innerHTML='Restore All';
       L.DomEvent.disableClickPropagation(btn);
       btn.addEventListener('click',function(){{
         if(typeof _owqSelectFeature==='function') _owqSelectFeature(null);
@@ -839,7 +850,7 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
       var fid=String(feature.properties[mapKey]||'');
       featureLayers[fid]=layer;
       // Tooltip with feature name on hover
-      layer.bindTooltip('Feature '+fid,{{sticky:true,direction:'top',opacity:0.9}});
+      layer.bindTooltip(_owqFeatureLabel+fid,{{sticky:true,direction:'top',opacity:0.9}});
       layer.on('click',function(){{
         if(selectedFid===fid){{
           _owqSelectFeature(null);  // deselect → restore all
@@ -882,7 +893,7 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   // Build map legend
   var legendEl=document.getElementById('mapLegend');
   if(legendEl){{
-    var html='<div class="ml-title">Features</div>';
+    var html='<div class="ml-title">{feature_label}s</div>';
     plotFids.forEach(function(fid){{
       var c=fidColor[fid]||'#888';
       html+='<div class="ml-item" data-fid="'+fid+'">'
@@ -930,7 +941,7 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
             if(!fid) return true;
             return om[tidx]===fid?true:false;
           }}
-          var tfid=(t.name||'').replace('Feature ','');
+          var tfid=(t.name||'').replace(_owqFeatureLabel,'');
           if(!fid) return true;
           return tfid===fid?true:'legendonly';
         }});
@@ -1029,6 +1040,7 @@ def Plot_h5_driver(what2map=None,
                    figsize=(12, 6),
                    river_network_shp=None,
                    mapping_key='SegId',
+                   feature_label=None,
                    observation_dir=None,
                    observation_csv=None):
     """
@@ -1076,6 +1088,10 @@ def Plot_h5_driver(what2map=None,
     str or None
         Path to the generated HTML file, or None if no plots were created.
     """
+
+    # Default feature_label to mapping_key if not provided
+    if feature_label is None:
+        feature_label = mapping_key
 
     print("=" * 70)
     print("TIME-SERIES PLOTTING (Interactive HTML)")
@@ -1195,7 +1211,7 @@ def Plot_h5_driver(what2map=None,
                 print(f"\n⚠ Warning: Missing features: {missing_features}")
 
             # Build plot entry
-            traces = _build_traces(feature_data)
+            traces = _build_traces(feature_data, feature_label=feature_label)
             plot_id = f'plot_{_sanitize_id(hydromodel_var2print)}'
             time_range = (f'{time_index[0]} to {time_index[-1]}'
                           if len(time_index) > 0 else '')
@@ -1205,7 +1221,7 @@ def Plot_h5_driver(what2map=None,
                 'traces': traces,
                 'ylabel': f'{hydromodel_var2print} ({units})',
                 'xtype': 'date' if isinstance(time_index, pd.DatetimeIndex) else 'linear',
-                'caption': f'{len(feature_data)} features | {time_range}',
+                'caption': f'{len(feature_data)} {feature_label}s | {time_range}',
             })
 
         except Exception as e:
@@ -1335,7 +1351,7 @@ def Plot_h5_driver(what2map=None,
                         print(f"    ⚠ Missing features: {missing_features}")
 
                     # Build plot entry
-                    traces = _build_traces(feature_data)
+                    traces = _build_traces(feature_data, feature_label=feature_label)
                     plot_id = f'plot_{_sanitize_id(spec)}_{_sanitize_id(file_extension)}'
                     time_range = (f'{ttdata.index[0]} to {ttdata.index[-1]}'
                                   if len(ttdata.index) > 0 else '')
@@ -1346,7 +1362,7 @@ def Plot_h5_driver(what2map=None,
                         'ylabel': f'{chem_name} ({units})',
                         'xtype': ('date' if isinstance(ttdata.index, pd.DatetimeIndex)
                                   else 'linear'),
-                        'caption': f'{len(feature_data)} features | {time_range}',
+                        'caption': f'{len(feature_data)} {feature_label}s | {time_range}',
                         'species': spec,
                     })
 
@@ -1504,7 +1520,8 @@ def Plot_h5_driver(what2map=None,
                                map_center=_map_center,
                                map_bounds=_map_bounds,
                                mapping_key=mapping_key,
-                               observation_data=_observation_data)
+                               observation_data=_observation_data,
+                               feature_label=feature_label)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
