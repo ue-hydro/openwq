@@ -16,1318 +16,200 @@
 
 """
 OpenWQ Calibration Configuration Template
-=========================================
+==========================================
 
-Copy this file to your working directory and modify for your calibration setup.
+PREREQUISITE: model_config_template.py must be set up and generating correct
+config files FIRST. All model settings (paths, modules, species, observation
+data, container settings, etc.) are read from there automatically.
 
 QUICK START:
   1. cp calibration_config_template.py my_calibration.py
-  2. Edit my_calibration.py:
-     a. Set paths (Section 1) to your model config and observation data
-     b. Set container settings (Section 2) for Docker or Apptainer
-     c. Define calibration parameters (Section 3) - open YOUR BGC JSON file
-        and use the exact key names/paths you see there
-     d. Set calibration options (Section 4) - species names, algorithm, etc.
-  3. Validate: python my_calibration.py --dry-run
-  4. Run:     python my_calibration.py
+  2. Edit the TWO paths below
+  3. Run:  python my_calibration.py
+  4. An interactive HTML report opens in your browser
+  5. Configure settings, parameters, species in the report
+  6. Click "Download Script" to get my_calibration_run.py
+  7. Run:  python my_calibration_run.py
 
 COMMAND-LINE OPTIONS:
-  python my_calibration.py                     # Run calibration (default)
-  python my_calibration.py --sensitivity-only  # Run sensitivity analysis only
-  python my_calibration.py --prepare-obs-only  # Prepare observation data only
-  python my_calibration.py --dry-run           # Validate configuration
-  python my_calibration.py --resume            # Resume from checkpoint
-
-CONFIGURATION OPTIONS (set in this file):
-  run_sensitivity_first = False  # Calibration only (default)
-  run_sensitivity_first = True   # Sensitivity analysis -> Calibration
-
-SPECIES NAMING CONVENTION:
-  OpenWQ follows the GRQA convention using HYPHENS for species names:
-    NO3-N (Nitrate-N)    NH4-N (Ammonium-N)    PO4-P (Phosphate-P)
-  These names must match EXACTLY between:
-    - Your observation CSV "species" column
-    - calibration_targets["species"]
-    - objective_weights keys
-    - grqa_config["species_mapping"] values (if using GRQA)
-
-SECTIONS:
-  1. Path Configuration
-  1B. Observation Data Configuration
-  2. Container Runtime Configuration
-  3. Calibration Parameters
-  4. Calibration Settings
-  5. Sensitivity Analysis Settings
-  6. HPC Settings (Apptainer)
-  7. Run Control (run_calibration_flag = True/False)
-  8. Execution (do not modify)
-
-Parameter Reference:
-  See calibration_lib/parameter_defaults.py for comprehensive list of all
-  calibratable parameters with their scientific ranges and documentation.
+  python my_calibration.py                  # Generate interactive setup report
+  python my_calibration.py --show-parameters  # Show auto-extracted parameters
+  python my_calibration.py --dry-run          # Validate config without report
 
 Full documentation: https://openwq.readthedocs.io
 """
 
 import sys
 import os
-import argparse
 
 # Add calibration library to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from calibration_lib.calibration_driver import run_calibration, run_sensitivity_analysis
-from calibration_lib.parameter_defaults import (
-    BGC_PARAMETERS, PHREEQC_PARAMETERS, SORPTION_PARAMETERS,
-    SEDIMENT_PARAMETERS, TRANSPORT_PARAMETERS, LATERAL_EXCHANGE_PARAMETERS,
-    SOURCE_SINK_PARAMETERS, create_parameter_entry, validate_parameter_bounds
-)
 
-# GRQA extraction tools (optional - only needed if observation_data_source = "grqa")
-try:
-    from calibration_lib.observation_data.grqa_extract_stations import GRQACalibrationExtractor
-    from calibration_lib.observation_data.prepare_calibration_observations import (
-        CalibrationObservationConverter,
-        generate_stations_from_csv
+# ╔═══════════════════════════════════════════════════════════════════════╗
+# ║                                                                       ║
+# ║   USER CONFIGURATION — Only 2 paths to set                           ║
+# ║                                                                       ║
+# ╚═══════════════════════════════════════════════════════════════════════╝
+
+# Absolute path to your model_config_template.py
+model_config_path = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/supporting_scripts/1_Model_Config/model_config_template_test.py"
+
+# Directory where calibration evaluations are stored
+calibration_work_dir = "/Users/diogocosta/Documents/openwq_code/calibration_workflow_test"
+
+
+# ╔═══════════════════════════════════════════════════════════════════════╗
+# ║                                                                       ║
+# ║   END OF USER CONFIGURATION                                          ║
+# ║                                                                       ║
+# ╚═══════════════════════════════════════════════════════════════════════╝
+# ── Execution logic below — do not modify ────────────────────────────
+
+import argparse
+import webbrowser
+import traceback
+
+from calibration_lib import config_integration
+from calibration_lib import extract_parameters
+from calibration_lib import Gen_Calibration_Setup_Report
+
+
+def _main():
+    """Main execution logic."""
+
+    # ── Parse CLI arguments ──
+    parser = argparse.ArgumentParser(
+        description="OpenWQ Calibration — Interactive Setup"
     )
-    GRQA_AVAILABLE = True
-except ImportError:
-    GRQA_AVAILABLE = False
-
-
-
-# =============================================================================
-# 1. PATH CONFIGURATION
-# =============================================================================
-
-# Path to the directory containing your model configuration
-# This should be the directory containing model_config_template.py
-base_model_config_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/supporting_scripts/Model_Config"
-
-# Working directory for calibration runs
-# Each evaluation will create a subdirectory here
-calibration_work_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/calibration_workspace"
-
-# Path to the test case directory (containing mizuroute_in, etc.)
-test_case_dir = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case_2"
-
-
-# =============================================================================
-# 1B. OBSERVATION DATA CONFIGURATION
-# =============================================================================
-#
-# Two options for observation data:
-#   Option A: "csv" - Provide pre-formatted observation CSV file
-#   Option B: "grqa" - Extract from GRQA database (Global River Water Quality Archive)
-#
-# The calibration framework requires observations in CSV format with columns:
-#   datetime, reach_id, species, value, units, source, uncertainty, quality_flag
-#
-# A calibration stations shapefile will be automatically generated containing:
-#   - Station name/ID
-#   - Corresponding spatial ID (reach_id for mizuRoute, hruId for SUMMA)
-#   - Parameters available at each station
-#   - Number of observations per parameter
-#   - Total observations per station
-
-# --- Select observation data source ---
-# Options: "csv", "grqa"
-observation_data_source = "csv"
-
-# --- Option A: Pre-formatted observation file (used when observation_data_source = "csv") ---
-# Provide path to existing observation CSV file
-observation_data_path = "/path/to/your/observations.csv"
-
-# River network shapefile (required for generating stations shapefile from CSV)
-# This shapefile is used to get reach centroids for station locations
-csv_river_network_shapefile = "/path/to/river_network.shp"
-csv_reach_id_column = "seg_id"  # Column in shapefile containing reach IDs
-
-# --- Option B: Extract from GRQA database (used when observation_data_source = "grqa") ---
-# Automatically downloads and processes data from GRQA (https://zenodo.org/records/15335450)
-# GRQA Configuration (only used if observation_data_source = "grqa")
-grqa_config = {
-    # -------------------------------------------------------------------------
-    # DATA SOURCE: Choose between downloading or using local files
-    # -------------------------------------------------------------------------
-    # Option 1: Download from Zenodo (default)
-    #   Set "local_data_path" to None - data will be downloaded automatically
-    #
-    # Option 2: Use already-downloaded GRQA data
-    #   Set "local_data_path" to the folder containing GRQA CSV files
-    #   Expected structure:
-    #     local_data_path/
-    #       ├── GRQA_data_v1.3/
-    #       │   ├── GRQA_data_v1.3_NO3.csv
-    #       │   ├── GRQA_data_v1.3_NH4.csv
-    #       │   ├── GRQA_data_v1.3_TN.csv
-    #       │   └── ... (other parameter files)
-    #       └── GRQA_meta_v1.3.csv (station metadata)
-    # -------------------------------------------------------------------------
-    "local_data_path": None,  # e.g., "/data/GRQA" or None to download
-
-    # River network shapefile for spatial matching
-    "river_network_shapefile": "/path/to/river_network.shp",
-
-    # Column in shapefile containing reach IDs
-    "reach_id_column": "seg_id",
-
-    # Time period for observations
-    # Option 1: Set to "auto" to extract from host model NetCDF output
-    # Option 2: Provide explicit dates in ISO format (YYYY-MM-DD)
-    "start_date": "auto",  # or e.g., "2000-01-01"
-    "end_date": "auto",    # or e.g., "2020-12-31"
-
-    # Host model output NetCDF file (required if start_date/end_date = "auto")
-    # Used to extract time range for observation filtering
-    "hostmodel_output_nc": "/path/to/hostmodel_output.nc",
-
-    # Maximum distance (meters) to match stations to river reaches
-    "max_station_distance_m": 500,
-
-    # Minimum number of observations required per station
-    "min_observations": 10,
-
-    # Output directory for GRQA extraction
-    "output_dir": None,  # Default: calibration_work_dir/observation_data
-
-    # Species mapping: GRQA parameter names -> Model species names
-    # Only parameters listed here will be downloaded and processed
-    # See GRQA documentation for full parameter list:
-    # https://zenodo.org/records/15335450
-    #
-    # IMPORTANT: The mapped names (right side) become the "species" column
-    # in your observation CSV. These MUST match your calibration_targets
-    # and objective_weights above. Use the GRQA hyphen convention
-    # (e.g., NO3-N, NH4-N) for consistency.
-    "species_mapping": {
-        # Nitrogen species
-        "NO3": "NO3-N",      # Nitrate-nitrogen
-        "NH4": "NH4-N",      # Ammonium-nitrogen
-        "TN": "TN",          # Total Nitrogen
-        "NO2": "NO2-N",      # Nitrite-nitrogen
-        "DON": "DON",        # Dissolved Organic Nitrogen
-
-        # Phosphorus species
-        "PO4": "PO4-P",      # Orthophosphate-phosphorus
-        "TP": "TP",          # Total Phosphorus
-        "DP": "DP",          # Dissolved Phosphorus
-
-        # General water quality
-        "DO": "DO",          # Dissolved Oxygen
-        "BOD": "BOD",        # Biochemical Oxygen Demand
-        "COD": "COD",        # Chemical Oxygen Demand
-        "DOC": "DOC",        # Dissolved Organic Carbon
-        "TOC": "TOC",        # Total Organic Carbon
-        "TSS": "TSS",        # Total Suspended Solids
-
-        # Uncomment additional parameters as needed:
-        # "Chl-a": "Chla",   # Chlorophyll-a
-        # "EC": "EC",        # Electrical Conductivity
-        # "pH": "pH",        # pH
-        # "TDS": "TDS",      # Total Dissolved Solids
-        # "Temp": "Temp",    # Temperature
-    },
-
-    # Unit conversions applied during extraction
-    # Format: {grqa_unit: {target_unit: conversion_factor}}
-    "unit_conversions": {
-        "ug/l": {"mg/l": 0.001},
-        "µg/l": {"mg/l": 0.001},
-        "mg/l": {"mg/l": 1.0},
-        "ppm": {"mg/l": 1.0},
-    },
-
-    # Target units for each species (optional)
-    # If not specified, original units are preserved
-    # Species names must match species_mapping values above
-    "target_units": {
-        "NO3-N": "mg/l",
-        "NH4-N": "mg/l",
-        "TN": "mg/l",
-        "TP": "mg/l",
-        "DO": "mg/l",
-    },
-
-    # Quality control flags to include (GRQA quality flags)
-    # Good/Acceptable values only
-    "accepted_quality_flags": ["GOOD", "ACCEPTABLE", "A", "B", None],
-}
-
-
-
-# =============================================================================
-# 2. CONTAINER RUNTIME CONFIGURATION
-# =============================================================================
-
-# Container runtime: "docker" (local) or "apptainer" (HPC)
-container_runtime = "docker"
-
-# --- Docker settings ---
-docker_container_name = "docker_openwq"
-docker_compose_path = "/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/containers/docker-compose.yml"
-
-# --- Apptainer settings (for HPC) ---
-apptainer_sif_path = "/path/to/openwq.sif"
-apptainer_bind_path = "/scratch/user/openwq_code:/code"  # host:container
-
-# --- Executable settings ---
-executable_name = "mizuroute_lakes_openwq_Release"  # or mizuroute_lakes_openwq_Debug
-executable_args = ""  # No flags needed - file manager is a positional argument
-
-# Full path to executable inside container
-# Overrides default path construction from executable_name
-executable_full_path = (
-    "/code/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/"
-    "mizuroute_lakes_openwq_Release"
-)
-
-# mizuRoute file manager path (inside container) - passed as positional argument
-file_manager_path = "/code/openwq_code/6_mizuroute_cslm_openwq/test_case_2/mizuroute_in/settings/mizuroute.control"
-
-# Command template for model execution
-# Placeholders: {eval_dir}, {exec_path}, {master_json}, {file_manager}, {args}
-#
-# IMPORTANT:
-#   - mpirun -np 2 is REQUIRED: mizuRoute domain decomposition needs >=2 MPI processes
-#   - --allow-run-as-root: needed inside Docker/Apptainer containers
-#   - -x master_json: forwards the OpenWQ master JSON env var to all MPI ranks
-command_template = (
-    "cd {eval_dir} && mpirun --allow-run-as-root -np 2 "
-    "-x master_json {exec_path} {file_manager}"
-)
-
-
-# =============================================================================
-# 3. CALIBRATION PARAMETERS
-# =============================================================================
-#
-# Each parameter is defined with:
-#   - name: Unique identifier (used in results)
-#   - file_type: Type of configuration file to modify
-#   - path: Location of parameter within the file
-#   - initial: Starting value
-#   - bounds: (min, max) tuple - see parameter_defaults.py for scientific ranges
-#   - transform: "linear" (default) or "log" for log-transformed optimization
-#   - dtype: "float" (default) or "int" for integer parameters
-#
-# Supported file_types:
-#   - "bgc_json": NATIVE_BGC_FLEX rate constants
-#   - "phreeqc_pqi": PHREEQC input file parameters
-#   - "sorption_json": Freundlich/Langmuir isotherm parameters
-#   - "sediment_json": HYPE_HBVSED or HYPE_MMF parameters
-#   - "transport_json": Dispersion coefficients
-#   - "lateral_exchange_json": Exchange coefficients
-#   - "ss_csv_scale": Source/sink CSV load scaling
-#   - "ss_copernicus_static": Copernicus LULC export coefficients
-#   - "ss_copernicus_dynamic": Climate-adjusted export coefficients
-#   - "ss_climate_param": Climate response parameters
-#   - "ss_ml_param": ML model hyperparameters
-#
-# SCIENTIFIC PARAMETER RANGES (from calibration_lib/parameter_defaults.py):
-# -------------------------------------------------------------------------
-# BGC (NATIVE_BGC_FLEX) - 1/day rates:
-#   k_nitrification:        (0.001, 0.5)    log - Chapra: 0.01-0.2/day typical
-#   k_denitrification:      (1e-8, 0.01)    log - Highly variable, anoxic
-#   k_mineralization_active:(0.01, 1.0)     log - Fast pool decomposition
-#   k_mineralization_stable:(0.0001, 0.01)  log - Slow pool, 10-100x slower
-#   k_immobilization:       (0.001, 0.5)    log - Microbial uptake
-#   k_plant_uptake_N:       (0.0, 0.5)      linear - Seasonal
-#   k_volatilization:       (0.0, 0.1)      linear - pH/temp dependent
-#   k_P_mineralization:     (0.001, 0.2)    log - Slower than N
-#   k_P_adsorption:         (0.01, 5.0)     log - Fast process
-#   k_BOD_decay:            (0.01, 1.0)     log - 0.1-0.5/day typical
-#   k_reaeration:           (0.1, 20.0)     log - Depth/velocity dependent
-#   theta (temp coeff):     (1.02, 1.12)    linear - Arrhenius factors
-#
-# PHREEQC - concentrations mg/L, SI dimensionless:
-#   Ca:                     (5.0, 500.0)    log - 10-200 mg/L typical
-#   Mg:                     (1.0, 200.0)    log - 5-50 mg/L typical
-#   Na:                     (1.0, 10000.0)  log - Freshwater to brackish
-#   N(5) as NO3:            (0.05, 50.0)    log - Pristine to agricultural
-#   N(-3) as NH4:           (0.005, 10.0)   log - Surface water <0.5 mg/L
-#   P as PO4:               (0.001, 5.0)    log - Oligo to eutrophic
-#   pCO2_log (atm):         (-4.5, -1.5)    linear - Atmospheric to organic-rich
-#   Calcite_SI:             (-3.0, 1.0)     linear - Under to supersaturated
-#
-# Sorption - Freundlich/Langmuir:
-#   Kfr (L/kg):             (0.01, 100.0)   log - Sandy 0.1-1, clay 5-50
-#   Nfr (exponent):         (0.3, 1.0)      linear - 1.0 = linear
-#   qmax (mg/kg):           (10.0, 2000.0)  log - Sandy to clay
-#   KL (L/mg):              (0.001, 1.0)    log - Affinity coefficient
-#   Kadsdes (1/s):          (1e-6, 0.1)     log - Kinetic rate
-#   bulk_density (kg/m3):   (1000, 2000)    linear
-#
-# Sediment (HYPE_HBVSED/MMF):
-#   erosion_index:          (0.05, 5.0)     linear - Calibration coefficient
-#   slope (m/m):            (0.001, 0.5)    linear - Land slope
-#   slope_erosion_exponent: (0.5, 3.0)      linear - USLE ~1.4
-#   precip_erosion_exponent:(0.5, 3.0)      linear - Erosivity ~1.5
-#   cohesion (kPa):         (1.0, 30.0)     linear - Sandy to clay
-#   erodibility (g/J):      (0.5, 10.0)     linear - MMF model
-#   monthly factors:        (-0.5, 2.0)     linear - Seasonal adjustment
-#
-# Transport Dissolved:
-#   dispersion_x (m2/s):    (0.01, 100.0)   log - Rivers 1-100 m2/s
-#   dispersion_y (m2/s):    (0.001, 10.0)   log - 10x smaller than x
-#   dispersion_z (m2/s):    (1e-5, 0.1)     log - Stratified to mixed
-#   characteristic_length:  (10.0, 10000.0) log - Reach scale
-#
-# Lateral Exchange:
-#   K_val (1/s):            (1e-14, 1e-6)   log - Very slow diffusive
-#
-# Source/Sink:
-#   csv_scale (all/species):(0.1, 5.0)      linear - Load multiplier
-#   cropland_TN (kg/ha/yr): (1.0, 30.0)     linear - Literature 1-30
-#   cropland_TP (kg/ha/yr): (0.1, 4.0)      linear - Literature 0.1-4
-#   forest_TN (kg/ha/yr):   (0.1, 5.0)      linear - Background 0.1-5
-#   forest_TP (kg/ha/yr):   (0.01, 0.5)     linear - Background 0.01-0.5
-#   urban_TN (kg/ha/yr):    (2.0, 25.0)     linear - Stormwater 2-25
-#   urban_TP (kg/ha/yr):    (0.2, 3.0)      linear - Stormwater 0.2-3
-#   grassland_TN (kg/ha/yr):(0.5, 15.0)     linear - 0.5-15, grazed higher
-#   precip_scaling_power:   (0.5, 2.5)      linear - Nonlinear erosion
-#   Q10_biological:         (1.5, 4.0)      linear - Temp response
-#   T_reference (degC):     (10.0, 25.0)    linear - Baseline temp
-#
-# ML Model Hyperparameters:
-#   n_estimators:           (50, 500)       linear, int - Random Forest
-#   max_depth:              (3, 20)         linear, int - Tree depth
-#   learning_rate:          (0.01, 0.3)     log - Gradient boosting
-# =============================================================================
-
-calibration_parameters = [
-    # =========================================================================
-    # BGC Rate Constants (NATIVE_BGC_FLEX)
-    # =========================================================================
-    #
-    # PATH FORMAT:
-    #   ["CYCLING_FRAMEWORKS", "<framework_name>", "<reaction_number>",
-    #    "<param_values_key>", "<parameter_name>"]
-    #
-    # IMPORTANT - Check your own BGC JSON file to verify:
-    #   1. Framework name: e.g., "FULL_N_CYCLE", "SWAT_NITROGEN_CYCLE", etc.
-    #   2. Reaction number: "1", "2", "3", ... (string keys in JSON)
-    #   3. Parameter values key: typically "PARAMETER_VALUES" (uppercase).
-    #      Open your openWQ_MODULE_NATIVE_BGC_FLEX.json and verify the exact case!
-    #   4. Parameter name: must match exactly (e.g., "k_hydrol", "k_min", "k")
-    #
-    # HOW TO FIND THE CORRECT PATH:
-    #   Open your openWQ_MODULE_NATIVE_BGC_FLEX.json and look at the structure:
-    #   {
-    #     "CYCLING_FRAMEWORKS": {
-    #       "FULL_N_CYCLE": {            <-- framework name
-    #         "1": {                      <-- reaction number
-    #           "consumed": [...],
-    #           "produced": [...],
-    #           "PARAMETER_VALUES": {     <-- check case in YOUR file!
-    #             "k_hydrol": 0.1         <-- parameter name
-    #           }
-    #         },
-    #         "2": { ... },
-    #       }
-    #     }
-    #   }
-    #
-    # Scientific ranges from Chapra (2008) and Thomann & Mueller (1987)
-    # =========================================================================
-
-    # --- Example: Full N Cycle (Variant A) ---
-    # Uncomment and adapt to your BGC configuration
-    {
-        "name": "k_nitrification",
-        "file_type": "bgc_json",
-        "path": ["CYCLING_FRAMEWORKS", "FULL_N_CYCLE", "3", "PARAMETER_VALUES", "k_nitrif1"],
-        "initial": 0.15,                    # 1/day - Typical: 0.01-0.2/day
-        "bounds": (0.01, 2.0),              # Chapra: up to 0.5/day in warm water
-        "transform": "log"
-    },
-    {
-        "name": "k_denitrification",
-        "file_type": "bgc_json",
-        "path": ["CYCLING_FRAMEWORKS", "FULL_N_CYCLE", "6", "PARAMETER_VALUES", "k_denitrif"],
-        "initial": 0.1,                     # 1/day - Highly variable
-        "bounds": (0.005, 2.0),             # SWAT: 0.001-0.01/day anoxic sediments
-        "transform": "log"
-    },
-    {
-        "name": "k_mineralization",
-        "file_type": "bgc_json",
-        "path": ["CYCLING_FRAMEWORKS", "FULL_N_CYCLE", "2", "PARAMETER_VALUES", "k_min"],
-        "initial": 0.08,                    # 1/day - Fast pool
-        "bounds": (0.005, 0.8),             # Thomann & Mueller: 0.05-0.5/day
-        "transform": "log"
-    },
-
-    # --- Example: SWAT-style Nitrogen Cycle (Variant B) ---
-    # Uncomment if using SWAT_NITROGEN_CYCLE framework
-    # {
-    #     "name": "k_nit",
-    #     "file_type": "bgc_json",
-    #     "path": ["CYCLING_FRAMEWORKS", "SWAT_NITROGEN_CYCLE", "4",
-    #              "PARAMETER_VALUES", "k_nit"],
-    #     "initial": 0.1,
-    #     "bounds": (0.005, 2.0),
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "k_den",
-    #     "file_type": "bgc_json",
-    #     "path": ["CYCLING_FRAMEWORKS", "SWAT_NITROGEN_CYCLE", "6",
-    #              "PARAMETER_VALUES", "k_den"],
-    #     "initial": 0.05,
-    #     "bounds": (0.005, 1.0),
-    #     "transform": "log"
-    # },
-
-    # --- Example: Thermodynamic N Cycle (Variant C) ---
-    # Uncomment if using NITRIFICATION_THERMODYNAMIC framework
-    # {
-    #     "name": "k_max_AOB",
-    #     "file_type": "bgc_json",
-    #     "path": ["CYCLING_FRAMEWORKS", "NITRIFICATION_THERMODYNAMIC", "1",
-    #              "PARAMETER_VALUES", "k_max"],
-    #     "initial": 5.0,                   # Maximum growth rate (1/day)
-    #     "bounds": (0.1, 100.0),
-    #     "transform": "log"
-    # },
-
-    # --- Example: PHREEQC Geochemistry (Variant D) ---
-    # Uncomment if using PHREEQC_N_CYCLE framework
-    # {
-    #     "name": "k_nitrif_phreeqc",
-    #     "file_type": "bgc_json",
-    #     "path": ["CYCLING_FRAMEWORKS", "PHREEQC_N_CYCLE", "1",
-    #              "PARAMETER_VALUES", "k_nitrif"],
-    #     "initial": 0.2,                   # 1/day
-    #     "bounds": (0.001, 5.0),
-    #     "transform": "log"
-    # },
-
-    # =========================================================================
-    # PHREEQC Parameters (if using bgc_module_name = "PHREEQC")
-    # Units: mg/L internally, converted to mol/kgw for PHREEQC
-    # Uncomment and modify as needed for your geochemistry model
-    # =========================================================================
-    # {
-    #     "name": "initial_Ca",
-    #     "file_type": "phreeqc_pqi",
-    #     "path": {"block": "SOLUTION", "species": "Ca"},
-    #     "initial": 40.0,                  # mg/L - typical freshwater
-    #     "bounds": (5.0, 500.0),           # Natural range
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "initial_NO3",
-    #     "file_type": "phreeqc_pqi",
-    #     "path": {"block": "SOLUTION", "species": "N(5)"},
-    #     "initial": 2.0,                   # mg/L as N
-    #     "bounds": (0.05, 50.0),           # Pristine to agricultural
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "initial_NH4",
-    #     "file_type": "phreeqc_pqi",
-    #     "path": {"block": "SOLUTION", "species": "N(-3)"},
-    #     "initial": 0.1,                   # mg/L as N
-    #     "bounds": (0.005, 10.0),          # Surface water typically <0.5
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "initial_PO4",
-    #     "file_type": "phreeqc_pqi",
-    #     "path": {"block": "SOLUTION", "species": "P"},
-    #     "initial": 0.05,                  # mg/L as P
-    #     "bounds": (0.001, 5.0),           # Oligotrophic to eutrophic
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "pCO2_log",
-    #     "file_type": "phreeqc_pqi",
-    #     "path": {"block": "EQUILIBRIUM_PHASES", "phase": "CO2(g)", "field": "si"},
-    #     "initial": -3.5,                  # log10(atm) - atmospheric
-    #     "bounds": (-4.5, -1.5),           # -4.5 (low) to -1.5 (organic-rich)
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "pO2_log",
-    #     "file_type": "phreeqc_pqi",
-    #     "path": {"block": "EQUILIBRIUM_PHASES", "phase": "O2(g)", "field": "si"},
-    #     "initial": -0.7,                  # log10(atm) - atmospheric O2
-    #     "bounds": (-6.0, 0.0),            # Anoxic (-6) to supersaturated (0)
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "kinetic_denitrif_rate",
-    #     "file_type": "phreeqc_pqi",
-    #     "path": {"block": "KINETICS", "reaction": "Denitrification", "param": "-parms", "index": 0},
-    #     "initial": 1e-9,                  # mol/L/s
-    #     "bounds": (1e-12, 1e-6),          # Microbially-mediated
-    #     "transform": "log"
-    # },
-
-    # =========================================================================
-    # Sorption Isotherm Parameters (Freundlich/Langmuir)
-    # Sandy soils: lower Kfr; clay soils: higher Kfr
-    # =========================================================================
-    # {
-    #     "name": "NH4_Kfr",
-    #     "file_type": "sorption_json",
-    #     "path": {"module": "FREUNDLICH", "species": "NH4-N", "param": "Kfr"},
-    #     "initial": 1.0,                   # L/kg - moderate soil
-    #     "bounds": (0.01, 100.0),          # Sandy 0.1-1, clay 5-50 L/kg
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "NH4_Nfr",
-    #     "file_type": "sorption_json",
-    #     "path": {"module": "FREUNDLICH", "species": "NH4-N", "param": "Nfr"},
-    #     "initial": 0.7,                   # dimensionless
-    #     "bounds": (0.3, 1.0),             # 1.0 = linear isotherm
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "PO4_Kfr",
-    #     "file_type": "sorption_json",
-    #     "path": {"module": "FREUNDLICH", "species": "PO4-P", "param": "Kfr"},
-    #     "initial": 10.0,                  # L/kg - P strongly sorbed
-    #     "bounds": (0.1, 500.0),           # Depends on Fe/Al oxide content
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "NH4_qmax",
-    #     "file_type": "sorption_json",
-    #     "path": {"module": "LANGMUIR", "species": "NH4-N", "param": "qmax_mg_per_kg"},
-    #     "initial": 200.0,                 # mg/kg
-    #     "bounds": (10.0, 2000.0),         # Sandy 50-200, clay 500-2000
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "bulk_density",
-    #     "file_type": "sorption_json",
-    #     "path": {"module": "FREUNDLICH", "param": "BULK_DENSITY_KG_M3"},
-    #     "initial": 1500.0,                # kg/m3
-    #     "bounds": (1000.0, 2000.0),       # Sandy 1600-1800, clay 1200-1400
-    #     "transform": "linear"
-    # },
-
-    # =========================================================================
-    # Sediment Transport Parameters (HYPE_HBVSED / HYPE_MMF)
-    # Based on HYPE model documentation and USLE
-    # =========================================================================
-    # {
-    #     "name": "erosion_index",
-    #     "file_type": "sediment_json",
-    #     "path": {"module": "HYPE_HBVSED", "param": "EROSION_INDEX"},
-    #     "initial": 0.5,                   # dimensionless
-    #     "bounds": (0.1, 2.0),             # HYPE calibration range
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "slope_erosion_exponent",
-    #     "file_type": "sediment_json",
-    #     "path": {"module": "HYPE_HBVSED", "param": "SLOPE_EROSION_FACTOR_EXPONENT"},
-    #     "initial": 1.5,                   # dimensionless
-    #     "bounds": (0.5, 3.0),             # USLE uses ~1.4
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "precip_erosion_exponent",
-    #     "file_type": "sediment_json",
-    #     "path": {"module": "HYPE_HBVSED", "param": "PRECIP_EROSION_FACTOR_EXPONENT"},
-    #     "initial": 1.5,                   # dimensionless
-    #     "bounds": (0.5, 3.0),             # Erosivity exponent
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "monthly_erosion_winter",
-    #     "file_type": "sediment_json",
-    #     "path": {"module": "HYPE_HBVSED", "param": "MONTHLY_EROSION_FACTOR", "index": 0},
-    #     "initial": 0.0,                   # January factor
-    #     "bounds": (-0.5, 2.0),            # Frozen ground = reduced erosion
-    #     "transform": "linear"
-    # },
-    # # MMF module parameters
-    # {
-    #     "name": "cohesion",
-    #     "file_type": "sediment_json",
-    #     "path": {"module": "HYPE_MMF", "param": "COHESION"},
-    #     "initial": 7.5,                   # kPa
-    #     "bounds": (1.0, 30.0),            # Sandy 2-5, loam 5-15, clay 15-30
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "erodibility",
-    #     "file_type": "sediment_json",
-    #     "path": {"module": "HYPE_MMF", "param": "ERODIBILITY"},
-    #     "initial": 2.0,                   # g/J
-    #     "bounds": (0.5, 10.0),            # MMF model
-    #     "transform": "linear"
-    # },
-
-    # =========================================================================
-    # Transport Parameters (Dispersion)
-    # Scale-dependent; rivers typically 1-100 m2/s longitudinal
-    # =========================================================================
-    # {
-    #     "name": "dispersion_x",
-    #     "file_type": "transport_json",
-    #     "path": {"param": "DISPERSION_X_M2_S"},
-    #     "initial": 1.0,                   # m2/s
-    #     "bounds": (0.01, 100.0),          # Rivers 1-100 m2/s
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "dispersion_y",
-    #     "file_type": "transport_json",
-    #     "path": {"param": "DISPERSION_Y_M2_S"},
-    #     "initial": 0.1,                   # m2/s - typically 10x smaller
-    #     "bounds": (0.001, 10.0),
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "dispersion_z",
-    #     "file_type": "transport_json",
-    #     "path": {"param": "DISPERSION_Z_M2_S"},
-    #     "initial": 0.001,                 # m2/s - vertical mixing
-    #     "bounds": (1e-5, 0.1),            # Stratified 1e-5, mixed 0.01-0.1
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "characteristic_length",
-    #     "file_type": "transport_json",
-    #     "path": {"param": "CHARACTERISTIC_LENGTH_M"},
-    #     "initial": 100.0,                 # m
-    #     "bounds": (10.0, 10000.0),        # Reach scale
-    #     "transform": "log"
-    # },
-
-    # =========================================================================
-    # Lateral Exchange Parameters (NATIVE_LE_BOUNDMIX)
-    # Very slow diffusive exchange between compartments
-    # =========================================================================
-    # {
-    #     "name": "K_val_surface_soil",
-    #     "file_type": "lateral_exchange_json",
-    #     "path": {"exchange_id": 1, "param": "K_val"},
-    #     "initial": 1e-9,                  # 1/s
-    #     "bounds": (1e-12, 1e-6),          # Slow diffusive exchange
-    #     "transform": "log"
-    # },
-    # {
-    #     "name": "K_val_soil_groundwater",
-    #     "file_type": "lateral_exchange_json",
-    #     "path": {"exchange_id": 2, "param": "K_val"},
-    #     "initial": 1e-10,                 # 1/s - even slower
-    #     "bounds": (1e-14, 1e-8),
-    #     "transform": "log"
-    # },
-
-    # =========================================================================
-    # Source/Sink: CSV Load Scaling
-    # Global multiplier for loads from CSV files
-    # =========================================================================
-    {
-        "name": "fertilizer_N_scale",
-        "file_type": "ss_csv_scale",
-        "path": {"species": "all"},         # Scale all species
-        "initial": 1.0,                     # No scaling
-        "bounds": (0.1, 5.0),               # Calibration range
-        "transform": "linear"
-    },
-    # {
-    #     "name": "TN_load_scale",
-    #     "file_type": "ss_csv_scale",
-    #     "path": {"species": "TN"},          # Scale only TN
-    #     "initial": 1.0,
-    #     "bounds": (0.1, 5.0),
-    #     "transform": "linear"
-    # },
-
-    # =========================================================================
-    # Source/Sink: Copernicus LULC Export Coefficients (static)
-    # Literature-based export coefficients in kg/ha/yr
-    # =========================================================================
-    # {
-    #     "name": "cropland_TN_coeff",
-    #     "file_type": "ss_copernicus_static",
-    #     "path": {"lulc_class": 10, "species": "TN"},
-    #     "initial": 15.0,                  # kg/ha/yr
-    #     "bounds": (1.0, 30.0),            # Literature: 1-30
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "cropland_TP_coeff",
-    #     "file_type": "ss_copernicus_static",
-    #     "path": {"lulc_class": 10, "species": "TP"},
-    #     "initial": 2.0,                   # kg/ha/yr
-    #     "bounds": (0.1, 4.0),             # Literature: 0.1-4
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "forest_TN_coeff",
-    #     "file_type": "ss_copernicus_static",
-    #     "path": {"lulc_class": 50, "species": "TN"},
-    #     "initial": 2.0,                   # kg/ha/yr
-    #     "bounds": (0.1, 5.0),             # Natural background: 0.1-5
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "grassland_TN_coeff",
-    #     "file_type": "ss_copernicus_static",
-    #     "path": {"lulc_class": 30, "species": "TN"},
-    #     "initial": 5.0,                   # kg/ha/yr
-    #     "bounds": (0.5, 15.0),            # 0.5-15, grazed higher
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "urban_TN_coeff",
-    #     "file_type": "ss_copernicus_static",
-    #     "path": {"lulc_class": 190, "species": "TN"},
-    #     "initial": 10.0,                  # kg/ha/yr
-    #     "bounds": (2.0, 25.0),            # Stormwater: 2-25
-    #     "transform": "linear"
-    # },
-
-    # =========================================================================
-    # Source/Sink: Climate Response Parameters (dynamic Copernicus)
-    # Modulate loads based on precipitation and temperature
-    # =========================================================================
-    # {
-    #     "name": "precip_scaling_power",
-    #     "file_type": "ss_climate_param",
-    #     "path": "ss_climate_precip_scaling_power",
-    #     "initial": 1.0,                   # Linear relationship
-    #     "bounds": (0.5, 2.5),             # Nonlinear erosion: 1.5-2.0
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "Q10_biological",
-    #     "file_type": "ss_climate_param",
-    #     "path": "ss_climate_temp_q10",
-    #     "initial": 2.0,                   # Standard Q10
-    #     "bounds": (1.5, 4.0),             # Microbial 1.5-3.0
-    #     "transform": "linear"
-    # },
-    # {
-    #     "name": "T_reference",
-    #     "file_type": "ss_climate_param",
-    #     "path": "ss_climate_temp_reference_c",
-    #     "initial": 15.0,                  # degC
-    #     "bounds": (10.0, 25.0),           # Regional baseline
-    #     "transform": "linear"
-    # },
-
-    # =========================================================================
-    # Source/Sink: ML Model Hyperparameters
-    # For machine learning-based load estimation
-    # =========================================================================
-    # {
-    #     "name": "ml_n_estimators",
-    #     "file_type": "ss_ml_param",
-    #     "path": "ss_ml_n_estimators",
-    #     "initial": 200,
-    #     "bounds": (50, 500),
-    #     "transform": "linear",
-    #     "dtype": "int"
-    # },
-    # {
-    #     "name": "ml_max_depth",
-    #     "file_type": "ss_ml_param",
-    #     "path": "ss_ml_max_depth",
-    #     "initial": 8,
-    #     "bounds": (3, 20),
-    #     "transform": "linear",
-    #     "dtype": "int"
-    # },
-    # {
-    #     "name": "ml_learning_rate",
-    #     "file_type": "ss_ml_param",
-    #     "path": "ss_ml_learning_rate",
-    #     "initial": 0.1,
-    #     "bounds": (0.01, 0.3),
-    #     "transform": "log"
-    # },
-]
-
-
-# =============================================================================
-# 4. CALIBRATION SETTINGS
-# =============================================================================
-
-# Optimization algorithm: "DDS" (recommended), "RANDOM"
-algorithm = "DDS"
-
-# Maximum number of model evaluations
-max_evaluations = 500
-
-# Number of parallel evaluations
-# For Docker: typically 1 (sequential)
-# For Apptainer/HPC: can be 10-100 depending on cluster resources
-n_parallel = 1
-
-# Objective function: "RMSE", "NSE", "KGE"
-# KGE (Kling-Gupta Efficiency) is recommended
-objective_function = "KGE"
-
-# =============================================================================
-# TEMPORAL RESOLUTION FOR CALIBRATION
-# =============================================================================
-# Controls the temporal scale at which observations and model results are
-# compared. Both observations and simulations are aggregated to the specified
-# resolution BEFORE computing objective functions and performance metrics.
-#
-# Options:
-#   - "native": Use original model timestep (no aggregation) - fastest but
-#               may be noisy for sub-daily data
-#   - "daily": Aggregate to daily values - good for sub-daily models
-#   - "weekly": Aggregate to weekly values - smooths short-term variability
-#   - "monthly": Aggregate to monthly values - focuses on seasonal patterns
-#   - "yearly": Aggregate to yearly values - long-term averages only
-#
-# Aggregation method controls how values within each period are combined:
-#   - "mean": Average value (recommended for concentrations)
-#   - "sum": Total value (use for loads/fluxes)
-#   - "median": Median value (robust to outliers)
-#   - "min": Minimum value
-#   - "max": Maximum value
-#
-# RECOMMENDATIONS:
-#   - For hourly/sub-daily model output: use "daily" or "weekly"
-#   - For daily model output: use "daily", "weekly", or "monthly"
-#   - For nutrient concentrations: use aggregation_method = "mean"
-#   - For sediment/nutrient loads: use aggregation_method = "sum"
-#   - For seasonal calibration focus: use "monthly"
-#   - For inter-annual variability: use "yearly"
-# =============================================================================
-temporal_resolution = "native"  # "native", "daily", "weekly", "monthly", "yearly"
-aggregation_method = "mean"     # "mean", "sum", "median", "min", "max"
-
-# Species weights for multi-species calibration
-# Higher weight = more influence on objective function
-#
-# IMPORTANT: Species names must EXACTLY match the "species" column in your
-# observation CSV file. Use the GRQA hyphen convention (e.g., NO3-N, NH4-N).
-objective_weights = {
-    "NO3-N": 1.0,
-    "NH4-N": 0.5,
-}
-
-# Calibration targets: which species and reaches to match
-# Species names must match your observation CSV exactly
-calibration_targets = {
-    "species": ["NO3-N", "NH4-N"],
-    "reach_ids": "all",  # or list of specific IDs: [1200014181, 200014181]
-    "compartments": ["RIVER_NETWORK_REACHES"]
-}
-
-# Random seed for reproducibility (None for random)
-random_seed = 42
-
-
-# =============================================================================
-# 5. SENSITIVITY ANALYSIS SETTINGS (OPTIONAL)
-# =============================================================================
-#
-# Run sensitivity analysis before calibration to identify influential parameters.
-# This is HIGHLY RECOMMENDED for large parameter sets (10+ parameters).
-# =============================================================================
-
-# Run sensitivity analysis before optimization
-run_sensitivity_first = False
-
-# Sensitivity analysis method: "morris" (screening) or "sobol" (quantitative)
-sensitivity_method = "morris"
-
-# Morris method settings
-sensitivity_morris_trajectories = 10  # Number of trajectories (r)
-sensitivity_morris_levels = 4  # Number of grid levels (p)
-
-# Sobol method settings
-sensitivity_sobol_samples = 1024  # Number of samples (N)
-
-# Threshold for influential parameters (relative to max mu_star)
-sensitivity_threshold = 0.1
-
-
-# =============================================================================
-# 6. HPC SETTINGS (for Apptainer)
-# =============================================================================
-
-# Enable HPC mode (generates SLURM/PBS job scripts)
-hpc_enabled = False
-
-# Job scheduler: "slurm" or "pbs"
-hpc_scheduler = "slurm"
-
-# SLURM/PBS settings
-hpc_partition = "standard"
-hpc_walltime = "24:00:00"
-hpc_nodes = 1
-hpc_tasks_per_node = 4
-hpc_memory = "8G"
-
-# Job array settings (for sensitivity analysis)
-hpc_max_concurrent_jobs = 50
-
-
-# =============================================================================
-# 7. RUN CONTROL
-# =============================================================================
-# Set to True to run calibration after setup/validation
-# Set to False to only create/validate calibration input files without running
-run_calibration_flag = True
-
-
-# =============================================================================
-# 8. EXECUTION (do not modify below this line)
-# =============================================================================
-
-def get_time_range_from_netcdf(nc_path: str) -> tuple:
-    """
-    Extract time range from host model NetCDF output file.
-
-    Parameters
-    ----------
-    nc_path : str
-        Path to NetCDF file
-
-    Returns
-    -------
-    tuple
-        (start_date, end_date) as ISO format strings
-    """
-    try:
-        import netCDF4 as nc
-        import numpy as np
-        from datetime import datetime
-
-        with nc.Dataset(nc_path, 'r') as ds:
-            # Find time variable (common names)
-            time_var = None
-            for var_name in ['time', 'Time', 'TIME', 't']:
-                if var_name in ds.variables:
-                    time_var = ds.variables[var_name]
-                    break
-
-            if time_var is None:
-                raise ValueError(f"No time variable found in {nc_path}")
-
-            # Get time values and units
-            times = time_var[:]
-            units = time_var.units if hasattr(time_var, 'units') else None
-            calendar = time_var.calendar if hasattr(time_var, 'calendar') else 'standard'
-
-            # Convert to datetime
-            dates = nc.num2date(times, units=units, calendar=calendar)
-
-            start_date = dates[0]
-            end_date = dates[-1]
-
-            # Handle cftime objects
-            if hasattr(start_date, 'strftime'):
-                start_str = start_date.strftime('%Y-%m-%d')
-                end_str = end_date.strftime('%Y-%m-%d')
-            else:
-                # For cftime objects without strftime
-                start_str = f"{start_date.year:04d}-{start_date.month:02d}-{start_date.day:02d}"
-                end_str = f"{end_date.year:04d}-{end_date.month:02d}-{end_date.day:02d}"
-
-            return start_str, end_str
-
-    except ImportError:
-        raise ImportError("netCDF4 required for auto time extraction. Install with: pip install netCDF4")
-
-
-def prepare_grqa_observations(config: dict, grqa_config: dict) -> str:
-    """
-    Download and process GRQA data for calibration.
-
-    Returns path to the prepared observation CSV file.
-    """
-    if not GRQA_AVAILABLE:
-        raise ImportError(
-            "GRQA extraction tools not available. Install required dependencies:\n"
-            "  pip install geopandas requests\n"
-            "Or provide pre-formatted observation_data_path."
-        )
-
-    print("=" * 60)
-    print("GRQA DATA EXTRACTION")
-    print("=" * 60)
-
-    # Set output directory
-    output_dir = grqa_config.get("output_dir")
-    if output_dir is None:
-        output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Determine time period (auto-extract from NetCDF or use provided dates)
-    start_date = grqa_config.get("start_date")
-    end_date = grqa_config.get("end_date")
-
-    if start_date == "auto" or end_date == "auto":
-        nc_path = grqa_config.get("hostmodel_output_nc")
-        if not nc_path:
-            raise ValueError(
-                "hostmodel_output_nc must be specified when start_date/end_date = 'auto'"
-            )
-        print(f"\nExtracting time range from: {nc_path}")
-        auto_start, auto_end = get_time_range_from_netcdf(nc_path)
-
-        if start_date == "auto":
-            start_date = auto_start
-        if end_date == "auto":
-            end_date = auto_end
-
-        print(f"  Time range: {start_date} to {end_date}")
-
-    # Step 1: Extract GRQA stations and observations
-    print("\n[1/2] Extracting GRQA stations and observations...")
-
-    # Check for local data path
-    local_data_path = grqa_config.get("local_data_path")
-    if local_data_path:
-        print(f"  Using local GRQA data: {local_data_path}")
-    else:
-        print("  Will download from Zenodo if needed")
-
-    extractor = GRQACalibrationExtractor(
-        river_network_shapefile=grqa_config["river_network_shapefile"],
-        species_mapping=grqa_config["species_mapping"],
-        output_dir=output_dir,
-        local_data_path=local_data_path,
-        time_period=(start_date, end_date)
-    )
-
-    grqa_output = extractor.run_extraction()
-    print(f"  Extracted {grqa_output.get('total_observations', 0)} observations "
-          f"from {grqa_output.get('total_stations', 0)} stations")
-
-    # Step 2: Convert to calibration format
-    print("\n[2/2] Converting to calibration format...")
-    converter = CalibrationObservationConverter(
-        grqa_stations_path=os.path.join(output_dir, "grqa_stations.csv"),
-        grqa_observations_path=os.path.join(output_dir, "grqa_observations.csv"),
-        river_network_shapefile=grqa_config["river_network_shapefile"],
-        reach_id_column=grqa_config.get("reach_id_column", "seg_id"),
-        output_dir=output_dir
-    )
-
-    result = converter.convert(
-        max_distance_m=grqa_config.get("max_station_distance_m", 500),
-        min_observations=grqa_config.get("min_observations", 10),
-        target_units=grqa_config.get("target_units"),
-        accepted_quality_flags=grqa_config.get("accepted_quality_flags")
-    )
-
-    calibration_obs_path = result.get("calibration_observations_path")
-    print(f"  Generated calibration observations: {calibration_obs_path}")
-    print(f"  Total observations: {result.get('total_observations', 0)}")
-    print(f"  Matched reaches: {result.get('matched_reaches', 0)}")
-    print(f"  Species: {result.get('species_list', [])}")
-
-    return calibration_obs_path
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="OpenWQ Calibration Framework")
-    parser.add_argument("--resume", action="store_true",
-                       help="Resume from checkpoint")
-    parser.add_argument("--sensitivity-only", action="store_true",
-                       help="Run only sensitivity analysis")
     parser.add_argument("--dry-run", action="store_true",
-                       help="Validate configuration without running")
-    parser.add_argument("--prepare-obs-only", action="store_true",
-                       help="Only prepare observation data (Section 1B) without running calibration")
-    parser.add_argument("--extract-grqa-only", action="store_true",
-                       help="Deprecated: use --prepare-obs-only instead")
+                        help="Validate configuration without generating report")
+    parser.add_argument("--show-parameters", action="store_true",
+                        help="Show auto-extracted parameters and exit")
     args = parser.parse_args()
 
-    # Handle deprecated flag
-    if args.extract_grqa_only:
-        print("WARNING: --extract-grqa-only is deprecated. Use --prepare-obs-only instead.")
-        args.prepare_obs_only = True
-
-    # Collect all configuration into a dictionary
-    config = {
-        # Paths
-        "base_model_config_dir": base_model_config_dir,
-        "calibration_work_dir": calibration_work_dir,
-        "observation_data_path": observation_data_path,
-        "test_case_dir": test_case_dir,
-
-        # Container runtime
-        "container_runtime": container_runtime,
-        "docker_container_name": docker_container_name,
-        "docker_compose_path": docker_compose_path,
-        "apptainer_sif_path": apptainer_sif_path,
-        "apptainer_bind_path": apptainer_bind_path,
-        "executable_name": executable_name,
-        "executable_args": executable_args,
-        "file_manager_path": file_manager_path,
-        "executable_full_path": executable_full_path,
-        "command_template": command_template,
-
-        # Calibration parameters
-        "calibration_parameters": calibration_parameters,
-
-        # Calibration settings
-        "algorithm": algorithm,
-        "max_evaluations": max_evaluations,
-        "n_parallel": n_parallel,
-        "objective_function": objective_function,
-        "objective_weights": objective_weights,
-        "calibration_targets": calibration_targets,
-        "random_seed": random_seed,
-        "temporal_resolution": temporal_resolution,
-        "aggregation_method": aggregation_method,
-
-        # Sensitivity analysis
-        "run_sensitivity_first": run_sensitivity_first,
-        "sensitivity_method": sensitivity_method,
-        "sensitivity_morris_trajectories": sensitivity_morris_trajectories,
-        "sensitivity_morris_levels": sensitivity_morris_levels,
-        "sensitivity_sobol_samples": sensitivity_sobol_samples,
-        "sensitivity_threshold": sensitivity_threshold,
-
-        # HPC settings
-        "hpc_enabled": hpc_enabled,
-        "hpc_scheduler": hpc_scheduler,
-        "hpc_partition": hpc_partition,
-        "hpc_walltime": hpc_walltime,
-        "hpc_nodes": hpc_nodes,
-        "hpc_tasks_per_node": hpc_tasks_per_node,
-        "hpc_memory": hpc_memory,
-        "hpc_max_concurrent_jobs": hpc_max_concurrent_jobs,
-
-        # Observation data settings
-        "observation_data_source": observation_data_source,
-        "grqa_config": grqa_config,
-        "csv_river_network_shapefile": csv_river_network_shapefile,
-        "csv_reach_id_column": csv_reach_id_column,
-    }
-
-    # ==========================================================================
-    # Observation Data Preparation (based on observation_data_source)
-    # ==========================================================================
-
-    if observation_data_source == "grqa":
-        print("Preparing observation data from GRQA database...")
-        try:
-            obs_path = prepare_grqa_observations(config, grqa_config)
-            config["observation_data_path"] = obs_path
-            print(f"\nObservation data ready: {obs_path}")
-        except Exception as e:
-            print(f"\nERROR: GRQA extraction failed: {e}")
-            if args.prepare_obs_only:
-                sys.exit(1)
-            else:
-                print("Falling back to configured observation_data_path...")
-
-    elif observation_data_source == "csv":
-        print(f"Using pre-formatted observation file: {observation_data_path}")
-
-        # Generate calibration stations shapefile from CSV
-        if GRQA_AVAILABLE and os.path.exists(observation_data_path):
-            try:
-                output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
-                os.makedirs(output_dir, exist_ok=True)
-                stations_output = os.path.join(output_dir, "calibration_observations")
-
-                stations_gdf = generate_stations_from_csv(
-                    calibration_csv_path=observation_data_path,
-                    river_network_path=csv_river_network_shapefile,
-                    output_path=stations_output,
-                    reach_id_column=csv_reach_id_column
-                )
-                if stations_gdf is not None:
-                    print(f"\nGenerated calibration stations shapefile with {len(stations_gdf)} stations")
-            except Exception as e:
-                print(f"\nWARNING: Could not generate stations shapefile: {e}")
-                if args.prepare_obs_only:
-                    sys.exit(1)
-                print("Calibration will continue without the shapefile.")
-
-    else:
-        print(f"WARNING: Unknown observation_data_source '{observation_data_source}'. "
-              f"Valid options: 'csv', 'grqa'")
-        print(f"Falling back to: {observation_data_path}")
-
-    # Exit if only preparing observations
-    if args.prepare_obs_only:
-        print("\n" + "=" * 60)
-        print("OBSERVATION DATA PREPARATION COMPLETE")
-        print("=" * 60)
-        output_dir = os.path.join(config["calibration_work_dir"], "observation_data")
-        print(f"Output directory: {output_dir}")
-        print("\nGenerated files:")
-        print(f"  - Observation CSV: {config.get('observation_data_path', observation_data_path)}")
-        print(f"  - Stations shapefile: {output_dir}/calibration_observations_stations.shp")
-        print(f"  - Stations GeoJSON: {output_dir}/calibration_observations_stations.geojson")
-        print("\nTo run calibration, use: python your_config.py")
-        sys.exit(0)
-
-    if args.dry_run:
-        print("=" * 60)
-        print("DRY RUN - Configuration Validation")
-        print("=" * 60)
-        print(f"Parameters to calibrate: {len(calibration_parameters)}")
-
-        # Validate each parameter
-        all_warnings = []
-        for p in calibration_parameters:
-            print(f"  - {p['name']}: {p['bounds']} (transform={p.get('transform', 'linear')})")
-            warnings = validate_parameter_bounds(p)
-            all_warnings.extend(warnings)
-
-        print(f"\nAlgorithm: {algorithm}")
-        print(f"Max evaluations: {max_evaluations}")
-        print(f"Container runtime: {container_runtime}")
-        print(f"Objective function: {objective_function}")
-
-        if all_warnings:
-            print("\n" + "=" * 60)
-            print("WARNINGS:")
-            print("=" * 60)
-            for w in all_warnings:
-                print(f"  ! {w}")
-            print("\nConsider fixing these issues before running calibration.")
-        else:
-            print("\nConfiguration is valid. All parameters have reasonable bounds.")
-
-        # Show available parameter reference
-        print("\n" + "=" * 60)
-        print("PARAMETER REFERENCE")
-        print("=" * 60)
-        print("See calibration_lib/parameter_defaults.py for:")
-        print("  - BGC_PARAMETERS: 20+ biogeochemical rate constants")
-        print("  - PHREEQC_PARAMETERS: 20+ geochemistry parameters")
-        print("  - SORPTION_PARAMETERS: Freundlich/Langmuir isotherm params")
-        print("  - SEDIMENT_PARAMETERS: HYPE_HBVSED/MMF erosion params")
-        print("  - TRANSPORT_PARAMETERS: Dispersion coefficients")
-        print("  - LATERAL_EXCHANGE_PARAMETERS: Compartment exchange rates")
-        print("  - SOURCE_SINK_PARAMETERS: LULC export coefficients, climate params")
-        print("\nUse create_parameter_entry() helper for automatic bounds lookup.")
-
-        sys.exit(0)
-
-    # Check run_calibration_flag
-    if not run_calibration_flag:
-        print("\n" + "=" * 60)
-        print("run_calibration_flag = False")
-        print("=" * 60)
-        print("Setup and validation complete. No calibration will be run.")
-        print("Set run_calibration_flag = True in Section 7 and re-run to start calibration.")
-        sys.exit(0)
-
-    if args.sensitivity_only:
-        print("Running sensitivity analysis only...")
-        results = run_sensitivity_analysis(**config)
-    else:
-        print("Running calibration...")
-        results = run_calibration(resume=args.resume, **config)
-
+    # ── Step 1: Load model configuration ──
     print("\n" + "=" * 60)
-    print("CALIBRATION COMPLETE")
+    print("OPENWQ CALIBRATION — INTERACTIVE SETUP")
     print("=" * 60)
-    print(f"Results saved to: {calibration_work_dir}/results/")
+
+    print(f"\n[1/4] Loading model config: {model_config_path}")
+    try:
+        model_cfg = config_integration.load_model_config(model_config_path)
+        print(f"      Loaded {len(model_cfg)} configuration variables")
+    except Exception as e:
+        print(f"      ERROR: {e}")
+        traceback.print_exc()
+        sys.exit(1)
+
+    # ── Step 2: Auto-extract BGC parameters ──
+    print(f"\n[2/4] Extracting calibration parameters...")
+
+    bgc_template_path = config_integration.get_bgc_template_path(model_cfg)
+
+    auto_params = []
+    if bgc_template_path:
+        print(f"      BGC template: {os.path.basename(bgc_template_path)}")
+        try:
+            auto_params = extract_parameters.extract_calibration_parameters(
+                bgc_template_path
+            )
+            print(f"      Auto-extracted {len(auto_params)} parameters "
+                  f"with RANGE fields")
+        except Exception as e:
+            print(f"      WARNING: Could not extract parameters: {e}")
+    else:
+        print("      No BGC template found (NATIVE_BGC_FLEX not selected)")
+
+    # ── Step 2b: Extract parameters for ALL active modules ──
+    print(f"\n[2b/5] Extracting parameters for all active modules...")
+
+    module_selections = config_integration.get_module_selections(model_cfg)
+    module_parameters = extract_parameters.extract_all_module_parameters(
+        model_cfg, bgc_params=auto_params
+    )
+
+    total_module_params = sum(len(v) for v in module_parameters.values())
+    for group_key, params in module_parameters.items():
+        if params:
+            print(f"      {group_key}: {len(params)} parameters")
+    print(f"      Total across all modules: {total_module_params}")
+
+    # ── --show-parameters: display and exit ──
+    if args.show_parameters:
+        print("\n" + "=" * 60)
+        print("AUTO-EXTRACTED PARAMETERS (ALL MODULES)")
+        print("=" * 60)
+        for group_key, params in module_parameters.items():
+            if params:
+                print(f"\n--- {group_key.upper()} ---")
+                extract_parameters.print_parameter_table(params)
+        sys.exit(0)
+
+    # ── Step 3: Extract observation & container config ──
+    print(f"\n[3/5] Extracting observation and container settings...")
+
+    obs_config = config_integration.get_observation_config(model_cfg)
+    container_config = config_integration.get_container_config(model_cfg)
+    species_obs_availability = (
+        config_integration.get_species_observation_availability(model_cfg)
+    )
+
+    # If chemical_species was "all", replace it with the resolved list
+    # so the report generator gets actual species names
+    if species_obs_availability:
+        model_cfg["chemical_species"] = list(species_obs_availability.keys())
+
+    print(f"      Observation source: {obs_config.get('source', 'skip')}")
+    obs_count = sum(1 for v in species_obs_availability.values() if v["has_obs"])
+    print(f"      Species with observations: {obs_count}/{len(species_obs_availability)}")
+    print(f"      Host model: {container_config.get('hostmodel', 'unknown')}")
+
+    # ── Validate ──
+    if args.dry_run:
+        print(f"\n[DRY RUN] Configuration validated.")
+        print(f"  Model config: OK ({len(model_cfg)} variables)")
+        print(f"  Total calibration parameters: {total_module_params}")
+        for gk, params in module_parameters.items():
+            if params:
+                print(f"    {gk}: {len(params)}")
+        print(f"  Observation source: {obs_config.get('source')}")
+        print(f"\n  All checks passed. Ready to generate interactive report.")
+        sys.exit(0)
+
+    # ── Step 4: Generate interactive setup report ──
+    print(f"\n[4/5] Generating interactive setup report...")
+
+    os.makedirs(calibration_work_dir, exist_ok=True)
+
+    report_path = Gen_Calibration_Setup_Report.generate_interactive_setup(
+        output_dir=calibration_work_dir,
+        model_config=model_cfg,
+        auto_extracted_parameters=auto_params,
+        observation_config=obs_config,
+        container_config=container_config,
+        model_config_path=os.path.abspath(model_config_path),
+        calibration_work_dir=os.path.abspath(calibration_work_dir),
+        module_parameters=module_parameters,
+        module_selections=module_selections,
+        species_obs_availability=species_obs_availability,
+    )
+
+    if report_path:
+        print(f"      Report: {report_path}")
+        print(f"\n{'=' * 60}")
+        print("NEXT STEPS:")
+        print("  1. Open the report in your browser")
+        print("  2. Configure calibration settings, species, parameters")
+        print("  3. Click 'Download Script' to get my_calibration_run.py")
+        print("  4. Run: python my_calibration_run.py")
+        print(f"{'=' * 60}\n")
+        webbrowser.open(f"file://{os.path.abspath(report_path)}")
+    else:
+        print("      ERROR: Report generation failed")
+        sys.exit(1)
+
+
+# Entry point
+if __name__ == "__main__":
+    _main()

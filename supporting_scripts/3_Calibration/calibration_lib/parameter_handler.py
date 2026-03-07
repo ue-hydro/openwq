@@ -21,11 +21,16 @@ Parameter Handler Module
 Maps calibration parameters to their target configuration files and applies values.
 Supports all OpenWQ module types: BGC, PHREEQC, Sorption, Sediment, Transport,
 Lateral Exchange, and Source/Sink methods.
+
+Two modes of operation:
+  1. **Legacy mode** (test_case_dir): copies config files from a test case directory.
+  2. **Config-integrated mode** (model_config): generates configs via Gen_Input_Driver.
 """
 
 import json
 import os
 import re
+import copy
 import shutil
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional, Union
@@ -42,47 +47,116 @@ class ParameterHandler:
     """
 
     def __init__(self,
-                 base_model_config_dir: str,
-                 test_case_dir: str,
                  calibration_work_dir: str,
+                 model_config: Optional[Dict[str, Any]] = None,
+                 base_model_config_dir: Optional[str] = None,
+                 test_case_dir: Optional[str] = None,
                  running_on_docker: bool = True):
         """
-        Initialize with paths to base configuration and working directory.
+        Initialize the parameter handler.
+
+        Use **model_config** for the integrated workflow (recommended).
+        Use **base_model_config_dir** + **test_case_dir** for legacy mode.
 
         Parameters
         ----------
-        base_model_config_dir : str
-            Path to the Model_Config directory containing model_config_template.py
-        test_case_dir : str
-            Path to the test case directory (containing openwq_in, mizuroute_in, etc.)
         calibration_work_dir : str
-            Path to working directory for calibration evaluations
+            Path to working directory for calibration evaluations.
+        model_config : Dict[str, Any], optional
+            Loaded model configuration (from config_integration.load_model_config).
+            When provided, eval directories are populated via Gen_Input_Driver.
+        base_model_config_dir : str, optional
+            [LEGACY] Path to the Model_Config directory.
+        test_case_dir : str, optional
+            [LEGACY] Path to the test case directory (openwq_in, mizuroute_in, …).
         running_on_docker : bool
-            Whether the model runs in Docker (affects path handling)
+            Whether the model runs in Docker (affects path handling).
         """
-        self.base_model_config_dir = Path(base_model_config_dir)
-        self.test_case_dir = Path(test_case_dir)
         self.calibration_work_dir = Path(calibration_work_dir)
         self.running_on_docker = running_on_docker
+
+        # Integrated-mode config
+        self.model_config = model_config
+
+        # Legacy-mode paths
+        self.base_model_config_dir = Path(base_model_config_dir) if base_model_config_dir else None
+        self.test_case_dir = Path(test_case_dir) if test_case_dir else None
 
         # Ensure directories exist
         self.calibration_work_dir.mkdir(parents=True, exist_ok=True)
         (self.calibration_work_dir / "evaluations").mkdir(exist_ok=True)
 
+    # =====================================================================
+    # Evaluation directory setup
+    # =====================================================================
+
     def setup_working_directory(self, eval_id: int) -> Path:
         """
         Create isolated working directory for a single model evaluation.
-        Copies all necessary files from test case directory.
+
+        If *model_config* was provided at init, the directory is populated
+        by calling Gen_Input_Driver.  Otherwise it falls back to copying
+        files from test_case_dir (legacy behaviour).
 
         Parameters
         ----------
         eval_id : int
-            Unique evaluation identifier
+            Unique evaluation identifier.
 
         Returns
         -------
         Path
-            Path to the evaluation working directory
+            Path to the evaluation working directory.
+        """
+        if self.model_config is not None:
+            return self._setup_from_config(eval_id)
+        elif self.test_case_dir is not None:
+            return self._setup_from_testcase(eval_id)
+        else:
+            raise RuntimeError(
+                "ParameterHandler: either model_config or test_case_dir "
+                "must be provided."
+            )
+
+    def _setup_from_config(self, eval_id: int) -> Path:
+        """
+        Generate config files via Gen_Input_Driver for an evaluation.
+
+        This is the recommended workflow when the calibration template
+        imports model_config_template.py.
+        """
+        from . import config_integration
+
+        eval_dir = self.calibration_work_dir / "evaluations" / f"eval_{eval_id:04d}"
+
+        # Clean up if exists
+        if eval_dir.exists():
+            shutil.rmtree(eval_dir)
+
+        eval_dir.mkdir(parents=True)
+
+        # Create output directory (model will write here)
+        (eval_dir / "openwq_out" / "HDF5").mkdir(parents=True, exist_ok=True)
+
+        # Generate config files using Gen_Input_Driver
+        try:
+            config_integration.generate_config_for_eval(
+                self.model_config, str(eval_dir), suppress_report=True
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to generate config for eval_{eval_id:04d}: {e}"
+            )
+            raise
+
+        logger.debug(
+            f"Created evaluation directory (Gen_Input_Driver): {eval_dir}"
+        )
+        return eval_dir
+
+    def _setup_from_testcase(self, eval_id: int) -> Path:
+        """
+        Legacy: copy files from test_case_dir to create eval directory.
         """
         eval_dir = self.calibration_work_dir / "evaluations" / f"eval_{eval_id:04d}"
 
@@ -93,7 +167,6 @@ class ParameterHandler:
         eval_dir.mkdir(parents=True)
 
         # Copy test case structure
-        # Copy openwq_in directory
         src_openwq_in = self.test_case_dir / "openwq_in"
         dst_openwq_in = eval_dir / "openwq_in"
         if src_openwq_in.exists():
@@ -107,7 +180,7 @@ class ParameterHandler:
         # Create output directory
         (eval_dir / "openwq_out" / "HDF5").mkdir(parents=True, exist_ok=True)
 
-        logger.debug(f"Created evaluation directory: {eval_dir}")
+        logger.debug(f"Created evaluation directory (copy): {eval_dir}")
         return eval_dir
 
     def apply_parameters(self,
@@ -702,11 +775,11 @@ class ParameterHandler:
         data, header = self._read_json_with_header(ss_file)
 
         # Also load original (unmodified) SS from test_case_dir for base loads
-        original_ss = self.test_case_dir / "openwq_in" / ss_file.name
-        if original_ss.exists() and original_ss != ss_file:
-            orig_data, _ = self._read_json_with_header(original_ss)
-        else:
-            orig_data = None
+        orig_data = None
+        if self.test_case_dir is not None:
+            original_ss = self.test_case_dir / "openwq_in" / ss_file.name
+            if original_ss.exists() and original_ss != ss_file:
+                orig_data, _ = self._read_json_with_header(original_ss)
 
         modified = False
         n_modified = 0
