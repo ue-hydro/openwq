@@ -65,9 +65,12 @@ def create_config_json(
     # Build the initial conditions data for each chemical species
     initial_conditions_data = {}
 
+    # C++ unit parser expects uppercase units (e.g., "MG/L", "KG", "G/M3")
+    ic_units_upper = ic_all_units.upper()
+
     for species in chemical_species_names:
         initial_conditions_data[species] = {
-            "1": ["all", "all", "all", ic_all_value, ic_all_units]
+            "1": ["ALL", "ALL", "ALL", ic_all_value, ic_units_upper]
         }
 
     # Build compartment configuration (same for all compartments)
@@ -78,8 +81,8 @@ def create_config_json(
         compartment_config["CYCLING_FRAMEWORK"] = cycling_framework
 
     compartment_config["INITIAL_CONDITIONS"] = {
-        "Data_Format": "JSON",
-        "Data": initial_conditions_data
+        "DATA_FORMAT": "JSON",
+        "DATA": initial_conditions_data
     }
 
     # Build the complete JSON structure with all compartments
