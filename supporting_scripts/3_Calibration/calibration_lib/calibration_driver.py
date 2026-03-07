@@ -51,13 +51,16 @@ from .postprocessing.results_analysis import ResultsAnalyzer
 
 def run_calibration(
         # Paths
-        base_model_config_dir: str,
         calibration_work_dir: str,
-        observation_data_path: str,
-        test_case_dir: str,
+        base_model_config_dir: str = None,
+        observation_data_path: str = None,
+        test_case_dir: str = None,
+
+        # Integrated config (preferred — replaces paths + container args)
+        model_config: Optional[Dict[str, Any]] = None,
 
         # Container runtime
-        container_runtime: str,
+        container_runtime: str = None,
         docker_container_name: str = None,
         docker_compose_path: str = None,
         apptainer_sif_path: str = None,
@@ -111,6 +114,8 @@ def run_calibration(
         Calibration results including best parameters and diagnostics
     """
 
+    start_time = datetime.now()
+
     # Setup
     work_dir = Path(calibration_work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -125,15 +130,38 @@ def run_calibration(
     ))
     logging.getLogger().addHandler(file_handler)
 
+    # ── Resolve settings from model_config (integrated mode) ──
+    if model_config is not None:
+        from . import config_integration
+        _container = config_integration.get_container_config(model_config)
+        _obs = config_integration.get_observation_config(model_config)
+
+        # Fill in any blanks from model_config
+        container_runtime = container_runtime or "docker"
+        executable_full_path = executable_full_path or _container.get("executable_path", "")
+        file_manager_path = file_manager_path or _container.get("file_manager_path", "")
+
+        # Observation data path — may be supplied directly or derived
+        if not observation_data_path:
+            obs_source = _obs.get("source", "skip")
+            if obs_source == "grqa":
+                observation_data_path = _obs.get("grqa_local_data_path", "")
+            elif obs_source == "user_csv":
+                observation_data_path = _obs.get("user_observation_csv", "")
+
     logger.info("=" * 60)
     logger.info("OPENWQ CALIBRATION FRAMEWORK")
     logger.info("=" * 60)
-    logger.info(f"Start time: {datetime.now()}")
+    logger.info(f"Start time: {start_time}")
     logger.info(f"Working directory: {work_dir}")
     logger.info(f"Parameters to calibrate: {len(calibration_parameters)}")
     logger.info(f"Algorithm: {algorithm}")
     logger.info(f"Max evaluations: {max_evaluations}")
     logger.info(f"Container runtime: {container_runtime}")
+    if model_config is not None:
+        logger.info("Mode: config-integrated (Gen_Input_Driver per eval)")
+    else:
+        logger.info("Mode: legacy (copy from test_case_dir)")
 
     # Validate inputs
     if not calibration_parameters:
@@ -145,9 +173,10 @@ def run_calibration(
     logger.info("Initializing components...")
 
     param_handler = ParameterHandler(
+        calibration_work_dir=calibration_work_dir,
+        model_config=model_config,
         base_model_config_dir=base_model_config_dir,
         test_case_dir=test_case_dir,
-        calibration_work_dir=calibration_work_dir,
         running_on_docker=(container_runtime == "docker")
     )
 
@@ -165,7 +194,12 @@ def run_calibration(
     )
 
     # H5 reader path for objective function
-    h5_reader_path = str(Path(base_model_config_dir).parent / "Read_Outputs" / "hdf5_support_lib")
+    if base_model_config_dir:
+        h5_reader_path = str(Path(base_model_config_dir).parent / "Read_Outputs" / "hdf5_support_lib")
+    else:
+        # Derive from this file's location
+        _this_dir = Path(__file__).resolve().parent
+        h5_reader_path = str(_this_dir.parent.parent / "Read_Outputs" / "hdf5_support_lib")
 
     # Get temporal resolution settings from kwargs
     temporal_resolution = kwargs.get("temporal_resolution", "native")
@@ -425,12 +459,13 @@ def run_calibration(
 
     # Resolve shapefile directory from base_model_config_dir
     # Convention: ../shapefiles/ relative to variant dir
-    _base_cfg = Path(base_model_config_dir)
     _shapefile_dir = kwargs.get("shapefile_dir", "")
-    if not _shapefile_dir and _base_cfg.exists():
-        _candidate = _base_cfg.parent / "shapefiles"
-        if _candidate.is_dir():
-            _shapefile_dir = str(_candidate)
+    if not _shapefile_dir and base_model_config_dir:
+        _base_cfg = Path(base_model_config_dir)
+        if _base_cfg.exists():
+            _candidate = _base_cfg.parent / "shapefiles"
+            if _candidate.is_dir():
+                _shapefile_dir = str(_candidate)
 
     # Generate plots and HTML report
     try:
@@ -558,24 +593,67 @@ def run_calibration(
             import traceback
             logger.debug(traceback.format_exc())
 
+    # Compute runtime
+    end_time = datetime.now()
+    runtime_hours = (end_time - start_time).total_seconds() / 3600.0
+
+    # Find convergence eval (evaluation that found the best)
+    convergence_eval = 0
+    if calibration_history:
+        best_obj_val = result.best_objective
+        for entry in calibration_history:
+            if abs(entry["objective"] - best_obj_val) < 1e-12:
+                convergence_eval = entry["eval_id"]
+                break
+
     # Summary
     logger.info("=" * 60)
     logger.info("CALIBRATION COMPLETE")
     logger.info("=" * 60)
     logger.info(f"Best objective: {result.best_objective:.6f}")
     logger.info(f"Total evaluations: {result.n_evaluations + start_eval}")
+    logger.info(f"Runtime: {runtime_hours:.2f} hours")
     logger.info(f"Best parameters:")
     for name, val in best_params_real.items():
         logger.info(f"  {name}: {val}")
     logger.info(f"Results saved to: {results_dir}")
 
-    return {
+    # Build the comprehensive results dict
+    # (compatible with Gen_Calibration_Results_Report.generate_results_report)
+    calibration_results = {
         "best_params": best_params_real,
         "best_objective": result.best_objective,
         "n_evaluations": result.n_evaluations + start_eval,
+        "converged": result.converged,
+        "convergence_reason": result.convergence_reason,
+        "convergence_eval": convergence_eval,
+        "runtime_hours": runtime_hours,
+        "history": calibration_history,
         "sensitive_params": sensitive_params,
-        "results_dir": str(results_dir)
+        "results_dir": str(results_dir),
     }
+
+    # Load sensitivity results if available
+    sa_results_path = results_dir / "sensitivity_results.json"
+    if sa_results_path.exists():
+        with open(sa_results_path) as f:
+            calibration_results["sensitivity_results"] = json.load(f)
+
+    # Attach matched data / performance metrics for report generation
+    try:
+        matched_data = obj_func.get_matched_data()
+        if matched_data is not None and not matched_data.empty:
+            calibration_results["matched_data"] = matched_data
+            # Compute per-species metrics
+            from .objective_functions import compute_all_metrics
+            perf_metrics = compute_all_metrics(
+                matched_data, calibration_targets.get("species", [])
+            )
+            calibration_results["performance_metrics"] = perf_metrics
+    except Exception as e:
+        logger.debug(f"Could not attach performance data: {e}")
+
+    return calibration_results
 
 
 def _run_sensitivity_analysis(
@@ -666,16 +744,20 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
     work_dir.mkdir(parents=True, exist_ok=True)
     (work_dir / "results").mkdir(exist_ok=True)
 
+    _model_config = kwargs.get('model_config')
+    _container_runtime = kwargs.get('container_runtime', 'docker')
+
     # Initialize components (same as run_calibration)
     param_handler = ParameterHandler(
-        base_model_config_dir=kwargs['base_model_config_dir'],
-        test_case_dir=kwargs['test_case_dir'],
         calibration_work_dir=kwargs['calibration_work_dir'],
-        running_on_docker=(kwargs['container_runtime'] == "docker")
+        model_config=_model_config,
+        base_model_config_dir=kwargs.get('base_model_config_dir'),
+        test_case_dir=kwargs.get('test_case_dir'),
+        running_on_docker=(_container_runtime == "docker")
     )
 
     model_runner = ModelRunner(
-        runtime=kwargs['container_runtime'],
+        runtime=_container_runtime,
         docker_container_name=kwargs.get('docker_container_name'),
         docker_compose_path=kwargs.get('docker_compose_path'),
         apptainer_sif_path=kwargs.get('apptainer_sif_path'),
@@ -687,14 +769,29 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         command_template=kwargs.get('command_template')
     )
 
-    h5_reader_path = str(Path(kwargs['base_model_config_dir']).parent / "Read_Outputs" / "hdf5_support_lib")
+    if kwargs.get('base_model_config_dir'):
+        h5_reader_path = str(Path(kwargs['base_model_config_dir']).parent / "Read_Outputs" / "hdf5_support_lib")
+    else:
+        _this_dir = Path(__file__).resolve().parent
+        h5_reader_path = str(_this_dir.parent.parent / "Read_Outputs" / "hdf5_support_lib")
 
     # Get temporal resolution settings
     temporal_resolution = kwargs.get("temporal_resolution", "native")
     aggregation_method = kwargs.get("aggregation_method", "mean")
 
+    # Resolve observation data path
+    _obs_path = kwargs.get('observation_data_path', '')
+    if not _obs_path and _model_config:
+        from . import config_integration
+        _obs = config_integration.get_observation_config(_model_config)
+        obs_source = _obs.get("source", "skip")
+        if obs_source == "grqa":
+            _obs_path = _obs.get("grqa_local_data_path", "")
+        elif obs_source == "user_csv":
+            _obs_path = _obs.get("user_observation_csv", "")
+
     obj_func = ObjectiveFunction(
-        observation_path=kwargs['observation_data_path'],
+        observation_path=_obs_path,
         target_species=kwargs['calibration_targets']["species"],
         target_reaches=kwargs['calibration_targets'].get("reach_ids", "all"),
         compartments=kwargs['calibration_targets'].get("compartments", ["RIVER_NETWORK_REACHES"]),
