@@ -65,6 +65,20 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
 
+        // Deferred IC concentration (stored value when water volume is zero)
+        d_chemass_ic_conc = std::unique_ptr<
+            arma::field< // Compartments
+            arma::field< // Chemical Species
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
+
+        // Pending flag for deferred IC (1=pending, 0=applied)
+        ic_conc_pending = std::unique_ptr<
+            arma::field< // Compartments
+            arma::field< // Chemical Species
+            arma::Cube<  // Dimensions: nx, ny, nz
+            int>>>>(new arma::field<arma::field<arma::Cube<int>>>(num_HydroComp));
+
         // Derivative (ss: sink or load)
         d_chemass_ss = std::unique_ptr<
             arma::field< // Compartments

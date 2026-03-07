@@ -96,8 +96,18 @@ void OpenWQ_initiate::initmemory(
         (*OpenWQ_vars.d_chemass_dt_chem)(icmp) = domain_field;
         (*OpenWQ_vars.d_chemass_dt_transp)(icmp) = domain_field;
         (*OpenWQ_vars.d_chemass_ic)(icmp) = domain_field;
+        (*OpenWQ_vars.d_chemass_ic_conc)(icmp) = domain_field;  // deferred IC concentration
         (*OpenWQ_vars.d_chemass_ss)(icmp) = domain_field;
         (*OpenWQ_vars.d_chemass_ewf)(icmp) = domain_field;
+
+        // Deferred IC pending flags (int-typed)
+        {
+            arma::field<arma::Cube<int>> domain_field_int(num_chem);
+            for (unsigned int chemi = 0; chemi < num_chem; chemi++){
+                domain_field_int(chemi) = arma::Cube<int>(n_xyz[0], n_xyz[1], n_xyz[2], arma::fill::zeros);
+            }
+            (*OpenWQ_vars.ic_conc_pending)(icmp) = domain_field_int;
+        }
 
         // Cumulative Derivatives (for export in debug mode)
         (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp) = domain_field;

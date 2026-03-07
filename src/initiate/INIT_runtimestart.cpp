@@ -506,11 +506,22 @@ void OpenWQ_initiate::setIC_json(
                             (ic_y == iy || ic_y == -1) &&
                             (ic_z == iz || ic_z == -1)){
 
-                            const double i_volume = is_mass_units ? 1.0 :
-                                OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
-
-                            (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix, iy, iz) = 
-                                ic_value * i_volume;
+                            if (is_mass_units) {
+                                // Mass-based IC: apply directly (no volume dependency)
+                                (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix, iy, iz) = ic_value;
+                            } else {
+                                const double i_volume =
+                                    OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
+                                if (i_volume > 0.0) {
+                                    // Volume available: apply IC immediately
+                                    (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix, iy, iz) =
+                                        ic_value * i_volume;
+                                } else {
+                                    // No water yet: defer IC, store concentration
+                                    (*OpenWQ_vars.d_chemass_ic_conc)(icmp)(chemi)(ix, iy, iz) = ic_value;
+                                    (*OpenWQ_vars.ic_conc_pending)(icmp)(chemi)(ix, iy, iz) = 1;
+                                }
+                            }
                         }
                     }
                 }
@@ -645,11 +656,22 @@ void OpenWQ_initiate::setIC_h5(
                 // Convert units
                 OpenWQ_units.Convert_Units(ic_value, unit_multiplers);
 
-                const double i_volume = is_mass_units ? 1.0 :
-                    OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ic_x, ic_y, ic_z);
-
-                (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ic_x, ic_y, ic_z) = 
-                    ic_value * i_volume;
+                if (is_mass_units) {
+                    // Mass-based IC: apply directly (no volume dependency)
+                    (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ic_x, ic_y, ic_z) = ic_value;
+                } else {
+                    const double i_volume =
+                        OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ic_x, ic_y, ic_z);
+                    if (i_volume > 0.0) {
+                        // Volume available: apply IC immediately
+                        (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ic_x, ic_y, ic_z) =
+                            ic_value * i_volume;
+                    } else {
+                        // No water yet: defer IC, store concentration
+                        (*OpenWQ_vars.d_chemass_ic_conc)(icmp)(chemi)(ic_x, ic_y, ic_z) = ic_value;
+                        (*OpenWQ_vars.ic_conc_pending)(icmp)(chemi)(ic_x, ic_y, ic_z) = 1;
+                    }
+                }
             }
             else {
                 #pragma omp critical
@@ -664,6 +686,59 @@ void OpenWQ_initiate::setIC_h5(
                         ", iz=" + std::to_string(ic_z);
 
                     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                }
+            }
+        }
+    }
+}
+
+
+/* #################################################
+// Apply deferred concentration-based ICs
+// For cells where water volume was zero at init time,
+// the IC concentration is stored and applied when water arrives
+################################################# */
+void OpenWQ_initiate::applyDeferredIC_Conc(
+    OpenWQ_vars& OpenWQ_vars,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_output& OpenWQ_output)
+{
+    const unsigned int num_chem =
+        OpenWQ_wqconfig.is_native_bgc_flex
+        ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
+        : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
+
+    const unsigned int num_comps = OpenWQ_hostModelconfig.get_num_HydroComp();
+    const unsigned int num_threads = OpenWQ_wqconfig.get_num_threads_requested();
+
+    #pragma omp parallel num_threads(num_threads)
+    {
+        #pragma omp for schedule(static) nowait
+        for (unsigned int idx = 0; idx < num_comps * num_chem; idx++){
+            const unsigned int icmp = idx / num_chem;
+            const unsigned int chemi = idx % num_chem;
+
+            const int nx = (*OpenWQ_vars.d_chemass_ic_conc)(icmp)(chemi).n_rows;
+            const int ny = (*OpenWQ_vars.d_chemass_ic_conc)(icmp)(chemi).n_cols;
+            const int nz = (*OpenWQ_vars.d_chemass_ic_conc)(icmp)(chemi).n_slices;
+
+            for (int ix = 0; ix < nx; ix++){
+                for (int iy = 0; iy < ny; iy++){
+                    for (int iz = 0; iz < nz; iz++){
+                        if ((*OpenWQ_vars.ic_conc_pending)(icmp)(chemi)(ix, iy, iz) == 1){
+                            const double vol = OpenWQ_hostModelconfig
+                                .get_waterVol_hydromodel_at(icmp, ix, iy, iz);
+                            if (vol > 0.0){
+                                const double conc = (*OpenWQ_vars.d_chemass_ic_conc)
+                                    (icmp)(chemi)(ix, iy, iz);
+                                // Add IC mass directly to state variable (chemass)
+                                // because the solver only uses d_chemass_ic on the first step
+                                (*OpenWQ_vars.chemass)(icmp)(chemi)(ix, iy, iz) += conc * vol;
+                                (*OpenWQ_vars.ic_conc_pending)(icmp)(chemi)(ix, iy, iz) = 0;
+                            }
+                        }
+                    }
                 }
             }
         }

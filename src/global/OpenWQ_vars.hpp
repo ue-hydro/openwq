@@ -39,12 +39,16 @@ class OpenWQ_vars
             d_chemass_ss,               // derivative (isolated) SS
             d_chemass_ewf,              // derivative (isolated) EWF
             d_chemass_ic,               // derivative (at start) IC
+            d_chemass_ic_conc,          // deferred IC concentration (stored until water arrives)
             d_chemass_dt_chem_out,      // cumulative derivative for output in debug model
             d_chemass_dt_transp_out,    // cumulative derivative for output in debug model
             d_chemass_ss_out,           // cumulative derivative for output in debug model
             d_chemass_ewf_out,          // cumulative derivative for output in debug model
             ewf_conc,
             d_chemass;                   // concentration of external water fluxes
+
+        std::unique_ptr<arma::field<arma::field<arma::Cube<int>>>>
+            ic_conc_pending;                // 1 = IC concentration pending, 0 = applied
 
         std::unique_ptr<arma::Cube<double>>
             sedmass,                        // sediment mass in flow-transport compartment (e.g, runoff)
