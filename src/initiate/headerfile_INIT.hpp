@@ -66,6 +66,14 @@ class OpenWQ_initiate{
             OpenWQ_units& OpenWQ_units,
             OpenWQ_output& OpenWQ_output);
 
+        // Apply deferred concentration-based ICs
+        // initiate_runtimestart.cpp
+        void applyDeferredIC_Conc(
+            OpenWQ_vars& OpenWQ_vars,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            OpenWQ_output& OpenWQ_output);
+
     private:
         // Set initial conditions
         // initiate_runtimestart.cpp        
