@@ -88,16 +88,6 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
 
     }
 
-    // ################################
-    // Apply deferred concentration-based ICs
-    // (for cells that had zero water volume at init)
-    // ################################
-    OpenWQ_initiate.applyDeferredIC_Conc(
-        OpenWQ_vars,
-        OpenWQ_hostModelconfig,
-        OpenWQ_wqconfig,
-        OpenWQ_output);
-
 
     // ########################################
     // Sources and Sinks 

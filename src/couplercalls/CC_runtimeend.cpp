@@ -58,6 +58,18 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
         OpenWQ_TS_model,
         OpenWQ_utils);
 
+    // ################################
+    // Apply deferred concentration-based ICs
+    // (for cells that had zero water volume at init)
+    // Must run AFTER solver and BEFORE output so that
+    // transport doesn't redistribute IC mass on the first timestep
+    // ################################
+    OpenWQ_initiate.applyDeferredIC_Conc(
+        OpenWQ_vars,
+        OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig,
+        OpenWQ_output);
+
     // ########################################
     // Output Results
     // ###########################################
