@@ -35,6 +35,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 
 from . import report_helpers as rh
+from . import config_integration as _ci
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,12 @@ def generate_results_report(
         ]
         if sensitivity_results:
             nav_items.append({"id": "sensitivity", "label": "Sensitivity"})
+        try:
+            _bgc_path = _ci.get_bgc_template_path(model_config)
+        except Exception:
+            _bgc_path = None
+        if _bgc_path and os.path.isfile(_bgc_path):
+            nav_items.append({"id": "bgc-network", "label": "BGC Network"})
         if performance_metrics:
             nav_items.append({"id": "performance", "label": "Performance"})
         nav_items.append({"id": "run-best", "label": "Run Best Params"})
@@ -199,6 +206,21 @@ def generate_results_report(
             H.append(_build_sensitivity_section(
                 sensitivity_results, output_dir
             ))
+
+        # ── Section: BGC Reaction Network (if template available) ──
+        if _bgc_path and os.path.isfile(_bgc_path):
+            try:
+                _diag_html = rh.generate_bgc_reaction_diagram(
+                    bgc_template_path=_bgc_path,
+                    module_name=model_config.get("bgc_module_name", ""),
+                )
+                if _diag_html:
+                    H.append('<div class="section" id="bgc-network">')
+                    H.append('<h2>BGC Reaction Network</h2>')
+                    H.append(_diag_html)
+                    H.append('</div>')
+            except Exception:
+                pass
 
         # ── Section: Performance Metrics (if available) ──
         if performance_metrics:

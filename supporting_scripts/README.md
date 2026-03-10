@@ -72,7 +72,7 @@ Location: `Model_Config/`
 Python-based configuration generator that creates all OpenWQ input JSON files from a single template script (`model_config_template.py`). Edit one file, run it, and get:
 
 - **All JSON configuration files** -- master, config, BGC, transport, source/sink, sorption, sediment, lateral exchange
-- **Interactive HTML report** (`openwq_report.html`) -- a self-contained configuration review tool featuring:
+- **Interactive HTML report** (`openwq_config_report.html`) -- a self-contained configuration review tool featuring:
   - Project summary with KPI grid (species, compartments, solver, timestep)
   - Interactive basin map (Leaflet.js) with river network, basin polygons, and GRQA monitoring stations
   - GRQA observation data -- nearby stations from the Global River Water Quality Archive with stoichiometric conversion tables

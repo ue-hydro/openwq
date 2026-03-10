@@ -190,7 +190,7 @@ cp model_config_template.py my_project.py
 python my_project.py   # generates configs → runs model → produces report
 ```
 
-The report (`openwq_report.html`) is a self-contained HTML file featuring:
+The report (`openwq_config_report.html`) is a self-contained HTML file featuring:
 - **Project information** header (name, authors, host model, description)
 - **Module parameter details** with collapsible sections for each active module (BGC species/frameworks, transport dispersion, lateral exchange, sediment parameters, sorption isotherms)
 - **Source/sink setup** summary with per-species statistics (cells, time period, total load)

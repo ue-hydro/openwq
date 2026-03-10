@@ -37,6 +37,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from . import report_helpers as rh
+from . import config_integration as _ci
 
 logger = logging.getLogger(__name__)
 
@@ -441,6 +442,21 @@ def _build_model_config_section(model_config: Dict[str, Any]) -> str:
     ic_value = model_config.get("ic_all_value", "N/A")
     ic_units = model_config.get("ic_all_units", "N/A")
 
+    # BGC reaction network diagram
+    diagram_html = ""
+    try:
+        bgc_path = _ci.get_bgc_template_path(model_config)
+    except Exception:
+        bgc_path = None
+    if bgc_path and os.path.isfile(bgc_path):
+        try:
+            diagram_html = rh.generate_bgc_reaction_diagram(
+                bgc_template_path=bgc_path,
+                module_name=model_config.get("bgc_module_name", ""),
+            )
+        except Exception:
+            pass
+
     return f"""
 <div class="section" id="model-config">
     <h2>Model Configuration</h2>
@@ -454,6 +470,7 @@ def _build_model_config_section(model_config: Dict[str, Any]) -> str:
         <h3>Initial Conditions</h3>
         <p>Uniform IC: <strong>{ic_value} {ic_units}</strong> (all species, all compartments)</p>
     </div>
+    {diagram_html}
 </div>
 """
 
