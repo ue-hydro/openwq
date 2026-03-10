@@ -36,7 +36,7 @@ Quick start
     python my_project_config.py
 
 4. The script generates all OpenWQ input files in the specified output directory
-   and an interactive HTML report (``openwq_report.html``). The report includes
+   and an interactive HTML report (``openwq_config_report.html``). The report includes
    configuration summaries, Docker run commands, and Python visualization code snippets.
 
 
@@ -331,7 +331,7 @@ The template always generates an interactive HTML report alongside the configura
     shapefile_path = None    # e.g., "/path/to/river_network.shp"
     shapefile_reach_id_col = "seg_id"   # Column containing reach IDs
 
-The report is a self-contained HTML file saved to ``{dir2save_input_files}/openwq_report.html`` and includes:
+The report is a self-contained HTML file saved to ``{dir2save_input_files}/openwq_config_report.html`` and includes:
 
 * **Project information** -- Project name, authors, host model, and description
 * **Summary KPIs** -- Species count, compartments, solver, timestep

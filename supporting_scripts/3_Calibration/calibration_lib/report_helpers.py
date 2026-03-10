@@ -24,9 +24,12 @@ Uses the same visual style as the model config report (Gen_Report.py).
 
 import json
 import base64
+import math
 import os
+import re
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+import html as html_lib
 
 
 def _js(obj):
@@ -372,6 +375,31 @@ def get_css_styles():
         height: 100%; border-radius: 10px;
         background: linear-gradient(90deg, var(--primary), var(--secondary));
         transition: width .3s;
+    }
+
+    /* ── BGC Reaction Network Diagram ─────────────────────── */
+    .bgc-diagram-container {
+        overflow-x: auto; margin: 1rem 0;
+        border: 1px solid var(--border); border-radius: 12px;
+        padding: 1rem 1rem .6rem; background: var(--surface);
+    }
+    .bgc-diagram-container svg {
+        display: block; margin: 0 auto; max-width: 100%;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .bgc-diagram-title {
+        font-size: .9rem; font-weight: 600; margin-bottom: .6rem;
+        color: var(--text);
+    }
+    .bgc-diagram-legend {
+        display: flex; flex-wrap: wrap; gap: .8rem;
+        margin-top: .6rem; font-size: .72rem; color: var(--text2);
+    }
+    .bgc-diagram-legend .legend-item {
+        display: flex; align-items: center; gap: .3rem;
+    }
+    .bgc-diagram-legend .legend-swatch {
+        width: 16px; height: 3px; border-radius: 2px;
     }
     """
 
@@ -1258,3 +1286,487 @@ def build_compact_header(
     <h1>{title}{badge_html}</h1>{subtitle_html}
 </div>
 """
+
+
+# =====================================================================
+#  BGC Reaction Network Diagram Generator
+# =====================================================================
+
+# PHREEQC element notation → friendly label
+_PHREEQC_LABELS = {
+    "N(-3)": "NH\u2084\u207a", "N(5)": "NO\u2083\u207b",
+    "N(3)": "NO\u2082\u207b", "N(0)": "N\u2082",
+    "O(0)": "O\u2082", "C(4)": "CO\u2083/HCO\u2083",
+    "C(-4)": "CH\u2084", "S(6)": "SO\u2084\u00b2\u207b",
+    "S(-2)": "H\u2082S", "Fe(2)": "Fe\u00b2\u207a",
+    "Fe(3)": "Fe\u00b3\u207a", "Mn(2)": "Mn\u00b2\u207a",
+    "P(5)": "PO\u2084\u00b3\u207b",
+}
+
+# Color palette for multi-framework diagrams (arrow colour, bg fill)
+_FW_COLORS = [
+    ("#4d9ee8", "rgba(77,158,232,.10)"),   # blue
+    ("#34d399", "rgba(52,211,153,.10)"),    # green
+    ("#fb923c", "rgba(251,146,60,.10)"),    # orange
+    ("#a78bfa", "rgba(167,139,250,.10)"),   # purple
+    ("#f472b6", "rgba(244,114,182,.10)"),   # pink
+    ("#2dd4bf", "rgba(45,212,191,.10)"),    # teal
+]
+
+
+def extract_bgc_network(bgc_data: dict) -> dict:
+    """Extract a reaction network from a NATIVE_BGC_FLEX JSON dict.
+
+    Accepts both top-level format (CHEMICAL_SPECIES at root) and nested
+    format (under BIOGEOCHEMISTRY_CONFIGURATION).
+
+    Returns ``{"species": [...], "frameworks": {...}}`` or empty dict.
+    """
+    if not bgc_data or not isinstance(bgc_data, dict):
+        return {}
+
+    # Unwrap nested format
+    if "BIOGEOCHEMISTRY_CONFIGURATION" in bgc_data:
+        bgc = bgc_data["BIOGEOCHEMISTRY_CONFIGURATION"]
+    else:
+        bgc = bgc_data
+
+    # --- Species ---
+    species = []
+    chem = bgc.get("CHEMICAL_SPECIES", {})
+    descs = chem.get("_LIST_DESCRIPTIONS", {})
+    sp_list = chem.get("LIST", {})
+    if sp_list:
+        for idx in sorted(sp_list.keys(), key=lambda x: int(x)):
+            name = sp_list[idx]
+            species.append({
+                "name": name,
+                "description": descs.get(name, ""),
+            })
+    if not species:
+        return {}
+
+    # --- Frameworks ---
+    frameworks = {}
+    fw_data = bgc.get("CYCLING_FRAMEWORKS", {})
+    for fw_name, fw in fw_data.items():
+        if not isinstance(fw, dict):
+            continue
+        desc = fw.get("_DESCRIPTION", fw_name)
+        reactions = []
+        # Runtime format with LIST_TRANSFORMATIONS
+        lt = fw.get("LIST_TRANSFORMATIONS", {})
+        if lt:
+            for idx in sorted(lt.keys(), key=lambda x: int(x)):
+                t = fw.get(idx, {})
+                reactions.append({
+                    "name": t.get("_NAME", lt[idx]),
+                    "consumed": t.get("CONSUMED", "NONE"),
+                    "produced": t.get("PRODUCED", "NONE"),
+                })
+        else:
+            # Legacy dict format
+            for key, val in fw.items():
+                if key.startswith("_") or not isinstance(val, dict):
+                    continue
+                if "KINETICS" not in val and "FORMULA" not in val:
+                    continue
+                reactions.append({
+                    "name": key,
+                    "consumed": val.get("CONSUMED", "NONE"),
+                    "produced": val.get("PRODUCED", "NONE"),
+                })
+        if reactions:
+            frameworks[fw_name] = {"description": desc, "reactions": reactions}
+
+    if not frameworks:
+        return {}
+
+    return {"species": species, "frameworks": frameworks}
+
+
+def extract_bgc_network_from_pqi(pqi_path: str) -> dict:
+    """Extract a reaction network from a PHREEQC .pqi file.
+
+    Parses KINETICS blocks for reaction names and ``-formula`` lines.
+    Returns the same structure as :func:`extract_bgc_network`.
+    """
+    if not pqi_path or not os.path.isfile(pqi_path):
+        return {}
+
+    with open(pqi_path, "r", errors="replace") as fh:
+        lines = fh.readlines()
+
+    reactions = []
+    species_set = set()
+    in_kinetics = False
+    current_rxn = None
+
+    for raw in lines:
+        line = raw.strip()
+        # Detect KINETICS block start
+        if re.match(r"^KINETICS\b", line, re.IGNORECASE):
+            in_kinetics = True
+            current_rxn = None
+            continue
+        # Detect block end
+        if in_kinetics and (line.upper() == "END"
+                           or re.match(r"^(RATES|SOLUTION|SELECTED_OUTPUT|"
+                                       r"EQUILIBRIUM_PHASES|USER_PUNCH)\b",
+                                       line, re.IGNORECASE)):
+            in_kinetics = False
+            current_rxn = None
+            continue
+        if not in_kinetics:
+            continue
+        # Reaction name: non-indented line that is not a keyword
+        if not raw[0:1].isspace() and line and not line.startswith("-"):
+            current_rxn = line.split()[0]
+            continue
+        # -formula line
+        if current_rxn and line.lower().startswith("-formula"):
+            tokens = line.split()[1:]  # e.g. ["N(-3)", "-1", "N(5)", "1"]
+            consumed, produced = [], []
+            i = 0
+            while i < len(tokens) - 1:
+                elem = tokens[i]
+                try:
+                    coeff = float(tokens[i + 1])
+                except (ValueError, IndexError):
+                    i += 1
+                    continue
+                label = _PHREEQC_LABELS.get(elem, elem)
+                species_set.add(label)
+                if coeff < 0:
+                    consumed.append(label)
+                elif coeff > 0:
+                    produced.append(label)
+                i += 2
+            for c in (consumed or ["NONE"]):
+                for p in (produced or ["NONE"]):
+                    reactions.append({
+                        "name": current_rxn,
+                        "consumed": c,
+                        "produced": p,
+                    })
+
+    if not reactions:
+        return {}
+
+    species = [{"name": s, "description": ""} for s in sorted(species_set)]
+    return {
+        "species": species,
+        "frameworks": {"PHREEQC_Reactions": {
+            "description": "Reactions parsed from PHREEQC input",
+            "reactions": reactions,
+        }},
+    }
+
+
+def _compute_diagram_layout(
+    species_names: List[str],
+    all_reactions: List[dict],
+    width: int = 860,
+    height: int = 500,
+) -> Dict[str, tuple]:
+    """Compute (x, y) positions for species nodes using a circular layout.
+
+    Nodes involved in reactions are placed on the main ellipse.
+    Unreferenced species are placed in a secondary row below.
+    """
+    # Determine which species are actually involved in reactions
+    involved = set()
+    for r in all_reactions:
+        if r["consumed"] != "NONE":
+            involved.add(r["consumed"])
+        if r["produced"] != "NONE":
+            involved.add(r["produced"])
+
+    main_nodes = [s for s in species_names if s in involved]
+    extra_nodes = [s for s in species_names if s not in involved]
+
+    positions = {}
+    cx, cy = width / 2, height / 2 - 10
+    n = max(len(main_nodes), 1)
+    # Ellipse radii (wider than tall)
+    rx = min(width * 0.38, 340)
+    ry = min(height * 0.34, 200)
+
+    for i, sp in enumerate(main_nodes):
+        angle = 2 * math.pi * i / n - math.pi / 2  # start from top
+        x = cx + rx * math.cos(angle)
+        y = cy + ry * math.sin(angle)
+        positions[sp] = (x, y)
+
+    # Place extra nodes in a row at the bottom
+    if extra_nodes:
+        y_extra = height - 35
+        spacing = min(width / (len(extra_nodes) + 1), 140)
+        x_start = (width - spacing * (len(extra_nodes) - 1)) / 2
+        for i, sp in enumerate(extra_nodes):
+            positions[sp] = (x_start + i * spacing, y_extra)
+
+    return positions
+
+
+def _svg_escape(text: str) -> str:
+    """Escape text for safe embedding in SVG/XML."""
+    return html_lib.escape(str(text), quote=True)
+
+
+def _render_bgc_svg(
+    network: dict,
+    max_width: int = 860,
+) -> str:
+    """Render a BGC reaction network as an inline SVG string."""
+
+    all_species = [s["name"] for s in network["species"]]
+    # Collect all reactions across frameworks
+    all_reactions = []
+    fw_names = list(network["frameworks"].keys())
+    for fw_name in fw_names:
+        for r in network["frameworks"][fw_name]["reactions"]:
+            all_reactions.append({**r, "_fw": fw_name})
+
+    if not all_reactions:
+        return ""
+
+    # Determine SVG dimensions
+    n_species = len(all_species)
+    svg_w = max_width
+    svg_h = max(380, min(250 + n_species * 22, 650))
+
+    positions = _compute_diagram_layout(all_species, all_reactions, svg_w, svg_h)
+
+    # Node dimensions
+    node_h = 28
+    char_w = 8  # approximate width per character
+
+    # Build SVG
+    S = []
+    S.append(f'<svg xmlns="http://www.w3.org/2000/svg" '
+             f'viewBox="0 0 {svg_w} {svg_h}" '
+             f'width="{svg_w}" height="{svg_h}" '
+             f'style="max-width:100%;height:auto;">')
+
+    # Defs: arrowhead markers per framework colour
+    S.append("<defs>")
+    for fi, fw_name in enumerate(fw_names):
+        colour = _FW_COLORS[fi % len(_FW_COLORS)][0]
+        mid = f"arrow-{fi}"
+        S.append(
+            f'<marker id="{mid}" markerWidth="8" markerHeight="6" '
+            f'refX="8" refY="3" orient="auto" markerUnits="strokeWidth">'
+            f'<path d="M0,0 L8,3 L0,6 Z" fill="{colour}"/></marker>')
+    # Dashed arrow marker for source/sink
+    S.append(
+        '<marker id="arrow-ss" markerWidth="7" markerHeight="5" '
+        'refX="7" refY="2.5" orient="auto" markerUnits="strokeWidth">'
+        '<path d="M0,0 L7,2.5 L0,5 Z" fill="currentColor" '
+        'class="source-sink-arrow"/></marker>')
+    S.append("</defs>")
+
+    # --- Draw reaction arrows first (behind nodes) ---
+    # Track how many arrows exist between each pair to offset them
+    pair_counts: Dict[tuple, int] = {}
+    for r in all_reactions:
+        c, p = r["consumed"], r["produced"]
+        if c == "NONE" or p == "NONE":
+            continue
+        key = (min(c, p), max(c, p))
+        pair_counts[key] = pair_counts.get(key, 0) + 1
+
+    pair_idx: Dict[tuple, int] = {}
+    for r in all_reactions:
+        fi = fw_names.index(r["_fw"])
+        colour = _FW_COLORS[fi % len(_FW_COLORS)][0]
+        c, p = r["consumed"], r["produced"]
+
+        if c == "NONE" and p == "NONE":
+            continue
+
+        # Source/sink arrows (dashed)
+        if c == "NONE" and p in positions:
+            px, py = positions[p]
+            sx = px - 60
+            sy = py - 30
+            S.append(
+                f'<g class="source-sink-arrow">'
+                f'<path d="M{sx:.0f},{sy:.0f} Q{(sx+px)/2:.0f},{sy:.0f} '
+                f'{px:.0f},{py - node_h/2:.0f}" '
+                f'fill="none" stroke="{colour}" stroke-width="1.5" '
+                f'stroke-dasharray="5 3" marker-end="url(#arrow-{fi})"/>'
+                f'<text x="{(sx+px)/2 - 10:.0f}" y="{sy - 4:.0f}" '
+                f'font-size="8" fill="{colour}" '
+                f'style="font-style:italic;">'
+                f'{_svg_escape(r["name"])}</text></g>')
+            continue
+
+        if p == "NONE" and c in positions:
+            cx_p, cy_p = positions[c]
+            ex = cx_p + 60
+            ey = cy_p + 30
+            S.append(
+                f'<g class="source-sink-arrow">'
+                f'<path d="M{cx_p:.0f},{cy_p + node_h/2:.0f} '
+                f'Q{(cx_p+ex)/2:.0f},{ey:.0f} {ex:.0f},{ey:.0f}" '
+                f'fill="none" stroke="{colour}" stroke-width="1.5" '
+                f'stroke-dasharray="5 3" marker-end="url(#arrow-{fi})"/>'
+                f'<text x="{(cx_p+ex)/2 + 4:.0f}" y="{ey + 12:.0f}" '
+                f'font-size="8" fill="{colour}" '
+                f'style="font-style:italic;">'
+                f'{_svg_escape(r["name"])}</text></g>')
+            continue
+
+        if c not in positions or p not in positions:
+            continue
+
+        x1, y1 = positions[c]
+        x2, y2 = positions[p]
+
+        # Offset for multiple arrows between same pair
+        key = (min(c, p), max(c, p))
+        idx = pair_idx.get(key, 0)
+        pair_idx[key] = idx + 1
+        total = pair_counts.get(key, 1)
+        offset = (idx - (total - 1) / 2) * 18
+
+        # Compute bezier control point perpendicular to midpoint
+        mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+        dx, dy = x2 - x1, y2 - y1
+        length = math.sqrt(dx * dx + dy * dy) or 1
+        # Perpendicular unit vector
+        nx, ny = -dy / length, dx / length
+        # Curve amount proportional to distance + offset
+        curve = length * 0.18 + offset
+        qx = mx + nx * curve
+        qy = my + ny * curve
+
+        # Shorten start/end to not overlap nodes
+        node_w_c = max(len(c) * char_w + 20, 60)
+        node_w_p = max(len(p) * char_w + 20, 60)
+        # Move start point away from centre of node c
+        t_start = max((node_w_c / 2 + 4) / length, 0.05)
+        t_end = max((node_w_p / 2 + 4) / length, 0.05)
+        ax = x1 + dx * t_start
+        ay = y1 + dy * t_start
+        bx = x2 - dx * t_end
+        by = y2 - dy * t_end
+
+        # Recalculate control relative to shortened segment
+        smx, smy = (ax + bx) / 2, (ay + by) / 2
+        qx2 = smx + nx * curve
+        qy2 = smy + ny * curve
+
+        S.append(
+            f'<g class="reaction-arrow">'
+            f'<path d="M{ax:.1f},{ay:.1f} Q{qx2:.1f},{qy2:.1f} '
+            f'{bx:.1f},{by:.1f}" '
+            f'fill="none" stroke="{colour}" stroke-width="1.8" '
+            f'marker-end="url(#arrow-{fi})"/>')
+
+        # Label at curve midpoint
+        lx = (ax + 2 * qx2 + bx) / 4
+        ly = (ay + 2 * qy2 + by) / 4
+        label = r["name"].replace("_", " ")
+        if len(label) > 22:
+            label = label[:20] + "\u2026"
+        S.append(
+            f'<text x="{lx:.1f}" y="{ly - 4:.1f}" '
+            f'text-anchor="middle" font-size="8.5" fill="{colour}" '
+            f'style="font-weight:500;pointer-events:none;">'
+            f'{_svg_escape(label)}</text>')
+        S.append("</g>")
+
+    # --- Draw species nodes (on top of arrows) ---
+    for sp in all_species:
+        if sp not in positions:
+            continue
+        x, y = positions[sp]
+        label = sp
+        node_w = max(len(label) * char_w + 24, 64)
+        is_loss = "loss" in sp.lower() or "atm" in sp.lower()
+        cls = "species-node sink" if is_loss else "species-node"
+        S.append(
+            f'<g class="{cls}">'
+            f'<rect x="{x - node_w/2:.1f}" y="{y - node_h/2:.1f}" '
+            f'width="{node_w:.0f}" height="{node_h}" rx="10" ry="10" '
+            f'style="fill:var(--surface,#fff);stroke:var(--primary,#4d9ee8);'
+            f'stroke-width:2;{" stroke-dasharray:4 2;" if is_loss else ""}"/>'
+            f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="middle" '
+            f'dominant-baseline="central" font-size="11.5" font-weight="600" '
+            f'style="fill:var(--text,#222);">'
+            f'{_svg_escape(label)}</text></g>')
+
+    S.append("</svg>")
+    return "\n".join(S)
+
+
+def generate_bgc_reaction_diagram(
+    bgc_data: Optional[dict] = None,
+    bgc_template_path: Optional[str] = None,
+    pqi_filepath: Optional[str] = None,
+    module_name: str = "NATIVE_BGC_FLEX",
+    max_width: int = 860,
+) -> str:
+    """Generate an HTML/SVG reaction network diagram for BGC modules.
+
+    Accepts either pre-parsed *bgc_data*, a path to a JSON template, or
+    a path to a PHREEQC .pqi file.  Returns an HTML ``<div>`` containing
+    the SVG diagram, or ``""`` if no data is available.
+    """
+    network = {}
+
+    # 1. Load data
+    if bgc_data is not None:
+        network = extract_bgc_network(bgc_data)
+    elif bgc_template_path and os.path.isfile(bgc_template_path):
+        try:
+            with open(bgc_template_path, "r", errors="replace") as fh:
+                data = json.load(fh)
+            network = extract_bgc_network(data)
+        except Exception:
+            return ""
+    elif pqi_filepath and os.path.isfile(pqi_filepath):
+        network = extract_bgc_network_from_pqi(pqi_filepath)
+    elif module_name.upper() == "PHREEQC" and pqi_filepath:
+        network = extract_bgc_network_from_pqi(pqi_filepath)
+
+    if not network or not network.get("frameworks"):
+        return ""
+
+    # 2. Render SVG
+    svg_html = _render_bgc_svg(network, max_width=max_width)
+    if not svg_html:
+        return ""
+
+    # 3. Framework legend
+    fw_names = list(network["frameworks"].keys())
+    legend_items = []
+    for fi, fw_name in enumerate(fw_names):
+        colour = _FW_COLORS[fi % len(_FW_COLORS)][0]
+        n_rxn = len(network["frameworks"][fw_name]["reactions"])
+        legend_items.append(
+            f'<span class="legend-item">'
+            f'<span class="legend-swatch" '
+            f'style="background:{colour};"></span>'
+            f'{_svg_escape(fw_name)} ({n_rxn} reactions)</span>')
+
+    legend_html = ""
+    if len(fw_names) > 1 or True:  # always show legend
+        legend_html = (
+            '<div class="bgc-diagram-legend">'
+            + "".join(legend_items)
+            + "</div>"
+        )
+
+    # 4. Wrap in container
+    n_sp = len(network["species"])
+    title = f"Reaction Network \u2014 {n_sp} species"
+    return (
+        f'<div class="bgc-diagram-container">'
+        f'<div class="bgc-diagram-title">{title}</div>'
+        f'{svg_html}'
+        f'{legend_html}'
+        f'</div>'
+    )

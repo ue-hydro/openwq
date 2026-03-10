@@ -53,6 +53,12 @@ try:
 except ImportError:
     _GRQA_AVAILABLE = False
 
+try:
+    from calibration_lib.report_helpers import generate_bgc_reaction_diagram
+    _DIAGRAM_AVAILABLE = True
+except ImportError:
+    _DIAGRAM_AVAILABLE = False
+
 # Auto-mapping: model species name → GRQA parameter code.
 #
 # BGC templates use the "-N" / "-P" / "-S" convention to indicate that the
@@ -181,7 +187,7 @@ def _read_module_json(output_dir, module_name):
         return None
 
 
-def _render_module_params(module_data, module_name):
+def _render_module_params(module_data, module_name, output_dir=None):
     """Generate HTML list for module parameter display inside a <details> block."""
     if module_data is None or module_name.upper() == 'NONE':
         return []
@@ -373,6 +379,16 @@ def _render_module_params(module_data, module_name):
                 H.append(f'<tr><td>{comp}</td><td>{fws_str}</td></tr>')
             H.append('</table>')
 
+        # Reaction network diagram
+        if _DIAGRAM_AVAILABLE:
+            try:
+                _diag = generate_bgc_reaction_diagram(bgc_data=bgc)
+                if _diag:
+                    H.append('<h4>Reaction Network</h4>')
+                    H.append(_diag)
+            except Exception:
+                pass
+
     # --- PHREEQC ---
     elif mn == 'PHREEQC':
         if 'PHREEQC_CONFIGURATION' in module_data:
@@ -383,6 +399,20 @@ def _render_module_params(module_data, module_name):
                 val = ", ".join(v) if isinstance(v, list) else str(v)
                 H.append(f'<tr><td>{k}</td><td>{val}</td></tr>')
             H.append('</table>')
+
+        # PHREEQC reaction network diagram
+        if _DIAGRAM_AVAILABLE:
+            pqi_path = os.path.join(output_dir, 'openwq_in',
+                                    'openWQ_PHREEQC.pqi')
+            if os.path.isfile(pqi_path):
+                try:
+                    _diag = generate_bgc_reaction_diagram(
+                        pqi_filepath=pqi_path, module_name='PHREEQC')
+                    if _diag:
+                        H.append('<h4>Reaction Network</h4>')
+                        H.append(_diag)
+                except Exception:
+                    pass
 
     # --- Sorption Isotherm (Freundlich / Langmuir) ---
     elif mn in ('FREUNDLICH', 'LANGMUIR'):
@@ -1163,7 +1193,7 @@ def generate_simulation_report(
 
     Returns the path to the generated HTML file.
     """
-    report_path = os.path.join(output_dir, "openwq_report.html")
+    report_path = os.path.join(output_dir, "openwq_config_report.html")
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     # Track errors for each section so the report can still be generated
@@ -1616,6 +1646,17 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 .footer a{color:var(--primary)}
 .footer a:hover{text-decoration:underline}
 
+/* BGC Reaction Network Diagram */
+.bgc-diagram-container{overflow-x:auto;margin:1rem 0;border:1px solid var(--border);
+  border-radius:12px;padding:1rem 1rem .6rem;background:var(--surface)}
+.bgc-diagram-container svg{display:block;margin:0 auto;max-width:100%;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif}
+.bgc-diagram-title{font-size:.9rem;font-weight:600;margin-bottom:.6rem;color:var(--text)}
+.bgc-diagram-legend{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:.6rem;
+  font-size:.72rem;color:var(--text2)}
+.bgc-diagram-legend .legend-item{display:flex;align-items:center;gap:.3rem}
+.bgc-diagram-legend .legend-swatch{width:16px;height:3px;border-radius:2px}
+
 /* Animations */
 @keyframes fadeInUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
 
@@ -2029,7 +2070,8 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             mod_data = _read_module_json(output_dir, mod_name)
             if mod_data is None:
                 continue
-            param_html = _render_module_params(mod_data, mod_name)
+            param_html = _render_module_params(mod_data, mod_name,
+                                                output_dir=output_dir)
             if not param_html:
                 continue
             H.append(f'<details class="module-details">')
