@@ -395,7 +395,10 @@ def _build_settings_section(settings: Dict[str, Any]) -> str:
 """
 
 
-def _build_model_config_section(model_config: Dict[str, Any]) -> str:
+def _build_model_config_section(
+    model_config: Dict[str, Any],
+    species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> str:
     """Build the model configuration summary section."""
 
     bgc = model_config.get("bgc_module_name", "N/A")
@@ -442,21 +445,6 @@ def _build_model_config_section(model_config: Dict[str, Any]) -> str:
     ic_value = model_config.get("ic_all_value", "N/A")
     ic_units = model_config.get("ic_all_units", "N/A")
 
-    # BGC reaction network diagram
-    diagram_html = ""
-    try:
-        bgc_path = _ci.get_bgc_template_path(model_config)
-    except Exception:
-        bgc_path = None
-    if bgc_path and os.path.isfile(bgc_path):
-        try:
-            diagram_html = rh.generate_bgc_reaction_diagram(
-                bgc_template_path=bgc_path,
-                module_name=model_config.get("bgc_module_name", ""),
-            )
-        except Exception:
-            pass
-
     return f"""
 <div class="section" id="model-config">
     <h2>Model Configuration</h2>
@@ -470,9 +458,52 @@ def _build_model_config_section(model_config: Dict[str, Any]) -> str:
         <h3>Initial Conditions</h3>
         <p>Uniform IC: <strong>{ic_value} {ic_units}</strong> (all species, all compartments)</p>
     </div>
-    {diagram_html}
 </div>
 """
+
+
+def _build_bgc_diagram(
+    model_config: Dict[str, Any],
+    species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> str:
+    """Build the BGC reaction network diagram HTML.
+
+    Prefers the generated combined BGC JSON (all frameworks) over individual
+    template.  Returns empty string if no diagram can be generated.
+    """
+    diagram_html = ""
+    combined_bgc_path = ""
+    exe_path = model_config.get("executable_path", "")
+    if exe_path:
+        combined_bgc_path = os.path.join(
+            os.path.dirname(os.path.abspath(exe_path)),
+            "openwq_in", "openWQ_MODULE_NATIVE_BGC_FLEX.json",
+        )
+    if combined_bgc_path and os.path.isfile(combined_bgc_path):
+        try:
+            diagram_html = rh.generate_bgc_reaction_diagram(
+                bgc_template_path=combined_bgc_path,
+                module_name=model_config.get("bgc_module_name", ""),
+                species_obs_availability=species_obs_availability,
+            )
+        except Exception:
+            pass
+    if not diagram_html:
+        # Fallback to individual template
+        try:
+            bgc_path = _ci.get_bgc_template_path(model_config)
+        except Exception:
+            bgc_path = None
+        if bgc_path and os.path.isfile(bgc_path):
+            try:
+                diagram_html = rh.generate_bgc_reaction_diagram(
+                    bgc_template_path=bgc_path,
+                    module_name=model_config.get("bgc_module_name", ""),
+                    species_obs_availability=species_obs_availability,
+                )
+            except Exception:
+                pass
+    return diagram_html
 
 
 def _build_observations_section(obs_config: Dict[str, Any]) -> str:
@@ -598,6 +629,7 @@ def generate_interactive_setup(
     module_parameters: Optional[Dict[str, List[Dict]]] = None,
     module_selections: Optional[Dict[str, Any]] = None,
     species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
+    ss_species_with_loads: Optional[set] = None,
 ) -> Optional[str]:
     """
     Generate an **interactive** calibration setup HTML report.
@@ -707,7 +739,10 @@ def generate_interactive_setup(
             total_params=total_params,
             module_selections=module_selections,
         ))
-        H.append(_build_model_config_section(model_config))
+        H.append(_build_model_config_section(
+            model_config,
+            species_obs_availability=species_obs_availability,
+        ))
         H.append(_build_observations_section(observation_config))
         H.append('</div>')
 
@@ -733,12 +768,44 @@ def generate_interactive_setup(
 
         # ── Tab: Parameters ──
         H.append('<div class="tab-panel" data-tab="parameters">')
+        # Reaction network diagram (above parameter list)
+        _param_diagram = _build_bgc_diagram(
+            model_config,
+            species_obs_availability=species_obs_availability,
+        )
+        if _param_diagram:
+            H.append('<div class="card" style="margin-bottom:1rem;">')
+            H.append('<h3>Reaction Network</h3>')
+            H.append(_param_diagram)
+            H.append('</div>')
         H.append('<input type="text" class="param-search" id="paramSearch" '
                  'placeholder="Search parameters by name, module, or type..." '
                  'oninput="filterParams(this.value)"/>')
         if module_parameters:
+            # Load BGC network for calibratability check
+            _bgc_net = None
+            if species_obs_availability:
+                try:
+                    _bgc_net = rh.extract_bgc_network(
+                        json.load(open(
+                            os.path.join(
+                                os.path.dirname(
+                                    os.path.abspath(
+                                        model_config.get("executable_path", "")
+                                    )
+                                ),
+                                "openwq_in",
+                                "openWQ_MODULE_NATIVE_BGC_FLEX.json",
+                            )
+                        ))
+                    )
+                except Exception:
+                    pass
             H.append(_build_interactive_parameters_section_grouped(
-                module_parameters, module_selections or {}
+                module_parameters, module_selections or {},
+                species_obs_availability=species_obs_availability,
+                bgc_network=_bgc_net,
+                ss_species_with_loads=ss_species_with_loads,
             ))
         else:
             H.append(_build_interactive_parameters_section(
@@ -1121,7 +1188,7 @@ def _build_interactive_parameters_section(parameters: List[Dict]) -> str:
     <h2>Calibration Parameters</h2>
     {rh.build_highlight_box(
         "<strong>No parameters auto-extracted.</strong> "
-        "Your BGC template has no _PARAMETERS_INFO entries with RANGE fields.",
+        "Your BGC template has no _PARAMETERS_INFO entries.",
         "warning"
     )}
 </div>
@@ -1165,9 +1232,89 @@ _GROUP_MODULE_KEY = {
 def _build_interactive_parameters_section_grouped(
     module_parameters: Dict[str, List[Dict]],
     module_selections: Dict[str, Any],
+    species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
+    bgc_network: Optional[dict] = None,
+    ss_species_with_loads: Optional[set] = None,
 ) -> str:
-    """Build the parameters section with collapsible module groups."""
+    """Build the parameters section with collapsible module groups.
+
+    *species_obs_availability*: species -> {"has_obs": bool} dict.  When
+    provided, parameters that affect only species without observations are
+    grayed out.  *bgc_network*: parsed network dict (from
+    ``extract_bgc_network``) used to resolve which species each BGC
+    reaction touches.  *ss_species_with_loads*: set of model species
+    names that have SS load entries (from the generated SS JSON).
+    """
     import html as html_lib
+
+    # Pre-compute calibratability per parameter
+    # Pre-compute which frameworks are "active" (have at least one
+    # species with observation data).
+    _active_fws: set = set()
+    if species_obs_availability and bgc_network:
+        for fw_name, fw_info in bgc_network.get("frameworks", {}).items():
+            fw_species: set = set()
+            for r in fw_info.get("reactions", []):
+                c = r.get("consumed", "NONE")
+                p = r.get("produced", "NONE")
+                if c and c != "NONE":
+                    fw_species.add(c)
+                if p and p != "NONE":
+                    fw_species.add(p)
+            if any(
+                species_obs_availability.get(sp, {}).get("has_obs", False)
+                for sp in fw_species
+            ):
+                _active_fws.add(fw_name)
+
+    # Set of model species that have SS loads (already resolved by the
+    # config template, which applied stoichiometric conversions).
+    _ss_load_species = ss_species_with_loads or set()
+
+    # Observed model species (species with has_obs=True)
+    _observed_species: set = set()
+    if species_obs_availability:
+        _observed_species = {
+            sp for sp, info in species_obs_availability.items()
+            if info.get("has_obs", False)
+        }
+
+    # SS species that can be calibrated = model species that have both
+    # loads in the generated SS JSON AND observation data.
+    _ss_calibratable_species = _ss_load_species & _observed_species
+
+    def _is_calibratable(p, group_key):
+        """Return True if this parameter belongs to an active sub-cycle."""
+        if species_obs_availability is None:
+            return True  # no obs info → all calibratable
+        if not _observed_species:
+            return True  # no obs at all → don't gray everything
+        if group_key == "bgc":
+            # Active = framework has at least one observed species
+            fw = p.get("_framework", "")
+            if fw:
+                return fw in _active_fws
+            return True  # can't determine → keep
+        elif group_key == "source_sink":
+            # SS params now use the same model species names as the
+            # generated SS JSON (e.g. NH4-N, NO3-N).  A param is
+            # calibratable if its species is in _ss_calibratable_species
+            # (species with both SS loads AND observation data).
+            if not _ss_calibratable_species:
+                return False
+            path_info = p.get("path", {})
+            if isinstance(path_info, dict):
+                sp = path_info.get("species", "")
+                if sp == "all":
+                    return bool(_ss_calibratable_species)
+                if sp:
+                    return sp in _ss_calibratable_species
+            # Climate response params (no species) are calibratable
+            # if any SS species is calibratable
+            return bool(_ss_calibratable_species)
+        else:
+            # Transport, LE, sediment → affects all species
+            return True
 
     # Build flat list and track group boundaries
     all_params = []
@@ -1185,8 +1332,14 @@ def _build_interactive_parameters_section_grouped(
             label += f" &mdash; {html_lib.escape(str(mod_name))}"
 
         start_idx = len(all_params)
-        all_params.extend(params)
-        group_meta.append((group_key, label, start_idx, len(params)))
+        # Annotate each param with calibratability
+        annotated = []
+        for p in params:
+            pp = dict(p)  # shallow copy
+            pp["_calibratable"] = _is_calibratable(p, group_key)
+            annotated.append(pp)
+        all_params.extend(annotated)
+        group_meta.append((group_key, label, start_idx, len(annotated)))
 
     total = len(all_params)
 
@@ -1212,10 +1365,18 @@ def _build_interactive_parameters_section_grouped(
 
     for group_key, label, start_idx, count in group_meta:
         group_params = all_params[start_idx:start_idx + count]
+        has_disabled = any(not p.get("_calibratable", True)
+                          for p in group_params)
         H.append(f'<details class="module-group" open>')
         H.append(f'<summary>{label} '
                  f'<span class="group-badge">{count}</span></summary>')
         H.append('<div class="module-content">')
+        if has_disabled:
+            H.append(rh.build_highlight_box(
+                'Grayed-out parameters belong to sub-cycles for which '
+                'no observation data is available, so they cannot be '
+                'calibrated.',
+                'warning'))
         H.append(rh.build_editable_param_table(
             group_params, idx_offset=start_idx))
         H.append('</div></details>')
@@ -1453,6 +1614,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     });
     s.parameters = params;
 
+    // Excluded frameworks (set by obs-only toggle)
+    s.excluded_frameworks = window._excludedFrameworks || [];
+
     return s;
   }
 
@@ -1504,6 +1668,16 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('sensitivity_sobol_samples = ' + pyRepr(s.sensitivity_sobol_samples));
     lines.push('sensitivity_threshold = ' + pyRepr(s.sensitivity_threshold));
     lines.push('');
+
+    // Excluded frameworks (obs-only filter)
+    if (s.excluded_frameworks && s.excluded_frameworks.length > 0) {
+      lines.push('# Sub-cycles excluded from calibration (no observation data)');
+      lines.push('excluded_frameworks = ' + pyRepr(s.excluded_frameworks));
+      lines.push('');
+    } else {
+      lines.push('excluded_frameworks = []');
+      lines.push('');
+    }
 
     lines.push('# Calibration parameters (' + s.parameters.length + ' selected)');
     lines.push('calibration_parameters = [');
@@ -1575,6 +1749,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        docker_compose_path=container_config.get("docker_compose_path", ""),');
     lines.push('        executable_full_path=container_config.get("executable_path", ""),');
     lines.push('        file_manager_path=container_config.get("file_manager_path", ""),');
+    lines.push('        excluded_frameworks=excluded_frameworks,');
     lines.push('    )');
     lines.push('');
     lines.push('    # Generate results report');
@@ -1930,8 +2105,39 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     });
   })();
 
+  // ── "Obs data only" diagram toggle → update script only ──
+  // The parameter list is independent of the diagram filter.
+  // Non-obs sub-cycle params are always visible but disabled/unchecked
+  // (set at render time via _is_calibratable). The diagram toggle only
+  // affects the visual diagram, not the parameter table.
+  document.addEventListener('obs-filter-changed', function(evt) {
+    updateScript();
+  });
+
+  // Collect excluded frameworks from the static _is_calibratable flags
+  // (these are baked in at report generation time, not driven by the
+  // diagram toggle).
+  window._excludedFrameworks = (function() {
+    var excluded = [];
+    document.querySelectorAll('.param-row.param-no-obs').forEach(function(row) {
+      var fw = row.getAttribute('data-fw');
+      if (fw && excluded.indexOf(fw) === -1) excluded.push(fw);
+    });
+    return excluded;
+  })();
+
   // Initial render
   updateScript();
+
+  // Auto-activate "Obs data only" in the diagram on page load
+  // (calibration should default to only calibratable sub-cycles)
+  setTimeout(function() {
+    var obsCb = document.querySelector('.obs-only-cb');
+    if (obsCb && !obsCb.checked) {
+      obsCb.checked = true;
+      obsCb.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+  }, 100);
 
 })();
 </script>

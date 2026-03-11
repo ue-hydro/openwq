@@ -487,6 +487,58 @@ def get_module_selections(model_config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def get_ss_species_with_loads(model_config: Dict[str, Any]) -> set:
+    """
+    Read the generated SS JSON config to find which model species
+    actually have source/sink loads.
+
+    The config template already resolved stoichiometric conversions
+    (e.g. TN → NO3-N, NH4 → NH4-N) when generating the SS JSON.
+    This function simply reads those resolved species names.
+
+    Returns
+    -------
+    set
+        Set of model species names that have SS load entries
+        (e.g. {"NH4-N", "NO3-N"}).
+    """
+    import json as _json
+
+    output_dir = model_config.get("dir2save_input_files", "")
+    ss_method = model_config.get("ss_method", "none")
+    if not output_dir or ss_method in ("none", "", None):
+        return set()
+
+    # Construct SS JSON path (same naming convention as Gen_SS_Driver)
+    ss_json_path = os.path.join(
+        output_dir, "openwq_in", f"openWQ_SS_{ss_method}.json"
+    )
+    if not os.path.isfile(ss_json_path):
+        logger.debug(f"SS JSON not found: {ss_json_path}")
+        return set()
+
+    try:
+        with open(ss_json_path, 'r') as f:
+            content = f.read()
+        # Strip comment lines (// ...)
+        json_start = content.find('{')
+        if json_start < 0:
+            return set()
+        data = _json.loads(content[json_start:])
+    except Exception as e:
+        logger.warning(f"Could not parse SS JSON: {e}")
+        return set()
+
+    species = set()
+    for key, entry in data.items():
+        if isinstance(entry, dict):
+            chem = entry.get("CHEMICAL_NAME", "")
+            if chem:
+                species.add(chem)
+    logger.info(f"SS species with loads: {species}")
+    return species
+
+
 def get_species_observation_availability(
     model_config: Dict[str, Any],
 ) -> Dict[str, Dict[str, Any]]:

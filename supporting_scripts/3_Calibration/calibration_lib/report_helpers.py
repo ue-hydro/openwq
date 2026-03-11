@@ -387,20 +387,103 @@ def get_css_styles():
         display: block; margin: 0 auto; max-width: 100%;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
+    .bgc-diagram-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: .4rem;
+    }
     .bgc-diagram-title {
-        font-size: .9rem; font-weight: 600; margin-bottom: .6rem;
+        font-size: .9rem; font-weight: 600;
         color: var(--text);
     }
-    .bgc-diagram-legend {
-        display: flex; flex-wrap: wrap; gap: .8rem;
-        margin-top: .6rem; font-size: .72rem; color: var(--text2);
+    .bgc-zoom-bar {
+        display: flex; align-items: center; gap: 4px;
     }
-    .bgc-diagram-legend .legend-item {
-        display: flex; align-items: center; gap: .3rem;
+    .zoom-btn {
+        width: 26px; height: 26px; border-radius: 6px;
+        border: 1px solid var(--border); background: var(--surface);
+        color: var(--text); font-size: .85rem; cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center;
+        transition: background .15s; font-family: inherit; line-height: 1;
+        padding: 0;
     }
-    .bgc-diagram-legend .legend-swatch {
-        width: 16px; height: 3px; border-radius: 2px;
+    .zoom-btn:hover { background: var(--border); }
+    .zoom-btn.zoom-lock { font-size: .7rem; }
+    .zoom-btn.zoom-lock.locked { background: var(--border); }
+    .zoom-btn[disabled] { opacity: .35; cursor: default; }
+    .zoom-btn[disabled]:hover { background: var(--surface); }
+    .zoom-hint {
+        font-size: .62rem; color: var(--text3); margin-left: 4px;
     }
+    /* ── Framework toggle bar ── */
+    .bgc-fw-toggle-bar {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        margin-bottom: .6rem; align-items: center;
+    }
+    .fw-toggle-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 10px; font-size: .72rem; font-weight: 500;
+        border: 1.5px solid var(--chip-color, var(--primary));
+        border-radius: 14px; background: transparent;
+        color: var(--chip-color, var(--primary));
+        cursor: pointer; transition: background .2s, opacity .2s;
+        font-family: inherit; line-height: 1.4;
+    }
+    .fw-toggle-chip.active {
+        background: var(--chip-color, var(--primary));
+        color: var(--surface, #fff);
+    }
+    .fw-toggle-chip:not(.active) { opacity: .45; }
+    .fw-toggle-chip[data-fw="__all__"] { --chip-color: var(--text2); }
+    .chip-swatch {
+        width: 10px; height: 10px; border-radius: 50%;
+        display: inline-block;
+    }
+    .fw-toggle-chip.active .chip-swatch {
+        border: 1.5px solid var(--surface, #fff);
+    }
+    .chip-tick {
+        font-size: .7rem; line-height: 1; margin-right: 1px;
+        display: inline-block; transition: opacity .15s;
+    }
+    .fw-toggle-chip:not(.active) .chip-tick { opacity: 0; width: 0; margin: 0; overflow: hidden; }
+    /* ── Hover tooltip ── */
+    .bgc-tooltip {
+        position: fixed; z-index: 9999; pointer-events: none;
+        max-width: 420px; padding: 8px 12px;
+        background: var(--surface, #1a1b2e); color: var(--text, #e2e8f0);
+        border: 1px solid var(--border, #2a2b3d);
+        border-radius: 8px; font-size: .78rem; line-height: 1.55;
+        box-shadow: 0 6px 24px rgba(0,0,0,.25);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .bgc-tooltip strong { display: block; margin-bottom: 3px; font-weight: 600; }
+    .bgc-tip-reaction {
+        display: block; color: var(--text2, #a0aec0); font-size: .72rem;
+        margin-bottom: 4px;
+    }
+    .bgc-tip-expr {
+        display: block; font-family: 'JetBrains Mono', monospace;
+        font-size: .7rem; color: var(--secondary, #34d399);
+        background: rgba(0,0,0,.15); padding: 3px 6px;
+        border-radius: 4px; margin: 3px 0; word-break: break-all;
+    }
+    .bgc-tip-params {
+        display: block; font-size: .68rem; color: var(--text3, #636e72);
+        margin-top: 2px;
+    }
+    /* ── Diagram interactivity ── */
+    .bgc-diagram-container .reaction-arrow {
+        transition: opacity .25s ease, filter .25s ease; cursor: pointer;
+    }
+    .bgc-diagram-container .species-node {
+        transition: opacity .25s ease, filter .25s ease;
+        cursor: pointer;
+    }
+    .bgc-diagram-container svg { cursor: crosshair; }
+    .bgc-diagram-container .reaction-arrow path.hit-area { pointer-events: stroke; }
+    .bgc-diagram-container .reaction-arrow path.vis-path { pointer-events: none; }
+    .bgc-diagram-container .reaction-arrow text { pointer-events: none; }
+    .bgc-diagram-container .label-bg { pointer-events: none; }
     """
 
 
@@ -897,13 +980,40 @@ def build_editable_param_table(parameters: List[Dict],
         # Serialise the full param dict as a data attribute for JS
         param_json = _js(p)
 
+        # Non-calibratable params: disabled checkbox + note
+        calibratable = p.get("_calibratable", True)
+        has_explicit_range = p.get("has_explicit_range", True)
+        row_cls = "param-row" if calibratable else "param-row param-no-obs"
+        row_style = "" if calibratable else ' style="opacity:0.45;"'
+        notes = []
+        if not calibratable:
+            notes.append(
+                '<span style="color:#c47800;font-size:.7rem;'
+                'font-style:italic;">'
+                '(no observation data to calibrate this sub-cycle)'
+                '</span>')
+        if not has_explicit_range:
+            notes.append(
+                '<span style="color:#888;font-size:.7rem;'
+                'font-style:italic;">'
+                '(auto-generated bounds &mdash; review before calibrating)'
+                '</span>')
+        no_obs_note = " ".join(notes)
+        if no_obs_note:
+            no_obs_note = " " + no_obs_note
+        cb_checked = " checked" if calibratable else ""
+        cb_disabled = "" if calibratable else " disabled"
+        fw_attr = ""
+        if p.get("_framework"):
+            fw_attr = f' data-fw="{html_lib.escape(p["_framework"])}"'
+
         rows.append(f"""
-<tr class="param-row" data-param-idx="{gi}" data-param='{html_lib.escape(param_json)}'>
+<tr class="{row_cls}" data-param-idx="{gi}" data-param='{html_lib.escape(param_json)}'{fw_attr}{row_style}>
     <td style="text-align:center;">
-        <input type="checkbox" class="param-cb" data-idx="{gi}" checked
+        <input type="checkbox" class="param-cb" data-idx="{gi}"{cb_checked}{cb_disabled}
                style="accent-color:var(--primary);"/>
     </td>
-    <td><code style="font-size:.8rem;">{html_lib.escape(name)}</code></td>
+    <td><code style="font-size:.8rem;">{html_lib.escape(name)}</code>{no_obs_note}</td>
     <td class="num">{initial_str}</td>
     <td><input type="number" class="inline-input param-min" data-idx="{gi}"
                value="{bounds[0]}" step="any"/></td>
@@ -1359,11 +1469,36 @@ def extract_bgc_network(bgc_data: dict) -> dict:
         if lt:
             for idx in sorted(lt.keys(), key=lambda x: int(x)):
                 t = fw.get(idx, {})
-                reactions.append({
+                rxn: dict = {
                     "name": t.get("_NAME", lt[idx]),
                     "consumed": t.get("CONSUMED", "NONE"),
                     "produced": t.get("PRODUCED", "NONE"),
-                })
+                }
+                # Capture kinetics expression & parameter info
+                kin = t.get("KINETICS", [])
+                if isinstance(kin, list) and kin:
+                    rxn["kinetics_expr"] = str(kin[0])
+                    if len(kin) > 1:
+                        rxn["kinetics_units"] = str(kin[1])
+                pinfo = t.get("_PARAMETERS_INFO", {})
+                if pinfo:
+                    params = []
+                    for pname, pd in pinfo.items():
+                        if isinstance(pd, dict):
+                            pstr = pname
+                            val = pd.get("VALUE", "")
+                            units = pd.get("UNITS", "")
+                            if val != "":
+                                pstr += f" = {val}"
+                            if units:
+                                pstr += f" {units}"
+                            rng = pd.get("RANGE")
+                            if isinstance(rng, list) and len(rng) == 2:
+                                pstr += f" [{rng[0]}\u2013{rng[1]}]"
+                            params.append(pstr)
+                    if params:
+                        rxn["parameters"] = params
+                reactions.append(rxn)
         else:
             # Legacy dict format
             for key, val in fw.items():
@@ -1371,11 +1506,17 @@ def extract_bgc_network(bgc_data: dict) -> dict:
                     continue
                 if "KINETICS" not in val and "FORMULA" not in val:
                     continue
-                reactions.append({
+                rxn = {
                     "name": key,
                     "consumed": val.get("CONSUMED", "NONE"),
                     "produced": val.get("PRODUCED", "NONE"),
-                })
+                }
+                kin = val.get("KINETICS", [])
+                if isinstance(kin, list) and kin:
+                    rxn["kinetics_expr"] = str(kin[0])
+                    if len(kin) > 1:
+                        rxn["kinetics_units"] = str(kin[1])
+                reactions.append(rxn)
         if reactions:
             frameworks[fw_name] = {"description": desc, "reactions": reactions}
 
@@ -1399,6 +1540,7 @@ def extract_bgc_network_from_pqi(pqi_path: str) -> dict:
 
     reactions = []
     species_set = set()
+    pqi_parms: Dict[str, list] = {}
     in_kinetics = False
     current_rxn = None
 
@@ -1423,8 +1565,13 @@ def extract_bgc_network_from_pqi(pqi_path: str) -> dict:
         if not raw[0:1].isspace() and line and not line.startswith("-"):
             current_rxn = line.split()[0]
             continue
+        # -parms line (capture parameter values)
+        if current_rxn and line.lower().startswith("-parms"):
+            pqi_parms[current_rxn] = line.split()[1:]
+            continue
         # -formula line
         if current_rxn and line.lower().startswith("-formula"):
+            formula_raw = line[len("-formula"):].strip()
             tokens = line.split()[1:]  # e.g. ["N(-3)", "-1", "N(5)", "1"]
             consumed, produced = [], []
             i = 0
@@ -1444,14 +1591,24 @@ def extract_bgc_network_from_pqi(pqi_path: str) -> dict:
                 i += 2
             for c in (consumed or ["NONE"]):
                 for p in (produced or ["NONE"]):
-                    reactions.append({
+                    rxn: dict = {
                         "name": current_rxn,
                         "consumed": c,
                         "produced": p,
-                    })
+                    }
+                    if formula_raw:
+                        rxn["kinetics_expr"] = formula_raw
+                    reactions.append(rxn)
 
     if not reactions:
         return {}
+
+    # Attach -parms values to reactions
+    for rxn in reactions:
+        pvals = pqi_parms.get(rxn["name"])
+        if pvals:
+            rxn["parameters"] = [f"PARM({i + 1}) = {v}"
+                                 for i, v in enumerate(pvals)]
 
     species = [{"name": s, "description": ""} for s in sorted(species_set)]
     return {
@@ -1474,7 +1631,6 @@ def _compute_diagram_layout(
     Nodes involved in reactions are placed on the main ellipse.
     Unreferenced species are placed in a secondary row below.
     """
-    # Determine which species are actually involved in reactions
     involved = set()
     for r in all_reactions:
         if r["consumed"] != "NONE":
@@ -1488,17 +1644,15 @@ def _compute_diagram_layout(
     positions = {}
     cx, cy = width / 2, height / 2 - 10
     n = max(len(main_nodes), 1)
-    # Ellipse radii (wider than tall)
     rx = min(width * 0.38, 340)
     ry = min(height * 0.34, 200)
 
     for i, sp in enumerate(main_nodes):
-        angle = 2 * math.pi * i / n - math.pi / 2  # start from top
+        angle = 2 * math.pi * i / n - math.pi / 2
         x = cx + rx * math.cos(angle)
         y = cy + ry * math.sin(angle)
         positions[sp] = (x, y)
 
-    # Place extra nodes in a row at the bottom
     if extra_nodes:
         y_extra = height - 35
         spacing = min(width / (len(extra_nodes) + 1), 140)
@@ -1514,14 +1668,98 @@ def _svg_escape(text: str) -> str:
     return html_lib.escape(str(text), quote=True)
 
 
+# ── Label collision avoidance helpers ────────────────────────────────
+
+def _bezier_point(t: float, a: float, q: float, b: float) -> float:
+    """Evaluate a quadratic Bézier component at parameter *t*."""
+    return (1 - t) ** 2 * a + 2 * (1 - t) * t * q + t ** 2 * b
+
+
+def _boxes_overlap(a: tuple, b: tuple, pad: float = 2.0) -> bool:
+    """Return True if two axis-aligned boxes (x, y, w, h) overlap."""
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    return not (ax + aw + pad < bx or bx + bw + pad < ax or
+                ay + ah + pad < by or by + bh + pad < ay)
+
+
+def _resolve_label_positions(labels: List[dict],
+                             placed_boxes: List[tuple]) -> None:
+    """Greedy label placement with collision avoidance.
+
+    Each *label* dict must contain keys:
+        x, y          – initial position (centre)
+        w, h          – estimated bounding-box size
+        ax, ay, qx, qy, bx, by  – Bézier control points
+        nx, ny        – perpendicular unit vector for offsets
+
+    The function mutates ``x`` and ``y`` in-place to resolved positions.
+    *placed_boxes* is a list of (x, y, w, h) already occupied (e.g. nodes)
+    and is appended to as labels are placed.
+    """
+    _CANDIDATES = [
+        (0.50, 0), (0.35, 0), (0.65, 0),
+        (0.50, 16), (0.50, -16),
+        (0.30, 0), (0.70, 0),
+        (0.35, 14), (0.65, 14),
+        (0.35, -14), (0.65, -14),
+        (0.20, 0), (0.80, 0),
+        (0.50, 24), (0.50, -24),
+    ]
+
+    for lab in labels:
+        w, h = lab["w"], lab["h"]
+        best = None
+        for t_val, perp_off in _CANDIDATES:
+            cx = _bezier_point(t_val, lab["ax"], lab["qx"], lab["bx"])
+            cy = _bezier_point(t_val, lab["ay"], lab["qy"], lab["by"])
+            cx += lab["nx"] * perp_off
+            cy += lab["ny"] * perp_off
+            box = (cx - w / 2, cy - h / 2, w, h)
+            if not any(_boxes_overlap(box, pb) for pb in placed_boxes):
+                best = (cx, cy, box)
+                break
+        if best:
+            lab["x"], lab["y"] = best[0], best[1]
+            placed_boxes.append(best[2])
+        else:
+            # Fallback: use first candidate (midpoint) even if it overlaps
+            cx = _bezier_point(0.5, lab["ax"], lab["qx"], lab["bx"])
+            cy = _bezier_point(0.5, lab["ay"], lab["qy"], lab["by"])
+            box = (cx - w / 2, cy - h / 2, w, h)
+            lab["x"], lab["y"] = cx, cy
+            placed_boxes.append(box)
+
+
+# ── SVG renderer ─────────────────────────────────────────────────────
+
+def _build_kinetics_tip(r: dict) -> str:
+    """Build a tooltip string from reaction kinetics data."""
+    parts: List[str] = []
+    expr = r.get("kinetics_expr", "")
+    if expr:
+        units = r.get("kinetics_units", "")
+        parts.append(expr + (f"  ({units})" if units else ""))
+    params = r.get("parameters", [])
+    if params:
+        parts.append("Parameters: " + "; ".join(params))
+    return " &#10; ".join(parts) if parts else ""
+
+
 def _render_bgc_svg(
     network: dict,
     max_width: int = 860,
+    species_obs_availability: Optional[dict] = None,
 ) -> str:
-    """Render a BGC reaction network as an inline SVG string."""
+    """Render a BGC reaction network as an inline SVG string.
+
+    Includes data-* attributes for JS interactivity, framework group
+    wrappers, hit-area paths, and collision-free label placement.
+    """
 
     all_species = [s["name"] for s in network["species"]]
-    # Collect all reactions across frameworks
+    species_desc = {s["name"]: s.get("description", "") for s in network["species"]}
+    # Collect reactions, sorted by framework for grouping
     all_reactions = []
     fw_names = list(network["frameworks"].keys())
     for fw_name in fw_names:
@@ -1531,19 +1769,31 @@ def _render_bgc_svg(
     if not all_reactions:
         return ""
 
-    # Determine SVG dimensions
     n_species = len(all_species)
     svg_w = max_width
     svg_h = max(380, min(250 + n_species * 22, 650))
 
     positions = _compute_diagram_layout(all_species, all_reactions, svg_w, svg_h)
 
-    # Node dimensions
     node_h = 28
-    char_w = 8  # approximate width per character
+    char_w = 8
+    _LABEL_FONT = 8.5
+    _LABEL_CHAR_W = 5.2
 
-    # Build SVG
-    S = []
+    # Pre-compute species node boxes for label collision avoidance
+    placed_boxes: List[tuple] = []
+    node_boxes: Dict[str, tuple] = {}
+    for sp in all_species:
+        if sp not in positions:
+            continue
+        x, y = positions[sp]
+        nw = max(len(sp) * char_w + 24, 64)
+        box = (x - nw / 2, y - node_h / 2, nw, node_h)
+        placed_boxes.append(box)
+        node_boxes[sp] = box
+
+    # ── Build SVG ──
+    S: List[str] = []
     S.append(f'<svg xmlns="http://www.w3.org/2000/svg" '
              f'viewBox="0 0 {svg_w} {svg_h}" '
              f'width="{svg_w}" height="{svg_h}" '
@@ -1558,16 +1808,13 @@ def _render_bgc_svg(
             f'<marker id="{mid}" markerWidth="8" markerHeight="6" '
             f'refX="8" refY="3" orient="auto" markerUnits="strokeWidth">'
             f'<path d="M0,0 L8,3 L0,6 Z" fill="{colour}"/></marker>')
-    # Dashed arrow marker for source/sink
-    S.append(
-        '<marker id="arrow-ss" markerWidth="7" markerHeight="5" '
-        'refX="7" refY="2.5" orient="auto" markerUnits="strokeWidth">'
-        '<path d="M0,0 L7,2.5 L0,5 Z" fill="currentColor" '
-        'class="source-sink-arrow"/></marker>')
     S.append("</defs>")
 
-    # --- Draw reaction arrows first (behind nodes) ---
-    # Track how many arrows exist between each pair to offset them
+    # Pannable / zoomable canvas group
+    S.append('<g class="diagram-canvas">')
+
+    # ── Reaction arrows (behind nodes) ──
+    # Pre-count arrows between each pair for offset calculation
     pair_counts: Dict[tuple, int] = {}
     for r in all_reactions:
         c, p = r["consumed"], r["produced"]
@@ -1577,130 +1824,904 @@ def _render_bgc_svg(
         pair_counts[key] = pair_counts.get(key, 0) + 1
 
     pair_idx: Dict[tuple, int] = {}
+    label_candidates: List[dict] = []  # collect for collision resolution
+    current_fw = None
+
     for r in all_reactions:
-        fi = fw_names.index(r["_fw"])
+        fw = r["_fw"]
+        fi = fw_names.index(fw)
         colour = _FW_COLORS[fi % len(_FW_COLORS)][0]
         c, p = r["consumed"], r["produced"]
 
         if c == "NONE" and p == "NONE":
             continue
 
-        # Source/sink arrows (dashed)
+        # Open / switch framework group wrapper
+        if fw != current_fw:
+            if current_fw is not None:
+                S.append("</g>")
+            S.append(f'<g class="fw-group" data-fw="{_svg_escape(fw)}">')
+            current_fw = fw
+
+        # ── Source arrows (NONE → species) ──
         if c == "NONE" and p in positions:
             px, py = positions[p]
-            sx = px - 60
-            sy = py - 30
+            sx, sy = px - 60, py - 30
+            qsx, qsy = (sx + px) / 2, sy
+            d_str = (f"M{sx:.0f},{sy:.0f} Q{qsx:.0f},{qsy:.0f} "
+                     f"{px:.0f},{py - node_h / 2:.0f}")
+            kin_tip = _build_kinetics_tip(r)
+            kin_attr = f' data-kinetics="{_svg_escape(kin_tip)}"' if kin_tip else ""
+            _src_obs_attr = ""
+            if species_obs_availability is not None:
+                p_obs = species_obs_availability.get(p, {}).get("has_obs", False)
+                _src_obs_attr = f' data-has-obs="{"true" if p_obs else "false"}"'
             S.append(
-                f'<g class="source-sink-arrow">'
-                f'<path d="M{sx:.0f},{sy:.0f} Q{(sx+px)/2:.0f},{sy:.0f} '
-                f'{px:.0f},{py - node_h/2:.0f}" '
-                f'fill="none" stroke="{colour}" stroke-width="1.5" '
-                f'stroke-dasharray="5 3" marker-end="url(#arrow-{fi})"/>'
-                f'<text x="{(sx+px)/2 - 10:.0f}" y="{sy - 4:.0f}" '
-                f'font-size="8" fill="{colour}" '
-                f'style="font-style:italic;">'
-                f'{_svg_escape(r["name"])}</text></g>')
+                f'<g class="reaction-arrow source-sink-arrow" '
+                f'data-fw="{_svg_escape(fw)}" '
+                f'data-rxn="{_svg_escape(r["name"])}" '
+                f'data-consumed="NONE" data-produced="{_svg_escape(p)}"'
+                f'{kin_attr}{_src_obs_attr}>'
+                f'<path d="{d_str}" fill="none" stroke="transparent" '
+                f'stroke-width="14" class="hit-area"/>'
+                f'<path d="{d_str}" fill="none" stroke="{colour}" '
+                f'stroke-width="1.5" stroke-dasharray="5 3" '
+                f'marker-end="url(#arrow-{fi})" class="vis-path"/>')
+            # Collect label
+            lab_text = r["name"].replace("_", " ")
+            if len(lab_text) > 22:
+                lab_text = lab_text[:20] + "\u2026"
+            dx_s = px - sx
+            dy_s = (py - node_h / 2) - sy
+            ln = math.sqrt(dx_s * dx_s + dy_s * dy_s) or 1
+            label_candidates.append({
+                "text": lab_text, "colour": colour, "italic": True,
+                "fw": fw, "rxn": r["name"],
+                "x": qsx - 10, "y": sy - 4,
+                "w": len(lab_text) * _LABEL_CHAR_W + 8, "h": 12,
+                "ax": sx, "ay": sy,
+                "qx": qsx, "qy": qsy,
+                "bx": px, "by": py - node_h / 2,
+                "nx": -dy_s / ln, "ny": dx_s / ln,
+            })
+            S.append("</g>")
             continue
 
+        # ── Sink arrows (species → NONE) ──
         if p == "NONE" and c in positions:
             cx_p, cy_p = positions[c]
-            ex = cx_p + 60
-            ey = cy_p + 30
+            ex, ey = cx_p + 60, cy_p + 30
+            qex, qey = (cx_p + ex) / 2, ey
+            d_str = (f"M{cx_p:.0f},{cy_p + node_h / 2:.0f} "
+                     f"Q{qex:.0f},{qey:.0f} {ex:.0f},{ey:.0f}")
+            kin_tip = _build_kinetics_tip(r)
+            kin_attr = f' data-kinetics="{_svg_escape(kin_tip)}"' if kin_tip else ""
+            _snk_obs_attr = ""
+            if species_obs_availability is not None:
+                c_obs = species_obs_availability.get(c, {}).get("has_obs", False)
+                _snk_obs_attr = f' data-has-obs="{"true" if c_obs else "false"}"'
             S.append(
-                f'<g class="source-sink-arrow">'
-                f'<path d="M{cx_p:.0f},{cy_p + node_h/2:.0f} '
-                f'Q{(cx_p+ex)/2:.0f},{ey:.0f} {ex:.0f},{ey:.0f}" '
-                f'fill="none" stroke="{colour}" stroke-width="1.5" '
-                f'stroke-dasharray="5 3" marker-end="url(#arrow-{fi})"/>'
-                f'<text x="{(cx_p+ex)/2 + 4:.0f}" y="{ey + 12:.0f}" '
-                f'font-size="8" fill="{colour}" '
-                f'style="font-style:italic;">'
-                f'{_svg_escape(r["name"])}</text></g>')
+                f'<g class="reaction-arrow source-sink-arrow" '
+                f'data-fw="{_svg_escape(fw)}" '
+                f'data-rxn="{_svg_escape(r["name"])}" '
+                f'data-consumed="{_svg_escape(c)}" data-produced="NONE"'
+                f'{kin_attr}{_snk_obs_attr}>'
+                f'<path d="{d_str}" fill="none" stroke="transparent" '
+                f'stroke-width="14" class="hit-area"/>'
+                f'<path d="{d_str}" fill="none" stroke="{colour}" '
+                f'stroke-width="1.5" stroke-dasharray="5 3" '
+                f'marker-end="url(#arrow-{fi})" class="vis-path"/>')
+            lab_text = r["name"].replace("_", " ")
+            if len(lab_text) > 22:
+                lab_text = lab_text[:20] + "\u2026"
+            dx_s = ex - cx_p
+            dy_s = ey - (cy_p + node_h / 2)
+            ln = math.sqrt(dx_s * dx_s + dy_s * dy_s) or 1
+            label_candidates.append({
+                "text": lab_text, "colour": colour, "italic": True,
+                "fw": fw, "rxn": r["name"],
+                "x": qex + 4, "y": ey + 12,
+                "w": len(lab_text) * _LABEL_CHAR_W + 8, "h": 12,
+                "ax": cx_p, "ay": cy_p + node_h / 2,
+                "qx": qex, "qy": qey,
+                "bx": ex, "by": ey,
+                "nx": -dy_s / ln, "ny": dx_s / ln,
+            })
+            S.append("</g>")
             continue
 
+        # ── Regular reaction arrows (species → species) ──
         if c not in positions or p not in positions:
             continue
 
         x1, y1 = positions[c]
         x2, y2 = positions[p]
 
-        # Offset for multiple arrows between same pair
         key = (min(c, p), max(c, p))
         idx = pair_idx.get(key, 0)
         pair_idx[key] = idx + 1
         total = pair_counts.get(key, 1)
         offset = (idx - (total - 1) / 2) * 18
 
-        # Compute bezier control point perpendicular to midpoint
         mx, my = (x1 + x2) / 2, (y1 + y2) / 2
         dx, dy = x2 - x1, y2 - y1
         length = math.sqrt(dx * dx + dy * dy) or 1
-        # Perpendicular unit vector
         nx, ny = -dy / length, dx / length
-        # Curve amount proportional to distance + offset
         curve = length * 0.18 + offset
-        qx = mx + nx * curve
-        qy = my + ny * curve
 
-        # Shorten start/end to not overlap nodes
+        # Shorten to avoid node overlap
         node_w_c = max(len(c) * char_w + 20, 60)
         node_w_p = max(len(p) * char_w + 20, 60)
-        # Move start point away from centre of node c
         t_start = max((node_w_c / 2 + 4) / length, 0.05)
         t_end = max((node_w_p / 2 + 4) / length, 0.05)
-        ax = x1 + dx * t_start
-        ay = y1 + dy * t_start
-        bx = x2 - dx * t_end
-        by = y2 - dy * t_end
+        ax_ = x1 + dx * t_start
+        ay_ = y1 + dy * t_start
+        bx_ = x2 - dx * t_end
+        by_ = y2 - dy * t_end
 
-        # Recalculate control relative to shortened segment
-        smx, smy = (ax + bx) / 2, (ay + by) / 2
+        smx, smy = (ax_ + bx_) / 2, (ay_ + by_) / 2
         qx2 = smx + nx * curve
         qy2 = smy + ny * curve
 
-        S.append(
-            f'<g class="reaction-arrow">'
-            f'<path d="M{ax:.1f},{ay:.1f} Q{qx2:.1f},{qy2:.1f} '
-            f'{bx:.1f},{by:.1f}" '
-            f'fill="none" stroke="{colour}" stroke-width="1.8" '
-            f'marker-end="url(#arrow-{fi})"/>')
+        d_str = f"M{ax_:.1f},{ay_:.1f} Q{qx2:.1f},{qy2:.1f} {bx_:.1f},{by_:.1f}"
 
-        # Label at curve midpoint
-        lx = (ax + 2 * qx2 + bx) / 4
-        ly = (ay + 2 * qy2 + by) / 4
-        label = r["name"].replace("_", " ")
-        if len(label) > 22:
-            label = label[:20] + "\u2026"
+        kin_tip = _build_kinetics_tip(r)
+        kin_attr = f' data-kinetics="{_svg_escape(kin_tip)}"' if kin_tip else ""
+        # Obs availability for this arrow
+        _arrow_obs_attr = ""
+        _arrow_dash = ""
+        if species_obs_availability is not None:
+            c_obs = species_obs_availability.get(c, {}).get("has_obs", False)
+            p_obs = species_obs_availability.get(p, {}).get("has_obs", False)
+            _arrow_has = c_obs or p_obs
+            _arrow_obs_attr = f' data-has-obs="{"true" if _arrow_has else "false"}"'
+            if not _arrow_has:
+                _arrow_dash = " stroke-dasharray='6 3'"
         S.append(
-            f'<text x="{lx:.1f}" y="{ly - 4:.1f}" '
-            f'text-anchor="middle" font-size="8.5" fill="{colour}" '
-            f'style="font-weight:500;pointer-events:none;">'
-            f'{_svg_escape(label)}</text>')
+            f'<g class="reaction-arrow" '
+            f'data-fw="{_svg_escape(fw)}" '
+            f'data-rxn="{_svg_escape(r["name"])}" '
+            f'data-consumed="{_svg_escape(c)}" '
+            f'data-produced="{_svg_escape(p)}"'
+            f'{kin_attr}{_arrow_obs_attr}>'
+            f'<path d="{d_str}" fill="none" stroke="transparent" '
+            f'stroke-width="14" class="hit-area"/>'
+            f'<path d="{d_str}" fill="none" stroke="{colour}" '
+            f'stroke-width="1.8" marker-end="url(#arrow-{fi})"{_arrow_dash} '
+            f'class="vis-path"/>')
+
+        # Collect label candidate
+        lab_text = r["name"].replace("_", " ")
+        if len(lab_text) > 22:
+            lab_text = lab_text[:20] + "\u2026"
+        lx_init = (ax_ + 2 * qx2 + bx_) / 4
+        ly_init = (ay_ + 2 * qy2 + by_) / 4
+        label_candidates.append({
+            "text": lab_text, "colour": colour, "italic": False,
+            "fw": fw, "rxn": r["name"],
+            "x": lx_init, "y": ly_init - 4,
+            "w": len(lab_text) * _LABEL_CHAR_W + 8, "h": 12,
+            "ax": ax_, "ay": ay_,
+            "qx": qx2, "qy": qy2,
+            "bx": bx_, "by": by_,
+            "nx": nx, "ny": ny,
+        })
         S.append("</g>")
 
-    # --- Draw species nodes (on top of arrows) ---
+    # Close last framework group
+    if current_fw is not None:
+        S.append("</g>")
+
+    # ── Resolve label overlaps and emit labels ──
+    _resolve_label_positions(label_candidates, placed_boxes)
+
+    S.append('<g class="label-layer">')
+    for lab in label_candidates:
+        lx, ly = lab["x"], lab["y"]
+        w = lab["w"]
+        h = lab["h"]
+        style_extra = "font-style:italic;" if lab.get("italic") else ""
+        fw_attr = f' data-fw="{_svg_escape(lab["fw"])}"' if lab.get("fw") else ""
+        rxn_attr = f' data-rxn="{_svg_escape(lab["rxn"])}"' if lab.get("rxn") else ""
+        # Background rect for readability
+        S.append(
+            f'<rect class="label-bg"{fw_attr}{rxn_attr} x="{lx - w / 2 - 1:.1f}" '
+            f'y="{ly - h / 2 - 1:.1f}" '
+            f'width="{w + 2:.0f}" height="{h + 2:.0f}" rx="3" ry="3" '
+            f'fill="var(--surface,#fff)" fill-opacity="0.82" stroke="none"/>')
+        S.append(
+            f'<text{fw_attr}{rxn_attr} x="{lx:.1f}" y="{ly + 1:.1f}" '
+            f'text-anchor="middle" dominant-baseline="central" '
+            f'font-size="{_LABEL_FONT}" fill="{lab["colour"]}" '
+            f'style="font-weight:500;pointer-events:none;{style_extra}">'
+            f'{_svg_escape(lab["text"])}</text>')
+    S.append("</g>")
+
+    # ── Build species → framework-index mapping ──
+    species_to_fws: dict[str, list[int]] = {}
+    for fi, fw_name in enumerate(fw_names):
+        fw_info = network["frameworks"].get(fw_name, {})
+        for r in fw_info.get("reactions", []):
+            for sp_ref in (r.get("consumed", "NONE"), r.get("produced", "NONE")):
+                if sp_ref != "NONE" and sp_ref in positions:
+                    species_to_fws.setdefault(sp_ref, [])
+                    if fi not in species_to_fws[sp_ref]:
+                        species_to_fws[sp_ref].append(fi)
+
+    # ── Species nodes (on top) ──
     for sp in all_species:
         if sp not in positions:
             continue
         x, y = positions[sp]
         label = sp
+        desc = species_desc.get(sp, "")
+        desc_attr = f' data-desc="{_svg_escape(desc)}"' if desc else ""
+        # Observation availability (calibration report only)
+        obs_attr = ""
+        if species_obs_availability is not None:
+            has_obs = species_obs_availability.get(sp, {}).get("has_obs", False)
+            obs_attr = f' data-has-obs="{"true" if has_obs else "false"}"'
         node_w = max(len(label) * char_w + 24, 64)
         is_loss = "loss" in sp.lower() or "atm" in sp.lower()
         cls = "species-node sink" if is_loss else "species-node"
+        # Dashed border for species without observation data (preserves colour)
+        no_obs_style = ""
+        if species_obs_availability is not None:
+            has_obs = species_obs_availability.get(sp, {}).get("has_obs", False)
+            if not has_obs:
+                no_obs_style = "stroke-dasharray:5 3;"
+
+        # Framework colours for this species
+        sp_fw_indices = species_to_fws.get(sp, [])
+        if sp_fw_indices:
+            sp_colours = [
+                _FW_COLORS[fi % len(_FW_COLORS)][0] for fi in sp_fw_indices
+            ]
+        else:
+            sp_colours = ["var(--primary,#4d9ee8)"]
+        n_layers = len(sp_colours)
+
         S.append(
-            f'<g class="{cls}">'
-            f'<rect x="{x - node_w/2:.1f}" y="{y - node_h/2:.1f}" '
-            f'width="{node_w:.0f}" height="{node_h}" rx="10" ry="10" '
-            f'style="fill:var(--surface,#fff);stroke:var(--primary,#4d9ee8);'
-            f'stroke-width:2;{" stroke-dasharray:4 2;" if is_loss else ""}"/>'
+            f'<g class="{cls}" data-species="{_svg_escape(sp)}"{desc_attr}{obs_attr}>')
+        # Emit nested rects: outermost first, innermost last (gets fill)
+        _inset = 3  # px per nesting level
+        for lvl, col in enumerate(sp_colours):
+            ix = _inset * lvl
+            rw = node_w - 2 * ix
+            rh = node_h - 2 * ix
+            rx_val = max(10 - lvl * 2, 4)
+            is_innermost = (lvl == n_layers - 1)
+            fill = "var(--surface,#fff)" if is_innermost else "none"
+            dash = ""
+            if is_loss:
+                dash += " stroke-dasharray:4 2;"
+            if lvl == 0 and no_obs_style:
+                dash += no_obs_style
+            S.append(
+                f'<rect x="{x - rw / 2:.1f}" y="{y - rh / 2:.1f}" '
+                f'width="{rw:.0f}" height="{rh}" rx="{rx_val}" ry="{rx_val}" '
+                f'style="fill:{fill};stroke:{col};stroke-width:2;{dash}"/>')
+        S.append(
             f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="middle" '
             f'dominant-baseline="central" font-size="11.5" font-weight="600" '
             f'style="fill:var(--text,#222);">'
             f'{_svg_escape(label)}</text></g>')
 
+    S.append("</g>")  # close diagram-canvas
+
+    # Selection rectangle for area-zoom (hidden by default)
+    S.append('<rect class="zoom-sel" x="0" y="0" width="0" height="0" '
+             'fill="rgba(77,158,232,.12)" stroke="var(--primary,#4d9ee8)" '
+             'stroke-width="1" stroke-dasharray="4 2" '
+             'style="display:none;pointer-events:none;"/>')
+
     S.append("</svg>")
     return "\n".join(S)
 
+
+# ── Interactivity JavaScript ─────────────────────────────────────────
+
+def _bgc_diagram_js() -> str:
+    """Return a <script> block for click-to-highlight, framework toggles, hover tooltips, and zoom."""
+    return """<script>
+(function(){
+  'use strict';
+  var activeEl = null;   /* currently highlighted arrow or species node */
+  var activeKind = null; /* 'arrow' | 'species' | null */
+
+  /* ── Tooltip element (shared, created once) ───── */
+  var tip = document.createElement('div');
+  tip.className = 'bgc-tooltip';
+  tip.style.display = 'none';
+  document.body.appendChild(tip);
+
+  function showTip(el, evt){
+    var rxn = el.getAttribute('data-rxn') || '';
+    var consumed = el.getAttribute('data-consumed') || '';
+    var produced = el.getAttribute('data-produced') || '';
+    var kin = el.getAttribute('data-kinetics') || '';
+
+    var lines = [];
+    lines.push('<strong>' + rxn.replace(/_/g,' ') + '</strong>');
+    if(consumed!=='NONE' || produced!=='NONE'){
+      lines.push('<span class="bgc-tip-reaction">' +
+        (consumed!=='NONE'?consumed:'(source)') + ' \\u2192 ' +
+        (produced!=='NONE'?produced:'(sink)') + '</span>');
+    }
+    if(kin){
+      var raw = el.getAttribute('data-kinetics');
+      var segs = raw.split(' &#10; ');
+      for(var i=0;i<segs.length;i++){
+        var s=segs[i].trim();
+        if(!s) continue;
+        if(s.indexOf('Parameters:')===0){
+          lines.push('<span class="bgc-tip-params">' + s + '</span>');
+        } else {
+          lines.push('<span class="bgc-tip-expr">' + s + '</span>');
+        }
+      }
+    }
+    if(!kin && consumed==='NONE' && produced==='NONE') return;
+
+    tip.innerHTML = lines.join('');
+    tip.style.display = 'block';
+    positionTip(evt);
+  }
+
+  function positionTip(evt){
+    var x = evt.clientX + 14;
+    var y = evt.clientY + 14;
+    var tw = tip.offsetWidth;
+    var th = tip.offsetHeight;
+    if(x + tw > window.innerWidth - 8) x = evt.clientX - tw - 10;
+    if(y + th > window.innerHeight - 8) y = evt.clientY - th - 10;
+    tip.style.left = x + 'px';
+    tip.style.top  = y + 'px';
+  }
+
+  function hideTip(){ tip.style.display='none'; }
+
+  function showSpeciesTip(el, evt){
+    var sp = el.getAttribute('data-species') || '';
+    var desc = el.getAttribute('data-desc') || '';
+    var hasObs = el.getAttribute('data-has-obs');
+    if(!desc && hasObs === null) return;
+    var html = '<strong>' + sp + '</strong>';
+    if(desc) html += '<span class="bgc-tip-reaction">' + desc + '</span>';
+    if(hasObs === 'false')
+      html += '<span class="bgc-tip-reaction" style="color:#c47800;font-style:italic;">No observation data for calibration</span>';
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+    positionTip(evt);
+  }
+
+  /* Hover events */
+  document.addEventListener('mouseover', function(e){
+    var arrow = e.target.closest('.reaction-arrow');
+    if(arrow){ showTip(arrow, e); return; }
+    var species = e.target.closest('.species-node');
+    if(species) showSpeciesTip(species, e);
+  });
+  document.addEventListener('mousemove', function(e){
+    if(tip.style.display==='block') positionTip(e);
+  });
+  document.addEventListener('mouseout', function(e){
+    var arrow = e.target.closest('.reaction-arrow');
+    var species = e.target.closest('.species-node');
+    if(arrow || species) hideTip();
+  });
+
+  /* ── Dim / undim helpers ──────────────────────── */
+  function dimAll(svg){
+    svg.querySelectorAll('.reaction-arrow').forEach(function(g){
+      g.style.opacity='0.12'; g.style.filter='grayscale(100%)';
+    });
+    svg.querySelectorAll('.species-node').forEach(function(g){
+      g.style.opacity='0.18'; g.style.filter='grayscale(100%)';
+    });
+    svg.querySelectorAll('.label-layer text').forEach(function(t){
+      t.style.opacity='0.12';
+    });
+    svg.querySelectorAll('.label-layer .label-bg').forEach(function(r){
+      r.style.opacity='0.12';
+    });
+  }
+
+  function undimEl(el){ el.style.opacity='1'; el.style.filter=''; }
+
+  function undimLabel(svg, rxnName){
+    if(!rxnName) return;
+    svg.querySelectorAll('.label-layer [data-rxn="'+rxnName+'"]').forEach(function(el){
+      el.style.opacity='1';
+    });
+  }
+
+  /* ── Click-to-highlight ────────────────────────── */
+  function resetHighlight(svg){
+    svg.querySelectorAll('.reaction-arrow').forEach(function(g){
+      g.style.opacity=''; g.style.filter='';
+    });
+    svg.querySelectorAll('.species-node').forEach(function(g){
+      g.style.opacity=''; g.style.filter='';
+    });
+    svg.querySelectorAll('.label-layer text').forEach(function(t){
+      t.style.opacity='';
+    });
+    svg.querySelectorAll('.label-layer .label-bg').forEach(function(r){
+      r.style.opacity='';
+    });
+    activeEl = null; activeKind = null;
+    /* Reset zoom to full view */
+    var container = svg.closest('.bgc-diagram-container');
+    if(container && container._zoomState){
+      var z = container._zoomState;
+      z.curVB.x = z.origVB.x; z.curVB.y = z.origVB.y;
+      z.curVB.w = z.origVB.w; z.curVB.h = z.origVB.h;
+      z.applyVB();
+    }
+  }
+
+  function highlightReaction(svg, el){
+    var consumed = el.getAttribute('data-consumed');
+    var produced = el.getAttribute('data-produced');
+    var rxnName  = el.getAttribute('data-rxn');
+
+    dimAll(svg);
+    undimEl(el);
+    undimLabel(svg, rxnName);
+
+    /* Highlight consumed + produced species */
+    var keep = {};
+    if(consumed && consumed!=='NONE') keep[consumed]=true;
+    if(produced && produced!=='NONE') keep[produced]=true;
+    svg.querySelectorAll('.species-node').forEach(function(g){
+      if(keep[g.getAttribute('data-species')]) undimEl(g);
+    });
+    activeEl = el; activeKind = 'arrow';
+    zoomToHighlighted(svg);
+  }
+
+  /* ── NEW: click a species node ─────────────────── */
+  function highlightSpecies(svg, speciesNode){
+    var sp = speciesNode.getAttribute('data-species');
+    dimAll(svg);
+    undimEl(speciesNode);
+
+    /* Find all arrows that consume or produce this species */
+    var connectedSpecies = {};
+    connectedSpecies[sp] = true;
+    svg.querySelectorAll('.reaction-arrow').forEach(function(g){
+      var c = g.getAttribute('data-consumed');
+      var p = g.getAttribute('data-produced');
+      if(c === sp || p === sp){
+        undimEl(g);
+        undimLabel(svg, g.getAttribute('data-rxn'));
+        /* Also highlight the other endpoint species */
+        if(c && c!=='NONE') connectedSpecies[c] = true;
+        if(p && p!=='NONE') connectedSpecies[p] = true;
+      }
+    });
+    /* Highlight all connected species nodes */
+    svg.querySelectorAll('.species-node').forEach(function(g){
+      if(connectedSpecies[g.getAttribute('data-species')]) undimEl(g);
+    });
+    activeEl = speciesNode; activeKind = 'species';
+    zoomToHighlighted(svg);
+  }
+
+  /* ── Auto zoom-fit to highlighted elements ─────── */
+  function zoomToHighlighted(svg){
+    var container = svg.closest('.bgc-diagram-container');
+    if(!container || !container._zoomState) return;
+    var z = container._zoomState;
+
+    /* Collect bounding boxes of all visible (non-dimmed) elements */
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    var found = false;
+
+    function expandBB(el){
+      try {
+        var bb = el.getBBox();
+        if(bb.width === 0 && bb.height === 0) return;
+        /* Transform to SVG root coordinates */
+        var ctm = el.getCTM();
+        var svgCtm = svg.getCTM();
+        if(!ctm || !svgCtm) return;
+        /* Get inverse of SVG CTM to go from screen to SVG coords */
+        var inv = svgCtm.inverse();
+        var m = inv.multiply(ctm);
+        /* Transform all four corners */
+        var pts = [
+          {x: bb.x, y: bb.y},
+          {x: bb.x + bb.width, y: bb.y},
+          {x: bb.x, y: bb.y + bb.height},
+          {x: bb.x + bb.width, y: bb.y + bb.height}
+        ];
+        for(var i=0;i<4;i++){
+          var px = m.a * pts[i].x + m.c * pts[i].y + m.e;
+          var py = m.b * pts[i].x + m.d * pts[i].y + m.f;
+          if(px < minX) minX = px;
+          if(py < minY) minY = py;
+          if(px > maxX) maxX = px;
+          if(py > maxY) maxY = py;
+        }
+        found = true;
+      } catch(e){}
+    }
+
+    svg.querySelectorAll('.reaction-arrow').forEach(function(g){
+      if(g.style.opacity === '' || g.style.opacity === '1') expandBB(g);
+    });
+    svg.querySelectorAll('.species-node').forEach(function(g){
+      if(g.style.opacity === '' || g.style.opacity === '1') expandBB(g);
+    });
+
+    if(!found) return;
+
+    /* Add padding (15% on each side) */
+    var padX = (maxX - minX) * 0.15;
+    var padY = (maxY - minY) * 0.15;
+    minX -= padX; minY -= padY; maxX += padX; maxY += padY;
+    var w = maxX - minX;
+    var h = maxY - minY;
+    if(w < 10 || h < 10) return;
+
+    /* Preserve aspect ratio */
+    var aspect = z.origVB.w / z.origVB.h;
+    if(w / h > aspect){ h = w / aspect; }
+    else { w = h * aspect; }
+    /* Center the box */
+    var cx = (minX + maxX) / 2;
+    var cy = (minY + maxY) / 2;
+
+    /* Don't zoom out beyond original */
+    if(w > z.origVB.w){ w = z.origVB.w; h = z.origVB.h; cx = z.origVB.x + z.origVB.w/2; cy = z.origVB.y + z.origVB.h/2; }
+
+    z.curVB.x = cx - w/2;
+    z.curVB.y = cy - h/2;
+    z.curVB.w = w;
+    z.curVB.h = h;
+    z.applyVB();
+  }
+
+  /* ── Click handler (arrows, species, background) ── */
+  document.addEventListener('click', function(e){
+    /* Ignore clicks on toggle chips, zoom buttons etc */
+    if(e.target.closest('.fw-toggle-chip') || e.target.closest('.zoom-btn')) return;
+    var svg = e.target.closest('.bgc-diagram-container svg');
+    if(!svg) return;
+
+    /* Check if this was a drag (rect-zoom) — ignore click after drag */
+    var container = svg.closest('.bgc-diagram-container');
+    if(container && container._wasDrag){ container._wasDrag = false; return; }
+
+    var arrow = e.target.closest('.reaction-arrow');
+    var species = e.target.closest('.species-node');
+
+    if(arrow){
+      if(arrow===activeEl && activeKind==='arrow') resetHighlight(svg);
+      else highlightReaction(svg, arrow);
+    } else if(species){
+      if(species===activeEl && activeKind==='species') resetHighlight(svg);
+      else highlightSpecies(svg, species);
+    } else {
+      if(activeEl) resetHighlight(svg);
+    }
+  });
+
+  /* ── Update species visibility based on active frameworks ── */
+  function updateSpeciesVisibility(svg, container){
+    /* Collect active framework names */
+    var activeFW = {};
+    container.querySelectorAll('.fw-toggle-chip.active').forEach(function(c){
+      var f = c.getAttribute('data-fw');
+      if(f && f!=='__all__') activeFW[f] = true;
+    });
+    /* Collect species used by active frameworks */
+    var usedSpecies = {};
+    svg.querySelectorAll('.reaction-arrow').forEach(function(g){
+      var f = g.getAttribute('data-fw');
+      if(!activeFW[f]) return;
+      var c = g.getAttribute('data-consumed');
+      var p = g.getAttribute('data-produced');
+      if(c && c!=='NONE') usedSpecies[c] = true;
+      if(p && p!=='NONE') usedSpecies[p] = true;
+    });
+    /* Gray out species not used by any active framework */
+    svg.querySelectorAll('.species-node').forEach(function(g){
+      var sp = g.getAttribute('data-species');
+      if(usedSpecies[sp]){
+        g.style.opacity=''; g.style.filter='';
+      } else {
+        g.style.opacity='0.18'; g.style.filter='grayscale(100%)';
+      }
+    });
+  }
+
+  /* ── Framework toggle chips (checkbox style) ───── */
+  document.addEventListener('click', function(e){
+    var chip = e.target.closest('.fw-toggle-chip');
+    if(!chip) return;
+    var container = chip.closest('.bgc-diagram-container');
+    if(!container) return;
+    var svg = container.querySelector('svg');
+    if(!svg) return;
+    var fw = chip.getAttribute('data-fw');
+
+    /* "All" button */
+    if(fw==='__all__'){
+      container.querySelectorAll('.fw-toggle-chip').forEach(function(c){
+        c.classList.add('active');
+      });
+      svg.querySelectorAll('.fw-group').forEach(function(g){
+        g.style.display='';
+      });
+      svg.querySelectorAll('.label-layer text, .label-layer .label-bg').forEach(function(el){
+        el.style.display='';
+      });
+      svg.querySelectorAll('.species-node').forEach(function(g){
+        g.style.opacity=''; g.style.filter='';
+      });
+      if(activeEl) resetHighlight(svg);
+      return;
+    }
+
+    /* Toggle individual framework */
+    chip.classList.toggle('active');
+    var isActive = chip.classList.contains('active');
+    svg.querySelectorAll('.fw-group[data-fw="'+fw+'"]').forEach(function(g){
+      g.style.display = isActive ? '' : 'none';
+    });
+    /* Also hide/show corresponding labels */
+    svg.querySelectorAll('.label-layer [data-fw="'+fw+'"]').forEach(function(el){
+      el.style.display = isActive ? '' : 'none';
+    });
+    /* Gray out species no longer used by any active framework */
+    updateSpeciesVisibility(svg, container);
+
+    if(activeEl && activeKind==='arrow' && activeEl.getAttribute('data-fw')===fw && !isActive){
+      resetHighlight(svg);
+    }
+  });
+
+  /* ── Zoom & Pan ────────────────────────────────── */
+  document.querySelectorAll('.bgc-diagram-container').forEach(function(container){
+    var svg = container.querySelector('svg');
+    if(!svg) return;
+    var canvas = svg.querySelector('.diagram-canvas');
+    var selRect = svg.querySelector('.zoom-sel');
+    if(!canvas) return;
+
+    var vb = svg.viewBox.baseVal;
+    var origVB = {x:vb.x, y:vb.y, w:vb.width, h:vb.height};
+    var curVB  = {x:vb.x, y:vb.y, w:vb.width, h:vb.height};
+    var zoomLocked = true;  /* +/- and scroll zoom locked by default */
+
+    function applyVB(){
+      svg.setAttribute('viewBox',
+        curVB.x+' '+curVB.y+' '+curVB.w+' '+curVB.h);
+    }
+
+    /* Expose zoom state on container so highlight functions can access it */
+    container._zoomState = { origVB: origVB, curVB: curVB, applyVB: applyVB };
+
+    /* Mouse-to-SVG coordinate conversion */
+    function svgPt(evt){
+      var r = svg.getBoundingClientRect();
+      return {
+        x: curVB.x + (evt.clientX - r.left) / r.width  * curVB.w,
+        y: curVB.y + (evt.clientY - r.top)  / r.height * curVB.h
+      };
+    }
+
+    /* Wheel zoom (disabled when locked) */
+    svg.addEventListener('wheel', function(e){
+      e.preventDefault();
+      if(zoomLocked) return;
+      var pt = svgPt(e);
+      var factor = e.deltaY > 0 ? 1.15 : 1/1.15;
+      var nw = curVB.w * factor;
+      var nh = curVB.h * factor;
+      if(nw > origVB.w * 1.05){ nw=origVB.w; nh=origVB.h; }
+      if(nw < origVB.w * 0.1){ return; }
+      curVB.x = pt.x - (pt.x - curVB.x) * (nw / curVB.w);
+      curVB.y = pt.y - (pt.y - curVB.y) * (nh / curVB.h);
+      curVB.w = nw;
+      curVB.h = nh;
+      applyVB();
+    }, {passive:false});
+
+    /* Rectangle-select zoom — primary drag action (left-click drag) */
+    var dragStart = null;
+    var dragStartScreen = null;
+    var dragging = false;
+
+    svg.addEventListener('mousedown', function(e){
+      if(e.button !== 0) return; /* left button only */
+      e.preventDefault();
+      dragStart = svgPt(e);
+      dragStartScreen = {x: e.clientX, y: e.clientY};
+      dragging = false; /* becomes true once movement threshold is met */
+    });
+
+    svg.addEventListener('mousemove', function(e){
+      if(!dragStart) return;
+      /* Threshold: start rectangle only after 5px of movement */
+      if(!dragging){
+        var dx = e.clientX - dragStartScreen.x;
+        var dy = e.clientY - dragStartScreen.y;
+        if(Math.sqrt(dx*dx + dy*dy) < 5) return;
+        dragging = true;
+        selRect.style.display = '';
+      }
+      var cur = svgPt(e);
+      var x = Math.min(dragStart.x, cur.x);
+      var y = Math.min(dragStart.y, cur.y);
+      var w = Math.abs(cur.x - dragStart.x);
+      var h = Math.abs(cur.y - dragStart.y);
+      selRect.setAttribute('x', x);
+      selRect.setAttribute('y', y);
+      selRect.setAttribute('width', w);
+      selRect.setAttribute('height', h);
+    });
+
+    svg.addEventListener('mouseup', function(e){
+      if(!dragStart) return;
+      var wasDrag = dragging;
+      selRect.style.display = 'none';
+      selRect.setAttribute('width', 0);
+      selRect.setAttribute('height', 0);
+
+      if(wasDrag){
+        container._wasDrag = true; /* signal click handler to ignore this */
+        var end = svgPt(e);
+        var x = Math.min(dragStart.x, end.x);
+        var y = Math.min(dragStart.y, end.y);
+        var w = Math.abs(end.x - dragStart.x);
+        var h = Math.abs(end.y - dragStart.y);
+        dragStart = null; dragStartScreen = null; dragging = false;
+        if(w < origVB.w * 0.02 || h < origVB.h * 0.02) return;
+        /* Preserve aspect ratio */
+        var aspect = origVB.w / origVB.h;
+        if(w / h > aspect){ h = w / aspect; }
+        else { w = h * aspect; }
+        curVB.x = x; curVB.y = y; curVB.w = w; curVB.h = h;
+        applyVB();
+      }
+      dragStart = null; dragStartScreen = null; dragging = false;
+    });
+
+    /* Cancel drag if mouse leaves SVG */
+    svg.addEventListener('mouseleave', function(){
+      if(dragStart){
+        selRect.style.display = 'none';
+        selRect.setAttribute('width', 0);
+        selRect.setAttribute('height', 0);
+        dragStart = null; dragStartScreen = null; dragging = false;
+      }
+    });
+
+    /* Zoom control buttons */
+    container.querySelectorAll('.zoom-btn').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var action = btn.getAttribute('data-zoom');
+        if(action === 'lock'){
+          zoomLocked = !zoomLocked;
+          btn.classList.toggle('locked', zoomLocked);
+          btn.innerHTML = zoomLocked ? '&#x1f512;' : '&#x1f513;';
+          btn.title = zoomLocked ? 'Unlock +/\u2212 zoom' : 'Lock +/\u2212 zoom';
+          /* Enable/disable +/- buttons */
+          container.querySelectorAll('.zoom-btn[data-zoom="in"],.zoom-btn[data-zoom="out"]').forEach(function(b){
+            if(zoomLocked) b.setAttribute('disabled','');
+            else b.removeAttribute('disabled');
+          });
+          /* Update hint text */
+          var hint = container.querySelector('.zoom-hint');
+          if(hint) hint.textContent = zoomLocked
+            ? 'Drag to select area'
+            : 'Scroll to zoom \u00b7 Drag to select area';
+          return;
+        }
+        if(action === 'in'){
+          var cx = curVB.x + curVB.w/2;
+          var cy = curVB.y + curVB.h/2;
+          curVB.w *= 0.7; curVB.h *= 0.7;
+          curVB.x = cx - curVB.w/2;
+          curVB.y = cy - curVB.h/2;
+        } else if(action === 'out'){
+          var cx = curVB.x + curVB.w/2;
+          var cy = curVB.y + curVB.h/2;
+          curVB.w = Math.min(curVB.w * 1.4, origVB.w);
+          curVB.h = Math.min(curVB.h * 1.4, origVB.h);
+          curVB.x = cx - curVB.w/2;
+          curVB.y = cy - curVB.h/2;
+          if(curVB.w >= origVB.w * 0.99){
+            curVB.x = origVB.x; curVB.y = origVB.y;
+            curVB.w = origVB.w; curVB.h = origVB.h;
+          }
+        } else if(action === 'reset'){
+          curVB.x = origVB.x; curVB.y = origVB.y;
+          curVB.w = origVB.w; curVB.h = origVB.h;
+        }
+        applyVB();
+      });
+    });
+
+    /* ── "Only species with observation data" toggle ── */
+    var obsCb = container.querySelector('.obs-only-cb');
+    if(obsCb){
+      obsCb.addEventListener('change', function(){
+        var obsOnly = obsCb.checked;
+
+        /* Gray out species without obs (keep visible & interactive) */
+        svg.querySelectorAll('.species-node').forEach(function(g){
+          var hasObs = g.getAttribute('data-has-obs');
+          if(obsOnly && hasObs === 'false'){
+            g.style.opacity = '0.25';
+            g.style.filter = 'grayscale(100%)';
+          } else {
+            g.style.opacity = '';
+            g.style.filter = '';
+          }
+        });
+
+        /* Gray out arrows without obs (keep visible & interactive) */
+        svg.querySelectorAll('.reaction-arrow').forEach(function(g){
+          var hasObs = g.getAttribute('data-has-obs');
+          if(obsOnly && hasObs === 'false'){
+            g.style.opacity = '0.2';
+            g.style.filter = 'grayscale(100%)';
+          } else {
+            g.style.opacity = '';
+            g.style.filter = '';
+          }
+        });
+
+        /* Gray out labels of no-obs arrows */
+        svg.querySelectorAll('.label-layer [data-rxn]').forEach(function(el){
+          var rxn = el.getAttribute('data-rxn');
+          var arrow = svg.querySelector('.reaction-arrow[data-rxn="'+rxn+'"]');
+          if(arrow){
+            var hasObs = arrow.getAttribute('data-has-obs');
+            if(obsOnly && hasObs === 'false'){
+              el.style.opacity = '0.2';
+            } else {
+              el.style.opacity = '';
+            }
+          }
+        });
+
+        /* Gray out framework chips that have no obs species */
+        container.querySelectorAll('.fw-toggle-chip').forEach(function(chip){
+          var fw = chip.getAttribute('data-fw');
+          if(fw === '__all__') return;
+          if(obsOnly){
+            var hasObsArrow = false;
+            svg.querySelectorAll('.reaction-arrow[data-fw="'+fw+'"]').forEach(function(a){
+              if(a.getAttribute('data-has-obs') === 'true') hasObsArrow = true;
+            });
+            if(!hasObsArrow){
+              chip.style.opacity = '0.35';
+            }
+          } else {
+            chip.style.opacity = '';
+          }
+        });
+
+        /* Dispatch custom event for calibration report integration */
+        container.dispatchEvent(new CustomEvent('obs-filter-changed', {
+          detail: { obsOnly: obsOnly },
+          bubbles: true
+        }));
+      });
+    }
+  });
+})();
+</script>"""
+
+
+# ── Main entry point ─────────────────────────────────────────────────
 
 def generate_bgc_reaction_diagram(
     bgc_data: Optional[dict] = None,
@@ -1708,12 +2729,18 @@ def generate_bgc_reaction_diagram(
     pqi_filepath: Optional[str] = None,
     module_name: str = "NATIVE_BGC_FLEX",
     max_width: int = 860,
+    species_obs_availability: Optional[dict] = None,
 ) -> str:
     """Generate an HTML/SVG reaction network diagram for BGC modules.
 
     Accepts either pre-parsed *bgc_data*, a path to a JSON template, or
     a path to a PHREEQC .pqi file.  Returns an HTML ``<div>`` containing
-    the SVG diagram, or ``""`` if no data is available.
+    the SVG diagram with interactive framework toggles and click-to-
+    highlight, or ``""`` if no data is available.
+
+    *species_obs_availability* (calibration report only): dict mapping
+    species name -> {"has_obs": bool, ...}.  When provided, species and
+    frameworks without observation data get a visual annotation.
     """
     network = {}
 
@@ -1736,37 +2763,153 @@ def generate_bgc_reaction_diagram(
         return ""
 
     # 2. Render SVG
-    svg_html = _render_bgc_svg(network, max_width=max_width)
+    svg_html = _render_bgc_svg(
+        network, max_width=max_width,
+        species_obs_availability=species_obs_availability,
+    )
     if not svg_html:
         return ""
 
-    # 3. Framework legend
+    # 3. Framework toggle bar (above diagram) — checkbox-style chips
     fw_names = list(network["frameworks"].keys())
-    legend_items = []
+    toggle_items = [
+        '<button class="fw-toggle-chip active" data-fw="__all__">'
+        '<span class="chip-tick">\u2714</span> All</button>'
+    ]
     for fi, fw_name in enumerate(fw_names):
         colour = _FW_COLORS[fi % len(_FW_COLORS)][0]
-        n_rxn = len(network["frameworks"][fw_name]["reactions"])
-        legend_items.append(
-            f'<span class="legend-item">'
-            f'<span class="legend-swatch" '
-            f'style="background:{colour};"></span>'
-            f'{_svg_escape(fw_name)} ({n_rxn} reactions)</span>')
+        fw_info = network["frameworks"][fw_name]
+        n_rxn = len(fw_info["reactions"])
+        # Determine if this framework has any species with observation data
+        no_obs_tag = ""
+        if species_obs_availability is not None:
+            fw_species = set()
+            for rxn in fw_info["reactions"]:
+                c = rxn.get("consumed", "NONE")
+                p = rxn.get("produced", "NONE")
+                if c and c != "NONE":
+                    fw_species.add(c)
+                if p and p != "NONE":
+                    fw_species.add(p)
+            has_any_obs = any(
+                species_obs_availability.get(sp, {}).get("has_obs", False)
+                for sp in fw_species
+            )
+            if not has_any_obs:
+                no_obs_tag = (
+                    ' <span style="font-size:0.75em;opacity:0.7;'
+                    'font-style:italic;">(no obs data)</span>'
+                )
+        toggle_items.append(
+            f'<button class="fw-toggle-chip active" '
+            f'data-fw="{_svg_escape(fw_name)}" '
+            f'style="--chip-color:{colour};">'
+            f'<span class="chip-tick">\u2714</span>'
+            f'<span class="chip-swatch" style="background:{colour};"></span>'
+            f'{_svg_escape(fw_name)} ({n_rxn}){no_obs_tag}</button>')
+    # "Only species with observation data" toggle
+    obs_toggle_html = ""
+    if species_obs_availability is not None:
+        has_any_obs = any(v.get("has_obs") for v in species_obs_availability.values())
+        has_any_no_obs = any(not v.get("has_obs") for v in species_obs_availability.values())
+        if has_any_obs and has_any_no_obs:
+            obs_toggle_html = (
+                '<div style="margin-bottom:.5rem;">'
+                '<label class="obs-only-toggle" style="display:inline-flex;'
+                'align-items:center;gap:6px;cursor:pointer;user-select:none;'
+                'font-size:.82rem;font-weight:600;color:var(--text,#222);'
+                'padding:5px 12px;border:1.5px solid var(--primary,#4d9ee8);'
+                'border-radius:8px;background:rgba(77,158,232,.06);'
+                'transition:background .2s;">'
+                '<input type="checkbox" class="obs-only-cb" '
+                'style="width:16px;height:16px;accent-color:var(--primary,#4d9ee8);'
+                'cursor:pointer;"/>'
+                '<span>Only species with observation data</span></label>'
+                '</div>'
+            )
 
-    legend_html = ""
-    if len(fw_names) > 1 or True:  # always show legend
-        legend_html = (
-            '<div class="bgc-diagram-legend">'
-            + "".join(legend_items)
-            + "</div>"
-        )
+    toggle_bar = (
+        '<div class="bgc-fw-toggle-bar">'
+        + "".join(toggle_items)
+        + "</div>"
+    )
 
-    # 4. Wrap in container
+    # 4. Zoom controls
+    zoom_controls = (
+        '<div class="bgc-zoom-bar">'
+        '<button class="zoom-btn zoom-lock locked" data-zoom="lock" '
+        'title="Unlock +/\u2212 zoom">&#x1f512;</button>'
+        '<button class="zoom-btn" data-zoom="in" title="Zoom in" disabled>+</button>'
+        '<button class="zoom-btn" data-zoom="out" title="Zoom out" disabled>\u2212</button>'
+        '<button class="zoom-btn" data-zoom="reset" title="Reset zoom">&#8634;</button>'
+        '<span class="zoom-hint">Drag to select area</span>'
+        '</div>'
+    )
+
+    # 5. Warning banner for sub-cycles without observation data
+    obs_warning = ""
+    if species_obs_availability is not None:
+        no_obs_fws = []
+        for fw_name, fw_info in network["frameworks"].items():
+            fw_species = set()
+            for rxn in fw_info["reactions"]:
+                c = rxn.get("consumed", "NONE")
+                p = rxn.get("produced", "NONE")
+                if c and c != "NONE":
+                    fw_species.add(c)
+                if p and p != "NONE":
+                    fw_species.add(p)
+            has_any = any(
+                species_obs_availability.get(sp, {}).get("has_obs", False)
+                for sp in fw_species
+            )
+            if not has_any:
+                no_obs_fws.append(fw_name)
+        no_obs_species = [
+            sp["name"] for sp in network["species"]
+            if not species_obs_availability.get(
+                sp["name"], {}
+            ).get("has_obs", False)
+        ]
+        if no_obs_fws or no_obs_species:
+            parts = []
+            if no_obs_fws:
+                fw_list = ", ".join(f"<strong>{f}</strong>" for f in no_obs_fws)
+                parts.append(
+                    f"Sub-cycles without observation data: {fw_list}"
+                )
+            if no_obs_species:
+                sp_list = ", ".join(
+                    f"<code>{s}</code>" for s in no_obs_species
+                )
+                parts.append(
+                    f"Species without observations: {sp_list}"
+                )
+            obs_warning = (
+                '<div style="margin-top:0.5rem;padding:0.5rem 0.8rem;'
+                'border-left:4px solid #e0a040;background:rgba(224,160,64,.08);'
+                'border-radius:4px;font-size:0.85em;">'
+                '<span style="color:#c47800;font-weight:600;">'
+                '&#x26a0; Calibration Note</span><br>'
+                + "<br>".join(parts)
+                + '<br><em style="opacity:0.7;">Species boxes and arrows with dashed '
+                'lines lack observation data for calibration.</em>'
+                '</div>'
+            )
+
+    # 6. Wrap in container: title → toggle bar → zoom → SVG → JS → warning
     n_sp = len(network["species"])
     title = f"Reaction Network \u2014 {n_sp} species"
     return (
         f'<div class="bgc-diagram-container">'
+        f'<div class="bgc-diagram-header">'
         f'<div class="bgc-diagram-title">{title}</div>'
+        f'{zoom_controls}'
+        f'</div>'
+        f'{obs_toggle_html}'
+        f'{toggle_bar}'
         f'{svg_html}'
-        f'{legend_html}'
+        f'{_bgc_diagram_js()}'
+        f'{obs_warning}'
         f'</div>'
     )
