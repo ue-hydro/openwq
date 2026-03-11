@@ -125,8 +125,9 @@ def _main():
     print(f"\n[2b/5] Extracting parameters for all active modules...")
 
     module_selections = config_integration.get_module_selections(model_cfg)
+    ss_load_species = config_integration.get_ss_species_with_loads(model_cfg)
     module_parameters = extract_parameters.extract_all_module_parameters(
-        model_cfg, bgc_params=auto_params
+        model_cfg, bgc_params=auto_params, ss_load_species=ss_load_species
     )
 
     total_module_params = sum(len(v) for v in module_parameters.values())
@@ -163,6 +164,8 @@ def _main():
     print(f"      Observation source: {obs_config.get('source', 'skip')}")
     obs_count = sum(1 for v in species_obs_availability.values() if v["has_obs"])
     print(f"      Species with observations: {obs_count}/{len(species_obs_availability)}")
+    if ss_load_species:
+        print(f"      SS species with loads: {', '.join(sorted(ss_load_species))}")
     print(f"      Host model: {container_config.get('hostmodel', 'unknown')}")
 
     # ── Validate ──
@@ -193,6 +196,7 @@ def _main():
         module_parameters=module_parameters,
         module_selections=module_selections,
         species_obs_availability=species_obs_availability,
+        ss_species_with_loads=ss_load_species,
     )
 
     if report_path:

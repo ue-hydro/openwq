@@ -187,7 +187,8 @@ def _read_module_json(output_dir, module_name):
         return None
 
 
-def _render_module_params(module_data, module_name, output_dir=None):
+def _render_module_params(module_data, module_name, output_dir=None,
+                          species_obs_availability=None):
     """Generate HTML list for module parameter display inside a <details> block."""
     if module_data is None or module_name.upper() == 'NONE':
         return []
@@ -315,6 +316,19 @@ def _render_module_params(module_data, module_name, output_dir=None):
                 H.append(_row)
             H.append('</table>')
 
+        # Reaction network diagram (right after Chemical Species)
+        if _DIAGRAM_AVAILABLE:
+            try:
+                _diag = generate_bgc_reaction_diagram(
+                    bgc_data=bgc,
+                    species_obs_availability=species_obs_availability,
+                )
+                if _diag:
+                    H.append('<h4>Reaction Network</h4>')
+                    H.append(_diag)
+            except Exception:
+                pass
+
         if 'CYCLING_FRAMEWORKS' in bgc:
             frameworks = bgc['CYCLING_FRAMEWORKS']
             H.append('<h4>Cycling Frameworks</h4>')
@@ -378,16 +392,6 @@ def _render_module_params(module_data, module_name, output_dir=None):
                 fws_str = ", ".join(fws) if isinstance(fws, list) else str(fws)
                 H.append(f'<tr><td>{comp}</td><td>{fws_str}</td></tr>')
             H.append('</table>')
-
-        # Reaction network diagram
-        if _DIAGRAM_AVAILABLE:
-            try:
-                _diag = generate_bgc_reaction_diagram(bgc_data=bgc)
-                if _diag:
-                    H.append('<h4>Reaction Network</h4>')
-                    H.append(_diag)
-            except Exception:
-                pass
 
     # --- PHREEQC ---
     elif mn == 'PHREEQC':
@@ -1256,6 +1260,17 @@ def generate_simulation_report(
         else:
             print("  No shapefile available for GRQA spatial search. Skipping.")
 
+    # Build species observation availability dict from obs_stats
+    _species_obs_avail = None
+    if obs_stats and chemical_species:
+        _species_with_data = set(
+            s.get('species', '') for s in obs_stats.get('species_stats', [])
+        )
+        _species_obs_avail = {
+            sp: {"has_obs": sp in _species_with_data}
+            for sp in chemical_species
+        }
+
     # Read source/sink config for summary
     ss_config_path = os.path.join(output_dir, 'openwq_in',
                                   f'openWQ_SS_{ss_method}.json')
@@ -1651,11 +1666,47 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
   border-radius:12px;padding:1rem 1rem .6rem;background:var(--surface)}
 .bgc-diagram-container svg{display:block;margin:0 auto;max-width:100%;
   font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif}
-.bgc-diagram-title{font-size:.9rem;font-weight:600;margin-bottom:.6rem;color:var(--text)}
-.bgc-diagram-legend{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:.6rem;
-  font-size:.72rem;color:var(--text2)}
-.bgc-diagram-legend .legend-item{display:flex;align-items:center;gap:.3rem}
-.bgc-diagram-legend .legend-swatch{width:16px;height:3px;border-radius:2px}
+.bgc-diagram-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
+.bgc-diagram-title{font-size:.9rem;font-weight:600;color:var(--text)}
+.bgc-zoom-bar{display:flex;align-items:center;gap:4px}
+.zoom-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);font-size:.85rem;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;transition:background .15s;
+  font-family:inherit;line-height:1;padding:0}
+.zoom-btn:hover{background:var(--border)}
+.zoom-hint{font-size:.62rem;color:var(--text3);margin-left:4px}
+/* Framework toggle bar */
+.bgc-fw-toggle-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.6rem;align-items:center}
+.fw-toggle-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
+  font-size:.72rem;font-weight:500;border:1.5px solid var(--chip-color,var(--primary));
+  border-radius:14px;background:transparent;color:var(--chip-color,var(--primary));
+  cursor:pointer;transition:background .2s,opacity .2s;font-family:inherit;line-height:1.4}
+.fw-toggle-chip.active{background:var(--chip-color,var(--primary));color:var(--surface,#fff)}
+.fw-toggle-chip:not(.active){opacity:.45}
+.fw-toggle-chip[data-fw="__all__"]{--chip-color:var(--text2)}
+.chip-swatch{width:10px;height:10px;border-radius:50%;display:inline-block}
+.fw-toggle-chip.active .chip-swatch{border:1.5px solid var(--surface,#fff)}
+.chip-tick{font-size:.7rem;line-height:1;margin-right:1px;display:inline-block;transition:opacity .15s}
+.fw-toggle-chip:not(.active) .chip-tick{opacity:0;width:0;margin:0;overflow:hidden}
+/* Hover tooltip */
+.bgc-tooltip{position:fixed;z-index:9999;pointer-events:none;max-width:420px;padding:8px 12px;
+  background:var(--surface,#1a1b2e);color:var(--text,#e2e8f0);border:1px solid var(--border,#2a2b3d);
+  border-radius:8px;font-size:.78rem;line-height:1.55;box-shadow:0 6px 24px rgba(0,0,0,.25);
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif}
+.bgc-tooltip strong{display:block;margin-bottom:3px;font-weight:600}
+.bgc-tip-reaction{display:block;color:var(--text2,#a0aec0);font-size:.72rem;margin-bottom:4px}
+.bgc-tip-expr{display:block;font-family:'JetBrains Mono',monospace;font-size:.7rem;
+  color:var(--secondary,#34d399);background:rgba(0,0,0,.15);padding:3px 6px;
+  border-radius:4px;margin:3px 0;word-break:break-all}
+.bgc-tip-params{display:block;font-size:.68rem;color:var(--text3,#636e72);margin-top:2px}
+/* Diagram interactivity */
+.bgc-diagram-container .reaction-arrow{transition:opacity .25s ease,filter .25s ease;cursor:pointer}
+.bgc-diagram-container .species-node{transition:opacity .25s ease,filter .25s ease;cursor:pointer}
+.bgc-diagram-container svg{cursor:crosshair}
+.bgc-diagram-container .reaction-arrow path.hit-area{pointer-events:stroke}
+.bgc-diagram-container .reaction-arrow path.vis-path{pointer-events:none}
+.bgc-diagram-container .reaction-arrow text{pointer-events:none}
+.bgc-diagram-container .label-bg{pointer-events:none}
 
 /* Animations */
 @keyframes fadeInUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
@@ -2070,8 +2121,12 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             mod_data = _read_module_json(output_dir, mod_name)
             if mod_data is None:
                 continue
-            param_html = _render_module_params(mod_data, mod_name,
-                                                output_dir=output_dir)
+            # Pass obs availability only for BGC modules
+            _obs_for_mod = (_species_obs_avail
+                            if 'BGC' in mod_name.upper() else None)
+            param_html = _render_module_params(
+                mod_data, mod_name, output_dir=output_dir,
+                species_obs_availability=_obs_for_mod)
             if not param_html:
                 continue
             H.append(f'<details class="module-details">')

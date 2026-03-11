@@ -19,7 +19,8 @@ Parameter Extraction Module
 ============================
 
 Auto-extracts calibration parameters from BGC template _PARAMETERS_INFO blocks.
-Parameters with a RANGE field are included; others are skipped.
+All parameters are included; those with an explicit RANGE field use those bounds,
+while others get auto-generated bounds based on their VALUE.
 
 Also provides helper functions for building non-BGC parameter entries
 (transport, sorption, sediment, lateral exchange, source/sink).
@@ -48,8 +49,9 @@ def extract_calibration_parameters(bgc_template_path: str) -> List[Dict]:
     Walks the BGC JSON structure:
         CYCLING_FRAMEWORKS -> framework -> reaction_number -> _PARAMETERS_INFO
 
-    For each parameter with a RANGE field, generates a calibration parameter
-    dict ready for use by the calibration driver.
+    ALL parameters are extracted. Those with an explicit RANGE field use those
+    bounds; others get auto-generated bounds based on their VALUE (+/- factor).
+    Parameters without RANGE are marked ``has_explicit_range=False``.
 
     Parameters
     ----------
@@ -64,11 +66,12 @@ def extract_calibration_parameters(bgc_template_path: str) -> List[Dict]:
         - file_type: "bgc_json"
         - path: list of JSON keys to reach PARAMETER_VALUES
         - initial: default value from the template
-        - bounds: (min, max) tuple from RANGE
+        - bounds: (min, max) tuple from RANGE or auto-generated
         - transform: "log" or "linear"
         - units: parameter units (if available)
         - description: parameter description (if available)
         - source: "auto-extracted"
+        - has_explicit_range: True if RANGE was in the template
     """
     if not os.path.isfile(bgc_template_path):
         logger.warning(f"BGC template not found: {bgc_template_path}")
@@ -114,19 +117,32 @@ def extract_calibration_parameters(bgc_template_path: str) -> List[Dict]:
                 if not isinstance(info, dict):
                     continue
 
-                # Only include parameters that have a RANGE
+                value = float(info.get("VALUE", 0.0))
+
+                # Use explicit RANGE if available, otherwise auto-generate
                 param_range = info.get("RANGE")
-                if param_range is None or not isinstance(param_range, (list, tuple)):
-                    continue
-                if len(param_range) != 2:
-                    continue
+                has_explicit_range = (
+                    param_range is not None
+                    and isinstance(param_range, (list, tuple))
+                    and len(param_range) == 2
+                )
 
-                value = info.get("VALUE", 0.0)
-                range_min = float(param_range[0])
-                range_max = float(param_range[1])
+                if has_explicit_range:
+                    range_min = float(param_range[0])
+                    range_max = float(param_range[1])
+                else:
+                    # Auto-generate bounds: ±50% of value, with floor
+                    abs_val = abs(value) if value != 0 else 0.01
+                    range_min = _round_sig(abs_val * 0.5)
+                    range_max = _round_sig(abs_val * 2.0)
+                    # Ensure min < max
+                    if range_min >= range_max:
+                        range_min, range_max = range_max, range_min
+                    if range_min == range_max:
+                        range_max = range_min * 2.0
 
-                # Determine transform: use log if range spans >2 orders of magnitude
-                # and value is positive
+                # Determine transform: use log if range spans >2 orders of
+                # magnitude and value is positive
                 if value > 0 and range_min > 0 and range_max / range_min > 100:
                     transform = "log"
                 else:
@@ -151,6 +167,7 @@ def extract_calibration_parameters(bgc_template_path: str) -> List[Dict]:
                     "units": info.get("UNITS", ""),
                     "description": info.get("DESCRIPTION", ""),
                     "source": "auto-extracted",
+                    "has_explicit_range": has_explicit_range,
                     # Extra metadata for the report
                     "_framework": framework_name,
                     "_reaction": rxn_name,
@@ -522,6 +539,7 @@ _LULC_CLASS_NAMES = {
 def extract_all_module_parameters(
     model_config: Dict[str, Any],
     bgc_params: Optional[List[Dict]] = None,
+    ss_load_species: Optional[set] = None,
 ) -> Dict[str, List[Dict]]:
     """
     Auto-extract calibration parameters for ALL active modules.
@@ -536,6 +554,10 @@ def extract_all_module_parameters(
         Loaded model configuration (from config_integration.load_model_config).
     bgc_params : List[Dict], optional
         Pre-extracted BGC parameters. If None, BGC group is skipped.
+    ss_load_species : set, optional
+        Set of model species names that have SS load entries
+        (e.g. {"NH4-N", "NO3-N"}), as resolved by the config template.
+        If None, falls back to custom coefficient species.
 
     Returns
     -------
@@ -698,31 +720,44 @@ def extract_all_module_parameters(
 
     elif ss_method in ("using_copernicus_lulc_with_static_coeff",
                        "using_copernicus_lulc_with_dynamic_coeff"):
-        dynamic = "dynamic" in ss_method
-        custom_coeffs = model_config.get(
-            "ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class", {}
-        )
+        # ss_load_species contains the actual model species that have
+        # loads (already resolved by the config template, including
+        # stoichiometric conversions).  Generate a scaling factor param
+        # per SS load species.
         ss_params = []
-        if isinstance(custom_coeffs, dict) and custom_coeffs:
-            for lulc_class, sp_loads in custom_coeffs.items():
-                if not isinstance(sp_loads, dict):
-                    continue
-                lulc_int = int(lulc_class)
-                lulc_name = _LULC_CLASS_NAMES.get(lulc_int, f"LULC_{lulc_int}")
-                for sp, load_val in sp_loads.items():
-                    sp_clean = sp.replace("-", "_").replace(" ", "_")
-                    initial = float(load_val)
-                    bmax = _round_sig(max(initial * 5.0, 1.0))
-                    bmin = _round_sig(max(initial * 0.1, 0.001))
-                    ss_params.append(make_ss_copernicus_param(
-                        f"SS_COP_{lulc_name}_{sp_clean}",
-                        lulc_class=lulc_int, species=sp,
-                        initial=initial, bounds=(bmin, bmax),
-                        dynamic=dynamic,
-                        description=f"{lulc_name} export coeff for {sp}"))
+        if ss_load_species:
+            for sp in sorted(ss_load_species):
+                sp_clean = sp.replace("-", "_").replace(" ", "_")
+                ss_params.append(make_ss_csv_scale_param(
+                    f"SS_COP_scale_{sp_clean}",
+                    species=sp,
+                    initial=1.0,
+                    bounds=(0.1, 5.0),
+                    description=f"Load scaling factor for {sp}"))
+        else:
+            # Fallback: use custom coefficient species if ss_load_species
+            # was not provided (SS JSON not generated yet)
+            custom_coeffs = model_config.get(
+                "ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class", {}
+            )
+            if isinstance(custom_coeffs, dict) and custom_coeffs:
+                seen_species = set()
+                for lulc_class, sp_loads in custom_coeffs.items():
+                    if isinstance(sp_loads, dict):
+                        for sp in sp_loads:
+                            if sp not in seen_species:
+                                seen_species.add(sp)
+                                sp_clean = sp.replace("-", "_").replace(" ", "_")
+                                ss_params.append(make_ss_csv_scale_param(
+                                    f"SS_COP_scale_{sp_clean}",
+                                    species=sp,
+                                    initial=1.0,
+                                    bounds=(0.1, 5.0),
+                                    description=f"Load scaling factor for {sp}"))
 
-        # Climate response params (dynamic only)
-        if dynamic:
+        # Climate response params (dynamic SS only)
+        is_dynamic = (ss_method == "using_copernicus_lulc_with_dynamic_coeff")
+        if is_dynamic:
             psp = float(model_config.get("ss_climate_precip_scaling_power", 1.0))
             q10 = float(model_config.get("ss_climate_temp_q10", 2.0))
             tref = float(model_config.get("ss_climate_temp_reference_c", 15.0))
