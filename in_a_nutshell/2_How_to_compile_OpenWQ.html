@@ -640,7 +640,13 @@ git clone -b develop https://github.com/ue-hydro/openwq.git
                     </div>
                     <div class="column">
                         <pre style="font-size: 0.72rem;">
-<span class="comment"># 1. Start Docker (e.g., open Docker Desktop)</span>
+<span class="comment"># 1. Start Docker</span>
+<span class="comment"># macOS:</span>
+open -a Docker
+<span class="comment"># Linux:</span>
+sudo systemctl start docker
+<span class="comment"># Windows (PowerShell):</span>
+Start-Service Docker
 
 <span class="comment"># 2. Navigate to the containers/ folder</span>
 cd containers
