@@ -240,14 +240,77 @@ def extract_cycling_frameworks_from_bgc(
     return framework_names
 
 
+def _get_docker_container_name(docker_compose_path: str) -> str:
+    """
+    Extract the container_name from docker-compose.yml.
+    Returns the name string or 'docker_openwq' as fallback.
+    """
+    try:
+        with open(docker_compose_path, 'r') as f:
+            content = f.read()
+        match = re.search(r'container_name:\s*(\S+)', content)
+        if match:
+            return match.group(1).strip()
+    except Exception:
+        pass
+    return 'docker_openwq'
+
+
+def _query_running_container_mount(container_name: str) -> tuple:
+    """
+    Query a running Docker container for its bind-mount volume mapping.
+    Returns (host_root, container_root) or (None, None) if unavailable.
+
+    This is the most reliable method because it returns the ACTUAL resolved
+    mount point, regardless of which docker-compose.yml was used to start
+    the container or how many '../' levels were in the volume definition.
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ['docker', 'inspect', container_name,
+             '--format', '{{range .Mounts}}{{.Source}}||{{.Destination}}{{end}}'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Parse "source||destination" — we use '||' as separator to avoid
+            # confusion with ':' in Windows paths
+            mount_str = result.stdout.strip()
+            parts = mount_str.split('||')
+            if len(parts) >= 2:
+                host_root = parts[0].strip()
+                container_root = parts[1].strip()
+                if not host_root.endswith('/'):
+                    host_root += '/'
+                if not container_root.endswith('/'):
+                    container_root += '/'
+                return host_root, container_root
+    except FileNotFoundError:
+        pass  # Docker CLI not installed
+    except Exception:
+        pass
+    return None, None
+
+
 def _parse_docker_volume_mount(docker_compose_path: str) -> tuple:
     """
-    Parse docker-compose.yml to extract the volume mount mapping.
-    Returns (host_root, container_root) or (None, None) if parsing fails.
+    Determine the Docker volume mount mapping (host_root → container_root).
+    Returns (host_root, container_root) or (None, None) if resolution fails.
 
-    The docker-compose.yml volume format is: 'host_path:container_path[:options]'
-    where host_path can be relative (resolved from docker-compose.yml location).
+    Strategy:
+      1. Query the running container via 'docker inspect' — this returns the
+         ACTUAL resolved mount, which is always correct regardless of which
+         docker-compose.yml started the container.
+      2. Fall back to parsing docker-compose.yml and resolving relative paths
+         from its directory (works when the container is not yet running).
     """
+    # --- Strategy 1: query the running container ---
+    container_name = _get_docker_container_name(docker_compose_path)
+    host_root, container_root = _query_running_container_mount(container_name)
+    if host_root and container_root:
+        return host_root, container_root
+
+    # --- Strategy 2: parse docker-compose.yml ---
     try:
         with open(docker_compose_path, 'r') as f:
             content = f.read()
