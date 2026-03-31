@@ -559,7 +559,7 @@
                 "CONSUMED": "DOC_acid",
                 "PRODUCED": "CO2_aq",
                 "KINETICS": [
-                    "k_mic_DOC * DOC_acid * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+                    "k_mic_DOC * DOC_acid * (DO / (Ks_O2 + DO)) * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [

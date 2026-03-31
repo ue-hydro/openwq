@@ -96,7 +96,7 @@
                 "CONSUMED": "PHARMA_antibiotic",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
-                    "k_bio_antibiotic * PHARMA_antibiotic * theta_bio^(Treach_K - 293)",
+                    "k_bio_antibiotic * PHARMA_antibiotic * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -161,7 +161,7 @@
                 "CONSUMED": "PHARMA_analgesic",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
-                    "k_bio_analgesic * PHARMA_analgesic * theta_bio^(Treach_K - 293)",
+                    "k_bio_analgesic * PHARMA_analgesic * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -206,7 +206,7 @@
                 "CONSUMED": "PHARMA_hormone",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
-                    "k_bio_hormone * PHARMA_hormone * theta_bio^(Treach_K - 293)",
+                    "k_bio_hormone * PHARMA_hormone * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -251,7 +251,7 @@
                 "CONSUMED": "PHARMA_psychiatric",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
-                    "k_bio_psychiatric * PHARMA_psychiatric * theta_bio^(Treach_K - 293)",
+                    "k_bio_psychiatric * PHARMA_psychiatric * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -307,7 +307,7 @@
                 "CONSUMED": "PPCP_fragrance",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_vol * PPCP_fragrance * (Treach_K / 293)",
+                    "k_vol * PPCP_fragrance * ((T + 273.15) / 293)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -330,7 +330,7 @@
                 "CONSUMED": "PPCP_fragrance",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_bio_fragrance * PPCP_fragrance * theta_bio^(Treach_K - 293)",
+                    "k_bio_fragrance * PPCP_fragrance * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -367,7 +367,7 @@
                 "CONSUMED": "PPCP_UV_filter",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_bio_uv * PPCP_UV_filter * theta_bio^(Treach_K - 293)",
+                    "k_bio_uv * PPCP_UV_filter * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -385,7 +385,7 @@
                 "CONSUMED": "PPCP_antimicrobial",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
-                    "k_bio_antimicrobial * PPCP_antimicrobial * theta_bio^(Treach_K - 293)",
+                    "k_bio_antimicrobial * PPCP_antimicrobial * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -688,7 +688,7 @@
                 "CONSUMED": "MP_fragment",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_biofoul * MP_fragment * theta_bio^(Treach_K - 293)",
+                    "k_biofoul * MP_fragment * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -716,7 +716,7 @@
                 "CONSUMED": "EDC_estrogen",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
-                    "k_bio_estrogen * EDC_estrogen * theta_bio^(Treach_K - 293)",
+                    "k_bio_estrogen * EDC_estrogen * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -760,7 +760,7 @@
                 "CONSUMED": "EDC_bisphenol",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
-                    "k_bio_bpa * EDC_bisphenol * theta_bio^(Treach_K - 293)",
+                    "k_bio_bpa * EDC_bisphenol * theta_bio^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -805,7 +805,7 @@
                 "CONSUMED": "NONE",
                 "PRODUCED": "METAB_generic",
                 "KINETICS": [
-                    "k_bio * EC_generic * theta^(Treach_K - 293)",
+                    "k_bio * EC_generic * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [

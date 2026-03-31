@@ -89,7 +89,7 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_G1 * OM_labile * theta_om^(Treach_K - 293)",
+                    "k_G1 * OM_labile * theta_om^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -115,7 +115,7 @@
                 "CONSUMED": "OM_semilabile",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_G2 * OM_semilabile * theta_om^(Treach_K - 293)",
+                    "k_G2 * OM_semilabile * theta_om^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -141,7 +141,7 @@
                 "CONSUMED": "OM_refractory",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_G3 * OM_refractory * theta_om^(Treach_K - 293)",
+                    "k_G3 * OM_refractory * theta_om^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -193,7 +193,7 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_aero * OM_labile * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+                    "k_aero * OM_labile * (DO / (Ks_O2 + DO)) * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -215,7 +215,7 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_denit * OM_labile * (NO3-N / (Ks_NO3N + NO3-N)) * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
+                    "k_denit * OM_labile * (NO3-N / (Ks_NO3N + NO3-N)) * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -239,7 +239,7 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_mn * OM_labile * (Mn_IV / (Ks_Mn + Mn_IV)) * f_anoxic * theta^(Treach_K - 293)",
+                    "k_mn * OM_labile * (Mn_IV / (Ks_Mn + Mn_IV)) * f_anoxic * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -264,7 +264,7 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_fe * OM_labile * (Fe_III / (Ks_Fe + Fe_III)) * f_anoxic * theta^(Treach_K - 293)",
+                    "k_fe * OM_labile * (Fe_III / (Ks_Fe + Fe_III)) * f_anoxic * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -288,7 +288,7 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CO2",
                 "KINETICS": [
-                    "k_so4 * OM_labile * (SO4-S / (Ks_SO4S + SO4-S)) * f_anoxic * theta^(Treach_K - 293)",
+                    "k_so4 * OM_labile * (SO4-S / (Ks_SO4S + SO4-S)) * f_anoxic * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -312,7 +312,7 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "CH4",
                 "KINETICS": [
-                    "k_meth * OM_labile * f_anoxic * (Ks_SO4S_inhib / (Ks_SO4S_inhib + SO4-S)) * theta^(Treach_K - 293)",
+                    "k_meth * OM_labile * f_anoxic * (Ks_SO4S_inhib / (Ks_SO4S_inhib + SO4-S)) * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -513,7 +513,7 @@
                 "CONSUMED": "OM_labile",
                 "PRODUCED": "NH4-N",
                 "KINETICS": [
-                    "k_ammon * OM_labile * rN_C * theta^(Treach_K - 293)",
+                    "k_ammon * OM_labile * rN_C * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -533,7 +533,7 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "NO3-N",
                 "KINETICS": [
-                    "k_nitrif * NH4-N * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+                    "k_nitrif * NH4-N * (DO / (Ks_O2 + DO)) * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -553,7 +553,7 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_denit_sed * NO3-N * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(Treach_K - 293)",
+                    "k_denit_sed * NO3-N * (Ks_O2_inhib / (Ks_O2_inhib + DO)) * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [

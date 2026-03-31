@@ -137,7 +137,7 @@
                 "CONSUMED": "NO3-N_soil",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_denit_tile * NO3-N_soil * (DOC_soil / (Ks_C + DOC_soil)) * f_sat * theta^(Treach_K - 293)",
+                    "k_denit_tile * NO3-N_soil * (DOC_soil / (Ks_C + DOC_soil)) * f_sat * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [

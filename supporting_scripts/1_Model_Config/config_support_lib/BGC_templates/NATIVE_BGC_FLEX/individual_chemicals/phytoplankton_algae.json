@@ -83,7 +83,7 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "PHYTO",
                 "KINETICS": [
-                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (NO3-N/(NO3-N+NH4-N+0.001)) * theta_growth^(Treach_K - 293)",
+                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (NO3-N/(NO3-N+NH4-N+0.001)) * theta_growth^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -134,7 +134,7 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "PHYTO",
                 "KINETICS": [
-                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (NH4-N/(NO3-N+NH4-N+0.001)) * Pref_NH4N * theta_growth^(Treach_K - 293)",
+                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (NH4-N/(NO3-N+NH4-N+0.001)) * Pref_NH4N * theta_growth^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -161,7 +161,7 @@
                 "CONSUMED": "PO4-P",
                 "PRODUCED": "PHYTO",
                 "KINETICS": [
-                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (1/rCP) * theta_growth^(Treach_K - 293)",
+                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * (1/rCP) * theta_growth^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -189,7 +189,7 @@
                 "CONSUMED": "PHYTO",
                 "PRODUCED": "NH4-N",
                 "KINETICS": [
-                    "k_resp * PHYTO * theta_resp^(Treach_K - 293)",
+                    "k_resp * PHYTO * theta_resp^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -265,7 +265,7 @@
                 "CONSUMED": "PHYTO",
                 "PRODUCED": "ZOO",
                 "KINETICS": [
-                    "g_max * ZOO * (1 - exp(-lambda_g * PHYTO)) * theta_zoo^(Treach_K - 293)",
+                    "g_max * ZOO * (1 - exp(-lambda_g * PHYTO)) * theta_zoo^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -286,7 +286,7 @@
                 "CONSUMED": "ZOO",
                 "PRODUCED": "NH4-N",
                 "KINETICS": [
-                    "k_resp_zoo * ZOO * theta_zoo^(Treach_K - 293)",
+                    "k_resp_zoo * ZOO * theta_zoo^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -323,7 +323,7 @@
                 "CONSUMED": "PHYTO",
                 "PRODUCED": "Chla",
                 "KINETICS": [
-                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * ratio_chla_C * theta_growth^(Treach_K - 293)",
+                    "mu_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * min((NO3-N+NH4-N)/(Ks_N+NO3-N+NH4-N), PO4-P/(Ks_P+PO4-P)) * ratio_chla_C * theta_growth^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
