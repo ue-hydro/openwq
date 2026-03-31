@@ -92,7 +92,7 @@
                 "CONSUMED": "NONE",
                 "PRODUCED": "DO",
                 "KINETICS": [
-                    "ka_20 * 1.024^(Treach_K - 293) * (dosat_20 * (1 - 0.0035*(Treach_K - 293)) - DO)",
+                    "ka_20 * 1.024^(T - 20) * (dosat_20 * (1 - 0.0035*(T - 20)) - DO)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -130,7 +130,7 @@
                 "CONSUMED": "NONE",
                 "PRODUCED": "DO",
                 "KINETICS": [
-                    "P_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * rO2_C * theta_p^(Treach_K - 293)",
+                    "P_max * PHYTO * (SWrad_Wm2/Iopt) * exp(1 - SWrad_Wm2/Iopt) * rO2_C * theta_p^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -158,7 +158,7 @@
                 "CONSUMED": "DO",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_resp_algae * PHYTO * rO2_C * theta_r^(Treach_K - 293)",
+                    "k_resp_algae * PHYTO * rO2_C * theta_r^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -180,7 +180,7 @@
                 "CONSUMED": "DO",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "kd_fast * BOD_fast * (DO / (Ks_do + DO)) * theta_bod^(Treach_K - 293)",
+                    "kd_fast * BOD_fast * (DO / (Ks_do + DO)) * theta_bod^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -215,7 +215,7 @@
                 "CONSUMED": "DO",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "kd_slow * BOD_slow * (DO / (Ks_do + DO)) * theta_bod^(Treach_K - 293)",
+                    "kd_slow * BOD_slow * (DO / (Ks_do + DO)) * theta_bod^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -264,7 +264,7 @@
                 "CONSUMED": "DO",
                 "PRODUCED": "NO3-N",
                 "KINETICS": [
-                    "k_nitrif * NH4-N * (DO / (Ks_do_nitrif + DO)) * rO2_N * theta_nitrif^(Treach_K - 293)",
+                    "k_nitrif * NH4-N * (DO / (Ks_do_nitrif + DO)) * rO2_N * theta_nitrif^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -292,7 +292,7 @@
                 "CONSUMED": "DO",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "SOD_20 / depth * (DO / (Ks_do_sed + DO)) * theta_sod^(Treach_K - 293)",
+                    "SOD_20 / depth * (DO / (Ks_do_sed + DO)) * theta_sod^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [

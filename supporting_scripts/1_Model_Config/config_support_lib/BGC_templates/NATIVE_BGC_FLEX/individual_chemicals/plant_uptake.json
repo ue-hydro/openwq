@@ -280,7 +280,7 @@
                 "CONSUMED": "LITTER_N",
                 "PRODUCED": "NH4-N",
                 "KINETICS": [
-                    "k_litter_N * LITTER_N * theta_litter^(Treach_K - 293)",
+                    "k_litter_N * LITTER_N * theta_litter^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -313,7 +313,7 @@
                 "CONSUMED": "LITTER_P",
                 "PRODUCED": "PO4-P",
                 "KINETICS": [
-                    "k_litter_P * LITTER_P * theta_litter^(Treach_K - 293)",
+                    "k_litter_P * LITTER_P * theta_litter^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -340,7 +340,7 @@
                 "CONSUMED": "LITTER_C",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_litter_C * LITTER_C * theta_litter^(Treach_K - 293)",
+                    "k_litter_C * LITTER_C * theta_litter^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -492,7 +492,7 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_denit_riparian * NO3-N * (DOC / (Ks_DOC + DOC)) * f_anoxic * theta_denit^(Treach_K - 293)",
+                    "k_denit_riparian * NO3-N * (DOC / (Ks_DOC + DOC)) * f_anoxic * theta_denit^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [

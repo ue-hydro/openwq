@@ -87,7 +87,7 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "N2_gas",
                 "KINETICS": [
-                    "k_denit_wet * NO3-N * (DOC / (Ks_C + DOC)) * (Ks_O2 / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+                    "k_denit_wet * NO3-N * (DOC / (Ks_C + DOC)) * (Ks_O2 / (Ks_O2 + DO)) * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -118,7 +118,7 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "NO3-N",
                 "KINETICS": [
-                    "k_nitrif_wet * NH4-N * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+                    "k_nitrif_wet * NH4-N * (DO / (Ks_O2 + DO)) * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -179,7 +179,7 @@
                 "CONSUMED": "N_ORG",
                 "PRODUCED": "NH4-N",
                 "KINETICS": [
-                    "k_min_N * N_ORG * theta^(Treach_K - 293)",
+                    "k_min_N * N_ORG * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -317,7 +317,7 @@
                 "CONSUMED": "P_ORG",
                 "PRODUCED": "PO4-P",
                 "KINETICS": [
-                    "k_min_P * P_ORG * theta^(Treach_K - 293)",
+                    "k_min_P * P_ORG * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -405,7 +405,7 @@
                 "CONSUMED": "BOD",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_bod * BOD * (DO / (Ks_O2 + DO)) * theta^(Treach_K - 293)",
+                    "k_bod * BOD * (DO / (Ks_O2 + DO)) * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -454,7 +454,7 @@
                 "CONSUMED": "PATHOGEN",
                 "PRODUCED": "NONE",
                 "KINETICS": [
-                    "k_dieoff * PATHOGEN * theta^(Treach_K - 293)",
+                    "k_dieoff * PATHOGEN * theta^(T - 20)",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
