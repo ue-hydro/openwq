@@ -150,15 +150,6 @@ int OpenWQ_output::writeResults(
         false,  // reset inst derivatives
         true);  // reset cumulative derivatives
 
-    // Flush all open HDF5 files to disk so data survives abnormal exits
-    if (outputfile_type == "HDF5") {
-        for (auto& kv : OpenWQ_wqconfig.files) {
-            if (kv.second >= 0) {
-                H5Fflush(kv.second, H5F_SCOPE_LOCAL);
-            }
-        }
-    }
-
     // Log success message
     std::string msg_string = "<OpenWQ> Output export successful (" +
                             outputfile_type + "): " + timestr;
@@ -309,9 +300,21 @@ int OpenWQ_output::writeHDF5(
     cells2print_xyzElements_size(0, 2) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
 
     /* ########################################
-    // Save metadata on first timestep
+    // 1. Open (or create) all files for this batch
+    //    First timestep: create files with metadata, keep open
+    //    Subsequent:     just open existing files
     ######################################## */
+
+    std::vector<hid_t> file_handles(num_chem2print, -1);
+
+    // Shared file access property: no locking, latest format
+    hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_file_locking(fapl, 0, 0);
+    H5Pset_libver_bounds(fapl, H5F_LIBVER_V18, H5F_LIBVER_LATEST);
+
     if (OpenWQ_wqconfig.print_oneStep){
+
+        // --- First timestep: create files with metadata ---
 
         // Prepare xyz elements (convert to 1-based indexing)
         arma::mat cells2print_xyzElements = OpenWQ_wqconfig.cells2print_vec[icmp];
@@ -320,112 +323,151 @@ int OpenWQ_output::writeHDF5(
         // Prepare host IDs
         std::vector<std::string> host_ids;
         host_ids.reserve(num_cells2print);
-        
         for (unsigned int ixyz = 0; ixyz < num_cells2print; ixyz++){
             const int ix = static_cast<int>(OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 0));
             const int iy = static_cast<int>(OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 1));
             const int iz = static_cast<int>(OpenWQ_wqconfig.cells2print_vec[icmp](ixyz, 2));
             host_ids.push_back(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix, iy, iz));
         }
+        const std::string internal_db_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel();
+        std::vector<const char*> cstrs(host_ids.size());
+        for (size_t i = 0; i < host_ids.size(); ++i) cstrs[i] = host_ids[i].c_str();
 
-        // Write metadata for each chemical
+        hid_t fcpl = H5Pcreate(H5P_FILE_CREATE);
+
         for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
 
             const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
-
-            // Build filename
             std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
                                   CompName_icmp + "@" + chem_name + "#" +
                                   units_string + "-" + output_file_label + ".h5";
 
-            // Save xyz elements
-            cells2print_xyzElements.save(arma::hdf5_name(filename, "xyz_elements"));
+            // Create file with latest format (fractal heaps, not B-trees)
+            hid_t fh = H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, fcpl, fapl);
+            if (fh < 0) {
+                std::string msg = "<OpenWQ> ERROR: Failed to create HDF5 file: " + filename;
+                ConsoleLog(OpenWQ_wqconfig, msg, true, true);
+                continue;
+            }
 
-            // Save domain size
-            cells2print_xyzElements_size.save(
-                arma::hdf5_name(filename, "xyz_elements_size", arma::hdf5_opts::append));
+            // Write xyz_elements
+            {
+                hsize_t dims[2] = {cells2print_xyzElements.n_cols,
+                                   cells2print_xyzElements.n_rows};
+                hid_t sp = H5Screate_simple(2, dims, NULL);
+                hid_t ds = H5Dcreate(fh, "xyz_elements", H5T_NATIVE_DOUBLE,
+                                     sp, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (ds >= 0) {
+                    H5Dwrite(ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                             H5P_DEFAULT, cells2print_xyzElements.memptr());
+                    H5Dclose(ds);
+                }
+                H5Sclose(sp);
+            }
+
+            // Write xyz_elements_size
+            {
+                hsize_t dims[2] = {cells2print_xyzElements_size.n_cols,
+                                   cells2print_xyzElements_size.n_rows};
+                hid_t sp = H5Screate_simple(2, dims, NULL);
+                hid_t ds = H5Dcreate(fh, "xyz_elements_size", H5T_NATIVE_DOUBLE,
+                                     sp, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (ds >= 0) {
+                    H5Dwrite(ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                             H5P_DEFAULT, cells2print_xyzElements_size.memptr());
+                    H5Dclose(ds);
+                }
+                H5Sclose(sp);
+            }
 
             // Write host IDs as variable-length strings
             if (!host_ids.empty()){
-                const std::string internal_db_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel();
-                
-                std::vector<const char*> cstrs(host_ids.size());
-                for (size_t i = 0; i < host_ids.size(); ++i) {
-                    cstrs[i] = host_ids[i].c_str();
+                hsize_t dims[1] = {host_ids.size()};
+                hid_t space = H5Screate_simple(1, dims, NULL);
+                hid_t dtype = H5Tcopy(H5T_C_S1);
+                H5Tset_size(dtype, H5T_VARIABLE);
+                hid_t dset = H5Dcreate(fh, internal_db_name.c_str(), dtype, space,
+                                      H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (dset >= 0){
+                    H5Dwrite(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, cstrs.data());
+                    H5Dclose(dset);
                 }
-
-                hid_t file_h = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
-                if (file_h >= 0){
-                    hsize_t dims[1] = {host_ids.size()};
-                    hid_t space = H5Screate_simple(1, dims, NULL);
-                    hid_t dtype = H5Tcopy(H5T_C_S1);
-                    H5Tset_size(dtype, H5T_VARIABLE);
-                    hid_t dset = H5Dcreate(file_h, internal_db_name.c_str(), dtype, space,
-                                          H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-                    if (dset >= 0){
-                        H5Dwrite(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, cstrs.data());
-                        H5Dclose(dset);
-                    }
-                    H5Tclose(dtype);
-                    H5Sclose(space);
-                    H5Fclose(file_h);
-                }
+                H5Tclose(dtype);
+                H5Sclose(space);
             }
 
-            // Open file for subsequent writes
-            hid_t fh = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
-            if (fh < 0) {
-                std::string msg = "<OpenWQ> ERROR: Failed to open HDF5 file: " + filename;
+            // Keep file open for data write below (no close here!)
+            file_handles[ichem] = fh;
+
+            std::string msg_string = "<OpenWQ> Created output file " + filename;
+            ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        }
+
+        H5Pclose(fcpl);
+
+    } else {
+
+        // --- Subsequent timesteps: open existing files ---
+        for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
+            const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
+            std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
+                                   CompName_icmp + "@" + chem_name + "#" +
+                                   units_string + "-" + output_file_label + ".h5";
+            file_handles[ichem] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, fapl);
+            if (file_handles[ichem] < 0) {
+                std::string msg = "<OpenWQ> WARNING: Failed to open HDF5 file, skipping: " + filename;
                 ConsoleLog(OpenWQ_wqconfig, msg, true, true);
             }
-            OpenWQ_wqconfig.files[filename] = fh;
+        }
+    }
 
-            std::string msg_string = "<OpenWQ> Opening output file " + filename +
-                                    " " + std::to_string(OpenWQ_wqconfig.files[filename]);
-            ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    H5Pclose(fapl);
+
+    /* ########################################
+    // 2. Write data in parallel
+    ######################################## */
+
+    #pragma omp parallel num_threads(num_threads)
+    {
+        #pragma omp for schedule(static)
+        for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
+
+            if (file_handles[ichem] < 0) continue;
+
+            // Prepare data matrix
+            arma::mat data2print(num_cells2print, 1);
+
+            // Extract data
+            for (unsigned int celli = 0; celli < num_cells2print; celli++){
+
+                const unsigned int ix = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 0);
+                const unsigned int iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 1);
+                const unsigned int iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 2);
+
+                const double water_vol = is_conc_requested ?
+                    OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz) : 1.0;
+
+                if ((is_conc_requested && water_vol > watervol_minlim) || !is_conc_requested){
+                    data2print(celli, 0) =
+                        (*OpenWQ_var2print)(icmp)(OpenWQ_wqconfig.chem2print[ichem])(ix, iy, iz) *
+                        unit_mult_num / (water_vol * unit_mult_den);
+                } else {
+                    data2print(celli, 0) = noWaterConc;
+                }
+            }
+
+            appendData_to_HDF5_file(file_handles[ichem], data2print, timestr);
         }
     }
 
     /* ########################################
-    // Write data for current timestep
-    // NOTE: HDF5 is NOT thread-safe by default,
-    // so writes are serialized (no OpenMP).
+    // 3. Close all files (ensures flush to disk)
     ######################################## */
 
     for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
-
-        const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
-
-        // Build filename
-        std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
-                              CompName_icmp + "@" + chem_name + "#" +
-                              units_string + "-" + output_file_label + ".h5";
-
-        // Prepare data matrix
-        arma::mat data2print(num_cells2print, 1);
-
-        // Extract data
-        for (unsigned int celli = 0; celli < num_cells2print; celli++){
-
-            const unsigned int ix = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 0);
-            const unsigned int iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 1);
-            const unsigned int iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 2);
-
-            const double water_vol = is_conc_requested ?
-                OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz) : 1.0;
-
-            if ((is_conc_requested && water_vol > watervol_minlim) || !is_conc_requested){
-                data2print(celli, 0) =
-                    (*OpenWQ_var2print)(icmp)(OpenWQ_wqconfig.chem2print[ichem])(ix, iy, iz) *
-                    unit_mult_num / (water_vol * unit_mult_den);
-            } else {
-                data2print(celli, 0) = noWaterConc;
-            }
+        if (file_handles[ichem] >= 0) {
+            H5Fclose(file_handles[ichem]);
         }
-
-        // Write to HDF5
-        hid_t file = OpenWQ_wqconfig.files[filename];
-        appendData_to_HDF5_file(file, data2print, timestr);
     }
 
     return EXIT_SUCCESS;
@@ -474,11 +516,6 @@ int OpenWQ_output::writeHDF5_Sediment(
         cells2print_xyzElements_size(0, 1) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
         cells2print_xyzElements_size(0, 2) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
 
-        // Save metadata
-        cells2print_xyzElements.save(arma::hdf5_name(filename, "xyz_elements"));
-        cells2print_xyzElements_size.save(
-            arma::hdf5_name(filename, "xyz_elements_size", arma::hdf5_opts::append));
-
         // Write host IDs
         std::vector<std::string> host_ids;
         host_ids.reserve(num_cells2print);
@@ -490,16 +527,53 @@ int OpenWQ_output::writeHDF5_Sediment(
             host_ids.push_back(OpenWQ_hostModelconfig.get_cellid_to_wq_at(icmp, ix, iy, iz));
         }
 
-        if (!host_ids.empty()){
-            const std::string internal_db_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel();
-            
-            std::vector<const char*> cstrs(host_ids.size());
-            for (size_t i = 0; i < host_ids.size(); ++i) {
-                cstrs[i] = host_ids[i].c_str();
+        std::vector<const char*> cstrs(host_ids.size());
+        for (size_t i = 0; i < host_ids.size(); ++i) {
+            cstrs[i] = host_ids[i].c_str();
+        }
+        const std::string internal_db_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel();
+
+        // Create file with latest format (fractal heaps, not B-trees)
+        hid_t fcpl_s = H5Pcreate(H5P_FILE_CREATE);
+        hid_t fapl_s = H5Pcreate(H5P_FILE_ACCESS);
+        H5Pset_file_locking(fapl_s, 0, 0);
+        H5Pset_libver_bounds(fapl_s, H5F_LIBVER_V18, H5F_LIBVER_LATEST);
+
+        hid_t file_h = H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, fcpl_s, fapl_s);
+        if (file_h >= 0){
+
+            // Write xyz_elements
+            {
+                hsize_t dims[2] = {cells2print_xyzElements.n_cols,
+                                   cells2print_xyzElements.n_rows};
+                hid_t sp = H5Screate_simple(2, dims, NULL);
+                hid_t ds = H5Dcreate(file_h, "xyz_elements", H5T_NATIVE_DOUBLE,
+                                     sp, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (ds >= 0) {
+                    H5Dwrite(ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                             H5P_DEFAULT, cells2print_xyzElements.memptr());
+                    H5Dclose(ds);
+                }
+                H5Sclose(sp);
             }
 
-            hid_t file_h = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
-            if (file_h >= 0){
+            // Write xyz_elements_size
+            {
+                hsize_t dims[2] = {cells2print_xyzElements_size.n_cols,
+                                   cells2print_xyzElements_size.n_rows};
+                hid_t sp = H5Screate_simple(2, dims, NULL);
+                hid_t ds = H5Dcreate(file_h, "xyz_elements_size", H5T_NATIVE_DOUBLE,
+                                     sp, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (ds >= 0) {
+                    H5Dwrite(ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                             H5P_DEFAULT, cells2print_xyzElements_size.memptr());
+                    H5Dclose(ds);
+                }
+                H5Sclose(sp);
+            }
+
+            // Write host IDs as variable-length strings
+            if (!host_ids.empty()){
                 hsize_t dims[1] = {host_ids.size()};
                 hid_t space = H5Screate_simple(1, dims, NULL);
                 hid_t dtype = H5Tcopy(H5T_C_S1);
@@ -512,16 +586,16 @@ int OpenWQ_output::writeHDF5_Sediment(
                 }
                 H5Tclose(dtype);
                 H5Sclose(space);
-                H5Fclose(file_h);
             }
+
+            H5Fclose(file_h);
         }
 
-        hid_t fh = H5Fopen(filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
-        if (fh < 0) {
-            std::string msg = "<OpenWQ> ERROR: Failed to open HDF5 file: " + filename;
-            ConsoleLog(OpenWQ_wqconfig, msg, true, true);
-        }
-        OpenWQ_wqconfig.files[filename] = fh;
+        H5Pclose(fcpl_s);
+        H5Pclose(fapl_s);
+
+        std::string msg_string = "<OpenWQ> Created sediment output file " + filename;
+        ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
     }
 
     /* ########################################
@@ -549,9 +623,18 @@ int OpenWQ_output::writeHDF5_Sediment(
         }
     }
 
-    // Write to HDF5
-    hid_t file = OpenWQ_wqconfig.files[filename];
-    appendData_to_HDF5_file(file, data2print, timestr);
+    // Open file, write timestep, close immediately
+    hid_t fapl_sed = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_file_locking(fapl_sed, 0, 0);
+    hid_t fh_sed = H5Fopen(filename.c_str(), H5F_ACC_RDWR, fapl_sed);
+    H5Pclose(fapl_sed);
+    if (fh_sed < 0) {
+        std::string msg = "<OpenWQ> WARNING: Failed to open sediment HDF5 file, skipping: " + filename;
+        ConsoleLog(OpenWQ_wqconfig, msg, true, true);
+        return EXIT_SUCCESS;
+    }
+    appendData_to_HDF5_file(fh_sed, data2print, timestr);
+    H5Fclose(fh_sed);
 
     return EXIT_SUCCESS;
 }
