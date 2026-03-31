@@ -162,9 +162,9 @@ phreeqc_component_h2o = True
 # Temperature mapping: tells OpenWQ which host-model variable provides
 # water temperature for each compartment.
 # NOTE: OpenWQ auto-converts Kelvin → Celsius (detects K if value > 100).
-#   mizuRoute: use "Treach_K"  (from basinAirTemp)
+#   mizuRoute: use "T"  (°C, converted from basinAirTemp)
 #   SUMMA:     use "Tair_K" or "Tsoil_K"
-phreeqc_temperature_mapping = {"RIVER_NETWORK_REACHES": "Treach_K"}  # or None
+phreeqc_temperature_mapping = {"RIVER_NETWORK_REACHES": "T"}  # or None
 phreeqc_pressure_mapping = None   # Maps compartment → pressure variable (atm). Usually None.
 
 # Species name override. Leave [] to auto-detect from the .pqi file.

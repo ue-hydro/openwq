@@ -357,9 +357,9 @@ def create_phreeqc_module_json(
         phreeqc_mobile_species: List of mobile species names (must match PHREEQC components)
         phreeqc_component_h2o: Whether to include H2O as a component (default True)
         phreeqc_temperature_mapping: Optional dict mapping compartment names to
-            dependency variable names for temperature (e.g., {"RIVER_NETWORK_REACHES": "Treach_K"})
-            NOTE: OpenWQ auto-detects Kelvin (>100) and converts to Celsius for PHREEQC.
-            For MIZUROUTE, use "Treach_K" (Kelvin). For SUMMA, use "Tair_K" or "Tsoil_K".
+            dependency variable names for temperature (e.g., {"RIVER_NETWORK_REACHES": "T"})
+            NOTE: Temperature is now provided in °C (converted from Kelvin in the coupler).
+            For MIZUROUTE, use "T" (°C). For SUMMA, use "Tair_K" or "Tsoil_K".
         phreeqc_pressure_mapping: Optional dict mapping compartment names to
             dependency variable names for pressure (in atm)
     """
