@@ -107,7 +107,7 @@ Create `openwq_in/openWQ_MODULE_PHREEQC.json`:
     "COMPONENT_H2O": true,
     "BGC_GENERAL_MOBILE_SPECIES": ["H", "O", "Charge", "Ca", "Mg", "Na"],
     "TEMPERATURE": {
-        "RIVER_NETWORK_REACHES": "Treach_K"
+        "RIVER_NETWORK_REACHES": "T"
     }
 }
 ```
@@ -233,7 +233,7 @@ This 0.04 g/L of Ca is automatically converted to:
 
 OpenWQ automatically handles temperature unit conversion:
 
-- **Host model provides Kelvin** (MIZUROUTE's `Treach_K`, SUMMA's state variables)
+- **Host model provides °C** (MIZUROUTE's `T`, converted from Kelvin in the coupler; SUMMA's state variables)
 - **PHREEQC expects Celsius**
 - **OpenWQ auto-detects** values > 100 as Kelvin and converts to Celsius
 
@@ -241,7 +241,7 @@ OpenWQ automatically handles temperature unit conversion:
 
 | Host Model | Compartment | Variable Name | Units |
 |------------|-------------|---------------|-------|
-| MIZUROUTE | RIVER_NETWORK_REACHES | `Treach_K` | Kelvin |
+| MIZUROUTE | RIVER_NETWORK_REACHES | `T` | °C |
 | MIZUROUTE | LAKES | `Tlake_K` | Kelvin |
 | SUMMA | Various | `Tair_K`, `Tsoil_K` | Kelvin |
 
@@ -249,7 +249,7 @@ Example configuration:
 ```json
 {
     "TEMPERATURE": {
-        "RIVER_NETWORK_REACHES": "Treach_K",
+        "RIVER_NETWORK_REACHES": "T",
         "LAKES": "Tlake_K"
     }
 }
@@ -358,7 +358,7 @@ create_phreeqc_module_json(
     phreeqc_mobile_species=["Ca", "Mg", "Na", "K", "Cl", "N", "S"],
     phreeqc_component_h2o=True,
     phreeqc_temperature_mapping={
-        "RIVER_NETWORK_REACHES": "Treach_K"
+        "RIVER_NETWORK_REACHES": "T"
     }
 )
 ```

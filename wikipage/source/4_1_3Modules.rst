@@ -76,7 +76,7 @@ Available Dependency Variables by Host Model
 +-------------------+-------------------------------------------------------+---------------+
 | Variable Name     | Description                                           | Units         |
 +===================+=======================================================+===============+
-| ``Treach_K``      | Reach water temperature (from air temperature proxy)  | Kelvin [K]    |
+| ``T``             | Reach water temperature (from air temperature proxy)  | °C            |
 +-------------------+-------------------------------------------------------+---------------+
 | ``SWrad_Wm2``     | Incoming shortwave radiation at the reach             | W/m²          |
 +-------------------+-------------------------------------------------------+---------------+
@@ -488,7 +488,7 @@ The PHREEQC module is configured through a JSON file referenced in the master co
         "COMPONENT_H2O": true,
         "BGC_GENERAL_MOBILE_SPECIES": ["H", "O", "Charge", "Ca", "Mg", "Na"],
         "TEMPERATURE": {
-            "RIVER_NETWORK_REACHES": "Treach_K"
+            "RIVER_NETWORK_REACHES": "T"
         }
     }
 
@@ -621,7 +621,7 @@ The variable name must match a variable exported by the host hydrological model.
 +----------------+---------------------------+------------------------------------------+
 | Host Model     | Variable Name             | Description                              |
 +================+===========================+==========================================+
-| MIZUROUTE      | ``Treach_K``              | Reach water temperature (Kelvin)         |
+| MIZUROUTE      | ``T``                     | Reach water temperature (°C)             |
 +----------------+---------------------------+------------------------------------------+
 | MIZUROUTE      | ``Tlake_K``               | Lake temperature (Kelvin)                |
 +----------------+---------------------------+------------------------------------------+
@@ -636,7 +636,7 @@ Example configuration:
 
     {
         "TEMPERATURE": {
-            "RIVER_NETWORK_REACHES": "Treach_K",
+            "RIVER_NETWORK_REACHES": "T",
             "LAKES": "Tlake_K"
         }
     }
