@@ -2335,24 +2335,28 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                         _abs_out += '/'
                     _cont_wd = _gJSON._correct_path_for_docker(
                         _abs_out, _host_root, _cont_root).rstrip('/')
+                    # SUMMA requires '-m' flag before the file manager path;
+                    # mizuRoute takes it as a positional argument.
+                    _fm_arg = f'-m {_cont_fm}' if hostmodel.lower() == 'summa' else _cont_fm
                     _docker_cmd = (
                         f'docker exec {docker_container_name} /bin/bash -c '
                         f'"cd {_cont_wd} && '
                         f'mpirun --allow-run-as-root -np {mpi_np} '
                         f'{_cont_exec} '
-                        f'{_cont_fm}"'
+                        f'{_fm_arg}"'
                     )
             except Exception as _e:
                 print(f"  WARNING: Could not resolve Docker paths for report: {_e}")
 
         if not _docker_cmd and executable_path and file_manager_path:
             # Fallback: show host paths (user will need to convert manually)
+            _fm_flag = '-m ' if hostmodel.lower() == 'summa' else ''
             _docker_cmd = (
                 f'docker exec {docker_container_name} /bin/bash -c '
                 f'"cd <container_path_to:{os.path.abspath(output_dir)}> && '
                 f'mpirun --allow-run-as-root -np {mpi_np} '
                 f'<container_path_to:{os.path.abspath(executable_path)}> '
-                f'<container_path_to:{os.path.abspath(file_manager_path)}>"'
+                f'{_fm_flag}<container_path_to:{os.path.abspath(file_manager_path)}>"'
             )
 
         if _docker_cmd:
