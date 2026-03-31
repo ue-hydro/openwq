@@ -150,6 +150,15 @@ int OpenWQ_output::writeResults(
         false,  // reset inst derivatives
         true);  // reset cumulative derivatives
 
+    // Flush all open HDF5 files to disk so data survives abnormal exits
+    if (outputfile_type == "HDF5") {
+        for (auto& kv : OpenWQ_wqconfig.files) {
+            if (kv.second >= 0) {
+                H5Fflush(kv.second, H5F_SCOPE_LOCAL);
+            }
+        }
+    }
+
     // Log success message
     std::string msg_string = "<OpenWQ> Output export successful (" +
                             outputfile_type + "): " + timestr;
