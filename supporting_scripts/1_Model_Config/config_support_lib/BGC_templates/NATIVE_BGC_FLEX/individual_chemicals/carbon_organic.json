@@ -24,10 +24,7 @@
             "DIC",
             "CH4",
             "DO",
-            "ALGAE_C",
-            "CH4_atm_loss",
-            "CO2_atm",
-            "SED_C_loss"
+            "ALGAE_C"
         ],
         "_LIST_DESCRIPTIONS": {
             "DOC_labile": "Labile dissolved organic carbon",

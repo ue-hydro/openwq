@@ -23,10 +23,6 @@
             "Virus",
             "Cryptosporidium",
             "Giardia",
-            "SED_Crypto",
-            "SED_Ecoli",
-            "SED_FC",
-            "SED_Giardia",
             "Virus_part"
         ],
         "_LIST_DESCRIPTIONS": {

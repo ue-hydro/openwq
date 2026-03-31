@@ -33,13 +33,7 @@
             "humusP",
             "fastP",
             "PartP",
-            "SS",
-            "CROP_N",
-            "CROP_P",
-            "N2_loss",
-            "SED_N",
-            "SED_P",
-            "SED_SS"
+            "SS"
         ],
         "_LIST_DESCRIPTIONS": {
             "IN": "Inorganic nitrogen (NO3 + NH4)",

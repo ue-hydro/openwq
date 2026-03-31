@@ -38,14 +38,7 @@
             "ORG_P_fresh",
             "ORG_C_active",
             "ORG_C_fresh",
-            "ALGAE",
-            "CO2_loss",
-            "N2_loss",
-            "NH3_loss",
-            "PLANT_P",
-            "SED_N",
-            "SED_P",
-            "PLANT_N"
+            "ALGAE"
         ],
         "_LIST_DESCRIPTIONS": {
             "NO3-N": "Nitrate nitrogen",
