@@ -2577,7 +2577,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'\n'
             f'shpfile_info = {{\n'
             f'    "path_to_shp": "{_shp_path_safe}",\n'
-            f'    "mapping_key": "SegId"\n'
+            f'    "mapping_key": "{_shp_key}"\n'
             f'}}\n'
             f'\n'
         )
@@ -2592,7 +2592,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 f'    print("  The 3D viewer will still work but without flow animation.")\n'
                 f'hydromodel_info = {{\n'
                 f'    "path_to_results": _nc_files[0] if _nc_files else "",\n'
-                f'    "mapping_key": "reachID"\n'
+                f'    "mapping_key": "{_h5_mapping_key}"\n'
                 f'}}\n'
                 f'\n'
             )
@@ -2601,7 +2601,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 f'# TODO: set the path to the host-model netCDF output below\n'
                 f'hydromodel_info = {{\n'
                 f'    "path_to_results": "<path/to/hostmodel_output.nc>",\n'
-                f'    "mapping_key": "reachID"\n'
+                f'    "mapping_key": "{_h5_mapping_key}"\n'
                 f'}}\n'
                 f'\n'
             )
