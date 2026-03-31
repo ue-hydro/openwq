@@ -2338,10 +2338,13 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                     # SUMMA requires '-m' flag before the file manager path;
                     # mizuRoute takes it as a positional argument.
                     _fm_arg = f'-m {_cont_fm}' if hostmodel.lower() == 'summa' else _cont_fm
+                    # SUMMA-OpenWQ is serial (no MPI); force -np 1
+                    _np = 1 if hostmodel.lower() == 'summa' else mpi_np
                     _docker_cmd = (
                         f'docker exec {docker_container_name} /bin/bash -c '
-                        f'"cd {_cont_wd} && '
-                        f'mpirun --allow-run-as-root -np {mpi_np} '
+                        f'"export HDF5_USE_FILE_LOCKING=FALSE && '
+                        f'cd {_cont_wd} && '
+                        f'mpirun --allow-run-as-root -np {_np} '
                         f'{_cont_exec} '
                         f'{_fm_arg}"'
                     )
@@ -2351,10 +2354,12 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         if not _docker_cmd and executable_path and file_manager_path:
             # Fallback: show host paths (user will need to convert manually)
             _fm_flag = '-m ' if hostmodel.lower() == 'summa' else ''
+            _np = 1 if hostmodel.lower() == 'summa' else mpi_np
             _docker_cmd = (
                 f'docker exec {docker_container_name} /bin/bash -c '
-                f'"cd <container_path_to:{os.path.abspath(output_dir)}> && '
-                f'mpirun --allow-run-as-root -np {mpi_np} '
+                f'"export HDF5_USE_FILE_LOCKING=FALSE && '
+                f'cd <container_path_to:{os.path.abspath(output_dir)}> && '
+                f'mpirun --allow-run-as-root -np {_np} '
                 f'<container_path_to:{os.path.abspath(executable_path)}> '
                 f'{_fm_flag}<container_path_to:{os.path.abspath(file_manager_path)}>"'
             )
