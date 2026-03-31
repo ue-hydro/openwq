@@ -2410,9 +2410,14 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             _cmp_default = _cmp_names[:1]
         _cmp_str = ', '.join(f'"{c}"' for c in _cmp_default)
 
-        # Shapefile info for mapping
+        # Shapefile info for mapping — hostmodel-dependent defaults
         _shp_path = river_network_shapefile or ''
-        _shp_key = 'SegId'
+        if hostmodel.lower() == 'summa':
+            _h5_mapping_key = 'hruId'
+            _shp_key = 'GRU_ID'
+        else:
+            _h5_mapping_key = 'reachID'
+            _shp_key = 'SegId'
         _feature_label = openwq_h5_mapping_key or _shp_key
 
         # --- Venv activation (OS-aware, uses _is_windows from earlier block) ---
@@ -2454,7 +2459,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 f'openwq_results = h5_rlib.Read_h5_driver(\n'
                 f'    openwq_info={{\n'
                 f'        "path_to_results": "{_results_dir_safe}",\n'
-                f'        "mapping_key": "reachID"\n'
+                f'        "mapping_key": "{_h5_mapping_key}"\n'
                 f'    }},\n'
                 f'    output_format="HDF5",\n'
                 f'    debugmode=False,\n'
