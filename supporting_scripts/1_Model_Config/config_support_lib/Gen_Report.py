@@ -2389,10 +2389,26 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _species_str = ', '.join(f'"{s}"' for s in _species_list[:_default_n]) \
             if _species_list else _species_str_all
 
-        # Compartment names
-        _cmp_names = list(compartments_and_cells.keys()) \
-            if isinstance(compartments_and_cells, dict) else ['RIVER_NETWORK_REACHES']
-        _cmp_str = ', '.join(f'"{c}"' for c in _cmp_names)
+        # Compartment names — use hostmodel-specific list so users see all
+        # valid compartments, not just the ones configured for output.
+        _HOSTMODEL_COMPARTMENTS = {
+            "mizuroute": ["RIVER_NETWORK_REACHES"],
+            "summa": ["SCALARCANOPYWAT", "ILAYERVOLFRACWAT_SNOW", "RUNOFF",
+                       "ILAYERVOLFRACWAT_SOIL", "SCALARAQUIFER"],
+        }
+        _cmp_names = _HOSTMODEL_COMPARTMENTS.get(
+            hostmodel.lower(),
+            list(compartments_and_cells.keys())
+                if isinstance(compartments_and_cells, dict)
+                else ['RIVER_NETWORK_REACHES']
+        )
+        # Default selection: compartments that were configured for output
+        _cmp_configured = set(compartments_and_cells.keys()) \
+            if isinstance(compartments_and_cells, dict) else set(_cmp_names)
+        _cmp_default = [c for c in _cmp_names if c in _cmp_configured]
+        if not _cmp_default:
+            _cmp_default = _cmp_names[:1]
+        _cmp_str = ', '.join(f'"{c}"' for c in _cmp_default)
 
         # Shapefile info for mapping
         _shp_path = river_network_shapefile or ''
@@ -2503,6 +2519,28 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append('<a href="#" id="speciesToggleAll" '
                  'style="font-size:.78rem;margin-left:.5rem;color:var(--primary)">'
                  'Deselect all</a>')
+        H.append('</div>')
+
+        # --- Compartment checkboxes ---
+        H.append('<p style="font-weight:600;margin-top:1rem">Select compartments to read:</p>')
+        H.append('<p style="font-size:.82rem;color:var(--muted);margin:0 0 .5rem">'
+                 f'Available compartments for <strong>{hostmodel}</strong>. '
+                 'Only checked compartments are included in the code snippets.</p>')
+        H.append('<div id="cmpCbRow" style="display:flex;flex-wrap:wrap;gap:.5rem .8rem;'
+                 'margin:.5rem 0 1rem;align-items:center">')
+        for _cmp in _cmp_names:
+            _cmp_esc = _html_mod.escape(_cmp)
+            _chk = " checked" if _cmp in _cmp_default else ""
+            H.append(
+                f'<label style="display:inline-flex;align-items:center;gap:.3rem;'
+                f'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'
+                f'border:1px solid var(--border);border-radius:6px;'
+                f'background:var(--surface);transition:border-color .15s">'
+                f'<input type="checkbox" class="cmp-cb" '
+                f'data-cmp="{_cmp_esc}"{_chk}> {_cmp_esc}</label>')
+        H.append('<a href="#" id="cmpToggleAll" '
+                 'style="font-size:.78rem;margin-left:.5rem;color:var(--primary)">'
+                 'Select all</a>')
         H.append('</div>')
 
         # --- 4a: Interactive 3D River Viewer (WebGL) ---
@@ -2664,35 +2702,57 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append('</div>')
         H.append('</div>')
 
-        # JavaScript: update code snippets when species checkboxes change
+        # JavaScript: update code snippets when species or compartment checkboxes change
         H.append(f"""<script>
 (function(){{
   var preIds = ['{_cb_id_4a}', '{_cb_id_4b}'];
   var origTexts = preIds.map(function(id){{ return document.getElementById(id).textContent; }});
-  var cbs = document.querySelectorAll('.species-cb');
-  var toggleLink = document.getElementById('speciesToggleAll');
-  var re = /chemSpec=\\[.*?\\]/g;
+  var specCbs = document.querySelectorAll('.species-cb');
+  var cmpCbs = document.querySelectorAll('.cmp-cb');
+  var specToggle = document.getElementById('speciesToggleAll');
+  var cmpToggle = document.getElementById('cmpToggleAll');
+  var reSpec = /chemSpec=\\[.*?\\]/g;
+  var reCmp = /cmp=\\[.*?\\]/g;
 
   function updateSnippets(){{
-    var checked = [];
-    cbs.forEach(function(cb){{ if(cb.checked) checked.push('"'+cb.dataset.species+'"'); }});
-    var newSpec = 'chemSpec=[' + checked.join(', ') + ']';
+    var checkedSpec = [];
+    specCbs.forEach(function(cb){{ if(cb.checked) checkedSpec.push('"'+cb.dataset.species+'"'); }});
+    var newSpec = 'chemSpec=[' + checkedSpec.join(', ') + ']';
+
+    var checkedCmp = [];
+    cmpCbs.forEach(function(cb){{ if(cb.checked) checkedCmp.push('"'+cb.dataset.cmp+'"'); }});
+    var newCmp = 'cmp=[' + checkedCmp.join(', ') + ']';
+
     preIds.forEach(function(id, idx){{
       var el = document.getElementById(id);
-      el.textContent = origTexts[idx].replace(re, newSpec);
+      var txt = origTexts[idx].replace(reSpec, newSpec).replace(reCmp, newCmp);
+      el.textContent = txt;
     }});
-    if(toggleLink){{
-      toggleLink.textContent = checked.length === cbs.length ? 'Deselect all' : 'Select all';
+
+    if(specToggle){{
+      specToggle.textContent = checkedSpec.length === specCbs.length ? 'Deselect all' : 'Select all';
+    }}
+    if(cmpToggle){{
+      cmpToggle.textContent = checkedCmp.length === cmpCbs.length ? 'Deselect all' : 'Select all';
     }}
   }}
 
-  cbs.forEach(function(cb){{ cb.addEventListener('change', updateSnippets); }});
+  specCbs.forEach(function(cb){{ cb.addEventListener('change', updateSnippets); }});
+  cmpCbs.forEach(function(cb){{ cb.addEventListener('change', updateSnippets); }});
 
-  if(toggleLink){{
-    toggleLink.addEventListener('click', function(e){{
+  if(specToggle){{
+    specToggle.addEventListener('click', function(e){{
       e.preventDefault();
-      var allChecked = Array.from(cbs).every(function(cb){{ return cb.checked; }});
-      cbs.forEach(function(cb){{ cb.checked = !allChecked; }});
+      var allChecked = Array.from(specCbs).every(function(cb){{ return cb.checked; }});
+      specCbs.forEach(function(cb){{ cb.checked = !allChecked; }});
+      updateSnippets();
+    }});
+  }}
+  if(cmpToggle){{
+    cmpToggle.addEventListener('click', function(e){{
+      e.preventDefault();
+      var allChecked = Array.from(cmpCbs).every(function(cb){{ return cb.checked; }});
+      cmpCbs.forEach(function(cb){{ cb.checked = !allChecked; }});
       updateSnippets();
     }});
   }}
