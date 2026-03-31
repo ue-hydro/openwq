@@ -46,8 +46,7 @@
             "POC_labile",
             "SED_PON1",
             "SED_PON2",
-            "SED_NH4",
-            "N2_loss"
+            "SED_NH4"
         ],
         "_LIST_DESCRIPTIONS": {
             "DO": "Dissolved oxygen",

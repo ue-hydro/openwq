@@ -27,9 +27,7 @@
             "DO",
             "H2S",
             "PO4-P",
-            "Fe_P",
-            "SED_Fe",
-            "SED_Mn"
+            "Fe_P"
         ],
         "_LIST_DESCRIPTIONS": {
             "Fe_II": "Ferrous iron (reduced, soluble)",

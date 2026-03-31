@@ -37,13 +37,7 @@
             "Hg_part",
             "MeHg",
             "TSS",
-            "DOC",
-            "Hg0_loss",
-            "SED_Cd_loss",
-            "SED_Cu_loss",
-            "SED_Hg_loss",
-            "SED_Pb_loss",
-            "SED_Zn_loss"
+            "DOC"
         ],
         "_LIST_DESCRIPTIONS": {
             "Cu_diss": "Dissolved copper",

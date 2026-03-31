@@ -30,10 +30,7 @@
             "ORG_P",
             "DISS_P",
             "ALGAE",
-            "FECAL_COLIFORM",
-            "SED_CBOD",
-            "SED_N",
-            "SED_P"
+            "FECAL_COLIFORM"
         ],
         "_LIST_DESCRIPTIONS": {
             "DO": "Dissolved oxygen",

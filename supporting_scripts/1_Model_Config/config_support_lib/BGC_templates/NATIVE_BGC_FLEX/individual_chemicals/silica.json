@@ -15,9 +15,7 @@
             "DSi",
             "BSi",
             "DIATOM",
-            "CO2",
-            "SED_DIATOM",
-            "SED_Si"
+            "CO2"
         ],
         "_LIST_DESCRIPTIONS": {
             "DSi": "Dissolved silica (silicic acid)",

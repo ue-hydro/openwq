@@ -22,10 +22,7 @@
             "METAB_1",
             "METAB_2",
             "DOC",
-            "TSS",
-            "CO2_loss",
-            "PEST_atm_loss",
-            "SED_PEST"
+            "TSS"
         ],
         "_LIST_DESCRIPTIONS": {
             "PEST_diss": "Dissolved pesticide in water",

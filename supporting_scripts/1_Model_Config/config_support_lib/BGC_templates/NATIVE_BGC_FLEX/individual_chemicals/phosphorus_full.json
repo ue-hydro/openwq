@@ -18,8 +18,7 @@
             "POP",
             "PIP",
             "ALGAE_P",
-            "DO",
-            "SED_P_loss"
+            "DO"
         ],
         "_LIST_DESCRIPTIONS": {
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",

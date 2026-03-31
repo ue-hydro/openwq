@@ -22,10 +22,7 @@
             "DON",
             "PON",
             "N2O",
-            "DO",
-            "N2O_atm_loss",
-            "N2_loss",
-            "NH3_loss"
+            "DO"
         ],
         "_LIST_DESCRIPTIONS": {
             "NH4-N": "Ammonium nitrogen",
