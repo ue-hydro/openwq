@@ -300,21 +300,13 @@ int OpenWQ_output::writeHDF5(
     cells2print_xyzElements_size(0, 2) = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
 
     /* ########################################
-    // 1. Open (or create) all files for this batch
-    //    First timestep: create files with metadata, keep open
-    //    Subsequent:     just open existing files
+    // Save metadata & open files on first timestep.
+    // Files stay open in OpenWQ_wqconfig.files for the
+    // entire simulation (closed in destructor).
+    // No close-reopen cycle = no Docker volume sync issues.
     ######################################## */
 
-    std::vector<hid_t> file_handles(num_chem2print, -1);
-
-    // Shared file access property: no locking, latest format
-    hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_file_locking(fapl, 0, 0);
-    H5Pset_libver_bounds(fapl, H5F_LIBVER_V18, H5F_LIBVER_LATEST);
-
     if (OpenWQ_wqconfig.print_oneStep){
-
-        // --- First timestep: create files with metadata ---
 
         // Prepare xyz elements (convert to 1-based indexing)
         arma::mat cells2print_xyzElements = OpenWQ_wqconfig.cells2print_vec[icmp];
@@ -333,7 +325,11 @@ int OpenWQ_output::writeHDF5(
         std::vector<const char*> cstrs(host_ids.size());
         for (size_t i = 0; i < host_ids.size(); ++i) cstrs[i] = host_ids[i].c_str();
 
+        // File properties: latest format (fractal heaps), no locking
         hid_t fcpl = H5Pcreate(H5P_FILE_CREATE);
+        hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
+        H5Pset_file_locking(fapl, 0, 0);
+        H5Pset_libver_bounds(fapl, H5F_LIBVER_V18, H5F_LIBVER_LATEST);
 
         for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
 
@@ -342,7 +338,6 @@ int OpenWQ_output::writeHDF5(
                                   CompName_icmp + "@" + chem_name + "#" +
                                   units_string + "-" + output_file_label + ".h5";
 
-            // Create file with latest format (fractal heaps, not B-trees)
             hid_t fh = H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, fcpl, fapl);
             if (fh < 0) {
                 std::string msg = "<OpenWQ> ERROR: Failed to create HDF5 file: " + filename;
@@ -396,35 +391,20 @@ int OpenWQ_output::writeHDF5(
                 H5Sclose(space);
             }
 
-            // Keep file open for data write below (no close here!)
-            file_handles[ichem] = fh;
+            // Store handle — file stays open until destructor
+            OpenWQ_wqconfig.files[filename] = fh;
 
             std::string msg_string = "<OpenWQ> Created output file " + filename;
             ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
         }
 
         H5Pclose(fcpl);
-
-    } else {
-
-        // --- Subsequent timesteps: open existing files ---
-        for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
-            const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
-            std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
-                                   CompName_icmp + "@" + chem_name + "#" +
-                                   units_string + "-" + output_file_label + ".h5";
-            file_handles[ichem] = H5Fopen(filename.c_str(), H5F_ACC_RDWR, fapl);
-            if (file_handles[ichem] < 0) {
-                std::string msg = "<OpenWQ> WARNING: Failed to open HDF5 file, skipping: " + filename;
-                ConsoleLog(OpenWQ_wqconfig, msg, true, true);
-            }
-        }
+        H5Pclose(fapl);
     }
 
-    H5Pclose(fapl);
-
     /* ########################################
-    // 2. Write data in parallel
+    // Write data for current timestep (parallel).
+    // Files are already open in OpenWQ_wqconfig.files.
     ######################################## */
 
     #pragma omp parallel num_threads(num_threads)
@@ -432,7 +412,21 @@ int OpenWQ_output::writeHDF5(
         #pragma omp for schedule(static)
         for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
 
-            if (file_handles[ichem] < 0) continue;
+            const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
+            std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
+                                  CompName_icmp + "@" + chem_name + "#" +
+                                  units_string + "-" + output_file_label + ".h5";
+
+            // Look up persistent handle (read-only map access, thread-safe)
+            auto it = OpenWQ_wqconfig.files.find(filename);
+            if (it == OpenWQ_wqconfig.files.end() || it->second < 0) {
+                #pragma omp critical
+                {
+                    std::string msg = "<OpenWQ> WARNING: HDF5 handle not found, skipping: " + filename;
+                    ConsoleLog(OpenWQ_wqconfig, msg, true, true);
+                }
+                continue;
+            }
 
             // Prepare data matrix
             arma::mat data2print(num_cells2print, 1);
@@ -456,17 +450,7 @@ int OpenWQ_output::writeHDF5(
                 }
             }
 
-            appendData_to_HDF5_file(file_handles[ichem], data2print, timestr);
-        }
-    }
-
-    /* ########################################
-    // 3. Close all files (ensures flush to disk)
-    ######################################## */
-
-    for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
-        if (file_handles[ichem] >= 0) {
-            H5Fclose(file_handles[ichem]);
+            appendData_to_HDF5_file(it->second, data2print, timestr);
         }
     }
 
@@ -588,7 +572,8 @@ int OpenWQ_output::writeHDF5_Sediment(
                 H5Sclose(space);
             }
 
-            H5Fclose(file_h);
+            // Store handle — file stays open until destructor
+            OpenWQ_wqconfig.files[filename] = file_h;
         }
 
         H5Pclose(fcpl_s);
@@ -599,8 +584,17 @@ int OpenWQ_output::writeHDF5_Sediment(
     }
 
     /* ########################################
-    // Write data for current timestep
+    // Write data for current timestep.
+    // File is already open in OpenWQ_wqconfig.files.
     ######################################## */
+
+    // Look up persistent handle (read-only map access)
+    auto it = OpenWQ_wqconfig.files.find(filename);
+    if (it == OpenWQ_wqconfig.files.end() || it->second < 0) {
+        std::string msg = "<OpenWQ> WARNING: Sediment HDF5 handle not found, skipping: " + filename;
+        ConsoleLog(OpenWQ_wqconfig, msg, true, true);
+        return EXIT_SUCCESS;
+    }
 
     arma::mat data2print(num_cells2print, 1);
 
@@ -623,18 +617,7 @@ int OpenWQ_output::writeHDF5_Sediment(
         }
     }
 
-    // Open file, write timestep, close immediately
-    hid_t fapl_sed = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_file_locking(fapl_sed, 0, 0);
-    hid_t fh_sed = H5Fopen(filename.c_str(), H5F_ACC_RDWR, fapl_sed);
-    H5Pclose(fapl_sed);
-    if (fh_sed < 0) {
-        std::string msg = "<OpenWQ> WARNING: Failed to open sediment HDF5 file, skipping: " + filename;
-        ConsoleLog(OpenWQ_wqconfig, msg, true, true);
-        return EXIT_SUCCESS;
-    }
-    appendData_to_HDF5_file(fh_sed, data2print, timestr);
-    H5Fclose(fh_sed);
+    appendData_to_HDF5_file(it->second, data2print, timestr);
 
     return EXIT_SUCCESS;
 }
