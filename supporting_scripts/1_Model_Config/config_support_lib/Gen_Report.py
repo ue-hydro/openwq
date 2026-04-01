@@ -2417,12 +2417,31 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
         # Shapefile info for mapping — hostmodel-dependent defaults
         _shp_path = river_network_shapefile or ''
+        _basin_shp_path = basin_shapefile or ''
         if hostmodel.lower() == 'summa':
             _h5_mapping_key = 'hruId'
-            _shp_key = 'GRU_ID'
+            # Detect HRU_ID vs GRU_ID from the actual basin shapefile
+            _basin_mapping_key = 'HRU_ID'  # preferred default
+            _shp_key = 'HRU_ID'
+            if basin_shapefile and os.path.isfile(basin_shapefile):
+                try:
+                    import fiona
+                    with fiona.open(basin_shapefile) as _src:
+                        _shp_props = list(_src.schema['properties'].keys())
+                    if 'HRU_ID' in _shp_props:
+                        _basin_mapping_key = 'HRU_ID'
+                        _shp_key = 'HRU_ID'
+                    elif 'GRU_ID' in _shp_props:
+                        _basin_mapping_key = 'GRU_ID'
+                        _shp_key = 'GRU_ID'
+                    print(f"  Basin shapefile mapping key: {_basin_mapping_key} "
+                          f"(available: {_shp_props})")
+                except Exception as _e:
+                    print(f"  WARNING: Could not inspect basin shapefile: {_e}")
         else:
             _h5_mapping_key = 'reachID'
             _shp_key = 'SegId'
+            _basin_mapping_key = ''
         _feature_label = openwq_h5_mapping_key or _shp_key
 
         # --- Venv activation (OS-aware, uses _is_windows from earlier block) ---
@@ -2434,7 +2453,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         else:
             _venv_activate = (
                 f'source "{_supporting_scripts_dir}/.venv/bin/activate" 2>/dev/null || '
-                f'source "{_supporting_scripts_dir}/venv/bin/activate"'
+                f'source "{_supporting_scripts_dir}/venv/bin/activate" 2>/dev/null || true'
             )
 
         # Common Python preamble builder: imports + HDF5 reading
@@ -2553,12 +2572,32 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                  'Select all</a>')
         H.append('</div>')
 
+        # --- Debug mode checkbox ---
+        H.append('<p style="font-weight:600;margin-top:1rem">Debug mode:</p>')
+        H.append('<p style="font-size:.82rem;color:var(--muted);margin:0 0 .5rem">'
+                 'When enabled, the Read driver loads derivative / source outputs '
+                 '(<code>dC/dt chem</code>, <code>dC/dt transp</code>, '
+                 '<code>SS</code>, <code>EWF</code>, <code>IC</code>) and the '
+                 'Plot driver overlays them as dashed lines on each graph. '
+                 'A per-plot <em>Debug</em> toggle lets you show / hide them.</p>')
+        H.append('<div id="debugCbRow" style="display:flex;flex-wrap:wrap;gap:.5rem .8rem;'
+                 'margin:.5rem 0 1rem;align-items:center">')
+        H.append(
+            '<label style="display:inline-flex;align-items:center;gap:.3rem;'
+            'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'
+            'border:1px solid var(--border);border-radius:6px;'
+            'background:var(--surface);transition:border-color .15s">'
+            '<input type="checkbox" id="debugModeCb"> '
+            'Include debug outputs</label>')
+        H.append('</div>')
+
         # --- 4a: Interactive 3D River Viewer (WebGL) ---
         _webgl_out_dir = os.path.join(_abs_output_dir, "openwq_out",
                                        "openwq_webgl_viewer")
         _webgl_out_dir_safe = _py_path(_webgl_out_dir)
         _srv_dir_safe = _py_path(os.path.join(_abs_output_dir, "openwq_out"))
         _shp_path_safe = _py_path(river_network_shapefile) if river_network_shapefile else ''
+        _basin_shp_path_safe = _py_path(basin_shapefile) if basin_shapefile else ''
 
         # Try to find the host-model output directory for hydromodel_info
         _hm_out_dir_safe = ''
@@ -2683,6 +2722,8 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    debugmode=False,\n'
             f'    output_path="{_out_all_html_safe}",\n'
             f'    river_network_shp="{_shp_path_safe}",\n'
+            f'    basin_shapefile="{_basin_shp_path_safe}",\n'
+            f'    basin_mapping_key="{_basin_mapping_key}",\n'
             f'    mapping_key="{_shp_key}",\n'
             f'    feature_label="{_feature_label}",\n'
             f'{_obs_plot_param}'
@@ -2712,17 +2753,19 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append('</div>')
         H.append('</div>')
 
-        # JavaScript: update code snippets when species or compartment checkboxes change
+        # JavaScript: update code snippets when species, compartment, or debug checkboxes change
         H.append(f"""<script>
 (function(){{
   var preIds = ['{_cb_id_4a}', '{_cb_id_4b}'];
   var origTexts = preIds.map(function(id){{ return document.getElementById(id).textContent; }});
   var specCbs = document.querySelectorAll('.species-cb');
   var cmpCbs = document.querySelectorAll('.cmp-cb');
+  var debugCb = document.getElementById('debugModeCb');
   var specToggle = document.getElementById('speciesToggleAll');
   var cmpToggle = document.getElementById('cmpToggleAll');
   var reSpec = /chemSpec=\\[.*?\\]/g;
   var reCmp = /cmp=\\[.*?\\]/g;
+  var reDebug = /debugmode=(True|False)/g;
 
   function updateSnippets(){{
     var checkedSpec = [];
@@ -2733,9 +2776,14 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     cmpCbs.forEach(function(cb){{ if(cb.checked) checkedCmp.push('"'+cb.dataset.cmp+'"'); }});
     var newCmp = 'cmp=[' + checkedCmp.join(', ') + ']';
 
+    var newDebug = 'debugmode=' + (debugCb && debugCb.checked ? 'True' : 'False');
+
     preIds.forEach(function(id, idx){{
       var el = document.getElementById(id);
-      var txt = origTexts[idx].replace(reSpec, newSpec).replace(reCmp, newCmp);
+      var txt = origTexts[idx]
+        .replace(reSpec, newSpec)
+        .replace(reCmp, newCmp)
+        .replace(reDebug, newDebug);
       el.textContent = txt;
     }});
 
@@ -2749,6 +2797,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
   specCbs.forEach(function(cb){{ cb.addEventListener('change', updateSnippets); }});
   cmpCbs.forEach(function(cb){{ cb.addEventListener('change', updateSnippets); }});
+  if(debugCb){{ debugCb.addEventListener('change', updateSnippets); }}
 
   if(specToggle){{
     specToggle.addEventListener('click', function(e){{

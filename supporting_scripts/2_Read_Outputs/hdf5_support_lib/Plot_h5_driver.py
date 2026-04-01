@@ -254,9 +254,110 @@ def _build_traces(feature_data, n_visible=10, feature_label='Feature'):
     return traces
 
 
+# ── Debug-mode helpers ──────────────────────────────────────────────────
+# Colorway matching Plotly layout — explicit assignment lets debug traces
+# reuse the same colour as their corresponding main trace.
+_COLORWAY = ['#0066cc', '#00a86b', '#ff6b35', '#004499', '#34d399', '#fb923c',
+             '#667eea', '#764ba2', '#e63946', '#2ec4b6', '#e9c46a', '#264653']
+
+# Metadata for each debug file extension
+_DEBUG_EXT_META = {
+    'd_output_dt_chemistry': {'label': 'dC/dt chem',   'dash': 'dash'},
+    'd_output_dt_transport': {'label': 'dC/dt transp', 'dash': 'dot'},
+    'd_output_ss':           {'label': 'SS',            'dash': 'dashdot'},
+    'd_output_ewf':          {'label': 'EWF',           'dash': 'longdash'},
+    'd_output_ic':           {'label': 'IC',            'dash': 'longdashdot'},
+}
+
+
+def _build_traces_with_colors(feature_data, n_visible=10, feature_label='Feature'):
+    """Like ``_build_traces`` but assigns explicit colours from ``_COLORWAY``.
+
+    Returns
+    -------
+    (list[dict], dict)
+        (traces, color_map) where *color_map* maps ``fid → hex colour``.
+    """
+    traces = []
+    color_map = {}
+    n_features = len(feature_data)
+
+    for idx, (fid, series) in enumerate(feature_data.items()):
+        color = _COLORWAY[idx % len(_COLORWAY)]
+        color_map[fid] = color
+
+        if isinstance(series.index, pd.DatetimeIndex):
+            x_vals = series.index.strftime('%Y-%m-%dT%H:%M:%S').tolist()
+        else:
+            x_vals = series.index.tolist()
+
+        y_vals = [None if (isinstance(v, float) and np.isnan(v)) else float(v)
+                  for v in series.values]
+
+        trace = {
+            'x': x_vals,
+            'y': y_vals,
+            'mode': 'lines',
+            'name': f'{feature_label} {fid}',
+            'hovertemplate': (f'{feature_label} {fid}<br>'
+                              f'%{{x}}<br>%{{y:.4g}}<extra></extra>'),
+            'line': {'color': color},
+        }
+
+        if n_features > 20 and idx >= n_visible:
+            trace['visible'] = 'legendonly'
+
+        traces.append(trace)
+
+    return traces, color_map
+
+
+def _build_debug_traces(feature_data, color_map, ext_label, dash_style,
+                        feature_label='Feature'):
+    """Build traces for a single debug extension.
+
+    Traces share the colour of the matching main-trace but use a different
+    dash pattern.  They start hidden (``visible: false``) and are revealed
+    by the per-plot *Debug* toggle button.  Only the first trace in the
+    group appears in the legend so it doesn't get cluttered.
+    """
+    traces = []
+    first = True
+
+    for fid, series in feature_data.items():
+        color = color_map.get(fid, '#888')
+
+        if isinstance(series.index, pd.DatetimeIndex):
+            x_vals = series.index.strftime('%Y-%m-%dT%H:%M:%S').tolist()
+        else:
+            x_vals = series.index.tolist()
+
+        y_vals = [None if (isinstance(v, float) and np.isnan(v)) else float(v)
+                  for v in series.values]
+
+        trace = {
+            'x': x_vals,
+            'y': y_vals,
+            'mode': 'lines',
+            'name': f'{ext_label}' if first else f'{ext_label}: {feature_label} {fid}',
+            'hovertemplate': (f'{ext_label}: {feature_label} {fid}<br>'
+                              f'%{{x}}<br>%{{y:.4g}}<extra></extra>'),
+            'line': {'color': color, 'dash': dash_style, 'width': 1.5},
+            'legendgroup': f'debug_{ext_label}',
+            'showlegend': first,
+            'visible': False,
+        }
+
+        traces.append(trace)
+        first = False
+
+    return traces
+
+
 def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 map_center=None, map_bounds=None, mapping_key='SegId',
-                observation_data=None, feature_label=None):
+                observation_data=None, feature_label=None,
+                map_geom_type='line'):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -268,7 +369,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
     hostmodel : str
         Host model name (e.g. 'mizuroute').
     river_geojson : dict or None
-        GeoJSON FeatureCollection for the river network.
+        GeoJSON FeatureCollection (river lines or basin polygons).
     map_center : list or None
         [lat, lng] for the initial map center.
     map_bounds : tuple or None
@@ -278,6 +379,8 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
     feature_label : str or None
         Display label for features in legends, tooltips, etc.
         If None, defaults to mapping_key.
+    map_geom_type : str
+        'line' for river segments, 'polygon' for basin/HRU areas.
 
     Returns
     -------
@@ -296,16 +399,83 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
     _all_fids_set = set()
     for p in plots:
         for t in p['traces']:
-            _all_fids_set.add(t['name'].replace(_label_prefix, ''))
+            # Only collect feature IDs from main traces (not debug)
+            if t.get('legendgroup', '').startswith('debug_'):
+                continue
+            fid = t['name'].replace(_label_prefix, '')
+            _all_fids_set.add(fid)
     _all_fids_sorted = sorted(_all_fids_set)
-    _fid_color = {fid: _colorway[i % len(_colorway)]
-                  for i, fid in enumerate(_all_fids_sorted)}
 
-    # Stamp explicit line colors onto every trace so Plotly matches the map
+    # Detect layers: fids like "1 (z1)", "1 (z2)" have a " (z<n>)" suffix
+    _all_layers = set()
+    _all_hru_ids = set()
+    _LAYER_RE = re.compile(r'^(.+?) \((z\d+)\)$')
+    for fid in _all_fids_sorted:
+        m = _LAYER_RE.match(fid)
+        if m:
+            _all_layers.add(m.group(2))
+            _all_hru_ids.add(m.group(1))
+        else:
+            _all_hru_ids.add(fid)
+    _all_layers_sorted = sorted(_all_layers, key=lambda x: int(x[1:]) if x[1:].isdigit() else x)
+    _has_layers = len(_all_layers) > 0
+
+    # Assign colours based on HRU ID (not layer) so same HRU gets same
+    # colour across all layers
+    _hru_ids_sorted = sorted(_all_hru_ids)
+    _hru_color = {hid: _colorway[i % len(_colorway)]
+                  for i, hid in enumerate(_hru_ids_sorted)}
+
+    # Build the full fid→color mapping.  For layered fids like "1 (z1)",
+    # use the HRU ID colour so all layers of the same HRU share the colour.
+    _fid_color = {}
+    for fid in _all_fids_sorted:
+        m = _LAYER_RE.match(fid)
+        if m:
+            _fid_color[fid] = _hru_color.get(m.group(1), '#888')
+        else:
+            _fid_color[fid] = _hru_color.get(fid, '#888')
+
+    # Build a separate color mapping for map GeoJSON features.
+    # When plot IDs and map IDs are in the same space (mizuRoute),
+    # _fid_color already covers them.  When they differ (SUMMA: HDF5
+    # uses sequential 1,2,3 but shapefile uses GRU_ID 740457190 etc.),
+    # we build an independent map color dict from the GeoJSON features.
+    _map_fid_color = {}
+    if river_geojson and river_geojson.get('features'):
+        _map_fid_set = set()
+        for feat in river_geojson['features']:
+            mfid = str(feat['properties'].get(mapping_key, ''))
+            if mfid:
+                _map_fid_set.add(mfid)
+        _map_fids_sorted = sorted(_map_fid_set)
+        # Check if map IDs overlap with plot IDs — if so, reuse plot colors
+        if _map_fid_set & (_all_fids_set | _all_hru_ids):
+            # IDs match (mizuRoute case): reuse _fid_color + _hru_color
+            for mfid in _map_fids_sorted:
+                _map_fid_color[mfid] = (_fid_color.get(mfid) or
+                                        _hru_color.get(mfid) or '#888')
+        else:
+            # IDs don't match (SUMMA case): assign independent colors
+            for i, mfid in enumerate(_map_fids_sorted):
+                _map_fid_color[mfid] = _colorway[i % len(_colorway)]
+
+    # Stamp explicit line colors onto every trace so Plotly matches the map.
     for p in plots:
         for t in p['traces']:
-            fid = t['name'].replace(_label_prefix, '')
-            t['line'] = {'color': _fid_color.get(fid, '#888')}
+            if t.get('legendgroup', '').startswith('debug_'):
+                # Debug trace: extract fid from hovertemplate (format:
+                # "{ext}: {feature_label} {fid}<br>...")
+                _ht = t.get('hovertemplate', '')
+                _after = _ht.split(_label_prefix)[-1] if _label_prefix in _ht else ''
+                _dfid = _after.split('<br>')[0] if '<br>' in _after else ''
+                if _dfid and _dfid in _fid_color:
+                    _existing = t.get('line', {})
+                    _existing['color'] = _fid_color[_dfid]
+                    t['line'] = _existing
+            else:
+                fid = t['name'].replace(_label_prefix, '')
+                t['line'] = {'color': _fid_color.get(fid, '#888')}
 
     # --- Merge observation traces (if any) into each plot ---
     _obs_meta = {}   # {div_id: {trace_index_str: feature_id}}
@@ -486,10 +656,19 @@ a{color:var(--primary);text-decoration:none}
     H.append('<aside class="sidebar">')
     H.append('<div class="logo">Open<span>WQ</span> Results</div>')
     H.append('<nav>')
+    _map_title = 'HRU / Basin Map' if map_geom_type == 'polygon' else 'River Network Map'
     if river_geojson:
-        H.append('<a href="#rivermap">River Network Map</a>')
+        H.append(f'<a href="#rivermap">{_map_title}</a>')
+    _nav_prev_comp = None
     for p in plots:
-        H.append(f'<a href="#{p["id"]}">{p["title"]}</a>')
+        _nc = p.get('compartment', '')
+        if _nc and _nc != _nav_prev_comp:
+            _cid = f'comp_{re.sub(r"[^a-zA-Z0-9]", "_", _nc)}'
+            H.append(f'<a href="#{_cid}" style="font-weight:700;'
+                     f'margin-top:.5rem;color:var(--text)">{_nc}</a>')
+            _nav_prev_comp = _nc
+        H.append(f'<a href="#{p["id"]}" style="padding-left:1.2rem">'
+                 f'{p["title"]}</a>')
     H.append('</nav>')
     H.append("""<div class="theme-toggle">
 <button class="theme-btn" onclick="toggleTheme()">
@@ -533,19 +712,57 @@ a{color:var(--primary);text-decoration:none}
 
     # --- RIVER NETWORK MAP ---
     if river_geojson:
-        H.append("""<div class="section" id="rivermap">
-<h2>River Network Map</h2>
+        _map_click_hint = ('Click an HRU polygon to isolate it in all plots below.'
+                           if map_geom_type == 'polygon'
+                           else 'Click a river segment to isolate it in all plots below.')
+        # Layer selector row (only for SUMMA with multiple layers)
+        _layer_selector_html = ''
+        if _has_layers:
+            _layer_btns = ''.join(
+                f'<button class="tb-btn{" active" if i == 0 else ""}" '
+                f'data-layer="{lyr}" onclick="_owqSelectLayer(\'{lyr}\',this)">'
+                f'{lyr}</button>'
+                for i, lyr in enumerate(_all_layers_sorted)
+            )
+            _layer_selector_html = (
+                f'<div class="plot-toolbar" style="justify-content:flex-start;'
+                f'padding:8px 12px;border-bottom:1px solid var(--border)">'
+                f'<label style="margin-right:6px;font-weight:600">Layer:</label>'
+                f'{_layer_btns}'
+                f'</div>'
+            )
+        H.append(f"""<div class="section" id="rivermap">
+<h2>{_map_title}</h2>
 <div class="card" style="padding:0;overflow:hidden;position:relative">
+{_layer_selector_html}
 <div id="mapContainer"></div>
 <div class="map-legend" id="mapLegend"></div>
 </div>
 <p class="plot-caption" style="margin-top:.4rem;font-size:.78rem;color:var(--text2)">
-Click a river segment to isolate it in all plots below.</p>
+{_map_click_hint}</p>
 </div>""")
 
-    # --- PLOT SECTIONS ---
+    # --- PLOT SECTIONS (grouped by compartment) ---
+    _prev_comp = None
     for p in plots:
+        _cur_comp = p.get('compartment', '')
+        if _cur_comp and _cur_comp != _prev_comp:
+            if _prev_comp is not None:
+                H.append('</div>')  # close previous compartment group
+            _comp_id = f'comp_{re.sub(r"[^a-zA-Z0-9]", "_", _cur_comp)}'
+            H.append(f'<div class="section" id="{_comp_id}">'
+                     f'<h2 style="font-size:1.3rem;margin-bottom:.5rem">'
+                     f'{_cur_comp}</h2></div>')
+            H.append(f'<div style="margin-left:.5rem">')
+            _prev_comp = _cur_comp
         div_id = f'{p["id"]}_div'
+        _debug_btn = ''
+        if p.get('has_debug'):
+            _debug_btn = (
+                f'  <span class="tb-sep"></span>'
+                f'  <button class="tb-btn" id="{div_id}_dbg" '
+                f'onclick="_owqToggleDebug(\'{div_id}\',this)">Debug</button>'
+            )
         H.append(f"""<div class="section" id="{p['id']}">
 <h2>{p['title']}</h2>
 <div class="plot-toolbar" data-plot="{div_id}">
@@ -562,12 +779,16 @@ Click a river segment to isolate it in all plots below.</p>
   <button class="tb-btn" onclick="_owqApplyRange('{div_id}')">Apply</button>
   <button class="tb-btn" onclick="_owqAxisTight('{div_id}')">Tight</button>
   <button class="tb-btn" onclick="_owqResetRange('{div_id}',this)">Reset</button>
+{_debug_btn}
 </div>
 <div class="card">
 <div id="{div_id}" style="width:100%;min-height:500px"></div>
 <p class="plot-caption">{p.get('caption', '')}</p>
 </div>
 </div>""")
+
+    if _prev_comp is not None:
+        H.append('</div>')  # close last compartment group
 
     H.append('</div>')  # container
     H.append('</div>')  # main
@@ -698,6 +919,19 @@ window._owqAxisTight = function(plotId){
   if(xmin!==null&&xmax!==null){upd['xaxis.range']=[xmin,xmax];upd['xaxis.autorange']=false;}
   Plotly.relayout(plotId,upd);
 };
+window._owqToggleDebug = function(plotId, btn){
+  var gd=document.getElementById(plotId);
+  if(!gd||!gd.data) return;
+  var show=!btn.classList.contains('active');
+  var indices=[];
+  gd.data.forEach(function(t,i){
+    if(t.legendgroup && t.legendgroup.indexOf('debug_')===0) indices.push(i);
+  });
+  if(!indices.length) return;
+  Plotly.restyle(gd,{visible:show},indices);
+  btn.classList.toggle('active',show);
+  btn.textContent=show?'Debug \\u2713':'Debug';
+};
 """)
 
     # Legend click: single-click isolates a trace (others become 'legendonly',
@@ -723,9 +957,12 @@ function _owqLegendClick(gd){
       return onlyMe?true:(idx===ci?true:'legendonly');
     });
     Plotly.restyle(gd,{visible:newVis});
-    // Broadcast to map
+    // Broadcast to map — extract HRU ID from layered fid
     if(typeof _owqSelectFeature==='function'){
-      _owqSelectFeature(onlyMe?null:clickedFid);
+      var mapFid=clickedFid;
+      var _lm=clickedFid.match(/^(.+?) \(z\d+\)$/);
+      if(_lm) mapFid=_lm[1];
+      _owqSelectFeature(onlyMe?null:mapFid);
     }
     return false;   // prevent Plotly default toggle
   });
@@ -764,6 +1001,8 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
         geojson_str = json.dumps(river_geojson)
         _fid_color_json = json.dumps(_fid_color)
         _fid_list_json = json.dumps(_all_fids_sorted)
+        _hru_color_json = json.dumps(_hru_color)
+        _hru_ids_json = json.dumps(_hru_ids_sorted)
 
         H.append(f"""
 // --- River Network Map ---
@@ -836,15 +1075,48 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   var mapKey='{mapping_key}';
   var fidColor={_fid_color_json};
   var plotFids={_fid_list_json};
+  var mapFidColor={json.dumps(_map_fid_color)};
 
   var featureLayers={{}};  // fid → Leaflet layer
   var selectedFid=null;
 
+  var isPolygon={json.dumps(map_geom_type == 'polygon')};
+  var hasLayers={json.dumps(_has_layers)};
+  var allLayers={json.dumps(_all_layers_sorted)};
+  var hruColor={json.dumps(_hru_color)};
+  var currentLayer=hasLayers&&allLayers.length?allLayers[0]:null;
+
+  // Map color lookup: try map-specific dict first, then plot dicts, then gray
+  function _mapColor(fid){{
+    return mapFidColor[fid]||fidColor[fid]||hruColor[fid]||'#888';
+  }}
+
+  function _defaultStyle(fid){{
+    var c=_mapColor(fid);
+    if(isPolygon){{
+      return {{color:'#444',weight:1.5,opacity:0.7,fillColor:c,fillOpacity:0.5}};
+    }}
+    return {{color:c,weight:3,opacity:0.85}};
+  }}
+  function _highlightStyle(fid){{
+    var c=_mapColor(fid);
+    if(isPolygon){{
+      return {{color:'#222',weight:2.5,opacity:1,fillColor:c,fillOpacity:0.75}};
+    }}
+    return {{color:c,weight:5,opacity:1}};
+  }}
+  function _dimStyle(fid){{
+    var c=_mapColor(fid);
+    if(isPolygon){{
+      return {{color:'#999',weight:0.5,opacity:0.3,fillColor:c,fillOpacity:0.15}};
+    }}
+    return {{color:c,weight:1.5,opacity:0.3}};
+  }}
+
   var geoLayer=L.geoJSON(geojsonData,{{
     style:function(feature){{
       var fid=String(feature.properties[mapKey]||'');
-      var c=fidColor[fid]||'#888';
-      return {{color:c,weight:3,opacity:0.85}};
+      return _defaultStyle(fid);
     }},
     onEachFeature:function(feature,layer){{
       var fid=String(feature.properties[mapKey]||'');
@@ -858,11 +1130,10 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
           _owqSelectFeature(fid);   // select this feature
         }}
       }});
-      layer.on('mouseover',function(){{ layer.setStyle({{weight:5,opacity:1}}); }});
+      layer.on('mouseover',function(){{ layer.setStyle(_highlightStyle(fid)); }});
       layer.on('mouseout',function(){{
-        var w=(selectedFid&&selectedFid!==fid)?1.5:3;
-        var o=(selectedFid&&selectedFid!==fid)?0.3:0.85;
-        layer.setStyle({{weight:w,opacity:o}});
+        if(selectedFid&&selectedFid!==fid){{ layer.setStyle(_dimStyle(fid)); }}
+        else{{ layer.setStyle(_defaultStyle(fid)); }}
       }});
     }}
   }}).addTo(map);
@@ -890,14 +1161,18 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   }});
   new RecenterCtrl().addTo(map);
 
-  // Build map legend
+  // Build map legend — use map feature IDs and map colors
   var legendEl=document.getElementById('mapLegend');
+  var _mapFidsSorted={json.dumps(sorted(_map_fid_color.keys()) if _map_fid_color else [])};
+  var legendFids=_mapFidsSorted.length?_mapFidsSorted:(hasLayers?{_hru_ids_json}:plotFids);
   if(legendEl){{
     var html='<div class="ml-title">{feature_label}s</div>';
-    plotFids.forEach(function(fid){{
-      var c=fidColor[fid]||'#888';
+    legendFids.forEach(function(fid){{
+      var c=_mapColor(fid);
       html+='<div class="ml-item" data-fid="'+fid+'">'
-           +'<span class="ml-swatch" style="background:'+c+'"></span>'
+           +'<span class="ml-swatch" style="background:'+c+';'
+           +(isPolygon?'height:10px;width:16px;border-radius:3px;border:1px solid #666':'')
+           +'"></span>'
            +'<span>'+fid+'</span></div>';
     }});
     legendEl.innerHTML=html;
@@ -917,9 +1192,9 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
     // 1) Update map styles (cheap — do immediately)
     for(var f in featureLayers){{
       var ly=featureLayers[f];
-      if(!fid){{ ly.setStyle({{weight:3,opacity:0.85}}); }}
-      else if(f===fid){{ ly.setStyle({{weight:5,opacity:1}}); }}
-      else{{ ly.setStyle({{weight:1.5,opacity:0.3}}); }}
+      if(!fid){{ ly.setStyle(_defaultStyle(f)); }}
+      else if(f===fid){{ ly.setStyle(_highlightStyle(f)); }}
+      else{{ ly.setStyle(_dimStyle(f)); }}
     }}
     // 2) Update map legend highlights (cheap — do immediately)
     if(legendEl){{
@@ -943,11 +1218,74 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
           }}
           var tfid=(t.name||'').replace(_owqFeatureLabel,'');
           if(!fid) return true;
+          // For layered data, clicking HRU "1" should show "1 (z1)","1 (z2)",etc.
+          if(hasLayers){{
+            var parts=tfid.match(/^(.+?) \\(z\\d+\\)$/);
+            var hruPart=parts?parts[1]:tfid;
+            return hruPart===fid?true:'legendonly';
+          }}
           return tfid===fid?true:'legendonly';
         }});
         Plotly.restyle(gd,{{visible:newVis}}).then(_nextRestyle);
       }}
       _nextRestyle();
+    }});
+  }};
+
+  // Layer selector (SUMMA multi-layer support)
+  window._owqSelectLayer=function(layer,btn){{
+    if(!hasLayers) return;
+    currentLayer=layer;
+    // Update button active states
+    var toolbar=btn?btn.parentElement:null;
+    if(toolbar){{
+      toolbar.querySelectorAll('.tb-btn').forEach(function(b){{
+        b.classList.remove('active');
+      }});
+      if(btn) btn.classList.add('active');
+    }}
+    // Show/hide plot traces based on selected layer.
+    // This applies to ALL traces — main AND debug.
+    // For debug traces, extract the fid from the hovertemplate
+    // (format: "EXT: LABEL FID<br>...").
+    window._owqPlotIds.forEach(function(id){{
+      var gd=document.getElementById(id);
+      if(!gd||!gd.data) return;
+      // Check if debug is currently shown (any debug trace visible)
+      var debugBtn=document.getElementById(id+'_dbg');
+      var debugOn=debugBtn&&debugBtn.classList.contains('active');
+      var newVis=gd.data.map(function(t){{
+        var isDebug=t.legendgroup&&t.legendgroup.indexOf('debug_')===0;
+        // Extract fid: from name for main traces, from hovertemplate for debug
+        var tfid='';
+        if(isDebug){{
+          var ht=t.hovertemplate||'';
+          var idx=ht.indexOf(_owqFeatureLabel);
+          if(idx>=0){{
+            var rest=ht.substring(idx+_owqFeatureLabel.length);
+            var br=rest.indexOf('<br>');
+            tfid=br>=0?rest.substring(0,br):rest;
+          }}
+        }}else{{
+          tfid=(t.name||'').replace(_owqFeatureLabel,'');
+        }}
+        // If no layer selected (All Layers), restore visibility
+        if(!layer){{
+          if(isDebug) return debugOn?true:false;
+          return true;
+        }}
+        // Check if this trace's fid contains the selected layer "(z1)" etc.
+        var m=tfid.match(/\\(z(\\d+)\\)$/);
+        if(m){{
+          var matches=('z'+m[1])===layer;
+          if(isDebug) return matches&&debugOn?true:false;
+          return matches?true:'legendonly';
+        }}
+        // No layer suffix — always show (non-layered data)
+        if(isDebug) return debugOn?true:false;
+        return true;
+      }});
+      Plotly.restyle(gd,{{visible:newVis}});
     }});
   }};
 
@@ -1014,6 +1352,18 @@ window._owqSelectFeature = window._owqSelectFeature || function(){};
 })();
 """)
 
+    # Auto-select the first layer on page load (after plots are rendered)
+    if _has_layers and _all_layers_sorted:
+        _first_layer = _all_layers_sorted[0]
+        H.append(f"""
+// Auto-select first layer after all plots are rendered
+setTimeout(function(){{
+  if(typeof _owqSelectLayer==='function'){{
+    _owqSelectLayer('{_first_layer}', document.querySelector('[data-layer="{_first_layer}"]'));
+  }}
+}}, 500);
+""")
+
     # Close DOMContentLoaded wrapper
     H.append('});')  # end DOMContentLoaded
     H.append('</script>')
@@ -1039,6 +1389,8 @@ def Plot_h5_driver(what2map=None,
                    combine_features=True,
                    figsize=(12, 6),
                    river_network_shp=None,
+                   basin_shapefile=None,
+                   basin_mapping_key=None,
                    mapping_key='SegId',
                    feature_label=None,
                    observation_dir=None,
@@ -1264,115 +1616,215 @@ def Plot_h5_driver(what2map=None,
         else:
             file_extensions = ['main']
 
+        # Helper: parse column name into (feature_id, layer) tuple.
+        # SUMMA columns: "hruId_1_z1" → fid="1", layer="z1"
+        # mizuRoute columns: "reachID_740493340" → fid="740493340", layer=None
+        def _parse_col(col):
+            """Parse a DataFrame column name into (fid, layer).
+
+            For SUMMA-style columns like ``hruId_1_z1`` the value part
+            is ``1_z1``.  We detect the ``_z\d+`` suffix to split out
+            the layer; everything before it is the feature ID.
+
+            For mizuRoute-style columns like ``reachID_740493340`` there
+            is no ``_z\d+`` suffix, so we return ``(740493340, None)``.
+            """
+            # Strip the mapping-key prefix (e.g. "hruId_" or "reachID_")
+            parts = col.split('_', 1)  # ['hruId', '1_z1'] or ['reachID', '740493340']
+            if len(parts) < 2:
+                return (col, None)
+            value = parts[1]  # '1_z1' or '740493340'
+            # Check for layer suffix _z<digits>
+            m = re.match(r'^(.+)_(z\d+)$', value)
+            if m:
+                return (m.group(1), m.group(2))
+            return (value, None)
+
+        # Helper: extract feature data from a DataFrame
+        def _extract_features(ttdata, mkv):
+            """Extract feature data, returning {display_id: Series}.
+
+            For SUMMA (with layers), display_id is ``"{hru} (z{n})"``
+            so that each HRU+layer pair gets its own trace with a
+            readable legend name.
+            For mizuRoute (no layers), display_id is the raw feature ID.
+
+            Also returns a set of unique layers found.
+            """
+            fd, miss = {}, []
+            _layers_found = set()
+
+            if mkv == ["all"] or mkv == "all":
+                for col in ttdata.columns:
+                    fid, layer = _parse_col(col)
+                    if layer:
+                        _layers_found.add(layer)
+                        display_id = f'{fid} ({layer})'
+                    else:
+                        display_id = fid
+                    fd[display_id] = ttdata[col]
+            else:
+                for target_fid in mkv:
+                    found_any = False
+                    for col in ttdata.columns:
+                        fid, layer = _parse_col(col)
+                        if str(fid) == str(target_fid):
+                            if layer:
+                                _layers_found.add(layer)
+                                display_id = f'{fid} ({layer})'
+                            else:
+                                display_id = str(fid)
+                            fd[display_id] = ttdata[col]
+                            found_any = True
+                    if not found_any:
+                        miss.append(target_fid)
+            return fd, miss, _layers_found
+
+        # ── Discover compartments from openwq_results keys ──────────
+        # Keys are "COMPARTMENT@CHEMICAL#UNITS" or "COMPARTMENT@Sediment"
+        _compartments_seen = []
+        _comp_set = set()
+        for key in openwq_results.keys():
+            comp = key.split('@')[0]
+            if comp not in _comp_set:
+                _comp_set.add(comp)
+                _compartments_seen.append(comp)
+
+        print(f"  Compartments: {_compartments_seen}")
         print(f"  Chemical species: {chemSpec}")
-        print(f"  Extensions to process: {file_extensions}")
-        print(f"  Will create {len(chemSpec) * len(file_extensions)} plot(s)")
+        print(f"  Extensions: {file_extensions}")
+        if debugmode:
+            print(f"  Debug mode ON — debug traces overlaid on each plot")
 
-        # Loop through species and extensions
-        for spec_idx, spec in enumerate(chemSpec):
-            print(f"\n{'=' * 70}")
-            print(f"Processing species {spec_idx + 1}/{len(chemSpec)}: {spec}")
-            print("=" * 70)
+        # ── Loop: compartment → species ─────────────────────────────
+        for comp in _compartments_seen:
 
-            try:
-                # Find matching species in openwq_results
-                species_key = None
+            for spec in chemSpec:
+                # Build the result key
+                # Normal species: "COMP@CHEM#UNITS"
+                # Sediment:       "COMP@Sediment"
+                result_key = None
                 for key in openwq_results.keys():
-                    if spec in key:
-                        species_key = key
-                        print(f"  Found species key: {species_key}")
+                    kcomp = key.split('@')[0]
+                    if kcomp != comp:
+                        continue
+                    if spec == 'Sediment':
+                        if key == f'{comp}@Sediment':
+                            result_key = key
+                            break
+                    elif spec in key:
+                        result_key = key
                         break
 
-                if species_key is None:
-                    print(f"  ✗ No data found for species: {spec}")
-                    print(f"  Available species:")
-                    for key in list(openwq_results.keys())[:5]:
-                        print(f"    - {key}")
+                if result_key is None:
                     continue
 
-                # Parse units
-                parts = species_key.split('#')
-                if len(parts) > 1:
-                    units = parts[1]
-                else:
-                    units = 'kg' if 'Sediment' in species_key else 'concentration'
+                print(f"\n{'=' * 70}")
+                print(f"  {comp} / {spec}  (key={result_key})")
+                print("=" * 70)
 
-                # Get chemical name
-                chem_parts = species_key.split('@')
-                chem_name = chem_parts[1].split('#')[0] if len(chem_parts) > 1 else spec
+                try:
+                    # Parse units & chemical name from key
+                    parts = result_key.split('#')
+                    units = parts[1] if len(parts) > 1 else (
+                        'kg' if 'Sediment' in result_key else 'concentration')
+                    chem_parts = result_key.split('@')
+                    chem_name = (chem_parts[1].split('#')[0]
+                                 if len(chem_parts) > 1 else spec)
 
-                # Loop through extensions
-                for ext_idx, file_extension in enumerate(file_extensions):
-                    print(f"\n  {'- ' * 33}")
-                    print(f"  Processing extension {ext_idx + 1}/{len(file_extensions)}: {file_extension}")
-                    print(f"  {'- ' * 33}")
+                    # ── Extract MAIN data ─────────────────────────
+                    main_ttdata = None
+                    for ext, data_list in openwq_results[result_key]:
+                        if ext == 'main' and data_list and len(data_list) > 0:
+                            _, main_ttdata, _ = data_list[0]
+                            print(f"  [main] shape={main_ttdata.shape}  "
+                                  f"{main_ttdata.index[0]} – "
+                                  f"{main_ttdata.index[-1]}")
+                            break
 
-                    # Extract data
-                    data_found = False
-                    ttdata = None
-                    for ext, data_list in openwq_results[species_key]:
-                        if ext == file_extension:
-                            if data_list and len(data_list) > 0:
-                                filename, ttdata, xyz_coords = data_list[0]
-                                data_found = True
-                                print(f"    Data shape: {ttdata.shape}")
-                                print(f"    Time range: {ttdata.index[0]} to {ttdata.index[-1]}")
-                                break
-
-                    if not data_found:
-                        print(f"    ✗ No data found for extension '{file_extension}'")
+                    if main_ttdata is None:
+                        print(f"  ✗ No 'main' data — skipped")
                         continue
 
-                    # Extract feature data
-                    feature_data = {}
-                    missing_features = []
-
-                    if mapping_key_values == ["all"] or mapping_key_values == "all":
-                        for col in ttdata.columns:
-                            fid = col.split('_')[-1]
-                            feature_data[fid] = ttdata[col]
-                            print(f"    ✓ Found data for feature {fid}")
-                    else:
-                        for fid in mapping_key_values:
-                            matching_cols = [col for col in ttdata.columns
-                                             if str(fid) in col.split('_')[-1]]
-                            if len(matching_cols) > 0:
-                                feature_data[fid] = ttdata[matching_cols[0]]
-                                print(f"    ✓ Found data for feature {fid}")
-                            else:
-                                missing_features.append(fid)
-                                print(f"    ✗ Feature {fid} not found")
-
-                    if len(feature_data) == 0:
-                        print(f"    ✗ No data found for any requested features")
+                    main_fd, main_miss, layers_found = _extract_features(
+                        main_ttdata, mapping_key_values)
+                    if not main_fd:
+                        print(f"  ✗ No feature data — skipped")
                         continue
+                    if main_miss:
+                        print(f"  ⚠ Missing features: {main_miss}")
+                    if layers_found:
+                        print(f"  Layers detected: {sorted(layers_found)}")
 
-                    if missing_features:
-                        print(f"    ⚠ Missing features: {missing_features}")
+                    # Build main traces with explicit colours
+                    all_traces, color_map = _build_traces_with_colors(
+                        main_fd, feature_label=feature_label)
 
-                    # Build plot entry
-                    traces = _build_traces(feature_data, feature_label=feature_label)
-                    plot_id = f'plot_{_sanitize_id(spec)}_{_sanitize_id(file_extension)}'
-                    time_range = (f'{ttdata.index[0]} to {ttdata.index[-1]}'
-                                  if len(ttdata.index) > 0 else '')
+                    # ── Overlay debug extensions ──────────────────
+                    _has_debug_traces = False
+                    if debugmode:
+                        for dbg_ext in file_extensions[1:]:
+                            meta = _DEBUG_EXT_META.get(dbg_ext)
+                            if meta is None:
+                                continue
+
+                            dbg_ttdata = None
+                            for ext, data_list in openwq_results[result_key]:
+                                if (ext == dbg_ext and data_list
+                                        and len(data_list) > 0):
+                                    _, dbg_ttdata, _ = data_list[0]
+                                    break
+
+                            if dbg_ttdata is None:
+                                continue
+
+                            dbg_fd, _, _ = _extract_features(
+                                dbg_ttdata, mapping_key_values)
+                            dbg_fd = {k: v for k, v in dbg_fd.items()
+                                      if k in color_map}
+                            if not dbg_fd:
+                                continue
+
+                            dbg_traces = _build_debug_traces(
+                                dbg_fd, color_map,
+                                meta['label'], meta['dash'],
+                                feature_label=feature_label)
+                            all_traces.extend(dbg_traces)
+                            _has_debug_traces = True
+                            print(f"  [debug] {meta['label']}: "
+                                  f"{len(dbg_fd)} feature(s)")
+
+                    # ── Append plot entry ─────────────────────────
+                    plot_id = (f'plot_{_sanitize_id(comp)}_'
+                               f'{_sanitize_id(spec)}_main')
+                    time_range = (
+                        f'{main_ttdata.index[0]} to '
+                        f'{main_ttdata.index[-1]}'
+                        if len(main_ttdata.index) > 0 else '')
                     plots.append({
                         'id': plot_id,
-                        'title': f'{chem_name} ({file_extension})',
-                        'traces': traces,
+                        'title': f'{comp} — {chem_name}',
+                        'traces': all_traces,
                         'ylabel': f'{chem_name} ({units})',
-                        'xtype': ('date' if isinstance(ttdata.index, pd.DatetimeIndex)
+                        'xtype': ('date'
+                                  if isinstance(main_ttdata.index,
+                                                pd.DatetimeIndex)
                                   else 'linear'),
-                        'caption': f'{len(feature_data)} {feature_label}s | {time_range}',
+                        'caption': (f'{len(main_fd)} {feature_label}s'
+                                    f' | {time_range}'),
                         'species': spec,
+                        'compartment': comp,
+                        'has_debug': _has_debug_traces,
                     })
 
-                    print(f"    ✓ Plot data collected for {chem_name} ({file_extension})")
+                    print(f"  ✓ Plot: {comp} — {chem_name}"
+                          + (" (+debug)" if _has_debug_traces else ""))
 
-            except Exception as e:
-                print(f"  ✗ Error processing species {spec}: {e}")
-                import traceback
-                traceback.print_exc()
-                continue
+                except Exception as e:
+                    print(f"  ✗ Error: {comp}/{spec}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
 
     # =====================================================================
     # BUILD HTML AND WRITE
@@ -1395,18 +1847,24 @@ def Plot_h5_driver(what2map=None,
     print(f"Building interactive HTML with {len(plots)} plot(s)...")
     print("=" * 70)
 
-    # Load river network shapefile for interactive map (optional)
+    # Load shapefile for interactive map (optional)
+    # For SUMMA: prefer basin_shapefile (HRU polygons) over river_network_shp
+    # For mizuRoute: use river_network_shp (line segments)
     _river_geojson = None
+    _basin_geojson = None
     _map_center = None
     _map_bounds = None
-    if river_network_shp and os.path.isfile(river_network_shp):
+    _map_geom_type = 'line'  # 'line' for rivers, 'polygon' for basins
+
+    def _load_shapefile(shp_path, label='shapefile'):
+        """Load a shapefile and return (geojson_dict, bounds) or (None, None)."""
         try:
             import fiona
             from shapely.geometry import shape, mapping as shp_mapping
 
             features = []
             src_proj4 = None
-            with fiona.open(river_network_shp) as src:
+            with fiona.open(shp_path) as src:
                 if src.crs:
                     if isinstance(src.crs, dict):
                         parts = []
@@ -1427,10 +1885,9 @@ def Plot_h5_driver(what2map=None,
                     })
 
             if features:
-                # Check if reprojection needed
                 sb = features[0]['geometry'].bounds
                 if (abs(sb[0]) > 360 or abs(sb[1]) > 360) and src_proj4:
-                    print("  Reprojecting shapefile to WGS84...")
+                    print(f"  Reprojecting {label} to WGS84...")
                     try:
                         from pyproj import Proj
                         from shapely.ops import transform as shp_transform
@@ -1450,29 +1907,107 @@ def Plot_h5_driver(what2map=None,
                         'properties': {k: (str(v) if v is not None else '')
                                        for k, v in f['properties'].items()},
                     })
-                _river_geojson = {'type': 'FeatureCollection',
-                                  'features': gj_features}
+                geojson = {'type': 'FeatureCollection',
+                           'features': gj_features}
                 all_b = [f['geometry'].bounds for f in features]
-                _map_bounds = (min(b[0] for b in all_b), min(b[1] for b in all_b),
-                               max(b[2] for b in all_b), max(b[3] for b in all_b))
-                _map_center = [(_map_bounds[1]+_map_bounds[3])/2,
-                               (_map_bounds[0]+_map_bounds[2])/2]
-                print(f"  ✓ Loaded river network: {len(gj_features)} features")
+                bounds = (min(b[0] for b in all_b), min(b[1] for b in all_b),
+                          max(b[2] for b in all_b), max(b[3] for b in all_b))
+                print(f"  ✓ Loaded {label}: {len(gj_features)} features")
+                return geojson, bounds
         except ImportError:
-            print("  WARNING: fiona/shapely not installed — skipping map")
+            print(f"  WARNING: fiona/shapely not installed — skipping {label}")
         except Exception as _e:
-            print(f"  WARNING: Failed to load shapefile: {_e}")
+            print(f"  WARNING: Failed to load {label}: {_e}")
+        return None, None
+
+    # Load basin shapefile (polygons) — used for SUMMA
+    if basin_shapefile and os.path.isfile(basin_shapefile):
+        _basin_geojson, _basin_bounds = _load_shapefile(
+            basin_shapefile, 'basin/HRU shapefile')
+        if _basin_geojson:
+            _map_geom_type = 'polygon'
+            _map_bounds = _basin_bounds
+            _map_center = [(_map_bounds[1]+_map_bounds[3])/2,
+                           (_map_bounds[0]+_map_bounds[2])/2]
+
+    # Load river network shapefile (lines) — used for mizuRoute or as fallback
+    if river_network_shp and os.path.isfile(river_network_shp):
+        _river_geojson, _river_bounds = _load_shapefile(
+            river_network_shp, 'river network')
+        if _river_geojson and not _basin_geojson:
+            _map_bounds = _river_bounds
+            _map_center = [(_map_bounds[1]+_map_bounds[3])/2,
+                           (_map_bounds[0]+_map_bounds[2])/2]
+
+    # Use basin as the primary map geojson if available
+    _primary_geojson = _basin_geojson or _river_geojson
+
+    # Auto-detect basin mapping key from actual GeoJSON properties.
+    # Strategy: find a property whose values overlap with the HRU IDs
+    # extracted from the HDF5 data columns.
+    _basin_mapping_key = basin_mapping_key or 'HRU_ID'
+    if _basin_geojson and _basin_geojson.get('features'):
+        _props = _basin_geojson['features'][0].get('properties', {})
+
+        # Collect HRU IDs from plot data for matching
+        _plot_hru_ids = set()
+        if plots:
+            for p in plots:
+                for t in p.get('traces', []):
+                    if t.get('legendgroup', '').startswith('debug_'):
+                        continue
+                    tname = t.get('name', '')
+                    if feature_label and tname.startswith(feature_label + ' '):
+                        tfid = tname[len(feature_label) + 1:]
+                    else:
+                        tfid = tname
+                    m = re.match(r'^(.+?) \(z\d+\)$', tfid)
+                    _plot_hru_ids.add(m.group(1) if m else tfid)
+
+        # First try the requested key
+        _found_match = False
+        if _basin_mapping_key in _props:
+            _map_vals = set()
+            for feat in _basin_geojson['features']:
+                _map_vals.add(str(feat['properties'].get(_basin_mapping_key, '')))
+            if _plot_hru_ids & _map_vals:
+                _found_match = True
+                print(f"  Basin mapping key '{_basin_mapping_key}' matches plot data ✓")
+
+        # If no match, try all properties to find one that overlaps
+        if not _found_match:
+            for _try_key in list(_props.keys()):
+                _map_vals = set()
+                for feat in _basin_geojson['features']:
+                    _map_vals.add(str(feat['properties'].get(_try_key, '')))
+                if _plot_hru_ids and (_plot_hru_ids & _map_vals):
+                    _basin_mapping_key = _try_key
+                    _found_match = True
+                    print(f"  Auto-detected basin mapping key: '{_try_key}' "
+                          f"(matches plot HRU IDs)")
+                    break
+
+            if not _found_match and _basin_mapping_key not in _props:
+                # Fallback: use first available property
+                for _try_key in ['HRU_ID', 'GRU_ID', 'hru_id', 'gru_id']:
+                    if _try_key in _props:
+                        _basin_mapping_key = _try_key
+                        break
+                print(f"  WARNING: No basin property matches plot HRU IDs. "
+                      f"Using '{_basin_mapping_key}'. Map colours may be wrong.")
 
     # --- Load observation data and match to features ---
     _observation_data = None    # {plot_id: [obs_dict, ...]}
-    if (observation_dir or observation_csv) and _river_geojson:
+    if (observation_dir or observation_csv) and _primary_geojson:
         print("\n" + "-" * 40)
         print("Loading observation data...")
         obs_by_species, station_locations = _load_observation_data(
             obs_dir=observation_dir, obs_csv=observation_csv)
         if obs_by_species and station_locations:
+            _obs_geojson = _primary_geojson
+            _obs_map_key = _basin_mapping_key if _basin_geojson else mapping_key
             station_to_feature = _match_stations_to_features(
-                station_locations, _river_geojson, mapping_key)
+                station_locations, _obs_geojson, _obs_map_key)
             if station_to_feature:
                 print(f"  Matched {len(station_to_feature)} stations to features:")
                 for sid, fid in station_to_feature.items():
@@ -1511,17 +2046,78 @@ def Plot_h5_driver(what2map=None,
             else:
                 print("  No stations could be matched to features.")
         print("-" * 40)
-    elif (observation_dir or observation_csv) and not _river_geojson:
-        print("  WARNING: Observation data provided but no river network "
-              "shapefile loaded — cannot match stations to features.")
+    elif (observation_dir or observation_csv) and not _primary_geojson:
+        print("  WARNING: Observation data provided but no shapefile "
+              "loaded — cannot match stations to features.")
+
+    # Determine the map key for the geojson features
+    _map_key = _basin_mapping_key if _basin_geojson else mapping_key
+
+    # ── Remap sequential HRU IDs → actual shapefile IDs in traces ──
+    # SUMMA HDF5 stores sequential IDs (1, 2, 3...) but the shapefile
+    # has the real GRU_IDs (740457190, ...).  Build a lookup from the
+    # basin shapefile feature order and rewrite trace names/hovertemplates.
+    if _basin_geojson and _basin_geojson.get('features'):
+        # Build mapping: "1" → first feature's GRU_ID, "2" → second, etc.
+        _id_remap = {}
+        for i, feat in enumerate(_basin_geojson['features']):
+            seq_id = str(i + 1)
+            real_id = str(feat['properties'].get(_basin_mapping_key, seq_id))
+            # Strip trailing ".0" from float-converted ints
+            if real_id.endswith('.0'):
+                real_id = real_id[:-2]
+            if seq_id != real_id:
+                _id_remap[seq_id] = real_id
+
+        if _id_remap:
+            print(f"  ID remapping ({len(_id_remap)} entries): "
+                  f"e.g. {list(_id_remap.items())[:3]}")
+            _fl = feature_label or ''
+
+            def _remap_fid(display_id):
+                """Remap '1 (z1)' → '740457190 (z1)' or '1' → '740457190'."""
+                m = re.match(r'^(.+?) \((z\d+)\)$', display_id)
+                if m:
+                    hru = m.group(1)
+                    lyr = m.group(2)
+                    return f'{_id_remap.get(hru, hru)} ({lyr})'
+                return _id_remap.get(display_id, display_id)
+
+            for p in plots:
+                for t in p['traces']:
+                    # Rewrite trace name
+                    tname = t.get('name', '')
+                    if _fl and tname.startswith(_fl + ' '):
+                        old_fid = tname[len(_fl) + 1:]
+                        new_fid = _remap_fid(old_fid)
+                        if new_fid != old_fid:
+                            t['name'] = f'{_fl} {new_fid}'
+                    elif not _fl:
+                        t['name'] = _remap_fid(tname)
+
+                    # Rewrite hovertemplate
+                    ht = t.get('hovertemplate', '')
+                    if _fl and (_fl + ' ') in ht:
+                        # Extract fid from hovertemplate
+                        prefix = _fl + ' '
+                        idx = ht.index(prefix) + len(prefix)
+                        rest = ht[idx:]
+                        br = rest.find('<br>')
+                        if br >= 0:
+                            old_fid = rest[:br]
+                            new_fid = _remap_fid(old_fid)
+                            if new_fid != old_fid:
+                                t['hovertemplate'] = (ht[:idx] + new_fid +
+                                                      rest[br:])
 
     html_content = _build_html(plots, what2map, hostmodel,
-                               river_geojson=_river_geojson,
+                               river_geojson=_primary_geojson,
                                map_center=_map_center,
                                map_bounds=_map_bounds,
-                               mapping_key=mapping_key,
+                               mapping_key=_map_key,
                                observation_data=_observation_data,
-                               feature_label=feature_label)
+                               feature_label=feature_label,
+                               map_geom_type=_map_geom_type)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
