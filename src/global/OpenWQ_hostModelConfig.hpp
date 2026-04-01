@@ -95,8 +95,16 @@ class OpenWQ_hostModelconfig
 
         // Reverse lookup: find (ix, iy, iz) from cell_id string
         // Returns true if found, false otherwise. If found, ix, iy, iz are set to the indices.
+        // partial_match: set to true if only a prefix match was found (e.g., "1" matched "1_z1")
         bool find_indices_from_cellid(int compartment_index, const std::string& cell_id,
-                                      int& ix, int& iy, int& iz);
+                                      int& ix, int& iy, int& iz,
+                                      bool& partial_match);
+
+        // Single-dimension lookup: given known_ix, find iy (dim=1) or iz (dim=2)
+        // by searching cell_ids for a substring match
+        bool find_index_single_dim(int compartment_index, int known_ix,
+                                   int dim, const std::string& search_str,
+                                   int& dim_result);
 
         /********************
          * HydroTuple methods

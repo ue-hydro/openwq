@@ -715,50 +715,32 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
         // ###################
         // ix
         // ###################
+        // Always read as string (ID-based lookup).
+        // Numeric indices are NOT supported -all spatial elements
+        // are treated as text IDs to avoid index/ID mismatches.
         elemName = "ix";
-        try{
-
-            // try entry as int
-            int entryVal = 0; // dummy variable
-            // if JSON
-            if (DataFormat.compare("JSON")==0){
-                entryVal = EWF_SS_json_sub_rowi.at(6);}
-            // if ASCII
-            else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[ 
-                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IX")]);}
-
-            ix_json = entryVal;
-
-            // Need to do "- 1" because C++ starts in zero
-            ix_json--;
-
-            // If entry in json is zero, we get here -1
-            // which is wrong, so need to send warning messsage
-            // and skip entry
-            if (ix_json == -1){
-                // Through a warning invalid entry
-                msg_string =
-                    "<OpenWQ> WARNING: SS '"
-                    + elemName
-                    + "' cannot be zero. It needs to start in one (entry skipped): File="
-                    + std::to_string(ssf+1)
-                    + ", Sub_structure=" + std::to_string(ssi+1)
-                    + ", Data_row=" + std::to_string(di + 1);
-
-                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-
-                continue; // skip entry
-            }
-
-
-        }catch(...){
-
-            // try as string for the cases where entry is "all" or a cell_id (e.g., reach_id)
+        {
             std::string entryVal = ""; // dummy variable
-            // if JSON
+            // if JSON -read as string regardless of JSON type
             if (DataFormat.compare("JSON")==0){
-                entryVal = EWF_SS_json_sub_rowi.at(6);}
+                // Handle both string and numeric JSON values by converting to string
+                try {
+                    entryVal = EWF_SS_json_sub_rowi.at(6).get<std::string>();
+                } catch (...) {
+                    // If it's a number in JSON, convert to string
+                    try {
+                        int numVal = EWF_SS_json_sub_rowi.at(6);
+                        entryVal = std::to_string(numVal);
+                    } catch (...) {
+                        try {
+                            double numVal = EWF_SS_json_sub_rowi.at(6);
+                            entryVal = std::to_string(static_cast<int>(numVal));
+                        } catch (...) {
+                            entryVal = "";
+                        }
+                    }
+                }
+            }
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
                 entryVal = ASCIIRowElemEntry[
@@ -779,9 +761,10 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 ix_json = OpenWQ_wqconfig.get_allSS_flag();
                 cell_id_lookup_used = false;  // Still need to parse iy and iz
             }
-            // Otherwise, try to interpret as a cell_id (e.g., reach_id, hru_id)
+            // Otherwise, interpret as a cell_id (e.g., reach_id, hru_id)
             else {
-                // Try cell_id lookup - this will set ix_json, iy_json, iz_json if successful
+                bool partial_match = false;
+                // Cell_id lookup - this will set ix_json, iy_json, iz_json if successful
                 validEntryFlag = lookupCellId_SS(
                     OpenWQ_hostModelconfig,
                     OpenWQ_wqconfig,
@@ -789,12 +772,16 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                     static_cast<int>(cmpi_ssi),  // compartment index
                     entryVal,                     // cell_id string
                     ix_json, iy_json, iz_json,   // output indices
-                    ssf, ssi, di);               // for error reporting
+                    ssf, ssi, di,                // for error reporting
+                    partial_match);              // partial prefix match flag
 
                 if (!validEntryFlag) {
                     continue;  // Skip this entry if cell_id not found
                 }
-                cell_id_lookup_used = true;  // Skip iy and iz parsing
+                // If exact match: skip iy/iz parsing (all indices set)
+                // If partial/prefix match (e.g., "1" matched "1_z1"):
+                //   only ix is reliable, iy/iz should still be parsed from JSON
+                cell_id_lookup_used = !partial_match;
             }
         }
 
@@ -805,73 +792,60 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
         if (cell_id_lookup_used) {
             // iy_json already set by lookupCellId_SS
         } else {
-        elemName = "iy";
-        try{
-
-            // try entry as int
-            int entryVal = 0; // dummy variable
+            // Always read as string (ID-based lookup)
+            elemName = "iy";
+            std::string entryVal_iy = "";
             // if JSON
             if (DataFormat.compare("JSON")==0){
-                entryVal = EWF_SS_json_sub_rowi.at(7);}
-            // if ASCII
-            else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[ 
-                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IY")]);}
-
-            iy_json = entryVal;
-
-            // Need to do "- 1" because C++ starts in zero
-            iy_json--;
-
-            // If entry in json is zero, we get here -1
-            // which is wrong, so need to send warning messsage
-            // and skip entry
-            if (iy_json == -1){
-                // Through a warning invalid entry           
-                msg_string = 
-                    "<OpenWQ> WARNING: SS '" 
-                    + elemName 
-                    + "' cannot be zero. It needs to start in one (entry skipped): File=" 
-                    + std::to_string(ssf+1)
-                    + ", Sub_structure=" + std::to_string(ssi+1)
-                    + ", Data_row=" + std::to_string(di + 1);   
-
-                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-
-                continue; // skip entry
+                try {
+                    entryVal_iy = EWF_SS_json_sub_rowi.at(7).get<std::string>();
+                } catch (...) {
+                    try {
+                        int numVal = EWF_SS_json_sub_rowi.at(7);
+                        entryVal_iy = std::to_string(numVal);
+                    } catch (...) {
+                        try {
+                            double numVal = EWF_SS_json_sub_rowi.at(7);
+                            entryVal_iy = std::to_string(static_cast<int>(numVal));
+                        } catch (...) {
+                            entryVal_iy = "";
+                        }
+                    }
+                }
             }
-
-        }catch(...){
-
-            // try as string for the cases where entry is "all"
-            std::string entryVal = ""; // dummy variable
-            // if JSON
-            if (DataFormat.compare("JSON")==0){
-                entryVal = EWF_SS_json_sub_rowi.at(7);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[
+                entryVal_iy = ASCIIRowElemEntry[
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IY")];}
 
             // Strip surrounding quotes (CSV may preserve them)
-            if (entryVal.size() >= 2
-                && (entryVal.front() == '"' || entryVal.front() == '\'')
-                && (entryVal.back() == '"' || entryVal.back() == '\'')) {
-                entryVal = entryVal.substr(1, entryVal.size() - 2);
+            if (entryVal_iy.size() >= 2
+                && (entryVal_iy.front() == '"' || entryVal_iy.front() == '\'')
+                && (entryVal_iy.back() == '"' || entryVal_iy.back() == '\'')) {
+                entryVal_iy = entryVal_iy.substr(1, entryVal_iy.size() - 2);
             }
 
-            validEntryFlag = getArrayElem_SS(
-                OpenWQ_wqconfig,
-                OpenWQ_output,
-                elemName,
-                (std::string) entryVal,
-                iy_json,
-                ssf,    // SS file
-                ssi,    // SS structure
-                di);    // SS row
+            // Convert to uppercase for "ALL" comparison
+            std::string entryVal_iy_upper = OpenWQ_utils.ConvertStringToUpperCase(entryVal_iy);
 
-            if (!validEntryFlag){continue;}
-        }
+            if (entryVal_iy_upper.compare("ALL") == 0) {
+                iy_json = OpenWQ_wqconfig.get_allSS_flag();
+            } else {
+                // Try ID-based lookup along iy dimension
+                bool found_iy = OpenWQ_hostModelconfig.find_index_single_dim(
+                    static_cast<int>(cmpi_ssi), ix_json, 1, entryVal_iy, iy_json);
+                if (!found_iy) {
+                    msg_string =
+                        "<OpenWQ> WARNING: SS iy='" + entryVal_iy +
+                        "' not found in cell_id mapping for compartment " +
+                        std::to_string(cmpi_ssi) +
+                        " (entry skipped): File=" + std::to_string(ssf+1) +
+                        ", Sub_structure=" + std::to_string(ssi+1) +
+                        ", Data_row=" + std::to_string(di + 1);
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    continue;
+                }
+            }
         }  // end of else block for cell_id_lookup_used (iy)
 
         // ###################
@@ -881,73 +855,60 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
         if (cell_id_lookup_used) {
             // iz_json already set by lookupCellId_SS
         } else {
-        elemName = "iz";
-        try{
-
-            // try entry as int
-            int entryVal = 0; // dummy variable
+            // Always read as string (ID-based lookup)
+            elemName = "iz";
+            std::string entryVal_iz = "";
             // if JSON
             if (DataFormat.compare("JSON")==0){
-                entryVal = EWF_SS_json_sub_rowi.at(8);}
-            // if ASCII
-            else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[ 
-                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IZ")]);}
-
-            iz_json = entryVal;
-
-            // Need to do "- 1" because C++ starts in zero
-            iz_json--;
-
-            // If entry in json is zero, we get here -1
-            // which is wrong, so need to send warning messsage
-            // and skip entry
-            if (iz_json == -1){
-                // Through a warning invalid entry           
-                msg_string = 
-                    "<OpenWQ> WARNING: SS '" 
-                    + elemName 
-                    + "' cannot be zero. It needs to start in one (entry skipped): File=" 
-                    + std::to_string(ssf+1)
-                    + ", Sub_structure=" + std::to_string(ssi+1)
-                    + ", Data_row=" + std::to_string(di + 1); 
-
-                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-
-                continue; // skip entry
+                try {
+                    entryVal_iz = EWF_SS_json_sub_rowi.at(8).get<std::string>();
+                } catch (...) {
+                    try {
+                        int numVal = EWF_SS_json_sub_rowi.at(8);
+                        entryVal_iz = std::to_string(numVal);
+                    } catch (...) {
+                        try {
+                            double numVal = EWF_SS_json_sub_rowi.at(8);
+                            entryVal_iz = std::to_string(static_cast<int>(numVal));
+                        } catch (...) {
+                            entryVal_iz = "";
+                        }
+                    }
+                }
             }
-
-        }catch(...){
-
-            // try as string for the cases where entry is "all"
-            std::string entryVal = ""; // dummy variable
-            // if JSON
-            if (DataFormat.compare("JSON")==0){
-                entryVal = EWF_SS_json_sub_rowi.at(8);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[
+                entryVal_iz = ASCIIRowElemEntry[
                     OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IZ")];}
 
             // Strip surrounding quotes (CSV may preserve them)
-            if (entryVal.size() >= 2
-                && (entryVal.front() == '"' || entryVal.front() == '\'')
-                && (entryVal.back() == '"' || entryVal.back() == '\'')) {
-                entryVal = entryVal.substr(1, entryVal.size() - 2);
+            if (entryVal_iz.size() >= 2
+                && (entryVal_iz.front() == '"' || entryVal_iz.front() == '\'')
+                && (entryVal_iz.back() == '"' || entryVal_iz.back() == '\'')) {
+                entryVal_iz = entryVal_iz.substr(1, entryVal_iz.size() - 2);
             }
 
-            validEntryFlag = getArrayElem_SS(
-                OpenWQ_wqconfig,
-                OpenWQ_output,
-                elemName,
-                (std::string) entryVal,
-                iz_json,
-                ssf,    // SS file
-                ssi,    // SS structure
-                di);    // SS row
+            // Convert to uppercase for "ALL" comparison
+            std::string entryVal_iz_upper = OpenWQ_utils.ConvertStringToUpperCase(entryVal_iz);
 
-            if (!validEntryFlag){continue;}
-        }
+            if (entryVal_iz_upper.compare("ALL") == 0) {
+                iz_json = OpenWQ_wqconfig.get_allSS_flag();
+            } else {
+                // Try ID-based lookup along iz dimension
+                bool found_iz = OpenWQ_hostModelconfig.find_index_single_dim(
+                    static_cast<int>(cmpi_ssi), ix_json, 2, entryVal_iz, iz_json);
+                if (!found_iz) {
+                    msg_string =
+                        "<OpenWQ> WARNING: SS iz='" + entryVal_iz +
+                        "' not found in cell_id mapping for compartment " +
+                        std::to_string(cmpi_ssi) +
+                        " (entry skipped): File=" + std::to_string(ssf+1) +
+                        ", Sub_structure=" + std::to_string(ssi+1) +
+                        ", Data_row=" + std::to_string(di + 1);
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    continue;
+                }
+            }
         }  // end of else block for cell_id_lookup_used (iz)
 
         // Reset cell_id_lookup_used for next iteration
@@ -1014,6 +975,10 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 loadScheme_str = loadScheme_str.substr(1, loadScheme_str.size() - 2);
             }
 
+            // Convert to uppercase for case-insensitive comparison
+            std::transform(loadScheme_str.begin(), loadScheme_str.end(),
+                          loadScheme_str.begin(), ::toupper);
+
             // loading scheme only needed if SS
             // EWF is in concentration and associated with fluxes
             if (inputType.compare("ss")==0){
@@ -1060,7 +1025,11 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                             contDt_str = contDt_str.substr(1, contDt_str.size() - 2);
                         }
 
-                        // Concatenate the time units to the load       
+                        // Convert to uppercase for case-insensitive comparison
+                        std::transform(contDt_str.begin(), contDt_str.end(),
+                                      contDt_str.begin(), ::toupper);
+
+                        // Concatenate the time units to the load
                         ss_units_json += "/";
                         ss_units_json += contDt_str;
 
@@ -1681,20 +1650,25 @@ bool OpenWQ_extwatflux_ss::getModIndex(
         elemEntry = elemEntry.substr(1, elemEntry.size() - 2);
     }
 
-    if(elemEntry.compare("ALL") == 0){
-        
+    // Convert to uppercase for case-insensitive comparison
+    std::string elemEntry_upper = elemEntry;
+    std::transform(elemEntry_upper.begin(), elemEntry_upper.end(), elemEntry_upper.begin(), ::toupper);
+
+    if(elemEntry_upper.compare("ALL") == 0){
+
         elemVal = OpenWQ_wqconfig.get_allSS_flag();
 
-    }else{ 
-        
-        // Through a warning invalid entry           
-        msg_string = 
-            "<OpenWQ> WARNING: SS '" 
-                            + elemName 
-                            + "' cannot be zero. It needs to start in one (entry skipped): File=" 
+    }else{
+
+        // Through a warning invalid entry
+        msg_string =
+            "<OpenWQ> WARNING: SS '"
+                            + elemName
+                            + "' entry '" + elemEntry + "' is not a valid value"
+                            + " (expected 'all' or valid ID). Entry skipped: File="
                             + std::to_string(file_i+1)
                             + ", Sub_structure=" + std::to_string(struc_i+1)
-                            + ", Data_row=" + std::to_string(row_i + 1);   
+                            + ", Data_row=" + std::to_string(row_i + 1);
 
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
@@ -1719,15 +1693,16 @@ bool OpenWQ_extwatflux_ss::lookupCellId_SS(
     int& ix, int& iy, int& iz,
     unsigned int& file_i,
     unsigned int& struc_i,
-    unsigned int& row_i){
+    unsigned int& row_i,
+    bool& partial_match){
 
     // Local variables
     std::string msg_string;
     std::string cellid_label = OpenWQ_hostModelconfig.get_cellid_to_wqlabel();
 
-    // Try to find the cell_id in the mapping
+    // Try to find the cell_id in the mapping (exact or prefix match)
     bool found = OpenWQ_hostModelconfig.find_indices_from_cellid(
-        compartment_index, cell_id_str, ix, iy, iz);
+        compartment_index, cell_id_str, ix, iy, iz, partial_match);
 
     if (!found) {
         // Cell ID not found - print warning

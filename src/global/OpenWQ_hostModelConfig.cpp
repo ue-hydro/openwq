@@ -102,10 +102,14 @@ std::string OpenWQ_hostModelconfig::get_cellid_to_wq_at(int index, int ix, int i
 // Reverse lookup: find (ix, iy, iz) from cell_id string
 // Searches through the cellid_to_wq structure for the given compartment
 // Returns true if found, false otherwise. If found, ix, iy, iz are set to the indices.
+// partial_match output: set to true if only a prefix match was found (ix set, iy/iz not definitive)
 bool OpenWQ_hostModelconfig::find_indices_from_cellid(int compartment_index,
                                                        const std::string& cell_id,
-                                                       int& ix, int& iy, int& iz)
+                                                       int& ix, int& iy, int& iz,
+                                                       bool& partial_match)
 {
+    partial_match = false;
+
     // Check if cellid_to_wq is initialized and compartment index is valid
     if (!this->cellid_to_wq ||
         compartment_index < 0 ||
@@ -116,15 +120,36 @@ bool OpenWQ_hostModelconfig::find_indices_from_cellid(int compartment_index,
     // Get the 3D structure for this compartment
     const auto& compartment_data = (*this->cellid_to_wq)[compartment_index];
 
-    // Search through all (ix, iy, iz) positions
+    // First pass: try exact match
     for (size_t i = 0; i < compartment_data.size(); ++i) {
         for (size_t j = 0; j < compartment_data[i].size(); ++j) {
             for (size_t k = 0; k < compartment_data[i][j].size(); ++k) {
                 if (compartment_data[i][j][k] == cell_id) {
-                    // Found it - set the output indices
+                    // Found exact match - set all output indices
                     ix = static_cast<int>(i);
                     iy = static_cast<int>(j);
                     iz = static_cast<int>(k);
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Second pass: try prefix match (e.g., cell_id "1" matches "1_z1", "1_z2", etc.)
+    // This handles cases like SUMMA where cell_ids are "{hruId}_z{layer}"
+    // but the SS JSON only specifies the hruId part
+    std::string prefix = cell_id + "_";
+    for (size_t i = 0; i < compartment_data.size(); ++i) {
+        for (size_t j = 0; j < compartment_data[i].size(); ++j) {
+            for (size_t k = 0; k < compartment_data[i][j].size(); ++k) {
+                const std::string& stored = compartment_data[i][j][k];
+                if (stored.substr(0, prefix.size()) == prefix) {
+                    // Found prefix match - set ix only
+                    // iy and iz should be handled by their own "all" or specific parsing
+                    ix = static_cast<int>(i);
+                    iy = static_cast<int>(j);
+                    iz = static_cast<int>(k);
+                    partial_match = true;
                     return true;
                 }
             }
@@ -135,6 +160,69 @@ bool OpenWQ_hostModelconfig::find_indices_from_cellid(int compartment_index,
     return false;
 }
 
+
+// Single-dimension lookup: given a compartment and a known ix, find iy or iz
+// by searching cell_ids that contain the search_str as a substring.
+// dim: 1 = search along iy (vary j, fix i=known_ix), 2 = search along iz (vary k, fix i=known_ix)
+// Returns the found dimension index in dim_result. Returns true if found.
+bool OpenWQ_hostModelconfig::find_index_single_dim(
+    int compartment_index,
+    int known_ix,
+    int dim,               // 1=iy, 2=iz
+    const std::string& search_str,
+    int& dim_result)
+{
+    if (!this->cellid_to_wq ||
+        compartment_index < 0 ||
+        compartment_index >= static_cast<int>((*this->cellid_to_wq).size())) {
+        return false;
+    }
+
+    const auto& compartment_data = (*this->cellid_to_wq)[compartment_index];
+
+    if (known_ix < 0 || known_ix >= static_cast<int>(compartment_data.size())) {
+        return false;
+    }
+
+    const auto& ix_data = compartment_data[known_ix];
+
+    if (dim == 1) {
+        // Search along iy dimension
+        for (size_t j = 0; j < ix_data.size(); ++j) {
+            for (size_t k = 0; k < ix_data[j].size(); ++k) {
+                const std::string& stored = ix_data[j][k];
+                // Check if search_str matches as substring (e.g., "1" in "1_z1")
+                if (stored == search_str || stored.find("_" + search_str) != std::string::npos
+                    || stored.find(search_str + "_") != std::string::npos) {
+                    dim_result = static_cast<int>(j);
+                    return true;
+                }
+            }
+        }
+    } else if (dim == 2) {
+        // Search along iz dimension
+        for (size_t j = 0; j < ix_data.size(); ++j) {
+            for (size_t k = 0; k < ix_data[j].size(); ++k) {
+                const std::string& stored = ix_data[j][k];
+                // Check for suffix match (e.g., "z1" or "1" matching "_z1" part of "1_z1")
+                // Try exact suffix "_z{search_str}" first (SUMMA layer format)
+                std::string z_suffix = "_z" + search_str;
+                if (stored.size() >= z_suffix.size() &&
+                    stored.compare(stored.size() - z_suffix.size(), z_suffix.size(), z_suffix) == 0) {
+                    dim_result = static_cast<int>(k);
+                    return true;
+                }
+                // Then try direct substring match
+                if (stored == search_str || stored.find(search_str) != std::string::npos) {
+                    dim_result = static_cast<int>(k);
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
 
 // Add a compartment to the vector of compartments
 void OpenWQ_hostModelconfig::add_HydroComp(int index, std::string name, int num_cells_x, 
