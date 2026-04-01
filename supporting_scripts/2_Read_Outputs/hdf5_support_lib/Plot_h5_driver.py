@@ -270,8 +270,42 @@ _DEBUG_EXT_META = {
 }
 
 
-def _build_traces_with_colors(feature_data, n_visible=10, feature_label='Feature'):
+def _hru_from_fid(fid):
+    """Extract the HRU/reach ID from a display fid like ``"1 (z1)"`` → ``"1"``."""
+    import re
+    m = re.match(r'^(.+?) \(z\d+\)$', str(fid))
+    return m.group(1) if m else str(fid)
+
+
+def _build_global_color_map(all_fids):
+    """Build a consistent HRU→colour mapping from all fids across all plots.
+
+    Colours are assigned by sorted HRU ID so they stay stable regardless
+    of compartment or data type.
+    """
+    hru_set = set()
+    for fid in all_fids:
+        hru_set.add(_hru_from_fid(fid))
+    hru_sorted = sorted(hru_set)
+    hru_color = {hru: _COLORWAY[i % len(_COLORWAY)]
+                 for i, hru in enumerate(hru_sorted)}
+    # Expand to full fids (with layer suffixes)
+    color_map = {}
+    for fid in all_fids:
+        hru = _hru_from_fid(fid)
+        color_map[fid] = hru_color[hru]
+    return color_map
+
+
+def _build_traces_with_colors(feature_data, n_visible=10, feature_label='Feature',
+                              global_color_map=None):
     """Like ``_build_traces`` but assigns explicit colours from ``_COLORWAY``.
+
+    Parameters
+    ----------
+    global_color_map : dict or None
+        Pre-built fid→colour mapping.  When provided, colours are taken
+        from this map so they stay consistent across all compartments.
 
     Returns
     -------
@@ -283,7 +317,10 @@ def _build_traces_with_colors(feature_data, n_visible=10, feature_label='Feature
     n_features = len(feature_data)
 
     for idx, (fid, series) in enumerate(feature_data.items()):
-        color = _COLORWAY[idx % len(_COLORWAY)]
+        if global_color_map and fid in global_color_map:
+            color = global_color_map[fid]
+        else:
+            color = _COLORWAY[idx % len(_COLORWAY)]
         color_map[fid] = color
 
         if isinstance(series.index, pd.DatetimeIndex):
@@ -316,13 +353,12 @@ def _build_debug_traces(feature_data, color_map, ext_label, dash_style,
                         feature_label='Feature'):
     """Build traces for a single debug extension.
 
-    Traces share the colour of the matching main-trace but use a different
-    dash pattern.  They start hidden (``visible: false``) and are revealed
-    by the per-plot *Debug* toggle button.  Only the first trace in the
-    group appears in the legend so it doesn't get cluttered.
+    Each trace gets its own legend entry showing the feature ID and the
+    derivative label, e.g. ``HRU 1 (z1) dC/dt chem``.  Traces share
+    the colour of the matching main-trace but use a different dash pattern.
+    They start visible and can be toggled with the Debug button.
     """
     traces = []
-    first = True
 
     for fid, series in feature_data.items():
         color = color_map.get(fid, '#888')
@@ -339,17 +375,16 @@ def _build_debug_traces(feature_data, color_map, ext_label, dash_style,
             'x': x_vals,
             'y': y_vals,
             'mode': 'lines',
-            'name': f'{ext_label}' if first else f'{ext_label}: {feature_label} {fid}',
-            'hovertemplate': (f'{ext_label}: {feature_label} {fid}<br>'
+            'name': f'{feature_label} {fid} {ext_label}',
+            'hovertemplate': (f'{feature_label} {fid} {ext_label}<br>'
                               f'%{{x}}<br>%{{y:.4g}}<extra></extra>'),
             'line': {'color': color, 'dash': dash_style, 'width': 1.5},
-            'legendgroup': f'debug_{ext_label}',
-            'showlegend': first,
-            'visible': False,
+            'legendgroup': f'debug_{ext_label}_{fid}',
+            'showlegend': True,
+            'visible': True,
         }
 
         traces.append(trace)
-        first = False
 
     return traces
 
@@ -583,12 +618,16 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);
   color:var(--text);line-height:1.65}
-html{scroll-behavior:smooth}
+html,.main{scroll-behavior:smooth}
 a{color:var(--primary);text-decoration:none}
-.layout{display:flex;min-height:100vh}
-.sidebar{width:220px;position:sticky;top:0;height:100vh;background:var(--glass);
-  backdrop-filter:blur(12px);border-right:1px solid var(--border);padding:1.2rem .8rem;
-  display:flex;flex-direction:column;z-index:10;overflow-y:auto;transition:background .3s,border .3s}
+.layout{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:220px;min-width:120px;max-width:50vw;height:100vh;background:var(--glass);
+  backdrop-filter:blur(12px);border-right:none;padding:1.2rem .8rem;
+  display:flex;flex-direction:column;z-index:10;overflow-y:auto;flex-shrink:0;
+  transition:background .3s;position:relative}
+.sidebar-handle{position:absolute;top:0;right:0;width:5px;height:100%;
+  cursor:col-resize;background:var(--border);transition:background .15s;z-index:11}
+.sidebar-handle:hover,.sidebar-handle.dragging{background:var(--primary);width:5px}
 .sidebar .logo{font-weight:700;font-size:1.1rem;margin-bottom:1.2rem;
   padding-left:.7rem;letter-spacing:-.3px;color:var(--text)}
 .sidebar .logo span{color:var(--primary)}
@@ -603,9 +642,10 @@ a{color:var(--primary);text-decoration:none}
   color:var(--text2);font-size:.78rem;cursor:pointer;transition:all .15s;font-family:inherit}
 .theme-btn:hover{border-color:var(--primary);color:var(--primary)}
 .theme-btn svg{width:16px;height:16px;flex-shrink:0}
-.main{flex:1;min-width:0;overflow-x:hidden}
+.main{flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;height:100vh}
+.top-fixed{position:sticky;top:0;z-index:20;flex-shrink:0}
 .header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
-  color:#fff;padding:3rem 2.5rem 2rem;position:relative;overflow:hidden}
+  color:#fff;padding:1.2rem 2.5rem 1rem;position:relative;overflow:hidden}
 .header::before{content:'';position:absolute;inset:0;
   background:radial-gradient(circle at 80% 20%,rgba(255,255,255,.08) 0%,transparent 60%)}
 .header h1{font-size:2rem;font-weight:700;letter-spacing:-.5px;position:relative}
@@ -636,6 +676,10 @@ a{color:var(--primary);text-decoration:none}
   font-size:.78rem;background:var(--surface);color:var(--text)}
 .tb-date{width:120px}
 .tb-sep{width:1px;height:18px;background:var(--border);margin:0 4px}
+.layer-bar{background:var(--surface);
+  border-bottom:1px solid var(--border);padding:6px 12px;display:flex;
+  align-items:center;gap:6px;font-size:.82rem;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.layer-bar label{font-weight:700;margin-right:4px;color:var(--text)}
 #mapContainer{width:100%;height:420px;border-radius:12px;z-index:1}
 .map-legend{position:absolute;bottom:12px;right:12px;background:var(--glass);
   backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:10px;
@@ -667,8 +711,9 @@ a{color:var(--primary);text-decoration:none}
             H.append(f'<a href="#{_cid}" style="font-weight:700;'
                      f'margin-top:.5rem;color:var(--text)">{_nc}</a>')
             _nav_prev_comp = _nc
+        _nav_label = p.get('nav_title', p['title'])
         H.append(f'<a href="#{p["id"]}" style="padding-left:1.2rem">'
-                 f'{p["title"]}</a>')
+                 f'{_nav_label}</a>')
     H.append('</nav>')
     H.append("""<div class="theme-toggle">
 <button class="theme-btn" onclick="toggleTheme()">
@@ -683,10 +728,14 @@ a{color:var(--primary);text-decoration:none}
 <span>Toggle Theme</span>
 </button>
 </div>""")
+    H.append('<div class="sidebar-handle" id="sidebarHandle"></div>')
     H.append('</aside>')
 
     # --- MAIN ---
     H.append('<div class="main">')
+
+    # --- FIXED TOP BAR (header + layer selector, always pinned) ---
+    H.append('<div class="top-fixed">')
 
     # Header
     mode_label = what2map.upper() if what2map else 'N/A'
@@ -708,6 +757,24 @@ a{color:var(--primary);text-decoration:none}
 </div>
 </div>""")
 
+    # Layer selector (only for SUMMA with multiple layers)
+    # Buttons are multi-select toggles — click to activate/deactivate layers.
+    if _has_layers:
+        _layer_btns = ''.join(
+            f'<button class="tb-btn{" active" if i == 0 else ""}" '
+            f'data-layer="{lyr}" onclick="_owqToggleLayer(this)">'
+            f'{lyr}</button>'
+            for i, lyr in enumerate(_all_layers_sorted)
+        )
+        H.append(
+            f'<div class="layer-bar" id="layerBar">'
+            f'<label>Layer:</label>'
+            f'{_layer_btns}'
+            f'</div>'
+        )
+
+    H.append('</div>')  # close top-fixed
+
     H.append('<div class="container">')
 
     # --- RIVER NETWORK MAP ---
@@ -715,26 +782,9 @@ a{color:var(--primary);text-decoration:none}
         _map_click_hint = ('Click an HRU polygon to isolate it in all plots below.'
                            if map_geom_type == 'polygon'
                            else 'Click a river segment to isolate it in all plots below.')
-        # Layer selector row (only for SUMMA with multiple layers)
-        _layer_selector_html = ''
-        if _has_layers:
-            _layer_btns = ''.join(
-                f'<button class="tb-btn{" active" if i == 0 else ""}" '
-                f'data-layer="{lyr}" onclick="_owqSelectLayer(\'{lyr}\',this)">'
-                f'{lyr}</button>'
-                for i, lyr in enumerate(_all_layers_sorted)
-            )
-            _layer_selector_html = (
-                f'<div class="plot-toolbar" style="justify-content:flex-start;'
-                f'padding:8px 12px;border-bottom:1px solid var(--border)">'
-                f'<label style="margin-right:6px;font-weight:600">Layer:</label>'
-                f'{_layer_btns}'
-                f'</div>'
-            )
         H.append(f"""<div class="section" id="rivermap">
 <h2>{_map_title}</h2>
 <div class="card" style="padding:0;overflow:hidden;position:relative">
-{_layer_selector_html}
 <div id="mapContainer"></div>
 <div class="map-legend" id="mapLegend"></div>
 </div>
@@ -756,12 +806,20 @@ a{color:var(--primary);text-decoration:none}
             H.append(f'<div style="margin-left:.5rem">')
             _prev_comp = _cur_comp
         div_id = f'{p["id"]}_div'
-        _debug_btn = ''
-        if p.get('has_debug'):
-            _debug_btn = (
-                f'  <span class="tb-sep"></span>'
-                f'  <button class="tb-btn" id="{div_id}_dbg" '
-                f'onclick="_owqToggleDebug(\'{div_id}\',this)">Debug</button>'
+        # Build second row: "Active:" + Concentrations toggle + per-derivative toggles
+        _trace_btns = (
+            f'  <button class="tb-btn active" '
+            f'data-deriv="conc" data-plot="{div_id}" '
+            f'onclick="_owqToggleDeriv(this)">'
+            f'Concentrations \u2713</button>'
+        )
+        for _dlbl in p.get('debug_labels', []):
+            _btn_id = f'{div_id}_dbg_{_dlbl.replace("/","").replace(" ","_")}'
+            _trace_btns += (
+                f'  <button class="tb-btn active" id="{_btn_id}" '
+                f'data-deriv="{_dlbl}" data-plot="{div_id}" '
+                f'onclick="_owqToggleDeriv(this)">'
+                f'{_dlbl} \u2713</button>'
             )
         H.append(f"""<div class="section" id="{p['id']}">
 <h2>{p['title']}</h2>
@@ -779,7 +837,10 @@ a{color:var(--primary);text-decoration:none}
   <button class="tb-btn" onclick="_owqApplyRange('{div_id}')">Apply</button>
   <button class="tb-btn" onclick="_owqAxisTight('{div_id}')">Tight</button>
   <button class="tb-btn" onclick="_owqResetRange('{div_id}',this)">Reset</button>
-{_debug_btn}
+</div>
+<div class="plot-toolbar" data-plot="{div_id}" style="padding-top:0">
+  <label style="font-weight:700">Active:</label>
+{_trace_btns}
 </div>
 <div class="card">
 <div id="{div_id}" style="width:100%;min-height:500px"></div>
@@ -795,11 +856,39 @@ a{color:var(--primary);text-decoration:none}
     H.append('</div>')  # layout
 
     # --- JAVASCRIPT ---
-    # Theme restore runs immediately (before deferred scripts)
+    # Theme restore + sidebar resize run immediately (before deferred scripts)
     H.append("""<script>
 (function(){
   var saved = localStorage.getItem('owq_theme');
   if(saved) document.documentElement.setAttribute('data-theme', saved);
+})();
+// Sidebar drag-to-resize
+(function(){
+  var handle=document.getElementById('sidebarHandle');
+  if(!handle) return;
+  var sidebar=handle.parentElement;
+  var dragging=false;
+  handle.addEventListener('mousedown',function(e){
+    e.preventDefault();
+    dragging=true;
+    handle.classList.add('dragging');
+    document.body.style.cursor='col-resize';
+    document.body.style.userSelect='none';
+  });
+  document.addEventListener('mousemove',function(e){
+    if(!dragging) return;
+    var newW=e.clientX;
+    if(newW<120) newW=120;
+    if(newW>window.innerWidth*0.5) newW=window.innerWidth*0.5;
+    sidebar.style.width=newW+'px';
+  });
+  document.addEventListener('mouseup',function(){
+    if(!dragging) return;
+    dragging=false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor='';
+    document.body.style.userSelect='';
+  });
 })();
 </script>""")
 
@@ -919,50 +1008,119 @@ window._owqAxisTight = function(plotId){
   if(xmin!==null&&xmax!==null){upd['xaxis.range']=[xmin,xmax];upd['xaxis.autorange']=false;}
   Plotly.relayout(plotId,upd);
 };
-window._owqToggleDebug = function(plotId, btn){
+// Per-trace-type toggle: "conc" for concentrations, or a derivative label
+window._owqToggleDeriv = function(btn){
+  var plotId=btn.getAttribute('data-plot');
+  var derivLabel=btn.getAttribute('data-deriv');
   var gd=document.getElementById(plotId);
   if(!gd||!gd.data) return;
   var show=!btn.classList.contains('active');
+  // Build display text (capitalize "conc" → "Concentrations")
+  var displayText=derivLabel==='conc'?'Concentrations':derivLabel;
+  btn.classList.toggle('active',show);
+  btn.textContent=show?displayText+' \u2713':displayText;
+  // Respect active layers
+  var active=window._owqActiveLayers||{};
+  var hasActive=Object.keys(active).length>0;
+  var newVis=[];
   var indices=[];
   gd.data.forEach(function(t,i){
-    if(t.legendgroup && t.legendgroup.indexOf('debug_')===0) indices.push(i);
+    var lg=t.legendgroup||'';
+    var isDebug=lg.indexOf('debug_')===0;
+    var isTarget=false;
+    if(derivLabel==='conc'){
+      // Concentrations = non-debug traces
+      isTarget=!isDebug;
+    }else{
+      // Match debug traces for this derivative
+      isTarget=lg.indexOf('debug_'+derivLabel+'_')===0;
+    }
+    if(isTarget){
+      indices.push(i);
+      if(!show){newVis.push(false);return;}
+      if(hasActive){
+        var m=(t.name||'').match(/\(z(\d+)\)/);
+        if(m && !active['z'+m[1]]){newVis.push(false);return;}
+      }
+      newVis.push(true);
+    }
   });
   if(!indices.length) return;
-  Plotly.restyle(gd,{visible:show},indices);
-  btn.classList.toggle('active',show);
-  btn.textContent=show?'Debug \\u2713':'Debug';
+  Plotly.restyle(gd,{visible:newVis},indices);
 };
 """)
 
-    # Legend click: single-click isolates a trace (others become 'legendonly',
-    # i.e. grayed out in legend but still clickable); click same trace again
-    # to restore all.  Also broadcasts to map via _owqSelectFeature.
+    # Legend click: click isolates a GRU/reach — all traces (main + debug)
+    # for that GRU within active layers are shown; other GRUs hidden.
+    # Click same GRU again to restore all (within active layers).
+    # Traces belonging to inactive layers always stay hidden.
     H.append("""
+function _owqExtractHru(tname){
+  // "1 (z1) dC/dt chem" → hru="1", layer="z1"
+  // "1 (z1)"            → hru="1", layer="z1"
+  // "1"                 → hru="1", layer=null
+  var m=tname.match(/^(.+?) \((z\d+)\)/);
+  if(m) return {hru:m[1],layer:m[2]};
+  return {hru:tname,layer:null};
+}
 function _owqLegendClick(gd){
   gd.on('plotly_legendclick',function(e){
-    var d=gd.data, n=d.length, ci=e.curveNumber;
+    var d=gd.data, ci=e.curveNumber;
     var om=_owqObsMeta[gd.id]||{};
-    // Count visible non-obs feature traces
-    var vis=d.map(function(t,idx){
-      if(om[idx]!==undefined) return false;
-      return t.visible===undefined||t.visible===true;
+    // Get active layers from the sticky bar (multi-select)
+    var active=window._owqActiveLayers||{};
+    var hasActive=Object.keys(active).length>0;
+    // Extract HRU from clicked trace
+    var clickedRaw=(d[ci].name||'').replace(_owqFeatureLabel,'');
+    var clickedInfo=_owqExtractHru(clickedRaw);
+    var clickedHru=clickedInfo.hru;
+    // Check if this HRU is already the only one shown (toggle off)
+    var visibleHrus={};
+    d.forEach(function(t,idx){
+      if(om[idx]!==undefined) return;
+      if(t.visible===false||t.visible==='legendonly') return;
+      var info=_owqExtractHru((t.name||'').replace(_owqFeatureLabel,''));
+      visibleHrus[info.hru]=true;
     });
-    var onlyMe=vis.filter(Boolean).length===1 && vis[ci];
-    var clickedFid=(d[ci].name||'').replace(_owqFeatureLabel,'');
+    var hruKeys=Object.keys(visibleHrus);
+    var onlyMe=hruKeys.length===1 && hruKeys[0]===clickedHru;
+    // Collect active trace-type toggles for this plot
+    var derivBtns=document.querySelectorAll('[data-plot="'+gd.id+'"][data-deriv]');
     var newVis=d.map(function(t,idx){
+      var lg=t.legendgroup||'';
+      var isDebug=lg.indexOf('debug_')===0;
+      // Observation traces: show if matching HRU
       if(om[idx]!==undefined){
         if(onlyMe) return true;
-        return om[idx]===clickedFid?true:false;
+        return om[idx]===clickedHru?true:false;
       }
-      return onlyMe?true:(idx===ci?true:'legendonly');
+      var tRaw=(t.name||'').replace(_owqFeatureLabel,'');
+      var info=_owqExtractHru(tRaw);
+      // Always hide traces from inactive layers
+      if(hasActive && info.layer && !active[info.layer]) return false;
+      // Check trace-type toggle (conc or derivative)
+      var typeOn=true;
+      if(isDebug){
+        typeOn=false;
+        derivBtns.forEach(function(b){
+          var d=b.getAttribute('data-deriv');
+          if(d!=='conc' && lg.indexOf('debug_'+d+'_')===0
+             && b.classList.contains('active')) typeOn=true;
+        });
+      }else{
+        var concBtn=document.querySelector('[data-plot="'+gd.id+'"][data-deriv="conc"]');
+        if(concBtn && !concBtn.classList.contains('active')) typeOn=false;
+      }
+      if(!typeOn) return false;
+      // If restoring all (onlyMe), show everything in active layers
+      if(onlyMe) return true;
+      // Otherwise isolate the clicked HRU
+      return info.hru===clickedHru?true:'legendonly';
     });
     Plotly.restyle(gd,{visible:newVis});
-    // Broadcast to map — extract HRU ID from layered fid
+    // Broadcast to map
     if(typeof _owqSelectFeature==='function'){
-      var mapFid=clickedFid;
-      var _lm=clickedFid.match(/^(.+?) \(z\d+\)$/);
-      if(_lm) mapFid=_lm[1];
-      _owqSelectFeature(onlyMe?null:mapFid);
+      _owqSelectFeature(onlyMe?null:clickedHru);
     }
     return false;   // prevent Plotly default toggle
   });
@@ -1211,81 +1369,41 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
         var gd=document.getElementById(ids[i++]);
         if(!gd||!gd.data){{ _nextRestyle(); return; }}
         var om=_owqObsMeta[gd.id]||{{}};
+        var active=window._owqActiveLayers||{{}};
+        var hasActiveLyr=Object.keys(active).length>0;
+        var derivBtns=document.querySelectorAll('[data-plot="'+gd.id+'"][data-deriv]');
         var newVis=gd.data.map(function(t,tidx){{
+          var isDebug=t.legendgroup&&t.legendgroup.indexOf('debug_')===0;
           if(om[tidx]!==undefined){{
             if(!fid) return true;
             return om[tidx]===fid?true:false;
           }}
-          var tfid=(t.name||'').replace(_owqFeatureLabel,'');
-          if(!fid) return true;
-          // For layered data, clicking HRU "1" should show "1 (z1)","1 (z2)",etc.
-          if(hasLayers){{
-            var parts=tfid.match(/^(.+?) \\(z\\d+\\)$/);
-            var hruPart=parts?parts[1]:tfid;
-            return hruPart===fid?true:'legendonly';
+          var tname=(t.name||'').replace(_owqFeatureLabel,'');
+          var info=_owqExtractHru(tname);
+          // Hide traces from inactive layers
+          if(hasActiveLyr && info.layer && !active[info.layer]) return false;
+          // Check trace-type toggle (conc or derivative)
+          var typeOn=true;
+          if(isDebug){{
+            var lg=t.legendgroup||'';
+            typeOn=false;
+            derivBtns.forEach(function(b){{
+              var dd=b.getAttribute('data-deriv');
+              if(dd!=='conc' && lg.indexOf('debug_'+dd+'_')===0
+                 && b.classList.contains('active')) typeOn=true;
+            }});
+          }}else{{
+            var concBtn=document.querySelector('[data-plot="'+gd.id+'"][data-deriv="conc"]');
+            if(concBtn && !concBtn.classList.contains('active')) typeOn=false;
           }}
-          return tfid===fid?true:'legendonly';
+          if(!typeOn) return false;
+          if(!fid) return true;
+          // For layered data, clicking HRU "1" shows all active-layer traces
+          return info.hru===fid?true:'legendonly';
         }});
         Plotly.restyle(gd,{{visible:newVis}}).then(_nextRestyle);
       }}
       _nextRestyle();
-    }});
-  }};
-
-  // Layer selector (SUMMA multi-layer support)
-  window._owqSelectLayer=function(layer,btn){{
-    if(!hasLayers) return;
-    currentLayer=layer;
-    // Update button active states
-    var toolbar=btn?btn.parentElement:null;
-    if(toolbar){{
-      toolbar.querySelectorAll('.tb-btn').forEach(function(b){{
-        b.classList.remove('active');
-      }});
-      if(btn) btn.classList.add('active');
-    }}
-    // Show/hide plot traces based on selected layer.
-    // This applies to ALL traces — main AND debug.
-    // For debug traces, extract the fid from the hovertemplate
-    // (format: "EXT: LABEL FID<br>...").
-    window._owqPlotIds.forEach(function(id){{
-      var gd=document.getElementById(id);
-      if(!gd||!gd.data) return;
-      // Check if debug is currently shown (any debug trace visible)
-      var debugBtn=document.getElementById(id+'_dbg');
-      var debugOn=debugBtn&&debugBtn.classList.contains('active');
-      var newVis=gd.data.map(function(t){{
-        var isDebug=t.legendgroup&&t.legendgroup.indexOf('debug_')===0;
-        // Extract fid: from name for main traces, from hovertemplate for debug
-        var tfid='';
-        if(isDebug){{
-          var ht=t.hovertemplate||'';
-          var idx=ht.indexOf(_owqFeatureLabel);
-          if(idx>=0){{
-            var rest=ht.substring(idx+_owqFeatureLabel.length);
-            var br=rest.indexOf('<br>');
-            tfid=br>=0?rest.substring(0,br):rest;
-          }}
-        }}else{{
-          tfid=(t.name||'').replace(_owqFeatureLabel,'');
-        }}
-        // If no layer selected (All Layers), restore visibility
-        if(!layer){{
-          if(isDebug) return debugOn?true:false;
-          return true;
-        }}
-        // Check if this trace's fid contains the selected layer "(z1)" etc.
-        var m=tfid.match(/\\(z(\\d+)\\)$/);
-        if(m){{
-          var matches=('z'+m[1])===layer;
-          if(isDebug) return matches&&debugOn?true:false;
-          return matches?true:'legendonly';
-        }}
-        // No layer suffix — always show (non-layered data)
-        if(isDebug) return debugOn?true:false;
-        return true;
-      }});
-      Plotly.restyle(gd,{{visible:newVis}});
     }});
   }};
 
@@ -1307,9 +1425,118 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
 window._owqSelectFeature = window._owqSelectFeature || function(){};
 """)
 
+    # --- LAYER SELECTOR LOGIC (always defined when layers exist) ---
+    # Supports multi-select: click toggles each layer on/off.
+    H.append(f"""
+// Layer selector (SUMMA multi-layer support — multi-select)
+(function(){{
+  var hasLayers={json.dumps(_has_layers)};
+  var allLayers={json.dumps(_all_layers_sorted)};
+
+  // Returns the set of currently active layers from the sticky bar buttons
+  function _getActiveLayers(){{
+    var active={{}};
+    var bar=document.getElementById('layerBar');
+    if(!bar) return active;
+    bar.querySelectorAll('.tb-btn.active').forEach(function(b){{
+      var lyr=b.getAttribute('data-layer');
+      if(lyr) active[lyr]=true;
+    }});
+    return active;
+  }}
+
+  // Toggle a layer button and refresh all plots
+  window._owqToggleLayer=function(btn){{
+    if(!hasLayers) return;
+    btn.classList.toggle('active');
+    // Ensure at least one layer stays active
+    var bar=document.getElementById('layerBar');
+    var anyActive=bar&&bar.querySelector('.tb-btn.active');
+    if(!anyActive){{ btn.classList.add('active'); }}
+    _owqApplyLayers();
+  }};
+
+  // Also keep the old name so auto-select on load still works
+  window._owqSelectLayer=function(layer,btn){{
+    if(btn) btn.classList.add('active');
+    _owqApplyLayers();
+  }};
+
+  // Core: show/hide traces based on all active layers
+  function _owqApplyLayers(){{
+    var active=_getActiveLayers();
+    var activeList=Object.keys(active);
+    window._owqActiveLayers=active;  // expose for other functions
+    window._owqPlotIds.forEach(function(id){{
+      var gd=document.getElementById(id);
+      if(!gd||!gd.data) return;
+      var plotHasLayer=false;
+      var plotIsLayered=false;
+      var btns=document.querySelectorAll('[data-plot="'+id+'"][data-deriv]');
+      var newVis=gd.data.map(function(t){{
+        var lg=t.legendgroup||'';
+        var isDebug=lg.indexOf('debug_')===0;
+        var tname=t.name||'';
+        // Check if this trace type is toggled on
+        var typeOn=true;
+        if(isDebug){{
+          typeOn=false;
+          btns.forEach(function(b){{
+            var d=b.getAttribute('data-deriv');
+            if(d!=='conc' && lg.indexOf('debug_'+d+'_')===0
+               && b.classList.contains('active')) typeOn=true;
+          }});
+        }}else{{
+          // Main (concentration) traces: check "conc" button
+          var concBtn=document.querySelector('[data-plot="'+id+'"][data-deriv="conc"]');
+          if(concBtn && !concBtn.classList.contains('active')) typeOn=false;
+        }}
+        // Check if trace name contains a layer marker "(z#)"
+        var m=tname.match(/\\(z(\\d+)\\)/);
+        if(m){{
+          plotIsLayered=true;
+          var traceLayer='z'+m[1];
+          var matches=active[traceLayer]===true;
+          if(matches) plotHasLayer=true;
+          return matches&&typeOn?true:false;
+        }}
+        // Non-layered trace
+        return typeOn?true:false;
+      }});
+      Plotly.restyle(gd,{{visible:newVis}});
+      // Hide entire plot section if it has layered data but none for active layers
+      var section=gd.closest('.section');
+      if(section){{
+        if(plotIsLayered&&!plotHasLayer){{
+          section.style.display='none';
+        }}else{{
+          section.style.display='';
+        }}
+      }}
+    }});
+    // Update sidebar: hide nav links for hidden sections
+    document.querySelectorAll('.sidebar nav a').forEach(function(a){{
+      var href=a.getAttribute('href');
+      if(!href||!href.startsWith('#')) return;
+      var sec=document.querySelector(href);
+      if(!sec) return;
+      if(sec.style.display==='none'){{
+        a.style.display='none';
+      }}else{{
+        a.style.display='';
+      }}
+    }});
+  }}
+  window._owqApplyLayers=_owqApplyLayers;
+}})();
+""")
+
     # Sidebar active state on scroll (throttled) + click-to-scroll
+    # NOTE: .main is the scroll container (overflow-y:auto), not window.
     H.append("""
 (function(){
+  var mainEl = document.querySelector('.main');
+  if(!mainEl) return;
   var links = document.querySelectorAll('.sidebar nav a');
   // Cache section elements once
   var sectionMap = [];
@@ -1320,25 +1547,37 @@ window._owqSelectFeature = window._owqSelectFeature || function(){};
     if(sec) sectionMap.push({link:link, sec:sec});
   });
 
-  // Click handler: smooth-scroll to section
+  // Click handler: smooth-scroll to section inside .main
   links.forEach(function(link){
     link.addEventListener('click', function(e){
       var id = link.getAttribute('href');
       if(!id||!id.startsWith('#')) return;
       e.preventDefault();
       var target = document.querySelector(id);
-      if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+      if(target){
+        var topFixed = document.querySelector('.top-fixed');
+        var offset = topFixed ? topFixed.offsetHeight + 10 : 0;
+        var y = target.offsetTop - offset;
+        mainEl.scrollTo({top: y, behavior: 'smooth'});
+      }
     });
   });
 
-  // Throttled scroll listener for active state
+  // Throttled scroll listener for active state (on .main, not window)
   var _scrollTick = false;
-  window.addEventListener('scroll', function(){
+  mainEl.addEventListener('scroll', function(){
     if(_scrollTick) return;
     _scrollTick = true;
     requestAnimationFrame(function(){
-      var fromTop = window.scrollY + 80;
+      var topFixed = document.querySelector('.top-fixed');
+      var fixedH = topFixed ? topFixed.offsetHeight : 0;
+      var fromTop = mainEl.scrollTop + fixedH + 20;
       sectionMap.forEach(function(item){
+        // Skip hidden sections (filtered out by layer selector)
+        if(item.sec.style.display==='none'||item.link.style.display==='none'){
+          item.link.classList.remove('active');
+          return;
+        }
         var t = item.sec.offsetTop, h = item.sec.offsetHeight;
         if(t <= fromTop && t + h > fromTop){
           item.link.classList.add('active');
@@ -1394,7 +1633,8 @@ def Plot_h5_driver(what2map=None,
                    mapping_key='SegId',
                    feature_label=None,
                    observation_dir=None,
-                   observation_csv=None):
+                   observation_csv=None,
+                   separator=' | '):
     """
     Generate interactive HTML time-series plots (Plotly.js).
 
@@ -1431,9 +1671,12 @@ def Plot_h5_driver(what2map=None,
     sediment_as_well : bool
         If True, also plot sediment transport results.
     combine_features : bool
-        Kept for backward compatibility (ignored — features are always combined).
+        Kept for backward compatibility (ignored - features are always combined).
     figsize : tuple
-        Kept for backward compatibility (ignored — Plotly charts are responsive).
+        Kept for backward compatibility (ignored - Plotly charts are responsive).
+    separator : str
+        Separator between compartment and species names in plot titles.
+        Default is ' | '. Examples: ' | ', ' - ', ' :: '.
 
     Returns
     -------
@@ -1569,7 +1812,7 @@ def Plot_h5_driver(what2map=None,
                           if len(time_index) > 0 else '')
             plots.append({
                 'id': plot_id,
-                'title': f'{hostmodel.upper()} — {hydromodel_var2print}',
+                'title': f'{hostmodel.upper()}{separator}{hydromodel_var2print}',
                 'traces': traces,
                 'ylabel': f'{hydromodel_var2print} ({units})',
                 'xtype': 'date' if isinstance(time_index, pd.DatetimeIndex) else 'linear',
@@ -1696,6 +1939,17 @@ def Plot_h5_driver(what2map=None,
         if debugmode:
             print(f"  Debug mode ON — debug traces overlaid on each plot")
 
+        # ── Pre-pass: collect all fids to build a global colour map ──
+        _all_fids_for_colors = set()
+        for _pk in openwq_results.keys():
+            for _pext, _pdata_list in openwq_results[_pk]:
+                if _pext == 'main' and _pdata_list and len(_pdata_list) > 0:
+                    _, _ptt, _ = _pdata_list[0]
+                    _pfd, _, _ = _extract_features(_ptt, mapping_key_values)
+                    _all_fids_for_colors.update(_pfd.keys())
+        _global_color_map = _build_global_color_map(_all_fids_for_colors)
+        print(f"  Global colour map: {len(_global_color_map)} fids")
+
         # ── Loop: compartment → species ─────────────────────────────
         for comp in _compartments_seen:
 
@@ -1756,12 +2010,13 @@ def Plot_h5_driver(what2map=None,
                     if layers_found:
                         print(f"  Layers detected: {sorted(layers_found)}")
 
-                    # Build main traces with explicit colours
+                    # Build main traces with global colours
                     all_traces, color_map = _build_traces_with_colors(
-                        main_fd, feature_label=feature_label)
+                        main_fd, feature_label=feature_label,
+                        global_color_map=_global_color_map)
 
                     # ── Overlay debug extensions ──────────────────
-                    _has_debug_traces = False
+                    _debug_labels_found = []  # list of labels present
                     if debugmode:
                         for dbg_ext in file_extensions[1:]:
                             meta = _DEBUG_EXT_META.get(dbg_ext)
@@ -1790,7 +2045,7 @@ def Plot_h5_driver(what2map=None,
                                 meta['label'], meta['dash'],
                                 feature_label=feature_label)
                             all_traces.extend(dbg_traces)
-                            _has_debug_traces = True
+                            _debug_labels_found.append(meta['label'])
                             print(f"  [debug] {meta['label']}: "
                                   f"{len(dbg_fd)} feature(s)")
 
@@ -1803,7 +2058,8 @@ def Plot_h5_driver(what2map=None,
                         if len(main_ttdata.index) > 0 else '')
                     plots.append({
                         'id': plot_id,
-                        'title': f'{comp} — {chem_name}',
+                        'title': f'{comp}{separator}{chem_name}',
+                        'nav_title': chem_name,
                         'traces': all_traces,
                         'ylabel': f'{chem_name} ({units})',
                         'xtype': ('date'
@@ -1814,11 +2070,12 @@ def Plot_h5_driver(what2map=None,
                                     f' | {time_range}'),
                         'species': spec,
                         'compartment': comp,
-                        'has_debug': _has_debug_traces,
+                        'debug_labels': _debug_labels_found,
                     })
 
-                    print(f"  ✓ Plot: {comp} — {chem_name}"
-                          + (" (+debug)" if _has_debug_traces else ""))
+                    print(f"  ✓ Plot: {comp}{separator}{chem_name}"
+                          + (f" (+{', '.join(_debug_labels_found)})"
+                             if _debug_labels_found else ""))
 
                 except Exception as e:
                     print(f"  ✗ Error: {comp}/{spec}: {e}")

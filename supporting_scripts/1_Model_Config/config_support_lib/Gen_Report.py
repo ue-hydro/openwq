@@ -1180,6 +1180,7 @@ def generate_simulation_report(
         bgc_template_path=None,
         openwq_h5_mapping_key=None,
         seasonal_loads_method=None,
+        plot_separator=' | ',
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -2726,6 +2727,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    basin_mapping_key="{_basin_mapping_key}",\n'
             f'    mapping_key="{_shp_key}",\n'
             f'    feature_label="{_feature_label}",\n'
+            f'    separator="{plot_separator}",\n'
             f'{_obs_plot_param}'
             f')\n'
             f'\n'
@@ -3087,6 +3089,7 @@ def generate_report(
         bgc_template_path=None,
         openwq_h5_mapping_key=None,
         seasonal_loads_method=None,
+        plot_separator=' | ',
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -3141,6 +3144,7 @@ def generate_report(
             bgc_template_path=bgc_template_path,
             openwq_h5_mapping_key=openwq_h5_mapping_key,
             seasonal_loads_method=seasonal_loads_method,
+            plot_separator=plot_separator,
         )
 
         print(f"  Report saved: {report_path}")
