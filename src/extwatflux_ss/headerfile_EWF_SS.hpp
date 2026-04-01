@@ -196,6 +196,7 @@ class OpenWQ_extwatflux_ss{
 
     // Lookup cell_id (e.g., reach_id, hru_id) and return corresponding ix, iy, iz indices
     // Returns true if cell_id was found and indices were set, false otherwise
+    // partial_match: set to true if only a prefix match was found (ix set, iy/iz not definitive)
     bool lookupCellId_SS(
         OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
         OpenWQ_wqconfig& OpenWQ_wqconfig,
@@ -205,7 +206,8 @@ class OpenWQ_extwatflux_ss{
         int& ix, int& iy, int& iz,
         unsigned int& file_i,
         unsigned int& struc_i,
-        unsigned int& row_i);
+        unsigned int& row_i,
+        bool& partial_match);
 
     void RemoveLoadBeforeSimStart_jsonAscii(
         OpenWQ_wqconfig& OpenWQ_wqconfig,
