@@ -986,7 +986,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_openwq")
                         ${NETCDF_LIB_PATH}
                         ${PIO_ROOT}/lib/libgptl.a
                         ${PIO_ROOT}/lib/libpiof.a
-                        ${PIO_ROOT}/lib/libpioc.a 
+                        ${PIO_ROOT}/lib/libpioc.a
+                        -lpnetcdf
                         ${LAPACK_LIBRARIES}
                         ${netCDF_LIBRARIES}
                         OPENWQ_OBJ)
@@ -1272,7 +1273,8 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
                         ${NETCDF_LIB_PATH}
                         ${PIO_ROOT}/lib/libgptl.a
                         ${PIO_ROOT}/lib/libpiof.a
-                        ${PIO_ROOT}/lib/libpioc.a 
+                        ${PIO_ROOT}/lib/libpioc.a
+                        -lpnetcdf
                         ${LAPACK_LIBRARIES}
                         ${netCDF_LIBRARIES}
                         CSLM_OBJ
