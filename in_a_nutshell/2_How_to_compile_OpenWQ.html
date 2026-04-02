@@ -714,8 +714,12 @@ cmake -DHOST_MODEL_TARGET=mizuroute_openwq \
 cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq \
       -DCMAKE_BUILD_TYPE=Release .
 
-<span class="comment"># Then compile (requires at least 16 GB RAM):</span>
-make -j2
+<span class="comment"># Then compile:</span>
+<span class="comment"># With 8 GB container RAM: use make -j1 (sequential, slower but safe)</span>
+<span class="comment"># With 16 GB container RAM: use make -j2 (parallel, faster)</span>
+make -j1
+<span class="comment"># Note: if you increased container RAM for compilation, consider</span>
+<span class="comment"># reducing it afterwards to avoid competing with the host machine.</span>
 <span class="comment"># Executable created in .../openwq/openwq/bin/</span>
                         </pre>
                     </div>
@@ -865,8 +869,12 @@ cmake -DHOST_MODEL_TARGET=mizuroute_openwq \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_PREFIX_PATH="/usr/local/phreeqcrm;/usr/local/sundials" .
 
-<span class="comment"># Then compile (requires at least 16 GB RAM):</span>
-make -j2
+<span class="comment"># Then compile:</span>
+<span class="comment"># With 8 GB container RAM: use make -j1 (sequential, slower but safe)</span>
+<span class="comment"># With 16 GB container RAM: use make -j2 (parallel, faster)</span>
+make -j1
+<span class="comment"># Note: if you increased container RAM for compilation, consider</span>
+<span class="comment"># reducing it afterwards to avoid competing with the host machine.</span>
 <span class="comment"># Executable created in .../openwq/openwq/bin/</span>
                         </pre>
                         <div class="highlight-box success" style="margin-top: 10px;">
@@ -936,11 +944,15 @@ cmake .. -DBUILD_FORTRAN_MODULE_INTERFACE=ON \
          -DCMAKE_INSTALL_PREFIX=/usr/local/sundials
 make -j4 && sudo make install
 
-<span class="comment"># 4. Compile OpenWQ (requires at least 16 GB RAM)</span>
+<span class="comment"># 4. Compile OpenWQ</span>
 cd openwq
 cmake -DHOST_MODEL_TARGET=summa_openwq \
       -DCMAKE_BUILD_TYPE=Release .
-make -j2
+<span class="comment"># With 8 GB container RAM: use make -j1 (sequential, slower but safe)</span>
+<span class="comment"># With 16 GB container RAM: use make -j2 (parallel, faster)</span>
+make -j1
+<span class="comment"># Note: if you increased container RAM for compilation, consider</span>
+<span class="comment"># reducing it afterwards to avoid competing with the host machine.</span>
 <span class="comment"># Executable in bin/ folder</span>
                         </pre>
                     </div>
