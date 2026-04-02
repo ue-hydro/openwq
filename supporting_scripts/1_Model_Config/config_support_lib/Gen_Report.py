@@ -2651,7 +2651,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 f'        "mapping_key": "{_h5_mapping_key}"\n'
                 f'    }},\n'
                 f'    output_format="HDF5",\n'
-                f'    debugmode=False,\n'
+                f'    debugmode=True,\n'
                 f'    cmp=[{_cmp_str}],\n'
                 f'    space_elem="all",\n'
                 f'    chemSpec=[{cs}],\n'
@@ -2752,7 +2752,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'
             'border:1px solid var(--border);border-radius:6px;'
             'background:var(--surface);transition:border-color .15s">'
-            '<input type="checkbox" id="debugModeCb"> '
+            '<input type="checkbox" id="debugModeCb" checked> '
             'Include debug outputs</label>')
         H.append('</div>')
 
@@ -2888,7 +2888,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    mapping_key_values="all",\n'
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
-            f'    debugmode=False,\n'
+            f'    debugmode=True,\n'
             f'    output_path="{_out_all_html_safe}",\n'
             f'    river_network_shp="{_shp_path_safe}",\n'
             f'    basin_shapefile="{_basin_shp_path_safe}",\n'
