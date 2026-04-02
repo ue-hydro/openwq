@@ -20,6 +20,7 @@
 
 #include <tuple>
 #include <vector>
+#include <algorithm>
 #include <time.h>
 #include "global/OpenWQ_json.hpp"
 using json = nlohmann::json;

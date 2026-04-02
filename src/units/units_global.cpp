@@ -93,6 +93,9 @@ bool OpenWQ_units::Calc_Unit_Multipliers(
         // (numerator and denominator)
         for (m=0;m<2;m++){
 
+            // Convert to uppercase for case-insensitive comparison
+            std::transform(units[m].begin(), units[m].end(), units[m].begin(), ::toupper);
+
             // Reset flags
             mass_unit_flag = false;                  // flag to note if unit of mass
             volume_unit_flag = false;                // flag to note if unit of volume

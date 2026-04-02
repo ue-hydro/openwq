@@ -41,7 +41,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_driver(
 
 
     // Get number of sub-structures of SS/EWF data
-    num_srcfiles = EWF_SS_json.size(); 
+    num_srcfiles = EWF_SS_json.size();
 
     /* ########################################
     // Loop over file (saved as sub-structure of SS/EWF data)
@@ -49,7 +49,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_driver(
 
     for (unsigned int ssf=0;ssf<num_srcfiles;ssf++){
         
-        // Get number of loads in each sub-structure 
+        // Get number of loads in each sub-structure
         // (corresponding to different SinkSource/ExtWatFlux json files)
         num_srchem = EWF_SS_json[std::to_string(ssf+1)].size();
         
@@ -217,7 +217,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
     // Needs try-catch because there may be other irrelevant entries e.g. COMMENTS
     try{
         Element_name = EWF_SS_json_sub[main_keyName];
-    }catch(...){   
+    }catch(...){
         return;
     }
 
@@ -275,6 +275,8 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
         EWF_SS_json_sub, "UNITS",
         errorMsgIdentifier,
         true);
+    std::transform(ss_units_json_mass_base.begin(), ss_units_json_mass_base.end(),
+                  ss_units_json_mass_base.begin(), ::toupper);
 
     if (foundflag == false) return; // skip if chem not found
 
@@ -294,6 +296,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
 
     // Set type flag (sink or source)
     // if EWF, then Type has been defined above as "SOURCE"
+    std::transform(Type.begin(), Type.end(), Type.begin(), ::toupper);
     if (Type.compare("SOURCE") == 0){ sinksource_ssi = 0;
     }else if (Type.compare("SINK") == 0){ sinksource_ssi = 1;
     }else{return;} // skip if Type is unknown
