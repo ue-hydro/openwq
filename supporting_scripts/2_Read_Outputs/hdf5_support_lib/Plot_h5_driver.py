@@ -392,7 +392,9 @@ def _build_debug_traces(feature_data, color_map, ext_label, dash_style,
 def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 map_center=None, map_bounds=None, mapping_key='SegId',
                 observation_data=None, feature_label=None,
-                map_geom_type='line'):
+                map_geom_type='line', station_locations=None,
+                station_to_feature=None, separator=' | ',
+                basin_geojson=None, river_line_geojson=None):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -404,7 +406,8 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
     hostmodel : str
         Host model name (e.g. 'mizuroute').
     river_geojson : dict or None
-        GeoJSON FeatureCollection (river lines or basin polygons).
+        GeoJSON FeatureCollection for the PRIMARY interactive layer
+        (the one whose features match plot data and are clickable).
     map_center : list or None
         [lat, lng] for the initial map center.
     map_bounds : tuple or None
@@ -416,6 +419,13 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
         If None, defaults to mapping_key.
     map_geom_type : str
         'line' for river segments, 'polygon' for basin/HRU areas.
+        Describes the geometry type of the PRIMARY interactive layer.
+    basin_geojson : dict or None
+        GeoJSON FeatureCollection for basin/catchment polygons.
+        Always rendered at the back. Interactive if map_geom_type=='polygon'.
+    river_line_geojson : dict or None
+        GeoJSON FeatureCollection for river network lines.
+        Rendered on top of basins. Interactive if map_geom_type=='line'.
 
     Returns
     -------
@@ -514,6 +524,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
 
     # --- Merge observation traces (if any) into each plot ---
     _obs_meta = {}   # {div_id: {trace_index_str: feature_id}}
+    _has_obs = set()  # div_ids that have observation traces
     if observation_data:
         for p in plots:
             plot_obs = observation_data.get(p['id'], [])
@@ -522,6 +533,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
             div_id = f'{p["id"]}_div'
             p_meta = {}
             base_idx = len(p['traces'])
+            _species_name = p.get('species', '')
             for i, od in enumerate(plot_obs):
                 fid = str(od['feature_id'])
                 color = _fid_color.get(fid, '#888')
@@ -532,12 +544,13 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                     'name': f'Obs: {od["station_id"]}',
                     'marker': {
                         'color': color,
-                        'size': 7,
+                        'size': 5,
                         'symbol': 'circle',
-                        'line': {'width': 1, 'color': '#333'},
+                        'line': {'width': 0.5, 'color': '#333'},
                     },
                     'hovertemplate': (
                         f'Station {od["station_id"]}<br>'
+                        f'Species: {_species_name}<br>'
                         f'%{{x}}<br>%{{y:.4g}}'
                         f'<extra>\u2192 {feature_label} {fid}</extra>'
                     ),
@@ -547,6 +560,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 p_meta[str(base_idx + i)] = fid
             if p_meta:
                 _obs_meta[div_id] = p_meta
+                _has_obs.add(div_id)
 
     # --- Compute summary stats for header KPI boxes ---
     _species_list = []
@@ -681,16 +695,21 @@ a{color:var(--primary);text-decoration:none}
   align-items:center;gap:6px;font-size:.82rem;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .layer-bar label{font-weight:700;margin-right:4px;color:var(--text)}
 #mapContainer{width:100%;height:420px;border-radius:12px;z-index:1}
-.map-legend{position:absolute;bottom:12px;right:12px;background:var(--glass);
-  backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:10px;
-  padding:.6rem .8rem;font-size:.75rem;max-height:300px;overflow-y:auto;z-index:800;
-  color:var(--text)}
+.map-legend{background:var(--glass);
+  backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:8px;
+  padding:.5rem .7rem;font-size:.72rem;overflow-y:auto;
+  color:var(--text);min-width:90px}
 .map-legend .ml-title{font-weight:600;margin-bottom:.3rem;font-size:.8rem}
 .map-legend .ml-item{display:flex;align-items:center;gap:.4rem;padding:2px 4px;
   border-radius:4px;cursor:pointer;transition:background .15s}
 .map-legend .ml-item:hover{background:rgba(0,102,204,.08)}
-.map-legend .ml-item.active{background:rgba(0,102,204,.15);font-weight:600}
+.map-legend .ml-item.active{background:rgba(0,102,204,.18);font-weight:600;border-left:3px solid var(--primary,#0066cc);padding-left:3px}
+.map-legend.has-selection .ml-item:not(.active){opacity:.35}
 .map-legend .ml-swatch{width:14px;height:4px;border-radius:2px;flex-shrink:0}
+.map-legend .ml-toggles{display:flex;flex-direction:column;gap:2px;margin-bottom:2px}
+.map-legend .ml-toggle{display:flex;align-items:center;gap:4px;font-size:.72rem;cursor:pointer}
+.map-legend .ml-toggle input{margin:0;cursor:pointer}
+.map-legend .ml-toggle label{cursor:pointer;user-select:none}
 </style>
 </head>
 <body>""")
@@ -757,21 +776,7 @@ a{color:var(--primary);text-decoration:none}
 </div>
 </div>""")
 
-    # Layer selector (only for SUMMA with multiple layers)
-    # Buttons are multi-select toggles — click to activate/deactivate layers.
-    if _has_layers:
-        _layer_btns = ''.join(
-            f'<button class="tb-btn{" active" if i == 0 else ""}" '
-            f'data-layer="{lyr}" onclick="_owqToggleLayer(this)">'
-            f'{lyr}</button>'
-            for i, lyr in enumerate(_all_layers_sorted)
-        )
-        H.append(
-            f'<div class="layer-bar" id="layerBar">'
-            f'<label>Layer:</label>'
-            f'{_layer_btns}'
-            f'</div>'
-        )
+    # Layer selector removed from top bar — now per-plot (see plot toolbar below)
 
     H.append('</div>')  # close top-fixed
 
@@ -779,14 +784,12 @@ a{color:var(--primary);text-decoration:none}
 
     # --- RIVER NETWORK MAP ---
     if river_geojson:
-        _map_click_hint = ('Click an HRU polygon to isolate it in all plots below.'
-                           if map_geom_type == 'polygon'
-                           else 'Click a river segment to isolate it in all plots below.')
+        _feat_name = feature_label or mapping_key or 'feature'
+        _map_click_hint = f'Click a {_feat_name} to select/deselect it. Selected features are isolated in all plots below.'
         H.append(f"""<div class="section" id="rivermap">
 <h2>{_map_title}</h2>
 <div class="card" style="padding:0;overflow:hidden;position:relative">
 <div id="mapContainer"></div>
-<div class="map-legend" id="mapLegend"></div>
 </div>
 <p class="plot-caption" style="margin-top:.4rem;font-size:.78rem;color:var(--text2)">
 {_map_click_hint}</p>
@@ -821,8 +824,53 @@ a{color:var(--primary);text-decoration:none}
                 f'onclick="_owqToggleDeriv(this)">'
                 f'{_dlbl} \u2713</button>'
             )
+        # Observation toggle button (only shown when obs data exists for this plot)
+        if div_id in _has_obs:
+            _trace_btns += (
+                f'  <span class="tb-sep"></span>'
+                f'  <button class="tb-btn active" '
+                f'data-obs="1" data-plot="{div_id}" '
+                f'onclick="_owqToggleObs(this)">'
+                f'Observations \u2713</button>'
+            )
+        # Layer range selector (per-plot, only when THIS plot has layers)
+        _layer_row = ''
+        _plot_layers = set()
+        for _t in p['traces']:
+            _tm = _LAYER_RE.match(
+                (_t.get('name', '').replace(_label_prefix, '')))
+            if _tm:
+                _plot_layers.add(_tm.group(2))
+        _plot_layers_sorted = sorted(
+            _plot_layers,
+            key=lambda x: int(x[1:]) if x[1:].isdigit() else x)
+        if len(_plot_layers_sorted) > 1:
+            _opts = ''.join(
+                f'<option value="{lyr}">{lyr}</option>'
+                for lyr in _plot_layers_sorted
+            )
+            _layer_row = (
+                f'<div class="plot-toolbar" data-plot="{div_id}" style="padding-top:0">'
+                f'  <label style="font-weight:700">Layers:</label>'
+                f'  <select class="tb-input" id="{div_id}_lyrFrom" '
+                f'style="width:auto;min-width:60px;padding:2px 4px" '
+                f'onchange="_owqApplyLayerRange(\'{div_id}\')">{_opts}</select>'
+                f'  <label style="margin:0 2px">to</label>'
+                f'  <select class="tb-input" id="{div_id}_lyrTo" '
+                f'style="width:auto;min-width:60px;padding:2px 4px" '
+                f'onchange="_owqApplyLayerRange(\'{div_id}\')">{_opts}</select>'
+                f'  <button class="tb-btn" '
+                f'onclick="_owqLayerAll(\'{div_id}\')">All</button>'
+                f'</div>'
+            )
+        # Display title: use short species name when inside a compartment group
+        _display_title = p['title']
+        _nav_t = p.get('nav_title', '')
+        if _nav_t and _cur_comp:
+            _display_title = (f'<span style="color:var(--primary);font-weight:400">'
+                              f'{separator.strip()}</span> {_nav_t}')
         H.append(f"""<div class="section" id="{p['id']}">
-<h2>{p['title']}</h2>
+<h2>{_display_title}</h2>
 <div class="plot-toolbar" data-plot="{div_id}">
   <button class="tb-btn" onclick="_owqToggleLog('{div_id}',this)">Y Log</button>
   <span class="tb-sep"></span>
@@ -842,6 +890,7 @@ a{color:var(--primary);text-decoration:none}
   <label style="font-weight:700">Active:</label>
 {_trace_btns}
 </div>
+{_layer_row}
 <div class="card">
 <div id="{div_id}" style="width:100%;min-height:500px"></div>
 <p class="plot-caption">{p.get('caption', '')}</p>
@@ -937,6 +986,26 @@ window._owqPlotIds = [];
 function _owqRegister(id){ window._owqPlotIds.push(id); }
 var _owqObsMeta = """ + json.dumps(_obs_meta) + """;
 
+// Toggle observation traces on/off for a specific plot
+window._owqToggleObs = function(btn){
+  var plotId = btn.getAttribute('data-plot');
+  var isActive = btn.classList.toggle('active');
+  btn.textContent = isActive ? 'Observations \\u2713' : 'Observations';
+  var gd = document.getElementById(plotId);
+  if(!gd || !gd.data) return;
+  var om = _owqObsMeta[plotId] || {};
+  var selFids = window._owqSelectedFids || {};
+  var hasSel = Object.keys(selFids).length > 0;
+  var newVis = gd.data.map(function(t, idx){
+    if(om[idx] !== undefined){
+      if(!isActive) return false;
+      if(hasSel) return selFids[om[idx]] ? true : false;
+      return true;
+    }
+    return t.visible === undefined ? true : t.visible;
+  });
+  Plotly.restyle(gd, {visible: newVis});
+};
 
 function _owqRelayoutAll(){
   var t=document.documentElement.getAttribute('data-theme')==='dark';
@@ -950,6 +1019,22 @@ function _owqRelayoutAll(){
     });}catch(e){}
   });
 }
+""")
+
+    # Helper: get active layers for a specific plot (reads its range dropdowns)
+    H.append(f"""
+var _owqAllLayers={json.dumps(_all_layers_sorted)};
+function _owqGetPlotLayers(plotId){{
+  var active={{}};
+  var fromEl=document.getElementById(plotId+'_lyrFrom');
+  var toEl=document.getElementById(plotId+'_lyrTo');
+  if(!fromEl||!toEl) return active;
+  function _idx(n){{ var m=n.match(/z(\\d+)/); return m?parseInt(m[1],10):0; }}
+  var fi=_idx(fromEl.value), ti=_idx(toEl.value);
+  var lo=Math.min(fi,ti), hi=Math.max(fi,ti);
+  _owqAllLayers.forEach(function(lyr){{ var li=_idx(lyr); if(li>=lo&&li<=hi) active[lyr]=true; }});
+  return active;
+}}
 """)
 
     # Plot toolbar controls: log scale toggle, axis range, reset
@@ -1009,121 +1094,89 @@ window._owqAxisTight = function(plotId){
   Plotly.relayout(plotId,upd);
 };
 // Per-trace-type toggle: "conc" for concentrations, or a derivative label
+// Uses a full-trace restyle (like _owqRefreshSelection) to keep all states consistent.
 window._owqToggleDeriv = function(btn){
   var plotId=btn.getAttribute('data-plot');
   var derivLabel=btn.getAttribute('data-deriv');
   var gd=document.getElementById(plotId);
   if(!gd||!gd.data) return;
   var show=!btn.classList.contains('active');
-  // Build display text (capitalize "conc" → "Concentrations")
   var displayText=derivLabel==='conc'?'Concentrations':derivLabel;
   btn.classList.toggle('active',show);
   btn.textContent=show?displayText+' \u2713':displayText;
-  // Respect active layers
-  var active=window._owqActiveLayers||{};
-  var hasActive=Object.keys(active).length>0;
-  var newVis=[];
-  var indices=[];
-  gd.data.forEach(function(t,i){
+  // Full restyle of ALL traces — respects all button states, feature selection, layers
+  var active=_owqGetPlotLayers(plotId);
+  var hasActiveLyr=Object.keys(active).length>0;
+  var selFids=window._owqSelectedFids||{};
+  var hasSel=Object.keys(selFids).length>0;
+  var om=_owqObsMeta[plotId]||{};
+  var obsBtn=document.querySelector('[data-plot="'+plotId+'"][data-obs]');
+  var obsOn=obsBtn?obsBtn.classList.contains('active'):true;
+  var derivBtns=document.querySelectorAll('[data-plot="'+plotId+'"][data-deriv]');
+  var newVis=gd.data.map(function(t,tidx){
+    // Observation traces
+    if(om[tidx]!==undefined){
+      if(!obsOn) return false;
+      if(hasSel) return selFids[om[tidx]]?true:false;
+      return true;
+    }
     var lg=t.legendgroup||'';
     var isDebug=lg.indexOf('debug_')===0;
-    var isTarget=false;
-    if(derivLabel==='conc'){
-      // Concentrations = non-debug traces
-      isTarget=!isDebug;
+    var tname=(t.name||'').replace(_owqFeatureLabel,'');
+    // Check trace-type toggle (conc or derivative)
+    var typeOn=true;
+    if(isDebug){
+      typeOn=false;
+      derivBtns.forEach(function(b){
+        var dd=b.getAttribute('data-deriv');
+        if(dd!=='conc' && lg.indexOf('debug_'+dd+'_')===0
+           && b.classList.contains('active')) typeOn=true;
+      });
     }else{
-      // Match debug traces for this derivative
-      isTarget=lg.indexOf('debug_'+derivLabel+'_')===0;
+      var concBtn=document.querySelector('[data-plot="'+plotId+'"][data-deriv="conc"]');
+      if(concBtn && !concBtn.classList.contains('active')) typeOn=false;
     }
-    if(isTarget){
-      indices.push(i);
-      if(!show){newVis.push(false);return;}
-      if(hasActive){
-        var m=(t.name||'').match(/\(z(\d+)\)/);
-        if(m && !active['z'+m[1]]){newVis.push(false);return;}
-      }
-      newVis.push(true);
+    if(!typeOn) return false;
+    // Feature selection filter
+    if(hasSel){
+      var info=_owqExtractHru(tname,lg);
+      if(!selFids[info.hru]) return false;
     }
+    // Layer filter
+    if(hasActiveLyr){
+      var m=tname.match(/\(z(\d+)\)/);
+      if(m && !active['z'+m[1]]) return false;
+    }
+    return true;
   });
-  if(!indices.length) return;
-  Plotly.restyle(gd,{visible:newVis},indices);
+  Plotly.restyle(gd,{visible:newVis});
 };
 """)
 
-    # Legend click: click isolates a GRU/reach — all traces (main + debug)
-    # for that GRU within active layers are shown; other GRUs hidden.
-    # Click same GRU again to restore all (within active layers).
-    # Traces belonging to inactive layers always stay hidden.
+    # Legend click: disabled — the map is the master controller for feature selection.
+    # Clicking a legend item in a plot does nothing; use the map or map legend
+    # to select/deselect features across all plots.
     H.append("""
-function _owqExtractHru(tname){
-  // "1 (z1) dC/dt chem" → hru="1", layer="z1"
-  // "1 (z1)"            → hru="1", layer="z1"
-  // "1"                 → hru="1", layer=null
+function _owqExtractHru(tname, legendgroup){
+  // Extract feature ID (hru) and optional layer from trace name.
+  // Trace names: "ID", "ID (z1)", "ID dC/dt chem", "ID (z1) dC/dt chem"
+  // For debug traces, the fid is embedded in legendgroup: "debug_{label}_{fid}"
+  // 1) Try layer pattern first
   var m=tname.match(/^(.+?) \((z\d+)\)/);
   if(m) return {hru:m[1],layer:m[2]};
+  // 2) For debug traces, extract fid from legendgroup
+  if(legendgroup && legendgroup.indexOf('debug_')===0){
+    // legendgroup format: "debug_{derivLabel}_{fid}"
+    // derivLabel can contain '/' so we can't just split on '_'
+    // Instead, find the fid at the end: it's the last '_'-separated segment
+    var lastUs=legendgroup.lastIndexOf('_');
+    if(lastUs>6) return {hru:legendgroup.substring(lastUs+1),layer:null};
+  }
   return {hru:tname,layer:null};
 }
 function _owqLegendClick(gd){
-  gd.on('plotly_legendclick',function(e){
-    var d=gd.data, ci=e.curveNumber;
-    var om=_owqObsMeta[gd.id]||{};
-    // Get active layers from the sticky bar (multi-select)
-    var active=window._owqActiveLayers||{};
-    var hasActive=Object.keys(active).length>0;
-    // Extract HRU from clicked trace
-    var clickedRaw=(d[ci].name||'').replace(_owqFeatureLabel,'');
-    var clickedInfo=_owqExtractHru(clickedRaw);
-    var clickedHru=clickedInfo.hru;
-    // Check if this HRU is already the only one shown (toggle off)
-    var visibleHrus={};
-    d.forEach(function(t,idx){
-      if(om[idx]!==undefined) return;
-      if(t.visible===false||t.visible==='legendonly') return;
-      var info=_owqExtractHru((t.name||'').replace(_owqFeatureLabel,''));
-      visibleHrus[info.hru]=true;
-    });
-    var hruKeys=Object.keys(visibleHrus);
-    var onlyMe=hruKeys.length===1 && hruKeys[0]===clickedHru;
-    // Collect active trace-type toggles for this plot
-    var derivBtns=document.querySelectorAll('[data-plot="'+gd.id+'"][data-deriv]');
-    var newVis=d.map(function(t,idx){
-      var lg=t.legendgroup||'';
-      var isDebug=lg.indexOf('debug_')===0;
-      // Observation traces: show if matching HRU
-      if(om[idx]!==undefined){
-        if(onlyMe) return true;
-        return om[idx]===clickedHru?true:false;
-      }
-      var tRaw=(t.name||'').replace(_owqFeatureLabel,'');
-      var info=_owqExtractHru(tRaw);
-      // Always hide traces from inactive layers
-      if(hasActive && info.layer && !active[info.layer]) return false;
-      // Check trace-type toggle (conc or derivative)
-      var typeOn=true;
-      if(isDebug){
-        typeOn=false;
-        derivBtns.forEach(function(b){
-          var d=b.getAttribute('data-deriv');
-          if(d!=='conc' && lg.indexOf('debug_'+d+'_')===0
-             && b.classList.contains('active')) typeOn=true;
-        });
-      }else{
-        var concBtn=document.querySelector('[data-plot="'+gd.id+'"][data-deriv="conc"]');
-        if(concBtn && !concBtn.classList.contains('active')) typeOn=false;
-      }
-      if(!typeOn) return false;
-      // If restoring all (onlyMe), show everything in active layers
-      if(onlyMe) return true;
-      // Otherwise isolate the clicked HRU
-      return info.hru===clickedHru?true:'legendonly';
-    });
-    Plotly.restyle(gd,{visible:newVis});
-    // Broadcast to map
-    if(typeof _owqSelectFeature==='function'){
-      _owqSelectFeature(onlyMe?null:clickedHru);
-    }
-    return false;   // prevent Plotly default toggle
-  });
+  // Disable legend click — map is the master controller
+  gd.on('plotly_legendclick',function(e){ return false; });
 }
 """)
 
@@ -1156,7 +1209,8 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
 
     # --- LEAFLET MAP INITIALIZATION ---
     if river_geojson:
-        geojson_str = json.dumps(river_geojson)
+        # river_geojson is the primary interactive layer data (used for FID extraction)
+        pass
         _fid_color_json = json.dumps(_fid_color)
         _fid_list_json = json.dumps(_all_fids_sorted)
         _hru_color_json = json.dumps(_hru_color)
@@ -1167,17 +1221,20 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
 (function(){{
   var mapEl=document.getElementById('mapContainer');
   if(!mapEl) return;
-  var isDark=document.documentElement.getAttribute('data-theme')==='dark';
-  var tileUrl=isDark
-    ?'https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png'
-    :'https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png';
+  // Basemap tile layers (Satellite, Light, Topo)
+  var satTile=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',{{
+    attribution:'Esri, Maxar, Earthstar Geographics',maxZoom:19}});
+  var lightTile=L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
+    attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:18}});
+  var topoTile=L.tileLayer('https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png',{{
+    attribution:'OpenTopoMap',maxZoom:17}});
   // Start with interactions disabled (locked view)
   var map=L.map('mapContainer',{{
     zoomControl:false,dragging:false,scrollWheelZoom:false,
     doubleClickZoom:false,touchZoom:false,boxZoom:false,keyboard:false
   }});
-  var tileLayer=L.tileLayer(tileUrl,{{
-    attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:18}}).addTo(map);
+  satTile.addTo(map);  // default basemap
+  L.control.layers({{'Satellite':satTile,'Light':lightTile,'Topo':topoTile}},{{}},{{collapsed:true,position:'bottomleft'}}).addTo(map);
 
   // Lock / unlock control (top-left)
   var mapLocked=true;
@@ -1229,14 +1286,14 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   new ShowAllCtrl().addTo(map);
   L.control.zoom({{position:'topleft'}}).addTo(map);
 
-  var geojsonData={geojson_str};
   var mapKey='{mapping_key}';
   var fidColor={_fid_color_json};
   var plotFids={_fid_list_json};
   var mapFidColor={json.dumps(_map_fid_color)};
 
   var featureLayers={{}};  // fid → Leaflet layer
-  var selectedFid=null;
+  var selectedFids={{}};   // fid → true (multi-select set)
+  window._owqSelectedFids=selectedFids;  // expose for layer selector
 
   var isPolygon={json.dumps(map_geom_type == 'polygon')};
   var hasLayers={json.dumps(_has_layers)};
@@ -1271,34 +1328,123 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
     return {{color:c,weight:1.5,opacity:0.3}};
   }}
 
-  var geoLayer=L.geoJSON(geojsonData,{{
-    style:function(feature){{
-      var fid=String(feature.properties[mapKey]||'');
-      return _defaultStyle(fid);
-    }},
-    onEachFeature:function(feature,layer){{
-      var fid=String(feature.properties[mapKey]||'');
-      featureLayers[fid]=layer;
-      // Tooltip with feature name on hover
-      layer.bindTooltip(_owqFeatureLabel+fid,{{sticky:true,direction:'top',opacity:0.9}});
-      layer.on('click',function(){{
-        if(selectedFid===fid){{
-          _owqSelectFeature(null);  // deselect → restore all
-        }}else{{
-          _owqSelectFeature(fid);   // select this feature
+  // === LAYER ORDER: Basin (back) → River Network (middle) → Stations (front) ===
+
+  // Helper: make a layer interactive (clickable, with selection logic)
+  function _makeInteractive(gjData){{
+    return L.geoJSON(gjData,{{
+      style:function(feature){{
+        var fid=String(feature.properties[mapKey]||'');
+        return _defaultStyle(fid);
+      }},
+      onEachFeature:function(feature,layer){{
+        var fid=String(feature.properties[mapKey]||'');
+        featureLayers[fid]=layer;
+        layer.bindTooltip(_owqFeatureLabel+fid,{{sticky:true,direction:'top',opacity:0.9}});
+        layer.on('click',function(){{ _owqToggleFeature(fid); }});
+        layer.on('mouseover',function(){{ layer.setStyle(_highlightStyle(fid)); }});
+        layer.on('mouseout',function(){{
+          var hasSel=Object.keys(selectedFids).length>0;
+          if(hasSel&&!selectedFids[fid]){{ layer.setStyle(_dimStyle(fid)); }}
+          else{{ layer.setStyle(_defaultStyle(fid)); }}
+        }});
+      }}
+    }});
+  }}
+
+  // 1) BASIN layer (always at the back)
+  var _basinData={json.dumps(basin_geojson) if basin_geojson else 'null'};
+  var _basinLayer=null;
+  var _basinVisible=true;
+  var _basinIsInteractive=isPolygon;  // interactive when primary is polygon (SUMMA)
+  if(_basinData){{
+    if(_basinIsInteractive){{
+      _basinLayer=_makeInteractive(_basinData);
+    }}else{{
+      _basinLayer=L.geoJSON(_basinData,{{
+        interactive:false,
+        style:function(){{
+          return {{color:'#555',weight:1.5,opacity:0.7,fillColor:'#b0b0b0',fillOpacity:0.25}};
         }}
       }});
-      layer.on('mouseover',function(){{ layer.setStyle(_highlightStyle(fid)); }});
-      layer.on('mouseout',function(){{
-        if(selectedFid&&selectedFid!==fid){{ layer.setStyle(_dimStyle(fid)); }}
-        else{{ layer.setStyle(_defaultStyle(fid)); }}
+    }}
+    _basinLayer.addTo(map);
+  }}
+
+  // 2) RIVER NETWORK layer (on top of basins)
+  var _riverData={json.dumps(river_line_geojson) if river_line_geojson else 'null'};
+  var _riverLayer=null;
+  var _riverVisible=true;
+  var _riverIsInteractive=!isPolygon;  // interactive when primary is line (mizuRoute)
+  if(_riverData){{
+    if(_riverIsInteractive){{
+      _riverLayer=_makeInteractive(_riverData);
+    }}else{{
+      _riverLayer=L.geoJSON(_riverData,{{
+        interactive:false,
+        style:function(){{
+          return {{color:'#fff',weight:2.5,opacity:0.9}};
+        }}
       }});
     }}
-  }}).addTo(map);
+    _riverLayer.addTo(map);
+  }}
 
-  // Fit map to data bounds
+  // Reference to the primary interactive layer (for fitBounds, bringToFront, etc.)
+  var geoLayer=_basinIsInteractive?_basinLayer:_riverLayer;
+
+  // --- Observation station markers ---
+  var stationData={json.dumps({sid: list(loc) for sid, loc in (station_locations or {}).items()})};
+  var stationToFeature={json.dumps(station_to_feature or {})};
+  var stationMarkers={{}};  // sid → L.circleMarker
+  var stationLayer=L.layerGroup();
+  var stationsVisible=true;
+  Object.keys(stationData).forEach(function(sid){{
+    var ll=stationData[sid];
+    var matchedFid=stationToFeature[sid]||null;
+    var marker=L.circleMarker([ll[0],ll[1]],{{
+      radius:4,fillColor:'#fff',color:'#e00',weight:1.5,opacity:1,fillOpacity:0.9
+    }});
+    var popupHtml='<b>Observation Station</b><br>ID: '+sid
+      +'<br>Lat: '+ll[0].toFixed(4)+'<br>Lon: '+ll[1].toFixed(4);
+    if(matchedFid) popupHtml+='<br>Matched {feature_label}: '+matchedFid;
+    marker.bindTooltip('Station: '+sid+(matchedFid?' \\u2192 {feature_label} '+matchedFid:''),{{direction:'top',offset:[0,-6]}});
+    marker.bindPopup(popupHtml);
+    stationMarkers[sid]=marker;
+    stationLayer.addLayer(marker);
+  }});
+  // Filter station markers when a feature is selected
+  window._owqFilterStations=function(selSet){{
+    if(!stationsVisible) return;
+    var hasSel=Object.keys(selSet).length>0;
+    Object.keys(stationMarkers).forEach(function(sid){{
+      var mk=stationMarkers[sid];
+      var matchedFid=stationToFeature[sid]||null;
+      if(!hasSel){{
+        mk.setStyle({{fillOpacity:0.85,opacity:1}});
+      }}else if(matchedFid && selSet[String(matchedFid)]){{
+        mk.setStyle({{fillOpacity:0.85,opacity:1}});
+      }}else{{
+        mk.setStyle({{fillOpacity:0.15,opacity:0.2}});
+      }}
+    }});
+  }};
+  if(Object.keys(stationData).length>0){{
+    stationLayer.addTo(map);
+  }}
+
+  // Fit map tightly to data bounds (zero padding, delayed to ensure container is sized)
   var _fitBounds=null;
-  try{{ _fitBounds=geoLayer.getBounds(); map.fitBounds(_fitBounds,{{padding:[20,20]}}); }}catch(e){{}}
+  try{{
+    _fitBounds=geoLayer.getBounds();
+    if(_basinLayer && _basinLayer!==geoLayer){{ _fitBounds.extend(_basinLayer.getBounds()); }}
+    if(_riverLayer && _riverLayer!==geoLayer){{ _fitBounds.extend(_riverLayer.getBounds()); }}
+    // Delay fitBounds so the map container has its final dimensions
+    setTimeout(function(){{
+      map.invalidateSize();
+      map.fitBounds(_fitBounds,{{padding:[0,0]}});
+    }}, 100);
+  }}catch(e){{}}
 
   // Re-center control (top-left)
   var RecenterCtrl=L.Control.extend({{
@@ -1312,55 +1458,144 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
       btn.innerHTML='&#x2316;';  // ⌖ crosshair
       L.DomEvent.disableClickPropagation(btn);
       btn.addEventListener('click',function(){{
-        if(_fitBounds) map.fitBounds(_fitBounds,{{padding:[20,20]}});
+        if(_fitBounds) map.fitBounds(_fitBounds,{{padding:[0,0]}});
       }});
       return btn;
     }}
   }});
   new RecenterCtrl().addTo(map);
 
-  // Build map legend — use map feature IDs and map colors
-  var legendEl=document.getElementById('mapLegend');
+  // Helper: re-stack layers in correct z-order after toggling
+  function _restackLayers(){{
+    if(_basinLayer && _basinVisible) _basinLayer.bringToBack();
+    if(_riverLayer && _riverVisible) _riverLayer.bringToFront();
+    if(stationsVisible && Object.keys(stationData).length>0) stationLayer.bringToFront();
+  }}
+
+  // Build map legend as a Leaflet control (top-right, below Restore All)
   var _mapFidsSorted={json.dumps(sorted(_map_fid_color.keys()) if _map_fid_color else [])};
   var legendFids=_mapFidsSorted.length?_mapFidsSorted:(hasLayers?{_hru_ids_json}:plotFids);
+  var legendEl=null;
+  var LegendCtrl=L.Control.extend({{
+    options:{{position:'topright'}},
+    onAdd:function(){{
+      var div=L.DomUtil.create('div','map-legend');
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      // Compute max-height: from control top to just above attribution (~30px from bottom)
+      var mapH=mapEl.offsetHeight||420;
+      // Leaflet topright container starts ~10px from top; Restore All is ~30px tall
+      // Leave ~40px at bottom for attribution
+      div.style.maxHeight=(mapH - 80)+'px';
+      var html='';
+      // Layer toggles section
+      var _toggles=[];
+      if(_basinLayer && !_basinIsInteractive){{
+        _toggles.push('<div class="ml-toggle" title="Toggle basin polygons">'
+          +'<input type="checkbox" checked id="mlChkBasin"><label for="mlChkBasin">Basins</label></div>');
+      }}
+      if(_riverLayer && !_riverIsInteractive){{
+        _toggles.push('<div class="ml-toggle" title="Toggle river network">'
+          +'<input type="checkbox" checked id="mlChkRiver"><label for="mlChkRiver">River Network</label></div>');
+      }}
+      if(Object.keys(stationData).length>0){{
+        _toggles.push('<div class="ml-toggle" title="Toggle observation stations">'
+          +'<input type="checkbox" checked id="mlChkSta"><label for="mlChkSta">Stations</label></div>');
+      }}
+      if(_toggles.length){{
+        html+='<div class="ml-toggles">'+_toggles.join('')+'</div>'
+             +'<div style="border-top:1px solid var(--border,#ddd);margin:4px 0"></div>';
+      }}
+      // Feature ID list
+      html+='<div class="ml-title">{feature_label}s</div>';
+      legendFids.forEach(function(fid){{
+        var c=_mapColor(fid);
+        html+='<div class="ml-item" data-fid="'+fid+'">'
+             +'<span class="ml-swatch" style="background:'+c+';'
+             +(isPolygon?'height:10px;width:16px;border-radius:3px;border:1px solid #666':'')
+             +'"></span>'
+             +'<span>'+fid+'</span></div>';
+      }});
+      div.innerHTML=html;
+      return div;
+    }}
+  }});
+  var _legendCtrl=new LegendCtrl();
+  _legendCtrl.addTo(map);
+  legendEl=_legendCtrl.getContainer();
+
+  // Bind feature click handlers
   if(legendEl){{
-    var html='<div class="ml-title">{feature_label}s</div>';
-    legendFids.forEach(function(fid){{
-      var c=_mapColor(fid);
-      html+='<div class="ml-item" data-fid="'+fid+'">'
-           +'<span class="ml-swatch" style="background:'+c+';'
-           +(isPolygon?'height:10px;width:16px;border-radius:3px;border:1px solid #666':'')
-           +'"></span>'
-           +'<span>'+fid+'</span></div>';
-    }});
-    legendEl.innerHTML=html;
     legendEl.querySelectorAll('.ml-item').forEach(function(el){{
       el.addEventListener('click',function(){{
         var fid=el.getAttribute('data-fid');
-        if(selectedFid===fid){{ _owqSelectFeature(null); }}
-        else{{ _owqSelectFeature(fid); }}
+        _owqToggleFeature(fid);
       }});
     }});
-  }}
-
-  // Global selection function — debounced to avoid rapid Plotly restyles
-  var _selTimer=null;
-  window._owqSelectFeature=function(fid){{
-    selectedFid=fid;
-    // 1) Update map styles (cheap — do immediately)
-    for(var f in featureLayers){{
-      var ly=featureLayers[f];
-      if(!fid){{ ly.setStyle(_defaultStyle(f)); }}
-      else if(f===fid){{ ly.setStyle(_highlightStyle(f)); }}
-      else{{ ly.setStyle(_dimStyle(f)); }}
-    }}
-    // 2) Update map legend highlights (cheap — do immediately)
-    if(legendEl){{
-      legendEl.querySelectorAll('.ml-item').forEach(function(el){{
-        el.classList.toggle('active',el.getAttribute('data-fid')===fid);
+    // Bind layer toggle handlers
+    var chkBasin=document.getElementById('mlChkBasin');
+    if(chkBasin){{
+      chkBasin.addEventListener('change',function(){{
+        _basinVisible=chkBasin.checked;
+        if(_basinVisible){{ _basinLayer.addTo(map); _restackLayers(); }}
+        else{{ map.removeLayer(_basinLayer); }}
       }});
     }}
-    // 3) Debounce Plotly restyles (expensive)
+    var chkRiver=document.getElementById('mlChkRiver');
+    if(chkRiver){{
+      chkRiver.addEventListener('change',function(){{
+        _riverVisible=chkRiver.checked;
+        if(_riverVisible){{ _riverLayer.addTo(map); _restackLayers(); }}
+        else{{ map.removeLayer(_riverLayer); }}
+      }});
+    }}
+    var chkSta=document.getElementById('mlChkSta');
+    if(chkSta){{
+      chkSta.addEventListener('change',function(){{
+        stationsVisible=chkSta.checked;
+        if(stationsVisible){{ stationLayer.addTo(map); _restackLayers(); }}
+        else{{ map.removeLayer(stationLayer); }}
+      }});
+    }}
+  }}
+
+  // Toggle a feature in/out of the multi-select set
+  window._owqToggleFeature=function(fid){{
+    if(selectedFids[fid]){{ delete selectedFids[fid]; }}
+    else{{ selectedFids[fid]=true; }}
+    _owqRefreshSelection();
+  }};
+
+  // Clear all selections (called by Restore All)
+  window._owqSelectFeature=function(arg){{
+    // arg===null means clear all
+    if(arg===null||arg===undefined){{
+      Object.keys(selectedFids).forEach(function(k){{ delete selectedFids[k]; }});
+    }}
+    _owqRefreshSelection();
+  }};
+
+  // Master refresh — updates map styles, legend, stations, and all plot traces
+  var _selTimer=null;
+  function _owqRefreshSelection(){{
+    var hasSel=Object.keys(selectedFids).length>0;
+    // 1) Update map feature styles
+    for(var f in featureLayers){{
+      var ly=featureLayers[f];
+      if(!hasSel){{ ly.setStyle(_defaultStyle(f)); }}
+      else if(selectedFids[f]){{ ly.setStyle(_highlightStyle(f)); }}
+      else{{ ly.setStyle(_dimStyle(f)); }}
+    }}
+    // 2) Filter station markers
+    if(typeof _owqFilterStations==='function') _owqFilterStations(selectedFids);
+    // 3) Update map legend highlights
+    if(legendEl){{
+      legendEl.classList.toggle('has-selection',hasSel);
+      legendEl.querySelectorAll('.ml-item').forEach(function(el){{
+        el.classList.toggle('active',!!selectedFids[el.getAttribute('data-fid')]);
+      }});
+    }}
+    // 4) Debounce Plotly restyles (expensive)
     if(_selTimer) cancelAnimationFrame(_selTimer);
     _selTimer=requestAnimationFrame(function(){{
       var ids=window._owqPlotIds, i=0;
@@ -1369,23 +1604,27 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
         var gd=document.getElementById(ids[i++]);
         if(!gd||!gd.data){{ _nextRestyle(); return; }}
         var om=_owqObsMeta[gd.id]||{{}};
-        var active=window._owqActiveLayers||{{}};
+        var obsBtn=document.querySelector('[data-plot="'+gd.id+'"][data-obs]');
+        var obsOn=obsBtn?obsBtn.classList.contains('active'):true;
+        var active=_owqGetPlotLayers(gd.id);
         var hasActiveLyr=Object.keys(active).length>0;
         var derivBtns=document.querySelectorAll('[data-plot="'+gd.id+'"][data-deriv]');
         var newVis=gd.data.map(function(t,tidx){{
           var isDebug=t.legendgroup&&t.legendgroup.indexOf('debug_')===0;
+          // Observation traces
           if(om[tidx]!==undefined){{
-            if(!fid) return true;
-            return om[tidx]===fid?true:false;
+            if(!obsOn) return false;
+            if(!hasSel) return true;
+            return selectedFids[om[tidx]]?true:false;
           }}
+          var lg=t.legendgroup||'';
           var tname=(t.name||'').replace(_owqFeatureLabel,'');
-          var info=_owqExtractHru(tname);
+          var info=_owqExtractHru(tname,lg);
           // Hide traces from inactive layers
           if(hasActiveLyr && info.layer && !active[info.layer]) return false;
           // Check trace-type toggle (conc or derivative)
           var typeOn=true;
           if(isDebug){{
-            var lg=t.legendgroup||'';
             typeOn=false;
             derivBtns.forEach(function(b){{
               var dd=b.getAttribute('data-deriv');
@@ -1397,26 +1636,16 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
             if(concBtn && !concBtn.classList.contains('active')) typeOn=false;
           }}
           if(!typeOn) return false;
-          if(!fid) return true;
-          // For layered data, clicking HRU "1" shows all active-layer traces
-          return info.hru===fid?true:'legendonly';
+          if(!hasSel) return true;
+          // Multi-select: show only selected features, completely hide others
+          return selectedFids[info.hru]?true:false;
         }});
         Plotly.restyle(gd,{{visible:newVis}}).then(_nextRestyle);
       }}
       _nextRestyle();
     }});
-  }};
+  }}
 
-  // Theme toggle: swap tile layer
-  var origToggle=window.toggleTheme;
-  window.toggleTheme=function(){{
-    origToggle();
-    var d=document.documentElement.getAttribute('data-theme')==='dark';
-    var url=d
-      ?'https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png'
-      :'https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png';
-    tileLayer.setUrl(url);
-  }};
 }})();
 """)
     else:
@@ -1425,109 +1654,74 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
 window._owqSelectFeature = window._owqSelectFeature || function(){};
 """)
 
-    # --- LAYER SELECTOR LOGIC (always defined when layers exist) ---
-    # Supports multi-select: click toggles each layer on/off.
+    # --- LAYER SELECTOR LOGIC (per-plot range dropdowns) ---
     H.append(f"""
-// Layer selector (SUMMA multi-layer support — multi-select)
+// Layer selector (SUMMA multi-layer support — per-plot range)
 (function(){{
-  var hasLayers={json.dumps(_has_layers)};
-  var allLayers={json.dumps(_all_layers_sorted)};
 
-  // Returns the set of currently active layers from the sticky bar buttons
-  function _getActiveLayers(){{
-    var active={{}};
-    var bar=document.getElementById('layerBar');
-    if(!bar) return active;
-    bar.querySelectorAll('.tb-btn.active').forEach(function(b){{
-      var lyr=b.getAttribute('data-layer');
-      if(lyr) active[lyr]=true;
-    }});
-    return active;
-  }}
-
-  // Toggle a layer button and refresh all plots
-  window._owqToggleLayer=function(btn){{
-    if(!hasLayers) return;
-    btn.classList.toggle('active');
-    // Ensure at least one layer stays active
-    var bar=document.getElementById('layerBar');
-    var anyActive=bar&&bar.querySelector('.tb-btn.active');
-    if(!anyActive){{ btn.classList.add('active'); }}
-    _owqApplyLayers();
-  }};
-
-  // Also keep the old name so auto-select on load still works
-  window._owqSelectLayer=function(layer,btn){{
-    if(btn) btn.classList.add('active');
-    _owqApplyLayers();
-  }};
-
-  // Core: show/hide traces based on all active layers
-  function _owqApplyLayers(){{
-    var active=_getActiveLayers();
-    var activeList=Object.keys(active);
-    window._owqActiveLayers=active;  // expose for other functions
-    window._owqPlotIds.forEach(function(id){{
-      var gd=document.getElementById(id);
-      if(!gd||!gd.data) return;
-      var plotHasLayer=false;
-      var plotIsLayered=false;
-      var btns=document.querySelectorAll('[data-plot="'+id+'"][data-deriv]');
-      var newVis=gd.data.map(function(t){{
-        var lg=t.legendgroup||'';
-        var isDebug=lg.indexOf('debug_')===0;
-        var tname=t.name||'';
-        // Check if this trace type is toggled on
-        var typeOn=true;
-        if(isDebug){{
-          typeOn=false;
-          btns.forEach(function(b){{
-            var d=b.getAttribute('data-deriv');
-            if(d!=='conc' && lg.indexOf('debug_'+d+'_')===0
-               && b.classList.contains('active')) typeOn=true;
-          }});
-        }}else{{
-          // Main (concentration) traces: check "conc" button
-          var concBtn=document.querySelector('[data-plot="'+id+'"][data-deriv="conc"]');
-          if(concBtn && !concBtn.classList.contains('active')) typeOn=false;
-        }}
-        // Check if trace name contains a layer marker "(z#)"
-        var m=tname.match(/\\(z(\\d+)\\)/);
-        if(m){{
-          plotIsLayered=true;
-          var traceLayer='z'+m[1];
-          var matches=active[traceLayer]===true;
-          if(matches) plotHasLayer=true;
-          return matches&&typeOn?true:false;
-        }}
-        // Non-layered trace
-        return typeOn?true:false;
-      }});
-      Plotly.restyle(gd,{{visible:newVis}});
-      // Hide entire plot section if it has layered data but none for active layers
-      var section=gd.closest('.section');
-      if(section){{
-        if(plotIsLayered&&!plotHasLayer){{
-          section.style.display='none';
-        }}else{{
-          section.style.display='';
-        }}
+  // Apply layer range for a single plot
+  window._owqApplyLayerRange=function(plotId){{
+    var active=_owqGetPlotLayers(plotId);
+    var gd=document.getElementById(plotId);
+    if(!gd||!gd.data) return;
+    var btns=document.querySelectorAll('[data-plot="'+plotId+'"][data-deriv]');
+    var om=_owqObsMeta[plotId]||{{}};
+    var obsBtn=document.querySelector('[data-plot="'+plotId+'"][data-obs]');
+    var obsOn=obsBtn?obsBtn.classList.contains('active'):true;
+    var selFids=window._owqSelectedFids||{{}};
+    var hasSel=Object.keys(selFids).length>0;
+    var newVis=gd.data.map(function(t,tidx){{
+      // Observation traces
+      if(om[tidx]!==undefined){{
+        if(!obsOn) return false;
+        if(hasSel) return selFids[om[tidx]]?true:false;
+        return true;
       }}
-    }});
-    // Update sidebar: hide nav links for hidden sections
-    document.querySelectorAll('.sidebar nav a').forEach(function(a){{
-      var href=a.getAttribute('href');
-      if(!href||!href.startsWith('#')) return;
-      var sec=document.querySelector(href);
-      if(!sec) return;
-      if(sec.style.display==='none'){{
-        a.style.display='none';
+      var lg=t.legendgroup||'';
+      var isDebug=lg.indexOf('debug_')===0;
+      var tname=(t.name||'').replace(_owqFeatureLabel,'');
+      var typeOn=true;
+      if(isDebug){{
+        typeOn=false;
+        btns.forEach(function(b){{
+          var d=b.getAttribute('data-deriv');
+          if(d!=='conc' && lg.indexOf('debug_'+d+'_')===0
+             && b.classList.contains('active')) typeOn=true;
+        }});
       }}else{{
-        a.style.display='';
+        var concBtn=document.querySelector('[data-plot="'+plotId+'"][data-deriv="conc"]');
+        if(concBtn && !concBtn.classList.contains('active')) typeOn=false;
       }}
+      if(!typeOn) return false;
+      // Feature selection filter
+      if(hasSel){{
+        var info=_owqExtractHru(tname,lg);
+        if(!selFids[info.hru]) return false;
+      }}
+      var m=tname.match(/\\(z(\\d+)\\)/);
+      if(m){{
+        var traceLayer='z'+m[1];
+        return active[traceLayer]===true?true:false;
+      }}
+      return true;
     }});
-  }}
-  window._owqApplyLayers=_owqApplyLayers;
+    Plotly.restyle(gd,{{visible:newVis}});
+  }};
+
+  // "All" button — set range to first..last option in this plot's dropdowns
+  window._owqLayerAll=function(plotId){{
+    var fromEl=document.getElementById(plotId+'_lyrFrom');
+    var toEl=document.getElementById(plotId+'_lyrTo');
+    if(!fromEl||!toEl) return;
+    fromEl.selectedIndex=0;
+    toEl.selectedIndex=toEl.options.length-1;
+    _owqApplyLayerRange(plotId);
+  }};
+
+  // Backwards compat stubs
+  window._owqToggleLayer=function(){{}};
+  window._owqSelectLayer=function(){{}};
+  window._owqActiveLayers={{}};
 }})();
 """)
 
@@ -1591,16 +1785,21 @@ window._owqSelectFeature = window._owqSelectFeature || function(){};
 })();
 """)
 
-    # Auto-select the first layer on page load (after plots are rendered)
-    if _has_layers and _all_layers_sorted:
-        _first_layer = _all_layers_sorted[0]
-        H.append(f"""
-// Auto-select first layer after all plots are rendered
-setTimeout(function(){{
-  if(typeof _owqSelectLayer==='function'){{
-    _owqSelectLayer('{_first_layer}', document.querySelector('[data-layer="{_first_layer}"]'));
-  }}
-}}, 500);
+    # Auto-apply first layer on page load (after plots are rendered)
+    if _has_layers:
+        H.append("""
+// Auto-apply first layer to plots that have layer dropdowns
+setTimeout(function(){
+  window._owqPlotIds.forEach(function(id){
+    var fromEl=document.getElementById(id+'_lyrFrom');
+    var toEl=document.getElementById(id+'_lyrTo');
+    if(!fromEl||!toEl) return;  // no layers for this plot
+    // Set both dropdowns to the first available option
+    fromEl.selectedIndex=0;
+    toEl.selectedIndex=0;
+    if(typeof _owqApplyLayerRange==='function') _owqApplyLayerRange(id);
+  });
+}, 500);
 """)
 
     # Close DOMContentLoaded wrapper
@@ -1634,6 +1833,7 @@ def Plot_h5_driver(what2map=None,
                    feature_label=None,
                    observation_dir=None,
                    observation_csv=None,
+                   observation_compartments=None,
                    separator=' | '):
     """
     Generate interactive HTML time-series plots (Plotly.js).
@@ -2108,7 +2308,9 @@ def Plot_h5_driver(what2map=None,
     # For SUMMA: prefer basin_shapefile (HRU polygons) over river_network_shp
     # For mizuRoute: use river_network_shp (line segments)
     _river_geojson = None
+    _river_bounds = None
     _basin_geojson = None
+    _basin_bounds = None
     _map_center = None
     _map_bounds = None
     _map_geom_type = 'line'  # 'line' for rivers, 'polygon' for basins
@@ -2177,27 +2379,41 @@ def Plot_h5_driver(what2map=None,
             print(f"  WARNING: Failed to load {label}: {_e}")
         return None, None
 
-    # Load basin shapefile (polygons) — used for SUMMA
+    # Load basin shapefile (polygons)
     if basin_shapefile and os.path.isfile(basin_shapefile):
         _basin_geojson, _basin_bounds = _load_shapefile(
             basin_shapefile, 'basin/HRU shapefile')
-        if _basin_geojson:
-            _map_geom_type = 'polygon'
-            _map_bounds = _basin_bounds
-            _map_center = [(_map_bounds[1]+_map_bounds[3])/2,
-                           (_map_bounds[0]+_map_bounds[2])/2]
 
-    # Load river network shapefile (lines) — used for mizuRoute or as fallback
+    # Load river network shapefile (lines)
     if river_network_shp and os.path.isfile(river_network_shp):
         _river_geojson, _river_bounds = _load_shapefile(
             river_network_shp, 'river network')
-        if _river_geojson and not _basin_geojson:
-            _map_bounds = _river_bounds
-            _map_center = [(_map_bounds[1]+_map_bounds[3])/2,
-                           (_map_bounds[0]+_map_bounds[2])/2]
 
-    # Use basin as the primary map geojson if available
-    _primary_geojson = _basin_geojson or _river_geojson
+    # Determine primary interactive layer based on host model
+    # mizuRoute: river network is clickable (line)
+    # SUMMA: basin is clickable (polygon)
+    # Both layers are always shown (when available) in order: basin → river → stations
+    _hm = (hostmodel or '').lower()
+    if _hm in ('mizuroute', 'mizuroute_cslm'):
+        _primary_geojson = _river_geojson or _basin_geojson
+        _map_geom_type = 'line' if _river_geojson else 'polygon'
+    else:
+        _primary_geojson = _basin_geojson or _river_geojson
+        _map_geom_type = 'polygon' if _basin_geojson else 'line'
+
+    # Compute map bounds from whichever layers are available
+    _all_bounds = []
+    if _basin_geojson and _basin_bounds:
+        _all_bounds.append(_basin_bounds)
+    if _river_geojson and _river_bounds:
+        _all_bounds.append(_river_bounds)
+    if _all_bounds:
+        _map_bounds = (min(b[0] for b in _all_bounds),
+                       min(b[1] for b in _all_bounds),
+                       max(b[2] for b in _all_bounds),
+                       max(b[3] for b in _all_bounds))
+        _map_center = [(_map_bounds[1]+_map_bounds[3])/2,
+                       (_map_bounds[0]+_map_bounds[2])/2]
 
     # Auto-detect basin mapping key from actual GeoJSON properties.
     # Strategy: find a property whose values overlap with the HRU IDs
@@ -2255,6 +2471,8 @@ def Plot_h5_driver(what2map=None,
 
     # --- Load observation data and match to features ---
     _observation_data = None    # {plot_id: [obs_dict, ...]}
+    station_locations = None     # {station_id: (lat, lon)}
+    station_to_feature = None    # {station_id: feature_id}
     if (observation_dir or observation_csv) and _primary_geojson:
         print("\n" + "-" * 40)
         print("Loading observation data...")
@@ -2270,7 +2488,20 @@ def Plot_h5_driver(what2map=None,
                 for sid, fid in station_to_feature.items():
                     print(f"    Station {sid} → Feature {fid}")
                 _observation_data = {}
+                # Normalise compartment filter to a set of lowercase names
+                _obs_comps = None
+                if observation_compartments:
+                    if isinstance(observation_compartments, str):
+                        _obs_comps = {observation_compartments.strip().lower()}
+                    else:
+                        _obs_comps = {c.strip().lower()
+                                      for c in observation_compartments}
                 for p in plots:
+                    # Filter by compartment if specified
+                    if _obs_comps:
+                        p_comp = (p.get('compartment') or '').strip().lower()
+                        if p_comp not in _obs_comps:
+                            continue
                     p_species = p.get('species')
                     if not p_species:
                         continue
@@ -2374,7 +2605,12 @@ def Plot_h5_driver(what2map=None,
                                mapping_key=_map_key,
                                observation_data=_observation_data,
                                feature_label=feature_label,
-                               map_geom_type=_map_geom_type)
+                               map_geom_type=_map_geom_type,
+                               station_locations=station_locations,
+                               station_to_feature=station_to_feature,
+                               separator=separator,
+                               basin_geojson=_basin_geojson,
+                               river_line_geojson=_river_geojson)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)

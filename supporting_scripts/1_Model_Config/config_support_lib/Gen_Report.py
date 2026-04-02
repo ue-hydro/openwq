@@ -33,31 +33,39 @@ import glob as _glob
 import platform
 import numpy as np
 
-# HDF5 reader — add 2_Read_Outputs to path
+# Ensure config_support_lib is on path (for local imports like Gen_BGC_Diagram)
 _this_dir = os.path.dirname(os.path.abspath(__file__))
+if _this_dir not in sys.path:
+    sys.path.insert(0, _this_dir)
+
+# HDF5 reader — add 2_Read_Outputs to path
 _read_outputs_dir = os.path.normpath(
     os.path.join(_this_dir, '..', '..', '2_Read_Outputs', 'hdf5_support_lib'))
 if _read_outputs_dir not in sys.path:
     sys.path.insert(0, _read_outputs_dir)
 
-# GRQA extraction tools — add 3_Calibration path
-_calibration_dir = os.path.normpath(
-    os.path.join(_this_dir, '..', '..', '3_Calibration'))
-if _calibration_dir not in sys.path:
-    sys.path.insert(0, _calibration_dir)
-
+# GRQA extraction tools (standalone — no calibration_lib dependency)
 try:
-    from calibration_lib.observation_data.grqa_extract_stations import (
+    from Gen_GRQA_Extract import (
         GRQACalibrationExtractor, SpeciesMapper, GRQA_PARAMETERS)
     _GRQA_AVAILABLE = True
 except ImportError:
-    _GRQA_AVAILABLE = False
+    try:
+        from .Gen_GRQA_Extract import (
+            GRQACalibrationExtractor, SpeciesMapper, GRQA_PARAMETERS)
+        _GRQA_AVAILABLE = True
+    except (ImportError, SystemError):
+        _GRQA_AVAILABLE = False
 
 try:
-    from calibration_lib.report_helpers import generate_bgc_reaction_diagram
+    from Gen_BGC_Diagram import generate_bgc_reaction_diagram
     _DIAGRAM_AVAILABLE = True
 except ImportError:
-    _DIAGRAM_AVAILABLE = False
+    try:
+        from .Gen_BGC_Diagram import generate_bgc_reaction_diagram
+        _DIAGRAM_AVAILABLE = True
+    except (ImportError, SystemError):
+        _DIAGRAM_AVAILABLE = False
 
 # Auto-mapping: model species name → GRQA parameter code.
 #
@@ -679,27 +687,44 @@ def _load_single_geojson(path):
         return None, None
 
 
-def _build_map_layers(river_network_shapefile, basin_shapefile):
+def _build_map_layers(river_network_shapefile, basin_shapefile, hostmodel="mizuroute"):
     """Build map layers from the river network and basin shapefiles.
+
+    Both layers are always included when available.  The *hostmodel* parameter
+    controls which layer is **interactive** (clickable, linked to plots) and
+    which is a background reference layer (lighter, transparent, non-clickable).
+
+    - mizuRoute: river network is interactive, basin is background.
+    - SUMMA:     basin is interactive, river network is background.
 
     Returns:
         (layers, map_center) where layers is a list of dicts with
-        'geojson_str', 'label', 'style', 'type', and map_center is [lat, lng].
+        'geojson_str', 'label', 'style', 'type', 'interactive', and
+        map_center is [lat, lng].
         Returns ([], None) if no layers loaded.
     """
+    is_summa = hostmodel.lower() == "summa"
     layers = []
     all_bounds = []
 
-    # Layer 1: Basin polygons (from Copernicus LULC shapefile)
+    # Layer 1: Basin polygons
     if basin_shapefile:
         geojson, bounds = _load_single_geojson(basin_shapefile)
         if geojson is not None:
+            if is_summa:
+                # SUMMA: basin is the interactive layer
+                style = {'color': '#ffffff', 'weight': 1.5, 'opacity': 0.9,
+                         'fillColor': '#4dabf7', 'fillOpacity': 0.25}
+            else:
+                # mizuRoute: basin is a background reference layer
+                style = {'color': '#ffffff', 'weight': 0.8, 'opacity': 0.4,
+                         'fillColor': '#aaaaaa', 'fillOpacity': 0.06}
             layers.append({
                 'geojson_str': json.dumps(geojson),
                 'label': 'Basin',
-                'style': {'color': '#ffffff', 'weight': 1.5, 'opacity': 0.9,
-                          'fillOpacity': 0.08},
+                'style': style,
                 'type': 'polygon',
+                'interactive': is_summa,
             })
             all_bounds.append(bounds)
 
@@ -707,11 +732,18 @@ def _build_map_layers(river_network_shapefile, basin_shapefile):
     if river_network_shapefile:
         geojson, bounds = _load_single_geojson(river_network_shapefile)
         if geojson is not None:
+            if not is_summa:
+                # mizuRoute: river network is the interactive layer
+                style = {'color': '#0066cc', 'weight': 2.5, 'opacity': 0.85}
+            else:
+                # SUMMA: river network is a background reference layer
+                style = {'color': '#6699cc', 'weight': 1.2, 'opacity': 0.35}
             layers.append({
                 'geojson_str': json.dumps(geojson),
                 'label': 'River Network',
-                'style': {'color': '#0066cc', 'weight': 2.5, 'opacity': 0.85},
+                'style': style,
                 'type': 'line',
+                'interactive': not is_summa,
             })
             all_bounds.append(bounds)
 
@@ -733,6 +765,8 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
                               grqa_buffer_km=10):
     """Extract GRQA observation stations for the simulated species.
 
+    Uses the standalone Gen_GRQA_Extract module (no calibration_lib dependency).
+
     Search strategy:
       1. If a basin shapefile is provided, use it as the search area
          (with a user-defined buffer around the basin boundary).
@@ -742,14 +776,6 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
     ``openwq_in/grqa_clipped_data/`` and the raw cache (full GRQA CSVs)
     is deleted to free disk space.
 
-    Parameters:
-        river_network_shapefile: path to river network shapefile (or None)
-        basin_shapefile: path to basin/catchment shapefile (or None)
-        chemical_species: list of model species names
-        output_dir: base directory (where openwq_in/ lives)
-        grqa_local_data_path: path to pre-downloaded GRQA data (or None)
-        grqa_buffer_km: buffer distance in km around basin/river network
-
     Returns:
         (stations_geojson_str, grqa_stats) or (None, None) on failure.
     """
@@ -757,14 +783,18 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
         print("  GRQA tools not available (missing geopandas/shapely). Skipping.")
         return None, None
 
+    import geopandas as _gpd
+    from shapely.geometry import mapping as _shp_mapping
+    from shapely.ops import unary_union as _unary_union
+    import pandas as _pd
+
     # Need at least one shapefile to define the search area
     shp_for_search = basin_shapefile or river_network_shapefile
     if not shp_for_search or not os.path.isfile(shp_for_search):
         print("  No shapefile available for GRQA spatial search. Skipping.")
         return None, None
 
-    # Build species mapping: GRQA code → model species name
-    # Also track which model species have no GRQA equivalent
+    # Build species mapping: GRQA code -> model species name
     species_mapping = {}
     unmapped_species = []
     for model_name in chemical_species:
@@ -791,25 +821,21 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
 
     try:
         import shutil
-        import geopandas as gpd
-        from shapely.geometry import mapping
-        from shapely.ops import unary_union
-        import pandas as pd
 
-        # ── Determine search buffer ──
+        # Determine search buffer
         if basin_shapefile and os.path.isfile(basin_shapefile):
             print(f"  Using basin shapefile for GRQA search area (+ {grqa_buffer_km} km buffer).")
-            basin_gdf = gpd.read_file(basin_shapefile)
+            basin_gdf = _gpd.read_file(basin_shapefile)
             if basin_gdf.crs and not basin_gdf.crs.is_geographic:
                 basin_gdf = basin_gdf.to_crs(epsg=4326)
-            # Buffer in a projected CRS (UTM)
             centroid = basin_gdf.geometry.unary_union.centroid
             utm_zone = int((centroid.x + 180) / 6) + 1
             hemi = 'north' if centroid.y >= 0 else 'south'
             utm_epsg = 32600 + utm_zone if hemi == 'north' else 32700 + utm_zone
             basin_proj = basin_gdf.to_crs(epsg=utm_epsg)
-            search_geom = unary_union(basin_proj.geometry).buffer(buffer_m)
-            search_gdf = gpd.GeoDataFrame(geometry=[search_geom], crs=f'EPSG:{utm_epsg}')
+            search_geom = _unary_union(basin_proj.geometry).buffer(buffer_m)
+            search_gdf = _gpd.GeoDataFrame(geometry=[search_geom],
+                                           crs=f'EPSG:{utm_epsg}')
             search_gdf = search_gdf.to_crs(epsg=4326)
         else:
             print(f"  Using river network with {grqa_buffer_km} km buffer for GRQA search area.")
@@ -831,7 +857,7 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
             stations, observations = extractor.extract_stations_and_observations(
                 buffer_gdf)
 
-        # ── Clean up: delete the large raw cache files ──
+        # Clean up: delete the large raw cache files
         cache_dir = os.path.join(grqa_output_dir, 'grqa_cache')
         if os.path.isdir(cache_dir):
             print(f"  Cleaning up GRQA cache ({cache_dir})...")
@@ -840,10 +866,8 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
         if stations is None or stations.empty:
             print("  No GRQA stations found in the search area.")
             grqa_stats = {
-                'n_stations': 0,
-                'n_observations': 0,
-                'year_start': None,
-                'year_end': None,
+                'n_stations': 0, 'n_observations': 0,
+                'year_start': None, 'year_end': None,
                 'species_stats': [],
                 'output_dir': grqa_output_dir,
                 'searched_species': list(species_mapping.values()),
@@ -862,7 +886,7 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
                      for k, v in row.items() if k != 'geometry'}
             features.append({
                 'type': 'Feature',
-                'geometry': mapping(row.geometry),
+                'geometry': _shp_mapping(row.geometry),
                 'properties': props,
             })
         stations_geojson = {'type': 'FeatureCollection', 'features': features}
@@ -870,13 +894,12 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
         # Compute statistics
         site_col = extractor.column_map.get('site_id', 'site_id')
         date_col = extractor.column_map.get('obs_date', 'obs_date')
-
-        dates = pd.to_datetime(observations[date_col], errors='coerce')
+        dates = _pd.to_datetime(observations[date_col], errors='coerce')
         species_stats = []
         found_model_species = set()
         for model_sp in observations['model_species'].unique():
             sp_obs = observations[observations['model_species'] == model_sp]
-            sp_dates = pd.to_datetime(sp_obs[date_col], errors='coerce')
+            sp_dates = _pd.to_datetime(sp_obs[date_col], errors='coerce')
             sp_stations = sp_obs[site_col].nunique()
             species_stats.append({
                 'species': model_sp,
@@ -887,7 +910,6 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
             })
             found_model_species.add(model_sp)
 
-        # Species that exist in GRQA but had no data within the buffer
         no_data_species = [s for s in species_mapping.values()
                            if s not in found_model_species]
 
@@ -907,6 +929,122 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
 
     except Exception:
         raise
+
+
+def _load_clipped_observations_for_report(output_dir, chemical_species):
+    """Load pre-extracted observation data from ``openwq_in/grqa_clipped_data/``.
+
+    This is a lightweight loader that reads the CSV files produced by the
+    calibration tools (GRQA extraction).  It does NOT depend on
+    ``calibration_lib`` — only standard library + pandas.
+
+    Expected files:
+        openwq_in/grqa_clipped_data/grqa_clipped_observations.csv
+        openwq_in/grqa_clipped_data/grqa_clipped_stations.csv
+
+    Returns:
+        (stations_geojson_str, obs_stats) or (None, None) when data is absent.
+    """
+    clipped_dir = os.path.join(output_dir, 'openwq_in', 'grqa_clipped_data')
+    obs_csv = os.path.join(clipped_dir, 'grqa_clipped_observations.csv')
+    stn_csv = os.path.join(clipped_dir, 'grqa_clipped_stations.csv')
+
+    if not os.path.isfile(obs_csv):
+        print(f"  No pre-extracted observation data found at {clipped_dir}")
+        print("  To generate it, run the GRQA extraction from the calibration tools first,")
+        print("  or set observation_data_source = 'user_csv' with your own CSV.")
+        return None, None
+
+    try:
+        import pandas as pd
+
+        observations = pd.read_csv(obs_csv)
+        if observations.empty:
+            print("  Clipped observations CSV is empty.")
+            return None, None
+
+        # Detect column names (GRQA clipped format)
+        site_col = 'site_id'
+        date_col = 'obs_date'
+        lat_col = 'lat_wgs84' if 'lat_wgs84' in observations.columns else 'lat'
+        lon_col = 'lon_wgs84' if 'lon_wgs84' in observations.columns else 'lon'
+
+        # Build station GeoJSON from the stations CSV or from observations
+        features = []
+        if os.path.isfile(stn_csv):
+            stations = pd.read_csv(stn_csv)
+            stn_lat = 'lat_wgs84' if 'lat_wgs84' in stations.columns else 'lat'
+            stn_lon = 'lon_wgs84' if 'lon_wgs84' in stations.columns else 'lon'
+            for _, row in stations.iterrows():
+                props = {k: str(v) for k, v in row.items()
+                         if k not in (stn_lat, stn_lon)}
+                features.append({
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'Point',
+                        'coordinates': [float(row[stn_lon]), float(row[stn_lat])],
+                    },
+                    'properties': props,
+                })
+        else:
+            # Fallback: derive stations from the observations CSV
+            stn_grp = observations.groupby(site_col).first()
+            for sid, row in stn_grp.iterrows():
+                features.append({
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'Point',
+                        'coordinates': [float(row[lon_col]), float(row[lat_col])],
+                    },
+                    'properties': {'site_id': str(sid)},
+                })
+
+        stations_geojson = {'type': 'FeatureCollection', 'features': features}
+
+        # Per-species statistics
+        dates = pd.to_datetime(observations[date_col], errors='coerce')
+        species_col = 'model_species' if 'model_species' in observations.columns else 'parameter'
+        species_stats = []
+        found_species = set()
+        for model_sp in observations[species_col].unique():
+            sp_obs = observations[observations[species_col] == model_sp]
+            sp_dates = pd.to_datetime(sp_obs[date_col], errors='coerce')
+            sp_stations = sp_obs[site_col].nunique()
+            species_stats.append({
+                'species': model_sp,
+                'n_stations': sp_stations,
+                'n_observations': len(sp_obs),
+                'year_start': int(sp_dates.min().year) if not sp_dates.isna().all() else None,
+                'year_end': int(sp_dates.max().year) if not sp_dates.isna().all() else None,
+            })
+            found_species.add(model_sp)
+
+        # Species in the model that have no observations
+        chem_set = set(chemical_species) if chemical_species else set()
+        no_data_species = sorted(chem_set - found_species)
+
+        n_stations = len(features)
+        obs_stats = {
+            'n_stations': n_stations,
+            'n_observations': len(observations),
+            'year_start': int(dates.min().year) if not dates.isna().all() else None,
+            'year_end': int(dates.max().year) if not dates.isna().all() else None,
+            'species_stats': species_stats,
+            'output_dir': clipped_dir,
+            'no_data_species': no_data_species,
+            'unmapped_species': [],
+        }
+
+        print(f"  Loaded {len(observations)} observations from {n_stations} stations.")
+        print(f"  Species with data: {sorted(found_species)}")
+        if no_data_species:
+            print(f"  Species without observations: {no_data_species}")
+
+        return json.dumps(stations_geojson), obs_stats
+
+    except Exception as e:
+        print(f"  WARNING: Failed to load clipped observations: {e}")
+        return None, None
 
 
 def _load_user_observations_for_report(user_observation_csv, chemical_species):
@@ -1171,6 +1309,7 @@ def generate_simulation_report(
         grqa_local_data_path=None,
         grqa_buffer_km=10,
         user_observation_csv=None,
+        observation_compartments=None,
         container_runtime="docker",
         mpi_np=2,
         docker_container_name="docker_openwq",
@@ -1214,7 +1353,7 @@ def generate_simulation_report(
     # Basin map layers (river network + basin polygons)
     map_layers, map_center = [], None
     try:
-        map_layers, map_center = _build_map_layers(river_network_shapefile, basin_shapefile)
+        map_layers, map_center = _build_map_layers(river_network_shapefile, basin_shapefile, hostmodel)
     except Exception as _e:
         print(f"  WARNING: Map layers failed: {_e}")
         _section_errors['map'] = str(_e)
@@ -1242,12 +1381,11 @@ def generate_simulation_report(
             print(f"  WARNING: User CSV observation loading failed: {_e}")
             _section_errors['observations'] = str(_e)
     else:
-        # Default: GRQA
+        # Default: GRQA extraction (or fallback to pre-extracted CSVs)
         _obs_label = "GRQA"
         if river_network_shapefile or basin_shapefile:
             try:
                 print("  Extracting GRQA observation stations...")
-                # "auto" or None → download from Zenodo; anything else → treat as path
                 _grqa_path = None
                 if isinstance(grqa_local_data_path, str) and \
                         grqa_local_data_path.strip().lower() not in ("auto", ""):
@@ -1257,9 +1395,22 @@ def generate_simulation_report(
                     output_dir, _grqa_path, grqa_buffer_km=grqa_buffer_km)
             except Exception as _e:
                 print(f"  WARNING: GRQA extraction failed: {_e}")
-                _section_errors['observations'] = str(_e)
+                print("  Falling back to pre-extracted observation data...")
+                try:
+                    obs_geojson_str, obs_stats = _load_clipped_observations_for_report(
+                        output_dir, chemical_species)
+                except Exception as _e2:
+                    print(f"  WARNING: Fallback also failed: {_e2}")
+                    _section_errors['observations'] = str(_e)
         else:
-            print("  No shapefile available for GRQA spatial search. Skipping.")
+            # No shapefiles — try pre-extracted data
+            try:
+                print("  No shapefile for GRQA search. Looking for pre-extracted data...")
+                obs_geojson_str, obs_stats = _load_clipped_observations_for_report(
+                    output_dir, chemical_species)
+            except Exception as _e:
+                print(f"  WARNING: Observation data loading failed: {_e}")
+                _section_errors['observations'] = str(_e)
 
     # Build species observation availability dict from obs_stats
     _species_obs_avail = None
@@ -2155,6 +2306,19 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                     H.append(f'<tr><td>Seasonal Distribution</td><td>'
                              f'<span class="badge badge-secondary">'
                              f'{seasonal_loads_method}</span></td></tr>')
+                # Observation compartments
+                if observation_compartments:
+                    if isinstance(observation_compartments, str):
+                        _obs_comp_str = observation_compartments
+                    else:
+                        _obs_comp_str = ', '.join(str(c) for c in observation_compartments)
+                    H.append(f'<tr><td>Observation Compartments</td>'
+                             f'<td><span class="badge badge-secondary">'
+                             f'{_obs_comp_str}</span></td></tr>')
+                else:
+                    H.append(f'<tr><td>Observation Compartments</td>'
+                             f'<td><span class="badge badge-secondary">'
+                             f'All (no filter)</span></td></tr>')
                 for mk, mv in ss_metadata.items():
                     H.append(f'<tr><td>{mk}</td><td>{mv}</td></tr>')
                 H.append('</table></div></div>')
@@ -2526,14 +2690,14 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                  'The snippets below are <strong>self-contained</strong> &mdash; '
                  'copy each into your terminal and it will run as-is '
                  '(activates the venv, reads HDF5, and produces output).</p>')
+        H.append('<p style="font-size:.82rem;color:var(--accent);margin:.4rem 0 .5rem">'
+                 '&#x26A0; Selecting multiple combinations of species, compartments, '
+                 'and debug mode may slow down rendering and increase memory usage. '
+                 'For best performance, keep only a few active at a time.</p>')
 
         # --- Species checkboxes ---
         import html as _html_mod
         H.append('<p style="font-weight:600;margin-top:1rem">Select chemical species to visualize:</p>')
-        H.append('<p style="font-size:.82rem;color:var(--accent);margin:0 0 .5rem">'
-                 '&#x26A0; Selecting many species simultaneously may slow down rendering '
-                 'and increase memory usage. For best performance, keep only a '
-                 'few species active at a time.</p>')
         H.append('<div id="speciesCbRow" style="display:flex;flex-wrap:wrap;gap:.5rem .8rem;'
                  'margin:.5rem 0 1rem;align-items:center">')
         for _i_sp, _sp in enumerate(_species_list):
@@ -2708,6 +2872,10 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         elif _obs_source == "user_csv" and user_observation_csv:
             _obs_plot_param = (
                 f'    observation_csv="{_py_path(os.path.abspath(user_observation_csv))}",\n')
+        # Add compartment filter for observations
+        if observation_compartments:
+            _obs_plot_param += (
+                f'    observation_compartments={repr(observation_compartments)},\n')
 
         _plot_all_body = (
             f'{_python_preamble()}\n'
@@ -2894,21 +3062,31 @@ function _owqRelayoutAll(){
             fit_var = None
 
             # Shapefile layers (basin polygons + river network)
-            for idx, layer in enumerate(map_layers):
+            # Interactive layers get popups; background layers are lighter
+            # and togglable via the Leaflet overlay checkbox control.
+            # Sort so background layers render first (underneath).
+            _sorted_layers = sorted(map_layers, key=lambda l: l.get('interactive', True))
+            bg_layer_vars = []  # track background layer vars for toggle
+            for idx, layer in enumerate(_sorted_layers):
                 var_name = f"lyr_{idx}"
                 geojson_var = f"gj_{idx}"
                 style = layer['style']
                 label = layer['label'].replace("'", "\\'")
                 layer_type = layer['type']
+                is_interactive = layer.get('interactive', True)
 
                 layer_js_blocks.append(f"  var {geojson_var} = {layer['geojson_str']};")
 
                 color = style.get('color', '#0066cc')
                 weight = style.get('weight', 2.5)
                 opacity = style.get('opacity', 0.85)
+                fill_color = style.get('fillColor', color)
                 fill_opacity = style.get('fillOpacity', 0.2)
-                layer_js_blocks.append(f"""  var {var_name} = L.geoJSON({geojson_var}, {{
-    style: function(f){{ return {{color:'{color}',weight:{weight},opacity:{opacity},fillOpacity:{fill_opacity}}}; }},
+
+                if is_interactive:
+                    # Interactive layer: full styling + click popups
+                    layer_js_blocks.append(f"""  var {var_name} = L.geoJSON({geojson_var}, {{
+    style: function(f){{ return {{color:'{color}',weight:{weight},opacity:{opacity},fillColor:'{fill_color}',fillOpacity:{fill_opacity}}}; }},
     onEachFeature: function(f,l){{
       var props = f.properties;
       var html = '<b>{label}</b><br>';
@@ -2916,7 +3094,16 @@ function _owqRelayoutAll(){
       l.bindPopup(html);
     }}
   }}).addTo(map);""")
-                overlay_entries.append(f"'{label}': {var_name}")
+                else:
+                    # Background reference layer: lighter, no popups, non-interactive
+                    layer_js_blocks.append(f"""  var {var_name} = L.geoJSON({geojson_var}, {{
+    style: function(f){{ return {{color:'{color}',weight:{weight},opacity:{opacity},fillColor:'{fill_color}',fillOpacity:{fill_opacity}}}; }},
+    interactive: false
+  }}).addTo(map);""")
+                    bg_layer_vars.append((var_name, label))
+
+                overlay_label = f'{label} (ref.)' if not is_interactive else label
+                overlay_entries.append(f"'{overlay_label}': {var_name}")
                 if fit_var is None:
                     fit_var = var_name
 
@@ -3080,6 +3267,7 @@ def generate_report(
         grqa_local_data_path=None,
         grqa_buffer_km=10,
         user_observation_csv=None,
+        observation_compartments=None,
         container_runtime="docker",
         mpi_np=2,
         docker_container_name="docker_openwq",
@@ -3135,6 +3323,7 @@ def generate_report(
             grqa_local_data_path=grqa_local_data_path,
             grqa_buffer_km=grqa_buffer_km,
             user_observation_csv=user_observation_csv,
+            observation_compartments=observation_compartments,
             container_runtime=container_runtime,
             mpi_np=mpi_np,
             docker_container_name=docker_container_name,

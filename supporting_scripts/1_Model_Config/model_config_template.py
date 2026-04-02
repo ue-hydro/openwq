@@ -149,7 +149,7 @@ path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/BGC_templates/NATI
 #     PO4-P (phosphate as phosphorus, mg-P/L),  SO4-S
 #   GRQA observations report the full ion (e.g. NO3 in mg-NO3/L).
 #   The stoichiometric conversion is applied automatically:
-#     model_value = GRQA_value × MW(element) / MW(ion)
+#     model_value = obs_value × MW(element) / MW(ion)
 #   See BGC_templates/README.md for the full conversion table.
 
 # ── PHREEQC settings ──
@@ -164,6 +164,10 @@ phreeqc_component_h2o = True
 # NOTE: OpenWQ auto-converts Kelvin → Celsius (detects K if value > 100).
 #   mizuRoute: use "T"  (°C, converted from basinAirTemp)
 #   SUMMA:     use "Tair_K" or "Tsoil_K"
+# Available compartment names (must match compartments_and_cells keys):
+#   mizuRoute : RIVER_NETWORK_REACHES
+#   SUMMA     : SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF,
+#               ILAYERVOLFRACWAT_SOIL, SCALARAQUIFER
 phreeqc_temperature_mapping = {"RIVER_NETWORK_REACHES": "T"}  # or None
 phreeqc_pressure_mapping = None   # Maps compartment → pressure variable (atm). Usually None.
 
@@ -211,6 +215,10 @@ le_module_name = "NATIVE_LE_BOUNDMIX"
 #   upper_compartment   — compartment on top (e.g., surface runoff)
 #   lower_compartment   — compartment below (e.g., soil water)
 #   K_val               — exchange coefficient [1/s]. Larger = faster mixing.
+# Available compartment names (must match compartments_and_cells keys):
+#   mizuRoute : RIVER_NETWORK_REACHES
+#   SUMMA     : SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF,
+#               ILAYERVOLFRACWAT_SOIL, SCALARAQUIFER
 le_module_config = [
     {
         "direction": "z",
@@ -234,6 +242,10 @@ le_module_config = [
 ts_module_name = "HYPE_HBVSED"
 
 # Which compartment experiences erosion and receives transported sediment.
+# Available compartment names (must match compartments_and_cells keys):
+#   mizuRoute : RIVER_NETWORK_REACHES
+#   SUMMA     : SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF,
+#               ILAYERVOLFRACWAT_SOIL, SCALARAQUIFER
 ts_sediment_compartment = "RIVER_NETWORK_REACHES"
 ts_transport_compartment = "RIVER_NETWORK_REACHES"
 ts_direction = "z"
@@ -292,6 +304,10 @@ ts_hbvsed_monthly_erosion_factor = [0.0] * 12
 #     via SURFACE/EXCHANGE blocks in the .pqi file.
 
 si_module_name = "NONE"
+# Available compartment names (must match compartments_and_cells keys):
+#   mizuRoute : RIVER_NETWORK_REACHES
+#   SUMMA     : SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF,
+#               ILAYERVOLFRACWAT_SOIL, SCALARAQUIFER
 si_sediment_compartment = "RIVER_NETWORK_REACHES"
 si_bulk_density_kg_m3 = 1500.0    # Sediment bulk density [kg/m³]
 si_layer_thickness_m = 1.0        # Active sediment layer thickness [m]
@@ -341,6 +357,10 @@ ss_metadata_comment = "Leave any comments needed for future reference"
 #  Provide one entry per species × compartment combination.
 #  Each CSV file has columns: datetime, cell_id_1, cell_id_2, ...
 #  Values are load rates in the specified units.
+# Available compartment names (must match compartments_and_cells keys):
+#   mizuRoute : RIVER_NETWORK_REACHES
+#   SUMMA     : SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF,
+#               ILAYERVOLFRACWAT_SOIL, SCALARAQUIFER
 
 ss_method_csv_config = [
     {
@@ -373,14 +393,11 @@ ss_method_copernicus_basin_info = {
     'mapping_key': 'SubId'    # Column in shapefile that identifies each sub-catchment
 }
 
-# HDF5 output file — used to map host-model IDs to OpenWQ grid indices.
-# Only needed when ss_use_cellid_mapping = False (legacy mode).
-ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key = {
-    'path_to_file': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/openwq_out/HDF5/RIVER_NETWORK_REACHES@N_ORG_ACTIVE#MG|L-main.h5',
-    'mapping_key': 'reachID'
-}
-
 # Which compartment receives the loads.
+# Available compartment names (must match compartments_and_cells keys):
+#   mizuRoute : RIVER_NETWORK_REACHES
+#   SUMMA     : SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF,
+#               ILAYERVOLFRACWAT_SOIL, SCALARAQUIFER
 ss_method_copernicus_compartment_name_for_load = "RIVER_NETWORK_REACHES"
 
 # Path to Copernicus ESA CCI Land Cover data.
@@ -422,22 +439,6 @@ ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
 #   "uniform"  — equal 1/12 each month
 #   "seasonal" — climate-weighted (requires ss_climate_data below)
 ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform'
-
-
-# ── Cell ID Mapping ──────────────────────────────────────────────────────────
-#  Controls how spatial locations are identified in the generated JSON files.
-#
-#   True  (recommended) — Uses host-model cell IDs directly (e.g., reachID
-#         for mizuRoute, hruId_z{layer} for SUMMA). Portable across grids.
-#   False (legacy)      — Uses internal (ix, iy, iz) indices. Requires the
-#         HDF5 mapping file above.
-#
-#  TIP: To find valid cell IDs, check your HDF5 outputs:
-#    import h5py
-#    with h5py.File('openwq_out/HDF5/RIVER_NETWORK_REACHES@NO3-N#MG|L-main.h5') as f:
-#        print(f['reachID'][:])    # mizuRoute
-#        print(f['hruId'][:])      # SUMMA
-ss_use_cellid_mapping = True
 
 
 # ── Climate data for seasonal distribution ────────────────────────────────────
@@ -535,6 +536,10 @@ timestep = [1, "hour"]
 # Which compartments and cells to export.
 # Format: { "COMPARTMENT": { "ix_range": ["iy_range", "iz_range", "cell_range"] } }
 # Use "all" to export every cell in that dimension.
+# Available compartment names:
+#   mizuRoute : RIVER_NETWORK_REACHES
+#   SUMMA     : SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF,
+#               ILAYERVOLFRACWAT_SOIL, SCALARAQUIFER
 compartments_and_cells = {
     "RIVER_NETWORK_REACHES": {
         "1": ["all", "all", "all"]
@@ -630,6 +635,26 @@ grqa_buffer_km = 100
 # the observation overlay.
 user_observation_csv = None   # e.g., "/path/to/my_observations.csv"
 
+# Observation compartments — restrict observation overlay to specific compartments.
+# In the output report, observations will ONLY be shown for plots belonging
+# to these compartments.  Compartment names must match the keys defined in
+# compartments_and_cells above (case-insensitive).
+#
+# Options:
+#   None or []                    → show observations for ALL compartments (no filter)
+#   ["RIVER_NETWORK_REACHES"]     → mizuRoute river reaches only
+#   ["RUNOFF"]                    → SUMMA runoff compartment only
+#   ["RUNOFF", "SCALARAQUIFER"]   → multiple compartments
+#
+# Available compartment names (must match compartments_and_cells keys):
+#   mizuRoute : RIVER_NETWORK_REACHES
+#   SUMMA     : SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF,
+#               ILAYERVOLFRACWAT_SOIL, SCALARAQUIFER
+#
+# Since river water-quality monitoring stations measure in-stream concentrations,
+# you will typically want to restrict observations to the river/runoff compartment:
+observation_compartments = ["RIVER_NETWORK_REACHES"]
+
 
 # ╔════════════════════════════════════════════════════════════════════════╗
 # ║  END OF USER CONFIGURATION — do not edit below this line               ║
@@ -714,6 +739,7 @@ if generate_report:
             grqa_local_data_path=grqa_local_data_path,
             grqa_buffer_km=grqa_buffer_km,
             user_observation_csv=user_observation_csv,
+            observation_compartments=observation_compartments,
             mpi_np=mpi_np,
             executable_path=executable_path,
             file_manager_path=file_manager_path,
