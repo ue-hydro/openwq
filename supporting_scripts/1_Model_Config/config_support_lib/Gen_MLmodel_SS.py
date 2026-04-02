@@ -402,7 +402,7 @@ def generate_predictions_json(
                 int(row['year']), int(row['month']), 1, 1, "all", "all",
                 "all", "all", "all",
                 float(row['load_sum']),
-                "continuous" if units == "mg/l" else "discrete"
+                "CONTINUOUS" if units == "mg/l" else "DISCRETE"
             ]
             sub_idx += 1
 
@@ -411,8 +411,8 @@ def generate_predictions_json(
                 "CHEMICAL_NAME": species,
                 "COMPARTMENT_NAME": compartment_name,
                 "COMMENT": f"ML-predicted {species} for {compartment_name}",
-                "TYPE": "source",
-                "UNITS": units,
+                "TYPE": "SOURCE",
+                "UNITS": units.upper(),
                 "DATA_FORMAT": "JSON",
                 "DATA": data_entries
             }

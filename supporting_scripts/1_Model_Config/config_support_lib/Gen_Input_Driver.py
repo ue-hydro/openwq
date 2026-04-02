@@ -466,13 +466,11 @@ def Gen_Input_Driver(
         ss_metadata_comment: str = "",
         ss_method_csv_config: List[Dict[str, Union[str, int]]] = None,
         ss_method_copernicus_basin_info: Dict[str, str] = None,
-        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str] = None,
         ss_method_copernicus_compartment_name_for_load: str = "",
         ss_method_copernicus_nc_lc_dir = None,
         ss_method_copernicus_period: List[Union[int, float]] = None,
         ss_method_copernicus_default_loads_bool: bool = True,
         ss_method_copernicus_annual_to_seasonal_loads_method: str = "uniform",
-        ss_use_cellid_mapping: bool = True,
 
         # External water fluxes
         ewf_method: str = "fixed_value",
@@ -547,7 +545,6 @@ def Gen_Input_Driver(
         #   - phreeqc_input_filepath / phreeqc_database_filepath (copied by Gen_PHREEQCmodule_file.py)
         #   - ss_method_copernicus_basin_info (shapefile read by Gen_SS_Driver.py)
         #   - ss_method_copernicus_nc_lc_dir (NetCDF files read by Gen_SS_Driver.py)
-        #   - ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key (HDF5 read)
         #
         # Only CSV source/sink Filepath entries are purely embedded in JSON (the CSV files
         # themselves are read by OpenWQ at runtime, not by the config generator).
@@ -967,13 +964,11 @@ def Gen_Input_Driver(
             ss_metadata_comment=ss_metadata_comment,
             ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
             ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
-            ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key=ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key,
             ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
             ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
-            use_cellid_mapping=ss_use_cellid_mapping,
             simulation_period=[req_start, req_end],
             bgc_engine_label=_bgc_engine_label,
             chemical_species_list=_chem_species_list,
@@ -998,13 +993,11 @@ def Gen_Input_Driver(
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
             ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
-            ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key=ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key,
             climate_data=ss_climate_data,
             precip_scaling_power=ss_climate_precip_scaling_power,
             temp_q10=ss_climate_temp_q10,
             temp_reference_c=ss_climate_temp_reference_c,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
-            use_cellid_mapping=ss_use_cellid_mapping,
             simulation_period=[req_start, req_end],
             bgc_engine_label=_bgc_engine_label,
             chemical_species_list=_chem_species_list,

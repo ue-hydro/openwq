@@ -413,6 +413,11 @@ class OptimizedLULCAnalyzer:
             else:
                 output_tiff = self.output_dir / f'lulc_{year}.tif'
 
+        # Remove any corrupted leftover from a previous run
+        output_tiff = Path(output_tiff)
+        if output_tiff.exists():
+            output_tiff.unlink()
+
         # Write to GeoTIFF
         # Use WKT format to avoid PROJ database issues
         wgs84_wkt = 'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]'
@@ -1827,7 +1832,6 @@ def set_ss_climate_adjusted_export_coefficients(
         ss_method_copernicus_period: List[Union[int, float]],
         ss_method_copernicus_default_loads_bool: bool,
         ss_method_copernicus_compartment_name_for_load: str,
-        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
         climate_data: Dict[int, Dict[str, List[float]]],
         precip_scaling_power: float = 1.0,
         temp_q10: float = 2.0,
@@ -1837,7 +1841,6 @@ def set_ss_climate_adjusted_export_coefficients(
         optional_load_coefficients: Optional[Dict[int, Dict[str, float]]] = None,
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc',
-        use_cellid_mapping: bool = True,
         simulation_period: Optional[List[int]] = None,
         bgc_engine_label: str = "",
         chemical_species_list: Optional[List[str]] = None
@@ -1871,8 +1874,6 @@ def set_ss_climate_adjusted_export_coefficients(
         If True, use default export coefficients; if False, use optional_load_coefficients
     ss_method_copernicus_compartment_name_for_load : str
         OpenWQ compartment name (e.g., 'RIVER_NETWORK_REACHES')
-    ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key : dict
-        HDF5 file info: {'path_to_file': ..., 'mapping_key': ...}
     climate_data : dict
         Monthly climate data indexed by year. Format:
         {
@@ -1899,13 +1900,8 @@ def set_ss_climate_adjusted_export_coefficients(
         Whether to search subdirectories for NetCDF files
     file_pattern : str
         Glob pattern for NetCDF files
-    use_cellid_mapping : bool, default True
-        If True, use cell_id (e.g., reachId, hruId) directly in JSON instead of (ix, iy, iz) indices.
-        OpenWQ C++ will perform the lookup at runtime using the cellid_to_wq mapping.
-        This eliminates the need for the HDF5 file for spatial mapping.
-        If False, use the legacy (ix, iy, iz) approach requiring HDF5 file.
+
     """
-    import h5py
 
     print("\n" + "=" * 60)
     print("CLIMATE-ADJUSTED EXPORT COEFFICIENT METHOD")
@@ -1948,31 +1944,7 @@ def set_ss_climate_adjusted_export_coefficients(
         shp_hru_id_column=shp_hru_id_column
     )
 
-    # Step 4: Prepare spatial mapping
-    hru_to_xyz = None  # Will be None if using cellid_mapping
-
-    if use_cellid_mapping:
-        print("\n✓ Using cell_id mapping (OpenWQ C++ runtime lookup)")
-        print("  JSON will contain cell_id strings instead of (ix, iy, iz) indices")
-    else:
-        # Legacy approach: Load HDF5 spatial mapping
-        openwq_hru_mapping_key = ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key['mapping_key']
-        openwq_h5_result_path = ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key['path_to_file']
-
-        print(f"\nLoading spatial mapping from: {openwq_h5_result_path}")
-        with h5py.File(openwq_h5_result_path, 'r') as h5f:
-            xyz_elements = h5f['xyz_elements'][:]
-            mapping_ids = h5f[openwq_hru_mapping_key][:]
-
-        hru_to_xyz = {}
-        for idx in range(len(mapping_ids)):
-            hru_id = mapping_ids[idx].decode('utf-8')
-            ix, iy, iz = xyz_elements[:, idx]
-            hru_to_xyz[hru_id] = (int(ix), int(iy), int(iz))
-
-        print(f"  Mapped {len(hru_to_xyz)} HRU/segments")
-
-    # Step 5: Build climate-adjusted JSON
+    # Step 4: Build climate-adjusted JSON
     pivot_csv_path = output_dir / 'nutrient_loads_pivot.csv'
     pivot_df = pd.read_csv(pivot_csv_path)
 
@@ -2061,14 +2033,8 @@ def set_ss_climate_adjusted_export_coefficients(
                 hru_id = str(int(row[shp_hru_id_column]))
                 annual_load_kg = row[nutrient]
 
-                if use_cellid_mapping:
-                    # Use cell_id directly - OpenWQ C++ will do the lookup
-                    spatial_id = hru_id
-                else:
-                    # Legacy approach: use (ix, iy, iz) from HDF5 mapping
-                    if hru_id not in hru_to_xyz:
-                        continue
-                    spatial_id = hru_to_xyz[hru_id]  # tuple (ix, iy, iz)
+                # Use cell_id directly - OpenWQ C++ will do the lookup
+                spatial_id = hru_id
 
                 # Climate-adjusted temporal distribution
                 temporal_entries = _apply_climate_adjustment(
@@ -2084,18 +2050,9 @@ def set_ss_climate_adjusted_export_coefficients(
                 for month, day, hour, load_kg in temporal_entries:
                     days = calendar.monthrange(sim_year, int(month))[1]
                     daily_rate = load_kg / days
-                    if use_cellid_mapping:
-                        data_entries[str(sub_idx)] = [
+                    data_entries[str(sub_idx)] = [
                             sim_year, int(month), "all", "all", "all", "all",
                             spatial_id, "all", "all",
-                            float(daily_rate),
-                            "continuous", "day"
-                        ]
-                    else:
-                        ix, iy, iz = spatial_id
-                        data_entries[str(sub_idx)] = [
-                            sim_year, int(month), "all", "all", "all", "all",
-                            ix, iy, iz,
                             float(daily_rate),
                             "continuous", "day"
                         ]
@@ -2161,12 +2118,10 @@ def create_openwq_ss_json_from_loads(
         ss_config_filepath: str,
         json_header_comment: List[str],
         ss_method_copernicus_compartment_name_for_load: str,
-        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
         shp_hru_id_column: str,
         ss_method_copernicus_annual_to_seasonal_loads_method: str = "uniform",
         ss_metadata_comment: str = "Nutrient loading from land use/land cover",
         ss_metadata_source: str = "Copernicus LULC analysis",
-        use_cellid_mapping: bool = True,
         simulation_period: Optional[List[int]] = None,
         bgc_engine_label: str = "",
         chemical_species_list: Optional[List[str]] = None,
@@ -2188,21 +2143,12 @@ def create_openwq_ss_json_from_loads(
         List of comment lines to add at the top of the file
     ss_method_copernicus_compartment_name_for_load : str
         Name of the compartment (e.g., 'RIVER_NETWORK_REACHES')
-    openwq_hru_mapping_key : str
-        Name of the HRU/segment ID column (e.g., 'Seg_ID', 'HRU_ID')
-    ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key : Dist[str, str]
-        Path to OpenWQ HDF5 output file containing xyz_elements and mapping_key data
     ss_metadata_comment : str
         Comment for metadata section
     ss_metadata_source : str
         Source identifier for metadata section
-    use_cellid_mapping : bool, default True
-        If True, use cell_id (e.g., reachId, hruId) directly in JSON instead of (ix, iy, iz) indices.
-        OpenWQ C++ will perform the lookup at runtime using the cellid_to_wq mapping.
-        This eliminates the need for the HDF5 file for spatial mapping.
-        If False, use the legacy (ix, iy, iz) approach requiring HDF5 file.
+
     """
-    import h5py
 
     print("\n" + "=" * 60)
     print("GENERATING OPENWQ SOURCE/SINK JSON")
@@ -2232,47 +2178,6 @@ def create_openwq_ss_json_from_loads(
     # Load pivot loads data
     print(f"\nLoading pivot loads from: {pivot_loads_csv_path.name}")
     pivot_df = pd.read_csv(pivot_loads_csv_path)
-
-    # Prepare spatial mapping
-    hru_to_xyz = None  # Will be None if using cellid_mapping
-
-    if use_cellid_mapping:
-        print("\n✓ Using cell_id mapping (OpenWQ C++ runtime lookup)")
-        print("  JSON will contain cell_id strings instead of (ix, iy, iz) indices")
-    else:
-        # Legacy approach: Load HDF5 mapping
-        openwq_hru_mapping_key = ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key['mapping_key']
-        openwq_h5_result_path = ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key['path_to_file']
-
-        print(f"Loading spatial mapping from: {openwq_h5_result_path}")
-        with h5py.File(openwq_h5_result_path, 'r') as h5f:
-            # Load xyz_elements
-            if 'xyz_elements' not in h5f:
-                raise ValueError(f"'xyz_elements' not found in HDF5 file. Available: {list(h5f.keys())}")
-
-            xyz_elements = h5f['xyz_elements'][:]
-
-            # Load mapping key (e.g., Seg_ID)
-            if openwq_hru_mapping_key not in h5f:
-                raise ValueError(
-                    f"'{openwq_hru_mapping_key}' not found in HDF5 file. Available: {list(h5f.keys())}\n"
-                    f"Make sure the mapping_key matches a variable in the HDF5 file."
-                )
-
-            mapping_ids = h5f[openwq_hru_mapping_key][:]
-
-        print(f"  Loaded {len(xyz_elements)} spatial elements")
-        print(f"  xyz_elements shape: {xyz_elements.shape}")
-        print(f"  {openwq_hru_mapping_key} shape: {mapping_ids.shape}")
-
-        # Create mapping dictionary: HRU_ID -> (ix, iy, iz)
-        hru_to_xyz = {}
-        for idx in range(len(mapping_ids)):
-            hru_id = mapping_ids[idx].decode('utf-8')
-            ix, iy, iz = xyz_elements[:, idx]
-            hru_to_xyz[hru_id] = (int(ix), int(iy), int(iz))
-
-        print(f"  Created mapping for {len(hru_to_xyz)} HRU/segments")
 
     # Get nutrient columns (exclude HRU_ID and Year columns)
     exclude_cols = [shp_hru_id_column, 'Year']
@@ -2358,15 +2263,8 @@ def create_openwq_ss_json_from_loads(
                 hru_id = str(int(hru_id))
                 annual_load_kg = row[nutrient]
 
-                if use_cellid_mapping:
-                    # Use cell_id directly - OpenWQ C++ will do the lookup
-                    spatial_id = hru_id
-                else:
-                    # Legacy approach: use (ix, iy, iz) from HDF5 mapping
-                    if hru_id not in hru_to_xyz.keys():
-                        print(f"    ⚠ Warning: HRU {hru_id} not found in HDF5 mapping, skipping...")
-                        continue
-                    spatial_id = hru_to_xyz[hru_id]  # tuple (ix, iy, iz)
+                # Use cell_id directly - OpenWQ C++ will do the lookup
+                spatial_id = hru_id
 
                 # Calculate temporal distribution of annual load
                 temporal_entries = _calculate_temporal_load_distribution(
@@ -2386,18 +2284,9 @@ def create_openwq_ss_json_from_loads(
                 for month, day, hour, load_kg in temporal_entries:
                     days = calendar.monthrange(sim_year, int(month))[1]
                     daily_rate = load_kg / days
-                    if use_cellid_mapping:
-                        data_entries[str(sub_idx)] = [
+                    data_entries[str(sub_idx)] = [
                             sim_year, int(month), "all", "all", "all", "all",
                             spatial_id, "all", "all",
-                            float(daily_rate),
-                            "continuous", "day"
-                        ]
-                    else:
-                        ix, iy, iz = spatial_id
-                        data_entries[str(sub_idx)] = [
-                            sim_year, int(month), "all", "all", "all", "all",
-                            ix, iy, iz,
                             float(daily_rate),
                             "continuous", "day"
                         ]
@@ -2547,14 +2436,12 @@ def set_ss_from_copernicus_lulc_with_loads(
         ss_method_copernicus_default_loads_bool: bool,
 
         ss_method_copernicus_compartment_name_for_load: str,
-        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key: Dict[str, str],
         ss_method_copernicus_annual_to_seasonal_loads_method: str = "uniform",
         ss_metadata_comment: str = "Nutrient loading from land use/land cover",
         ss_metadata_source: str = "Copernicus LULC analysis",
         optional_load_coefficients: Optional[Dict[int, Dict[str, float]]] = None,
         recursive: bool = False,
         file_pattern: str = 'ESACCI-LC-*.nc',
-        use_cellid_mapping: bool = True,
         simulation_period: Optional[List[int]] = None,
         bgc_engine_label: str = "",
         chemical_species_list: Optional[List[str]] = None,
@@ -2591,8 +2478,6 @@ def set_ss_from_copernicus_lulc_with_loads(
         Comment lines to add at the top of the JSON file
     ss_method_copernicus_compartment_name_for_load : str
         OpenWQ compartment name (e.g., 'RIVER_NETWORK_REACHES')
-    ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key : List[str, str]
-        Path to OpenWQ HDF5 output file with xyz_elements and mapping_key
     ss_metadata_comment : str
         Comment for JSON metadata section
     ss_metadata_source : str
@@ -2670,12 +2555,10 @@ def set_ss_from_copernicus_lulc_with_loads(
         ss_config_filepath=ss_config_filepath,
         json_header_comment=json_header_comment,
         ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
-        ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key=ss_method_copernicus_openwq_h5_results_file_example_for_mapping_key,
         shp_hru_id_column=shp_hru_id_column,
         ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
         ss_metadata_comment=ss_metadata_comment,
         ss_metadata_source=ss_metadata_source,
-        use_cellid_mapping=use_cellid_mapping,
         simulation_period=simulation_period,
         bgc_engine_label=bgc_engine_label,
         chemical_species_list=chemical_species_list,
