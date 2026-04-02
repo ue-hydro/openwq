@@ -22,7 +22,10 @@ RUN apt-get -y update && apt-get upgrade -y && \
     liblapack-dev \
     gfortran \
     git \
-    nano
+    nano \
+    libopenmpi-dev \
+    libpnetcdf-dev \
+    pkg-config
 
 # Install PHREEQC-RM
 WORKDIR /opt
@@ -63,6 +66,7 @@ RUN sed -i '121s/^\/\/ #define ARMA_USE_HDF5/#define ARMA_USE_HDF5/' /usr/includ
 WORKDIR /code
 
 # Install piolib (ParallelIO) (needed for MizuRoute_lakes)
+# PIO 2.6.8 (commit 39e5584) with genf90 and CMake_Fortran_utils build deps
 WORKDIR /opt
 RUN git clone https://github.com/NCAR/ParallelIO.git
 WORKDIR /opt/ParallelIO
@@ -74,16 +78,15 @@ RUN git clone https://github.com/CESM-Development/CMake_Fortran_utils.git cmake
 WORKDIR /opt/ParallelIO/bin/cmake
 RUN git checkout 05ff8d8
 WORKDIR /opt
-RUN mkdir pio-build
-RUN mkdir piolib
-WORKDIR pio-build
+RUN mkdir pio-build piolib
+WORKDIR /opt/pio-build
 RUN cmake ../ParallelIO \
   -DPIO_ENABLE_FORTRAN=ON \
   -DPIO_ENABLE_TIMING=ON \
   -DNetCDF_C_INCLUDE_DIR=$(nc-config --includedir) \
   -DNetCDF_C_LIBRARY=$(nc-config --libdir)/libnetcdf.so \
-  -DPnetCDF_C_INCLUDE_DIR=$(pnetcdf-config --includedir) \
-  -DPnetCDF_C_LIBRARY=$(pnetcdf-config --libdir)/libpnetcdf.so \
+  -DPnetCDF_C_INCLUDE_DIR=$(find /usr -name 'pnetcdf.h' -printf '%h' -quit) \
+  -DPnetCDF_C_LIBRARY=$(find /usr -name 'libpnetcdf.so' -print -quit) \
   -DCMAKE_C_COMPILER=mpicc \
   -DCMAKE_Fortran_COMPILER=mpif90 \
   -DCMAKE_CXX_COMPILER=mpicxx \
