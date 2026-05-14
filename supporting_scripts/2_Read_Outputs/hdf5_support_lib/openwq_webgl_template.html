@@ -78,7 +78,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
 <div id="loading">Loading simulation data...</div>
 
 <div id="controls" style="display:none;">
-    <h2>OpenWQ River Network</h2>
+    <h2 id="viewer-title">OpenWQ River Network</h2>
     <div class="ctrl-row">
         <label>Time</label>
         <input type="range" id="sl-time" min="0" max="100" value="0">
@@ -623,14 +623,17 @@ uniform sampler2D u_velocity_next;
 uniform float u_time_frac;
 varying vec2 v_uv;
 varying float v_conc_t;
+varying float v_is_polygon;
 
 void main() {
     v_uv = a_texcoord;
 
     // Sample concentration
-    float conc = texture2D(u_concentration, a_texcoord).r;
-    float conc_wet = texture2D(u_concentration, a_texcoord).a;
-    v_conc_t = conc * step(0.5, conc_wet);
+    float conc      = texture2D(u_concentration, a_texcoord).r;
+    float poly_flag = texture2D(u_concentration, a_texcoord).g;
+    float conc_wet  = texture2D(u_concentration, a_texcoord).a;
+    v_conc_t        = conc * step(0.5, conc_wet);
+    v_is_polygon    = poly_flag;
 
     // Sample water depth for surface elevation
     vec4 v0 = texture2D(u_velocity, a_texcoord);
@@ -661,6 +664,7 @@ void main() {
 precision mediump float;
 varying vec2 v_uv;
 varying float v_conc_t;
+varying float v_is_polygon;
 
 // Viridis-like yellow-orange-red heat ramp
 vec3 concColor(float t) {
@@ -678,7 +682,15 @@ void main() {
     if (v_conc_t < 0.004) discard;  // no concentration
     float t = clamp(v_conc_t, 0.0, 1.0);
     vec3 col = concColor(t);
-    float alpha = mix(0.4, 0.85, t);
+    // Branch on the polygon flag baked into the G channel of the
+    // concentration texture:
+    //   v_is_polygon > 0.5 → HRU/GRU polygon cell (large area), use a
+    //     lower alpha so the satellite / hillshade basemap stays readable.
+    //   otherwise → mizuRoute river-line cell (thin raster); keep the
+    //     original higher alpha for good contrast.
+    float alpha = (v_is_polygon > 0.5)
+                  ? mix(0.25, 0.60, t)
+                  : mix(0.40, 0.85, t);
     gl_FragColor = vec4(col, alpha);
 }
 </script>
@@ -1333,6 +1345,36 @@ class FloodViewer3D {
                 this.showConcentration = true;
                 document.getElementById('btn-conc').classList.add('active');
                 document.getElementById('conc-colorbar-wrap').style.display = '';
+            }
+            // HRU/GRU viewer (polygon geometry): there is no flow direction
+            // inside a basin, so the GPU particle field would just sit still.
+            // Disable it and hide the particle button + slider so the UI
+            // matches the geometry. Auto-enable the concentration overlay
+            // so the polygon fill is visible right away. Also rename the
+            // legend / page title from "River Network" to "HRUs/GRUs".
+            // Mizuroute (line geometry) is unaffected: disable_particles is
+            // false and the title stays "OpenWQ River Network".
+            if (m.disable_particles === true || m.geometry_kind === 'polygon') {
+                this.showParticles = false;
+                this.showConcentration = true;
+                const btnP   = document.getElementById('btn-particles');
+                const slP    = document.getElementById('sl-particles');
+                const valP   = document.getElementById('v-particles');
+                const lblP   = slP && slP.previousElementSibling;
+                if (btnP) {
+                    btnP.classList.remove('active');
+                    btnP.style.display = 'none';
+                }
+                if (slP)  slP.style.display = 'none';
+                if (valP) valP.style.display = 'none';
+                if (lblP) lblP.style.display = 'none';
+                const btnC = document.getElementById('btn-conc');
+                if (btnC) btnC.classList.add('active');
+                const cbw  = document.getElementById('conc-colorbar-wrap');
+                if (cbw)  cbw.style.display = '';
+                const ttl = document.getElementById('viewer-title');
+                if (ttl) ttl.textContent = 'OpenWQ HRUs/GRUs';
+                document.title = 'OpenWQ Water Quality — HRUs/GRUs Viewer';
             }
 
             // Initialize species selector (OpenWQ)

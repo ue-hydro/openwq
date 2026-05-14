@@ -346,11 +346,14 @@ def _rasterize_segments(geodf, shpf_mapKey, grid_params, river_width_cells=3):
 
     Returns
     -------
-    tuple : (river_mask, tangent_x, tangent_y, segment_id_grid)
+    tuple : (river_mask, tangent_x, tangent_y, segment_id_grid, is_polygon_grid)
         river_mask : ndarray (nrows, ncols) bool
         tangent_x : ndarray (nrows, ncols) float — easting tangent component
         tangent_y : ndarray (nrows, ncols) float — northing tangent component
         segment_id_grid : ndarray (nrows, ncols) — segment ID at each river cell
+        is_polygon_grid : ndarray (nrows, ncols) bool — True for cells filled
+            from Polygon/MultiPolygon geometries (HRU/GRU viewer); used to
+            reduce overlay opacity over large basin areas.
     """
     nrows = grid_params['nrows']
     ncols = grid_params['ncols']
@@ -362,6 +365,10 @@ def _rasterize_segments(geodf, shpf_mapKey, grid_params, river_width_cells=3):
     tangent_x = np.zeros((nrows, ncols), dtype=np.float64)
     tangent_y = np.zeros((nrows, ncols), dtype=np.float64)
     segment_id_grid = np.full((nrows, ncols), -1, dtype=np.int64)
+    # True where a cell was filled by a Polygon/MultiPolygon (HRU/GRU viewer).
+    # Used downstream to lower the overlay opacity over basin polygons while
+    # keeping the higher river-line opacity unchanged for mizuRoute.
+    is_polygon_grid = np.zeros((nrows, ncols), dtype=bool)
 
     # Dilation offsets for river width
     half_w = river_width_cells // 2
@@ -373,21 +380,48 @@ def _rasterize_segments(geodf, shpf_mapKey, grid_params, river_width_cells=3):
 
     step_dist = cs * 0.4  # sub-cell step distance
 
+    # rasterio is only needed for the polygon-fill path (HRU/GRU viewer).
+    # Imported lazily so LineString-only runs keep no extra hard dependency.
+    _rasterize_features = None
+    _from_origin = None
+
     for feat_idx, geom in enumerate(geodf.geometry):
         seg_id = shpf_mapKey[feat_idx]
 
-        # Collect all linestrings from the geometry
-        lines = []
         if geom is None:
             continue
+
+        # Polygon / MultiPolygon → fill INTERIOR (HRU/GRU viewer).
+        # We rasterize the filled polygon so the colored map covers the whole
+        # catchment area, not just the outline. Tangent vectors stay zero
+        # (no inherent flow direction within a basin), which means particle
+        # animation degenerates to a uniform coloured patch — exactly what
+        # an HRU/GRU viewer should show.
+        if geom.geom_type in ('Polygon', 'MultiPolygon'):
+            if _rasterize_features is None:
+                from rasterio.features import rasterize as _rasterize_features
+                from rasterio.transform import from_origin as _from_origin
+            _transform = _from_origin(xmin, ymax, cs, cs)
+            _feat_mask = _rasterize_features(
+                [(geom, 1)],
+                out_shape=(nrows, ncols),
+                transform=_transform,
+                fill=0,
+                dtype='uint8',
+                all_touched=True,
+            ).astype(bool)
+            river_mask |= _feat_mask
+            is_polygon_grid |= _feat_mask
+            segment_id_grid[_feat_mask] = seg_id
+            # tangent_x / tangent_y stay 0 inside polygons — no flow direction.
+            continue
+
+        # Otherwise treat geometry as a polyline (river-network viewer).
+        lines = []
         if geom.geom_type == 'LineString':
             lines = [geom]
         elif geom.geom_type == 'MultiLineString':
             lines = list(geom.geoms)
-        elif geom.geom_type == 'Polygon':
-            lines = [geom.exterior]
-        elif geom.geom_type == 'MultiPolygon':
-            lines = [p.exterior for p in geom.geoms]
         else:
             continue
 
@@ -436,10 +470,16 @@ def _rasterize_segments(geodf, shpf_mapKey, grid_params, river_width_cells=3):
                         segment_id_grid[r, c] = seg_id
 
     n_river_cells = np.sum(river_mask)
-    print(f"  Rasterized {len(geodf)} segments → {n_river_cells} river cells "
-          f"({100 * n_river_cells / (nrows * ncols):.1f}% coverage)")
+    n_polygon_cells = int(np.sum(is_polygon_grid))
+    if n_polygon_cells > 0:
+        print(f"  Rasterized {len(geodf)} features → {n_river_cells} active cells "
+              f"({100 * n_river_cells / (nrows * ncols):.1f}% coverage, "
+              f"{n_polygon_cells} from polygons)")
+    else:
+        print(f"  Rasterized {len(geodf)} segments → {n_river_cells} river cells "
+              f"({100 * n_river_cells / (nrows * ncols):.1f}% coverage)")
 
-    return river_mask, tangent_x, tangent_y, segment_id_grid
+    return river_mask, tangent_x, tangent_y, segment_id_grid, is_polygon_grid
 
 
 def _map_data_to_grid(data_values, data_hostmdlKeys, river_mask, segment_id_grid, shpf_mapKey):
@@ -463,29 +503,59 @@ def _map_data_to_grid(data_values, data_hostmdlKeys, river_mask, segment_id_grid
     nrows, ncols = river_mask.shape
     grid_values = np.zeros((nrows, ncols), dtype=np.float64)
 
-    # Build lookup: segment_id → value
-    data_hostmdlKeys_mainInfo = [item.split('_')[-1] for item in data_hostmdlKeys]
-    seg_to_value = {}
-    for j, key_str in enumerate(data_hostmdlKeys_mainInfo):
+    # Build lookup: segment_id → value.
+    #
+    # Column names follow Read_h5_driver's convention:
+    #   "<mappingKey>_<id>"           (single-layer, e.g. mizuRoute "reachID_123")
+    #   "<mappingKey>_<id>_z<layer>"  (multi-layer SUMMA: "hruId_1_z1", "hruId_1_z2", ...)
+    #
+    # The old code did `split('_')[-1]` which gave "z1" for the SUMMA case and
+    # silently failed the int lookup — every polygon cell ended up at zero.
+    # We now scan the parts and pick the first one that parses as an int
+    # (working from the end backwards so the legitimate ID is preferred over
+    # any prefix tokens). When several columns share the same id (multi-layer
+    # compartments) the values are averaged into a single per-cell value, which
+    # is the right aggregation for a 2-D map.
+    def _parse_seg_id(col):
+        parts = str(col).split('_')
+        for p in reversed(parts):
+            try:
+                return int(float(p))
+            except (ValueError, TypeError):
+                continue
+        return None
+
+    seg_to_vals = {}
+    for j, col in enumerate(data_hostmdlKeys):
+        sid = _parse_seg_id(col)
+        if sid is None:
+            continue
+        val = data_values[j]
+        if val is None:
+            continue
         try:
-            seg_to_value[int(float(key_str))] = data_values[j]
-        except (ValueError, IndexError):
-            seg_to_value[key_str] = data_values[j]
+            f = float(val)
+        except (TypeError, ValueError):
+            continue
+        if not np.isfinite(f):
+            continue
+        seg_to_vals.setdefault(sid, []).append(f)
+
+    seg_to_value = {sid: float(np.mean(vs)) for sid, vs in seg_to_vals.items() if vs}
 
     # Map to grid using segment_id_grid
     river_rows, river_cols = np.where(river_mask)
     for i in range(len(river_rows)):
         r, c = river_rows[i], river_cols[i]
-        seg_id = segment_id_grid[r, c]
+        seg_id = int(segment_id_grid[r, c])
         if seg_id in seg_to_value:
-            val = seg_to_value[seg_id]
-            if not np.isnan(val):
-                grid_values[r, c] = val
+            grid_values[r, c] = seg_to_value[seg_id]
 
     return grid_values
 
 
-def _build_velocity_field(flow_grid, river_mask, tangent_x, tangent_y):
+def _build_velocity_field(flow_grid, river_mask, tangent_x, tangent_y,
+                           is_polygon_grid=None):
     """Build velocity grids from flow magnitude and tangent direction.
 
     Parameters
@@ -494,6 +564,11 @@ def _build_velocity_field(flow_grid, river_mask, tangent_x, tangent_y):
         Flow magnitude mapped to grid
     river_mask : ndarray (nrows, ncols) bool
     tangent_x, tangent_y : ndarray (nrows, ncols) float
+    is_polygon_grid : ndarray (nrows, ncols) bool or None
+        Cells filled from a polygon (HRU/GRU). These cells stay "wet" even
+        when flow is zero, so the concentration overlay can paint them on
+        non-routed SUMMA outputs. River-line cells keep the original
+        "wet only when flow > 0" behavior so dry mizuRoute reaches disappear.
 
     Returns
     -------
@@ -502,6 +577,8 @@ def _build_velocity_field(flow_grid, river_mask, tangent_x, tangent_y):
     grid_vx = tangent_x * flow_grid
     grid_vy = tangent_y * flow_grid
     wet_mask = river_mask & (flow_grid > 0)
+    if is_polygon_grid is not None:
+        wet_mask = wet_mask | (river_mask & is_polygon_grid)
     grid_h = flow_grid.copy()
 
     return grid_vx, grid_vy, wet_mask, grid_h
@@ -537,17 +614,23 @@ def _encode_velocity_png(grid_vx, grid_vy, wet_mask, grid_h,
     return _write_png(rgba)
 
 
-def _encode_concentration_png(grid_conc, conc_max, wet_mask):
+def _encode_concentration_png(grid_conc, conc_max, wet_mask, is_polygon_grid=None):
     """Encode concentration into RGBA PNG bytes.
 
-    Encoding matches FLUXOS format:
+    Encoding:
         R = conc / conc_max * 255
-        G = 0
+        G = 255 if the cell came from a Polygon/MultiPolygon (HRU/GRU viewer),
+            else 0 (river-line cell). The shader reads this to pick a lower
+            overlay alpha over basin polygons so the basemap stays visible,
+            without affecting the thin river-line overlay used by mizuRoute.
         B = 0
         A = 255 if wet and conc > 0, else 0
     """
     c_r = (grid_conc / max(conc_max, 1e-12) * 255.0).clip(0, 255).astype(np.uint8)
-    c_g = np.zeros_like(c_r)
+    if is_polygon_grid is not None:
+        c_g = np.where(is_polygon_grid, np.uint8(255), np.uint8(0))
+    else:
+        c_g = np.zeros_like(c_r)
     c_b = np.zeros_like(c_r)
     c_a = np.where(wet_mask & (grid_conc > 0), np.uint8(255), np.uint8(0))
 
@@ -1206,7 +1289,7 @@ def WebGL_h5_driver(shpfile_info=None,
     print("STEP 3: Rasterizing river segments...")
     print("=" * 70)
 
-    river_mask, tangent_x, tangent_y, segment_id_grid = _rasterize_segments(
+    river_mask, tangent_x, tangent_y, segment_id_grid, is_polygon_grid = _rasterize_segments(
         geodf, shpf_mapKey, grid_params, river_width_cells
     )
 
@@ -1267,22 +1350,67 @@ def WebGL_h5_driver(shpfile_info=None,
     conc_data_per_species = {}  # species_name -> (ttdata, data_keys, units)
 
     if what2map == 'openwq' and openwq_results is not None:
-        # Determine species to export
+        # Determine species to export.
+        # When the same chemical appears under multiple compartments (typical
+        # for SUMMA: SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF, ...) we
+        # pick the compartment with the most dynamic positive signal so the
+        # viewer doesn't end up showing a steady or all-zero layer.
+        def _score_compartment(key):
+            """Score for picking among matching compartments.
+
+            We rank by **temporal variability** (standard deviation of positive
+            finite values), so a compartment with a real dynamic signal
+            (e.g. SUMMA SOIL: 2.0 → 0.4 over time) wins over one that sits at
+            a steady value (e.g. SUMMA AQUIFER: 2.00 → 2.02). The mean is
+            used only as a tiebreaker — for fully steady fields we pick the
+            one with the largest magnitude so the user at least sees a non-
+            zero map.
+            """
+            for ext, data_list in openwq_results[key]:
+                if ext == file_extension and data_list and len(data_list) > 0:
+                    try:
+                        _, ttdata, _ = data_list[0]
+                        vals = np.asarray(ttdata.values, dtype=np.float64)
+                        vals = vals[np.isfinite(vals) & (vals > 0)]
+                        if vals.size == 0:
+                            return (0.0, 0.0)
+                        return (float(np.std(vals)), float(np.mean(vals)))
+                    except Exception:
+                        return (0.0, 0.0)
+            return (0.0, 0.0)
+
+        def _pick_best(matching_keys):
+            """Pick the matching key with the most dynamic positive signal."""
+            if not matching_keys:
+                return None
+            scored = [(k, _score_compartment(k)) for k in matching_keys]
+            scored.sort(key=lambda kv: kv[1], reverse=True)
+            best_key, (best_std, best_mean) = scored[0]
+            if len(scored) > 1 and (best_std > 0 or best_mean > 0):
+                others = ', '.join(
+                    f"{k}=(std={s:.3g},mean={m:.3g})"
+                    for k, (s, m) in scored[1:]
+                )
+                print(f"    [compartment pick] {best_key} "
+                      f"(std={best_std:.3g}, mean={best_mean:.3g}); "
+                      f"alternatives: {others}")
+            return best_key
+
         if chemSpec is None:
             species_list = list(openwq_results.keys())
         elif isinstance(chemSpec, list):
             species_list = []
             for chem in chemSpec:
-                for key in openwq_results.keys():
-                    if chem in key:
-                        species_list.append(key)
-                        break
+                matching = [k for k in openwq_results.keys()
+                            if chem in k and 'Sediment' not in k]
+                pick = _pick_best(matching)
+                if pick is not None:
+                    species_list.append(pick)
         else:
-            species_list = []
-            for key in openwq_results.keys():
-                if chemSpec in key:
-                    species_list.append(key)
-                    break
+            matching = [k for k in openwq_results.keys()
+                        if chemSpec in k and 'Sediment' not in k]
+            pick = _pick_best(matching)
+            species_list = [pick] if pick is not None else []
 
         # Append sediment if requested
         if sediment_as_well:
@@ -1367,7 +1495,8 @@ def WebGL_h5_driver(shpfile_info=None,
                 river_mask, segment_id_grid, shpf_mapKey
             )
             grid_vx, grid_vy, wet, grid_h = _build_velocity_field(
-                flow_grid, river_mask, tangent_x, tangent_y
+                flow_grid, river_mask, tangent_x, tangent_y,
+                is_polygon_grid=is_polygon_grid,
             )
             if np.any(wet):
                 all_vx.append(grid_vx[wet])
@@ -1459,7 +1588,8 @@ def WebGL_h5_driver(shpfile_info=None,
             flow_grid = np.ones_like(river_mask, dtype=np.float64)  # uniform flow
 
         grid_vx, grid_vy, wet_mask, grid_h = _build_velocity_field(
-            flow_grid, river_mask, tangent_x, tangent_y
+            flow_grid, river_mask, tangent_x, tangent_y,
+            is_polygon_grid=is_polygon_grid,
         )
 
         # Encode velocity PNG
@@ -1482,7 +1612,8 @@ def WebGL_h5_driver(shpfile_info=None,
                 conc_bytes = _encode_concentration_png(
                     conc_grid,
                     conc_max_per_species.get(species_name, 1.0),
-                    wet_mask
+                    wet_mask,
+                    is_polygon_grid=is_polygon_grid,
                 )
                 with open(os.path.join(conc_dirs[species_name],
                                         f"c_{fi:04d}.png"), "wb") as f:
@@ -1566,6 +1697,12 @@ def WebGL_h5_driver(shpfile_info=None,
     target_cells_per_frame = 3.0
     computed_speed_factor = target_cells_per_frame / max_vel_magnitude
 
+    # Geometry kind: 'polygon' for HRU/GRU viewer, 'line' for river network.
+    # Drives particle visibility on the viewer side: polygons have no inherent
+    # flow direction, so the GPU particle field would just sit static — better
+    # to hide it entirely.
+    _geometry_kind = 'polygon' if bool(np.any(is_polygon_grid)) else 'line'
+
     metadata = {
         "width": int(ncols),
         "height": int(nrows),
@@ -1582,7 +1719,7 @@ def WebGL_h5_driver(shpfile_info=None,
         "vy_max": float(vx_max),
         "cellsize": float(cs),
         "speed_factor": float(computed_speed_factor),
-        "default_particles": n_particles,
+        "default_particles": 0 if _geometry_kind == 'polygon' else n_particles,
         "z_min": z_min,
         "z_max": z_max,
         "h_max": float(h_max_visual),
@@ -1591,6 +1728,8 @@ def WebGL_h5_driver(shpfile_info=None,
         "model": hostmodel or "unknown",
         "flow_variable": hydromodel_var2print or "flow",
         "has_satellite": has_satellite,
+        "geometry_kind": _geometry_kind,
+        "disable_particles": (_geometry_kind == 'polygon'),
     }
 
     if conc_data_per_species:
