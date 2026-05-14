@@ -2580,32 +2580,59 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             _cmp_default = _cmp_names[:1]
         _cmp_str = ', '.join(f'"{c}"' for c in _cmp_default)
 
-        # Shapefile info for mapping — hostmodel-dependent defaults
+        # Shapefile info for mapping — hostmodel-dependent defaults.
+        # NOTE: _shp_key is the column in the RIVER-NETWORK shapefile used by
+        # the 3D viewer (it must match the host-model IDs in the HDF5 output).
+        # _basin_mapping_key is the column in the BASIN shapefile used for
+        # SUMMA basin filtering. The two shapefiles can have different schemas
+        # (e.g. TauDEM-derived river networks have LINKNO, not HRU_ID), so we
+        # inspect each one independently below.
         _shp_path = river_network_shapefile or ''
         _basin_shp_path = basin_shapefile or ''
+
+        def _detect_shp_mapping_key(shp_path, candidates, default_key, label):
+            """Pick the first column from `candidates` that exists in the shapefile."""
+            if not shp_path or not os.path.isfile(shp_path):
+                return default_key
+            try:
+                import fiona
+                with fiona.open(shp_path) as _src:
+                    _props = list(_src.schema['properties'].keys())
+                for _cand in candidates:
+                    if _cand in _props:
+                        print(f"  {label} mapping key: {_cand} "
+                              f"(available: {_props})")
+                        return _cand
+                print(f"  WARNING: No standard mapping key found in {label} "
+                      f"shapefile. Available: {_props}. Falling back to "
+                      f"'{default_key}' — you may need to override "
+                      f"shpfile_info['mapping_key'] manually.")
+                return default_key
+            except Exception as _e:
+                print(f"  WARNING: Could not inspect {label} shapefile: {_e}")
+                return default_key
+
         if hostmodel.lower() == 'summa':
             _h5_mapping_key = 'hruId'
-            # Detect HRU_ID vs GRU_ID from the actual basin shapefile
-            _basin_mapping_key = 'HRU_ID'  # preferred default
-            _shp_key = 'HRU_ID'
-            if basin_shapefile and os.path.isfile(basin_shapefile):
-                try:
-                    import fiona
-                    with fiona.open(basin_shapefile) as _src:
-                        _shp_props = list(_src.schema['properties'].keys())
-                    if 'HRU_ID' in _shp_props:
-                        _basin_mapping_key = 'HRU_ID'
-                        _shp_key = 'HRU_ID'
-                    elif 'GRU_ID' in _shp_props:
-                        _basin_mapping_key = 'GRU_ID'
-                        _shp_key = 'GRU_ID'
-                    print(f"  Basin shapefile mapping key: {_basin_mapping_key} "
-                          f"(available: {_shp_props})")
-                except Exception as _e:
-                    print(f"  WARNING: Could not inspect basin shapefile: {_e}")
+            # Order matters: prefer exact SUMMA conventions before fallbacks
+            _rn_candidates = ['hruId', 'HRU_ID', 'hru_id', 'HruId',
+                              'gruId', 'GRU_ID', 'gru_id',
+                              'LINKNO', 'COMID', 'reachID', 'SegId']
+            _basin_candidates = ['HRU_ID', 'hruId', 'hru_id', 'HruId',
+                                 'GRU_ID', 'gruId', 'gru_id']
+            _shp_key = _detect_shp_mapping_key(
+                river_network_shapefile, _rn_candidates, 'HRU_ID',
+                'River network')
+            _basin_mapping_key = _detect_shp_mapping_key(
+                basin_shapefile, _basin_candidates, 'HRU_ID',
+                'Basin')
         else:
             _h5_mapping_key = 'reachID'
-            _shp_key = 'SegId'
+            _rn_candidates = ['reachID', 'REACHID', 'reach_id', 'ReachID',
+                              'SegId', 'segId', 'seg_id', 'COMID', 'LINKNO']
+            _shp_key = _detect_shp_mapping_key(
+                river_network_shapefile, _rn_candidates, 'SegId',
+                'River network')
             _basin_mapping_key = ''
         _feature_label = openwq_h5_mapping_key or _shp_key
 
@@ -2756,13 +2783,37 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             'Include debug outputs</label>')
         H.append('</div>')
 
-        # --- 4a: Interactive 3D River Viewer (WebGL) ---
+        # --- 4a: Interactive 3D Spatial Viewer (WebGL) ---
+        # For SUMMA, results are HRU/GRU based, so we drive the viewer with
+        # basin polygons (the catchment shapefile). For mizuRoute, results are
+        # per river reach, so we keep using the river-network polylines.
         _webgl_out_dir = os.path.join(_abs_output_dir, "openwq_out",
                                        "openwq_webgl_viewer")
         _webgl_out_dir_safe = _py_path(_webgl_out_dir)
         _srv_dir_safe = _py_path(os.path.join(_abs_output_dir, "openwq_out"))
         _shp_path_safe = _py_path(river_network_shapefile) if river_network_shapefile else ''
         _basin_shp_path_safe = _py_path(basin_shapefile) if basin_shapefile else ''
+
+        # Pick the right shapefile + mapping key for the spatial viewer.
+        if hostmodel.lower() == 'summa':
+            if _basin_shp_path_safe:
+                _viewer_shp_path_safe = _basin_shp_path_safe
+                _viewer_shp_key       = _basin_mapping_key
+                _viewer_geom_label    = 'HRU/GRU polygons'
+            else:
+                # No basin shapefile — fall back to river network with a warning
+                _viewer_shp_path_safe = _shp_path_safe
+                _viewer_shp_key       = _shp_key
+                _viewer_geom_label    = 'river network (no basin shapefile available)'
+                print("  WARNING: SUMMA host but no basin_shapefile provided -- "
+                      "falling back to river_network_shapefile for the spatial "
+                      "viewer (HRU polygons would be preferred).")
+            _viewer_title_html = 'Generate interactive HRU/GRU viewer:'
+        else:
+            _viewer_shp_path_safe = _shp_path_safe
+            _viewer_shp_key       = _shp_key
+            _viewer_geom_label    = 'river network'
+            _viewer_title_html    = 'Generate interactive 3D river viewer:'
 
         # Try to find the host-model output directory for hydromodel_info
         _hm_out_dir_safe = ''
@@ -2782,36 +2833,78 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'{_python_preamble()}\n'
             f'\n'
             f'# --- Build 3D WebGL viewer ---\n'
+            f'# Geometry: {_viewer_geom_label}\n'
             f'import glob, os\n'
             f'\n'
             f'shpfile_info = {{\n'
-            f'    "path_to_shp": "{_shp_path_safe}",\n'
-            f'    "mapping_key": "{_shp_key}"\n'
+            f'    "path_to_shp": "{_viewer_shp_path_safe}",\n'
+            f'    "mapping_key": "{_viewer_shp_key}"\n'
             f'}}\n'
             f'\n'
         )
 
-        # Add hydromodel_info: auto-detect .nc file if we know the output dir
+        # Host-specific flow-variable candidates (used at SNIPPET runtime to
+        # pick whichever variable actually exists in the netCDF).
+        if hostmodel.lower() == 'summa':
+            _flow_var_candidates = [
+                'averageRoutedRunoff', 'basRunoff', 'scalarTotalRunoff',
+                'scalarSurfaceRunoff', 'scalarSoilBaseflow',
+                'scalarAquiferBaseflow', 'scalarSoilDrainage']
+        else:  # mizuroute (default routing methods)
+            _flow_var_candidates = [
+                'DWroutedRunoff', 'IRFroutedRunoff', 'KWTroutedRunoff',
+                'KWroutedRunoff', 'MCroutedRunoff', 'instRunoff']
+        _flow_cands_str = '[' + ', '.join(f'"{v}"' for v in _flow_var_candidates) + ']'
+
+        # Add hydromodel_info: auto-detect .nc file AND flow variable name.
+        # If no usable flow variable is found, hydromodel_info is set to None
+        # so the WebGL driver runs without flow animation (it handles None).
         if _hm_out_dir_safe:
             _webgl_body += (
                 f'# Auto-detect host-model output (netCDF)\n'
                 f'_nc_files = sorted(glob.glob("{_hm_out_dir_safe}/{_hm_prefix}*.nc"))\n'
                 f'if not _nc_files:\n'
                 f'    print("WARNING: No .nc files found in {_hm_out_dir_safe}")\n'
-                f'    print("  The 3D viewer will still work but without flow animation.")\n'
-                f'hydromodel_info = {{\n'
-                f'    "path_to_results": _nc_files[0] if _nc_files else "",\n'
-                f'    "mapping_key": "{_h5_mapping_key}"\n'
-                f'}}\n'
+                f'\n'
+                f'# Auto-detect a flow variable in the netCDF\n'
+                f'_flow_var = None\n'
+                f'_flow_candidates = {_flow_cands_str}\n'
+                f'if _nc_files:\n'
+                f'    try:\n'
+                f'        from netCDF4 import Dataset as _NCDS\n'
+                f'        with _NCDS(_nc_files[0]) as _f:\n'
+                f'            _available = list(_f.variables.keys())\n'
+                f'        for _c in _flow_candidates:\n'
+                f'            if _c in _available:\n'
+                f'                _flow_var = _c\n'
+                f'                break\n'
+                f'        if _flow_var:\n'
+                f'            print(f"Flow variable detected: {{_flow_var}}")\n'
+                f'        else:\n'
+                f'            print(f"WARNING: None of {{_flow_candidates}} found in {{_nc_files[0]}}")\n'
+                f'            print(f"  Available variables: {{_available}}")\n'
+                f'            print("  3D viewer will run without flow animation.")\n'
+                f'    except Exception as _e:\n'
+                f'        print(f"WARNING: Could not inspect netCDF for flow variable: {{_e}}")\n'
+                f'\n'
+                f'if _nc_files and _flow_var is not None:\n'
+                f'    hydromodel_info = {{\n'
+                f'        "path_to_results": _nc_files[0],\n'
+                f'        "mapping_key": "{_h5_mapping_key}"\n'
+                f'    }}\n'
+                f'else:\n'
+                f'    hydromodel_info = None    # WebGL driver skips flow when None\n'
                 f'\n'
             )
         else:
             _webgl_body += (
                 f'# TODO: set the path to the host-model netCDF output below\n'
+                f'# (or leave hydromodel_info = None to skip flow animation)\n'
                 f'hydromodel_info = {{\n'
                 f'    "path_to_results": "<path/to/hostmodel_output.nc>",\n'
                 f'    "mapping_key": "{_h5_mapping_key}"\n'
                 f'}}\n'
+                f'_flow_var = "{_flow_var_candidates[0]}"   # adjust to match the variable in your netCDF\n'
                 f'\n'
             )
 
@@ -2826,7 +2919,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    chemSpec=[{_species_str}],\n'
             f'    sediment_as_well={_sed_flag},\n'
             f'    hydromodel_info=hydromodel_info,\n'
-            f'    hydromodel_var2print="DWroutedRunoff",\n'
+            f'    hydromodel_var2print=_flow_var,\n'
             f'    output_dir="{_webgl_out_dir_safe}",\n'
             f'    timeframes=50,\n'
             f'    n_particles=65536,\n'
@@ -2836,15 +2929,31 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f')\n'
             f'\n'
             f'if _result:\n'
-            f'    # Start local HTTP server and open the 3D viewer\n'
+            f'    # Start local HTTP server and open the 3D viewer.\n'
+            f'    # Walk a small port range so the snippet works even if a\n'
+            f'    # previous run is still holding 8080, then fall back to an\n'
+            f'    # OS-assigned free port if all preferred ones are taken.\n'
             f'    import threading, http.server, functools, time, webbrowser\n'
             f'    _handler = functools.partial(\n'
             f'        http.server.SimpleHTTPRequestHandler,\n'
             f'        directory="{_srv_dir_safe}")\n'
-            f'    _httpd = http.server.HTTPServer(("localhost", 8080), _handler)\n'
+            f'    _httpd = None\n'
+            f'    _port = None\n'
+            f'    for _try_port in range(8080, 8100):\n'
+            f'        try:\n'
+            f'            _httpd = http.server.HTTPServer(("localhost", _try_port), _handler)\n'
+            f'            _port = _try_port\n'
+            f'            break\n'
+            f'        except OSError:\n'
+            f'            continue\n'
+            f'    if _httpd is None:\n'
+            f'        _httpd = http.server.HTTPServer(("localhost", 0), _handler)\n'
+            f'        _port = _httpd.server_address[1]\n'
+            f'        print(f"All preferred ports 8080-8099 in use; using OS-assigned port {{_port}}.")\n'
+            f'    _url = f"http://localhost:{{_port}}/openwq_webgl_viewer/index.html"\n'
             f'    threading.Thread(target=_httpd.serve_forever, daemon=True).start()\n'
-            f'    print("Serving at http://localhost:8080")\n'
-            f'    webbrowser.open("http://localhost:8080/openwq_webgl_viewer/index.html")\n'
+            f'    print(f"Serving at http://localhost:{{_port}}")\n'
+            f'    webbrowser.open(_url)\n'
             f'\n'
             f'    print("Press Ctrl+C to stop the server...")\n'
             f'    try:\n'
@@ -2910,8 +3019,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         # Two-column layout: 4a (left) and 4b (right) side by side
         H.append('<div style="display:flex;gap:1.5rem;margin-top:1rem;align-items:flex-start">')
         H.append('<div style="flex:1;min-width:0">')
-        H.append('<p style="font-weight:600">Generate interactive '
-                 '3D river viewer:</p>')
+        H.append(f'<p style="font-weight:600">{_viewer_title_html}</p>')
         _cb_id_4a = f'_cb{_copy_id_counter[0]}'  # ID before _code_block increments
         H.append(_code_block(_terminal_snippet(_webgl_body)))
         H.append('</div>')
