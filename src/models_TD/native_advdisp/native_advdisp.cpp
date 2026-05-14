@@ -23,21 +23,36 @@
 // Mass transport
 // Advection & Dispersion (Fickian dispersive flux approximation)
 //
-// The advective flux is: F_adv = (wflux_s2r / wmass_source) * chemass_source
+// The advective flux is: F_adv = (1 - exp(-Q*dt/V)) * chemass_source
 //   which moves mass proportionally to the water flux (concentration-based).
 //
-// The dispersive flux uses a Fickian approximation between cell pairs:
-//   F_disp = D_eff * (C_source - C_recipient) * wmass_source
+// The dispersive flux uses a Fickian approximation between cell pairs with
+// a harmonic-mean volume so the scheme stays stable and symmetric for any
+// volume ratio:
+//   V_h    = wmass_source * wmass_recipient / (wmass_source + wmass_recipient)
+//   F_disp = D_eff * dt * (C_source - C_recipient) * V_h
 // where:
 //   D_eff = D_avg / L^2  [1/s]
 //   D_avg = (Dx + Dy + Dz) / 3  [m2/s]  (averaged since we don't know connection orientation)
 //   L = characteristic_length_m  [m]  (user-provided distance between cell centers)
-//   C_source = chemass_source / wmass_source
+//   C_source    = chemass_source    / wmass_source
 //   C_recipient = chemass_recipient / wmass_recipient
 //
+// With V_h, the resulting concentration changes are
+//   ΔC_source    = -D_eff * dt * (C_s - C_r) * V_r / (V_s + V_r)
+//   ΔC_recipient = +D_eff * dt * (C_s - C_r) * V_s / (V_s + V_r)
+// so the gradient simply relaxes by a factor of (1 - D_eff*dt) per step
+// without overshoot, regardless of how asymmetric V_s and V_r are.
+//
+// Both fluxes are evaluated using the PRE-call state (start-of-call mass on
+// both sides) and then summed before being applied. This avoids the previous
+// failure mode where dispersion reacted to the artificial gradient that
+// advection had just introduced and ended up moving mass back upstream,
+// undoing advection.
+//
 // The dispersive flux is BIDIRECTIONAL: it can move mass in either direction
-// depending on the concentration gradient, smoothing concentration differences
-// regardless of flow direction. This is physically correct for dispersion.
+// depending on the concentration gradient. Sign convention: F_disp > 0 moves
+// mass source -> recipient.
 //
 // OPTIMIZED: cached flags, pre-fetched refs, pre-computed D_eff
 ################################################# */
@@ -68,10 +83,15 @@ void OpenWQ_TD_model::AdvDisp(
     // Get pre-computed effective dispersion rate [1/s]
     const double D_eff = OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff;
 
+    // Host model time step [s]. D_eff has units of 1/s, so multiplying by dt
+    // gives a dimensionless mass fraction. Without dt the dispersive flux
+    // silently used an implicit 1-second window regardless of the actual
+    // routing time step, producing arbitrary magnitudes.
+    const double dt = OpenWQ_hostModelconfig.get_time_step();
+
     // Get recipient water mass from host model for concentration calculation
-    // wmass_recipient is needed to compute the recipient concentration: C_r = chemass_r / wmass_r
     double wmass_recipient = 0.0;
-    bool has_recipient = (recipient != -1);
+    const bool has_recipient = (recipient != -1);
     if (has_recipient){
         wmass_recipient = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
             recipient, ix_r, iy_r, iz_r);
@@ -87,70 +107,99 @@ void OpenWQ_TD_model::AdvDisp(
         const unsigned int ichem_mob = mobile_species[chemi];
 
         // ===========================
-        // 1) ADVECTIVE FLUX
-        // Uses current available mass (original + accumulated transport from
-        // already-processed upstream reaches) to prevent alternating-zero oscillations
+        // 0) Snapshot the START-OF-STEP mass in source and recipient.
+        // Using chemass only (not chemass + d_transp) makes the scheme
+        // order-independent: every AdvDisp call reads the same source and
+        // recipient state regardless of which other reaches have been
+        // processed earlier in the same timestep. This eliminates the
+        // alternating ±large-flux oscillations that appeared whenever the
+        // host (MPI/OpenMP/parallel routing) processed reaches out of
+        // strict topological order. Trade-off: mass advances at most one
+        // reach per timestep.
         // ===========================
-        double available = chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
-                         + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s);
-        double current_mass = std::fmax(available, 0.0);
+        const double src_initial = std::fmax(
+            chemass_source(ichem_mob)(ix_s,iy_s,iz_s), 0.0);
 
-        double chemass_flux_adv = conc_factor * current_mass;
+        double recip_initial = 0.0;
+        if (has_recipient){
+            recip_initial = std::fmax(
+                (*OpenWQ_vars.chemass)(recipient)(ichem_mob)(ix_r,iy_r,iz_r), 0.0);
+        }
 
-        // Safety cap: never extract more than what's available
-        chemass_flux_adv = std::fmin(chemass_flux_adv, current_mass);
+        // ===========================
+        // 1) ADVECTIVE FLUX (source -> recipient via water flux)
+        // ===========================
+        double chemass_flux_adv = conc_factor * src_initial;
+        chemass_flux_adv = std::fmin(chemass_flux_adv, src_initial);
 
-        // Remove advective flux from SOURCE
-        d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_adv;
+        // ===========================
+        // 2) DISPERSIVE FLUX (Fickian, pre-call gradient, with dt)
+        //
+        // The mass exchanged uses the HARMONIC MEAN of source and recipient
+        // volumes:
+        //     V_h = V_s * V_r / (V_s + V_r)
+        // This is the mathematically correct quantity for symmetric exchange
+        // between two cells and keeps the scheme unconditionally stable for
+        // any volume ratio. Using V_source alone (the textbook simplification
+        // valid only when V_s == V_r) makes the concentration change at the
+        // recipient scale as V_s/V_r, so when V_s >> V_r the recipient
+        // overshoots the source's start-of-step concentration and dispersion
+        // becomes an exponential amplifier instead of a smoother. mizuRoute
+        // reach volumes can vary by orders of magnitude, so the symmetric
+        // form is required for robust behaviour on any network.
+        // ===========================
+        double chemass_flux_disp = 0.0;
+        if (has_recipient && D_eff > 0.0 && dt > 0.0 && wmass_recipient > 0.0){
+            const double C_source    = src_initial   / wmass_source;
+            const double C_recipient = recip_initial / wmass_recipient;
+            const double V_harmonic  = (wmass_source * wmass_recipient)
+                                     / (wmass_source + wmass_recipient);
+            chemass_flux_disp = D_eff * dt * (C_source - C_recipient) * V_harmonic;
+        }
 
-        // Add advective flux to RECIPIENT (if not an OUT-flux)
+        // ===========================
+        // 3) Combined flux: cap at whichever side is donating mass so neither
+        // side can be driven negative. The cap uses the LIVE balance
+        // (chemass + d_transp) rather than start-of-step state, so that
+        // successive calls in the same step (e.g. multiple upstream tribs
+        // converging on the same recipient, all pulling backwards via
+        // dispersion) cannot collectively drain more mass than the donating
+        // side actually has. Using start-of-step for the cap permits N calls
+        // to each pull recip_initial, creating N-1 copies of mass via the
+        // end-of-step non-negativity clamp.
+        // ===========================
+        double chemass_flux_total = chemass_flux_adv + chemass_flux_disp;
+        if (chemass_flux_total > 0.0){
+            // Net transfer source -> recipient
+            const double src_live = std::fmax(
+                chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
+                + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s), 0.0);
+            chemass_flux_total = std::fmin(chemass_flux_total, src_live);
+        } else if (chemass_flux_total < 0.0){
+            // Net transfer recipient -> source (only possible with dispersion)
+            const double recip_live = has_recipient ? std::fmax(
+                (*OpenWQ_vars.chemass)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
+                + (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r), 0.0)
+                : 0.0;
+            chemass_flux_total = std::fmax(chemass_flux_total, -recip_live);
+        }
+
+        // ===========================
+        // 4) Apply
+        // ===========================
+        d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_total;
+
         if (!has_recipient){
-            // Track mass leaving the system for mass balance
+            // OUT-flux: mass leaving the system. No dispersion in this branch
+            // (no neighbour), so chemass_flux_total == chemass_flux_adv here.
             if (OpenWQ_vars.mass_balance.initialized &&
                 ichem_mob < OpenWQ_vars.mass_balance.num_species) {
-                OpenWQ_vars.mass_balance.cumulative_out_flux[ichem_mob] += chemass_flux_adv;
+                OpenWQ_vars.mass_balance.cumulative_out_flux[ichem_mob] += chemass_flux_total;
             }
             continue;
         }
         (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
-            += chemass_flux_adv;
-
-        // ===========================
-        // 2) DISPERSIVE FLUX (Fickian approximation between cell pairs)
-        // F_disp = D_eff * (C_source - C_recipient) * wmass_source
-        // Positive F_disp means mass moves from source to recipient (source has higher concentration)
-        // Negative F_disp means mass moves from recipient to source (recipient has higher concentration)
-        // ===========================
-        if (D_eff > 0.0 && wmass_recipient > 0.0){
-
-            // Compute concentrations using current available mass (after advection)
-            double src_avail_after_adv = std::fmax(
-                chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
-                + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s), 0.0);
-            const double C_source = src_avail_after_adv / wmass_source;
-
-            double recip_current = std::fmax(
-                (*OpenWQ_vars.chemass)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
-                + (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r), 0.0);
-            const double C_recipient = recip_current / wmass_recipient;
-
-            // Dispersive mass flux [mass/time]
-            double chemass_flux_disp = D_eff * (C_source - C_recipient) * wmass_source;
-
-            // Cap dispersive flux at available mass to prevent over-extraction
-            if (chemass_flux_disp > 0.0) {
-                // Source loses mass: cap at remaining available (after advective removal)
-                chemass_flux_disp = std::fmin(chemass_flux_disp, src_avail_after_adv);
-            } else if (chemass_flux_disp < 0.0) {
-                // Recipient loses mass: cap at recipient's remaining available
-                chemass_flux_disp = std::fmax(chemass_flux_disp, -recip_current);
-            }
-
-            // Apply dispersive flux: remove from source, add to recipient
-            d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_disp;
-            (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
-                += chemass_flux_disp;
-        }
+            += chemass_flux_total;
     }
 
 }

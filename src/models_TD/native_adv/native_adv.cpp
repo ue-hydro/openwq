@@ -58,19 +58,31 @@ void OpenWQ_TD_model::Adv(
 
         const unsigned int ichem_mob = mobile_species[chemi];
 
-        // Use current available mass (original + accumulated transport from
-        // already-processed upstream reaches) for the advective flux calculation.
-        // This prevents alternating-zero oscillations: when a cell receives inflow
-        // before its outflow is computed, the outflow correctly accounts for it.
-        double available = chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
-                         + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s);
-        double current_mass = std::fmax(available, 0.0);
+        // Use only the start-of-step source mass (chemass) for the advective
+        // flux. The previous formulation included d_transp_source as well, so
+        // that mass arriving from upstream in the same timestep could be
+        // routed further downstream in one step -- but that depends on the
+        // host calling reaches in strict topological order. Under MPI/OpenMP
+        // (or any routing scheme that processes reaches out of order), the
+        // dependence flips between timesteps and produces large alternating
+        // oscillations. Using chemass only gives the standard explicit upwind
+        // scheme: order-independent, mass-conservative, stable for any CFL.
+        // Mass advances at most one reach per timestep.
+        double current_mass = std::fmax(
+            chemass_source(ichem_mob)(ix_s,iy_s,iz_s), 0.0);
 
-        // Chemical mass flux between source and recipient (Advection)
+        // Chemical mass flux between source and recipient (Advection).
+        // Flux magnitude is set by the start-of-step source mass (order-
+        // independent). The safety cap below uses LIVE balance (chemass +
+        // d_transp) so that a reach with multiple downstream connections
+        // cannot have N successive outflow calls each extract current_mass
+        // -- without this, the end-of-step non-negativity clamp would
+        // silently create mass at the recipients.
         double chemass_flux_adv = conc_factor * current_mass;
-
-        // Safety cap: never extract more than what's available
-        chemass_flux_adv = std::fmin(chemass_flux_adv, current_mass);
+        const double src_live = std::fmax(
+            chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
+            + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s), 0.0);
+        chemass_flux_adv = std::fmin(chemass_flux_adv, src_live);
 
         // Remove Chemical mass flux from SOURCE
         d_transp_source(ichem_mob)(ix_s,iy_s,iz_s) -= chemass_flux_adv;
