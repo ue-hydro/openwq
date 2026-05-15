@@ -418,6 +418,25 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
             true).size();
     }
 
+    // Cache ASCII header indices
+    int idx_YYYY = -1, idx_MM = -1, idx_DD = -1, idx_HH = -1, idx_MIN = -1, idx_SEC = -1;
+    int idx_IX = -1, idx_IY = -1, idx_IZ = -1, idx_LOAD = -1, idx_LOAD_TYPE = -1, idx_TIME_UNITS = -1;
+
+    if (DataFormat.compare("ASCII") == 0 && !headerKeys.empty()) {
+        idx_YYYY       = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"YYYY");
+        idx_MM         = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"MM");
+        idx_DD         = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"DD");
+        idx_HH         = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"HH");
+        idx_MIN        = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"MIN");
+        idx_SEC        = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"SEC");
+        idx_IX         = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IX");
+        idx_IY         = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IY");
+        idx_IZ         = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IZ");
+        idx_LOAD       = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"LOAD");
+        idx_LOAD_TYPE  = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"LOAD_TYPE");
+        idx_TIME_UNITS = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"TIME_UNITS");
+    }
+
     /* ########################################
     // Loop over row data in sink-source file
     ######################################## */
@@ -469,8 +488,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(0);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[
-                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"YYYY")]);}
+                entryVal = std::stoi(ASCIIRowElemEntry[idx_YYYY]);}
 
             YYYY_json = entryVal;
 
@@ -483,8 +501,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(0);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"YYYY")];}
+                entryVal = ASCIIRowElemEntry[idx_YYYY];}
 
             // Check if "all" and return flag validEntryFlag
             validEntryFlag = getArrayElem_SS(
@@ -511,8 +528,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(1);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[ 
-                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"MM")]);}
+                entryVal = std::stoi(ASCIIRowElemEntry[idx_MM]);}
 
             MM_json = entryVal;
 
@@ -525,8 +541,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(1);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"MM")];}
+                entryVal = ASCIIRowElemEntry[idx_MM];}
 
             validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
@@ -554,8 +569,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(2);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[ 
-                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"DD")]);}
+                entryVal = std::stoi(ASCIIRowElemEntry[idx_DD]);}
 
             DD_json = entryVal;
 
@@ -568,8 +582,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(2);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"DD")];}
+                entryVal = ASCIIRowElemEntry[idx_DD];}
 
             validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
@@ -597,8 +610,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(3);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[ 
-                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"HH")]);}
+                entryVal = std::stoi(ASCIIRowElemEntry[idx_HH]);}
 
             HH_json = entryVal;
 
@@ -611,8 +623,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(3);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"HH")];}
+                entryVal = ASCIIRowElemEntry[idx_HH];}
 
             validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
@@ -640,8 +651,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(4);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[ 
-                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"MIN")]);}
+                entryVal = std::stoi(ASCIIRowElemEntry[idx_MIN]);}
 
             MIN_json = entryVal;
 
@@ -654,8 +664,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(4);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"MIN")];}
+                entryVal = ASCIIRowElemEntry[idx_MIN];}
 
             validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
@@ -683,8 +692,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(5);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = std::stoi(ASCIIRowElemEntry[ 
-                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"SEC")]);}
+                entryVal = std::stoi(ASCIIRowElemEntry[idx_SEC]);}
 
             SEC_json = entryVal;
 
@@ -697,8 +705,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(5);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"SEC")];}
+                entryVal = ASCIIRowElemEntry[idx_SEC];}
 
             validEntryFlag = getArrayElem_SS(
                 OpenWQ_wqconfig,
@@ -746,8 +753,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
             }
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IX")];}
+                entryVal = ASCIIRowElemEntry[idx_IX];}
 
             // Strip surrounding quotes (CSV may preserve them)
             if (entryVal.size() >= 2
@@ -818,8 +824,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
             }
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal_iy = ASCIIRowElemEntry[
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IY")];}
+                entryVal_iy = ASCIIRowElemEntry[idx_IY];}
 
             // Strip surrounding quotes (CSV may preserve them)
             if (entryVal_iy.size() >= 2
@@ -881,8 +886,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
             }
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal_iz = ASCIIRowElemEntry[
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"IZ")];}
+                entryVal_iz = ASCIIRowElemEntry[idx_IZ];}
 
             // Strip surrounding quotes (CSV may preserve them)
             if (entryVal_iz.size() >= 2
@@ -928,8 +932,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
             entryVal = EWF_SS_json_sub_rowi.at(9);}
         // if ASCII
         else if (DataFormat.compare("ASCII")==0){
-            entryVal = std::stod(ASCIIRowElemEntry[ 
-            OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"LOAD")]);}
+            entryVal = std::stod(ASCIIRowElemEntry[idx_LOAD]);}
 
         ss_data_json = entryVal;
 
@@ -966,8 +969,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                 entryVal = EWF_SS_json_sub_rowi.at(10);}
             // if ASCII
             else if (DataFormat.compare("ASCII")==0){
-                entryVal = ASCIIRowElemEntry[ 
-                    OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"LOAD_TYPE")];}
+                entryVal = ASCIIRowElemEntry[idx_LOAD_TYPE];}
 
             loadScheme_str = entryVal;
 
@@ -1016,8 +1018,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                             entryVal = EWF_SS_json_sub_rowi.at(11);}
                         // if ASCII
                         else if (DataFormat.compare("ASCII")==0){
-                            entryVal = ASCIIRowElemEntry[ 
-                                OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"TIME_UNITS")];}
+                            entryVal = ASCIIRowElemEntry[idx_TIME_UNITS];}
 
                         contDt_str = entryVal;
 
