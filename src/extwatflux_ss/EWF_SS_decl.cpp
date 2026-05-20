@@ -437,6 +437,16 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
         idx_TIME_UNITS = OpenWQ_utils.FindStrIndexInVectStr(headerKeys,"TIME_UNITS");
     }
 
+    // Allocate space in SS/EWF matrix
+    if (inputType.compare("ss")==0){
+        (*OpenWQ_wqconfig.SinkSource_FORC).resize(
+            (*OpenWQ_wqconfig.SinkSource_FORC).n_rows + num_rowdata,
+            (*OpenWQ_wqconfig.SinkSource_FORC).n_cols);}
+    if (inputType.compare("ewf")==0){
+        (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).resize(
+            (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).n_rows + num_rowdata,
+            (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).n_cols);}
+
     /* ########################################
     // Loop over row data in sink-source file
     ######################################## */
@@ -1146,7 +1156,15 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
             row_data_col);
 
     }
-
+    // Remove unused rows from SS/EWF matrix
+    if (inputType.compare("ss")==0){
+        (*OpenWQ_wqconfig.SinkSource_FORC).resize(
+            OpenWQ_wqconfig.current_ss_row,
+            (*OpenWQ_wqconfig.SinkSource_FORC).n_cols);}
+    if (inputType.compare("ewf")==0){
+        (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).resize(
+            OpenWQ_wqconfig.current_ewf_row,
+            (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).n_cols);}
  }
 
 /* #################################################
@@ -1732,27 +1750,13 @@ void OpenWQ_extwatflux_ss::AppendRow_SS_EWF_FORC_jsonAscii(
     std::string inputType,
     arma::vec row_data_col){
 
-    // Local variables            
-    arma::Mat<double> row_data_row;                     // new row data (initially as col data)
-    int int_n_elem = 0;
-
-    // Transpose vector for adding to SinkSource_FORC as a new row
-    row_data_row = row_data_col.t();
-
-    // Get index of last element
-    if (inputType.compare("ss")==0)     int_n_elem = (*OpenWQ_wqconfig.SinkSource_FORC).n_rows;
-    if (inputType.compare("ewf")==0)    int_n_elem = (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).n_rows;
-    
-    // Add new row_data_row to SinkSource_FORC
+    // Add transposed vector to SinkSource_FORC and keep track of valid rows
     if (inputType.compare("ss")==0){ 
-        (*OpenWQ_wqconfig.SinkSource_FORC).insert_rows(
-            std::max(int_n_elem-1,0),
-            row_data_row);}
+        (*OpenWQ_wqconfig.SinkSource_FORC).row(OpenWQ_wqconfig.current_ss_row) = row_data_col.t();
+        OpenWQ_wqconfig.current_ss_row++;}
     else if (inputType.compare("ewf")==0){
-        (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).insert_rows(
-            std::max(int_n_elem-1,0),
-            row_data_row);}
-   
+        (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).row(OpenWQ_wqconfig.current_ewf_row) = row_data_col.t();
+        OpenWQ_wqconfig.current_ewf_row++;} 
 }
 
 // Add new row to SinkSource_FORC or ExtFlux_FORC_jsonAscii

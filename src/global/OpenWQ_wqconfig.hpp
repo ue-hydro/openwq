@@ -213,6 +213,8 @@ class OpenWQ_wqconfig
         /***********************************************
         * Sink and Source AND External fluxes
         ************************************************/
+        int current_ss_row = 0;  // Track number of valid rows
+        int current_ewf_row = 0;
         std::unique_ptr<            
             arma::Mat<double>
             > SinkSource_FORC;              // SS
