@@ -1305,6 +1305,11 @@ def generate_simulation_report(
         timestep,
         river_network_shapefile=None,
         basin_shapefile=None,
+        # OPTIONAL: column in the river-network shapefile whose values match
+        # the reach IDs that OpenWQ writes to HDF5. None → auto-detect from a
+        # candidate list (see _detect_shp_mapping_key); a string sets the
+        # column explicitly (e.g. "LINKNO", "SegId", "COMID").
+        river_network_mapping_key=None,
         observation_data_source="grqa",
         grqa_local_data_path=None,
         grqa_buffer_km=10,
@@ -2590,27 +2595,51 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _shp_path = river_network_shapefile or ''
         _basin_shp_path = basin_shapefile or ''
 
-        def _detect_shp_mapping_key(shp_path, candidates, default_key, label):
-            """Pick the first column from `candidates` that exists in the shapefile."""
+        def _detect_shp_mapping_key(shp_path, candidates, default_key, label,
+                                    explicit_override=None):
+            """Pick the column to use as mapping key for a shapefile.
+
+            Resolution order:
+              1. If `explicit_override` is set, validate it exists in the
+                 shapefile's properties and use it (warn if it doesn't).
+              2. Otherwise walk `candidates` and pick the first one present.
+              3. Otherwise fall back to `default_key` with a warning.
+            """
             if not shp_path or not os.path.isfile(shp_path):
+                if explicit_override:
+                    print(f"  {label} mapping key: '{explicit_override}' "
+                          f"(explicit override; shapefile not on disk so "
+                          f"cannot validate)")
+                    return explicit_override
                 return default_key
             try:
                 import fiona
                 with fiona.open(shp_path) as _src:
                     _props = list(_src.schema['properties'].keys())
+                # 1) Explicit user override — strongest signal
+                if explicit_override:
+                    if explicit_override in _props:
+                        print(f"  {label} mapping key: '{explicit_override}' "
+                              f"(explicit override from template)")
+                        return explicit_override
+                    print(f"  WARNING: explicit mapping key "
+                          f"'{explicit_override}' for {label} not found in "
+                          f"shapefile. Available: {_props}. "
+                          f"Falling back to auto-detect.")
+                # 2) Auto-detect from candidate list
                 for _cand in candidates:
                     if _cand in _props:
-                        print(f"  {label} mapping key: {_cand} "
-                              f"(available: {_props})")
+                        print(f"  {label} mapping key: '{_cand}' "
+                              f"(auto-detected; available: {_props})")
                         return _cand
                 print(f"  WARNING: No standard mapping key found in {label} "
                       f"shapefile. Available: {_props}. Falling back to "
-                      f"'{default_key}' — you may need to override "
-                      f"shpfile_info['mapping_key'] manually.")
+                      f"'{default_key}' — set river_network_mapping_key in "
+                      f"the template to override explicitly.")
                 return default_key
             except Exception as _e:
                 print(f"  WARNING: Could not inspect {label} shapefile: {_e}")
-                return default_key
+                return explicit_override or default_key
 
         if hostmodel.lower() == 'summa':
             _h5_mapping_key = 'hruId'
@@ -2622,7 +2651,8 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                                  'GRU_ID', 'gruId', 'gru_id']
             _shp_key = _detect_shp_mapping_key(
                 river_network_shapefile, _rn_candidates, 'HRU_ID',
-                'River network')
+                'River network',
+                explicit_override=river_network_mapping_key)
             _basin_mapping_key = _detect_shp_mapping_key(
                 basin_shapefile, _basin_candidates, 'HRU_ID',
                 'Basin')
@@ -2632,7 +2662,8 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                               'SegId', 'segId', 'seg_id', 'COMID', 'LINKNO']
             _shp_key = _detect_shp_mapping_key(
                 river_network_shapefile, _rn_candidates, 'SegId',
-                'River network')
+                'River network',
+                explicit_override=river_network_mapping_key)
             _basin_mapping_key = ''
         _feature_label = openwq_h5_mapping_key or _shp_key
 
@@ -3371,6 +3402,11 @@ def generate_report(
         timestep,
         river_network_shapefile=None,
         basin_shapefile=None,
+        # OPTIONAL: column in the river-network shapefile whose values match
+        # the reach IDs that OpenWQ writes to HDF5. None → auto-detect from a
+        # candidate list (see _detect_shp_mapping_key); a string sets the
+        # column explicitly (e.g. "LINKNO", "SegId", "COMID").
+        river_network_mapping_key=None,
         observation_data_source="grqa",
         grqa_local_data_path=None,
         grqa_buffer_km=10,
@@ -3427,6 +3463,7 @@ def generate_report(
             timestep=timestep,
             river_network_shapefile=river_network_shapefile,
             basin_shapefile=basin_shapefile,
+            river_network_mapping_key=river_network_mapping_key,
             observation_data_source=observation_data_source,
             grqa_local_data_path=grqa_local_data_path,
             grqa_buffer_km=grqa_buffer_km,
