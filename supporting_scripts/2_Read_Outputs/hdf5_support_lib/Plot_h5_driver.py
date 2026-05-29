@@ -2469,6 +2469,58 @@ def Plot_h5_driver(what2map=None,
                 print(f"  WARNING: No basin property matches plot HRU IDs. "
                       f"Using '{_basin_mapping_key}'. Map colours may be wrong.")
 
+    # Auto-detect / validate the RIVER-NETWORK mapping key.
+    # Mirrors the basin block above so the river layer is just as robust:
+    #   1) Honour the explicit `mapping_key` argument if it actually matches
+    #      reach IDs in the plot data.
+    #   2) Otherwise scan the river-network GeoJSON's properties for any
+    #      column whose values overlap the plot reach IDs.
+    #   3) Otherwise fall back to a short candidate list and warn.
+    # Before this block existed the river layer would render entirely gray
+    # whenever Gen_Report picked the wrong column (the `_makeInteractive`
+    # call in the HTML template uses `feature.properties[mapKey]` and
+    # `_mapColor(undefined)` falls through to '#888').
+    if _river_geojson and _river_geojson.get('features'):
+        _river_props = _river_geojson['features'][0].get('properties', {})
+
+        _found_river_match = False
+        # 1) honour explicit mapping_key when it overlaps plot IDs
+        if mapping_key and mapping_key in _river_props:
+            _river_vals = set()
+            for feat in _river_geojson['features']:
+                _river_vals.add(str(feat['properties'].get(mapping_key, '')))
+            if _plot_hru_ids & _river_vals:
+                _found_river_match = True
+                print(f"  River-network mapping key '{mapping_key}' "
+                      f"matches plot data ✓")
+
+        # 2) walk every property looking for overlap
+        if not _found_river_match:
+            for _try_key in list(_river_props.keys()):
+                _rv_vals = set()
+                for feat in _river_geojson['features']:
+                    _rv_vals.add(str(feat['properties'].get(_try_key, '')))
+                if _plot_hru_ids and (_plot_hru_ids & _rv_vals):
+                    mapping_key = _try_key
+                    _found_river_match = True
+                    print(f"  Auto-detected river-network mapping key: "
+                          f"'{_try_key}' (matches plot reach IDs)")
+                    break
+
+        # 3) fallback so we still emit *something* sensible
+        if not _found_river_match and mapping_key not in _river_props:
+            for _try_key in ['reachID', 'REACHID', 'reach_id', 'ReachID',
+                             'SegId', 'segId', 'seg_id',
+                             'LINKNO', 'COMID']:
+                if _try_key in _river_props:
+                    mapping_key = _try_key
+                    break
+            print(f"  WARNING: No river-network property matches plot "
+                  f"reach IDs. Using '{mapping_key}'. Map reaches may "
+                  f"render gray. Pass an explicit `mapping_key=` (or "
+                  f"set `river_network_mapping_key` in the template) "
+                  f"to override.")
+
     # --- Load observation data and match to features ---
     _observation_data = None    # {plot_id: [obs_dict, ...]}
     station_locations = None     # {station_id: (lat, lon)}
