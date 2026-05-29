@@ -99,6 +99,139 @@ def _match_stations_to_features(station_locations, river_geojson, mapping_key):
     return matches
 
 
+def _polygon_rings(geom):
+    """Return outer rings of a Polygon/MultiPolygon as lists of [lon, lat].
+
+    GeoJSON Polygons store the outer ring at index 0 of the coordinates
+    list; subsequent entries are interior holes (which we ignore here).
+    """
+    gtype = geom.get('type', '')
+    coords = geom.get('coordinates', [])
+    if gtype == 'Polygon':
+        return [coords[0]] if coords else []
+    if gtype == 'MultiPolygon':
+        return [poly[0] for poly in coords if poly]
+    return []
+
+
+def _point_in_polygon(lon, lat, ring):
+    """Ray-casting point-in-polygon test.  `ring` is a list of [lon, lat]."""
+    inside = False
+    n = len(ring)
+    if n < 3:
+        return False
+    j = n - 1
+    for i in range(n):
+        xi, yi = ring[i][0], ring[i][1]
+        xj, yj = ring[j][0], ring[j][1]
+        if ((yi > lat) != (yj > lat)) and \
+           (lon < (xj - xi) * (lat - yi) / ((yj - yi) or 1e-30) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
+def _polygon_centroid(rings):
+    """Area-weighted centroid of a (Multi)Polygon outer rings.
+
+    Falls back to the vertex mean if all rings are degenerate.  Returns
+    (lon, lat) or None if no vertices.
+    """
+    sx = sy = sa = 0.0
+    for ring in rings:
+        n = len(ring)
+        if n < 3:
+            continue
+        # Ensure closed (some GeoJSON omits the closing duplicate vertex)
+        ring_closed = ring if ring[0] == ring[-1] else ring + [ring[0]]
+        for i in range(len(ring_closed) - 1):
+            x0, y0 = ring_closed[i][0], ring_closed[i][1]
+            x1, y1 = ring_closed[i + 1][0], ring_closed[i + 1][1]
+            a = x0 * y1 - x1 * y0
+            sa += a
+            sx += (x0 + x1) * a
+            sy += (y0 + y1) * a
+    if sa != 0:
+        sa *= 0.5
+        return (sx / (6 * sa), sy / (6 * sa))
+    pts = [p for ring in rings for p in ring]
+    if not pts:
+        return None
+    return (sum(p[0] for p in pts) / len(pts),
+            sum(p[1] for p in pts) / len(pts))
+
+
+def _match_stations_to_basins(station_locations, basin_geojson, mapping_key):
+    """Match each station to the basin polygon that contains it, then designate
+    one "pouring-point" station per basin.
+
+    The pouring-point station of a basin is the station inside that basin whose
+    location is closest to the basin centroid (a reasonable heuristic when no
+    explicit outlet coordinates are available).  All other stations inside the
+    same polygon are flagged as *secondary* — they remain on the map but should
+    be rendered greyed out so the viewer can tell them apart from the basin's
+    primary observation.
+
+    Stations that fall outside every basin polygon are unmatched (they will not
+    appear in the returned mapping).
+
+    Parameters
+    ----------
+    station_locations : dict
+        {station_id: (lat, lon)}
+    basin_geojson : dict
+        GeoJSON FeatureCollection of basin/HRU polygons.
+    mapping_key : str
+        Property key for the basin ID in GeoJSON features.
+
+    Returns
+    -------
+    station_to_basin : dict
+        {station_id: basin_id}
+    pouring_point_stations : set
+        Station IDs that are the designated pouring-point station of their
+        matched basin.  Always a subset of station_to_basin.keys().
+    """
+    station_to_basin = {}
+    centroids = {}
+    # First pass: point-in-polygon test for each station against each basin.
+    for feat in basin_geojson.get('features', []):
+        fid = str(feat['properties'].get(mapping_key, ''))
+        if not fid:
+            continue
+        rings = _polygon_rings(feat.get('geometry') or {})
+        if not rings:
+            continue
+        c = _polygon_centroid(rings)
+        if c is not None:
+            centroids[fid] = c  # (lon, lat)
+        for sid, (slat, slon) in station_locations.items():
+            if sid in station_to_basin:
+                continue  # first containing basin wins
+            for ring in rings:
+                if _point_in_polygon(slon, slat, ring):
+                    station_to_basin[sid] = fid
+                    break
+    # Second pass: choose one pouring-point station per basin (centroid heuristic).
+    by_basin = {}
+    for sid, fid in station_to_basin.items():
+        by_basin.setdefault(fid, []).append(sid)
+    pouring = set()
+    for fid, sids in by_basin.items():
+        if len(sids) == 1:
+            pouring.add(sids[0])
+            continue
+        c = centroids.get(fid)
+        if c is None:
+            pouring.add(sids[0])
+            continue
+        clon, clat = c
+        best = min(sids, key=lambda s: _haversine(
+            station_locations[s][0], station_locations[s][1], clat, clon))
+        pouring.add(best)
+    return station_to_basin, pouring
+
+
 def _load_observation_data(obs_dir=None, obs_csv=None):
     """Load observation data from a GRQA clipped directory or user CSV.
 
@@ -393,7 +526,8 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 map_center=None, map_bounds=None, mapping_key='SegId',
                 observation_data=None, feature_label=None,
                 map_geom_type='line', station_locations=None,
-                station_to_feature=None, separator=' | ',
+                station_to_feature=None,
+                pouring_point_stations=None, separator=' | ',
                 basin_geojson=None, river_line_geojson=None):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
@@ -449,12 +583,31 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 continue
             fid = t['name'].replace(_label_prefix, '')
             _all_fids_set.add(fid)
-    _all_fids_sorted = sorted(_all_fids_set)
 
     # Detect layers: fids like "1 (z1)", "1 (z2)" have a " (z<n>)" suffix
+    _LAYER_RE = re.compile(r'^(.+?) \((z\d+)\)$')
+
+    def _smart_sort_key(s):
+        """Sort key that orders pure-numeric IDs numerically.
+
+        With the default lexicographic sort, sequential IDs come back as
+        ``['1','10','11','2','3']``, which means the i-th element no longer
+        matches the i-th element of a list of real basin IDs (which usually
+        are large fixed-width integers and *do* sort consistently).  That
+        breaks the position-based plot ↔ map bridge built below.
+        """
+        s = str(s)
+        m = _LAYER_RE.match(s)
+        base = m.group(1) if m else s
+        try:
+            return (0, int(base), s)
+        except ValueError:
+            return (1, base.lower(), s)
+
+    _all_fids_sorted = sorted(_all_fids_set, key=_smart_sort_key)
+
     _all_layers = set()
     _all_hru_ids = set()
-    _LAYER_RE = re.compile(r'^(.+?) \((z\d+)\)$')
     for fid in _all_fids_sorted:
         m = _LAYER_RE.match(fid)
         if m:
@@ -467,7 +620,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
 
     # Assign colours based on HRU ID (not layer) so same HRU gets same
     # colour across all layers
-    _hru_ids_sorted = sorted(_all_hru_ids)
+    _hru_ids_sorted = sorted(_all_hru_ids, key=_smart_sort_key)
     _hru_color = {hid: _colorway[i % len(_colorway)]
                   for i, hid in enumerate(_hru_ids_sorted)}
 
@@ -485,25 +638,45 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
     # When plot IDs and map IDs are in the same space (mizuRoute),
     # _fid_color already covers them.  When they differ (SUMMA: HDF5
     # uses sequential 1,2,3 but shapefile uses GRU_ID 740457190 etc.),
-    # we build an independent map color dict from the GeoJSON features.
+    # we build an independent map color dict from the GeoJSON features
+    # AND a position-based bridge so the same logical HRU lights up in
+    # both the map and the plots when clicked.
     _map_fid_color = {}
+    _plot_to_map = {}   # plot HRU id  -> map basin id  (position based)
+    _map_to_plot = {}   # map basin id -> plot HRU id   (position based)
     if river_geojson and river_geojson.get('features'):
         _map_fid_set = set()
         for feat in river_geojson['features']:
             mfid = str(feat['properties'].get(mapping_key, ''))
             if mfid:
                 _map_fid_set.add(mfid)
-        _map_fids_sorted = sorted(_map_fid_set)
-        # Check if map IDs overlap with plot IDs — if so, reuse plot colors
-        if _map_fid_set & (_all_fids_set | _all_hru_ids):
-            # IDs match (mizuRoute case): reuse _fid_color + _hru_color
+        _map_fids_sorted = sorted(_map_fid_set, key=_smart_sort_key)
+        _ids_overlap = bool(_map_fid_set & (_all_fids_set | _all_hru_ids))
+        if _ids_overlap:
+            # IDs match (mizuRoute, or SUMMA after a successful remap):
+            # reuse the plot-side colors so a basin and its trace are
+            # guaranteed identical.
             for mfid in _map_fids_sorted:
                 _map_fid_color[mfid] = (_fid_color.get(mfid) or
                                         _hru_color.get(mfid) or '#888')
         else:
-            # IDs don't match (SUMMA case): assign independent colors
+            # IDs don't overlap (SUMMA, basin shapefile uses GRU_IDs but
+            # plot data still carries sequential indices).  Assign basin
+            # colors from the SAME colorway by the SAME sorted position,
+            # so the i-th plot-side HRU and the i-th basin polygon get
+            # the same swatch.  Then publish a position-based bridge so
+            # clicking a basin can filter plot traces that still carry
+            # the sequential ID.
             for i, mfid in enumerate(_map_fids_sorted):
                 _map_fid_color[mfid] = _colorway[i % len(_colorway)]
+            n_bridge = min(len(_hru_ids_sorted), len(_map_fids_sorted))
+            for i in range(n_bridge):
+                _plot_to_map[_hru_ids_sorted[i]] = _map_fids_sorted[i]
+                _map_to_plot[_map_fids_sorted[i]] = _hru_ids_sorted[i]
+            if n_bridge:
+                print(f"  Plot↔map ID bridge built: {n_bridge} entries "
+                      f"(plot IDs and map IDs are in different namespaces; "
+                      f"colors and click broadcast aligned by sorted position)")
 
     # Stamp explicit line colors onto every trace so Plotly matches the map.
     for p in plots:
@@ -536,7 +709,23 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
             _species_name = p.get('species', '')
             for i, od in enumerate(plot_obs):
                 fid = str(od['feature_id'])
-                color = _fid_color.get(fid, '#888')
+                _stn_id = od.get('station_id')
+                # Pouring-point stations get their basin/reach colour; all
+                # other observations (secondary stations inside an HRU, or
+                # stations matched only by nearest-distance fallback) are
+                # rendered gray so the plot mirrors the map's colour code.
+                _is_primary = (not pouring_point_stations
+                               or _stn_id in pouring_point_stations)
+                if _is_primary:
+                    # Use plot-trace colour when fid is in plot-ID space
+                    # (mizuRoute), else MAP colour for that basin (SUMMA,
+                    # where station_to_feature gives basin IDs that aren't
+                    # in the plot trace name list).
+                    color = (_fid_color.get(fid)
+                             or _map_fid_color.get(fid)
+                             or '#888')
+                else:
+                    color = '#888'
                 trace = {
                     'x': od['x'],
                     'y': od['y'],
@@ -1290,10 +1479,27 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   var fidColor={_fid_color_json};
   var plotFids={_fid_list_json};
   var mapFidColor={json.dumps(_map_fid_color)};
+  // Position-based bridges between plot-side HRU IDs (e.g. "1","2","3")
+  // and map-side basin IDs (e.g. "740457190",...).  Both objects are
+  // empty when the two namespaces already agree (mizuRoute, or SUMMA
+  // with successful remap).
+  var plotToMap={json.dumps(_plot_to_map)};
+  var mapToPlot={json.dumps(_map_to_plot)};
 
   var featureLayers={{}};  // fid → Leaflet layer
-  var selectedFids={{}};   // fid → true (multi-select set)
+  var selectedFids={{}};   // fid → true (multi-select set, map-space IDs)
   window._owqSelectedFids=selectedFids;  // expose for layer selector
+
+  // Has the user clicked anything in *map* space that corresponds to this
+  // plot-side HRU?  We accept either a direct match (mizuRoute) or the
+  // bridged map-space ID (SUMMA when ID namespaces diverge).
+  window._owqIsSelected=function(plotHru){{
+    if(plotHru==null) return false;
+    if(selectedFids[plotHru]) return true;
+    var mapId=plotToMap[plotHru];
+    if(mapId && selectedFids[mapId]) return true;
+    return false;
+  }};
 
   var isPolygon={json.dumps(map_geom_type == 'polygon')};
   var hasLayers={json.dumps(_has_layers)};
@@ -1394,38 +1600,92 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   var geoLayer=_basinIsInteractive?_basinLayer:_riverLayer;
 
   // --- Observation station markers ---
+  // Colour scheme:
+  //   - Primary (pouring-point) station of a basin/reach → matched feature's
+  //     colour, full opacity, larger radius.
+  //   - Secondary station (inside a basin but not the pouring point) → solid
+  //     GRAY so it visually contrasts with the basin's primary marker.
+  //   - Unmatched station (outside every basin polygon) → also gray.
+  // For line-geometry maps (mizuRoute) every matched station is primary, so
+  // the gray secondary branch never fires there.
   var stationData={json.dumps({sid: list(loc) for sid, loc in (station_locations or {}).items()})};
   var stationToFeature={json.dumps(station_to_feature or {})};
-  var stationMarkers={{}};  // sid → L.circleMarker
+  var pouringPointStations={json.dumps({sid: True for sid in (pouring_point_stations or set())})};
+  var mapGeomType={json.dumps(map_geom_type or 'line')};
+  var SECONDARY_GRAY='#888';
+  var stationMarkers={{}};   // sid -> L.circleMarker
+  var stationStyles={{}};    // sid -> {{primary, secondary, hidden}} style presets
   var stationLayer=L.layerGroup();
   var stationsVisible=true;
   Object.keys(stationData).forEach(function(sid){{
     var ll=stationData[sid];
     var matchedFid=stationToFeature[sid]||null;
-    var marker=L.circleMarker([ll[0],ll[1]],{{
-      radius:4,fillColor:'#fff',color:'#e00',weight:1.5,opacity:1,fillOpacity:0.9
-    }});
+    var isPrimary=!!pouringPointStations[sid];
+    // Feature colour for primary; gray for everything else (secondary or
+    // unmatched).  We resolve the feature colour every time so the marker
+    // always exposes its parent basin/reach colour in tooltips/popups.
+    var featCol=(matchedFid && mapFidColor[matchedFid]) || SECONDARY_GRAY;
+    var primaryStyle={{
+      radius:6, fillColor:featCol, color:'#fff',
+      weight:1.5, opacity:1, fillOpacity:0.95
+    }};
+    var secondaryStyle={{
+      radius:4, fillColor:SECONDARY_GRAY, color:'#fff',
+      weight:1, opacity:0.95, fillOpacity:0.75
+    }};
+    // Used when another feature is selected and this station belongs to a
+    // non-selected one — dim to near-invisible so the focus is clear.
+    var hiddenStyle={{
+      radius:3, fillColor:SECONDARY_GRAY, color:'#fff',
+      weight:0.5, opacity:0.15, fillOpacity:0.08
+    }};
+    stationStyles[sid]={{
+      primary:primaryStyle, secondary:secondaryStyle, hidden:hiddenStyle,
+      isPrimary:isPrimary
+    }};
+    var marker=L.circleMarker([ll[0],ll[1]], isPrimary?primaryStyle:secondaryStyle);
     var popupHtml='<b>Observation Station</b><br>ID: '+sid
       +'<br>Lat: '+ll[0].toFixed(4)+'<br>Lon: '+ll[1].toFixed(4);
-    if(matchedFid) popupHtml+='<br>Matched {feature_label}: '+matchedFid;
-    marker.bindTooltip('Station: '+sid+(matchedFid?' \\u2192 {feature_label} '+matchedFid:''),{{direction:'top',offset:[0,-6]}});
+    if(matchedFid){{
+      popupHtml+='<br>Matched {feature_label}: '+matchedFid;
+      popupHtml+=isPrimary
+        ? '<br><i>(pouring-point observation)</i>'
+        : '<br><i>(secondary \\u2014 inside basin but not pouring point)</i>';
+    }}else{{
+      popupHtml+='<br><i>(outside every basin polygon)</i>';
+    }}
+    marker.bindTooltip(
+      'Station: '+sid+
+      (matchedFid?' \\u2192 {feature_label} '+matchedFid:'')+
+      (matchedFid && !isPrimary?' (secondary)':'')+
+      (!matchedFid?' (unmatched)':''),
+      {{direction:'top',offset:[0,-6]}}
+    );
     marker.bindPopup(popupHtml);
     stationMarkers[sid]=marker;
     stationLayer.addLayer(marker);
   }});
-  // Filter station markers when a feature is selected
+  // Filter station markers when a feature is selected.
+  //   - No selection: revert to each marker's default (primary/secondary).
+  //   - Selection + station's matched fid is selected:
+  //        primary  -> full opacity
+  //        secondary -> greyed (still visible, signals "within selected basin
+  //                    but not its pouring point")
+  //   - Selection + station's matched fid is NOT selected: hide (near-zero opacity).
   window._owqFilterStations=function(selSet){{
     if(!stationsVisible) return;
     var hasSel=Object.keys(selSet).length>0;
     Object.keys(stationMarkers).forEach(function(sid){{
       var mk=stationMarkers[sid];
       var matchedFid=stationToFeature[sid]||null;
+      var st=stationStyles[sid];
+      if(!st) return;
       if(!hasSel){{
-        mk.setStyle({{fillOpacity:0.85,opacity:1}});
+        mk.setStyle(st.isPrimary?st.primary:st.secondary);
       }}else if(matchedFid && selSet[String(matchedFid)]){{
-        mk.setStyle({{fillOpacity:0.85,opacity:1}});
+        mk.setStyle(st.isPrimary?st.primary:st.secondary);
       }}else{{
-        mk.setStyle({{fillOpacity:0.15,opacity:0.2}});
+        mk.setStyle(st.hidden);
       }}
     }});
   }};
@@ -1637,8 +1897,10 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
           }}
           if(!typeOn) return false;
           if(!hasSel) return true;
-          // Multi-select: show only selected features, completely hide others
-          return selectedFids[info.hru]?true:false;
+          // Multi-select: show only selected features.  _owqIsSelected
+          // bridges plot-side HRU IDs to map-side basin IDs when the two
+          // namespaces differ (SUMMA).
+          return window._owqIsSelected(info.hru)?true:false;
         }});
         Plotly.restyle(gd,{{visible:newVis}}).then(_nextRestyle);
       }}
@@ -1693,10 +1955,14 @@ window._owqSelectFeature = window._owqSelectFeature || function(){};
         if(concBtn && !concBtn.classList.contains('active')) typeOn=false;
       }}
       if(!typeOn) return false;
-      // Feature selection filter
+      // Feature selection filter — bridge plot↔map IDs (SUMMA needs this)
       if(hasSel){{
         var info=_owqExtractHru(tname,lg);
-        if(!selFids[info.hru]) return false;
+        if(typeof window._owqIsSelected==='function'){{
+          if(!window._owqIsSelected(info.hru)) return false;
+        }}else if(!selFids[info.hru]){{
+          return false;
+        }}
       }}
       var m=tname.match(/\\(z(\\d+)\\)/);
       if(m){{
@@ -2522,9 +2788,10 @@ def Plot_h5_driver(what2map=None,
                   f"to override.")
 
     # --- Load observation data and match to features ---
-    _observation_data = None    # {plot_id: [obs_dict, ...]}
-    station_locations = None     # {station_id: (lat, lon)}
-    station_to_feature = None    # {station_id: feature_id}
+    _observation_data = None         # {plot_id: [obs_dict, ...]}
+    station_locations = None          # {station_id: (lat, lon)}
+    station_to_feature = None         # {station_id: feature_id}
+    _pouring_point_stations = set()   # subset of stations flagged as "primary"
     if (observation_dir or observation_csv) and _primary_geojson:
         print("\n" + "-" * 40)
         print("Loading observation data...")
@@ -2532,13 +2799,34 @@ def Plot_h5_driver(what2map=None,
             obs_dir=observation_dir, obs_csv=observation_csv)
         if obs_by_species and station_locations:
             _obs_geojson = _primary_geojson
-            _obs_map_key = _basin_mapping_key if _basin_geojson else mapping_key
-            station_to_feature = _match_stations_to_features(
-                station_locations, _obs_geojson, _obs_map_key)
+            # The obs mapping key must follow the INTERACTIVE layer, not just
+            # "basin if any basin loaded".  Mirrors _map_key logic below so a
+            # mizuRoute run with a basin reference layer doesn't mismatch.
+            if _map_geom_type == 'polygon':
+                _obs_map_key = (_basin_mapping_key
+                                if _basin_geojson else mapping_key)
+            else:
+                _obs_map_key = mapping_key
+            if _map_geom_type == 'polygon':
+                # SUMMA: match each station to its containing basin via
+                # point-in-polygon, then designate one pouring-point obs
+                # per basin (closest to basin centroid).  Stations inside
+                # but not the pouring point appear greyed on the map.
+                station_to_feature, _pouring_point_stations = \
+                    _match_stations_to_basins(
+                        station_locations, _obs_geojson, _obs_map_key)
+            else:
+                # mizuRoute: match to nearest river reach; every matched
+                # station is "primary" for the purposes of the JS filter.
+                station_to_feature = _match_stations_to_features(
+                    station_locations, _obs_geojson, _obs_map_key)
+                _pouring_point_stations = set(station_to_feature.keys())
             if station_to_feature:
                 print(f"  Matched {len(station_to_feature)} stations to features:")
                 for sid, fid in station_to_feature.items():
-                    print(f"    Station {sid} → Feature {fid}")
+                    _flag = ('' if sid in _pouring_point_stations
+                             else '  [secondary]')
+                    print(f"    Station {sid} → Feature {fid}{_flag}")
                 _observation_data = {}
                 # Normalise compartment filter to a set of lowercase names
                 _obs_comps = None
@@ -2590,8 +2878,22 @@ def Plot_h5_driver(what2map=None,
         print("  WARNING: Observation data provided but no shapefile "
               "loaded — cannot match stations to features.")
 
-    # Determine the map key for the geojson features
-    _map_key = _basin_mapping_key if _basin_geojson else mapping_key
+    # Determine the map key for the geojson features.
+    # CRITICAL: must match the key for the INTERACTIVE layer:
+    #   - polygon geometry  (SUMMA):     basin polygons are interactive   → basin key
+    #   - line    geometry  (mizuRoute): river polylines are interactive  → river key
+    # The previous condition `_basin_mapping_key if _basin_geojson else mapping_key`
+    # always picked the basin key whenever ANY basin shapefile was loaded — even
+    # in mizuRoute runs where the basin is a background reference and the river
+    # is the clickable layer. The result was `feature.properties['HRU_ID']`
+    # being looked up on river-network features whose columns are LINKNO/SegId/etc.
+    # That returns undefined for every reach, `_mapColor` falls through every
+    # dictionary, and the map renders the entire river network in the `'#888'`
+    # gray fallback — looking exactly like a data-mapping failure.
+    if _map_geom_type == 'polygon':
+        _map_key = _basin_mapping_key if _basin_geojson else mapping_key
+    else:
+        _map_key = mapping_key
 
     # ── Remap sequential HRU IDs → actual shapefile IDs in traces ──
     # SUMMA HDF5 stores sequential IDs (1, 2, 3...) but the shapefile
@@ -2660,6 +2962,7 @@ def Plot_h5_driver(what2map=None,
                                map_geom_type=_map_geom_type,
                                station_locations=station_locations,
                                station_to_feature=station_to_feature,
+                               pouring_point_stations=_pouring_point_stations,
                                separator=separator,
                                basin_geojson=_basin_geojson,
                                river_line_geojson=_river_geojson)
