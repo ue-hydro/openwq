@@ -161,19 +161,131 @@ def _polygon_centroid(rings):
             sum(p[1] for p in pts) / len(pts))
 
 
-def _match_stations_to_basins(station_locations, basin_geojson, mapping_key):
-    """Match each station to the basin polygon that contains it, then designate
-    one "pouring-point" station per basin.
+def _river_endpoint_degrees(river_geojson):
+    """Build {(lon,lat)-rounded: degree} for the river-network endpoint graph.
 
-    The pouring-point station of a basin is the station inside that basin whose
-    location is closest to the basin centroid (a reasonable heuristic when no
-    explicit outlet coordinates are available).  All other stations inside the
-    same polygon are flagged as *secondary* — they remain on the map but should
-    be rendered greyed out so the viewer can tell them apart from the basin's
-    primary observation.
+    Degree = how many segments share that endpoint.  Leaves (degree==1) are
+    the topological terminals of the network — they're either headwaters
+    (deep inside a basin) or the basin's outlet (on the basin boundary).
+    """
+    if not river_geojson or not river_geojson.get('features'):
+        return {}
+    deg = {}
 
-    Stations that fall outside every basin polygon are unmatched (they will not
-    appear in the returned mapping).
+    def _key(pt):
+        return (round(float(pt[0]), 7), round(float(pt[1]), 7))
+
+    for feat in river_geojson['features']:
+        geom = feat.get('geometry') or {}
+        gtype = geom.get('type')
+        coords = geom.get('coordinates') or []
+        lines = []
+        if gtype == 'LineString' and len(coords) >= 2:
+            lines = [coords]
+        elif gtype == 'MultiLineString':
+            lines = [ln for ln in coords if len(ln) >= 2]
+        for line in lines:
+            for pt in (line[0], line[-1]):
+                k = _key(pt)
+                deg[k] = deg.get(k, 0) + 1
+    return deg
+
+
+def _find_basin_outlet(rings, river_geojson, endpoint_deg=None):
+    """Return (lon, lat) of the basin's outlet via the river network.
+
+    Strategy — every river *segment* with one endpoint inside the basin and
+    one outside crosses the boundary.  The outside endpoint of that segment
+    is a *candidate outlet*.  We then prefer endpoints that are LEAVES of the
+    river graph (degree==1), i.e. terminal nodes that cannot be inflow
+    junctions — they're almost always the basin's outlet rather than a
+    transient crossing.  Ties broken by southernmost (rough downstream
+    proxy for northern-hemisphere basins).
+
+    If no crossing segments are found (lumped basin where the river is fully
+    interior), we fall back to the river endpoint INSIDE the basin that is
+    closest to the polygon boundary — still a better outlet estimate than
+    the basin centroid.
+
+    Returns None if there is no usable river network or no endpoints can be
+    associated with the basin.
+    """
+    if not rings or not river_geojson:
+        return None
+    feats = river_geojson.get('features') or []
+    if not feats:
+        return None
+    if endpoint_deg is None:
+        endpoint_deg = _river_endpoint_degrees(river_geojson)
+
+    def _in_polygon(lon, lat):
+        return any(_point_in_polygon(lon, lat, r) for r in rings)
+
+    def _ekey(pt):
+        return (round(float(pt[0]), 7), round(float(pt[1]), 7))
+
+    # 1) Crossing segments → outside endpoint is the candidate outlet.
+    crossings = []  # list of (degree, lat, lon)
+    for feat in feats:
+        geom = feat.get('geometry') or {}
+        gtype = geom.get('type')
+        coords = geom.get('coordinates') or []
+        lines = []
+        if gtype == 'LineString' and len(coords) >= 2:
+            lines = [coords]
+        elif gtype == 'MultiLineString':
+            lines = [ln for ln in coords if len(ln) >= 2]
+        for line in lines:
+            sx, sy = float(line[0][0]), float(line[0][1])
+            ex, ey = float(line[-1][0]), float(line[-1][1])
+            si = _in_polygon(sx, sy)
+            ei = _in_polygon(ex, ey)
+            if si == ei:
+                continue
+            out_pt = (ex, ey) if si else (sx, sy)
+            d = endpoint_deg.get(_ekey(out_pt), 0)
+            crossings.append((d, out_pt[1], out_pt[0]))
+
+    if crossings:
+        leaves = [c for c in crossings if c[0] == 1]
+        pool = leaves if leaves else crossings
+        # Prefer southernmost as a flow-direction proxy.
+        pool.sort(key=lambda c: (c[1], c[0]))
+        return (pool[0][2], pool[0][1])
+
+    # 2) No crossings — pick the interior river endpoint closest to the
+    # polygon boundary (a degenerate but reasonable approximation).
+    boundary_pts = [(v[0], v[1]) for r in rings for v in r]
+    if not boundary_pts:
+        return None
+    candidates = []  # (dist_to_boundary_km, degree, lat, lon)
+    for (lon, lat), degree in endpoint_deg.items():
+        if not _in_polygon(lon, lat):
+            continue
+        min_d = min(_haversine(lat, lon, v[1], v[0]) for v in boundary_pts)
+        candidates.append((min_d, degree, lat, lon))
+    if not candidates:
+        return None
+    leaves = [c for c in candidates if c[1] == 1]
+    pool = leaves if leaves else candidates
+    pool.sort(key=lambda c: (c[0], c[2]))   # closest to boundary, then southernmost
+    return (pool[0][3], pool[0][2])
+
+
+def _match_stations_to_basins(station_locations, basin_geojson, mapping_key,
+                              river_geojson=None):
+    """Match each station to a basin and designate one pouring-point station.
+
+    Matching is robust:
+      1. Point-in-polygon — station truly sits inside a basin polygon.
+      2. Fallback: nearest-basin-centroid for stations that fail (1) — handles
+         stations digitised just outside the polygon boundary, which is the
+         common reason every observation ends up unmatched in practice.
+
+    Pouring-point designation uses the basin's RIVER-NETWORK OUTLET (where the
+    river leaves the basin polygon).  The pouring-point station of a basin is
+    the station closest to that outlet.  When no river network is available
+    we fall back to the polygon centroid as a last resort.
 
     Parameters
     ----------
@@ -183,18 +295,20 @@ def _match_stations_to_basins(station_locations, basin_geojson, mapping_key):
         GeoJSON FeatureCollection of basin/HRU polygons.
     mapping_key : str
         Property key for the basin ID in GeoJSON features.
+    river_geojson : dict or None
+        Optional river-network FeatureCollection used to locate basin outlets.
 
     Returns
     -------
     station_to_basin : dict
-        {station_id: basin_id}
     pouring_point_stations : set
-        Station IDs that are the designated pouring-point station of their
-        matched basin.  Always a subset of station_to_basin.keys().
     """
-    station_to_basin = {}
+    if not station_locations or not basin_geojson:
+        return {}, set()
+
+    # Pre-cache per-basin geometry helpers.
+    rings_by_fid = {}
     centroids = {}
-    # First pass: point-in-polygon test for each station against each basin.
     for feat in basin_geojson.get('features', []):
         fid = str(feat['properties'].get(mapping_key, ''))
         if not fid:
@@ -202,17 +316,60 @@ def _match_stations_to_basins(station_locations, basin_geojson, mapping_key):
         rings = _polygon_rings(feat.get('geometry') or {})
         if not rings:
             continue
+        rings_by_fid[fid] = rings
         c = _polygon_centroid(rings)
         if c is not None:
-            centroids[fid] = c  # (lon, lat)
+            centroids[fid] = c   # (lon, lat)
+
+    # 1) Point-in-polygon pass.
+    station_to_basin = {}
+    for fid, rings in rings_by_fid.items():
         for sid, (slat, slon) in station_locations.items():
             if sid in station_to_basin:
-                continue  # first containing basin wins
+                continue
             for ring in rings:
                 if _point_in_polygon(slon, slat, ring):
                     station_to_basin[sid] = fid
                     break
-    # Second pass: choose one pouring-point station per basin (centroid heuristic).
+    _n_pip = len(station_to_basin)
+    print(f"  [match] {_n_pip}/{len(station_locations)} stations matched "
+          f"via point-in-polygon")
+
+    # 2) Nearest-basin fallback for the leftovers.
+    if _n_pip < len(station_locations) and centroids:
+        for sid, (slat, slon) in station_locations.items():
+            if sid in station_to_basin:
+                continue
+            best_fid, best_dist = None, float('inf')
+            for fid, (clon, clat) in centroids.items():
+                d = _haversine(slat, slon, clat, clon)
+                if d < best_dist:
+                    best_dist = d
+                    best_fid = fid
+            if best_fid is not None:
+                station_to_basin[sid] = best_fid
+        print(f"  [match] {len(station_to_basin)-_n_pip} stations matched "
+              f"via nearest-basin fallback (digitised outside polygon)")
+
+    # 3) Determine each basin's outlet via the river network.
+    endpoint_deg = (_river_endpoint_degrees(river_geojson)
+                    if river_geojson else {})
+    print(f"  [match] River-network endpoints in graph: {len(endpoint_deg)}")
+    basin_outlets = {}   # fid -> (lon, lat)
+    for fid, rings in rings_by_fid.items():
+        outlet = _find_basin_outlet(rings, river_geojson, endpoint_deg)
+        if outlet is None and fid in centroids:
+            outlet = centroids[fid]   # last-resort fallback
+        if outlet is not None:
+            basin_outlets[fid] = outlet
+    _n_river_outlets = sum(1 for fid in basin_outlets
+                           if fid in rings_by_fid
+                           and basin_outlets[fid] != centroids.get(fid))
+    print(f"  [match] Basin outlets located via river network: "
+          f"{_n_river_outlets}/{len(rings_by_fid)} basins "
+          f"(rest fell back to centroid)")
+
+    # 4) Pouring-point designation: closest station to each basin's outlet.
     by_basin = {}
     for sid, fid in station_to_basin.items():
         by_basin.setdefault(fid, []).append(sid)
@@ -221,14 +378,15 @@ def _match_stations_to_basins(station_locations, basin_geojson, mapping_key):
         if len(sids) == 1:
             pouring.add(sids[0])
             continue
-        c = centroids.get(fid)
-        if c is None:
+        outlet = basin_outlets.get(fid)
+        if outlet is None:
             pouring.add(sids[0])
             continue
-        clon, clat = c
+        olon, olat = outlet
         best = min(sids, key=lambda s: _haversine(
-            station_locations[s][0], station_locations[s][1], clat, clon))
+            station_locations[s][0], station_locations[s][1], olat, olon))
         pouring.add(best)
+
     return station_to_basin, pouring
 
 
@@ -696,8 +854,22 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 t['line'] = {'color': _fid_color.get(fid, '#888')}
 
     # --- Merge observation traces (if any) into each plot ---
-    _obs_meta = {}   # {div_id: {trace_index_str: feature_id}}
-    _has_obs = set()  # div_ids that have observation traces
+    _obs_meta = {}       # {div_id: {trace_index_str: feature_id}}
+    _obs_secondary = {}  # {div_id: {trace_index_str: True}} for gray (non-pouring-
+                          # point) station traces.  Used by the "secondary
+                          # stations" toggle to hide/show them in plots in lock-
+                          # step with the map markers.
+    _has_obs = set()      # div_ids that have observation traces
+    _has_any_secondary = False  # at least one secondary station was emitted
+    # The toggle UI also needs to know whether ANY station on the MAP is
+    # gray — that includes unmatched stations (which never reach the
+    # plots because they have no feature_id).  This covers mizuRoute too:
+    # any station the matcher couldn't pin to a reach is rendered gray
+    # on the map and should be hideable.
+    _has_any_gray_station = bool(station_locations) and any(
+        (sid not in (pouring_point_stations or set()))
+        for sid in (station_locations or {}).keys()
+    )
     if observation_data:
         for p in plots:
             plot_obs = observation_data.get(p['id'], [])
@@ -705,6 +877,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 continue
             div_id = f'{p["id"]}_div'
             p_meta = {}
+            p_sec = {}
             base_idx = len(p['traces'])
             _species_name = p.get('species', '')
             for i, od in enumerate(plot_obs):
@@ -746,10 +919,16 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                     'showlegend': False,
                 }
                 p['traces'].append(trace)
-                p_meta[str(base_idx + i)] = fid
+                _tidx_str = str(base_idx + i)
+                p_meta[_tidx_str] = fid
+                if not _is_primary:
+                    p_sec[_tidx_str] = True
+                    _has_any_secondary = True
             if p_meta:
                 _obs_meta[div_id] = p_meta
                 _has_obs.add(div_id)
+            if p_sec:
+                _obs_secondary[div_id] = p_sec
 
     # --- Compute summary stats for header KPI boxes ---
     _species_list = []
@@ -1174,6 +1353,21 @@ var PCFG = {responsive:true, displayModeBar:true,
 window._owqPlotIds = [];
 function _owqRegister(id){ window._owqPlotIds.push(id); }
 var _owqObsMeta = """ + json.dumps(_obs_meta) + """;
+// Indexed lookup of which obs-trace tidx in each plot is a SECONDARY
+// (gray) station observation, so the "Show secondary obs" toggle can
+// hide them in the time-series plots in lock-step with the map markers.
+var _owqObsSecondary = """ + json.dumps(_obs_secondary) + """;
+// Global visibility flag for secondary (gray) station markers + obs
+// traces.  Default: visible.  Flipped by the legend checkbox.
+window._owqSecondaryStationsVisible = true;
+
+// True when the trace at index `tidx` in plot `plotId` is a secondary-
+// station observation (gray marker on map).  Used by every trace-filter
+// site so the toggle propagates to all plots.
+window._owqIsSecondaryObsTrace = function(plotId, tidx){
+  var s = _owqObsSecondary[plotId];
+  return !!(s && s[tidx]);
+};
 
 // Toggle observation traces on/off for a specific plot
 window._owqToggleObs = function(btn){
@@ -1185,9 +1379,12 @@ window._owqToggleObs = function(btn){
   var om = _owqObsMeta[plotId] || {};
   var selFids = window._owqSelectedFids || {};
   var hasSel = Object.keys(selFids).length > 0;
+  var secOn = window._owqSecondaryStationsVisible !== false;
   var newVis = gd.data.map(function(t, idx){
     if(om[idx] !== undefined){
       if(!isActive) return false;
+      // Hide secondary-station obs when their toggle is off
+      if(!secOn && window._owqIsSecondaryObsTrace(plotId, idx)) return false;
       if(hasSel) return selFids[om[idx]] ? true : false;
       return true;
     }
@@ -1617,6 +1814,11 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   var stationStyles={{}};    // sid -> {{primary, secondary, hidden}} style presets
   var stationLayer=L.layerGroup();
   var stationsVisible=true;
+  // Will the "Secondary obs" toggle have anything to do?  Yes when at
+  // least one station would render gray — either a SUMMA non-pouring-
+  // point station inside a basin or any unmatched station (mizuRoute
+  // included).  Drives whether the checkbox appears in the legend.
+  var _hasSecondaryStations={json.dumps(_has_any_gray_station)};
   Object.keys(stationData).forEach(function(sid){{
     var ll=stationData[sid];
     var matchedFid=stationToFeature[sid]||null;
@@ -1672,14 +1874,24 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   //        secondary -> greyed (still visible, signals "within selected basin
   //                    but not its pouring point")
   //   - Selection + station's matched fid is NOT selected: hide (near-zero opacity).
+  // A "gone" style used when the secondary-station toggle hides a non-
+  // primary marker.  Zero-opacity keeps the marker in the layer (so we
+  // can flip it back on without re-adding) but it no longer renders or
+  // captures hover events.
+  var ZERO_STYLE={{radius:0.001,opacity:0,fillOpacity:0,weight:0}};
   window._owqFilterStations=function(selSet){{
     if(!stationsVisible) return;
     var hasSel=Object.keys(selSet).length>0;
+    var secOn=window._owqSecondaryStationsVisible!==false;
     Object.keys(stationMarkers).forEach(function(sid){{
       var mk=stationMarkers[sid];
       var matchedFid=stationToFeature[sid]||null;
       var st=stationStyles[sid];
       if(!st) return;
+      // The secondary-station toggle hides ALL non-primary markers
+      // (gray inside-basin AND unmatched stations) regardless of which
+      // feature is selected.
+      if(!st.isPrimary && !secOn){{ mk.setStyle(ZERO_STYLE); return; }}
       if(!hasSel){{
         mk.setStyle(st.isPrimary?st.primary:st.secondary);
       }}else if(matchedFid && selSet[String(matchedFid)]){{
@@ -1687,6 +1899,40 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
       }}else{{
         mk.setStyle(st.hidden);
       }}
+    }});
+  }};
+
+  // Master toggle for secondary (gray) station observations.  Hides /
+  // re-shows them on the MAP and in every species PLOT.  Wired up to
+  // the "Show secondary obs" checkbox in the map legend below.
+  window._owqToggleSecondaryStations=function(checked){{
+    window._owqSecondaryStationsVisible=!!checked;
+    // 1) Refresh map markers (uses the current selection set so other
+    //    interactions are preserved).
+    var selFids=window._owqSelectedFids||{{}};
+    if(typeof window._owqFilterStations==='function') window._owqFilterStations(selFids);
+    // 2) Restyle every plot's obs traces so the secondary ones appear /
+    //    disappear in lock-step with the map.
+    var ids=window._owqPlotIds||[];
+    var hasSel=Object.keys(selFids).length>0;
+    var secOn=window._owqSecondaryStationsVisible;
+    ids.forEach(function(plotId){{
+      var gd=document.getElementById(plotId);
+      if(!gd||!gd.data) return;
+      var om=_owqObsMeta[plotId]||{{}};
+      var obsBtn=document.querySelector('[data-plot="'+plotId+'"][data-obs]');
+      var obsOn=obsBtn?obsBtn.classList.contains('active'):true;
+      var newVis=gd.data.map(function(t,tidx){{
+        if(om[tidx]===undefined){{
+          // Non-observation trace: preserve current visibility.
+          return t.visible===undefined?true:t.visible;
+        }}
+        if(!obsOn) return false;
+        if(!secOn && window._owqIsSecondaryObsTrace(plotId,tidx)) return false;
+        if(hasSel) return selFids[om[tidx]]?true:false;
+        return true;
+      }});
+      try{{ Plotly.restyle(gd,{{visible:newVis}}); }}catch(e){{}}
     }});
   }};
   if(Object.keys(stationData).length>0){{
@@ -1761,6 +2007,15 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
       if(Object.keys(stationData).length>0){{
         _toggles.push('<div class="ml-toggle" title="Toggle observation stations">'
           +'<input type="checkbox" checked id="mlChkSta"><label for="mlChkSta">Stations</label></div>');
+        // Always expose the secondary-obs toggle whenever there are
+        // observation stations.  For SUMMA it hides within-basin non-
+        // pouring-point markers; for mizuRoute it hides any station the
+        // nearest-reach matcher couldn't pin to a reach (unmatched →
+        // gray).  When everything is currently primary the toggle is a
+        // no-op until that changes, but keeping the control visible
+        // means the UI is the same in both hosts.
+        _toggles.push('<div class="ml-toggle" title="Show / hide gray (non-pouring-point or unmatched) stations on the map AND in plots">'
+          +'<input type="checkbox" checked id="mlChkSecSta"><label for="mlChkSecSta">Gray obs</label></div>');
       }}
       if(_toggles.length){{
         html+='<div class="ml-toggles">'+_toggles.join('')+'</div>'
@@ -1817,6 +2072,12 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
         else{{ map.removeLayer(stationLayer); }}
       }});
     }}
+    var chkSecSta=document.getElementById('mlChkSecSta');
+    if(chkSecSta){{
+      chkSecSta.addEventListener('change',function(){{
+        window._owqToggleSecondaryStations(chkSecSta.checked);
+      }});
+    }}
   }}
 
   // Toggle a feature in/out of the multi-select set
@@ -1866,6 +2127,7 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
         var om=_owqObsMeta[gd.id]||{{}};
         var obsBtn=document.querySelector('[data-plot="'+gd.id+'"][data-obs]');
         var obsOn=obsBtn?obsBtn.classList.contains('active'):true;
+        var secOn=window._owqSecondaryStationsVisible!==false;
         var active=_owqGetPlotLayers(gd.id);
         var hasActiveLyr=Object.keys(active).length>0;
         var derivBtns=document.querySelectorAll('[data-plot="'+gd.id+'"][data-deriv]');
@@ -1874,6 +2136,8 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
           // Observation traces
           if(om[tidx]!==undefined){{
             if(!obsOn) return false;
+            // Secondary-station toggle (off → hide gray obs traces)
+            if(!secOn && window._owqIsSecondaryObsTrace(gd.id,tidx)) return false;
             if(!hasSel) return true;
             return selectedFids[om[tidx]]?true:false;
           }}
@@ -1930,12 +2194,14 @@ window._owqSelectFeature = window._owqSelectFeature || function(){};
     var om=_owqObsMeta[plotId]||{{}};
     var obsBtn=document.querySelector('[data-plot="'+plotId+'"][data-obs]');
     var obsOn=obsBtn?obsBtn.classList.contains('active'):true;
+    var secOn=window._owqSecondaryStationsVisible!==false;
     var selFids=window._owqSelectedFids||{{}};
     var hasSel=Object.keys(selFids).length>0;
     var newVis=gd.data.map(function(t,tidx){{
       // Observation traces
       if(om[tidx]!==undefined){{
         if(!obsOn) return false;
+        if(!secOn && window._owqIsSecondaryObsTrace(plotId,tidx)) return false;
         if(hasSel) return selFids[om[tidx]]?true:false;
         return true;
       }}
@@ -2809,12 +3075,15 @@ def Plot_h5_driver(what2map=None,
                 _obs_map_key = mapping_key
             if _map_geom_type == 'polygon':
                 # SUMMA: match each station to its containing basin via
-                # point-in-polygon, then designate one pouring-point obs
-                # per basin (closest to basin centroid).  Stations inside
-                # but not the pouring point appear greyed on the map.
+                # point-in-polygon (with a nearest-basin fallback for
+                # stations digitised just outside the polygon).  Then
+                # designate the pouring-point station per basin as the
+                # one closest to where the river network LEAVES the
+                # basin polygon — using _river_geojson when available.
                 station_to_feature, _pouring_point_stations = \
                     _match_stations_to_basins(
-                        station_locations, _obs_geojson, _obs_map_key)
+                        station_locations, _obs_geojson, _obs_map_key,
+                        river_geojson=_river_geojson)
             else:
                 # mizuRoute: match to nearest river reach; every matched
                 # station is "primary" for the purposes of the JS filter.
