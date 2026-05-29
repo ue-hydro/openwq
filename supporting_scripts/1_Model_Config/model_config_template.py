@@ -576,6 +576,18 @@ open_report = True   # Automatically open the report in your browser when done.
 # Basin polygons are automatically loaded from ss_method_copernicus_basin_info above.
 river_network_shapefile = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/mizuSegId.shp"   # e.g., "/path/to/river_network.shp"
 
+# OPTIONAL: column in the river-network shapefile whose values match the reach
+# IDs that OpenWQ writes to its HDF5 outputs. Set this when the auto-detect
+# picks the wrong column (the default list tries `reachID, REACHID, reach_id,
+# ReachID, SegId, segId, seg_id, COMID, LINKNO` in that order).
+# Leave as None to keep the existing auto-detect behaviour.
+# Common values:
+#   "LINKNO"   - TauDEM / MERIT-basin river networks
+#   "SegId"    - mizuRoute reach segment IDs (RAVEN-style shapefiles)
+#   "COMID"    - NHDPlus comID identifiers
+#   "reachID"  - already-tagged reach IDs
+river_network_mapping_key = None
+
 # ── Observation data source ──
 # Choose between GRQA (Global River Water Quality Archive) or a user-provided
 # CSV file with custom observation data.
@@ -734,6 +746,7 @@ if generate_report:
             compartments_and_cells=compartments_and_cells,
             timestep=timestep,
             river_network_shapefile=river_network_shapefile,
+            river_network_mapping_key=river_network_mapping_key,
             basin_shapefile=_basin_shp,
             observation_data_source=observation_data_source,
             grqa_local_data_path=grqa_local_data_path,
