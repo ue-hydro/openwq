@@ -31,6 +31,7 @@ Provides two report generators:
 
 import os
 import json
+import inspect
 import html as html_lib
 import logging
 from datetime import datetime
@@ -38,6 +39,29 @@ from typing import List, Dict, Any, Optional
 
 from . import report_helpers as rh
 from . import config_integration as _ci
+
+
+def _caller_template_stem(default="calibration"):
+    """Basename (no extension) of the *calibration template* that called
+    into this module — used to name the setup + results reports after it.
+
+    Walks the stack outward and returns the first frame whose file lives
+    OUTSIDE this calibration_lib package (i.e. the user's
+    ``calibration_config_template*.py``).  Falls back to ``default``."""
+    try:
+        _here = os.path.dirname(os.path.abspath(__file__))
+        for fr in inspect.stack()[1:]:
+            fn = fr.filename or ""
+            if not fn or fn.startswith("<"):
+                continue
+            if os.path.dirname(os.path.abspath(fn)) == _here:
+                continue
+            stem = os.path.splitext(os.path.basename(fn))[0]
+            if stem:
+                return stem
+    except Exception:
+        pass
+    return default
 
 logger = logging.getLogger(__name__)
 
@@ -462,48 +486,170 @@ def _build_model_config_section(
 """
 
 
+def _candidate_bgc_data_sources(
+    model_config: Dict[str, Any]
+) -> List[str]:
+    """Return BGC source-file candidates in priority order.
+
+    Handles BOTH ``NATIVE_BGC_FLEX`` (JSON) and ``PHREEQC`` (``.pqi``)
+    modules so the calibratability check and the diagram work for any
+    template the user selects.
+
+    Order:
+      1. The *runtime* combined BGC JSON at
+         ``<exe_dir>/openwq_in/openWQ_MODULE_NATIVE_BGC_FLEX.json`` —
+         present after the user has run ``Gen_Input_Driver``.
+      2. The user's individual NATIVE_BGC_FLEX template returned by
+         ``config_integration.get_bgc_template_path`` — available
+         before the model has been run.
+      3. The PHREEQC ``.pqi`` file pointed to by
+         ``model_config["phreeqc_input_filepath"]`` (when the user
+         selected ``bgc_module_name == "PHREEQC"``).
+    """
+    out: List[str] = []
+    exe_path = model_config.get("executable_path", "")
+    if exe_path:
+        out.append(os.path.join(
+            os.path.dirname(os.path.abspath(exe_path)),
+            "openwq_in", "openWQ_MODULE_NATIVE_BGC_FLEX.json",
+        ))
+    try:
+        tpl = _ci.get_bgc_template_path(model_config)
+    except Exception:
+        tpl = None
+    if tpl:
+        out.append(tpl)
+    # PHREEQC: look up the .pqi file from the model config.  Resolve
+    # relative paths the same way get_bgc_template_path does (relative
+    # to the model_config dir).
+    pqi_path = model_config.get("phreeqc_input_filepath", "") or \
+               model_config.get("phreeqc_pqi_path", "")
+    if pqi_path:
+        if not os.path.isabs(pqi_path):
+            # Try relative to executable_path's grandparent, mirroring
+            # the layout used by Gen_Input_Driver.
+            if exe_path:
+                _candidate = os.path.join(
+                    os.path.dirname(os.path.abspath(exe_path)),
+                    pqi_path,
+                )
+                if os.path.isfile(_candidate):
+                    out.append(os.path.abspath(_candidate))
+                    pqi_path = ""   # mark as handled
+            if pqi_path:
+                # Try relative to 1_Model_Config (where pqi templates ship)
+                _here = os.path.dirname(os.path.abspath(__file__))
+                _config_dir = os.path.normpath(
+                    os.path.join(_here, "..", "..", "1_Model_Config")
+                )
+                _candidate = os.path.join(_config_dir, pqi_path)
+                if os.path.isfile(_candidate):
+                    out.append(os.path.abspath(_candidate))
+                    pqi_path = ""
+        if pqi_path and os.path.isfile(pqi_path):
+            out.append(os.path.abspath(pqi_path))
+    # Deduplicate while preserving order.
+    seen: set = set()
+    uniq: List[str] = []
+    for p in out:
+        if p and p not in seen:
+            seen.add(p)
+            uniq.append(p)
+    return uniq
+
+
+def _parse_bgc_source(path: str) -> Optional[dict]:
+    """Dispatch a BGC source path to the right parser based on extension.
+
+    * ``.json`` → :func:`report_helpers.safe_load_bgc_json` →
+      :func:`extract_bgc_network`.
+    * ``.pqi``  → :func:`report_helpers.extract_bgc_network_from_pqi`
+      (PHREEQC).
+
+    Returns the network dict (``{"species": [...], "frameworks": ...}``)
+    or ``None`` when the file is unreadable / produces an empty network.
+    Centralising the dispatch here means ``_resolve_bgc_data_source``,
+    ``_load_bgc_network`` and ``_build_bgc_diagram`` cannot disagree
+    about which path is "usable".
+    """
+    if not path:
+        return None
+    ext = os.path.splitext(path)[1].lower()
+    try:
+        if ext == ".pqi":
+            net = rh.extract_bgc_network_from_pqi(path)
+        else:
+            data = rh.safe_load_bgc_json(path)
+            net = rh.extract_bgc_network(data) if data is not None else None
+    except Exception:
+        return None
+    if not net or not net.get("frameworks"):
+        return None
+    return net
+
+
+def _resolve_bgc_data_source(
+    model_config: Dict[str, Any]
+) -> Optional[str]:
+    """Return the first candidate path whose contents actually PARSE.
+
+    Before this used to return the first candidate that merely existed
+    on disk — which broke on the runtime JSON because it begins with a
+    ``// ...`` comment header that vanilla ``json.load`` rejects.  Now
+    each candidate is round-tripped through :func:`_parse_bgc_source`
+    so PHREEQC ``.pqi`` files are also accepted and an unparseable
+    runtime JSON falls through to the user's template.
+    """
+    for path in _candidate_bgc_data_sources(model_config):
+        if _parse_bgc_source(path) is not None:
+            return path
+    return None
+
+
+def _load_bgc_network(
+    model_config: Dict[str, Any],
+) -> Optional[dict]:
+    """Parse the best available BGC source (JSON or PHREEQC) into a
+    network dict.
+
+    Walks the candidate list and returns the first one that yields a
+    non-empty network.  Format dispatch lives in
+    :func:`_parse_bgc_source`.
+    """
+    for path in _candidate_bgc_data_sources(model_config):
+        net = _parse_bgc_source(path)
+        if net:
+            return net
+    return None
+
+
 def _build_bgc_diagram(
     model_config: Dict[str, Any],
     species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> str:
     """Build the BGC reaction network diagram HTML.
 
-    Prefers the generated combined BGC JSON (all frameworks) over individual
-    template.  Returns empty string if no diagram can be generated.
+    Uses :func:`_resolve_bgc_data_source` to find the best source file
+    (runtime combined JSON, NATIVE_BGC_FLEX template, or PHREEQC
+    ``.pqi``) and routes it to the right
+    :func:`report_helpers.generate_bgc_reaction_diagram` argument so
+    BOTH file formats render.
     """
-    diagram_html = ""
-    combined_bgc_path = ""
-    exe_path = model_config.get("executable_path", "")
-    if exe_path:
-        combined_bgc_path = os.path.join(
-            os.path.dirname(os.path.abspath(exe_path)),
-            "openwq_in", "openWQ_MODULE_NATIVE_BGC_FLEX.json",
+    path = _resolve_bgc_data_source(model_config)
+    if not path:
+        return ""
+    try:
+        kwargs: Dict[str, Any] = dict(
+            module_name=model_config.get("bgc_module_name", ""),
+            species_obs_availability=species_obs_availability,
         )
-    if combined_bgc_path and os.path.isfile(combined_bgc_path):
-        try:
-            diagram_html = rh.generate_bgc_reaction_diagram(
-                bgc_template_path=combined_bgc_path,
-                module_name=model_config.get("bgc_module_name", ""),
-                species_obs_availability=species_obs_availability,
-            )
-        except Exception:
-            pass
-    if not diagram_html:
-        # Fallback to individual template
-        try:
-            bgc_path = _ci.get_bgc_template_path(model_config)
-        except Exception:
-            bgc_path = None
-        if bgc_path and os.path.isfile(bgc_path):
-            try:
-                diagram_html = rh.generate_bgc_reaction_diagram(
-                    bgc_template_path=bgc_path,
-                    module_name=model_config.get("bgc_module_name", ""),
-                    species_obs_availability=species_obs_availability,
-                )
-            except Exception:
-                pass
-    return diagram_html
+        if path.lower().endswith(".pqi"):
+            kwargs["pqi_filepath"] = path
+        else:
+            kwargs["bgc_template_path"] = path
+        return rh.generate_bgc_reaction_diagram(**kwargs)
+    except Exception:
+        return ""
 
 
 def _build_observations_section(obs_config: Dict[str, Any]) -> str:
@@ -671,7 +817,14 @@ def generate_interactive_setup(
     """
     try:
         os.makedirs(output_dir, exist_ok=True)
-        report_path = os.path.join(output_dir, "calibration_setup_report.html")
+        # Name the setup report after the calibration template that
+        # invoked us, e.g. calibration_config_template_X.py ->
+        #   <stem>_config_report.html
+        # The matching calibration RESULTS report (produced later by the
+        # generated run script) becomes <stem>_results_report.html.
+        _calib_stem = _caller_template_stem(default="calibration")
+        _setup_report_name = f"{_calib_stem}_config_report.html"
+        report_path = os.path.join(output_dir, _setup_report_name)
 
         H = []  # HTML accumulator
 
@@ -782,25 +935,16 @@ def generate_interactive_setup(
                  'placeholder="Search parameters by name, module, or type..." '
                  'oninput="filterParams(this.value)"/>')
         if module_parameters:
-            # Load BGC network for calibratability check
-            _bgc_net = None
-            if species_obs_availability:
-                try:
-                    _bgc_net = rh.extract_bgc_network(
-                        json.load(open(
-                            os.path.join(
-                                os.path.dirname(
-                                    os.path.abspath(
-                                        model_config.get("executable_path", "")
-                                    )
-                                ),
-                                "openwq_in",
-                                "openWQ_MODULE_NATIVE_BGC_FLEX.json",
-                            )
-                        ))
-                    )
-                except Exception:
-                    pass
+            # Load BGC network for the calibratability check.  Uses the
+            # SAME path resolver as the BGC diagram above so the two
+            # sides can never disagree about which frameworks are
+            # "active" (have at least one observed species).  Before
+            # the helper existed the diagram had a template-fallback
+            # but the parameter loader didn't, so on a first-time run
+            # every BGC parameter ended up grayed out even though the
+            # diagram correctly showed reactions with observed species.
+            _bgc_net = (_load_bgc_network(model_config)
+                        if species_obs_availability else None)
             H.append(_build_interactive_parameters_section_grouped(
                 module_parameters, module_selections or {},
                 species_obs_availability=species_obs_availability,
@@ -819,9 +963,13 @@ def generate_interactive_setup(
         H.append('<div class="pane-resizer" id="paneResizer"></div>')
 
         # ── Script Pane (Right) ──
-        # Recommended save path: the 3_Calibration/ directory (parent of calibration_lib/)
+        # Recommended save path: the calibration_work_dir set in the form,
+        # so the generated run-script lives next to its results/ outputs.
+        # The run-script filename follows the originating template stem
+        # (e.g. "model_config_template_mizuRoute_run.py").
         cal_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        save_hint = html_lib.escape(os.path.join(cal_script_dir, "my_calibration_run.py"))
+        _run_script_name = f"{_calib_stem}_run.py"
+        save_hint = html_lib.escape(os.path.join(calibration_work_dir, _run_script_name))
 
         H.append('<div class="script-pane">')
         H.append(f"""
@@ -850,9 +998,9 @@ def generate_interactive_setup(
 
         containers_dir = os.path.normpath(
             os.path.join(cal_script_dir, '..', '..', '..', '..', 'containers'))
-        script_path = os.path.join(cal_script_dir, 'my_calibration_run.py')
+        script_path = os.path.join(calibration_work_dir, _run_script_name)
         results_path = os.path.join(calibration_work_dir,
-                                    'calibration_results_report.html')
+                                    f'{_calib_stem}_results_report.html')
 
         if os_name == "Windows":
             docker_cmd = html_lib.escape(
@@ -991,6 +1139,7 @@ def generate_interactive_setup(
             auto_extracted_parameters=auto_extracted_parameters,
             module_parameters=module_parameters,
             container_config=container_config,
+            report_stem=_calib_stem,
         ))
 
         H.append("</body></html>")
@@ -1085,7 +1234,32 @@ def _build_interactive_settings_section() -> str:
                 ["native", "daily", "weekly", "monthly"], "monthly",
                 "Aggregate obs/model to this scale before computing metrics")}
             {rh.build_form_select("aggregation_method", "Aggregation Method",
-                ["mean", "sum", "median"], "mean")}
+                ["mean", "median"], "mean")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_checkbox(
+                "use_primary_only",
+                "Use only pouring-point (primary) observations in the metric",
+                checked=True,
+                hint="SUMMA case: only the obs closest to each HRU's outlet "
+                     "drives the objective. Secondary (gray) stations still "
+                     "appear on the map. For mizuRoute every matched station "
+                     "is already primary, so this has no effect on the metric.")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_input(
+                "apptainer_sif_path",
+                "Apptainer SIF path (HPC)", "",
+                hint="Optional. Used by the results report's Apptainer / "
+                     "SLURM snippets and forwarded to ModelRunner when "
+                     "running on HPC. Leave blank to fall back to 'openwq.sif'.",
+                placeholder="e.g. /scratch/$USER/openwq.sif")}
+            {rh.build_form_input(
+                "apptainer_bind_path",
+                "Apptainer bind path (HPC)", "",
+                hint="Optional. Bind-mount root containing the config and "
+                     "outputs. Leave blank to derive from executable_path.",
+                placeholder="e.g. /scratch/$USER/openwq_root")}
         </div>
     </div>
 </div>
@@ -1247,25 +1421,27 @@ def _build_interactive_parameters_section_grouped(
     """
     import html as html_lib
 
-    # Pre-compute calibratability per parameter
-    # Pre-compute which frameworks are "active" (have at least one
-    # species with observation data).
-    _active_fws: set = set()
-    if species_obs_availability and bgc_network:
-        for fw_name, fw_info in bgc_network.get("frameworks", {}).items():
-            fw_species: set = set()
-            for r in fw_info.get("reactions", []):
-                c = r.get("consumed", "NONE")
-                p = r.get("produced", "NONE")
-                if c and c != "NONE":
-                    fw_species.add(c)
-                if p and p != "NONE":
-                    fw_species.add(p)
-            if any(
-                species_obs_availability.get(sp, {}).get("has_obs", False)
-                for sp in fw_species
-            ):
-                _active_fws.add(fw_name)
+    # Pre-compute calibratability per parameter.
+    #
+    # A reaction is calibratable when tuning its rate can perturb a
+    # species that is observed — either directly (its consumed/produced
+    # species has obs) OR transitively (the perturbation propagates
+    # through one or more downstream/upstream reactions that share a
+    # species with the current frontier).
+    #
+    # Concrete example: a user with NO3 + NH4 observations should be
+    # able to calibrate not only the nitrification reaction NH4 -> NO3,
+    # but also any upstream reaction A -> NH4 (because the rate of
+    # A -> NH4 sets the NH4 pool that drives nitrification, which sets
+    # NO3) and any downstream NO3 -> X reaction (because it changes
+    # the NO3 concentration the obs are compared against).
+    #
+    # `compute_obs_reachable` performs the fixed-point species-reaction
+    # closure once for the entire network, so per-parameter checks
+    # collapse to O(1) set lookups below.
+    _reach = rh.compute_obs_reachable(bgc_network, species_obs_availability)
+    _active_fws: set = _reach["reachable_frameworks"]
+    _active_reactions: set = _reach["reachable_reactions"]   # (fw, rxn_name)
 
     # Set of model species that have SS loads (already resolved by the
     # config template, which applied stoichiometric conversions).
@@ -1291,8 +1467,29 @@ def _build_interactive_parameters_section_grouped(
             return True  # no obs at all → don't gray everything
         if group_key == "bgc":
             # Active = framework has at least one observed species
+            # Per-REACTION gating: only enable the parameter if THIS
+            # specific reaction is in the obs-reachable closure.
+            # `compute_obs_reachable` stores BOTH the (framework, name)
+            # tuple AND the (framework, idx) tuple — we try both
+            # because `extract_parameters.py` and `extract_bgc_network`
+            # disagree on the `_NAME` fallback when the template
+            # doesn't explicitly set one (one uses ``rxn{idx}``, the
+            # other uses ``LIST_TRANSFORMATIONS[idx]``).  Matching by
+            # idx as a backup makes the check robust across templates.
             fw = p.get("_framework", "")
+            rxn = p.get("_reaction", "")
+            rxn_num = str(p.get("_reaction_num", "") or "")
+            if fw and (rxn or rxn_num):
+                if (fw, rxn) in _active_reactions:
+                    return True
+                if (fw, rxn_num) in _active_reactions:
+                    return True
+                return False
             if fw:
+                # Last-resort framework-level fallback for legacy /
+                # hand-written parameters that have no reaction tag at
+                # all: treat as calibratable iff the framework has any
+                # reachable reaction.
                 return fw in _active_fws
             return True  # can't determine → keep
         elif group_key == "source_sink":
@@ -1485,7 +1682,8 @@ def _build_interactive_script_section() -> str:
 def _build_interactive_js(model_config_path, calibration_work_dir,
                           auto_extracted_parameters,
                           module_parameters=None,
-                          container_config=None):
+                          container_config=None,
+                          report_stem="calibration"):
     """Build the JavaScript for the interactive setup report."""
     import json as json_mod
 
@@ -1502,6 +1700,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     # Escape paths for JS string embedding
     mcp = json_mod.dumps(model_config_path)
     cwd = json_mod.dumps(calibration_work_dir)
+    rstem = json_mod.dumps(report_stem or "calibration")
 
     # Build the JS as a plain string (not f-string) to avoid issues
     # with JS curly braces and Python triple-quote conflicts.
@@ -1513,6 +1712,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   // Data injected from Python
   var MODEL_CONFIG_PATH = ''' + mcp + r''';
   var CALIBRATION_WORK_DIR = ''' + cwd + r''';
+  var REPORT_STEM = ''' + rstem + r''';
   var PARAMS = ''' + params_json + r''';
 
   // Helper: Python repr
@@ -1562,6 +1762,14 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.temporal_resolution = document.getElementById('temporal_resolution').value;
     s.aggregation_method = document.getElementById('aggregation_method').value;
     s.random_seed = parseInt(document.getElementById('random_seed').value) || 42;
+    // Spatial-matching + HPC options (these are optional — the form
+    // fields may not exist on older / customised reports so guard them).
+    var _upoEl = document.getElementById('use_primary_only');
+    s.use_primary_only = _upoEl ? !!_upoEl.checked : true;
+    var _sifEl = document.getElementById('apptainer_sif_path');
+    s.apptainer_sif_path = _sifEl ? (_sifEl.value.trim() || null) : null;
+    var _bindEl = document.getElementById('apptainer_bind_path');
+    s.apptainer_bind_path = _bindEl ? (_bindEl.value.trim() || null) : null;
 
     var speciesCbs = document.querySelectorAll('.species-cb');
     var species = [];
@@ -1639,6 +1847,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('');
     lines.push('model_config_path = ' + pyRepr(s.model_config_path));
     lines.push('calibration_work_dir = ' + pyRepr(s.calibration_work_dir));
+    lines.push('report_stem = ' + pyRepr(REPORT_STEM));
     lines.push('');
     lines.push('algorithm = ' + pyRepr(s.algorithm));
     lines.push('max_evaluations = ' + pyRepr(s.max_evaluations));
@@ -1646,6 +1855,20 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('temporal_resolution = ' + pyRepr(s.temporal_resolution));
     lines.push('aggregation_method = ' + pyRepr(s.aggregation_method));
     lines.push('random_seed = ' + pyRepr(s.random_seed));
+    lines.push('');
+    lines.push('# Spatial-matching: when True the objective uses only the');
+    lines.push('# pouring-point observation per HRU (SUMMA case). For');
+    lines.push('# mizuRoute every matched station is already primary so this');
+    lines.push('# has no effect on the metric — but it still drives the');
+    lines.push('# primary/secondary visualisation in the results-report map.');
+    lines.push('use_primary_only = ' + pyRepr(s.use_primary_only !== false));
+    lines.push('');
+    lines.push('# HPC defaults (used by the results-report Apptainer / SLURM');
+    lines.push('# snippets and forwarded to ModelRunner when running on HPC).');
+    lines.push('# Leave as None to fall back to "openwq.sif" + a bind path');
+    lines.push('# derived from executable_path.');
+    lines.push('apptainer_sif_path = ' + pyRepr(s.apptainer_sif_path || null));
+    lines.push('apptainer_bind_path = ' + pyRepr(s.apptainer_bind_path || null));
     lines.push('');
 
     var reachRepr = s.reach_ids === 'all' ? pyRepr('all') : pyRepr(
@@ -1750,6 +1973,16 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        executable_full_path=container_config.get("executable_path", ""),');
     lines.push('        file_manager_path=container_config.get("file_manager_path", ""),');
     lines.push('        excluded_frameworks=excluded_frameworks,');
+    lines.push('        # Spatial-matching options consumed by ObjectiveFunction.');
+    lines.push('        # use_primary_only=True restricts the metric to pouring-');
+    lines.push('        # point observations (SUMMA case).  For mizuRoute every');
+    lines.push('        # matched station is already primary so it has no effect.');
+    lines.push('        use_primary_only=use_primary_only,');
+    lines.push('        # HPC paths (forwarded to ModelRunner + surfaced in the');
+    lines.push('        # results report\'s Apptainer / SLURM snippets).  Defaults');
+    lines.push('        # are None — set them in the setup-report HTML form.');
+    lines.push('        apptainer_sif_path=apptainer_sif_path,');
+    lines.push('        apptainer_bind_path=apptainer_bind_path,');
     lines.push('    )');
     lines.push('');
     lines.push('    # Generate results report');
@@ -1763,6 +1996,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        "random_seed": random_seed,');
     lines.push('        "run_sensitivity_first": run_sensitivity_first,');
     lines.push('        "sensitivity_method": sensitivity_method,');
+    lines.push('        # Echo HPC + primary-only choices so the results report\'s');
+    lines.push('        # Apptainer / SLURM snippets show the actual user paths.');
+    lines.push('        "use_primary_only": use_primary_only,');
+    lines.push('        "apptainer_sif_path": apptainer_sif_path,');
+    lines.push('        "apptainer_bind_path": apptainer_bind_path,');
     lines.push('    }');
     lines.push('    report_path = Gen_Calibration_Results_Report.generate_results_report(');
     lines.push('        output_dir=calibration_work_dir,');
@@ -1773,6 +2011,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        sensitivity_results=results.get("sensitivity_results"),');
     lines.push('        performance_metrics=results.get("performance_metrics"),');
     lines.push('        matched_data=results.get("matched_data"),');
+    lines.push('        report_stem=report_stem,');
     lines.push('    )');
     lines.push('');
     lines.push('    print("\\n" + "=" * 60)');
@@ -1947,12 +2186,18 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     updateProgress();
   }
 
-  // Save script — uses Save-As dialog when available
+  // Save script — uses Save-As dialog when available.
+  // The suggested filename follows the originating template stem
+  // (<REPORT_STEM>_run.py).  Browsers cannot pre-set an arbitrary save
+  // directory for security reasons, so the recommended directory
+  // (calibration_work_dir) is surfaced in the status hint below the
+  // header instead.
   window.downloadScript = function() {
     var state = collectFormState();
     var script = generateScript(state);
     var blob = new Blob([script], {type: 'text/x-python'});
     var btn = document.getElementById('downloadBtnHeader');
+    var sugName = (REPORT_STEM ? REPORT_STEM : 'my_calibration') + '_run.py';
 
     function onSaved() {
       if (btn) {
@@ -1964,7 +2209,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // Use File System Access API (Save As dialog) when supported
     if (window.showSaveFilePicker) {
       window.showSaveFilePicker({
-        suggestedName: 'my_calibration_run.py',
+        suggestedName: sugName,
+        startIn: 'documents',
         types: [{
           description: 'Python Script',
           accept: {'text/x-python': ['.py']},
@@ -1984,7 +2230,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = 'my_calibration_run.py';
+      a.download = sugName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

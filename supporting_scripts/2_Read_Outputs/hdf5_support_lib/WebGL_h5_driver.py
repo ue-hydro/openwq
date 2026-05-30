@@ -1353,8 +1353,9 @@ def WebGL_h5_driver(shpfile_info=None,
         # Determine species to export.
         # When the same chemical appears under multiple compartments (typical
         # for SUMMA: SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF, ...) we
-        # pick the compartment with the most dynamic positive signal so the
-        # viewer doesn't end up showing a steady or all-zero layer.
+        # pick the compartment with the largest non-zero signal so the viewer
+        # doesn't end up showing an all-zero layer just because the first
+        # listed compartment happens to be inert for that species.
         def _score_compartment(key):
             """Score for picking among matching compartments.
 
@@ -1364,7 +1365,8 @@ def WebGL_h5_driver(shpfile_info=None,
             a steady value (e.g. SUMMA AQUIFER: 2.00 → 2.02). The mean is
             used only as a tiebreaker — for fully steady fields we pick the
             one with the largest magnitude so the user at least sees a non-
-            zero map.
+            zero map. Compartments with no positive values score 0 and are
+            sorted last by the picker.
             """
             for ext, data_list in openwq_results[key]:
                 if ext == file_extension and data_list and len(data_list) > 0:
@@ -1383,6 +1385,7 @@ def WebGL_h5_driver(shpfile_info=None,
             """Pick the matching key with the most dynamic positive signal."""
             if not matching_keys:
                 return None
+            # score = (std, mean); tuple comparison breaks ties on mean
             scored = [(k, _score_compartment(k)) for k in matching_keys]
             scored.sort(key=lambda kv: kv[1], reverse=True)
             best_key, (best_std, best_mean) = scored[0]

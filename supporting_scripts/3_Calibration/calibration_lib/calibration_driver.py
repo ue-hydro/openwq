@@ -208,6 +208,14 @@ def run_calibration(
     logger.info(f"Temporal resolution: {temporal_resolution}")
     logger.info(f"Aggregation method: {aggregation_method}")
 
+    # Resolve host-aware spatial mapping (mirrors Gen_Report convention).
+    # Re-import defensively in case the obs-path branch above didn't fire
+    # (it's gated on `model_config is not None`).
+    from . import config_integration as _cint
+    _spatial = _cint.get_spatial_mapping(model_config) \
+        if model_config is not None else {
+            "hostmodel": "mizuroute", "h5_mapping_key": "reachID"}
+
     obj_func = ObjectiveFunction(
         observation_path=observation_data_path,
         target_species=calibration_targets["species"],
@@ -217,7 +225,10 @@ def run_calibration(
         weights=objective_weights,
         h5_reader_path=h5_reader_path,
         temporal_resolution=temporal_resolution,
-        aggregation_method=aggregation_method
+        aggregation_method=aggregation_method,
+        hostmodel=_spatial.get("hostmodel", "mizuroute"),
+        h5_mapping_key=_spatial.get("h5_mapping_key"),
+        use_primary_only=kwargs.get("use_primary_only", True),
     )
 
     checkpoint_mgr = CheckpointManager(work_dir / "checkpoints")
@@ -790,6 +801,13 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         elif obs_source == "user_csv":
             _obs_path = _obs.get("user_observation_csv", "")
 
+    # Re-import defensively so this branch works even when the obs-path
+    # resolution above (which is the only other importer of
+    # config_integration in this function) didn't fire.
+    from . import config_integration as _cint
+    _spatial = _cint.get_spatial_mapping(_model_config) \
+        if _model_config is not None else {
+            "hostmodel": "mizuroute", "h5_mapping_key": "reachID"}
     obj_func = ObjectiveFunction(
         observation_path=_obs_path,
         target_species=kwargs['calibration_targets']["species"],
@@ -799,7 +817,10 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         weights=kwargs.get('objective_weights'),
         h5_reader_path=h5_reader_path,
         temporal_resolution=temporal_resolution,
-        aggregation_method=aggregation_method
+        aggregation_method=aggregation_method,
+        hostmodel=_spatial.get("hostmodel", "mizuroute"),
+        h5_mapping_key=_spatial.get("h5_mapping_key"),
+        use_primary_only=kwargs.get("use_primary_only", True),
     )
 
     # Parameter info
