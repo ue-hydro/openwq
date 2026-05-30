@@ -878,7 +878,7 @@ grqa_config = {
                         </div>
                         <div class="highlight-box success" style="margin-top: 15px;">
                             <strong>Run extraction:</strong><br>
-                            <code style="font-size: 0.85rem;">python my_calibration.py --prepare-obs-only</code>
+                            <code style="font-size: 0.85rem;">python &lt;template&gt;_run.py --prepare-obs-only</code>
                         </div>
                     </div>
                 </div>
@@ -988,23 +988,26 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-content">
                 <p style="font-size: 1.05rem; margin-bottom: 15px;">
-                    Copy the template to your working directory, configure parameters, then run:
+                    Configure parameters in the interactive config report, click
+                    <strong>&ldquo;Save the script&rdquo;</strong>, then run the generated script:
                 </p>
                 <div class="two-column" style="gap: 30px;">
                     <div class="column">
                         <pre style="font-size: 0.78rem;">
-<span class="comment"># 1) Copy and edit the template</span>
-cp calibration_config_template.py my_calibration.py
+<span class="comment"># The config report's "Save the script" button writes</span>
+<span class="comment"># &lt;template&gt;_run.py into your calibration_work_dir.</span>
 
-<span class="comment"># 2) Run in different modes:</span>
-python my_calibration.py                    <span class="comment"># Full calibration</span>
-python my_calibration.py --sensitivity-only <span class="comment"># SA only</span>
-python my_calibration.py --prepare-obs-only <span class="comment"># Obs data only</span>
-python my_calibration.py --dry-run          <span class="comment"># Validate config</span>
-python my_calibration.py --resume           <span class="comment"># Resume from checkpoint</span>
+<span class="comment"># Run it in different modes:</span>
+python &lt;template&gt;_run.py                    <span class="comment"># Full calibration</span>
+python &lt;template&gt;_run.py --sensitivity-only <span class="comment"># SA only</span>
+python &lt;template&gt;_run.py --prepare-obs-only <span class="comment"># Obs data only</span>
+python &lt;template&gt;_run.py --dry-run          <span class="comment"># Validate config</span>
+python &lt;template&gt;_run.py --resume           <span class="comment"># Resume from checkpoint</span>
                         </pre>
                         <div class="highlight-box success" style="margin-top: 10px;">
-                            <strong>Template pattern:</strong> Copy → Edit → Run — no need to modify library code
+                            <strong>Default save location:</strong> the Save button suggests
+                            <code>&lt;template&gt;_run.py</code> and points at your
+                            <code>calibration_work_dir</code> so the script sits next to its outputs.
                         </div>
                     </div>
                     <div class="column">
@@ -1045,10 +1048,15 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
                                 <tr><td><code>calibration_history.json</code></td><td>All evaluations</td></tr>
                                 <tr><td><code>parameter_definitions.json</code></td><td>Parameter metadata &amp; bounds</td></tr>
                                 <tr><td><code>matched_data.csv</code></td><td>Obs-model matched pairs</td></tr>
-                                <tr><td><code>calibration_report.html</code></td><td><strong>Interactive HTML report</strong></td></tr>
-                                <tr><td><code>basin_report.html</code></td><td><strong>Per-basin multi-variant report</strong></td></tr>
+                                <tr><td><code>&lt;template&gt;_config_report.html</code></td><td><strong>Interactive setup / config report</strong></td></tr>
+                                <tr><td><code>&lt;template&gt;_results_report.html</code></td><td><strong>Interactive results report</strong> (maps, convergence, performance)</td></tr>
                                 <tr><td><code>sensitivity_results.json</code></td><td>SA results (if run)</td></tr>
                             </table>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 12px;">
+                            <strong>Report naming:</strong> reports are named after the calibration
+                            template — e.g. <code>model_config_template_mizuRoute_results_report.html</code>
+                            — so each host-model variant keeps its own clearly-labelled outputs.
                         </div>
                     </div>
                     <div class="column">
@@ -1163,9 +1171,16 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
                         </div>
                         <div class="card teal">
                             <h3>Auto-Generated</h3>
-                            <p style="font-size: 0.9rem;">Reports are created automatically when calibration completes — no extra steps needed.</p>
+                            <p style="font-size: 0.9rem;">Reports are created automatically when calibration completes, and named after the calibration template (<code>&lt;template&gt;_results_report.html</code>).</p>
                         </div>
                     </div>
+                </div>
+                <div class="highlight-box info" style="margin-top: 18px;">
+                    <strong>Host-model observation semantics:</strong>
+                    for <strong>mizuRoute</strong> the report shows every observation matched within
+                    each river reach; for <strong>SUMMA</strong> it shows only the pouring-point
+                    (HRU outlet) observation, because that is what the objective function uses
+                    (<code>use_primary_only=True</code>).
                 </div>
             </div>
             <div class="slide-footer">
@@ -1190,7 +1205,7 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
                             <ul style="margin-left: 15px;">
                                 <li style="font-size: 0.9rem;"><strong>HRU polygons</strong> — colored by area quintiles</li>
                                 <li style="font-size: 0.9rem;"><strong>River network</strong> — styled by Strahler order</li>
-                                <li style="font-size: 0.9rem;"><strong>Observation stations</strong> — red markers with popup info</li>
+                                <li style="font-size: 0.9rem;"><strong>Observation stations</strong> — markers colored by the objective metric; mizuRoute matches to the nearest reach, SUMMA to the HRU pouring point</li>
                             </ul>
                         </div>
                         <div class="card accent">
@@ -1263,13 +1278,13 @@ python my_calibration.py --resume           <span class="comment"># Resume from 
 <span class="string">matched_data.csv</span>            ← saved
         │
         ▼
-<span class="keyword">calibration_report.html</span>     ← per-variant
+<span class="keyword">&lt;template&gt;_results_report.html</span>  ← per-variant
         │
         ▼
 <span class="comment">Detect sibling workspaces</span>
         │
         ▼
-<span class="keyword">basin_report.html</span>           ← multi-variant
+<span class="keyword">basin_report.html</span>             ← multi-variant
                                 </pre>
                             </div>
                         </div>

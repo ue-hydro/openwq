@@ -785,6 +785,31 @@ def extract_all_module_parameters(
         if ss_params:
             groups["source_sink"] = ss_params
 
+    elif ss_method == "ml_model":
+        # ML-based source/sink loads (Gen_MLmodel_SS).  The numeric, tunable
+        # inputs are the tree-ensemble hyperparameters.  Both are
+        # generation-time parameters: changing them retrains the model and
+        # regenerates the SS JSON, so ParameterHandler bakes their calibrated
+        # values into the eval config at setup time (see _build_eval_config)
+        # rather than editing the JSON post-hoc.
+        n_est = int(model_config.get("ss_ml_n_estimators", 200))
+        max_depth = int(model_config.get("ss_ml_max_depth", 6))
+        ss_params = [
+            {"name": "SS_ML_n_estimators", "file_type": "ss_ml",
+             "path": {"param": "n_estimators"},
+             "initial": n_est, "bounds": (50, 500), "transform": "linear",
+             "dtype": "int", "units": "trees",
+             "description": "ML SS: number of trees in the ensemble",
+             "source": "auto-extracted"},
+            {"name": "SS_ML_max_depth", "file_type": "ss_ml",
+             "path": {"param": "max_depth"},
+             "initial": max_depth, "bounds": (2, 12), "transform": "linear",
+             "dtype": "int", "units": "levels",
+             "description": "ML SS: maximum tree depth (higher = more complex)",
+             "source": "auto-extracted"},
+        ]
+        groups["source_sink"] = ss_params
+
     n_total = sum(len(v) for v in groups.values())
     logger.info(f"Extracted {n_total} parameters across {len(groups)} module groups")
     return groups

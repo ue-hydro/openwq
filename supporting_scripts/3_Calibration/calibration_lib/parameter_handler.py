@@ -90,7 +90,29 @@ class ParameterHandler:
     # Evaluation directory setup
     # =====================================================================
 
-    def setup_working_directory(self, eval_id: int) -> Path:
+    # Generation-time SS parameters: these reshape/retrain the *generated* SS
+    # JSON rather than editing it post-hoc, so they must be injected into the
+    # model config BEFORE Gen_Input_Driver runs.  Keyed by file_type; each
+    # entry maps the parameter's path["param"] (set in extract_parameters) to
+    # a (model_config key, value-type) pair.  The value-type coerces the
+    # optimiser's real-scale float to what the config key expects — integer
+    # hyperparameters (e.g. ML tree count/depth) are rounded.
+    _GENERATION_TIME_SS_PARAMS = {
+        "ss_climate": {
+            "precip_scaling_power": ("ss_climate_precip_scaling_power", "float"),
+            "Q10_biological":       ("ss_climate_temp_q10", "float"),
+            "T_reference":          ("ss_climate_temp_reference_c", "float"),
+        },
+        "ss_ml": {
+            "n_estimators": ("ss_ml_n_estimators", "int"),
+            "max_depth":    ("ss_ml_max_depth", "int"),
+        },
+    }
+
+    def setup_working_directory(self,
+                                eval_id: int,
+                                parameters: Optional[List[Dict]] = None,
+                                values: Optional[np.ndarray] = None) -> Path:
         """
         Create isolated working directory for a single model evaluation.
 
@@ -102,6 +124,15 @@ class ParameterHandler:
         ----------
         eval_id : int
             Unique evaluation identifier.
+        parameters, values : optional
+            The calibration parameter definitions and their real-scale
+            values for this evaluation.  When provided, *generation-time*
+            parameters (currently the dynamic SS climate-response params,
+            ``file_type == "ss_climate"``) are baked into the per-eval model
+            config before the SS JSON is generated, because they change how
+            the annual load is distributed across months rather than scaling
+            an already-written value.  All other parameters are applied
+            afterwards via :meth:`apply_parameters`.
 
         Returns
         -------
@@ -109,7 +140,8 @@ class ParameterHandler:
             Path to the evaluation working directory.
         """
         if self.model_config is not None:
-            return self._setup_from_config(eval_id)
+            eval_config = self._build_eval_config(parameters, values)
+            return self._setup_from_config(eval_id, eval_config)
         elif self.test_case_dir is not None:
             return self._setup_from_testcase(eval_id)
         else:
@@ -118,14 +150,62 @@ class ParameterHandler:
                 "must be provided."
             )
 
-    def _setup_from_config(self, eval_id: int) -> Path:
+    def _build_eval_config(self,
+                           parameters: Optional[List[Dict]],
+                           values: Optional[np.ndarray]) -> Dict[str, Any]:
+        """
+        Return the model config to use for generating this evaluation's
+        input files, with any generation-time parameters overridden by their
+        calibrated values.
+
+        Returns ``self.model_config`` unchanged when there are no
+        generation-time parameters to inject (the common case), so the hot
+        path allocates nothing extra.
+        """
+        if not parameters or values is None:
+            return self.model_config
+
+        overrides: Dict[str, Any] = {}
+        for i, param in enumerate(parameters):
+            fmap = self._GENERATION_TIME_SS_PARAMS.get(param.get("file_type"))
+            if not fmap:
+                continue
+            path = param.get("path", {})
+            pkey = path.get("param") if isinstance(path, dict) else None
+            spec = fmap.get(pkey)
+            if spec is None:
+                continue
+            cfg_key, vtype = spec
+            try:
+                raw = float(values[i])
+            except (TypeError, ValueError, IndexError):
+                continue
+            overrides[cfg_key] = int(round(raw)) if vtype == "int" else raw
+
+        if not overrides:
+            return self.model_config
+
+        eval_config = copy.deepcopy(self.model_config)
+        eval_config.update(overrides)
+        logger.debug(
+            f"Baked generation-time SS params into eval config: {overrides}")
+        return eval_config
+
+    def _setup_from_config(self,
+                           eval_id: int,
+                           model_config: Optional[Dict[str, Any]] = None) -> Path:
         """
         Generate config files via Gen_Input_Driver for an evaluation.
 
         This is the recommended workflow when the calibration template
         imports model_config_template.py.
+
+        ``model_config`` may be an override (e.g. with generation-time
+        climate params baked in); it defaults to ``self.model_config``.
         """
         from . import config_integration
+
+        cfg = model_config if model_config is not None else self.model_config
 
         eval_dir = self.calibration_work_dir / "evaluations" / f"eval_{eval_id:04d}"
 
@@ -141,7 +221,7 @@ class ParameterHandler:
         # Generate config files using Gen_Input_Driver
         try:
             config_integration.generate_config_for_eval(
-                self.model_config, str(eval_dir), suppress_report=True
+                cfg, str(eval_dir), suppress_report=True
             )
         except Exception as e:
             logger.error(
@@ -229,10 +309,17 @@ class ParameterHandler:
             elif file_type in ("ss_copernicus_static", "ss_copernicus_dynamic"):
                 initial = param.get("initial", None)
                 self._apply_ss_copernicus_coeff(eval_dir, path, value, initial_value=initial)
-            elif file_type == "ss_climate_param":
-                self._apply_ss_climate_param(eval_dir, path, value)
-            elif file_type == "ss_ml_param":
-                self._apply_ss_ml_param(eval_dir, path, value)
+            elif file_type in ("ss_climate", "ss_climate_param",
+                                "ss_ml", "ss_ml_param"):
+                # Generation-time parameter: the dynamic SS climate-response
+                # params reshape the monthly load distribution, and the ML SS
+                # hyperparameters (tree count/depth) retrain the model — both
+                # change how the SS JSON is *generated*, so they are baked
+                # into the eval config at setup_working_directory() time (see
+                # _build_eval_config).  Nothing to edit post-hoc here.
+                logger.debug(
+                    f"{file_type} param '{param['name']}' is applied at "
+                    f"generation time; skipping post-hoc edit.")
             else:
                 logger.warning(f"Unknown file_type: {file_type} for parameter {param['name']}")
 
@@ -605,7 +692,15 @@ class ParameterHandler:
                             path: Dict,
                             scale_factor: float) -> None:
         """
-        Scale source/sink load values in CSV files.
+        Scale source/sink load values, covering both load formats:
+
+        * ``DATA_FORMAT == "ASCII"`` — external CSV loads
+          (``ss_method = "load_from_csv"``); the LOAD column of the
+          referenced CSV is scaled.
+        * ``DATA_FORMAT == "JSON"`` — inline loads such as the Copernicus
+          LULC source/sink entries (static or dynamic coefficient, uniform
+          or seasonal monthly distribution); the load value (index 9) of
+          every DATA row in the matching entry is scaled in place.
 
         Parameters
         ----------
@@ -627,6 +722,8 @@ class ParameterHandler:
         ss_file = ss_files[0]
         data, header = self._read_json_with_header(ss_file)
 
+        json_modified = False  # track whether any inline-JSON load was scaled
+
         # Process each SS entry
         for key, entry in data.items():
             if key == "METADATA":
@@ -642,9 +739,43 @@ class ParameterHandler:
                 continue
 
             if data_format == "ASCII":
+                # External CSV loads — scale the LOAD column in the file.
                 filepath = entry.get("DATA", {}).get("FILEPATH", "")
                 if filepath:
                     self._scale_csv_loads(eval_dir, filepath, scale_factor)
+            elif data_format == "JSON":
+                # Inline JSON loads (e.g. Copernicus LULC source/sink entries,
+                # both static- and dynamic-coefficient, and uniform or seasonal
+                # monthly distributions).  DATA is a dict (or list) of rows;
+                # each row is a list of the form
+                #   [yyyy, mm, ..., load, "continuous"/"discrete", ...]
+                # with the load/rate value at index 9.  Scale it in place so
+                # the SS_COP_scale_<species> multiplier actually takes effect.
+                json_data = entry.get("DATA", {})
+                if isinstance(json_data, dict):
+                    rows = json_data.values()
+                elif isinstance(json_data, list):
+                    rows = json_data
+                else:
+                    rows = []
+                n_scaled = 0
+                for row in rows:
+                    if isinstance(row, list) and len(row) > 9:
+                        try:
+                            row[9] = float(row[9]) * scale_factor
+                            n_scaled += 1
+                        except (ValueError, TypeError):
+                            continue
+                if n_scaled:
+                    json_modified = True
+                    logger.debug(
+                        f"Scaled {n_scaled} inline-JSON SS load rows for "
+                        f"'{chem_name}' by factor {scale_factor}")
+
+        # Persist inline-JSON edits back to the SS file.  (ASCII edits are
+        # written to their own CSV files by _scale_csv_loads directly.)
+        if json_modified:
+            self._write_json_with_header(ss_file, data, header)
 
     def _scale_csv_loads(self, eval_dir: Path, csv_path: str, scale_factor: float) -> None:
         """Scale load values in a CSV file."""
@@ -873,19 +1004,19 @@ class ParameterHandler:
                                 path: Union[str, Dict],
                                 value: float) -> None:
         """
-        Modify climate response parameters for dynamic SS method.
+        [SUPERSEDED] Dynamic SS climate-response parameters
+        (precip_scaling_power, Q10_biological, T_reference) are now applied
+        at *generation time*: setup_working_directory() bakes their
+        calibrated values into the per-evaluation model config via
+        _build_eval_config(), so Gen_Input_Driver/Gen_SS_Driver regenerate
+        the SS JSON with the correct climate-weighted monthly distribution.
 
-        These affect the template config - for now we note this limitation.
+        This post-hoc hook is therefore no longer wired into
+        apply_parameters() and is kept only for backward compatibility.
         """
-        # Climate parameters like ss_climate_precip_scaling_power are in the Python template
-        # To properly handle these, we would need to:
-        # 1. Copy model_config_template.py to eval_dir
-        # 2. Modify the parameter value
-        # 3. Run the generator to create new JSONs
-        #
-        # For efficiency, we log a warning and skip for now
-        # This should be implemented via the template regeneration approach
-        logger.warning(f"Climate parameter modification ({path}) requires template regeneration - not yet implemented")
+        logger.debug(
+            f"_apply_ss_climate_param({path}) is a no-op; climate params are "
+            f"baked into the SS JSON at generation time.")
 
     # =========================================================================
     # Source/Sink: ML Model Parameters
@@ -896,11 +1027,18 @@ class ParameterHandler:
                            path: str,
                            value: float) -> None:
         """
-        Modify ML model hyperparameters.
+        [SUPERSEDED] ML source/sink hyperparameters (n_estimators, max_depth)
+        are now applied at *generation time*: setup_working_directory() bakes
+        their calibrated values into the per-evaluation model config via
+        _build_eval_config(), so Gen_Input_Driver/Gen_MLmodel_SS retrains the
+        model and regenerates the SS JSON with the chosen hyperparameters.
 
-        Similar to climate params, these are in the Python template.
+        This post-hoc hook is therefore no longer wired into
+        apply_parameters() and is kept only for backward compatibility.
         """
-        logger.warning(f"ML parameter modification ({path}) requires template regeneration - not yet implemented")
+        logger.debug(
+            f"_apply_ss_ml_param({path}) is a no-op; ML hyperparameters are "
+            f"baked into the SS JSON at generation time.")
 
     # =========================================================================
     # Utility Methods
