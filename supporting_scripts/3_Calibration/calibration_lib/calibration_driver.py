@@ -325,10 +325,13 @@ def run_calibration(
 
         logger.debug(f"Parameters (real): {dict(zip(param_names, params_real))}")
 
-        # Setup working directory
-        eval_dir = param_handler.setup_working_directory(eval_id)
+        # Setup working directory.  Pass parameters+values so generation-time
+        # params (e.g. dynamic SS climate-response params) are baked into the
+        # config before the SS JSON is generated.
+        eval_dir = param_handler.setup_working_directory(
+            eval_id, calibration_parameters, params_real)
 
-        # Apply parameters
+        # Apply parameters (post-hoc edits to the generated config files)
         param_handler.apply_parameters(eval_dir, calibration_parameters, params_real)
 
         # Save parameters for reference
@@ -719,8 +722,9 @@ def _run_sensitivity_analysis(
             for p, t in zip(sample, transforms)
         ])
 
-        # Setup and run
-        eval_dir = param_handler.setup_working_directory(10000 + i)
+        # Setup and run (bake generation-time params before generation)
+        eval_dir = param_handler.setup_working_directory(
+            10000 + i, calibration_parameters, params_real)
         param_handler.apply_parameters(eval_dir, calibration_parameters, params_real)
 
         # Save parameters
