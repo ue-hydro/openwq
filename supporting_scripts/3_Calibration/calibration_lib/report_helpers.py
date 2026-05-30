@@ -23,10 +23,13 @@ Uses the same visual style as the model config report (Gen_Report.py).
 """
 
 import json
+import logging
 import base64
 import math
 import os
 import re
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 import html as html_lib
@@ -814,6 +817,33 @@ def build_form_number(
 """
 
 
+def build_form_input(
+    field_id: str,
+    label: str,
+    default: str = "",
+    hint: str = "",
+    placeholder: str = "",
+) -> str:
+    """Build a form group with a plain-text ``<input type="text">``.
+
+    Mirrors ``build_form_number`` / ``build_form_checkbox`` for callers
+    that need free-form string fields (paths, hostnames, etc.).
+    """
+    import html as html_lib
+    hint_html = (f'<div class="hint">{html_lib.escape(hint)}</div>'
+                 if hint else "")
+    placeholder_attr = (f' placeholder="{html_lib.escape(placeholder)}"'
+                        if placeholder else "")
+    return f"""
+<div class="form-group">
+    <label for="{field_id}">{html_lib.escape(label)}</label>
+    <input class="form-input" type="text" id="{field_id}" name="{field_id}"
+           value="{html_lib.escape(str(default))}"{placeholder_attr}/>
+    {hint_html}
+</div>
+"""
+
+
 def build_form_checkbox(
     field_id: str,
     label: str,
@@ -1424,6 +1454,271 @@ _FW_COLORS = [
 ]
 
 
+def safe_load_bgc_json(path: str) -> Optional[dict]:
+    """Robustly load an OpenWQ BGC JSON file.
+
+    OpenWQ's runtime-generated combined BGC JSON
+    (``openwq_in/openWQ_MODULE_NATIVE_BGC_FLEX.json``) starts with a
+    block of ``// ...`` line comments that vanilla :func:`json.load`
+    rejects, e.g.::
+
+        // #####################
+        // JSON file automatically generated using OpenWQ ...
+        // #####################
+
+        { "_DESCRIPTION": ... }
+
+    This helper finds the first ``{`` and feeds everything from that
+    point to ``json.loads``, so both the runtime JSON and the user's
+    in-source template parse with the same code path.  Returns the
+    parsed dict, or ``None`` when the file is missing / unreadable /
+    contains no JSON object at all.
+
+    Used by both the diagram (:func:`generate_bgc_reaction_diagram`)
+    and the calibration parameter calibratability check
+    (``Gen_Calibration_Setup_Report._load_bgc_network``) so they
+    succeed on the same set of inputs.
+    """
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", errors="replace") as fh:
+            content = fh.read()
+    except Exception:
+        return None
+    idx = content.find("{")
+    if idx < 0:
+        return None
+    try:
+        return json.loads(content[idx:])
+    except Exception:
+        return None
+
+
+# Unicode subscripts/superscripts found in PHREEQC species names.  We
+# fold them to ASCII before applying the rest of the canonicalisation
+# so the same key matches "NH4-N" (SUMMA SWAT style) and "NH4⁺" (PHREEQC).
+_SPECIES_UNICODE_FOLD = str.maketrans({
+    "₀": "0", "₁": "1", "₂": "2", "₃": "3",
+    "₄": "4", "₅": "5", "₆": "6", "₇": "7",
+    "₈": "8", "₉": "9",
+    "⁺": "+", "⁻": "-",
+    "²": "2", "³": "3", "¹": "1",
+})
+
+
+def _canonicalize_species_name(name: Any) -> str:
+    """Aggressive canonical key for fuzzy species-name matching.
+
+    Strips, in order:
+      * Unicode subscripts / superscripts (PHREEQC ``NH₄⁺`` → ``NH4+``)
+      * Trailing charge spec (``NH4+``, ``NO3-``, ``PO43-``, ``Ca2+``)
+      * Trailing form suffix (``NH4-N`` → ``NH4``,
+        ``ORG_N_active`` is NOT stripped — only single-letter suffixes
+        after a final ``-``)
+      * All remaining non-alphanumerics
+      * Final ``upper()``
+
+    Then "NH4", "NH4-N", "NH₄⁺", and "NH4+" all collapse to the same
+    key ``"NH4"``.  Conservative against false positives because the
+    form-suffix step ONLY accepts ``-N``, ``-P``, ``-C``, ``-S``.
+    """
+    if not name:
+        return ""
+    s = str(name).translate(_SPECIES_UNICODE_FOLD)
+    # Trailing sign(s): "+", "-", "++", "--".  We deliberately do NOT
+    # strip preceding digits, because in conventional chemistry the
+    # digit immediately before the sign can be either CHARGE magnitude
+    # (``Ca2+``, ``PO43-``) or part of the FORMULA (``NH4+``,
+    # ``NO3-``).  Regex can't tell those apart without chemistry
+    # knowledge.  Stripping only the sign covers the cases that
+    # actually appear in OpenWQ water-quality observations:
+    # ``NH4+``/``NH₄⁺``/``NH4-N`` all collapse to ``NH4``;
+    # ``Ca2+`` collapses to ``CA2`` (the user can rename their obs to
+    # ``Ca2`` to match, the rare edge case).
+    s = re.sub(r'[+\-]+$', '', s)
+    # Trailing form suffix used by SWAT / NATIVE_BGC_FLEX templates
+    # ("-N", "-P", "-C", "-S") so ``NH4-N`` matches ``NH4``.
+    s = re.sub(r'-[NPCS]$', '', s, flags=re.IGNORECASE)
+    # Final scrub: remove everything that's not alphanumeric.
+    s = re.sub(r'[^A-Za-z0-9]', '', s)
+    return s.upper()
+
+
+def _yield_species(field: Any):
+    """Yield species names from a ``CONSUMED`` / ``PRODUCED`` field.
+
+    The field is normally a string (``"NH4-N"``) but some BGC templates
+    encode multi-species reactions as a list (``["NH4-N", "O2"]``).  A
+    bare ``"NONE"`` or ``""`` is silently skipped.  Anything that isn't
+    a string, list, or tuple is ignored so an unexpected schema can't
+    blow up the calibratability check.
+    """
+    if field is None:
+        return
+    if isinstance(field, str):
+        if field and field != "NONE":
+            yield field
+        return
+    if isinstance(field, (list, tuple)):
+        for item in field:
+            if isinstance(item, str) and item and item != "NONE":
+                yield item
+
+
+def compute_obs_reachable(
+    network: Optional[dict],
+    species_obs_availability: Optional[dict],
+) -> Dict[str, Any]:
+    """Transitive-closure reachability between observed species and reactions.
+
+    A reaction's parameters control the rate at which one species is
+    converted to another.  Tuning that rate perturbs the consumed AND the
+    produced species, which propagates through every other reaction that
+    shares any of those species, in either direction.  So a reaction is
+    *calibratable* whenever any of its species sits in the transitive
+    closure of "species reachable from any observed species via any
+    reaction that shares a species with the current frontier".
+
+    The fixed-point loop terminates because (a) the number of species and
+    reactions is finite and (b) the frontier only ever grows.
+
+    Parameters
+    ----------
+    network
+        Output of :func:`extract_bgc_network` —
+        ``{"species": [...], "frameworks": {fw_name: {"reactions": [...]}}}``.
+        Returns an empty result when ``None`` / empty.
+    species_obs_availability
+        ``{species_name: {"has_obs": bool, ...}}``.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Keys:
+          * ``reachable_species`` — set of species names reachable from
+            the observed set through any chain of reactions.
+          * ``reachable_reactions`` — set of ``(framework_name, reaction_name)``
+            tuples flagged as calibratable.
+          * ``reachable_frameworks`` — set of framework names that have at
+            least one reachable reaction.
+          * ``observed_species`` — the seed set actually present in the
+            network (filtered against the species list).
+    """
+    empty = {
+        "reachable_species": set(),
+        "reachable_reactions": set(),
+        "reachable_frameworks": set(),
+        "observed_species": set(),
+    }
+    if not network or not species_obs_availability:
+        return empty
+    frameworks = network.get("frameworks") or {}
+    if not frameworks:
+        return empty
+
+    # ── Index the network ───────────────────────────────────────────
+    # Collect every species the network knows about, plus a per-reaction
+    # record carrying both a name key and an index key so the
+    # calibratability check can match either (`extract_parameters.py`
+    # and `extract_bgc_network` don't always agree on the ``_NAME``
+    # fallback when ``_NAME`` is missing).
+    known_species: set = set()
+    reactions_index = []     # (fw_name, rxn_name, rxn_idx_key, species_set)
+    for fw_name, fw_info in frameworks.items():
+        for i, r in enumerate(fw_info.get("reactions") or []):
+            sp_set = set()
+            for k in ("consumed", "produced"):
+                for sp in _yield_species(r.get(k)):
+                    sp_set.add(sp)
+            known_species |= sp_set
+            rxn_name = r.get("name") or ""
+            # Prefer an explicit ``_idx`` if the extractor stamped one
+            # on the dict; otherwise use the 1-based position which is
+            # what ``extract_parameters._reaction_num`` produces for
+            # LIST_TRANSFORMATIONS-style templates.
+            rxn_idx = r.get("_idx") or str(i + 1)
+            reactions_index.append(
+                (fw_name, rxn_name, rxn_idx, sp_set)
+            )
+
+    # ── Resolve observed species → network species ──────────────────
+    # Pass 1: direct case-sensitive match.
+    observed: set = set()
+    obs_requested: set = set()
+    for sp, info in (species_obs_availability or {}).items():
+        if not isinstance(info, dict):
+            continue
+        if not info.get("has_obs", False):
+            continue
+        obs_requested.add(sp)
+        if sp in known_species:
+            observed.add(sp)
+
+    # Pass 2: canonical fallback.  If a user has obs for ``NH4-N`` but
+    # the network uses ``NH4⁺`` (PHREEQC) or vice-versa, the exact
+    # match misses.  Build a {canon → set(network names)} index and
+    # match each un-matched obs species against it.
+    if obs_requested - observed:
+        canon_to_network: Dict[str, set] = {}
+        for sp in known_species:
+            c = _canonicalize_species_name(sp)
+            if c:
+                canon_to_network.setdefault(c, set()).add(sp)
+        for sp in obs_requested - observed:
+            c = _canonicalize_species_name(sp)
+            if c and c in canon_to_network:
+                observed |= canon_to_network[c]
+
+    if not observed:
+        # Surface a clear diagnostic — leaving every reaction grayed
+        # without a hint usually traces back to a species-name mismatch
+        # between the observation source and the BGC template (the most
+        # common one is obs CSV uses ``NO3`` but the template uses
+        # ``NO3-N``).  Logged at INFO so it shows up in the calibration
+        # generator's normal stdout.
+        if obs_requested and known_species:
+            logger.info(
+                "BGC calibratability: no observation species matched the "
+                "network (after canonical normalisation).  "
+                "obs species = %s ; network species = %s",
+                sorted(obs_requested)[:20],
+                sorted(known_species)[:20],
+            )
+        return empty
+
+    # ── Fixed-point closure ─────────────────────────────────────────
+    reachable_species = set(observed)
+    reachable_reactions: set = set()
+    reachable_frameworks: set = set()
+    changed = True
+    while changed:
+        changed = False
+        for fw_name, rxn_name, rxn_idx, sp_set in reactions_index:
+            key_name = (fw_name, rxn_name)
+            key_idx = (fw_name, rxn_idx)
+            # We store BOTH keys so the calibratability check (which
+            # may know only the ``_reaction_num`` or only the ``_NAME``)
+            # can match through either.  Dedup via `key_name`.
+            if key_name in reachable_reactions:
+                continue
+            if sp_set & reachable_species:
+                reachable_reactions.add(key_name)
+                reachable_reactions.add(key_idx)
+                reachable_frameworks.add(fw_name)
+                new = sp_set - reachable_species
+                if new:
+                    reachable_species |= new
+                    changed = True
+
+    return {
+        "reachable_species": reachable_species,
+        "reachable_reactions": reachable_reactions,
+        "reachable_frameworks": reachable_frameworks,
+        "observed_species": observed,
+    }
+
+
 def extract_bgc_network(bgc_data: dict) -> dict:
     """Extract a reaction network from a NATIVE_BGC_FLEX JSON dict.
 
@@ -1756,6 +2051,13 @@ def _render_bgc_svg(
     Includes data-* attributes for JS interactivity, framework group
     wrappers, hit-area paths, and collision-free label placement.
     """
+    # Pre-compute the obs-reachable closure so a reaction is shown as
+    # "active" (solid) whenever tuning its parameter can perturb an
+    # observed species — directly OR transitively through other
+    # reactions in the same network.  Falls back gracefully to the
+    # empty closure when no obs info is supplied.
+    _reach = compute_obs_reachable(network, species_obs_availability or {})
+    _reachable_rxn = _reach["reachable_reactions"]
 
     all_species = [s["name"] for s in network["species"]]
     species_desc = {s["name"]: s.get("description", "") for s in network["species"]}
@@ -1967,13 +2269,17 @@ def _render_bgc_svg(
 
         kin_tip = _build_kinetics_tip(r)
         kin_attr = f' data-kinetics="{_svg_escape(kin_tip)}"' if kin_tip else ""
-        # Obs availability for this arrow
+        # Obs availability for this arrow.  An arrow is shown as solid
+        # (calibratable) when its reaction is REACHABLE from any
+        # observed species through the reaction graph — not just when
+        # its own consumed/produced is directly observed.  That way a
+        # user with NO3 obs sees the upstream "A -> NH4" reaction as
+        # active in the diagram, mirroring what the calibration code
+        # now does on the parameters side.
         _arrow_obs_attr = ""
         _arrow_dash = ""
         if species_obs_availability is not None:
-            c_obs = species_obs_availability.get(c, {}).get("has_obs", False)
-            p_obs = species_obs_availability.get(p, {}).get("has_obs", False)
-            _arrow_has = c_obs or p_obs
+            _arrow_has = (fw, r.get("name", "")) in _reachable_rxn
             _arrow_obs_attr = f' data-has-obs="{"true" if _arrow_has else "false"}"'
             if not _arrow_has:
                 _arrow_dash = " stroke-dasharray='6 3'"
@@ -2748,12 +3054,12 @@ def generate_bgc_reaction_diagram(
     if bgc_data is not None:
         network = extract_bgc_network(bgc_data)
     elif bgc_template_path and os.path.isfile(bgc_template_path):
-        try:
-            with open(bgc_template_path, "r", errors="replace") as fh:
-                data = json.load(fh)
+        # safe_load_bgc_json handles the `// ...` header that OpenWQ
+        # writes at the top of the runtime-generated combined JSON,
+        # which vanilla json.load chokes on.
+        data = safe_load_bgc_json(bgc_template_path)
+        if data is not None:
             network = extract_bgc_network(data)
-        except Exception:
-            return ""
     elif pqi_filepath and os.path.isfile(pqi_filepath):
         network = extract_bgc_network_from_pqi(pqi_filepath)
     elif module_name.upper() == "PHREEQC" and pqi_filepath:

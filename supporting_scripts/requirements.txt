@@ -39,3 +39,20 @@ SALib>=1.4.0
 
 # JSON schema validation (optional)
 jsonschema>=4.0.0
+
+# ─────────────────────────────────────────────────────────────────────────
+# Browser-side dependency (NOT a pip package)
+# ─────────────────────────────────────────────────────────────────────────
+# The interactive HTML reports (config viewer + calibration results report)
+# embed Leaflet 1.9.4 directly from the unpkg CDN:
+#     https://unpkg.com/leaflet@1.9.4/dist/leaflet.{js,css}
+#
+# This requires INTERNET ACCESS from the machine that opens the report in
+# its browser.  If you regularly view reports on an air-gapped HPC login
+# node or behind a strict firewall, mirror the two files locally and patch
+# the <link>/<script> tags in the report generators:
+#   - 1_Model_Config/config_support_lib/Gen_Report.py
+#   - 3_Calibration/calibration_lib/Gen_Calibration_Results_Report.py
+# (search for "unpkg.com/leaflet" — there are 2 occurrences per file).
+#
+# Plotly.js is loaded the same way in the config viewer (also via unpkg).

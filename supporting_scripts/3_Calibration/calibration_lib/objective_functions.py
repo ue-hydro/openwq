@@ -52,7 +52,10 @@ class ObjectiveFunction:
                  no_data_flag: float = -9999,
                  h5_reader_path: str = None,
                  temporal_resolution: TemporalResolution = "native",
-                 aggregation_method: str = "mean"):
+                 aggregation_method: str = "mean",
+                 hostmodel: str = "mizuroute",
+                 h5_mapping_key: Optional[str] = None,
+                 use_primary_only: bool = True):
         """
         Initialize objective function calculator.
 
@@ -93,6 +96,23 @@ class ObjectiveFunction:
         self.no_data_flag = no_data_flag
         self.temporal_resolution = temporal_resolution
         self.aggregation_method = aggregation_method
+        # Host-aware HDF5 mapping_key: SUMMA writes `hruId`, mizuRoute
+        # writes `reachID`.  Explicit `h5_mapping_key` wins; otherwise
+        # we derive from `hostmodel` to match Gen_Report's convention.
+        self.hostmodel = (hostmodel or "mizuroute").lower()
+        if h5_mapping_key:
+            self.h5_mapping_key = h5_mapping_key
+        elif self.hostmodel == "summa":
+            self.h5_mapping_key = "hruId"
+        else:
+            self.h5_mapping_key = "reachID"
+        # When True, only observations from PRIMARY stations
+        # (pouring-point obs in SUMMA; every matched station in
+        # mizuRoute) contribute to the objective.  Secondary (gray)
+        # SUMMA stations still appear on the calibration results-report
+        # map but they're excluded from the metric so the calibration
+        # doesn't average over multiple obs per basin.
+        self.use_primary_only = bool(use_primary_only)
 
         # Validate temporal resolution
         valid_resolutions = ["native", "daily", "weekly", "monthly", "yearly"]
@@ -102,8 +122,13 @@ class ObjectiveFunction:
                 f"Valid options: {valid_resolutions}"
             )
 
-        # Validate aggregation method
-        valid_methods = ["mean", "sum", "median", "min", "max"]
+        # Validate aggregation method.  Note: "sum" is intentionally
+        # excluded — summing concentrations across a time window
+        # produces a value with no physical meaning for water quality
+        # metrics (you'd be adding mg/L at different timestamps).  Use
+        # "mean" (default) or "median" for concentrations, or "min" /
+        # "max" for extreme-value summaries.
+        valid_methods = ["mean", "median", "min", "max"]
         if aggregation_method not in valid_methods:
             raise ValueError(
                 f"Invalid aggregation_method '{aggregation_method}'. "
@@ -120,11 +145,20 @@ class ObjectiveFunction:
         self.observations = self._load_observations()
 
     def _load_observations(self) -> pd.DataFrame:
-        """Load and preprocess observation data."""
+        """Load and preprocess observation data.
+
+        Honours the ``is_primary`` column produced by
+        ``prepare_calibration_observations.py``: when
+        ``use_primary_only=True`` (default) only the pouring-point obs of
+        each basin / matched reach contributes to the metric.  Secondary
+        (gray) station rows are still kept in memory if present, exposed
+        via ``self.observations_secondary`` for the results-report map.
+        """
         try:
             obs = pd.read_csv(self.observation_path, parse_dates=['datetime'])
         except FileNotFoundError:
             logger.warning(f"Observation file not found: {self.observation_path}")
+            self.observations_secondary = pd.DataFrame()
             return pd.DataFrame()
 
         # Filter by species
@@ -134,7 +168,26 @@ class ObjectiveFunction:
         if self.target_reaches != "all" and isinstance(self.target_reaches, list):
             obs = obs[obs['reach_id'].isin(self.target_reaches)]
 
-        logger.info(f"Loaded {len(obs)} observations for {obs['species'].nunique()} species")
+        # Separate primary vs secondary so the results-report map can
+        # still draw the gray ones even when they're excluded from the
+        # objective.  Rows missing the column are treated as primary
+        # (legacy CSVs without spatial-matching info).
+        if 'is_primary' in obs.columns:
+            _is_prim = obs['is_primary'].fillna(True).astype(bool)
+            self.observations_secondary = obs[~_is_prim].copy()
+            if self.use_primary_only:
+                obs = obs[_is_prim].copy()
+                logger.info(
+                    f"use_primary_only=True → "
+                    f"{len(obs)} primary obs kept for metric, "
+                    f"{len(self.observations_secondary)} secondary "
+                    f"obs reserved for map display only."
+                )
+        else:
+            self.observations_secondary = pd.DataFrame()
+
+        logger.info(f"Loaded {len(obs)} observations for "
+                    f"{obs['species'].nunique()} species")
         return obs
 
     def compute(self,
@@ -242,7 +295,7 @@ class ObjectiveFunction:
 
         openwq_info = {
             "path_to_results": str(output_dir),
-            "mapping_key": "reachID"
+            "mapping_key": self.h5_mapping_key,
         }
 
         try:
@@ -275,9 +328,14 @@ class ObjectiveFunction:
                     for filename, df, coords in data_list:
                         if df is None or df.empty:
                             continue
-                        # df has time index and columns like "reachID_123"
+                        # df has time index and columns like
+                        # "reachID_123" (mizuRoute) or "hruId_123" (SUMMA).
+                        _col_prefix = f"{self.h5_mapping_key}_"
                         for col in df.columns:
-                            reach_id = col.replace("reachID_", "")
+                            if col.startswith(_col_prefix):
+                                reach_id = col[len(_col_prefix):]
+                            else:
+                                reach_id = col.replace("reachID_", "")
                             try:
                                 reach_id = int(reach_id)
                             except ValueError:
@@ -323,16 +381,34 @@ class ObjectiveFunction:
 
                 try:
                     with h5py.File(filepath, 'r') as hf:
-                        # Get reach IDs
-                        if '/reachID' in hf:
+                        # Get IDs — host-aware (mizuRoute writes
+                        # /reachID, SUMMA writes /hruId).  We probe the
+                        # configured key first, then fall back to the
+                        # other so a misconfiguration still produces
+                        # something usable.
+                        _id_key = self.h5_mapping_key
+                        _id_root = f"/{_id_key}"
+                        if _id_root in hf:
                             reach_ids = [x.decode() if isinstance(x, bytes) else x
-                                        for x in hf['/reachID'][:]]
+                                         for x in hf[_id_root][:]]
+                        elif '/reachID' in hf:
+                            _id_key = 'reachID'
+                            reach_ids = [x.decode() if isinstance(x, bytes) else x
+                                         for x in hf['/reachID'][:]]
+                        elif '/hruId' in hf:
+                            _id_key = 'hruId'
+                            reach_ids = [x.decode() if isinstance(x, bytes) else x
+                                         for x in hf['/hruId'][:]]
                         else:
                             reach_ids = list(range(hf[list(hf.keys())[0]].shape[1]))
 
-                        # Get timestamps
+                        # Get timestamps (skip the well-known metadata keys)
+                        _metadata_keys = {
+                            'xyz_elements', 'reachID', 'hruId',
+                            'mapping_key', _id_key,
+                        }
                         timestamps = [k for k in hf.keys()
-                                     if k not in ['xyz_elements', 'reachID', 'mapping_key']]
+                                      if k not in _metadata_keys]
 
                         for ts in timestamps:
                             try:

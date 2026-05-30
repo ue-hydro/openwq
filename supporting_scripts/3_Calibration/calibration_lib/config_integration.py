@@ -21,16 +21,34 @@ Config Integration Module
 Loads model_config_template.py as a Python module and exposes its variables
 for use by the calibration framework.  Also provides functions to generate
 config files for individual calibration evaluations using Gen_Input_Driver.
+
+Manifest handoff
+----------------
+When the user runs the *config* template (1_Model_Config/...), Gen_Report
+writes ``openwq_baseline_manifest.json`` alongside the HTML report.  The
+calibration side prefers values from that manifest over re-detecting them,
+so the calibration runs use exactly the same spatial mapping keys, host-
+model conventions, and shapefile paths the user saw in the config viewer.
+The manifest is OPTIONAL — if it's not there, calibration falls back to
+re-exec'ing the template the way it always has.
 """
 
 import os
 import sys
 import copy
+import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger(__name__)
+
+# Manifest filename written by Gen_Report.generate_simulation_report.
+_MANIFEST_FILENAME = "openwq_baseline_manifest.json"
+# Where load_model_config stores the loaded manifest dict in the returned
+# config so downstream consumers (get_observation_config, get_spatial_mapping)
+# can find it without re-reading the disk.
+_MANIFEST_CFG_KEY = "_baseline_manifest"
 
 # Variables that should NOT be forwarded to Gen_Input_Driver
 _EXCLUDED_VARS = {
@@ -42,7 +60,54 @@ _EXCLUDED_VARS = {
     '_has_errors', '_config_error_msg', '_report_path', '_tb',
     '_excluded', '_config', '_basin_shp', '_h5_mapping_key',
     '_seasonal_method',
+    # Bookkeeping entries stored on the returned config dict — never
+    # forwarded to Gen_Input_Driver.
+    _MANIFEST_CFG_KEY,
+    '_model_config_path',
 }
+
+
+def _try_load_manifest(model_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Locate and load ``openwq_baseline_manifest.json`` for this config.
+
+    The manifest is written next to the config HTML report under
+    ``{dir2save_input_files}/openwq_baseline_manifest.json``.  We probe a
+    couple of directories so this still works when the user has moved the
+    output around.  Returns the parsed dict or ``None`` if no manifest is
+    found / parseable.
+    """
+    candidates = []
+    d = model_config.get('dir2save_input_files')
+    if d:
+        candidates.append(os.path.join(d, _MANIFEST_FILENAME))
+    ex = model_config.get('executable_path')
+    if ex:
+        candidates.append(
+            os.path.join(os.path.dirname(os.path.abspath(ex)),
+                         _MANIFEST_FILENAME))
+    # Deduplicate while preserving order
+    seen = set()
+    uniq = []
+    for c in candidates:
+        if c and c not in seen:
+            seen.add(c)
+            uniq.append(c)
+    for path in uniq:
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                manifest = json.load(f)
+            logger.info(f"Loaded baseline manifest: {path}")
+            return manifest
+        except Exception as e:
+            logger.warning(f"Found manifest at {path} but failed to parse: {e}")
+            return None
+    logger.debug(
+        f"No baseline manifest found (looked in: {uniq}). "
+        f"Calibration will re-detect mapping keys."
+    )
+    return None
 
 
 def load_model_config(model_config_path: str) -> Dict[str, Any]:
@@ -129,13 +194,38 @@ def load_model_config(model_config_path: str) -> Dict[str, Any]:
                 continue
         config[k] = v
 
+    # Remember the source .py path so downstream consumers (e.g. the
+    # calibration results report's "Run with Best Parameters" section,
+    # which dumps the template content) can find the file again
+    # without it having to be passed through every helper signature.
+    config['_model_config_path'] = os.path.abspath(model_config_path)
+
     # Derive dir2save_input_files (where config files are generated)
     if 'executable_path' in config and 'dir2save_input_files' not in config:
         config['dir2save_input_files'] = os.path.dirname(
             os.path.abspath(config['executable_path'])
         )
 
-    logger.info(f"Loaded {len(config)} config variables")
+    # Overlay the baseline manifest if Gen_Report.generate_simulation_report
+    # wrote one.  We attach the parsed dict under _baseline_manifest so
+    # callers (get_observation_config / get_spatial_mapping) can prefer
+    # manifest values over local re-detection.  We also use it to backfill
+    # river_network_mapping_key into the config dict itself when the user
+    # left it as the default None in the template — that way the very
+    # first time calibration runs after the user runs the config template,
+    # the resolved key is available without any extra wiring.
+    manifest = _try_load_manifest(config)
+    if manifest:
+        config[_MANIFEST_CFG_KEY] = manifest
+        # Backfill river_network_mapping_key from the manifest when the user
+        # left it unset in the template.
+        if not config.get('river_network_mapping_key') and manifest.get(
+                'river_network_mapping_key'):
+            config['river_network_mapping_key'] = manifest[
+                'river_network_mapping_key']
+
+    logger.info(f"Loaded {len(config)} config variables"
+                + (" + baseline manifest" if manifest else ""))
     logger.debug(f"Config keys: {sorted(config.keys())}")
 
     return config
@@ -252,6 +342,12 @@ def generate_config_for_eval(
     for k in ('executable_path', 'file_manager_path',
               'generate_report', 'open_report',
               'river_network_shapefile',
+              # Report-side configuration not consumed by Gen_Input_Driver
+              # (was previously dropped by the except-TypeError fallback,
+              # which masked legitimate signature mismatches — list it
+              # explicitly instead).
+              'river_network_mapping_key',
+              'observation_compartments',
               'observation_data_source', 'grqa_local_data_path',
               'grqa_buffer_km', 'user_observation_csv',
               'mpi_np', 'ss_method_copernicus_use_proxy_if_outside_range'):
@@ -328,6 +424,12 @@ def get_observation_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
     obs_config["river_network_shapefile"] = model_config.get(
         "river_network_shapefile", None
     )
+    # User-supplied (or manifest-resolved) override for the column in the
+    # river-network shapefile whose values match the reach IDs OpenWQ
+    # writes to HDF5.  ``None`` means "let downstream auto-detect".
+    obs_config["river_network_mapping_key"] = model_config.get(
+        "river_network_mapping_key", None
+    )
 
     # Species
     obs_config["chemical_species"] = model_config.get(
@@ -335,6 +437,74 @@ def get_observation_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     return obs_config
+
+
+def get_spatial_mapping(model_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the resolved spatial-mapping convention for this model run.
+
+    Mirrors the host-specific branches in
+    ``Gen_Report.generate_simulation_report`` (around lines 2640-2668) so
+    that calibration code uses the same conventions as the config viewer
+    without duplicating the detection logic.
+
+    Resolution order for each field:
+      1. The baseline manifest written by Gen_Report (most authoritative —
+         it captures what the user actually saw on the report).
+      2. Explicit override on the model config (e.g.
+         ``river_network_mapping_key`` in the template).
+      3. Host-defaulted value (``reachID``/``hruId`` for the H5 key,
+         ``HRU_ID``/``SegId`` for the shapefile key, etc.).
+
+    Returns a dict with:
+      - ``hostmodel`` — lower-cased host model name
+      - ``h5_mapping_key`` — column name OpenWQ writes to HDF5 (``reachID``
+        for mizuRoute, ``hruId`` for SUMMA)
+      - ``river_network_mapping_key`` — column in river-network shapefile
+      - ``basin_mapping_key`` — column in basin shapefile
+      - ``feature_label`` — label used in viewer trace names
+    """
+    manifest = model_config.get(_MANIFEST_CFG_KEY) or {}
+    hostmodel = (model_config.get('hostmodel') or
+                 manifest.get('hostmodel') or '').lower()
+
+    # Sensible host-aware defaults (mirrors Gen_Report.py:2645/2660)
+    if hostmodel == 'summa':
+        default_h5_key = 'hruId'
+        default_shp_key = 'HRU_ID'
+    else:
+        default_h5_key = 'reachID'
+        default_shp_key = 'SegId'
+
+    # h5_mapping_key: manifest > user override > host default
+    h5_key = (manifest.get('h5_mapping_key')
+              or model_config.get('openwq_h5_mapping_key')
+              or default_h5_key)
+
+    # river_network_mapping_key: manifest > model config > default
+    rn_key = (manifest.get('river_network_mapping_key')
+              or model_config.get('river_network_mapping_key')
+              or default_shp_key)
+
+    # basin_mapping_key: manifest > model config (via ss_method_copernicus_basin_info)
+    basin_info = model_config.get('ss_method_copernicus_basin_info', {})
+    basin_user_key = (basin_info.get('mapping_key')
+                      if isinstance(basin_info, dict) else None)
+    basin_key = (manifest.get('basin_mapping_key')
+                 or basin_user_key
+                 or ('HRU_ID' if hostmodel == 'summa' else ''))
+
+    feature_label = (manifest.get('feature_label')
+                     or model_config.get('openwq_h5_mapping_key')
+                     or rn_key)
+
+    return {
+        'hostmodel': hostmodel,
+        'h5_mapping_key': h5_key,
+        'river_network_mapping_key': rn_key,
+        'basin_mapping_key': basin_key,
+        'feature_label': feature_label,
+        'from_manifest': bool(manifest),
+    }
 
 
 def get_container_config(model_config: Dict[str, Any]) -> Dict[str, Any]:

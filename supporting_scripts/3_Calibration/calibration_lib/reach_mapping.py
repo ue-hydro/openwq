@@ -48,7 +48,8 @@ class ReachMapper:
 
     def __init__(self,
                  mapping_source: Union[str, Path] = None,
-                 mapping_key: str = "reachID"):
+                 mapping_key: Optional[str] = None,
+                 hostmodel: str = "mizuroute"):
         """
         Initialize reach mapper.
 
@@ -59,10 +60,21 @@ class ReachMapper:
             - An HDF5 output file containing the mapping
             - A directory containing HDF5 files (will use first valid file)
             - A JSON mapping file
-        mapping_key : str
-            The mapping key name ("reachID" for mizuRoute, "hruId" for SUMMA)
+        mapping_key : str, optional
+            The mapping key name ("reachID" for mizuRoute, "hruId" for SUMMA).
+            When ``None`` (the default) it is derived from ``hostmodel``.
+            The HDF5 loader falls back to whichever key actually appears in
+            the file if neither matches.
+        hostmodel : str
+            Host model name used to pick the default mapping_key when it
+            isn't given explicitly.  ``"summa"`` -> ``"hruId"``, anything
+            else -> ``"reachID"``.
         """
+        if mapping_key is None:
+            mapping_key = ("hruId" if (hostmodel or "").lower() == "summa"
+                           else "reachID")
         self.mapping_key = mapping_key
+        self.hostmodel = (hostmodel or "mizuroute").lower()
         self.reach_to_xyz: Dict[str, Tuple[int, int, int]] = {}
         self.xyz_to_reach: Dict[Tuple[int, int, int], str] = {}
 
@@ -309,7 +321,8 @@ class ReachMapper:
 
 def create_mapping_from_output(output_dir: Union[str, Path],
                                output_json: Union[str, Path] = None,
-                               mapping_key: str = "reachID") -> ReachMapper:
+                               mapping_key: Optional[str] = None,
+                               hostmodel: str = "mizuroute") -> ReachMapper:
     """
     Convenience function to create a ReachMapper from OpenWQ output directory.
 
@@ -319,8 +332,11 @@ def create_mapping_from_output(output_dir: Union[str, Path],
         Path to openwq_out directory
     output_json : str or Path, optional
         If provided, save the mapping to this JSON file for reuse
-    mapping_key : str
-        Mapping key name ("reachID" or "hruId")
+    mapping_key : str, optional
+        Mapping key name ("reachID" or "hruId").  When ``None`` it is
+        derived from ``hostmodel``.
+    hostmodel : str
+        Host model name (drives the default mapping_key).
 
     Returns
     -------
@@ -329,11 +345,11 @@ def create_mapping_from_output(output_dir: Union[str, Path],
 
     Example
     -------
-    >>> mapper = create_mapping_from_output("/path/to/openwq_out")
+    >>> mapper = create_mapping_from_output("/path/to/openwq_out", hostmodel="summa")
     >>> xyz = mapper.get_xyz("1200014181")
     >>> print(f"Reach 1200014181 is at index {xyz}")
     """
-    mapper = ReachMapper(mapping_key=mapping_key)
+    mapper = ReachMapper(mapping_key=mapping_key, hostmodel=hostmodel)
     mapper.load_mapping(Path(output_dir))
 
     if output_json and len(mapper) > 0:

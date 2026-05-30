@@ -49,11 +49,25 @@ try:
     import pandas as pd
     import geopandas as gpd
     import numpy as np
-    from shapely.geometry import Point
+    from shapely.geometry import Point, mapping as shp_mapping
     from shapely.ops import nearest_points
 except ImportError as e:
     print(f"Error: Missing required package: {e.name}")
     print("Install with: pip install pandas geopandas numpy shapely")
+    sys.exit(1)
+
+# Import the shared spatial-matching helpers from 2_Read_Outputs.  These
+# are the SAME functions the config-side viewer uses, so the stations get
+# tagged identically here and the calibration results report can render
+# the exact same map (basin colours, primary vs secondary, etc.).
+_this_dir = Path(__file__).resolve().parent
+_h5_lib = _this_dir.parent.parent.parent / "2_Read_Outputs" / "hdf5_support_lib"
+if str(_h5_lib) not in sys.path:
+    sys.path.insert(0, str(_h5_lib))
+try:
+    import spatial_matching as _sm
+except ImportError as _e:
+    print(f"Error: could not import shared spatial_matching from {_h5_lib}: {_e}")
     sys.exit(1)
 
 
@@ -94,132 +108,266 @@ UNIT_CONVERSIONS = {
 DEFAULT_UNCERTAINTY_FRACTION = 0.10  # 10%
 
 
-class StationReachMatcher:
+def _gdf_to_geojson(gdf: gpd.GeoDataFrame) -> dict:
+    """Convert a (re-projected to WGS84) GeoDataFrame into the GeoJSON-dict
+    shape that the shared :mod:`spatial_matching` helpers consume.
+
+    String-coerces every property value because the matchers compare
+    feature IDs as strings (matching ``Plot_h5_driver`` conventions).
     """
-    Matches observation stations to model river reaches.
+    if gdf.crs is None:
+        gdf = gdf.set_crs("EPSG:4326")
+    elif gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs("EPSG:4326")
+    features = []
+    for _, row in gdf.iterrows():
+        geom = row.geometry
+        if geom is None or geom.is_empty:
+            continue
+        props = {}
+        for k, v in row.items():
+            if k == 'geometry':
+                continue
+            props[k] = '' if pd.isna(v) else str(v)
+        features.append({
+            'type': 'Feature',
+            'geometry': shp_mapping(geom),
+            'properties': props,
+        })
+    return {'type': 'FeatureCollection', 'features': features}
+
+
+class StationReachMatcher:
+    """Spatial matcher that ties observation stations to model elements.
+
+    This is the host-aware single entry point used by the calibration prep
+    script.  Internally it dispatches to the same matchers that the
+    config-side viewer (``Plot_h5_driver``) uses, so a station gets the
+    SAME assignment in both reports:
+
+      * ``hostmodel='mizuroute'`` (default) — nearest-reach matching
+        against ``river_network_path``.  Every matched station is
+        ``is_primary=True`` (line geometry has no "secondary" concept).
+      * ``hostmodel='summa'`` — point-in-polygon against
+        ``basin_network_path`` with a nearest-basin fallback for stations
+        digitised just outside the polygon.  The pouring-point station of
+        each basin (closest to where the river leaves the polygon) is
+        ``is_primary=True``; the rest are ``is_primary=False`` (gray on
+        the map).
+
+    Parameters
+    ----------
+    river_network_path
+        Path to the river-network shapefile.  Required for mizuRoute,
+        optional but RECOMMENDED for SUMMA (used to locate basin outlets).
+    reach_id_column
+        Column in the river-network shapefile holding the reach
+        identifier.  Default ``'seg_id'`` matches the legacy convention;
+        for newer mizuRoute outputs this is usually ``'LINKNO'`` or
+        ``'SegId'``.
+    max_distance_m
+        Matching cut-off in metres.  Stations farther than this are
+        flagged ``matched=False`` (still appear in the output but with
+        ``reach_id=None``).
+    hostmodel
+        ``"mizuroute"`` (default) or ``"summa"``.  Selects which matcher
+        gets used.
+    basin_network_path
+        Path to the basin / HRU polygons shapefile.  Required when
+        ``hostmodel='summa'``.
+    basin_id_column
+        Column in the basin shapefile holding the HRU / GRU identifier.
+        Default ``'HRU_ID'``.
     """
 
     def __init__(self,
-                 river_network_path: str,
+                 river_network_path: Optional[str] = None,
                  reach_id_column: str = 'seg_id',
-                 max_distance_m: float = 1000):
-        """
-        Initialize the matcher.
-
-        Parameters
-        ----------
-        river_network_path : str
-            Path to river network shapefile
-        reach_id_column : str
-            Column name containing reach IDs
-        max_distance_m : float
-            Maximum distance for matching (meters)
-        """
+                 max_distance_m: float = 1000,
+                 hostmodel: str = 'mizuroute',
+                 basin_network_path: Optional[str] = None,
+                 basin_id_column: str = 'HRU_ID'):
         self.max_distance_m = max_distance_m
         self.reach_id_column = reach_id_column
+        self.basin_id_column = basin_id_column
+        self.hostmodel = (hostmodel or 'mizuroute').lower()
 
-        # Load river network
-        print(f"Loading river network: {river_network_path}")
-        self.river_gdf = gpd.read_file(river_network_path)
+        # Load river network (always optional now — SUMMA may skip it,
+        # though it is strongly recommended for basin-outlet detection).
+        self.river_gdf: Optional[gpd.GeoDataFrame] = None
+        self.river_geojson: Optional[dict] = None
+        if river_network_path:
+            print(f"Loading river network: {river_network_path}")
+            self.river_gdf = gpd.read_file(river_network_path)
+            if reach_id_column not in self.river_gdf.columns:
+                available = list(self.river_gdf.columns)
+                raise ValueError(
+                    f"Reach ID column '{reach_id_column}' not found in "
+                    f"{river_network_path}. Available columns: {available}"
+                )
+            if self.river_gdf.crs is None:
+                self.river_gdf = self.river_gdf.set_crs("EPSG:4326")
+            self.river_geojson = _gdf_to_geojson(self.river_gdf)
+            print(f"  Loaded {len(self.river_gdf)} reaches "
+                  f"(id column '{reach_id_column}')")
 
-        if reach_id_column not in self.river_gdf.columns:
-            available = list(self.river_gdf.columns)
+        # Load basin polygons (SUMMA case).
+        self.basin_gdf: Optional[gpd.GeoDataFrame] = None
+        self.basin_geojson: Optional[dict] = None
+        if basin_network_path:
+            print(f"Loading basin shapefile: {basin_network_path}")
+            self.basin_gdf = gpd.read_file(basin_network_path)
+            if basin_id_column not in self.basin_gdf.columns:
+                available = list(self.basin_gdf.columns)
+                raise ValueError(
+                    f"Basin ID column '{basin_id_column}' not found in "
+                    f"{basin_network_path}. Available columns: {available}"
+                )
+            if self.basin_gdf.crs is None:
+                self.basin_gdf = self.basin_gdf.set_crs("EPSG:4326")
+            self.basin_geojson = _gdf_to_geojson(self.basin_gdf)
+            print(f"  Loaded {len(self.basin_gdf)} basin polygons "
+                  f"(id column '{basin_id_column}')")
+
+        if self.hostmodel == 'summa' and self.basin_geojson is None:
             raise ValueError(
-                f"Reach ID column '{reach_id_column}' not found. "
-                f"Available columns: {available}"
+                "hostmodel='summa' requires basin_network_path to be set."
+            )
+        if self.hostmodel != 'summa' and self.river_geojson is None:
+            raise ValueError(
+                "hostmodel='%s' requires river_network_path to be set." % self.hostmodel
             )
 
-        # Ensure WGS84
-        if self.river_gdf.crs is None:
-            self.river_gdf = self.river_gdf.set_crs("EPSG:4326")
-        elif self.river_gdf.crs.to_epsg() != 4326:
-            self.river_gdf = self.river_gdf.to_crs("EPSG:4326")
-
-        # Determine UTM zone for distance calculations
-        centroid = self.river_gdf.dissolve().centroid.iloc[0]
+        # UTM zone — still used downstream to report per-station distances
+        # in metres for the diagnostic output.
+        ref_gdf = self.river_gdf if self.river_gdf is not None else self.basin_gdf
+        centroid = ref_gdf.dissolve().centroid.iloc[0]
         utm_zone = int((centroid.x + 180) / 6) + 1
         hemisphere = 'north' if centroid.y >= 0 else 'south'
-        self.utm_epsg = 32600 + utm_zone if hemisphere == 'north' else 32700 + utm_zone
-
-        # Project for accurate distance calculations
-        self.river_gdf_utm = self.river_gdf.to_crs(f"EPSG:{self.utm_epsg}")
-
-        print(f"  Loaded {len(self.river_gdf)} reaches")
-        print(f"  Reach ID column: {reach_id_column}")
+        self.utm_epsg = (32600 + utm_zone
+                         if hemisphere == 'north' else 32700 + utm_zone)
+        self._ref_utm = ref_gdf.to_crs(f"EPSG:{self.utm_epsg}")
         print(f"  Using UTM zone {utm_zone} for distance calculations")
 
     def match_stations(self,
                        stations_gdf: gpd.GeoDataFrame,
                        station_id_column: str = 'site_id') -> pd.DataFrame:
+        """Match stations using the shared host-aware matcher.
+
+        Returns a DataFrame with columns:
+          * ``station_id``  — the value of ``stations_gdf[station_id_column]``.
+          * ``reach_id``    — matched feature ID (reach for mizuRoute,
+                              basin/HRU for SUMMA).  ``None`` when the
+                              station fell outside the ``max_distance_m``
+                              cut-off (mizuRoute) or when matching failed
+                              entirely.
+          * ``distance_m``  — distance from the station to its matched
+                              element (metres).
+          * ``matched``     — boolean: did this station get assigned?
+          * ``is_primary``  — boolean.  ``True`` for the pouring-point
+                              station of a basin (SUMMA) or for any
+                              successfully-matched reach station
+                              (mizuRoute).  ``False`` for secondary
+                              (gray) stations inside a basin.
+          * ``hostmodel``   — echoes the matcher mode for traceability.
         """
-        Match stations to nearest reaches.
+        print(f"\nMatching {len(stations_gdf)} stations "
+              f"(hostmodel={self.hostmodel})...")
+        print(f"  Max matching distance: {self.max_distance_m} m")
 
-        Parameters
-        ----------
-        stations_gdf : gpd.GeoDataFrame
-            Station locations
-        station_id_column : str
-            Column containing station IDs
-
-        Returns
-        -------
-        pd.DataFrame
-            Mapping of station_id to reach_id with distance
-        """
-        print(f"\nMatching {len(stations_gdf)} stations to reaches...")
-        print(f"  Max matching distance: {self.max_distance_m}m")
-
-        # Ensure same CRS
         if stations_gdf.crs is None:
             stations_gdf = stations_gdf.set_crs("EPSG:4326")
         elif stations_gdf.crs.to_epsg() != 4326:
             stations_gdf = stations_gdf.to_crs("EPSG:4326")
 
-        # Project to UTM
+        # Build the {sid: (lat, lon)} dict the shared matcher expects.
+        station_locations: Dict[str, Tuple[float, float]] = {}
+        for _, row in stations_gdf.iterrows():
+            sid = row[station_id_column]
+            if sid is None or pd.isna(sid):
+                continue
+            geom = row.geometry
+            if geom is None or geom.is_empty:
+                continue
+            station_locations[str(sid)] = (float(geom.y), float(geom.x))
+
+        # Call the shared matcher.
+        s2f, primary = _sm.match_stations(
+            station_locations,
+            hostmodel=self.hostmodel,
+            river_geojson=self.river_geojson,
+            basin_geojson=self.basin_geojson,
+            river_mapping_key=self.reach_id_column,
+            basin_mapping_key=self.basin_id_column,
+            log=print,
+        )
+
+        # Compute per-station distance from its assigned element, in
+        # metres, using the UTM projection.  We use shapely.distance
+        # because it matches the previous behaviour and keeps the
+        # max_distance_m cut-off meaningful.
         stations_utm = stations_gdf.to_crs(f"EPSG:{self.utm_epsg}")
+        if self.hostmodel == 'summa':
+            id_col = self.basin_id_column
+        else:
+            id_col = self.reach_id_column
+        # Map feature_id (string) -> reference geometry (UTM)
+        ref_by_fid = {
+            str(row[id_col]): row.geometry
+            for _, row in self._ref_utm.iterrows()
+        }
 
         matches = []
-
-        for idx, station in stations_utm.iterrows():
-            station_id = station[station_id_column]
-            station_point = station.geometry
-
-            # Find nearest reach
-            min_dist = float('inf')
-            nearest_reach_id = None
-
-            for _, reach in self.river_gdf_utm.iterrows():
-                dist = station_point.distance(reach.geometry)
-                if dist < min_dist:
-                    min_dist = dist
-                    nearest_reach_id = reach[self.reach_id_column]
-
-            if min_dist <= self.max_distance_m:
+        for _, station in stations_utm.iterrows():
+            sid_raw = station[station_id_column]
+            sid = str(sid_raw)
+            assigned = s2f.get(sid)
+            geom = station.geometry
+            if assigned is not None and assigned in ref_by_fid:
+                dist = float(geom.distance(ref_by_fid[assigned]))
+            else:
+                # Fallback: nearest geometry across the reference set.
+                dist = min(
+                    (float(geom.distance(g)) for g in ref_by_fid.values()),
+                    default=float('inf'),
+                )
+            within_cutoff = dist <= self.max_distance_m
+            is_primary = sid in primary
+            if assigned is None or not within_cutoff:
                 matches.append({
-                    'station_id': station_id,
-                    'reach_id': int(nearest_reach_id),
-                    'distance_m': round(min_dist, 1),
-                    'matched': True
+                    'station_id': sid_raw,
+                    'reach_id': None,
+                    'distance_m': round(dist, 1),
+                    'matched': False,
+                    'is_primary': False,
+                    'hostmodel': self.hostmodel,
                 })
             else:
+                # reach_id may be a string (e.g. SUMMA GRU_ID) — try int
+                try:
+                    rid: Union[int, str] = int(assigned)
+                except (TypeError, ValueError):
+                    rid = assigned
                 matches.append({
-                    'station_id': station_id,
-                    'reach_id': None,
-                    'distance_m': round(min_dist, 1),
-                    'matched': False
+                    'station_id': sid_raw,
+                    'reach_id': rid,
+                    'distance_m': round(dist, 1),
+                    'matched': True,
+                    'is_primary': bool(is_primary),
+                    'hostmodel': self.hostmodel,
                 })
 
         matches_df = pd.DataFrame(matches)
-
-        n_matched = matches_df['matched'].sum()
-        print(f"  Matched: {n_matched}/{len(matches_df)} stations")
-
+        n_matched = int(matches_df['matched'].sum())
+        n_primary = int(matches_df['is_primary'].sum())
+        print(f"  Matched: {n_matched}/{len(matches_df)} stations  "
+              f"({n_primary} primary / pouring-point)")
         if n_matched < len(matches_df):
             unmatched = matches_df[~matches_df['matched']]
-            print(f"  Unmatched stations (distance > {self.max_distance_m}m):")
+            print(f"  Unmatched stations (distance > {self.max_distance_m} m):")
             for _, row in unmatched.iterrows():
-                print(f"    {row['station_id']}: {row['distance_m']}m to nearest reach")
-
+                print(f"    {row['station_id']}: {row['distance_m']} m to "
+                      f"nearest {self.hostmodel} element")
         return matches_df
 
 
@@ -287,10 +435,23 @@ class CalibrationObservationConverter:
 
         print(f"\nConverting {len(observations_df)} observations...")
 
-        # Merge with reach mapping
+        # Merge with reach mapping — include is_primary so the calibration
+        # objective function and the results-report map both know which
+        # observations belong to the pouring-point of an HRU (SUMMA) or
+        # a successfully matched reach (mizuRoute).  Fall back gracefully
+        # if a legacy matcher produced a DataFrame without the column.
         site_col = grqa_columns['site_id']
+        _mapping_cols = ['station_id', 'reach_id', 'matched']
+        if 'is_primary' in station_reach_mapping.columns:
+            _mapping_cols.append('is_primary')
+        else:
+            station_reach_mapping = station_reach_mapping.copy()
+            station_reach_mapping['is_primary'] = (
+                station_reach_mapping['matched'].astype(bool)
+            )
+            _mapping_cols.append('is_primary')
         obs_with_reach = observations_df.merge(
-            station_reach_mapping[['station_id', 'reach_id', 'matched']],
+            station_reach_mapping[_mapping_cols],
             left_on=site_col,
             right_on='station_id',
             how='left'
@@ -299,6 +460,9 @@ class CalibrationObservationConverter:
         # Filter to matched only
         obs_matched = obs_with_reach[obs_with_reach['matched'] == True].copy()
         print(f"  Observations with matched reaches: {len(obs_matched)}")
+        _n_prim = int(obs_matched.get('is_primary',
+                                      pd.Series(dtype=bool)).sum())
+        print(f"  Observations from primary (pouring-point) stations: {_n_prim}")
 
         if len(obs_matched) == 0:
             print("  WARNING: No observations could be matched to reaches!")
@@ -350,15 +514,25 @@ class CalibrationObservationConverter:
                 if row[outlier_col] == True or row[outlier_col] == 1:
                     quality_flag = 'SUSPECT'
 
+            # reach_id can be int (mizuRoute) or string (SUMMA GRU_ID).
+            _rid = row['reach_id']
+            try:
+                _rid_out = int(_rid)
+            except (TypeError, ValueError):
+                _rid_out = str(_rid)
             calibration_obs.append({
                 'datetime': dt.strftime('%Y-%m-%d %H:%M:%S'),
-                'reach_id': int(row['reach_id']),
+                'reach_id': _rid_out,
                 'species': species,
                 'value': round(value_converted, 6),
                 'units': self.target_units,
                 'source': str(row[site_col]),
                 'uncertainty': round(uncertainty, 6),
-                'quality_flag': quality_flag
+                'quality_flag': quality_flag,
+                # NEW columns (consumed by ObjectiveFunction and the
+                # calibration results-report map):
+                'station_id': str(row[site_col]),
+                'is_primary': bool(row.get('is_primary', True)),
             })
 
         result_df = pd.DataFrame(calibration_obs)

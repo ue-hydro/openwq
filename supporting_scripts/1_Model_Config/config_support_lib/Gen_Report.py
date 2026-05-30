@@ -28,10 +28,35 @@ design patterns from the calibration postprocessing module (results_analysis.py)
 import os
 import sys
 import json
+import inspect
 import datetime
 import glob as _glob
 import platform
 import numpy as np
+
+
+def _caller_template_stem(default="openwq"):
+    """Return the basename (no extension) of the *user template* that
+    called into this module, so generated reports can be named after it.
+
+    Walks the call stack outward and returns the first frame whose file
+    is NOT inside this config_support_lib directory (i.e. the user's
+    ``model_config_template*.py``).  Falls back to ``default`` when the
+    caller can't be determined (e.g. interactive use)."""
+    try:
+        _here = os.path.dirname(os.path.abspath(__file__))
+        for fr in inspect.stack()[1:]:
+            fn = fr.filename or ""
+            if not fn or fn.startswith("<"):
+                continue
+            if os.path.dirname(os.path.abspath(fn)) == _here:
+                continue  # skip frames inside this library
+            stem = os.path.splitext(os.path.basename(fn))[0]
+            if stem:
+                return stem
+    except Exception:
+        pass
+    return default
 
 # Ensure config_support_lib is on path (for local imports like Gen_BGC_Diagram)
 _this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1303,6 +1328,11 @@ def generate_simulation_report(
         units,
         compartments_and_cells,
         timestep,
+        # Basename (no extension) of the user's config template; when set,
+        # reports are named "<stem>_config_report.html" and
+        # "<stem>_results_report.html".  None keeps the legacy
+        # openwq_config_report.html / openwq_simulation_report.html names.
+        report_stem=None,
         river_network_shapefile=None,
         basin_shapefile=None,
         # OPTIONAL: column in the river-network shapefile whose values match
@@ -1342,7 +1372,9 @@ def generate_simulation_report(
 
     Returns the path to the generated HTML file.
     """
-    report_path = os.path.join(output_dir, "openwq_config_report.html")
+    _config_report_name = (f"{report_stem}_config_report.html"
+                           if report_stem else "openwq_config_report.html")
+    report_path = os.path.join(output_dir, _config_report_name)
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     # Track errors for each section so the report can still be generated
@@ -2998,7 +3030,10 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         )
 
         # --- 4b: Interactive time-series plots (all species) ---
-        _report_name = "openwq_simulation_report.html"
+        # Name the results report after the config template too, so the
+        # config report and its results report share the template stem.
+        _report_name = (f"{report_stem}_results_report.html"
+                        if report_stem else "openwq_simulation_report.html")
         _out_all_html = os.path.join(_abs_output_dir, "openwq_out",
                                      _report_name)
         _out_all_html_safe = _py_path(_out_all_html)
@@ -3379,6 +3414,59 @@ function _owqRelayoutAll(){
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
+    # Write the baseline manifest next to the HTML report.  The calibration
+    # side reads this instead of re-running the user's config template, so
+    # the resolved mapping keys / shapefile paths / host conventions stay
+    # consistent between the manual (config) and automated (calibration)
+    # halves of the workflow.  Anything that's currently auto-detected in
+    # Gen_Report (the basin/river shapefile column, the OpenWQ-side H5
+    # mapping_key) is FROZEN here so downstream consumers don't redetect.
+    try:
+        import json as _json
+        manifest = {
+            "schema_version": 1,
+            "generated_at": now,
+            "report_path": report_path,
+            "hostmodel": hostmodel,
+            # Resolved spatial mapping (the actual columns used by the
+            # config viewer at the time the report was generated)
+            "h5_mapping_key": _h5_mapping_key,
+            "river_network_mapping_key": _shp_key,
+            "basin_mapping_key": _basin_mapping_key,
+            "feature_label": _feature_label,
+            # Shapefiles
+            "river_network_shapefile": river_network_shapefile,
+            "basin_shapefile": basin_shapefile,
+            # User-supplied overrides (so calibration knows what the user
+            # actually asked for vs what we auto-detected)
+            "user_river_network_mapping_key": river_network_mapping_key,
+            "user_openwq_h5_mapping_key": openwq_h5_mapping_key,
+            # Model parameters
+            "chemical_species": list(chemical_species or []),
+            "units": units,
+            "timestep": timestep,
+            "compartments_and_cells": compartments_and_cells,
+            # Observation source
+            "observation_data_source": observation_data_source,
+            "grqa_local_data_path": grqa_local_data_path,
+            "grqa_buffer_km": grqa_buffer_km,
+            "user_observation_csv": user_observation_csv,
+            "observation_compartments": observation_compartments,
+            # Bookkeeping
+            "project_name": project_name,
+            "authors": authors,
+            "date": date,
+            "plot_separator": plot_separator,
+        }
+        manifest_path = os.path.join(
+            output_dir, "openwq_baseline_manifest.json"
+        )
+        with open(manifest_path, 'w', encoding='utf-8') as _mf:
+            _json.dump(manifest, _mf, indent=2, default=str)
+        print(f"  Wrote baseline manifest: {manifest_path}")
+    except Exception as _e:
+        print(f"  WARNING: Failed to write baseline manifest: {_e}")
+
     return report_path
 
 
@@ -3442,8 +3530,14 @@ def generate_report(
     print("GENERATING REPORT")
     print("=" * 60)
 
+    # Name the reports after the user's config template (the script that
+    # called us), e.g. model_config_template_SUMMA_X.py ->
+    #   <stem>_config_report.html   and   <stem>_results_report.html
+    _report_stem = _caller_template_stem(default="openwq")
+
     try:
         report_path = generate_simulation_report(
+            report_stem=_report_stem,
             output_dir=dir2save_input_files,
             project_name=project_name,
             authors=authors,
