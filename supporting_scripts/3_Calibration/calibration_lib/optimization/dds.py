@@ -214,8 +214,17 @@ class DDS:
             else:
                 no_improvement_count += 1
 
-            history.append((i, f_best, x_best.copy()))
+            # Record the TRIAL actually evaluated this iteration (x_new/f_new),
+            # NOT the best-so-far.  Otherwise, when DDS doesn't improve, every
+            # history row is the identical initial point — which makes the
+            # parameter-correlation heatmap, sensitivity scatter and evolution
+            # plots degenerate (constant columns → all-NaN correlations).
+            # The convergence plot derives the running best via cumulative-min
+            # (results_analysis.get_convergence_data), so it's unaffected.
+            history.append((i, f_new, x_new.copy()))
 
+            # Callback keeps best-so-far (drives the --resume checkpoint, which
+            # must restart from the best point, not the last trial).
             if callback:
                 callback(i, f_best, x_best)
 
@@ -362,8 +371,12 @@ class RandomSearch:
                 f_best = f_new
                 logger.info(f"Random Eval {i}: New best = {f_best:.6f}")
 
-            history.append((i, f_best, x_best.copy()))
+            # Record the TRIAL actually evaluated (not best-so-far) so the
+            # results analysis sees the real sampled points; convergence uses
+            # cumulative-min, so it still shows the running best.
+            history.append((i, f_new, x_new.copy()))
 
+            # Callback keeps best-so-far (drives the --resume checkpoint).
             if callback:
                 callback(i, f_best, x_best)
 
