@@ -1300,7 +1300,8 @@ def generate_interactive_setup(
         # validation split slider.  Either may be None (no obs data / control
         # file unreadable); the slider JS hides itself gracefully.
         try:
-            _obs_period = _ci.get_observation_period(model_config)
+            _obs_period = _ci.get_observation_period(
+                model_config, work_dir=calibration_work_dir)
         except Exception:
             _obs_period = None
         try:
@@ -1389,8 +1390,28 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
     return f"""
 <div class="section" id="settings">
     <h2>Calibration Settings</h2>
+    <!-- Theme: run mode / output (top — biggest lever on per-eval cost) -->
     <div class="card primary">
-        <h3>Optimization</h3>
+        <h3>Run mode &amp; output</h3>
+        <div class="form-row">
+            {rh.build_form_checkbox(
+                "run_mode_debug",
+                "Enable openWQ debug mode (RUN_MODE_DEBUG) during calibration",
+                checked=False,
+                hint="Overrides the model config's run_mode_debug. Debug mode "
+                     "writes 5 extra diagnostic HDF5 files per "
+                     "species/compartment (chemistry, transport, ewf, ic, ss) "
+                     "- handy when configuring/testing the model, but a large "
+                     "speed / memory / output drag over many evaluations. "
+                     "Leave OFF (recommended): each eval then writes only the "
+                     "main concentration output. Tick only if you need the "
+                     "diagnostics during calibration.")}
+        </div>
+    </div>
+
+    <!-- Theme: optimization algorithm -->
+    <div class="card">
+        <h3>Optimization algorithm</h3>
         <div class="form-row">
             {rh.build_form_select("algorithm", "Algorithm",
                 ["DDS", "RANDOM"], "DDS",
@@ -1406,6 +1427,11 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
             {rh.build_form_number("random_seed", "Random Seed",
                 42, min_val=0, step=1)}
         </div>
+    </div>
+
+    <!-- Theme: objective metric (how model vs obs is scored) -->
+    <div class="card">
+        <h3>Objective metric</h3>
         <div class="form-row">
             {rh.build_form_select("temporal_resolution", "Temporal Resolution",
                 ["native", "daily", "weekly", "monthly"], "monthly",
@@ -1423,6 +1449,11 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                      "appear on the map. For mizuRoute every matched station "
                      "is already primary, so this has no effect on the metric.")}
         </div>
+    </div>
+
+    <!-- Theme: how the models are executed -->
+    <div class="card">
+        <h3>Model execution</h3>
         <div class="form-row">
             {rh.build_form_select(
                 "container_runtime", "Container runtime",
@@ -1437,8 +1468,7 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                      "the sensitivity analysis (the runs are independent). "
                      "Works for both Docker and Apptainer. DDS calibration is "
                      "sequential by design, so this only speeds up the "
-                     "sensitivity stage. Set to roughly your available CPU "
-                     "cores / container capacity.")}
+                     "sensitivity stage. Auto-capped to fit container memory.")}
         </div>
         <div class="form-row">
             {rh.build_form_select(
@@ -1450,6 +1480,11 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                 "this on HPC / batch jobs where you can't answer a prompt. "
                 "'keep' leaves them in place. (Resume runs never clean.)")}
         </div>
+    </div>
+
+    <!-- Theme: HPC / Apptainer (optional) -->
+    <div class="card">
+        <h3>HPC / Apptainer <span style="font-weight:400;opacity:.7;">(optional)</span></h3>
         <div class="form-row">
             {rh.build_form_input(
                 "apptainer_sif_path",
@@ -2192,6 +2227,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // Stale-folder handling: 'prompt' | 'clean' | 'keep'.
     var _cwdEl = document.getElementById('clean_work_dir');
     s.clean_work_dir_mode = _cwdEl ? _cwdEl.value : 'prompt';
+    // openWQ debug-mode override (default OFF — diagnostics are a drag here).
+    var _rmdEl = document.getElementById('run_mode_debug');
+    s.run_mode_debug = _rmdEl ? !!_rmdEl.checked : false;
     // Calibration / validation period split (from the slider).  The hidden
     // inputs are populated by the slider JS in 'YYYY-MM-DD HH:MM' format.
     var _ucpEl = document.getElementById('use_calibration_period');
@@ -2345,6 +2383,12 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                  : (_cwdMode === 'keep') ? 'False' : 'None';
     lines.push('clean_work_dir = ' + _cwdRepr);
     lines.push('');
+    lines.push('# openWQ debug-mode override for calibration. The model config may');
+    lines.push('# set run_mode_debug=True (useful when configuring), but it makes');
+    lines.push('# openWQ write 5 extra diagnostic HDF5 files per species/compartment');
+    lines.push('# - a big speed/memory/output drag. Forced OFF here unless ticked.');
+    lines.push('run_mode_debug = ' + pyRepr(!!s.run_mode_debug));
+    lines.push('');
     lines.push('# Calibration window (start, end) that each evaluation simulates.');
     lines.push('# Restricting the per-eval period keeps runtime + memory low and');
     lines.push('# avoids out-of-memory kills from full multi-year runs (openWQ');
@@ -2483,6 +2527,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        sensitivity_threshold=sensitivity_threshold,');
     lines.push('        resume=args.resume,');
     lines.push('        clean_work_dir=clean_work_dir,');
+    lines.push('        # Force openWQ debug mode off (default) so evals skip the');
+    lines.push('        # 5 diagnostic HDF5 files per species/compartment.');
+    lines.push('        run_mode_debug=run_mode_debug,');
     lines.push('        # Per-eval calibration window (None = full model period).');
     lines.push('        calibration_period=calibration_period,');
     lines.push('        temporal_resolution=temporal_resolution,');
@@ -3009,6 +3056,35 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var aStartF = frac(aStart), aEndF = frac(aEnd);
     var splitF = (aStartF + aEndF) / 2;   // default: middle of obs period
 
+    // Observation timestamps (epoch ms) per species → live in-window count.
+    // Counts only the SELECTED target species when any are ticked, else all
+    // species present in the obs data.  (Optimistic: spatial / primary-only
+    // filtering happens at run time, so this is an upper bound, but it
+    // cleanly separates an empty window from a populated one.)
+    var OBS_MS = (OBS_PERIOD && OBS_PERIOD.dates_by_species) || {};
+    function selectedSpecies() {
+      var sel = [];
+      document.querySelectorAll('.species-cb:checked').forEach(function(cb) {
+        if (cb.dataset && cb.dataset.species) sel.push(cb.dataset.species);
+      });
+      return sel;
+    }
+    function countObs(loMs, hiMs) {
+      var keys = Object.keys(OBS_MS);
+      if (keys.length === 0) return null;   // no per-species obs dates available
+      var sp = selectedSpecies();
+      var use = sp.length ? keys.filter(function(k){ return sp.indexOf(k) >= 0; }) : keys;
+      if (use.length === 0) use = keys;     // selected species absent in obs → count all
+      var n = 0;
+      use.forEach(function(k) {
+        var arr = OBS_MS[k];
+        for (var i = 0; i < arr.length; i++) {
+          if (arr[i] >= loMs && arr[i] <= hiMs) n++;
+        }
+      });
+      return n;
+    }
+
     function render() {
       var pct = function(f) { return (f * 100) + '%'; };
       var gl = document.getElementById('segGrayLeft');
@@ -3022,8 +3098,16 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       handle.style.left = pct(splitF);
 
       var cEnd = dateAtFrac(splitF);
-      document.getElementById('calibWindowText').textContent = fmt(aStart) + '  →  ' + fmt(cEnd);
-      document.getElementById('valWindowText').textContent   = fmt(cEnd)   + '  →  ' + fmt(aEnd);
+      var cN = countObs(aStart.getTime(), cEnd.getTime());
+      var vN = countObs(cEnd.getTime(), aEnd.getTime());
+      var cSuf = (cN === null) ? '' : ('  ·  ' + cN + ' obs');
+      var vSuf = (vN === null) ? '' : ('  ·  ' + vN + ' obs');
+      var cEl = document.getElementById('calibWindowText');
+      cEl.textContent = fmt(aStart) + '  →  ' + fmt(cEnd) + cSuf;
+      // Flag an empty calibration window (no eligible obs) in red.
+      cEl.style.color = (cN === 0) ? 'var(--danger, #dc2626)' : '';
+      cEl.style.fontWeight = (cN === 0) ? '700' : '';
+      document.getElementById('valWindowText').textContent   = fmt(cEnd)   + '  →  ' + fmt(aEnd) + vSuf;
       document.getElementById('calibAxisStart').textContent  = fmt(lo);
       document.getElementById('calibAxisEnd').textContent    = fmt(hi);
       document.getElementById('calibration_period_start').value = fmt(aStart);
@@ -3064,6 +3148,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
         if (typeof updateScript === 'function') updateScript();
       });
     }
+
+    // Re-count when the target-species selection changes (Targets tab).
+    document.querySelectorAll('.species-cb').forEach(function(cb) {
+      cb.addEventListener('change', render);
+    });
 
     render();
   })();

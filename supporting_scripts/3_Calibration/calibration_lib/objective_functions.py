@@ -279,6 +279,38 @@ class ObjectiveFunction:
         logger.debug(f"Objective: {weighted_obj:.6f} (species objectives: {objectives})")
         return weighted_obj
 
+    @staticmethod
+    def _normalize_feature_id(raw):
+        """Normalise an openWQ feature/column ID so it matches the integer
+        observation ``reach_id``.
+
+        Handles:
+          * ``bytes`` -> ``str``
+          * ``hruId_`` / ``reachID_`` prefixes (library column names)
+          * SUMMA vertical-zone / soil-layer suffixes, e.g. ``1_z1`` -> ``1``
+            (so every layer of HRU 1 maps to HRU 1, matching the obs HRU id)
+
+        Returns an ``int`` when possible (obs ``reach_id`` is integer),
+        otherwise the cleaned string (so non-numeric ids still flow through
+        rather than being silently dropped).
+        """
+        import re
+        s = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
+        s = s.strip()
+        for pre in ("hruId_", "reachID_", "hruid_", "reachid_"):
+            if s.startswith(pre):
+                s = s[len(pre):]
+                break
+        # Strip a trailing vertical zone / layer tag like '_z1', '_Z12'.
+        s = re.sub(r"_z\d+$", "", s, flags=re.IGNORECASE)
+        try:
+            return int(s)
+        except ValueError:
+            try:
+                return int(float(s))
+            except ValueError:
+                return s
+
     def _extract_simulated(self,
                            output_dir: Path,
                            units: str) -> pd.DataFrame:
@@ -330,16 +362,11 @@ class ObjectiveFunction:
                             continue
                         # df has time index and columns like
                         # "reachID_123" (mizuRoute) or "hruId_123" (SUMMA).
-                        _col_prefix = f"{self.h5_mapping_key}_"
                         for col in df.columns:
-                            if col.startswith(_col_prefix):
-                                reach_id = col[len(_col_prefix):]
-                            else:
-                                reach_id = col.replace("reachID_", "")
-                            try:
-                                reach_id = int(reach_id)
-                            except ValueError:
-                                continue
+                            # SUMMA writes zoned HRU ids like 'hruId_1_z1';
+                            # normalise to the base feature id (int 1) so it
+                            # matches the integer observation 'reach_id'.
+                            reach_id = self._normalize_feature_id(col)
 
                             for dt, val in df[col].items():
                                 all_data.append({
@@ -424,10 +451,10 @@ class ObjectiveFunction:
                                 data = data[0, :]
 
                             for i, reach_id in enumerate(reach_ids):
-                                try:
-                                    rid = int(reach_id)
-                                except:
-                                    continue
+                                # Normalise SUMMA zoned HRU ids ('1_z1' -> 1)
+                                # / strip 'reachID_' etc. so they match the
+                                # integer observation 'reach_id'.
+                                rid = self._normalize_feature_id(reach_id)
 
                                 val = data[i] if i < len(data) else np.nan
                                 if val == self.no_data_flag:

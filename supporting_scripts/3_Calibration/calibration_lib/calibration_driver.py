@@ -252,6 +252,21 @@ def run_calibration(
         _container = config_integration.get_container_config(model_config)
         _obs = config_integration.get_observation_config(model_config)
 
+        # Calibration override for openWQ debug mode.  The model config may
+        # set run_mode_debug=True (handy when configuring/testing), but it
+        # makes openWQ write 5 extra diagnostic HDF5 files per
+        # species/compartment (chemistry/transport/ewf/ic/ss) — a big
+        # speed / memory / output drag across many evaluations.  Default OFF;
+        # the user can re-enable it via the setup-report checkbox.  Mutating
+        # the shared model_config here propagates to every per-eval config
+        # (generate_config_for_eval deep-copies this dict).
+        _rmd = kwargs.get("run_mode_debug")
+        if _rmd is not None:
+            model_config["run_mode_debug"] = bool(_rmd)
+            logger.info(
+                f"openWQ debug mode (run_mode_debug) overridden to "
+                f"{bool(_rmd)} for calibration evaluations")
+
         # Fill in any blanks from model_config
         container_runtime = container_runtime or "docker"
         executable_full_path = executable_full_path or _container.get("executable_path", "")
@@ -926,6 +941,13 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
 
     _model_config = kwargs.get('model_config')
     _container_runtime = kwargs.get('container_runtime', 'docker')
+
+    # Calibration override for openWQ debug mode (see run_calibration) — keeps
+    # evaluations from writing the 5 extra diagnostic HDF5 files per
+    # species/compartment.  Default OFF; user-overridable via the report.
+    _rmd = kwargs.get("run_mode_debug")
+    if _rmd is not None and _model_config is not None:
+        _model_config["run_mode_debug"] = bool(_rmd)
 
     # Initialize components (same as run_calibration)
     param_handler = ParameterHandler(

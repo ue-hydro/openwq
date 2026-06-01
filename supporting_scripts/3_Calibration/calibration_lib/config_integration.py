@@ -460,6 +460,7 @@ def get_observation_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_observation_period(model_config: Dict[str, Any],
+                           work_dir: Optional[str] = None,
                            log=None) -> Optional[Dict[str, Any]]:
     """Return the time span covered by the available observation data.
 
@@ -471,15 +472,45 @@ def get_observation_period(model_config: Dict[str, Any],
     Returns
     -------
     Optional[Dict[str, Any]]
-        ``{"obs_start": "YYYY-MM-DD HH:MM", "obs_end": ..., "n_obs": int}``
-        or ``None`` when no observation data / dates can be found.
+        ``{"obs_start": "YYYY-MM-DD HH:MM", "obs_end": ..., "n_obs": int,
+        "dates_by_species": {species: [epoch_ms, ...]}}`` or ``None`` when no
+        observation data / dates can be found.  ``dates_by_species`` lets the
+        setup-report slider show a live "observations in window" count that
+        updates with the selected target species.
     """
     import pandas as pd
     _log = log or (lambda *a, **k: None)
     source = model_config.get("observation_data_source", "skip")
-    dates = None
+    dd = None   # DataFrame with columns: datetime, species
+
+    # 1) Prefer the already-prepared objective CSV in the calibration work
+    #    dir — it carries the ``is_primary`` flag, so the slider's range and
+    #    in-window count reflect exactly the observations the metric uses by
+    #    default (primary / pouring-point stations).  This makes the
+    #    calibratable range START at the first primary obs, structurally
+    #    preventing the user from choosing a window the metric can't score.
+    #    Only present after a prior run; first-time setup falls back to (2).
     try:
-        if source == "grqa":
+        if work_dir:
+            _prep = os.path.join(work_dir, 'calibration_observations.csv')
+            if os.path.isfile(_prep):
+                pf = pd.read_csv(_prep)
+                if 'datetime' in pf.columns and 'species' in pf.columns:
+                    if 'is_primary' in pf.columns:
+                        pf = pf[pf['is_primary'].fillna(True).astype(bool)]
+                    dd = pd.DataFrame({
+                        'datetime': pd.to_datetime(pf['datetime'], errors='coerce'),
+                        'species': pf['species'].astype(str),
+                    }).dropna(subset=['datetime'])
+                    if len(dd) == 0:
+                        dd = None
+    except Exception as exc:
+        _log(f"Could not read prepared observation CSV: {exc}")
+        dd = None
+
+    # 2) Fallback: the raw clipped GRQA / user observation CSV.
+    try:
+        if dd is None and source == "grqa":
             dir2save = model_config.get('dir2save_input_files')
             if not dir2save:
                 exe = model_config.get('executable_path', '')
@@ -493,33 +524,58 @@ def get_observation_period(model_config: Dict[str, Any],
                     col = ('obs_date' if 'obs_date' in df.columns
                            else ('datetime' if 'datetime' in df.columns
                                  else None))
+                    spc = ('model_species' if 'model_species' in df.columns
+                           else ('species' if 'species' in df.columns else None))
                     if col:
-                        dates = pd.to_datetime(df[col], errors='coerce').dropna()
-        elif source == "user_csv":
+                        dd = pd.DataFrame({
+                            'datetime': pd.to_datetime(df[col], errors='coerce'),
+                            'species': (df[spc].astype(str) if spc else 'all'),
+                        }).dropna(subset=['datetime'])
+        elif dd is None and source == "user_csv":
             csv_path = model_config.get('user_observation_csv')
             if csv_path and os.path.isfile(csv_path):
                 df = pd.read_csv(csv_path)
                 cols = {c.lower(): c for c in df.columns}
+                spc_c = cols.get('parameter') or cols.get('species')
+                _spc = (df[spc_c].astype(str) if spc_c else 'all')
                 if 'datetime' in cols:
-                    dates = pd.to_datetime(df[cols['datetime']],
-                                           errors='coerce').dropna()
+                    dt = pd.to_datetime(df[cols['datetime']], errors='coerce')
+                    dd = pd.DataFrame({'datetime': dt, 'species': _spc}
+                                      ).dropna(subset=['datetime'])
                 elif all(k in cols for k in ('year', 'month', 'day')):
                     parts = pd.DataFrame({
                         'year': pd.to_numeric(df[cols['year']], errors='coerce'),
                         'month': pd.to_numeric(df[cols['month']], errors='coerce'),
                         'day': pd.to_numeric(df[cols['day']], errors='coerce'),
-                    }).dropna()
-                    dates = pd.to_datetime(parts, errors='coerce').dropna()
+                    })
+                    dt = pd.to_datetime(parts, errors='coerce')
+                    dd = pd.DataFrame({'datetime': dt, 'species': _spc}
+                                      ).dropna(subset=['datetime'])
     except Exception as exc:
         _log(f"Could not determine observation period: {exc}")
         return None
 
-    if dates is None or len(dates) == 0:
+    if dd is None or len(dd) == 0:
         return None
+
+    dates = dd['datetime']
+    # Epoch-ms timestamps grouped by species → powers the slider's live
+    # "observations in window" count.  Cap per species to keep the embedded
+    # payload small (the count stays representative for window selection).
+    _MAX_PER_SP = 6000
+    dates_by_species: Dict[str, list] = {}
+    for sp, grp in dd.groupby('species'):
+        ms = (grp['datetime'].astype('int64') // 1_000_000).tolist()
+        if len(ms) > _MAX_PER_SP:
+            step = len(ms) // _MAX_PER_SP + 1
+            ms = ms[::step]
+        dates_by_species[str(sp)] = ms
+
     return {
         "obs_start": dates.min().strftime('%Y-%m-%d %H:%M'),
         "obs_end": dates.max().strftime('%Y-%m-%d %H:%M'),
         "n_obs": int(len(dates)),
+        "dates_by_species": dates_by_species,
     }
 
 
