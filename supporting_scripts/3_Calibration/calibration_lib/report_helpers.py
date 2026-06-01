@@ -1304,6 +1304,20 @@ def get_interactive_layout_css() -> str:
         min-height: 100%;
         font-size: .78rem;
         line-height: 1.55;
+        /* Wrap long lines by default so the ENTIRE generated script is
+           visible without horizontal scrolling (the pane is narrow and the
+           horizontal scrollbar would otherwise sit far below the fold).
+           The "Wrap" header toggle adds .nowrap to switch to single-line
+           code with a horizontal scrollbar instead. */
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    .script-pane-body pre.code-block.nowrap {
+        white-space: pre;
+        overflow-wrap: normal;
+        word-break: normal;
+        overflow-x: auto;
     }
 
     /* ── Action Bar (Bottom) ────────────────────────────────── */
@@ -2820,10 +2834,14 @@ def _bgc_diagram_js() -> str:
       };
     }
 
-    /* Wheel zoom (disabled when locked) */
+    /* Wheel zoom (disabled when locked).  When locked we must NOT call
+       preventDefault — otherwise the wheel event is swallowed and the page
+       can't scroll past the diagram.  Returning early lets the browser
+       scroll the page normally; only an unlocked diagram captures the
+       wheel to zoom. */
     svg.addEventListener('wheel', function(e){
-      e.preventDefault();
       if(zoomLocked) return;
+      e.preventDefault();
       var pt = svgPt(e);
       var factor = e.deltaY > 0 ? 1.15 : 1/1.15;
       var nw = curVB.w * factor;

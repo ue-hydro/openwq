@@ -337,15 +337,18 @@ def generate_config_for_eval(
     for k in keys_to_remove:
         eval_config.pop(k, None)
 
-    # Remove non-Gen_Input_Driver keys that may be in the config
-    # (report-related, executable path, etc.)
-    for k in ('executable_path', 'file_manager_path',
-              'generate_report', 'open_report',
+    # Remove report-only keys that Gen_Input_Driver does not consume.
+    #
+    # NOTE: do NOT drop ``file_manager_path`` — Gen_Input_Driver reads it
+    # (via **kwargs) to auto-detect the simulation period for the Copernicus
+    # source/sink loads when ``ss_method_copernicus_period`` is None.  It is
+    # one of the model-config settings that must be carried over, exactly as
+    # the model-config script passes it when run directly.  (``executable_path``
+    # is kept too — harmless via **kwargs and lets any executable-relative
+    # derivation behave as in the user's own run.)
+    for k in ('generate_report', 'open_report',
               'river_network_shapefile',
-              # Report-side configuration not consumed by Gen_Input_Driver
-              # (was previously dropped by the except-TypeError fallback,
-              # which masked legitimate signature mismatches — list it
-              # explicitly instead).
+              # Report-side configuration not consumed by Gen_Input_Driver.
               'river_network_mapping_key',
               'observation_compartments',
               'observation_data_source', 'grqa_local_data_path',
@@ -353,26 +356,43 @@ def generate_config_for_eval(
               'mpi_np', 'ss_method_copernicus_use_proxy_if_outside_range'):
         eval_config.pop(k, None)
 
-    # Call Gen_Input_Driver
+    # Run Gen_Input_Driver with the cwd set to the model-config's own
+    # directory, so RELATIVE paths inside the model config (e.g.
+    # path2selected_NATIVE_BGC_FLEX_framework =
+    # "config_support_lib/BGC_templates/…/SWAT_full_nutrients.json") resolve
+    # exactly as they do when the user runs the model-config script from
+    # that directory.  This mirrors load_model_config(), which exec's the
+    # config with cwd set to its directory.  Output still goes to the
+    # (absolute) eval_dir via dir2save_input_files, so cwd doesn't affect it.
+    _mcp = model_config.get('_model_config_path')
+    _cfg_dir = os.path.dirname(os.path.abspath(_mcp)) if _mcp else None
+    _old_cwd = os.getcwd()
     try:
-        gJSON_lib.Gen_Input_Driver(**eval_config)
-    except TypeError as e:
-        # If there are unexpected kwargs, filter them out and retry
-        logger.warning(f"Gen_Input_Driver got unexpected kwargs: {e}")
-        # Get the function signature to determine valid kwargs
-        import inspect
-        sig = inspect.signature(gJSON_lib.Gen_Input_Driver)
-        valid_params = set(sig.parameters.keys())
-        has_var_keyword = any(
-            p.kind == inspect.Parameter.VAR_KEYWORD
-            for p in sig.parameters.values()
-        )
-        if not has_var_keyword:
-            filtered = {k: v for k, v in eval_config.items()
-                        if k in valid_params}
-            gJSON_lib.Gen_Input_Driver(**filtered)
-        else:
-            raise
+        if _cfg_dir and os.path.isdir(_cfg_dir):
+            os.chdir(_cfg_dir)
+
+        # Call Gen_Input_Driver
+        try:
+            gJSON_lib.Gen_Input_Driver(**eval_config)
+        except TypeError as e:
+            # If there are unexpected kwargs, filter them out and retry
+            logger.warning(f"Gen_Input_Driver got unexpected kwargs: {e}")
+            # Get the function signature to determine valid kwargs
+            import inspect
+            sig = inspect.signature(gJSON_lib.Gen_Input_Driver)
+            valid_params = set(sig.parameters.keys())
+            has_var_keyword = any(
+                p.kind == inspect.Parameter.VAR_KEYWORD
+                for p in sig.parameters.values()
+            )
+            if not has_var_keyword:
+                filtered = {k: v for k, v in eval_config.items()
+                            if k in valid_params}
+                gJSON_lib.Gen_Input_Driver(**filtered)
+            else:
+                raise
+    finally:
+        os.chdir(_old_cwd)
 
 
 def get_observation_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -507,6 +527,275 @@ def get_spatial_mapping(model_config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def prepare_calibration_observations_csv(model_config: Dict[str, Any],
+                                         output_dir: str,
+                                         log=None) -> Optional[str]:
+    """Resolve a calibration-ready observations CSV straight from the model
+    config the user set up, honouring ``observation_data_source``:
+
+      * ``"grqa"``    → reshape the GRQA data the model-config setup already
+                        clipped to the basin (folder *or* "auto" download —
+                        both end up in ``openwq_in/grqa_clipped_data/``).
+      * ``"user_csv"``→ reshape the user-provided CSV
+                        (``user_observation_csv``).
+      * ``"skip"``    → no observations.
+
+    All paths come from ``model_config`` (no re-download).  Returns the path
+    to ``<output_dir>/calibration_observations.csv`` or ``None`` when nothing
+    is configured / preparable.
+    """
+    src = (model_config.get('observation_data_source') or 'skip').strip().lower()
+    if src == 'grqa':
+        return prepare_grqa_calibration_csv(model_config, output_dir, log)
+    if src == 'user_csv':
+        return prepare_user_csv_calibration_csv(model_config, output_dir, log)
+    return None
+
+
+def _match_and_write_obs(model_config: Dict[str, Any],
+                         station_locations: Dict[str, tuple],
+                         records: List[Dict[str, Any]],
+                         output_dir: str,
+                         source_prefix: str,
+                         log=None) -> Optional[str]:
+    """Match station locations → model feature (mizuRoute reach / SUMMA HRU)
+    with the SAME shared ``spatial_matching`` helper the results-report map
+    uses, then write the objective-format CSV
+    (``datetime, reach_id, species, value, units, source, is_primary``).
+
+    ``records`` is a list of dicts with keys
+    ``site_id, datetime, species, value, units``.  Returns the CSV path or
+    ``None`` on failure.
+    """
+    import pandas as pd
+    _log = log or (lambda *a, **k: None)
+    if not station_locations or not records:
+        _log("No stations / records to prepare observations from.")
+        return None
+
+    spatial = get_spatial_mapping(model_config)
+    hostmodel = spatial.get('hostmodel', '')
+    obs_cfg = get_observation_config(model_config)
+    river_shp = obs_cfg.get('river_network_shapefile')
+    basin_shp = obs_cfg.get('basin_shapefile')
+
+    # Lazy imports (avoid a circular import with the results-report module,
+    # and keep config_integration importable without geopandas/fiona).
+    try:
+        from .Gen_Calibration_Results_Report import (
+            _import_spatial_matching, _load_shapefile_as_geojson)
+        sm = _import_spatial_matching()
+    except Exception as e:  # pragma: no cover - defensive
+        _log(f"spatial_matching unavailable for obs preparation: {e}")
+        return None
+
+    river_gj = _load_shapefile_as_geojson(river_shp)[0] if river_shp else None
+    basin_gj = _load_shapefile_as_geojson(basin_shp)[0] if basin_shp else None
+
+    s2f, primary = sm.match_stations(
+        station_locations,
+        hostmodel=hostmodel,
+        river_geojson=river_gj,
+        basin_geojson=basin_gj,
+        river_mapping_key=spatial.get('river_network_mapping_key') or 'SegId',
+        basin_mapping_key=spatial.get('basin_mapping_key') or 'HRU_ID',
+        log=_log,
+    )
+    if not s2f:
+        _log("No observation stations matched a model feature.")
+        return None
+
+    rows = []
+    for rec in records:
+        sid = str(rec.get('site_id', ''))
+        feat = s2f.get(sid)
+        if not feat:
+            continue
+        rows.append({
+            'datetime': rec.get('datetime'),
+            'reach_id': feat,
+            'species': rec.get('species'),
+            'value': rec.get('value'),
+            'units': rec.get('units', ''),
+            'source': f'{source_prefix}:{sid}',
+            'is_primary': sid in primary,
+        })
+    if not rows:
+        _log("No observations fell on a matched feature.")
+        return None
+
+    out_df = pd.DataFrame(rows).dropna(
+        subset=['datetime', 'value', 'species', 'reach_id'])
+    if out_df.empty:
+        return None
+
+    os.makedirs(output_dir, exist_ok=True)
+    out_path = os.path.join(output_dir, 'calibration_observations.csv')
+    out_df.to_csv(out_path, index=False)
+    _log(f"Prepared {len(out_df)} calibration observations "
+         f"({out_df['reach_id'].nunique()} features, "
+         f"{out_df['species'].nunique()} species) → {out_path}")
+    return out_path
+
+
+def prepare_grqa_calibration_csv(model_config: Dict[str, Any],
+                                 output_dir: str,
+                                 log=None) -> Optional[str]:
+    """Reshape the GRQA observations already extracted by the model-config
+    setup into the objective-function CSV format — *no re-download*.
+
+    When the user runs their model-config script, ``Gen_Report`` clips the
+    GRQA database (folder *or* "auto" Zenodo download) to the basin and
+    writes::
+
+        <dir2save_input_files>/openwq_in/grqa_clipped_data/
+            grqa_clipped_observations.csv   (station-based: obs_date, site_id,
+                                             model_species, obs_value, unit …)
+            grqa_clipped_stations.csv       (site_id, lat_wgs84, lon_wgs84 …)
+
+    Returns the prepared CSV path, or ``None`` when the clipped data is
+    absent (caller surfaces a clear "run the model-config setup first"
+    message).
+    """
+    import pandas as pd
+    _log = log or (lambda *a, **k: None)
+
+    dir2save = model_config.get('dir2save_input_files')
+    if not dir2save:
+        exe = model_config.get('executable_path', '')
+        dir2save = os.path.dirname(os.path.abspath(exe)) if exe else None
+    if not dir2save:
+        return None
+
+    clipped_dir = os.path.join(dir2save, 'openwq_in', 'grqa_clipped_data')
+    obs_csv = os.path.join(clipped_dir, 'grqa_clipped_observations.csv')
+    stn_csv = os.path.join(clipped_dir, 'grqa_clipped_stations.csv')
+    if not os.path.isfile(obs_csv):
+        _log(f"No clipped GRQA observations at {obs_csv}")
+        return None
+
+    obs = pd.read_csv(obs_csv)
+    if obs.empty:
+        _log("Clipped GRQA observations CSV is empty.")
+        return None
+
+    # Column aliases (clipped/GRQA names → objective names)
+    date_col = 'obs_date' if 'obs_date' in obs.columns else 'datetime'
+    spc_col = 'model_species' if 'model_species' in obs.columns else 'species'
+    val_col = 'obs_value' if 'obs_value' in obs.columns else 'value'
+    unit_col = next((c for c in ('unit', 'units') if c in obs.columns), None)
+    lat_col = 'lat_wgs84' if 'lat_wgs84' in obs.columns else 'lat'
+    lon_col = 'lon_wgs84' if 'lon_wgs84' in obs.columns else 'lon'
+
+    # Station locations {site_id: (lat, lon)} — from the stations CSV, or
+    # derived from the observations as a fallback.
+    station_locations: Dict[str, tuple] = {}
+    if os.path.isfile(stn_csv):
+        st = pd.read_csv(stn_csv)
+        s_lat = 'lat_wgs84' if 'lat_wgs84' in st.columns else 'lat'
+        s_lon = 'lon_wgs84' if 'lon_wgs84' in st.columns else 'lon'
+        for _, r in st.iterrows():
+            sid = str(r.get('site_id', ''))
+            if sid:
+                try:
+                    station_locations[sid] = (float(r[s_lat]), float(r[s_lon]))
+                except (TypeError, ValueError, KeyError):
+                    pass
+    if not station_locations and lat_col in obs.columns and lon_col in obs.columns:
+        for sid, grp in obs.groupby('site_id'):
+            r = grp.iloc[0]
+            try:
+                station_locations[str(sid)] = (float(r[lat_col]), float(r[lon_col]))
+            except (TypeError, ValueError):
+                pass
+
+    records = [{
+        'site_id': str(r.get('site_id', '')),
+        'datetime': r.get(date_col),
+        'species': r.get(spc_col),
+        'value': r.get(val_col),
+        'units': (r.get(unit_col) if unit_col else ''),
+    } for _, r in obs.iterrows()]
+
+    return _match_and_write_obs(
+        model_config, station_locations, records, output_dir, 'GRQA', _log)
+
+
+def prepare_user_csv_calibration_csv(model_config: Dict[str, Any],
+                                     output_dir: str,
+                                     log=None) -> Optional[str]:
+    """Reshape the user-provided observation CSV into the objective format.
+
+    Expected user columns (case-insensitive, any order, as documented in the
+    model-config template)::
+
+        station_id, lat, lon, parameter, year, month, day, minute, value, units
+
+    Each station is matched to its model feature with the shared
+    ``spatial_matching`` helper.  If the CSV is ALREADY in objective format
+    (has both ``datetime`` and ``reach_id`` columns) it is returned as-is.
+    Returns the prepared CSV path or ``None``.
+    """
+    import pandas as pd
+    _log = log or (lambda *a, **k: None)
+
+    csv_path = model_config.get('user_observation_csv')
+    if not csv_path or not os.path.isfile(csv_path):
+        _log(f"User observation CSV not found: {csv_path}")
+        return None
+
+    df = pd.read_csv(csv_path)
+    if df.empty:
+        _log("User observation CSV is empty.")
+        return None
+
+    cols = {c.lower(): c for c in df.columns}
+
+    # Already in objective format → use as-is (no reshape needed).
+    if 'datetime' in cols and 'reach_id' in cols:
+        _log("User CSV already in objective format; using as-is.")
+        return csv_path
+
+    required = ['station_id', 'lat', 'lon', 'parameter', 'year', 'month',
+                'day', 'value']
+    missing = [n for n in required if n not in cols]
+    if missing:
+        _log(f"User CSV missing required columns {missing}; cannot reshape.")
+        return None
+
+    def C(name):
+        return cols.get(name)
+
+    station_locations: Dict[str, tuple] = {}
+    for sid, grp in df.groupby(C('station_id')):
+        r = grp.iloc[0]
+        try:
+            station_locations[str(sid)] = (float(r[C('lat')]), float(r[C('lon')]))
+        except (TypeError, ValueError):
+            pass
+
+    minute_c = cols.get('minute')
+    unit_c = cols.get('units') or cols.get('unit')
+    records = []
+    for _, r in df.iterrows():
+        try:
+            y = int(r[C('year')]); mo = int(r[C('month')]); d = int(r[C('day')])
+            mins = int(r[minute_c]) if (minute_c and pd.notna(r[minute_c])) else 0
+            dt = pd.Timestamp(year=y, month=mo, day=d) + pd.Timedelta(minutes=mins)
+        except (TypeError, ValueError):
+            continue
+        records.append({
+            'site_id': str(r[C('station_id')]),
+            'datetime': dt.isoformat(sep=' '),
+            'species': r[C('parameter')],
+            'value': r[C('value')],
+            'units': (r[unit_c] if unit_c else ''),
+        })
+
+    return _match_and_write_obs(
+        model_config, station_locations, records, output_dir, 'USER', _log)
+
+
 def get_container_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extract container runtime configuration from the model config.
@@ -526,8 +815,18 @@ def get_container_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
     Dict[str, Any]
         Container config with keys matching calibration_driver expectations.
     """
-    # Try to derive docker_compose_path from the executable location.
-    # Layout: .../openwq/bin/exe → .../openwq/containers/docker-compose.yml
+    # Resolve docker_compose_path.  Needed so ModelRunner parses the SAME
+    # host→/code volume mount the container actually uses (otherwise it falls
+    # back to a wrong ~→/code guess and the per-eval `cd` into the container
+    # fails).  Try, in order:
+    #   1. an explicit model-config value;
+    #   2. .../openwq/bin/exe → .../openwq/containers/docker-compose.yml
+    #      (only works when the executable lives inside the openWQ repo);
+    #   3. the openWQ repo's containers/ dir relative to THIS file
+    #      (config_integration lives at
+    #       <openwq>/supporting_scripts/3_Calibration/calibration_lib/), which
+    #      is the robust path when the executable is a host-model binary in a
+    #      domain folder (e.g. SUMMA/mizuRoute).
     docker_compose = model_config.get("docker_compose_path", "")
     if not docker_compose:
         exe = model_config.get("executable_path", "")
@@ -536,6 +835,13 @@ def get_container_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
             _candidate = os.path.join(_openwq_root, "containers", "docker-compose.yml")
             if os.path.isfile(_candidate):
                 docker_compose = _candidate
+    if not docker_compose:
+        _here = os.path.dirname(os.path.abspath(__file__))
+        # calibration_lib → 3_Calibration → supporting_scripts → <openwq>
+        _openwq = os.path.dirname(os.path.dirname(os.path.dirname(_here)))
+        _candidate = os.path.join(_openwq, "containers", "docker-compose.yml")
+        if os.path.isfile(_candidate):
+            docker_compose = _candidate
 
     return {
         "executable_path": model_config.get("executable_path", ""),

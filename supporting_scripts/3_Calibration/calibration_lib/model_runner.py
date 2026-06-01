@@ -24,9 +24,10 @@ Executes OpenWQ model in Docker or Apptainer containers.
 import subprocess
 import os
 import time
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import shutil
 
@@ -49,6 +50,7 @@ class ModelRunner:
                  file_manager_path: str = None,
                  executable_full_path: str = None,
                  command_template: str = None,
+                 hostmodel: str = "",
                  timeout_seconds: int = 7200):
         """
         Initialize model runner.
@@ -91,6 +93,10 @@ class ModelRunner:
         self.file_manager_path = file_manager_path
         self.executable_full_path = executable_full_path
         self.command_template = command_template
+        # Host model governs how the control file is passed to the executable:
+        #   SUMMA      → `-m <fileManager>`   (master-file flag)
+        #   mizuRoute  → `<control_file>`     (positional argument)
+        self.hostmodel = (hostmodel or "").lower()
         self.timeout_seconds = timeout_seconds
 
         # Parse Docker compose to get volume mapping
@@ -172,25 +178,50 @@ class ModelRunner:
 
         Uses docker exec to run the model. Expects container is already running.
         """
-        # Convert eval_dir to container path
-        eval_dir_abs = str(eval_dir.resolve())
+        # Host→container path mapper, matching the docker-compose volume
+        # mount (e.g. /Users/me/Documents -> /code).  EVERY host path handed
+        # to the container (eval dir, executable, control file) must be
+        # rewritten, otherwise the container can't find them.
         if self.docker_host_path:
-            container_eval_dir = eval_dir_abs.replace(
-                self.docker_host_path, self.docker_container_path)
+            _hroot, _croot = self.docker_host_path, self.docker_container_path
         else:
-            # Fallback: assume /code mapping
-            container_eval_dir = eval_dir_abs.replace(
-                str(Path.home()), "/code")
+            # Fallback: assume the user's home dir maps to /code.
+            _hroot, _croot = str(Path.home()), "/code"
 
+        def _to_container(p):
+            return str(p).replace(_hroot, _croot) if p else p
+
+        eval_dir_abs = str(eval_dir.resolve())
+        container_eval_dir = _to_container(eval_dir_abs)
         container_master_json = f"{container_eval_dir}/openWQ_master.json"
 
-        # Build the command
-        # Determine executable path
+        # Executable path inside the container.
         if self.executable_full_path:
-            exec_path = self.executable_full_path
+            exec_path = _to_container(self.executable_full_path)
         else:
             # Default: assume it's in the standard bin directory
             exec_path = f"{self.docker_container_path}/openwq_code/6_mizuroute_cslm_openwq/route/build/openwq/openwq/bin/{self.executable_name}"
+
+        # Control file (host-model file manager) inside the container.
+        container_file_manager = _to_container(self.file_manager_path)
+
+        # Host-model-specific invocation:
+        #   SUMMA      → single process, control file behind the `-m` flag.
+        #                SUMMA is NOT MPI-domain-decomposed, so launching >1
+        #                rank runs duplicate simulations that collide on the
+        #                shared output (rank 0 finishes, rank 1 hits STOP 1).
+        #                `-s <suffix>` gives each evaluation a UNIQUE SUMMA
+        #                output filename in the shared outputPath, so parallel
+        #                evals don't fight over the same NetCDF/HDF5 file
+        #                (which surfaces as "Permission denied" on create).
+        #   mizuRoute  → MPI-parallel across reaches; control file positional.
+        eval_suffix = Path(eval_dir).name  # unique per eval, e.g. "eval_0000"
+        if self.hostmodel == "summa":
+            n_ranks = 1
+            model_arg = f"-m {container_file_manager} -s {eval_suffix}"
+        else:
+            n_ranks = 2
+            model_arg = f"{container_file_manager}"
 
         # Build the shell command using template or default
         if self.command_template:
@@ -198,13 +229,13 @@ class ModelRunner:
                 eval_dir=container_eval_dir,
                 exec_path=exec_path,
                 master_json=container_master_json,
-                file_manager=self.file_manager_path,
+                file_manager=container_file_manager,
                 args=self.executable_args or ""
             )
         else:
             shell_cmd = (
-                f"cd {container_eval_dir} && mpirun --allow-run-as-root -np 2 "
-                f"-x master_json {exec_path} {self.file_manager_path}"
+                f"cd {container_eval_dir} && mpirun --allow-run-as-root "
+                f"-np {n_ranks} -x master_json {exec_path} {model_arg}"
             )
 
         cmd = [
@@ -264,13 +295,26 @@ class ModelRunner:
             host_path = self.apptainer_bind_path
             container_path = "/code"
 
-        # Convert eval_dir to container path
+        # Convert host paths to their in-container equivalents (bind mount).
+        def _to_container(p):
+            return str(p).replace(host_path, container_path) if p else p
+
         eval_dir_abs = str(eval_dir.resolve())
-        container_eval_dir = eval_dir_abs.replace(host_path, container_path)
+        container_eval_dir = _to_container(eval_dir_abs)
         container_master_json = f"{container_eval_dir}/openWQ_master.json"
+        container_file_manager = _to_container(self.file_manager_path)
 
         # Build executable path
         exec_dir = f"{container_path}/route/build/openwq/openwq/bin"
+
+        # SUMMA needs `-m <fileManager>` (+ a unique `-s <suffix>` so parallel
+        # evals write distinct output files); mizuRoute takes the control file
+        # positionally.
+        if self.hostmodel == "summa":
+            model_args = ["-m", container_file_manager,
+                          "-s", Path(eval_dir).name]
+        else:
+            model_args = [container_file_manager]
 
         cmd = [
             "apptainer", "exec",
@@ -280,7 +324,7 @@ class ModelRunner:
             self.apptainer_sif_path,
             f"./{self.executable_name}",
             *self.executable_args.split(),
-            "-m", self.file_manager_path
+            *model_args
         ]
 
         logger.debug(f"Apptainer command: {' '.join(cmd)}")
@@ -321,16 +365,27 @@ class ModelRunner:
                                  eval_configs: List[Dict],
                                  n_parallel: int) -> List[Tuple[int, bool, float, str]]:
         """
-        Run multiple evaluations in parallel.
+        Run multiple (independent) evaluations concurrently.
 
-        Only works properly with Apptainer (Docker uses single container).
+        Works for **both** runtimes:
+
+        * **Docker** — each evaluation is a separate ``docker exec`` into the
+          (already-running) shared container; because every eval has its own
+          ``eval_dir`` (distinct ``openwq_in``/``openwq_out``) and the master
+          JSON is passed per-exec, concurrent runs don't collide.
+        * **Apptainer** — each evaluation is its own container instance.
+
+        Uses a thread pool (the work is subprocess-bound — ``docker exec`` /
+        ``apptainer exec`` — so the GIL is released while the model runs).
+        With ``n_parallel <= 1`` (or a single config) it runs sequentially,
+        with no pool overhead.
 
         Parameters
         ----------
         eval_configs : List[Dict]
             List of {"eval_id": int, "eval_dir": Path, "master_json": str}
         n_parallel : int
-            Number of parallel workers
+            Maximum number of concurrent model runs.
 
         Returns
         -------
@@ -338,37 +393,64 @@ class ModelRunner:
             List of (eval_id, success, runtime, error_msg)
         """
         results = []
+        total = len(eval_configs)
+        n_workers = max(1, int(n_parallel or 1))
 
-        if self.runtime == "docker":
-            # Sequential execution for Docker
-            logger.warning("Docker mode: running evaluations sequentially")
-            for config in eval_configs:
-                success, runtime, error = self.run_single_evaluation(
-                    config['eval_dir'],
-                    config['master_json'],
-                    config['eval_id']
-                )
-                results.append((config['eval_id'], success, runtime, error))
-        else:
-            # Parallel execution for Apptainer
-            with ProcessPoolExecutor(max_workers=n_parallel) as executor:
-                futures = {}
+        # ── Live progress feedback ──────────────────────────────────────
+        # Per-eval completion lines (printed as each model finishes) plus a
+        # periodic heartbeat so the user can see the run is alive even while
+        # a long model evaluation is still in flight.
+        _lock = threading.Lock()
+        _state = {"done": 0}
+        _t0 = time.time()
+        _stop_hb = threading.Event()
+
+        def _heartbeat():
+            # Fires only if a chunk takes a while; short chunks never trigger
+            # it (no log spam), long ones get a reassuring "still running".
+            while not _stop_hb.wait(15):
+                with _lock:
+                    done = _state["done"]
+                running = min(n_workers, total - done)
+                logger.info(
+                    f"    ... still running: {done}/{total} done, "
+                    f"~{running} model(s) in progress "
+                    f"(elapsed {time.time() - _t0:.0f}s)")
+
+        def _run_one(config):
+            success, runtime, error = self.run_single_evaluation(
+                config['eval_dir'], config['master_json'], config['eval_id'])
+            with _lock:
+                _state["done"] += 1
+                n_done = _state["done"]
+            status = "done " if success else "FAILED"
+            logger.info(
+                f"    [{n_done}/{total}] eval {config['eval_id']} {status} "
+                f"({runtime:.1f}s)")
+            return (config['eval_id'], success, runtime, error)
+
+        hb_thread = threading.Thread(target=_heartbeat, daemon=True)
+        hb_thread.start()
+        try:
+            if n_workers <= 1 or total <= 1:
+                # Sequential — no pool overhead (still logs each completion).
                 for config in eval_configs:
-                    future = executor.submit(
-                        self.run_single_evaluation,
-                        config['eval_dir'],
-                        config['master_json'],
-                        config['eval_id']
-                    )
-                    futures[future] = config['eval_id']
-
-                for future in as_completed(futures):
-                    eval_id = futures[future]
-                    try:
-                        success, runtime, error = future.result()
-                        results.append((eval_id, success, runtime, error))
-                    except Exception as e:
-                        results.append((eval_id, False, 0.0, str(e)))
+                    results.append(_run_one(config))
+            else:
+                logger.info(
+                    f"Running {total} evaluations with up to "
+                    f"{n_workers} in parallel ({self.runtime})...")
+                with ThreadPoolExecutor(max_workers=n_workers) as executor:
+                    futures = {executor.submit(_run_one, c): c['eval_id']
+                               for c in eval_configs}
+                    for future in as_completed(futures):
+                        eval_id = futures[future]
+                        try:
+                            results.append(future.result())
+                        except Exception as e:
+                            results.append((eval_id, False, 0.0, str(e)))
+        finally:
+            _stop_hb.set()
 
         return results
 
