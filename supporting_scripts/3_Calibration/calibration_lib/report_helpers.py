@@ -1412,6 +1412,79 @@ def get_interactive_layout_css() -> str:
             max-height: 50vh;
         }
     }
+
+    /* ── Calibration / validation period slider ─────────────── */
+    .calib-slider-wrap { margin: .4rem 0 .2rem; }
+    .calib-track {
+        position: relative;
+        height: 40px;
+        border-radius: 8px;
+        background: #e5e7eb;
+        user-select: none;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,.12);
+        overflow: hidden;
+    }
+    .calib-seg {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        transition: background .15s;
+    }
+    .calib-gray  { background: repeating-linear-gradient(
+                       45deg, #d1d5db, #d1d5db 6px, #c7ccd4 6px, #c7ccd4 12px); }
+    .calib-calib { background: linear-gradient(135deg, #2563eb, #3b82f6); }
+    .calib-valid { background: linear-gradient(135deg, #059669, #10b981); }
+    .calib-seg-label {
+        color: #fff;
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        text-shadow: 0 1px 2px rgba(0,0,0,.35);
+        pointer-events: none;
+    }
+    .calib-handle {
+        position: absolute;
+        top: -4px;
+        width: 14px;
+        height: 48px;
+        margin-left: -7px;
+        border-radius: 4px;
+        background: #fff;
+        border: 2px solid var(--dark, #1f2937);
+        box-shadow: 0 1px 4px rgba(0,0,0,.35);
+        cursor: ew-resize;
+        z-index: 3;
+    }
+    .calib-handle:hover { border-color: var(--primary, #2563eb); }
+    .calib-axis {
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        font-size: .72rem;
+        color: var(--text-light, #6b7280);
+        margin-top: .25rem;
+    }
+    .calib-window-text {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: .82rem;
+        font-weight: 600;
+        color: var(--text, #1f2937);
+    }
+    .calib-swatch {
+        display: inline-block;
+        width: 10px; height: 10px;
+        border-radius: 2px;
+        vertical-align: middle;
+        margin-left: .25rem;
+    }
+    .calib-sw-c { background: #3b82f6; }
+    .calib-sw-v { background: #10b981; }
     """
 
 

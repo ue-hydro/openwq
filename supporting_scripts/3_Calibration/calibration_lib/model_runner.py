@@ -52,6 +52,7 @@ class ModelRunner:
                  command_template: str = None,
                  hostmodel: str = "",
                  calibration_work_dir: str = None,
+                 calibration_period: Optional[Tuple[str, str]] = None,
                  timeout_seconds: int = 7200):
         """
         Initialize model runner.
@@ -98,6 +99,11 @@ class ModelRunner:
         #   SUMMA      → `-m <fileManager>`   (master-file flag)
         #   mizuRoute  → `<control_file>`     (positional argument)
         self.hostmodel = (hostmodel or "").lower()
+        # Optional (start, end) calibration window.  When set, the per-eval
+        # control file is rewritten so each evaluation simulates ONLY this
+        # window instead of the model's full period — keeps runtime + memory
+        # low and avoids OOM kills (openWQ holds its output in RAM).
+        self.calibration_period = calibration_period
         self.timeout_seconds = timeout_seconds
 
         # Reference size (bytes) of a COMPLETED evaluation's openWQ output,
@@ -119,6 +125,24 @@ class ModelRunner:
         self.docker_container_path = "/code"
         if docker_compose_path:
             self._parse_docker_compose()
+
+        # ── Automatic memory guard ──────────────────────────────────────
+        # openWQ's in-RAM footprint is far larger than its on-disk output
+        # (~10-20×) and balloons early, so running too many evals at once can
+        # exhaust the container and trigger OS OOM-kills.  We detect the
+        # container memory ceiling and a per-eval RAM estimate (persisted
+        # across runs, refined by live sampling) and cap concurrency so
+        # n_parallel × per-eval-RAM stays under the limit — auto-reducing
+        # n_parallel with a clear log line instead of dying mid-run.
+        self._mem_safety = 0.85   # fraction of the limit we allow to be used
+        self._mem_limit_gb = self._detect_mem_limit_gb()
+        self._mem_file = (Path(calibration_work_dir) / ".openwq_mem_per_eval_gb"
+                          if calibration_work_dir else None)
+        self._mem_per_eval_gb = self._load_mem_estimate()
+        if self._mem_limit_gb:
+            logger.debug(f"Memory guard: container limit ~"
+                         f"{self._mem_limit_gb:.1f} GB, per-eval estimate "
+                         f"{self._mem_per_eval_gb}.")
 
     def _parse_docker_compose(self):
         """Parse docker-compose.yml to extract volume mapping."""
@@ -239,7 +263,9 @@ class ModelRunner:
             model_arg = f"-m {fm_arg}"
         else:
             n_ranks = 2
-            model_arg = f"{container_file_manager}"
+            # Per-eval control file with the calibration window (if set).
+            eval_ctrl = self._mizuroute_eval_control(eval_dir, container_eval_dir)
+            model_arg = f"{eval_ctrl or container_file_manager}"
 
         # Build the shell command using template or default
         if self.command_template:
@@ -283,6 +309,9 @@ class ModelRunner:
                 f.write(result.stderr)
 
             if result.returncode != 0:
+                oom = self._oom_message(result.returncode, result.stderr)
+                if oom:
+                    return False, oom
                 return False, f"Exit code {result.returncode}: {result.stderr[-500:]}"
 
             # Check if output files were created
@@ -332,7 +361,8 @@ class ModelRunner:
             eval_fm = self._summa_eval_filemanager(eval_dir, container_eval_dir)
             model_args = ["-m", eval_fm or container_file_manager]
         else:
-            model_args = [container_file_manager]
+            eval_ctrl = self._mizuroute_eval_control(eval_dir, container_eval_dir)
+            model_args = [eval_ctrl or container_file_manager]
 
         cmd = [
             "apptainer", "exec",
@@ -364,6 +394,9 @@ class ModelRunner:
                 f.write(result.stderr)
 
             if result.returncode != 0:
+                oom = self._oom_message(result.returncode, result.stderr)
+                if oom:
+                    return False, oom
                 return False, f"Exit code {result.returncode}: {result.stderr[-500:]}"
 
             # Check if output files were created
@@ -422,7 +455,9 @@ class ModelRunner:
         fileManager (falls back to the baseline path on any problem).
 
         Only ``outputPath`` is rewritten; ``settingsPath`` / ``forcingPath``
-        stay pointed at the shared (read-only) inputs.
+        stay pointed at the shared (read-only) inputs.  When a calibration
+        window is set, ``simStartTime`` / ``simEndTime`` are also rewritten so
+        the eval simulates only that (short) window.
         """
         import re
         try:
@@ -433,6 +468,17 @@ class ModelRunner:
             text = re.sub(
                 r"(outputPath\s+')[^']*(')",
                 lambda m: m.group(1) + container_out + m.group(2), text)
+            # Restrict the simulation to the calibration window (if set).
+            if self.calibration_period:
+                cstart, cend = self.calibration_period
+                if cstart:
+                    text = re.sub(
+                        r"(simStartTime\s+')[^']*(')",
+                        lambda m: m.group(1) + str(cstart) + m.group(2), text)
+                if cend:
+                    text = re.sub(
+                        r"(simEndTime\s+')[^']*(')",
+                        lambda m: m.group(1) + str(cend) + m.group(2), text)
             host_fm = Path(eval_dir) / "fileManager_eval.txt"
             host_fm.write_text(text)
             # Container path of the per-eval fileManager = the eval dir's
@@ -443,6 +489,66 @@ class ModelRunner:
                 f"Could not write per-eval SUMMA fileManager ({e}); "
                 f"using the shared one.")
             return None
+
+    def _mizuroute_eval_control(self, eval_dir, container_eval_dir) -> Optional[str]:
+        """Create a per-eval mizuRoute control file with ``<sim_start>`` /
+        ``<sim_end>`` rewritten to the calibration window.  Returns its
+        CONTAINER path, or ``None`` when no window is set / on any problem
+        (caller then falls back to the baseline control file).
+
+        Only the two date tags change; every ``<*_dir>`` / file path in the
+        control file is absolute, so a copy in the eval dir resolves the same
+        inputs.
+        """
+        if not self.calibration_period:
+            return None
+        import re
+        try:
+            text = Path(self.file_manager_path).read_text()
+            cstart, cend = self.calibration_period
+
+            def _mz(s):
+                # mizuRoute expects 'YYYY-MM-DD HH:MM:SS'.
+                s = str(s).strip()
+                if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+                    return s + " 00:00:00"
+                if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$", s):
+                    return s + ":00"
+                return s
+
+            if cstart:
+                text = re.sub(r"(<sim_start>\s+)[^!\n]*",
+                              lambda m: m.group(1) + _mz(cstart) + "    ", text)
+            if cend:
+                text = re.sub(r"(<sim_end>\s+)[^!\n]*",
+                              lambda m: m.group(1) + _mz(cend) + "    ", text)
+            host_ctrl = Path(eval_dir) / "control_eval.txt"
+            host_ctrl.write_text(text)
+            return f"{container_eval_dir.rstrip('/')}/control_eval.txt"
+        except OSError as e:
+            logger.warning(
+                f"Could not write per-eval mizuRoute control file ({e}); "
+                f"using the shared one.")
+            return None
+
+    @staticmethod
+    def _oom_message(returncode, stderr) -> Optional[str]:
+        """If a failure looks like an out-of-memory kill, return an
+        actionable message; otherwise ``None``.  Exit 137 = 128 + signal 9
+        (SIGKILL), which the Linux OOM-killer uses when the container hits its
+        memory ceiling."""
+        s = stderr or ""
+        low = s.lower()
+        if (returncode == 137 or "signal 9 (killed)" in low
+                or "out of memory" in low or "oom-kill" in low
+                or "oomkill" in low):
+            return ("Killed by the OS (out of memory: exit 137 / signal 9). "
+                    "openWQ holds its output in RAM, so a long simulation "
+                    "period or too many parallel runs can exhaust container "
+                    "memory. Fixes: shorten the calibration period in the "
+                    "setup report, lower n_parallel, or give Docker / the "
+                    "container more RAM.")
+        return None
 
     @staticmethod
     def _openwq_out_bytes(eval_dir) -> int:
@@ -477,6 +583,98 @@ class ModelRunner:
             return f"{mb:.1f} MB ({pct}%)"
         return f"{mb:.1f} MB"
 
+    # ── Memory-guard helpers ────────────────────────────────────────────
+    def _detect_mem_limit_gb(self) -> Optional[float]:
+        """Best-effort container memory ceiling in GB (Docker only).
+
+        Uses the container's explicit ``HostConfig.Memory`` if set, else the
+        Docker VM total (``docker info``).  Returns ``None`` for Apptainer/HPC
+        (memory is managed by the scheduler there) or if it can't be read.
+        """
+        if self.runtime != "docker" or not self.docker_container_name:
+            return None
+        try:
+            out = subprocess.run(
+                ["docker", "inspect", self.docker_container_name,
+                 "--format", "{{.HostConfig.Memory}}"],
+                capture_output=True, text=True, timeout=15)
+            val = int((out.stdout or "0").strip() or 0)
+            if val > 0:
+                return val / (1024.0 ** 3)
+        except Exception:
+            pass
+        try:
+            out = subprocess.run(
+                ["docker", "info", "--format", "{{.MemTotal}}"],
+                capture_output=True, text=True, timeout=15)
+            val = int((out.stdout or "0").strip() or 0)
+            if val > 0:
+                return val / (1024.0 ** 3)
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _parse_mem_to_gb(s) -> Optional[float]:
+        """Parse a docker-style size ('12.54GiB', '880MiB') into GB."""
+        import re
+        m = re.match(r"\s*([0-9.]+)\s*([KMGT]?i?B)", str(s), re.I)
+        if not m:
+            return None
+        v = float(m.group(1))
+        factor = {"b": 1, "kib": 1024, "kb": 1e3, "mib": 1024 ** 2, "mb": 1e6,
+                  "gib": 1024 ** 3, "gb": 1e9, "tib": 1024 ** 4,
+                  "tb": 1e12}.get(m.group(2).lower(), 1)
+        return v * factor / (1024.0 ** 3)
+
+    def _sample_container_mem_gb(self) -> Optional[float]:
+        """Current memory used by the container (GB) via ``docker stats``."""
+        if self.runtime != "docker" or not self.docker_container_name:
+            return None
+        try:
+            out = subprocess.run(
+                ["docker", "stats", "--no-stream", "--format",
+                 "{{.MemUsage}}", self.docker_container_name],
+                capture_output=True, text=True, timeout=15)
+            used = (out.stdout or "").split("/")[0].strip()  # "12.54GiB / 16GiB"
+            return self._parse_mem_to_gb(used)
+        except Exception:
+            return None
+
+    def _load_mem_estimate(self) -> Optional[float]:
+        """Load the persisted per-eval RAM estimate (GB), if any."""
+        if not getattr(self, "_mem_file", None):
+            f = (Path(self._work_dir) / ".openwq_mem_per_eval_gb"
+                 if self._work_dir else None)
+        else:
+            f = self._mem_file
+        try:
+            if f and f.is_file():
+                return float(f.read_text().strip())
+        except Exception:
+            pass
+        return None
+
+    def _save_mem_estimate(self, gb: float):
+        """Persist the per-eval RAM estimate so later runs cap from the start."""
+        if not self._mem_file:
+            return
+        try:
+            self._mem_file.write_text(f"{gb:.3f}")
+        except Exception:
+            pass
+
+    def _effective_parallelism(self, n_requested: int, n_available: int) -> int:
+        """Cap *n_requested* so ``n × per-eval-RAM`` fits under the container
+        memory limit.  Returns it unchanged when the limit or the per-eval
+        estimate is unknown (then the probe step measures it)."""
+        n = min(max(1, int(n_requested)), max(1, int(n_available)))
+        L, E = self._mem_limit_gb, self._mem_per_eval_gb
+        if not L or not E or E <= 0:
+            return n
+        safe = max(1, int((L * self._mem_safety) // E))
+        return min(n, safe)
+
     def run_parallel_evaluations(self,
                                  eval_configs: List[Dict],
                                  n_parallel: int) -> List[Tuple[int, bool, float, str]]:
@@ -510,7 +708,26 @@ class ModelRunner:
         """
         results = []
         total = len(eval_configs)
-        n_workers = max(1, int(n_parallel or 1))
+
+        # ── Memory guard: pick a safe concurrency ───────────────────────
+        n_req = max(1, int(n_parallel or 1))
+        if (n_req > 1 and self.runtime == "docker" and self._mem_limit_gb
+                and not self._mem_per_eval_gb):
+            # No per-eval RAM estimate yet → run this chunk one-at-a-time to
+            # measure peak memory safely before ever parallelising.
+            n_workers = 1
+            logger.info(
+                f"    Memory guard: no per-eval RAM estimate yet — running "
+                f"1-at-a-time to measure peak before parallelising "
+                f"(container ~{self._mem_limit_gb:.1f} GB).")
+        else:
+            n_workers = self._effective_parallelism(n_req, total)
+            if n_workers < n_req:
+                logger.info(
+                    f"    Memory guard: reducing parallel runs {n_req} → "
+                    f"{n_workers} (~{self._mem_per_eval_gb:.1f} GB/eval, "
+                    f"container ~{self._mem_limit_gb:.1f} GB, "
+                    f"{int(self._mem_safety * 100)}% budget).")
 
         # ── Live progress feedback ──────────────────────────────────────
         # Per-eval completion lines (printed as each model finishes) plus a
@@ -518,6 +735,8 @@ class ModelRunner:
         # a long model evaluation is still in flight.
         _lock = threading.Lock()
         _done_ids = set()
+        _active = set()              # eval_ids actually executing right now
+        _mem_peak = {"per_eval": 0.0}  # GB, refined by live sampling
         _t0 = time.time()
         _stop_hb = threading.Event()
 
@@ -528,6 +747,7 @@ class ModelRunner:
             while not _stop_hb.wait(15):
                 with _lock:
                     done = set(_done_ids)
+                    active_n = len(_active)
                 running = [c for c in eval_configs if c['eval_id'] not in done]
                 if not running:
                     continue
@@ -539,10 +759,24 @@ class ModelRunner:
                 for c in running:
                     logger.info(
                         f"        eval {c['eval_id']:<6} {self._progress_str(c['eval_dir'])}")
+                # Sample container memory to refine the per-eval RAM estimate
+                # (used to auto-cap parallelism on later chunks and runs).
+                if self._mem_limit_gb and active_n > 0:
+                    used = self._sample_container_mem_gb()
+                    if used:
+                        cand = used / active_n
+                        if cand > _mem_peak["per_eval"]:
+                            _mem_peak["per_eval"] = cand
 
         def _run_one(config):
-            success, runtime, error = self.run_single_evaluation(
-                config['eval_dir'], config['master_json'], config['eval_id'])
+            with _lock:
+                _active.add(config['eval_id'])
+            try:
+                success, runtime, error = self.run_single_evaluation(
+                    config['eval_dir'], config['master_json'], config['eval_id'])
+            finally:
+                with _lock:
+                    _active.discard(config['eval_id'])
             out_bytes = self._openwq_out_bytes(config['eval_dir'])
             with _lock:
                 _done_ids.add(config['eval_id'])
@@ -580,6 +814,16 @@ class ModelRunner:
                             results.append((eval_id, False, 0.0, str(e)))
         finally:
             _stop_hb.set()
+            # Persist / refine the per-eval RAM estimate so later chunks (and
+            # future `_run.py` invocations) auto-cap parallelism from the start.
+            newE = _mem_peak["per_eval"]
+            if newE > 0 and (not self._mem_per_eval_gb
+                             or newE > self._mem_per_eval_gb):
+                self._mem_per_eval_gb = newE
+                self._save_mem_estimate(newE)
+                logger.info(
+                    f"    Memory guard: per-eval RAM estimate now "
+                    f"~{newE:.1f} GB (container ~{self._mem_limit_gb:.1f} GB).")
 
         return results
 
