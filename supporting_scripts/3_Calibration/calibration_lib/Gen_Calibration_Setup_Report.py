@@ -1296,6 +1296,18 @@ def generate_interactive_setup(
         H.append(rh.build_theme_toggle_js())
 
         # ── Main interactive JS ──
+        # Observation + model simulation periods drive the calibration /
+        # validation split slider.  Either may be None (no obs data / control
+        # file unreadable); the slider JS hides itself gracefully.
+        try:
+            _obs_period = _ci.get_observation_period(model_config)
+        except Exception:
+            _obs_period = None
+        try:
+            _sim_period = _ci.get_model_sim_period(model_config)
+        except Exception:
+            _sim_period = None
+
         H.append(_build_interactive_js(
             model_config_path=model_config_path,
             calibration_work_dir=calibration_work_dir,
@@ -1303,6 +1315,8 @@ def generate_interactive_setup(
             module_parameters=module_parameters,
             container_config=container_config,
             report_stem=_calib_stem,
+            observation_period=_obs_period,
+            model_sim_period=_sim_period,
         ))
 
         H.append("</body></html>")
@@ -1451,6 +1465,68 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                      "outputs. Leave blank to derive from executable_path.",
                 placeholder="e.g. /scratch/$USER/openwq_root")}
         </div>
+    </div>
+    <div class="card" id="calibPeriodCard">
+        <h3>Calibration / validation period</h3>
+        <p class="hint" style="margin-top:0;">
+            Each evaluation simulates <strong>only the calibration window</strong>
+            instead of the model's full period &mdash; this keeps runtime and
+            memory low (a full multi-year run can exhaust container RAM and be
+            OOM-killed). The split below defaults to the <strong>middle of your
+            observation period</strong>: the first part is used to
+            <strong>calibrate</strong>, the second is reserved to
+            <strong>validate</strong> later. Drag the handle to adjust; the
+            greyed span has no observations.
+        </p>
+        <div class="calib-slider-wrap" id="calibSliderWrap">
+            <div class="calib-track" id="calibTrack">
+                <div class="calib-seg calib-gray"  id="segGrayLeft"></div>
+                <div class="calib-seg calib-calib" id="segCalib">
+                    <span class="calib-seg-label">Calibration</span></div>
+                <div class="calib-seg calib-valid" id="segValid">
+                    <span class="calib-seg-label">Validation</span></div>
+                <div class="calib-seg calib-gray"  id="segGrayRight"></div>
+                <div class="calib-handle" id="calibHandle"
+                     title="Drag to move the calibration / validation split"></div>
+            </div>
+            <div class="calib-axis">
+                <span id="calibAxisStart"></span>
+                <span id="calibAxisEnd"></span>
+            </div>
+            <div class="form-row" style="margin-top:.6rem;">
+                <div class="form-group">
+                    <label>Calibration window <span class="calib-swatch calib-sw-c"></span></label>
+                    <div class="calib-window-text" id="calibWindowText">&mdash;</div>
+                </div>
+                <div class="form-group">
+                    <label>Validation window <span class="calib-swatch calib-sw-v"></span></label>
+                    <div class="calib-window-text" id="valWindowText">&mdash;</div>
+                </div>
+            </div>
+            <div class="form-row">
+                {rh.build_form_checkbox(
+                    "use_calibration_period",
+                    "Restrict each evaluation to the calibration window "
+                    "(recommended)",
+                    checked=True,
+                    hint="When on, the per-evaluation control file is rewritten "
+                         "to run only the calibration window. Turn off to run "
+                         "the model's full period per evaluation (slow, "
+                         "memory-heavy).")}
+            </div>
+        </div>
+        <p class="hint" id="calibNoDataMsg" style="display:none;">
+            &#9888; No observation period or model simulation period could be
+            detected, so the period cannot be restricted automatically. Each
+            evaluation will run the model's full period. To enable this, make
+            sure the model config points to valid observation data and a
+            readable control file (fileManager / mizuRoute control).
+        </p>
+        <!-- Hidden fields populated by the slider JS, read by collectFormState. -->
+        <input type="hidden" id="calibration_period_start" value="">
+        <input type="hidden" id="calibration_period_end" value="">
+        <input type="hidden" id="validation_period_start" value="">
+        <input type="hidden" id="validation_period_end" value="">
     </div>
 </div>
 """
@@ -2007,7 +2083,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                           module_parameters=None,
                           container_config=None,
                           report_stem="calibration",
-                          calib_lib_dir=""):
+                          calib_lib_dir="",
+                          observation_period=None,
+                          model_sim_period=None):
     """Build the JavaScript for the interactive setup report."""
     import json as json_mod
     # Absolute path to the openWQ "3_Calibration" folder (the parent of
@@ -2026,11 +2104,20 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     else:
         params_json = rh._js(auto_extracted_parameters)
 
+    # Observation + model simulation periods → power the calibration /
+    # validation split slider in the Settings tab.  Computed by the caller
+    # (where model_config is available) and passed in; either may be None
+    # (no obs data, or control file unreadable) and the slider JS copes.
+    _obs_period = observation_period
+    _sim_period = model_sim_period
+
     # Escape paths for JS string embedding
     mcp = json_mod.dumps(model_config_path)
     cwd = json_mod.dumps(calibration_work_dir)
     rstem = json_mod.dumps(report_stem or "calibration")
     clibdir = json_mod.dumps(calib_lib_dir)
+    obs_period_json = json_mod.dumps(_obs_period)
+    sim_period_json = json_mod.dumps(_sim_period)
 
     # Build the JS as a plain string (not f-string) to avoid issues
     # with JS curly braces and Python triple-quote conflicts.
@@ -2045,6 +2132,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   var REPORT_STEM = ''' + rstem + r''';
   var CALIB_LIB_DIR = ''' + clibdir + r''';
   var PARAMS = ''' + params_json + r''';
+  var OBS_PERIOD = ''' + obs_period_json + r''';
+  var SIM_PERIOD = ''' + sim_period_json + r''';
 
   // Helper: Python repr
   function pyRepr(v, indent) {
@@ -2103,6 +2192,18 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // Stale-folder handling: 'prompt' | 'clean' | 'keep'.
     var _cwdEl = document.getElementById('clean_work_dir');
     s.clean_work_dir_mode = _cwdEl ? _cwdEl.value : 'prompt';
+    // Calibration / validation period split (from the slider).  The hidden
+    // inputs are populated by the slider JS in 'YYYY-MM-DD HH:MM' format.
+    var _ucpEl = document.getElementById('use_calibration_period');
+    s.use_calibration_period = _ucpEl ? !!_ucpEl.checked : false;
+    var _cps = document.getElementById('calibration_period_start');
+    var _cpe = document.getElementById('calibration_period_end');
+    var _vps = document.getElementById('validation_period_start');
+    var _vpe = document.getElementById('validation_period_end');
+    s.calibration_period_start = (_cps && _cps.value) ? _cps.value : null;
+    s.calibration_period_end   = (_cpe && _cpe.value) ? _cpe.value : null;
+    s.validation_period_start  = (_vps && _vps.value) ? _vps.value : null;
+    s.validation_period_end    = (_vpe && _vpe.value) ? _vpe.value : null;
     // Spatial-matching + HPC options (these are optional — the form
     // fields may not exist on older / customised reports so guard them).
     var _upoEl = document.getElementById('use_primary_only');
@@ -2244,6 +2345,23 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                  : (_cwdMode === 'keep') ? 'False' : 'None';
     lines.push('clean_work_dir = ' + _cwdRepr);
     lines.push('');
+    lines.push('# Calibration window (start, end) that each evaluation simulates.');
+    lines.push('# Restricting the per-eval period keeps runtime + memory low and');
+    lines.push('# avoids out-of-memory kills from full multi-year runs (openWQ');
+    lines.push('# holds its output in RAM). The complementary validation window');
+    lines.push('# is recorded for a later validation run.');
+    lines.push('#   (start, end) -> rewrite simStart/simEnd in each eval control file');
+    lines.push('#   None         -> run the model\'s full period per evaluation');
+    if (s.use_calibration_period && s.calibration_period_start && s.calibration_period_end) {
+      lines.push('calibration_period = (' + pyRepr(s.calibration_period_start) +
+                 ', ' + pyRepr(s.calibration_period_end) + ')');
+      lines.push('validation_period = (' + pyRepr(s.validation_period_start) +
+                 ', ' + pyRepr(s.validation_period_end) + ')');
+    } else {
+      lines.push('calibration_period = None');
+      lines.push('validation_period = None');
+    }
+    lines.push('');
     lines.push('# Spatial-matching: when True the objective uses only the');
     lines.push('# pouring-point observation per HRU (SUMMA case). For');
     lines.push('# mizuRoute every matched station is already primary so this');
@@ -2365,6 +2483,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        sensitivity_threshold=sensitivity_threshold,');
     lines.push('        resume=args.resume,');
     lines.push('        clean_work_dir=clean_work_dir,');
+    lines.push('        # Per-eval calibration window (None = full model period).');
+    lines.push('        calibration_period=calibration_period,');
     lines.push('        temporal_resolution=temporal_resolution,');
     lines.push('        aggregation_method=aggregation_method,');
     // Runtime chosen in the setup report (docker / apptainer), overriding
@@ -2822,6 +2942,130 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       if (fw && excluded.indexOf(fw) === -1) excluded.push(fw);
     });
     return excluded;
+  })();
+
+  // ── Calibration / validation period slider ──
+  // Greys out the span without observations; one draggable handle splits
+  // the observation period into Calibration (left) and Validation (right),
+  // defaulting to the middle.  Populates the hidden period inputs that
+  // collectFormState() / generateScript() read.
+  (function() {
+    var wrap   = document.getElementById('calibSliderWrap');
+    var track  = document.getElementById('calibTrack');
+    var handle = document.getElementById('calibHandle');
+    if (!wrap || !track || !handle) return;
+
+    function parseDate(s) {
+      if (!s) return null;
+      // Accept 'YYYY-MM-DD HH:MM[:SS]' or ISO; normalise space->T (Safari).
+      var d = new Date(String(s).trim().replace(' ', 'T'));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    function p2(n) { return (n < 10 ? '0' : '') + n; }
+    function fmt(d) {
+      if (!d) return '—';
+      return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate())
+           + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+    }
+
+    var simStart = SIM_PERIOD ? parseDate(SIM_PERIOD.sim_start) : null;
+    var simEnd   = SIM_PERIOD ? parseDate(SIM_PERIOD.sim_end)   : null;
+    var obsStart = OBS_PERIOD ? parseDate(OBS_PERIOD.obs_start) : null;
+    var obsEnd   = OBS_PERIOD ? parseDate(OBS_PERIOD.obs_end)   : null;
+
+    // Outer track range [lo, hi] = the model's simulation period (the hard
+    // bound — you can't calibrate where the model doesn't run).  The active
+    // (calibratable) sub-range [aStart, aEnd] = observations ∩ model period;
+    // the rest of the track (model period without obs) is greyed out.
+    var haveObs = obsStart && obsEnd && obsEnd > obsStart;
+    var haveSim = simStart && simEnd && simEnd > simStart;
+    var lo, hi, aStart, aEnd;
+    if (haveSim) {
+      lo = simStart; hi = simEnd;
+      if (haveObs) {
+        aStart = (obsStart > simStart) ? obsStart : simStart;
+        aEnd   = (obsEnd   < simEnd)   ? obsEnd   : simEnd;
+        if (aEnd <= aStart) {        // obs disjoint from model period
+          aStart = simStart; aEnd = simEnd;
+        }
+      } else {
+        aStart = simStart; aEnd = simEnd;
+      }
+    } else if (haveObs) {
+      lo = obsStart; hi = obsEnd; aStart = obsStart; aEnd = obsEnd;
+    } else {
+      wrap.style.display = 'none';
+      var msg = document.getElementById('calibNoDataMsg');
+      if (msg) msg.style.display = '';
+      var ucp0 = document.getElementById('use_calibration_period');
+      if (ucp0) ucp0.checked = false;
+      return;
+    }
+    var span = hi.getTime() - lo.getTime();
+    if (span <= 0) { wrap.style.display = 'none'; return; }
+
+    function frac(d) { return (d.getTime() - lo.getTime()) / span; }
+    function dateAtFrac(f) { return new Date(lo.getTime() + f * span); }
+    var aStartF = frac(aStart), aEndF = frac(aEnd);
+    var splitF = (aStartF + aEndF) / 2;   // default: middle of obs period
+
+    function render() {
+      var pct = function(f) { return (f * 100) + '%'; };
+      var gl = document.getElementById('segGrayLeft');
+      var sc = document.getElementById('segCalib');
+      var sv = document.getElementById('segValid');
+      var gr = document.getElementById('segGrayRight');
+      gl.style.left = '0%';         gl.style.width = pct(aStartF);
+      sc.style.left = pct(aStartF); sc.style.width = pct(splitF - aStartF);
+      sv.style.left = pct(splitF);  sv.style.width = pct(aEndF - splitF);
+      gr.style.left = pct(aEndF);   gr.style.width = pct(1 - aEndF);
+      handle.style.left = pct(splitF);
+
+      var cEnd = dateAtFrac(splitF);
+      document.getElementById('calibWindowText').textContent = fmt(aStart) + '  →  ' + fmt(cEnd);
+      document.getElementById('valWindowText').textContent   = fmt(cEnd)   + '  →  ' + fmt(aEnd);
+      document.getElementById('calibAxisStart').textContent  = fmt(lo);
+      document.getElementById('calibAxisEnd').textContent    = fmt(hi);
+      document.getElementById('calibration_period_start').value = fmt(aStart);
+      document.getElementById('calibration_period_end').value   = fmt(cEnd);
+      document.getElementById('validation_period_start').value  = fmt(cEnd);
+      document.getElementById('validation_period_end').value    = fmt(aEnd);
+    }
+
+    function setFromClientX(clientX) {
+      var rect = track.getBoundingClientRect();
+      var f = (clientX - rect.left) / rect.width;
+      f = Math.max(aStartF, Math.min(aEndF, f));
+      splitF = f;
+      render();
+      if (typeof updateScript === 'function') updateScript();
+    }
+
+    var dragging = false;
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault(); dragging = true; document.body.style.userSelect = 'none';
+    });
+    track.addEventListener('mousedown', function(e) {
+      setFromClientX(e.clientX); dragging = true; document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (dragging) setFromClientX(e.clientX);
+    });
+    document.addEventListener('mouseup', function() {
+      if (dragging) { dragging = false; document.body.style.userSelect = ''; }
+    });
+
+    // Enable/disable the slider with the "use calibration window" checkbox.
+    var ucp = document.getElementById('use_calibration_period');
+    if (ucp) {
+      ucp.addEventListener('change', function() {
+        track.style.opacity = this.checked ? '1' : '.4';
+        track.style.pointerEvents = this.checked ? '' : 'none';
+        if (typeof updateScript === 'function') updateScript();
+      });
+    }
+
+    render();
   })();
 
   // Initial render

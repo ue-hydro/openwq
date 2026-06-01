@@ -459,6 +459,119 @@ def get_observation_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
     return obs_config
 
 
+def get_observation_period(model_config: Dict[str, Any],
+                           log=None) -> Optional[Dict[str, Any]]:
+    """Return the time span covered by the available observation data.
+
+    Reads the SAME already-prepared data as the obs-prep functions (no
+    re-download): the GRQA clipped observations CSV or the user observation
+    CSV.  Used by the calibration setup report to *propose* a calibration /
+    validation split (first half = calibration, second half = validation).
+
+    Returns
+    -------
+    Optional[Dict[str, Any]]
+        ``{"obs_start": "YYYY-MM-DD HH:MM", "obs_end": ..., "n_obs": int}``
+        or ``None`` when no observation data / dates can be found.
+    """
+    import pandas as pd
+    _log = log or (lambda *a, **k: None)
+    source = model_config.get("observation_data_source", "skip")
+    dates = None
+    try:
+        if source == "grqa":
+            dir2save = model_config.get('dir2save_input_files')
+            if not dir2save:
+                exe = model_config.get('executable_path', '')
+                dir2save = os.path.dirname(os.path.abspath(exe)) if exe else None
+            if dir2save:
+                obs_csv = os.path.join(dir2save, 'openwq_in',
+                                       'grqa_clipped_data',
+                                       'grqa_clipped_observations.csv')
+                if os.path.isfile(obs_csv):
+                    df = pd.read_csv(obs_csv)
+                    col = ('obs_date' if 'obs_date' in df.columns
+                           else ('datetime' if 'datetime' in df.columns
+                                 else None))
+                    if col:
+                        dates = pd.to_datetime(df[col], errors='coerce').dropna()
+        elif source == "user_csv":
+            csv_path = model_config.get('user_observation_csv')
+            if csv_path and os.path.isfile(csv_path):
+                df = pd.read_csv(csv_path)
+                cols = {c.lower(): c for c in df.columns}
+                if 'datetime' in cols:
+                    dates = pd.to_datetime(df[cols['datetime']],
+                                           errors='coerce').dropna()
+                elif all(k in cols for k in ('year', 'month', 'day')):
+                    parts = pd.DataFrame({
+                        'year': pd.to_numeric(df[cols['year']], errors='coerce'),
+                        'month': pd.to_numeric(df[cols['month']], errors='coerce'),
+                        'day': pd.to_numeric(df[cols['day']], errors='coerce'),
+                    }).dropna()
+                    dates = pd.to_datetime(parts, errors='coerce').dropna()
+    except Exception as exc:
+        _log(f"Could not determine observation period: {exc}")
+        return None
+
+    if dates is None or len(dates) == 0:
+        return None
+    return {
+        "obs_start": dates.min().strftime('%Y-%m-%d %H:%M'),
+        "obs_end": dates.max().strftime('%Y-%m-%d %H:%M'),
+        "n_obs": int(len(dates)),
+    }
+
+
+def get_model_sim_period(model_config: Dict[str, Any],
+                         log=None) -> Optional[Dict[str, Any]]:
+    """Return the model's full simulation period from its control file.
+
+    SUMMA   → ``simStartTime`` / ``simEndTime`` in the fileManager.
+    mizuRoute → ``<sim_start>`` / ``<sim_end>`` in the control file.
+
+    Used as the *outer* bound for the calibration/validation slider (the
+    span outside the observation period is greyed out).
+
+    Returns
+    -------
+    Optional[Dict[str, Any]]
+        ``{"sim_start": "...", "sim_end": "...", "hostmodel": "..."}`` or
+        ``None`` when the control file / dates can't be read.
+    """
+    import re
+    _log = log or (lambda *a, **k: None)
+    fm = (model_config.get('file_manager_path')
+          or model_config.get('control_file_path') or '')
+    if not fm or not os.path.isfile(fm):
+        return None
+    hostmodel = (model_config.get('hostmodel') or '').lower()
+    try:
+        with open(fm, 'r') as fh:
+            text = fh.read()
+    except Exception as exc:
+        _log(f"Could not read control file {fm}: {exc}")
+        return None
+
+    # SUMMA fileManager: simStartTime '1990-10-01 01:00'
+    m1 = re.search(r"simStartTime\s+'([^']*)'", text)
+    m2 = re.search(r"simEndTime\s+'([^']*)'", text)
+    if m1 and m2:
+        return {"sim_start": m1.group(1).strip(),
+                "sim_end": m2.group(1).strip(),
+                "hostmodel": hostmodel or "summa"}
+
+    # mizuRoute control file: <sim_start>  1990-10-01 00:00:00  ! comment
+    m1 = re.search(r"<sim_start>\s*([0-9][^!<\n]*)", text)
+    m2 = re.search(r"<sim_end>\s*([0-9][^!<\n]*)", text)
+    if m1 and m2:
+        return {"sim_start": m1.group(1).strip(),
+                "sim_end": m2.group(1).strip(),
+                "hostmodel": hostmodel or "mizuroute"}
+
+    return None
+
+
 def get_spatial_mapping(model_config: Dict[str, Any]) -> Dict[str, Any]:
     """Return the resolved spatial-mapping convention for this model run.
 

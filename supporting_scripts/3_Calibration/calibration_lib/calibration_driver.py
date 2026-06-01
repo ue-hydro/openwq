@@ -323,7 +323,11 @@ def run_calibration(
         executable_full_path=executable_full_path,
         command_template=command_template,
         hostmodel=(model_config.get("hostmodel", "") if model_config else ""),
-        calibration_work_dir=calibration_work_dir
+        calibration_work_dir=calibration_work_dir,
+        # Per-eval calibration window (start, end) | None.  When set, each
+        # eval's control file is rewritten to simulate only this window —
+        # keeps runtime + memory low and avoids OOM kills.
+        calibration_period=kwargs.get("calibration_period"),
     )
 
     # H5 reader path for objective function
@@ -944,7 +948,8 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         executable_full_path=kwargs.get('executable_full_path'),
         command_template=kwargs.get('command_template'),
         hostmodel=(_model_config.get("hostmodel", "") if _model_config else ""),
-        calibration_work_dir=kwargs.get('calibration_work_dir')
+        calibration_work_dir=kwargs.get('calibration_work_dir'),
+        calibration_period=kwargs.get("calibration_period"),
     )
 
     if kwargs.get('base_model_config_dir'):
