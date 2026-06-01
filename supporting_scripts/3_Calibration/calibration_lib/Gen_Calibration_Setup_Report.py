@@ -1253,6 +1253,13 @@ def generate_interactive_setup(
       Finally, set <strong>Container runtime = apptainer</strong> and fill the
       <strong>Apptainer SIF / bind path</strong> fields above.
     </div>
+    <div class="hint" style="margin-top:.4rem;">
+      <strong>Batch jobs can't answer prompts:</strong> set
+      <strong>Stale evaluation folders = clean</strong> (or run with
+      <code>--clean</code>) so old <code>eval_*</code> folders are removed
+      automatically with no terminal prompt. Use <code>--keep</code> to keep
+      them.
+    </div>
   </div>
 </details>
 """)
@@ -1418,6 +1425,16 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                      "sequential by design, so this only speeds up the "
                      "sensitivity stage. Set to roughly your available CPU "
                      "cores / container capacity.")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_select(
+                "clean_work_dir", "Stale evaluation folders",
+                ["prompt", "clean", "keep"], "prompt",
+                "What to do with leftover eval_* folders from a previous run "
+                "in the calibration work dir. 'prompt' asks at the terminal "
+                "(interactive only). 'clean' always deletes them first - use "
+                "this on HPC / batch jobs where you can't answer a prompt. "
+                "'keep' leaves them in place. (Resume runs never clean.)")}
         </div>
         <div class="form-row">
             {rh.build_form_input(
@@ -2083,6 +2100,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var _npEl = document.getElementById('n_parallel');
     s.n_parallel = _npEl ? (parseInt(_npEl.value) || 1) : 1;
     if (s.n_parallel < 1) s.n_parallel = 1;
+    // Stale-folder handling: 'prompt' | 'clean' | 'keep'.
+    var _cwdEl = document.getElementById('clean_work_dir');
+    s.clean_work_dir_mode = _cwdEl ? _cwdEl.value : 'prompt';
     // Spatial-matching + HPC options (these are optional — the form
     // fields may not exist on older / customised reports so guard them).
     var _upoEl = document.getElementById('use_primary_only');
@@ -2214,6 +2234,16 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('# up the sensitivity stage.');
     lines.push('n_parallel = ' + pyRepr(s.n_parallel || 1));
     lines.push('');
+    lines.push('# Handling of leftover eval_* folders from a previous run:');
+    lines.push('#   None  -> prompt at the terminal (interactive only)');
+    lines.push('#   True  -> always delete first (use on HPC / batch jobs)');
+    lines.push('#   False -> keep them');
+    lines.push('# Overridable at runtime with --clean / --keep.');
+    var _cwdMode = s.clean_work_dir_mode || 'prompt';
+    var _cwdRepr = (_cwdMode === 'clean') ? 'True'
+                 : (_cwdMode === 'keep') ? 'False' : 'None';
+    lines.push('clean_work_dir = ' + _cwdRepr);
+    lines.push('');
     lines.push('# Spatial-matching: when True the objective uses only the');
     lines.push('# pouring-point observation per HRU (SUMMA case). For');
     lines.push('# mizuRoute every matched station is already primary so this');
@@ -2289,7 +2319,17 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('    parser = argparse.ArgumentParser(description="OpenWQ Calibration")');
     lines.push('    parser.add_argument("--resume", action="store_true",');
     lines.push('                        help="Resume from checkpoint")');
+    lines.push('    parser.add_argument("--clean", action="store_true",');
+    lines.push('                        help="Delete stale eval_* folders before running "');
+    lines.push('                             "(no prompt; ideal for HPC/batch jobs)")');
+    lines.push('    parser.add_argument("--keep", action="store_true",');
+    lines.push('                        help="Keep stale eval_* folders (no prompt)")');
     lines.push('    args = parser.parse_args()');
+    lines.push('    # CLI flags override the report default (clean_work_dir).');
+    lines.push('    if args.clean:');
+    lines.push('        clean_work_dir = True');
+    lines.push('    elif args.keep:');
+    lines.push('        clean_work_dir = False');
     lines.push('');
     lines.push('    print("\\n" + "=" * 60)');
     lines.push('    print("OPENWQ CALIBRATION")');
@@ -2324,6 +2364,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        sensitivity_sobol_samples=sensitivity_sobol_samples,');
     lines.push('        sensitivity_threshold=sensitivity_threshold,');
     lines.push('        resume=args.resume,');
+    lines.push('        clean_work_dir=clean_work_dir,');
     lines.push('        temporal_resolution=temporal_resolution,');
     lines.push('        aggregation_method=aggregation_method,');
     // Runtime chosen in the setup report (docker / apptainer), overriding

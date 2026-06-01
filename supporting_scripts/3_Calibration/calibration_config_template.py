@@ -28,13 +28,22 @@ QUICK START:
   3. Run:  python my_calibration.py
   4. An interactive HTML report opens in your browser
   5. Configure settings, parameters, species in the report
-  6. Click "Download Script" to get my_calibration_run.py
-  7. Run:  python my_calibration_run.py
+  6. Click "Save the script" to get <template>_run.py
+  7. Run:  python <template>_run.py
 
-COMMAND-LINE OPTIONS:
-  python my_calibration.py                  # Generate interactive setup report
-  python my_calibration.py --show-parameters  # Show auto-extracted parameters
-  python my_calibration.py --dry-run          # Validate config without report
+COMMAND-LINE OPTIONS (this template — generates the report):
+  python my_calibration.py                     # Generate interactive setup report
+  python my_calibration.py --show-parameters   # Show auto-extracted parameters
+  python my_calibration.py --dry-run           # Validate config without report
+
+COMMAND-LINE OPTIONS (the generated <template>_run.py — runs the calibration):
+  python <template>_run.py                     # Run the calibration
+  python <template>_run.py --resume            # Resume from the last checkpoint
+  python <template>_run.py --clean             # Delete stale eval_* folders first
+                                               #   (no prompt — ideal for HPC/batch jobs)
+  python <template>_run.py --keep              # Keep stale eval_* folders (no prompt)
+  # Without --clean/--keep, the "Stale evaluation folders" choice from the
+  # report applies (prompt when interactive, keep otherwise).
 
 Full documentation: https://openwq.readthedocs.io
 """

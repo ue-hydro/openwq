@@ -24,6 +24,7 @@ Orchestrates parameter handling, model execution, and optimization.
 
 import os
 import sys
+import shutil
 import json
 import logging
 from pathlib import Path
@@ -81,6 +82,82 @@ def _validate_observation_csv(path: str, obs_source: str) -> str:
             "source, [is_primary]."
         )
     return path
+
+
+def _maybe_clean_work_dir(work_dir: Path, resume: bool = False,
+                          clean=None) -> None:
+    """Offer to clear stale evaluation folders / old results before a run.
+
+    A previous run (especially one with MORE evaluations) leaves ``eval_*``
+    folders behind that don't belong to the new calibration.  This detects
+    them and, on an interactive terminal, asks whether to delete them for a
+    clean run.  Never cleans when resuming.
+
+    ``clean`` can force the decision (True/False) for non-interactive use;
+    when None it prompts (interactive) or keeps + warns (non-interactive).
+    """
+    if resume:
+        return
+    evals = work_dir / "evaluations"
+    stale = sorted(evals.glob("eval_*")) if evals.is_dir() else []
+    if not stale:
+        return
+
+    n = len(stale)
+    decision = clean
+    if decision is None:
+        if sys.stdin.isatty():
+            print(f"\n  The calibration work dir already contains {n} "
+                  f"evaluation folder(s) from a previous run:")
+            print(f"      {evals}")
+            print("  These may be stale (e.g. left over from a run with more "
+                  "evaluations) and don't belong to this calibration.")
+            try:
+                resp = input("  Delete them (and old results) for a clean "
+                             "run? [y/N]: ").strip().lower()
+            except EOFError:
+                resp = ""
+            decision = resp in ("y", "yes")
+        else:
+            decision = False
+            logger.warning(
+                f"{n} stale evaluation folder(s) found in {evals} "
+                f"(non-interactive run — left in place; pass "
+                f"clean_work_dir=True to auto-clean).")
+
+    if decision:
+        # Before deleting, preserve a % progress reference: the largest
+        # openWQ output among the eval dirs about to be removed.  Otherwise a
+        # clean run loses the only reference (no eval has necessarily
+        # completed yet to persist one) and the live % can't be shown.
+        try:
+            best = max((ModelRunner._openwq_out_bytes(d) for d in stale),
+                       default=0)
+            ref_file = work_dir / ".openwq_output_reference.txt"
+            prev = 0
+            if ref_file.is_file():
+                try:
+                    prev = int(ref_file.read_text().strip())
+                except (ValueError, OSError):
+                    prev = 0
+            if best > prev:
+                ref_file.write_text(str(int(best)))
+        except (OSError, ValueError):
+            pass
+
+        shutil.rmtree(evals, ignore_errors=True)
+        evals.mkdir(parents=True, exist_ok=True)
+        # Clear old results (plots / history) too so runs don't mix.
+        results = work_dir / "results"
+        if results.is_dir():
+            shutil.rmtree(results, ignore_errors=True)
+        results.mkdir(parents=True, exist_ok=True)
+        logger.info(
+            f"Cleaned {n} stale evaluation folder(s) and old results for a "
+            f"fresh run.")
+    else:
+        logger.info("Keeping existing folders (stale evaluations from a "
+                    "previous run may remain).")
 
 
 def run_calibration(
@@ -164,6 +241,11 @@ def run_calibration(
     ))
     logging.getLogger().addHandler(file_handler)
 
+    # Offer to clear stale evaluation folders / old results from a previous
+    # run (so a smaller new run doesn't inherit leftover eval_* folders).
+    _maybe_clean_work_dir(work_dir, resume=resume,
+                          clean=kwargs.get("clean_work_dir"))
+
     # ── Resolve settings from model_config (integrated mode) ──
     if model_config is not None:
         from . import config_integration
@@ -240,7 +322,8 @@ def run_calibration(
         file_manager_path=file_manager_path,
         executable_full_path=executable_full_path,
         command_template=command_template,
-        hostmodel=(model_config.get("hostmodel", "") if model_config else "")
+        hostmodel=(model_config.get("hostmodel", "") if model_config else ""),
+        calibration_work_dir=calibration_work_dir
     )
 
     # H5 reader path for objective function
@@ -860,7 +943,8 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         file_manager_path=kwargs.get('file_manager_path'),
         executable_full_path=kwargs.get('executable_full_path'),
         command_template=kwargs.get('command_template'),
-        hostmodel=(_model_config.get("hostmodel", "") if _model_config else "")
+        hostmodel=(_model_config.get("hostmodel", "") if _model_config else ""),
+        calibration_work_dir=kwargs.get('calibration_work_dir')
     )
 
     if kwargs.get('base_model_config_dir'):
