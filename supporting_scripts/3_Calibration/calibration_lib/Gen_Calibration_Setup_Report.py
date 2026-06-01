@@ -901,7 +901,8 @@ def generate_interactive_setup(
 
         # ── Tab: Settings ──
         H.append('<div class="tab-panel" data-tab="settings">')
-        H.append(_build_interactive_settings_section())
+        H.append(_build_interactive_settings_section(
+            container_config.get("container_runtime", "docker")))
         H.append(_build_interactive_sensitivity_section())
         H.append('</div>')
 
@@ -913,9 +914,52 @@ def generate_interactive_setup(
             species_list = [str(species_list)]
         obs_source = observation_config.get("source", "skip")
 
+        # Host-model-aware reach/HRU + compartment options
+        _spatial = _ci.get_spatial_mapping(model_config)
+        _hostmodel = (_spatial.get("hostmodel") or "").lower()
+        if _hostmodel == "summa":
+            _feat_label = "HRU"
+            _feat_shp = observation_config.get("basin_shapefile")
+            _feat_key = _spatial.get("basin_mapping_key") or "HRU_ID"
+        else:
+            _feat_label = "Reach"
+            _feat_shp = observation_config.get("river_network_shapefile")
+            _feat_key = _spatial.get("river_network_mapping_key") or "SegId"
+        _available_reaches = _read_feature_ids(_feat_shp, _feat_key)
+
+        # Compartments: keys defined in the model config are authoritative;
+        # fall back to host-aware defaults when not present.
+        _cc = model_config.get("compartments_and_cells", {})
+        if isinstance(_cc, dict) and _cc:
+            _available_compartments = list(_cc.keys())
+        elif _hostmodel == "summa":
+            _available_compartments = [
+                "SCALARCANOPYWAT", "ILAYERVOLFRACWAT_SNOW", "RUNOFF",
+                "ILAYERVOLFRACWAT_SOIL", "SCALARAQUIFER",
+            ]
+        else:
+            _available_compartments = ["RIVER_NETWORK_REACHES"]
+
+        # Pre-tick the compartments the user already restricts obs to;
+        # otherwise tick all available.
+        _obs_comp = model_config.get("observation_compartments") or []
+        if isinstance(_obs_comp, str):
+            _obs_comp = [_obs_comp]
+        _obs_comp_set = set(_obs_comp)
+        if _obs_comp_set:
+            _selected_compartments = [c for c in _available_compartments
+                                      if c in _obs_comp_set] or list(_available_compartments)
+        else:
+            _selected_compartments = list(_available_compartments)
+
         H.append('<div class="tab-panel" data-tab="targets">')
         H.append(_build_interactive_targets_section(
-            species_list, species_obs_availability or {}, obs_source
+            species_list, species_obs_availability or {}, obs_source,
+            hostmodel=_hostmodel,
+            feature_label=_feat_label,
+            available_reaches=_available_reaches,
+            available_compartments=_available_compartments,
+            selected_compartments=_selected_compartments,
         ))
         H.append('</div>')
 
@@ -963,19 +1007,26 @@ def generate_interactive_setup(
         H.append('<div class="pane-resizer" id="paneResizer"></div>')
 
         # ── Script Pane (Right) ──
-        # Recommended save path: the calibration_work_dir set in the form,
-        # so the generated run-script lives next to its results/ outputs.
-        # The run-script filename follows the originating template stem
+        # Recommended save path: the openWQ "3_Calibration" folder, because
+        # the generated script does `from calibration_lib...` and that
+        # package lives there.  (The script also bakes this folder into its
+        # sys.path, so it still runs if saved elsewhere.)  Results are
+        # written to calibration_work_dir as set in the calibration config
+        # template.  Filename follows the originating template stem
         # (e.g. "model_config_template_mizuRoute_run.py").
         cal_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         _run_script_name = f"{_calib_stem}_run.py"
-        save_hint = html_lib.escape(os.path.join(calibration_work_dir, _run_script_name))
+        save_hint = html_lib.escape(os.path.join(cal_script_dir, _run_script_name))
 
         H.append('<div class="script-pane">')
         H.append(f"""
 <div class="script-pane-header">
     <h3>Generated Script</h3>
     <div style="display:flex;gap:.4rem;align-items:center;">
+        <button class="copy-btn" id="wrapToggleBtn" style="position:static;font-size:.75rem;padding:.25rem .6rem;
+            background:rgba(0,102,204,.1);border:1px solid var(--border);color:var(--primary);
+            border-radius:6px;cursor:pointer;"
+            onclick="toggleWrap()" title="Toggle line wrapping / horizontal scroll">Wrap: on</button>
         <button class="copy-btn" style="position:static;font-size:.75rem;padding:.25rem .6rem;
             background:rgba(0,102,204,.1);border:1px solid var(--border);color:var(--primary);
             border-radius:6px;cursor:pointer;"
@@ -987,9 +1038,14 @@ def generate_interactive_setup(
             onclick="downloadScript()">Save the script</button>
     </div>
 </div>
-<div style="padding:.2rem 1.2rem .1rem;font-size:.7rem;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+<div style="padding:.2rem 1.2rem .1rem;font-size:.7rem;color:var(--text3);word-break:break-all;line-height:1.45;"
      title="{save_hint}">
-    Save to: <code style="font-size:.68rem;">{save_hint}</code>
+    Save to: <code id="saveHint" style="font-size:.68rem;">{save_hint}</code>
+    <button id="copyHintBtn" onclick="copySaveHint()" title="Copy path to clipboard"
+        style="margin-left:.4rem;font-size:.62rem;padding:.05rem .4rem;
+        background:rgba(0,102,204,.1);border:1px solid var(--border);
+        color:var(--primary);border-radius:4px;cursor:pointer;
+        font-family:inherit;white-space:nowrap;vertical-align:baseline;">Copy</button>
 </div>
 """)
         # Build the how-to section with OS-aware commands
@@ -998,36 +1054,42 @@ def generate_interactive_setup(
 
         containers_dir = os.path.normpath(
             os.path.join(cal_script_dir, '..', '..', '..', '..', 'containers'))
-        script_path = os.path.join(calibration_work_dir, _run_script_name)
+        # The run-script is recommended to live in cal_script_dir (the
+        # "3_Calibration" folder that contains calibration_lib).  The how-to
+        # therefore cd's into that folder first, then runs the script by name
+        # so the `from calibration_lib...` import always resolves.
         results_path = os.path.join(calibration_work_dir,
                                     f'{_calib_stem}_results_report.html')
 
         if os_name == "Windows":
             docker_cmd = html_lib.escape(
                 f'cd /d "{containers_dir}" && docker compose up -d')
-            run_cmd = html_lib.escape(f'python "{script_path}"')
-            resume_cmd = html_lib.escape(f'python "{script_path}" --resume')
-            dryrun_cmd = html_lib.escape(f'python "{script_path}" --dry-run')
+            cd_cmd = html_lib.escape(f'cd /d "{cal_script_dir}"')
+            run_cmd = html_lib.escape(f'python "{_run_script_name}"')
+            resume_cmd = html_lib.escape(f'python "{_run_script_name}" --resume')
+            dryrun_cmd = html_lib.escape(f'python "{_run_script_name}" --dry-run')
             open_cmd = "start"
         else:
             docker_cmd = html_lib.escape(
                 f"cd {containers_dir} && docker compose up -d")
-            run_cmd = html_lib.escape(f"python {script_path}")
-            resume_cmd = html_lib.escape(f"python {script_path} --resume")
-            dryrun_cmd = html_lib.escape(f"python {script_path} --dry-run")
+            cd_cmd = html_lib.escape(f"cd {cal_script_dir}")
+            run_cmd = html_lib.escape(f"python {_run_script_name}")
+            resume_cmd = html_lib.escape(f"python {_run_script_name} --resume")
+            dryrun_cmd = html_lib.escape(f"python {_run_script_name} --dry-run")
             open_cmd = "open" if os_name == "Darwin" else "xdg-open"
 
-        # Inline CSS for the mini code snippets with copy buttons
+        # Inline CSS for the mini code snippets with copy buttons.
+        # align-items:flex-start + wrapping code so the full command is
+        # visible (paths can be long) with the copy button pinned top-right.
         snippet_css = (
-            "display:flex;align-items:center;"
+            "display:flex;align-items:flex-start;"
             "background:var(--dark);color:#e2e8f0;border-radius:6px;"
             "padding:.35rem .6rem;margin:.3rem 0 .5rem;font-family:'JetBrains Mono',monospace;"
             "font-size:.75rem;line-height:1.4;gap:.5rem;"
-            "overflow:hidden;"
         )
         snippet_code_css = (
-            "min-width:0;overflow:hidden;text-overflow:ellipsis;"
-            "white-space:nowrap;flex:1;"
+            "min-width:0;flex:1;white-space:pre-wrap;"
+            "overflow-wrap:anywhere;word-break:break-all;"
         )
         copy_btn_css = (
             "flex-shrink:0;background:rgba(255,255,255,.1);"
@@ -1053,8 +1115,8 @@ def generate_interactive_setup(
     </div>
 
     <div style="margin-bottom:.6rem;">
-      <strong>3.</strong> Start the Docker container:
-      <div style="{snippet_css}">
+      <strong>3.</strong> <span id="step3Text">Start the Docker container:</span>
+      <div id="step3DockerCmd" style="{snippet_css}">
         <code id="cmdDocker" style="{snippet_code_css}">{docker_cmd}</code>
         <button style="{copy_btn_css}"
           onclick="navigator.clipboard.writeText(document.getElementById('cmdDocker').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
@@ -1062,7 +1124,17 @@ def generate_interactive_setup(
     </div>
 
     <div style="margin-bottom:.6rem;">
-      <strong>4.</strong> Run the calibration:
+      <strong>4.</strong> Go to the calibration folder (the one that contains
+      <code>calibration_lib</code>) so the script's imports resolve:
+      <div style="{snippet_css}">
+        <code id="cmdCd" style="{snippet_code_css}">{cd_cmd}</code>
+        <button style="{copy_btn_css}"
+          onclick="navigator.clipboard.writeText(document.getElementById('cmdCd').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:.6rem;">
+      <strong>5.</strong> Run the calibration:
       <div style="{snippet_css}">
         <code id="cmdRun" style="{snippet_code_css}">{run_cmd}</code>
         <button style="{copy_btn_css}"
@@ -1071,7 +1143,7 @@ def generate_interactive_setup(
     </div>
 
     <div style="margin-bottom:.6rem;">
-      <strong>5.</strong> Resume if interrupted:
+      <strong>6.</strong> Resume if interrupted:
       <div style="{snippet_css}">
         <code id="cmdResume" style="{snippet_code_css}">{resume_cmd}</code>
         <button style="{copy_btn_css}"
@@ -1080,7 +1152,7 @@ def generate_interactive_setup(
     </div>
 
     <div style="margin-bottom:.6rem;">
-      <strong>6.</strong> Validate config (optional dry run):
+      <strong>7.</strong> Validate config (optional dry run):
       <div style="{snippet_css}">
         <code id="cmdDryrun" style="{snippet_code_css}">{dryrun_cmd}</code>
         <button style="{copy_btn_css}"
@@ -1089,7 +1161,7 @@ def generate_interactive_setup(
     </div>
 
     <div style="margin-bottom:.3rem;">
-      <strong>7.</strong> View results &mdash; the script auto-generates an interactive
+      <strong>8.</strong> View results &mdash; the script auto-generates an interactive
       results report and opens it in your browser. To reopen it:
       <div style="{snippet_css}">
         <code id="cmdResults" style="{snippet_code_css}">{open_cmd} {html_lib.escape(results_path)}</code>
@@ -1101,6 +1173,90 @@ def generate_interactive_setup(
   </div>
 </details>
 """)
+
+        # ── HPC (Apptainer / Singularity) folder checklist ──
+        # Derive the concrete folders the user must copy to the cluster from
+        # the paths already in their model config.  The heavy GRQA /
+        # Copernicus processing is reused from the model-config setup, so the
+        # raw GRQA database is NOT needed on the HPC.
+        _supp_dir = os.path.dirname(cal_script_dir)  # supporting_scripts (1_/2_/3_)
+        _exe = (container_config.get("executable_path", "")
+                or model_config.get("executable_path", ""))
+        _model_run_dir = (os.path.dirname(os.path.abspath(_exe)) if _exe
+                          else model_config.get("dir2save_input_files", "") or "")
+        _river_shp = observation_config.get("river_network_shapefile") or ""
+        _basin_shp = observation_config.get("basin_shapefile") or ""
+        _shp_dirs = [os.path.dirname(p) for p in (_river_shp, _basin_shp) if p]
+        _dom_parts = [d for d in ([_model_run_dir] + _shp_dirs) if d]
+        try:
+            _domain_dir = (os.path.commonpath(_dom_parts)
+                           if len(_dom_parts) > 1
+                           else (_dom_parts[0] if _dom_parts else ""))
+        except ValueError:
+            _domain_dir = _model_run_dir
+
+        def _hpc_row(path_html, why_html):
+            return (
+                '<tr>'
+                '<td style="vertical-align:top;padding:.25rem .5rem;">'
+                f'<code style="font-size:.72rem;word-break:break-all;">{path_html}</code></td>'
+                '<td style="padding:.25rem .5rem;font-size:.82rem;color:var(--text2);">'
+                f'{why_html}</td></tr>')
+
+        _hpc_rows = [
+            _hpc_row(html_lib.escape(_supp_dir or "(supporting_scripts)"),
+                     "<strong>Supporting scripts</strong> &mdash; the openWQ "
+                     "<code>1_Model_Config</code>, <code>2_Read_Outputs</code> and "
+                     "<code>3_Calibration</code> tree (calibration_lib, the model-config "
+                     "template, BGC templates, spatial_matching)."),
+            _hpc_row(html_lib.escape(_domain_dir or "(domain folder)"),
+                     "<strong>Domain folder</strong> &mdash; the model run dir (the "
+                     "<em>already-processed</em> openWQ config in <code>openwq_in/</code> + the "
+                     "clipped GRQA in <code>grqa_clipped_data/</code>), the "
+                     "<code>shapefiles/</code>, and the host-model settings / forcing / "
+                     "control file the executable reads."),
+            _hpc_row("&lt;your openwq.sif&gt;",
+                     "<strong>Apptainer / Singularity image</strong> &mdash; build/transfer it "
+                     "and set its path in the <em>Apptainer SIF path</em> field (Execution settings)."),
+            _hpc_row(html_lib.escape(calibration_work_dir or "(calibration_work_dir)"),
+                     "<strong>Calibration work dir</strong> &mdash; created on the HPC; "
+                     "evaluations + results are written here (no need to pre-copy)."),
+        ]
+
+        H.append(f"""
+<details style="margin:.2rem 1rem .6rem;border:1px solid var(--border);border-radius:8px;padding:.2rem .8rem;font-size:.82rem;">
+  <summary style="cursor:pointer;font-weight:600;padding:.4rem 0;color:var(--primary);user-select:none;">
+    Running on HPC (Apptainer / Singularity) &mdash; folders to copy
+  </summary>
+  <div style="padding:.3rem 0 .8rem;line-height:1.6;color:var(--text2);">
+    <p style="margin:.2rem 0 .5rem;">Copy these to the cluster. The heavy GRQA / Copernicus
+    processing is <strong>reused</strong> from your model-config setup &mdash; nothing is
+    re-downloaded or re-processed per evaluation:</p>
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem;">
+      <tr style="border-bottom:1px solid var(--border);">
+        <th style="text-align:left;padding:.25rem .5rem;">Folder / file</th>
+        <th style="text-align:left;padding:.25rem .5rem;">Why</th></tr>
+      {''.join(_hpc_rows)}
+    </table>
+    <div class="hint" style="margin-top:.6rem;">
+      <strong>Paths:</strong> keep the same directory layout on the HPC, <em>or</em> edit the
+      absolute paths in your model config (<code>executable_path</code>, <code>file_manager_path</code>,
+      <code>river_network_shapefile</code>, the basin shapefile, <code>dir2save_input_files</code>) to the
+      HPC locations and set the <strong>Apptainer bind path</strong> to the shared root that contains them.
+    </div>
+    <div class="hint" style="margin-top:.4rem;">
+      <strong>Not needed on the HPC:</strong> the raw GRQA database
+      (<code>grqa_local_data_path</code>, often &gt;1&nbsp;GB) &mdash; the calibration reuses the
+      already-clipped GRQA inside the model run dir.
+    </div>
+    <div class="hint" style="margin-top:.4rem;">
+      Finally, set <strong>Container runtime = apptainer</strong> and fill the
+      <strong>Apptainer SIF / bind path</strong> fields above.
+    </div>
+  </div>
+</details>
+""")
+
         H.append("""
 <div class="script-pane-body">
     <pre class="code-block" id="scriptBlock">
@@ -1207,7 +1363,7 @@ def _build_interactive_summary(
 """
 
 
-def _build_interactive_settings_section() -> str:
+def _build_interactive_settings_section(container_runtime_default: str = "docker") -> str:
     """Calibration settings with interactive form elements."""
     return f"""
 <div class="section" id="settings">
@@ -1247,6 +1403,23 @@ def _build_interactive_settings_section() -> str:
                      "is already primary, so this has no effect on the metric.")}
         </div>
         <div class="form-row">
+            {rh.build_form_select(
+                "container_runtime", "Container runtime",
+                ["docker", "apptainer"], container_runtime_default,
+                "How to run the model: 'docker' (local Docker Desktop / "
+                "docker compose) or 'apptainer' (Singularity, typical on HPC "
+                "clusters). The Apptainer SIF / bind paths below apply only "
+                "when 'apptainer' is selected.")}
+            {rh.build_form_number(
+                "n_parallel", "Parallel model runs", 1, min_val=1, step=1,
+                hint="How many model evaluations to run concurrently during "
+                     "the sensitivity analysis (the runs are independent). "
+                     "Works for both Docker and Apptainer. DDS calibration is "
+                     "sequential by design, so this only speeds up the "
+                     "sensitivity stage. Set to roughly your available CPU "
+                     "cores / container capacity.")}
+        </div>
+        <div class="form-row">
             {rh.build_form_input(
                 "apptainer_sif_path",
                 "Apptainer SIF path (HPC)", "",
@@ -1266,12 +1439,90 @@ def _build_interactive_settings_section() -> str:
 """
 
 
+def _norm_feature_id(val) -> str:
+    """Normalise a shapefile feature ID to a clean string.
+
+    Float-typed IDs such as ``740457190.0`` become ``"740457190"`` so they
+    match the integer-cast IDs OpenWQ writes to HDF5 / the objective uses.
+    """
+    try:
+        f = float(val)
+        if f == int(f):
+            return str(int(f))
+        return str(f)
+    except (TypeError, ValueError):
+        return str(val).strip()
+
+
+def _read_feature_ids(shapefile_path: Optional[str],
+                      mapping_key: Optional[str],
+                      max_features: int = 5000) -> List[str]:
+    """Return sorted unique feature IDs from *shapefile_path*'s *mapping_key*
+    column (river reaches for mizuRoute, HRUs for SUMMA).
+
+    Best-effort and dependency-tolerant: returns ``[]`` on any problem
+    (missing fiona, missing file, missing column), in which case the UI
+    falls back to a free-text reach/HRU input.
+    """
+    if not shapefile_path or not mapping_key:
+        return []
+    try:
+        import fiona  # noqa: F401
+    except Exception:
+        return []
+    try:
+        if not os.path.isfile(shapefile_path):
+            return []
+        ids = set()
+        with fiona.open(shapefile_path) as src:
+            for feat in src:
+                props = (feat.get("properties", {}) or {})
+                if mapping_key in props:
+                    val = props[mapping_key]
+                else:
+                    # case-insensitive fallback
+                    lk = {k.lower(): k for k in props}
+                    real = lk.get(mapping_key.lower())
+                    if real is None:
+                        continue
+                    val = props[real]
+                if val is None:
+                    continue
+                ids.add(_norm_feature_id(val))
+                if len(ids) >= max_features:
+                    break
+        # numeric sort when every ID is numeric, else lexical
+        def _key(x):
+            try:
+                return (0, float(x))
+            except (TypeError, ValueError):
+                return (1, str(x))
+        return sorted(ids, key=_key)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning(f"Could not read feature IDs from {shapefile_path}: {e}")
+        return []
+
+
 def _build_interactive_targets_section(
     species_list: List[str],
     species_obs_availability: Dict[str, Dict[str, Any]],
     obs_source: str,
+    hostmodel: str = "",
+    feature_label: str = "Reach",
+    available_reaches: Optional[List[str]] = None,
+    available_compartments: Optional[List[str]] = None,
+    selected_compartments: Optional[List[str]] = None,
 ) -> str:
-    """Calibration targets with species checkboxes and observation info."""
+    """Calibration targets with species checkboxes and observation info.
+
+    The reach/compartment selectors are host-model-aware:
+      * mizuRoute → river reaches + ``RIVER_NETWORK_REACHES``-style compartments
+      * SUMMA     → HRUs + the SUMMA land/soil compartments
+
+    *available_reaches* populates a multi-select scroll list (falls back to a
+    free-text field if empty); *available_compartments* renders one checkbox
+    per compartment, pre-ticked from *selected_compartments*.
+    """
 
     obs_count = sum(
         1 for sp in species_list
@@ -1318,6 +1569,68 @@ def _build_interactive_targets_section(
         species_list, species_obs_availability
     )
 
+    # ── Host-aware reach/HRU + compartment selectors ──
+    available_reaches = available_reaches or []
+    available_compartments = available_compartments or []
+    _sel_comp = set(selected_compartments
+                    if selected_compartments is not None
+                    else available_compartments)
+    feat_lower = (feature_label or "Reach").lower()
+    feat_plural = "Reaches" if feature_label == "Reach" else f"{feature_label}s"
+
+    if available_reaches:
+        _opts = [f'<option value="all" selected>all '
+                 f'({len(available_reaches)} {feat_plural})</option>']
+        for _rid in available_reaches:
+            _r = html_lib.escape(str(_rid))
+            _opts.append(f'<option value="{_r}">{_r}</option>')
+        reach_field_html = (
+            f'<label for="reach_ids">Target {feature_label} IDs</label>'
+            f'<select class="form-input" id="reach_ids" multiple size="8" '
+            f'style="height:auto;min-height:9rem;font-family:monospace;">'
+            f'{"".join(_opts)}</select>'
+            f'<div class="hint">Ctrl / Cmd-click to select multiple '
+            f'{feat_lower}s; choose <strong>all</strong> to use every '
+            f'{feat_lower}.</div>'
+        )
+    else:
+        reach_field_html = (
+            f'<label for="reach_ids">Target {feature_label} IDs</label>'
+            f'<input class="form-input" type="text" id="reach_ids" '
+            f'value="all" placeholder="all or comma-separated IDs"/>'
+            f'<div class="hint">"all" or comma-separated IDs '
+            f'(no shapefile found to list {feat_lower}s).</div>'
+        )
+
+    if available_compartments:
+        _checks = []
+        for _comp in available_compartments:
+            _c = html_lib.escape(_comp)
+            _chk = "checked" if _comp in _sel_comp else ""
+            _checks.append(
+                f'<label class="comp-check" style="display:flex;'
+                f'align-items:center;gap:.45rem;padding:.25rem 0;'
+                f'cursor:pointer;">'
+                f'<input type="checkbox" class="comp-cb" value="{_c}" {_chk}/>'
+                f'<code style="font-size:.78rem;">{_c}</code></label>'
+            )
+        compartment_field_html = (
+            f'<label>Compartments</label>'
+            f'<div class="compartment-checks" style="border:1px solid '
+            f'var(--border);border-radius:8px;padding:.45rem .75rem;'
+            f'max-height:9rem;overflow:auto;">{"".join(_checks)}</div>'
+            f'<div class="hint">Tick the compartments to include '
+            f'({hostmodel or "host"} model).</div>'
+        )
+    else:
+        compartment_field_html = (
+            '<label for="compartments">Compartments</label>'
+            '<input class="form-input" type="text" id="compartments" '
+            'value="RIVER_NETWORK_REACHES" '
+            'placeholder="Comma-separated compartment names"/>'
+            '<div class="hint">Comma-separated (e.g. RIVER_NETWORK_REACHES)</div>'
+        )
+
     return f"""
 <div class="section" id="targets">
     <h2>Calibration Targets</h2>
@@ -1332,20 +1645,13 @@ def _build_interactive_targets_section(
         {species_html}
     </div>
     <div class="card">
-        <h3>Reach &amp; Compartment Selection</h3>
+        <h3>{feature_label} &amp; Compartment Selection</h3>
         <div class="form-row">
             <div class="form-group">
-                <label for="reach_ids">Target Reach IDs</label>
-                <input class="form-input" type="text" id="reach_ids"
-                       value="all" placeholder="all or comma-separated IDs"/>
-                <div class="hint">"all" or comma-separated IDs (e.g. 1001, 1002)</div>
+                {reach_field_html}
             </div>
             <div class="form-group">
-                <label for="compartments">Compartments</label>
-                <input class="form-input" type="text" id="compartments"
-                       value="RIVER_NETWORK_REACHES"
-                       placeholder="Comma-separated compartment names"/>
-                <div class="hint">Comma-separated (e.g. RIVER_NETWORK_REACHES)</div>
+                {compartment_field_html}
             </div>
         </div>
     </div>
@@ -1683,9 +1989,15 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                           auto_extracted_parameters,
                           module_parameters=None,
                           container_config=None,
-                          report_stem="calibration"):
+                          report_stem="calibration",
+                          calib_lib_dir=""):
     """Build the JavaScript for the interactive setup report."""
     import json as json_mod
+    # Absolute path to the openWQ "3_Calibration" folder (the parent of
+    # calibration_lib).  Baked into the generated run-script's sys.path so
+    # the import works regardless of where the user saves the script.
+    if not calib_lib_dir:
+        calib_lib_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     # Build flat PARAMS array: use module_parameters if available,
     # otherwise fall back to auto_extracted_parameters only
@@ -1701,6 +2013,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     mcp = json_mod.dumps(model_config_path)
     cwd = json_mod.dumps(calibration_work_dir)
     rstem = json_mod.dumps(report_stem or "calibration")
+    clibdir = json_mod.dumps(calib_lib_dir)
 
     # Build the JS as a plain string (not f-string) to avoid issues
     # with JS curly braces and Python triple-quote conflicts.
@@ -1713,6 +2026,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   var MODEL_CONFIG_PATH = ''' + mcp + r''';
   var CALIBRATION_WORK_DIR = ''' + cwd + r''';
   var REPORT_STEM = ''' + rstem + r''';
+  var CALIB_LIB_DIR = ''' + clibdir + r''';
   var PARAMS = ''' + params_json + r''';
 
   // Helper: Python repr
@@ -1762,6 +2076,13 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.temporal_resolution = document.getElementById('temporal_resolution').value;
     s.aggregation_method = document.getElementById('aggregation_method').value;
     s.random_seed = parseInt(document.getElementById('random_seed').value) || 42;
+    // Container runtime: 'docker' or 'apptainer' (Singularity).
+    var _crEl = document.getElementById('container_runtime');
+    s.container_runtime = _crEl ? _crEl.value : 'docker';
+    // Number of parallel model runs (sensitivity stage).
+    var _npEl = document.getElementById('n_parallel');
+    s.n_parallel = _npEl ? (parseInt(_npEl.value) || 1) : 1;
+    if (s.n_parallel < 1) s.n_parallel = 1;
     // Spatial-matching + HPC options (these are optional — the form
     // fields may not exist on older / customised reports so guard them).
     var _upoEl = document.getElementById('use_primary_only');
@@ -1785,11 +2106,33 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.species = species;
     s.objective_weights = weights;
 
-    var reachVal = document.getElementById('reach_ids').value.trim();
-    s.reach_ids = reachVal;
+    // Target reach/HRU IDs: multi-select scroll list when a shapefile was
+    // available, else a free-text field.  Normalised to "all" or a
+    // comma-separated string so generateScript() stays format-agnostic.
+    var reachEl = document.getElementById('reach_ids');
+    if (reachEl && reachEl.tagName === 'SELECT') {
+      var picked = Array.prototype.slice.call(reachEl.selectedOptions)
+        .map(function(o){ return o.value; });
+      if (picked.length === 0 || picked.indexOf('all') >= 0) {
+        s.reach_ids = 'all';
+      } else {
+        s.reach_ids = picked.join(',');
+      }
+    } else {
+      s.reach_ids = reachEl ? reachEl.value.trim() : 'all';
+    }
 
-    var compVal = document.getElementById('compartments').value.trim();
-    s.compartments = compVal.split(',').map(function(c){ return c.trim(); }).filter(Boolean);
+    // Compartments: checkbox list when available, else free-text field.
+    var compCbs = document.querySelectorAll('.comp-cb');
+    if (compCbs.length) {
+      var comps = [];
+      compCbs.forEach(function(cb){ if (cb.checked) comps.push(cb.value); });
+      s.compartments = comps;
+    } else {
+      var compEl = document.getElementById('compartments');
+      var compVal = compEl ? compEl.value.trim() : '';
+      s.compartments = compVal.split(',').map(function(c){ return c.trim(); }).filter(Boolean);
+    }
 
     s.run_sensitivity_first = document.getElementById('run_sensitivity_first').checked;
     s.sensitivity_method = document.getElementById('sensitivity_method').value;
@@ -1834,6 +2177,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('#!/usr/bin/env python3');
     lines.push('# Auto-generated calibration script from OpenWQ Interactive Setup Report.');
     lines.push('import sys, os');
+    lines.push('# calibration_lib lives in the openWQ "3_Calibration" folder.  Add');
+    lines.push('# that folder to sys.path (absolute, baked at generation time) so');
+    lines.push('# this script imports calibration_lib no matter where it is saved.');
+    lines.push('sys.path.insert(0, ' + pyRepr(CALIB_LIB_DIR) + ')');
     lines.push('sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))');
     lines.push('');
     lines.push('from calibration_lib.calibration_driver import run_calibration');
@@ -1855,6 +2202,17 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('temporal_resolution = ' + pyRepr(s.temporal_resolution));
     lines.push('aggregation_method = ' + pyRepr(s.aggregation_method));
     lines.push('random_seed = ' + pyRepr(s.random_seed));
+    lines.push('');
+    lines.push('# Container runtime selected in the setup report:');
+    lines.push('#   "docker"    — local Docker (docker compose up -d first)');
+    lines.push('#   "apptainer" — Singularity/Apptainer (set the SIF + bind paths below)');
+    lines.push('container_runtime = ' + pyRepr(s.container_runtime || 'docker'));
+    lines.push('');
+    lines.push('# Number of model evaluations to run concurrently during the');
+    lines.push('# sensitivity analysis (independent runs; works for Docker and');
+    lines.push('# Apptainer). DDS calibration is sequential, so this only speeds');
+    lines.push('# up the sensitivity stage.');
+    lines.push('n_parallel = ' + pyRepr(s.n_parallel || 1));
     lines.push('');
     lines.push('# Spatial-matching: when True the objective uses only the');
     lines.push('# pouring-point observation per HRU (SUMMA case). For');
@@ -1954,6 +2312,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        calibration_parameters=calibration_parameters,');
     lines.push('        algorithm=algorithm,');
     lines.push('        max_evaluations=max_evaluations,');
+    lines.push('        n_parallel=n_parallel,');
     lines.push('        objective_function=objective_function,');
     lines.push('        objective_weights=objective_weights,');
     lines.push('        calibration_targets=calibration_targets,');
@@ -1967,7 +2326,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        resume=args.resume,');
     lines.push('        temporal_resolution=temporal_resolution,');
     lines.push('        aggregation_method=aggregation_method,');
-    lines.push('        container_runtime=container_config.get("container_runtime", "docker"),');
+    // Runtime chosen in the setup report (docker / apptainer), overriding
+    // whatever the model config defaulted to.
+    lines.push('        container_runtime=container_runtime,');
     lines.push('        docker_container_name=container_config.get("docker_container_name", "docker_openwq"),');
     lines.push('        docker_compose_path=container_config.get("docker_compose_path", ""),');
     lines.push('        executable_full_path=container_config.get("executable_path", ""),');
@@ -2162,10 +2523,57 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   window.copyScript = function() {
     var codeEl = document.getElementById('scriptCode');
     navigator.clipboard.writeText(codeEl.textContent.trim());
-    var btn = document.querySelector('.script-pane-header .copy-btn');
+    // Target the Copy button specifically (not the Wrap toggle, which
+    // also carries the .copy-btn class).
+    var btn = document.querySelector('.script-pane-header .copy-btn:not(#wrapToggleBtn)');
     if (btn) {
       btn.textContent = 'Copied!';
       setTimeout(function(){ btn.textContent = 'Copy'; }, 2000);
+    }
+  };
+
+  // Toggle line wrapping vs single-line + horizontal scroll for the
+  // generated-script viewer.  Wrapping is ON by default so the whole
+  // script is visible without horizontal scrolling.
+  window.toggleWrap = function() {
+    var pre = document.getElementById('scriptBlock');
+    var btn = document.getElementById('wrapToggleBtn');
+    if (!pre) return;
+    var nowrap = pre.classList.toggle('nowrap');
+    if (btn) btn.textContent = nowrap ? 'Wrap: off' : 'Wrap: on';
+  };
+
+  // Reflect the selected container runtime in the "How to use this script"
+  // steps: Docker shows the `docker compose up -d` command; Apptainer
+  // (Singularity) drops it and points the user at the SIF / bind paths.
+  function updateRuntimeUI() {
+    var crEl = document.getElementById('container_runtime');
+    var rt = crEl ? crEl.value : 'docker';
+    var txt = document.getElementById('step3Text');
+    var cmd = document.getElementById('step3DockerCmd');
+    if (rt === 'apptainer') {
+      if (txt) txt.textContent = 'Apptainer / Singularity: build your openwq ' +
+        '.sif image and set the SIF & bind paths in the Execution settings ' +
+        'tab (no "docker compose" needed).';
+      if (cmd) cmd.style.display = 'none';
+    } else {
+      if (txt) txt.textContent = 'Start the Docker container:';
+      if (cmd) cmd.style.display = '';
+    }
+  }
+
+  // Copy the recommended save path (shown after "Save to:") to the
+  // clipboard.  Uses the live text, which the load-time hook refines to
+  // wherever the report HTML is actually opened from.
+  window.copySaveHint = function() {
+    var el = document.getElementById('saveHint');
+    var btn = document.getElementById('copyHintBtn');
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent.trim());
+    if (btn) {
+      var prev = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(function(){ btn.textContent = prev; }, 1500);
     }
   };
 
@@ -2188,10 +2596,12 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
 
   // Save script — uses Save-As dialog when available.
   // The suggested filename follows the originating template stem
-  // (<REPORT_STEM>_run.py).  Browsers cannot pre-set an arbitrary save
-  // directory for security reasons, so the recommended directory
-  // (calibration_work_dir) is surfaced in the status hint below the
-  // header instead.
+  // (<REPORT_STEM>_run.py).  The recommended location (shown in the status
+  // hint below the header) is the openWQ "3_Calibration" folder, where
+  // calibration_lib lives — though the script bakes that folder into its
+  // sys.path so it runs from anywhere.  Browsers cannot pre-set an
+  // arbitrary save directory for security reasons, so the hint tells the
+  // user exactly where to save it.
   window.downloadScript = function() {
     var state = collectFormState();
     var script = generateScript(state);
@@ -2210,7 +2620,6 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     if (window.showSaveFilePicker) {
       window.showSaveFilePicker({
         suggestedName: sugName,
-        startIn: 'documents',
         types: [{
           description: 'Python Script',
           accept: {'text/x-python': ['.py']},
@@ -2242,7 +2651,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   // Event binding
   var formInputs = document.querySelectorAll(
     '.form-select, .form-input, .species-cb, .weight-input, ' +
-    '.param-cb, .inline-input, .inline-select'
+    '.param-cb, .inline-input, .inline-select, .comp-cb'
   );
   formInputs.forEach(function(el) {
     el.addEventListener('change', updateScript);
@@ -2252,6 +2661,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   ['reach_ids', 'compartments'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) {
+      // 'change' covers <select multiple>; 'input' covers text fields.
+      el.addEventListener('change', updateScript);
       el.addEventListener('input', updateScript);
     }
   });
@@ -2374,6 +2785,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
 
   // Initial render
   updateScript();
+
+  // Container-runtime UI: reflect the current choice and update on change.
+  updateRuntimeUI();
+  var _crEl = document.getElementById('container_runtime');
+  if (_crEl) _crEl.addEventListener('change', updateRuntimeUI);
 
   // Auto-activate "Obs data only" in the diagram on page load
   // (calibration should default to only calibratable sub-cycles)

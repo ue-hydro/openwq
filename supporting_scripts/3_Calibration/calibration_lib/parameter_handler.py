@@ -141,6 +141,20 @@ class ParameterHandler:
         """
         if self.model_config is not None:
             eval_config = self._build_eval_config(parameters, values)
+            # Fast path — reuse the config the model-config script already
+            # produced.  When there are NO generation-time parameter overrides
+            # (climate / ML), the per-eval config is byte-for-byte what
+            # Gen_Input_Driver would regenerate, so we copy the baseline
+            # (including the already-processed Copernicus SS JSON, BGC, etc.)
+            # instead of re-running the whole generator — much faster and it
+            # skips re-processing GRQA/Copernicus on every evaluation.
+            # apply_parameters() then patches the calibrated values on the
+            # copy.  (`_build_eval_config` returns the SAME object when no
+            # generation-time overrides were injected.)
+            if eval_config is self.model_config:
+                baseline_dir = self._setup_from_baseline_config(eval_id)
+                if baseline_dir is not None:
+                    return baseline_dir
             return self._setup_from_config(eval_id, eval_config)
         elif self.test_case_dir is not None:
             return self._setup_from_testcase(eval_id)
@@ -232,6 +246,60 @@ class ParameterHandler:
         logger.debug(
             f"Created evaluation directory (Gen_Input_Driver): {eval_dir}"
         )
+        return eval_dir
+
+    def _setup_from_baseline_config(self, eval_id: int) -> Optional[Path]:
+        """Fast eval setup: copy the config the model-config script already
+        generated (under ``dir2save_input_files``) into the eval directory,
+        reusing the processed Copernicus SS JSON, BGC, transport, etc.
+        verbatim — instead of re-running Gen_Input_Driver.
+
+        Safe because, with no generation-time parameter overrides, the
+        regenerated config would be identical to this baseline; the per-eval
+        differences are applied afterwards by :meth:`apply_parameters`, which
+        edits the copied JSONs in place.
+
+        The OpenWQ master file uses paths relative to the run directory
+        (``openwq_in/…``, ``openwq_out/``) and the model is launched with its
+        CWD set to the eval dir, so the copied config is location-independent
+        — no path rewriting needed.
+
+        Returns the eval dir, or ``None`` when no baseline config is available
+        (caller then falls back to full regeneration).
+        """
+        mc = self.model_config or {}
+        base = mc.get('dir2save_input_files')
+        if not base:
+            exe = mc.get('executable_path', '')
+            base = os.path.dirname(os.path.abspath(exe)) if exe else None
+        if not base:
+            return None
+
+        base = Path(base)
+        src_in = base / "openwq_in"
+        src_master = base / "openWQ_master.json"
+        if not src_in.is_dir() or not src_master.is_file():
+            logger.debug(
+                f"No baseline config at {base}; will regenerate per eval.")
+            return None
+
+        eval_dir = self.calibration_work_dir / "evaluations" / f"eval_{eval_id:04d}"
+        if eval_dir.exists():
+            shutil.rmtree(eval_dir)
+        eval_dir.mkdir(parents=True)
+
+        # Copy the processed input config, skipping report-only / bulky
+        # artefacts (clipped GRQA data, any previously-written HDF5 output).
+        shutil.copytree(
+            src_in, eval_dir / "openwq_in",
+            ignore=shutil.ignore_patterns(
+                'grqa_clipped_data', 'HDF5', '*.h5', '*.nc'))
+        shutil.copy2(src_master, eval_dir / "openWQ_master.json")
+        (eval_dir / "openwq_out" / "HDF5").mkdir(parents=True, exist_ok=True)
+
+        logger.debug(
+            f"Created evaluation directory (reused baseline config from "
+            f"{base}): {eval_dir}")
         return eval_dir
 
     def _setup_from_testcase(self, eval_id: int) -> Path:

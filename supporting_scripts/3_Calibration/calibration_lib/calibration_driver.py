@@ -49,6 +49,40 @@ from .sensitivity.sobol_analysis import SobolAnalysis
 from .postprocessing.results_analysis import ResultsAnalyzer
 
 
+def _validate_observation_csv(path: str, obs_source: str) -> str:
+    """Make sure the observation path is a calibration-ready CSV.
+
+    For ``observation_data_source = "grqa"`` the model config gives a path
+    to the raw GRQA database *directory* (per-species ``*_GRQA.csv`` files).
+    That cannot be fed straight to the objective function, which expects a
+    single prepared CSV (``datetime, reach_id, species, value, units,
+    source, [is_primary]``).  Fail here with actionable guidance instead of
+    letting ``pd.read_csv`` raise a cryptic ``IsADirectoryError`` deep in
+    the objective function.
+    """
+    if obs_source == "skip" or not path:
+        return path
+    if os.path.isdir(path):
+        raise ValueError(
+            "Observation path is a directory, not a prepared calibration "
+            f"CSV:\n    {path}\n\n"
+            "The GRQA database has not been clipped/prepared for this basin "
+            "yet.\n"
+            "Run your MODEL-CONFIG script once first — it clips GRQA to the "
+            "basin and writes:\n"
+            "    <dir2save_input_files>/openwq_in/grqa_clipped_data/"
+            "grqa_clipped_observations.csv\n"
+            "The calibration then reshapes that automatically (no "
+            "re-download).\n\n"
+            "Alternatively, set in your model config:\n"
+            "      observation_data_source = \"user_csv\"\n"
+            "      user_observation_csv    = \"<your_observations.csv>\"\n"
+            "  with columns: datetime, reach_id, species, value, units, "
+            "source, [is_primary]."
+        )
+    return path
+
+
 def run_calibration(
         # Paths
         calibration_work_dir: str,
@@ -141,13 +175,28 @@ def run_calibration(
         executable_full_path = executable_full_path or _container.get("executable_path", "")
         file_manager_path = file_manager_path or _container.get("file_manager_path", "")
 
-        # Observation data path — may be supplied directly or derived
+        # Observation data path — may be supplied directly or derived from
+        # the model config the user already set up.  Honours all sources:
+        #   grqa (folder or "auto" download) and user_csv.  The paths come
+        #   straight from the model config; nothing is re-downloaded.
         if not observation_data_path:
             obs_source = _obs.get("source", "skip")
-            if obs_source == "grqa":
-                observation_data_path = _obs.get("grqa_local_data_path", "")
-            elif obs_source == "user_csv":
-                observation_data_path = _obs.get("user_observation_csv", "")
+            if obs_source in ("grqa", "user_csv"):
+                _log_adapter = lambda *a, **k: logger.info(
+                    " ".join(str(x) for x in a)) if a else None
+                observation_data_path = config_integration.prepare_calibration_observations_csv(
+                    model_config, str(work_dir), log=_log_adapter)
+                if not observation_data_path:
+                    # Fall back to the raw config path so the guard below
+                    # raises a clear, actionable error.
+                    observation_data_path = (
+                        _obs.get("grqa_local_data_path", "")
+                        if obs_source == "grqa"
+                        else _obs.get("user_observation_csv", ""))
+
+        # Make sure we end up with a real CSV (not the raw GRQA directory).
+        observation_data_path = _validate_observation_csv(
+            observation_data_path, _obs.get("source", "skip"))
 
     logger.info("=" * 60)
     logger.info("OPENWQ CALIBRATION FRAMEWORK")
@@ -190,7 +239,8 @@ def run_calibration(
         executable_args=executable_args,
         file_manager_path=file_manager_path,
         executable_full_path=executable_full_path,
-        command_template=command_template
+        command_template=command_template,
+        hostmodel=(model_config.get("hostmodel", "") if model_config else "")
     )
 
     # H5 reader path for objective function
@@ -277,7 +327,8 @@ def run_calibration(
             sobol_samples=sensitivity_sobol_samples,
             threshold=sensitivity_threshold,
             work_dir=work_dir,
-            random_seed=random_seed
+            random_seed=random_seed,
+            n_parallel=n_parallel
         )
 
         sensitive_params = sa_result.influential_params
@@ -683,9 +734,16 @@ def _run_sensitivity_analysis(
         sobol_samples: int,
         threshold: float,
         work_dir: Path,
-        random_seed: int
+        random_seed: int,
+        n_parallel: int = 1
 ):
-    """Run sensitivity analysis."""
+    """Run sensitivity analysis.
+
+    Sensitivity samples are independent, so their (slow) model runs are
+    executed up to ``n_parallel`` at a time.  Per-sample setup and the
+    objective computation stay on the main thread; only the model execution
+    is parallelised.
+    """
 
     param_names = [p["name"] for p in calibration_parameters]
 
@@ -711,37 +769,57 @@ def _run_sensitivity_analysis(
     samples = sa.generate_samples()
     logger.info(f"Generated {len(samples)} samples for {method} analysis")
 
-    # Evaluate samples
-    outputs = []
-    for i, sample in enumerate(samples):
-        logger.info(f"Sensitivity sample {i+1}/{len(samples)}")
+    # Evaluate samples.  Model runs are independent → run up to n_parallel
+    # at a time (works for Docker and Apptainer).  Setup + objective compute
+    # stay on the main thread; only the model execution is parallelised.
+    n_samples = len(samples)
+    n_par = max(1, int(n_parallel or 1))
+    outputs = [1e10] * n_samples
 
-        # Transform to real space
-        params_real = np.array([
-            ParameterHandler.transform_to_real(p, t)
-            for p, t in zip(sample, transforms)
-        ])
+    for chunk_start in range(0, n_samples, n_par):
+        chunk = list(range(chunk_start, min(chunk_start + n_par, n_samples)))
 
-        # Setup and run (bake generation-time params before generation)
-        eval_dir = param_handler.setup_working_directory(
-            10000 + i, calibration_parameters, params_real)
-        param_handler.apply_parameters(eval_dir, calibration_parameters, params_real)
+        # ── Setup each eval in the chunk (sequential, fast) ──
+        eval_configs = []
+        for i in chunk:
+            params_real = np.array([
+                ParameterHandler.transform_to_real(p, t)
+                for p, t in zip(samples[i], transforms)
+            ])
+            # Setup (bake generation-time params before generation) + patch
+            eval_dir = param_handler.setup_working_directory(
+                10000 + i, calibration_parameters, params_real)
+            param_handler.apply_parameters(
+                eval_dir, calibration_parameters, params_real)
 
-        # Save parameters
-        params_file = eval_dir / "parameters.json"
-        with open(params_file, 'w') as f:
-            json.dump({name: float(val) for name, val in zip(param_names, params_real)}, f, indent=2)
+            params_file = eval_dir / "parameters.json"
+            with open(params_file, 'w') as f:
+                json.dump({name: float(val)
+                           for name, val in zip(param_names, params_real)},
+                          f, indent=2)
 
-        master_json = str(eval_dir / "openWQ_master.json")
-        success, runtime, error = model_runner.run_single_evaluation(eval_dir, master_json, 10000 + i)
+            eval_configs.append({
+                "eval_id": 10000 + i,
+                "eval_dir": eval_dir,
+                "master_json": str(eval_dir / "openWQ_master.json"),
+                "_idx": i,
+            })
 
-        if success:
-            output_dir = eval_dir / "openwq_out"
-            obj_val = obj_func.compute(output_dir)
-        else:
-            obj_val = 1e10
+        logger.info(
+            f"Sensitivity samples {chunk[0] + 1}-{chunk[-1] + 1}/{n_samples} "
+            f"(running {len(eval_configs)} with n_parallel={n_par})")
 
-        outputs.append(obj_val)
+        # ── Run the chunk (parallel when n_par > 1) ──
+        run_results = model_runner.run_parallel_evaluations(eval_configs, n_par)
+        success_by_id = {eid: ok for (eid, ok, _rt, _err) in run_results}
+
+        # ── Objective for each (sequential; reads HDF5 output) ──
+        for cfg in eval_configs:
+            if success_by_id.get(cfg["eval_id"], False):
+                outputs[cfg["_idx"]] = obj_func.compute(
+                    cfg["eval_dir"] / "openwq_out")
+            else:
+                outputs[cfg["_idx"]] = 1e10
 
     outputs = np.array(outputs)
 
@@ -781,7 +859,8 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         executable_args=kwargs.get('executable_args', ""),
         file_manager_path=kwargs.get('file_manager_path'),
         executable_full_path=kwargs.get('executable_full_path'),
-        command_template=kwargs.get('command_template')
+        command_template=kwargs.get('command_template'),
+        hostmodel=(_model_config.get("hostmodel", "") if _model_config else "")
     )
 
     if kwargs.get('base_model_config_dir'):
@@ -800,10 +879,20 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         from . import config_integration
         _obs = config_integration.get_observation_config(_model_config)
         obs_source = _obs.get("source", "skip")
-        if obs_source == "grqa":
-            _obs_path = _obs.get("grqa_local_data_path", "")
-        elif obs_source == "user_csv":
-            _obs_path = _obs.get("user_observation_csv", "")
+        if obs_source in ("grqa", "user_csv"):
+            # Reuse the observations the model config points to (GRQA folder/
+            # "auto" download, or user_csv), reshaped to the objective CSV
+            # format (no re-download).
+            _log_adapter = lambda *a, **k: logger.info(
+                " ".join(str(x) for x in a)) if a else None
+            _obs_path = config_integration.prepare_calibration_observations_csv(
+                _model_config, str(work_dir), log=_log_adapter)
+            if not _obs_path:
+                _obs_path = (
+                    _obs.get("grqa_local_data_path", "")
+                    if obs_source == "grqa"
+                    else _obs.get("user_observation_csv", ""))
+        _obs_path = _validate_observation_csv(_obs_path, obs_source)
 
     # Re-import defensively so this branch works even when the obs-path
     # resolution above (which is the only other importer of
@@ -853,7 +942,8 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         sobol_samples=kwargs.get('sensitivity_sobol_samples', 1024),
         threshold=kwargs.get('sensitivity_threshold', 0.1),
         work_dir=work_dir,
-        random_seed=kwargs.get('random_seed')
+        random_seed=kwargs.get('random_seed'),
+        n_parallel=kwargs.get('n_parallel', 1)
     )
 
     result.print_summary()
