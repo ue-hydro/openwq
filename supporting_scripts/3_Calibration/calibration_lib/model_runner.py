@@ -51,6 +51,7 @@ class ModelRunner:
                  executable_full_path: str = None,
                  command_template: str = None,
                  hostmodel: str = "",
+                 calibration_work_dir: str = None,
                  timeout_seconds: int = 7200):
         """
         Initialize model runner.
@@ -98,6 +99,20 @@ class ModelRunner:
         #   mizuRoute  → `<control_file>`     (positional argument)
         self.hostmodel = (hostmodel or "").lower()
         self.timeout_seconds = timeout_seconds
+
+        # Reference size (bytes) of a COMPLETED evaluation's openWQ output,
+        # used to estimate live % progress.  openWQ writes the SAME set of
+        # HDF5 outputs (one record per output timestep) regardless of host
+        # model, and every eval simulates the same period → the same final
+        # size.  So this is host-agnostic.  We seed it up front (from a
+        # persisted value or a prior completed eval on disk) so % is shown
+        # from the very first chunk, and refresh it the first time an eval
+        # completes in this run.
+        self._work_dir = calibration_work_dir
+        self._ref_file = (Path(calibration_work_dir) / ".openwq_output_reference.txt"
+                          if calibration_work_dir else None)
+        self._ref_output_bytes = None
+        self._init_reference()
 
         # Parse Docker compose to get volume mapping
         self.docker_host_path = None
@@ -215,10 +230,13 @@ class ModelRunner:
         #                evals don't fight over the same NetCDF/HDF5 file
         #                (which surfaces as "Permission denied" on create).
         #   mizuRoute  → MPI-parallel across reaches; control file positional.
-        eval_suffix = Path(eval_dir).name  # unique per eval, e.g. "eval_0000"
         if self.hostmodel == "summa":
             n_ranks = 1
-            model_arg = f"-m {container_file_manager} -s {eval_suffix}"
+            # Per-eval SUMMA output dir (fresh + isolated) avoids stale-file
+            # 'Permission denied' on re-create and parallel collisions.
+            eval_fm = self._summa_eval_filemanager(eval_dir, container_eval_dir)
+            fm_arg = eval_fm or container_file_manager
+            model_arg = f"-m {fm_arg}"
         else:
             n_ranks = 2
             model_arg = f"{container_file_manager}"
@@ -307,12 +325,12 @@ class ModelRunner:
         # Build executable path
         exec_dir = f"{container_path}/route/build/openwq/openwq/bin"
 
-        # SUMMA needs `-m <fileManager>` (+ a unique `-s <suffix>` so parallel
-        # evals write distinct output files); mizuRoute takes the control file
-        # positionally.
+        # SUMMA → `-m <fileManager>` with a per-eval fileManager that writes
+        # into this eval's own summa_out (isolated, fresh each run).
+        # mizuRoute → control file positionally.
         if self.hostmodel == "summa":
-            model_args = ["-m", container_file_manager,
-                          "-s", Path(eval_dir).name]
+            eval_fm = self._summa_eval_filemanager(eval_dir, container_eval_dir)
+            model_args = ["-m", eval_fm or container_file_manager]
         else:
             model_args = [container_file_manager]
 
@@ -361,6 +379,104 @@ class ModelRunner:
         except Exception as e:
             return False, str(e)
 
+    def _init_reference(self):
+        """Seed the reference output size so % progress is available from the
+        first chunk.  Tries (1) a persisted value, then (2) the largest
+        completed openWQ output among existing eval directories on disk
+        (left by a prior run / sensitivity stage)."""
+        # 1. persisted reference
+        if self._ref_file and self._ref_file.is_file():
+            try:
+                val = int(self._ref_file.read_text().strip())
+                if val > 0:
+                    self._ref_output_bytes = val
+                    return
+            except (ValueError, OSError):
+                pass
+        # 2. fallback: scan existing eval dirs for the biggest output set
+        if self._work_dir:
+            evals_dir = Path(self._work_dir) / "evaluations"
+            best = 0
+            try:
+                for d in evals_dir.glob("eval_*"):
+                    best = max(best, self._openwq_out_bytes(d))
+            except OSError:
+                pass
+            if best > 0:
+                self._ref_output_bytes = best
+
+    def _save_reference(self, nbytes: int):
+        """Persist the reference output size for future runs."""
+        if self._ref_file and nbytes > 0:
+            try:
+                self._ref_file.write_text(str(int(nbytes)))
+            except OSError:
+                pass
+
+    def _summa_eval_filemanager(self, eval_dir, container_eval_dir) -> str:
+        """Create a per-evaluation SUMMA fileManager so each eval writes its
+        SUMMA output into its OWN ``<eval_dir>/summa_out/`` (fresh every run),
+        instead of a shared directory.  This avoids 'Permission denied' on
+        re-creating leftover output files and any cross-eval collision when
+        running in parallel.  Returns the CONTAINER path of the per-eval
+        fileManager (falls back to the baseline path on any problem).
+
+        Only ``outputPath`` is rewritten; ``settingsPath`` / ``forcingPath``
+        stay pointed at the shared (read-only) inputs.
+        """
+        import re
+        try:
+            host_out = Path(eval_dir) / "summa_out"
+            host_out.mkdir(parents=True, exist_ok=True)
+            text = Path(self.file_manager_path).read_text()
+            container_out = f"{container_eval_dir.rstrip('/')}/summa_out/"
+            text = re.sub(
+                r"(outputPath\s+')[^']*(')",
+                lambda m: m.group(1) + container_out + m.group(2), text)
+            host_fm = Path(eval_dir) / "fileManager_eval.txt"
+            host_fm.write_text(text)
+            # Container path of the per-eval fileManager = the eval dir's
+            # container path + the file name.
+            return f"{container_eval_dir.rstrip('/')}/fileManager_eval.txt"
+        except OSError as e:
+            logger.warning(
+                f"Could not write per-eval SUMMA fileManager ({e}); "
+                f"using the shared one.")
+            return None
+
+    @staticmethod
+    def _openwq_out_bytes(eval_dir) -> int:
+        """Total bytes of the openWQ HDF5 output written so far for an eval.
+
+        Host-agnostic progress signal: openWQ appends one record per output
+        timestep to each ``openwq_out/**/*.h5`` file, so the directory grows
+        ~linearly with simulated time (same for SUMMA and mizuRoute).  Uses
+        only ``stat`` (never opens the HDF5), so it can't collide with the
+        model still writing them.
+        """
+        out = Path(eval_dir) / "openwq_out"
+        total = 0
+        try:
+            for p in out.rglob("*.h5"):
+                try:
+                    total += p.stat().st_size
+                except OSError:
+                    pass
+        except OSError:
+            pass
+        return total
+
+    def _progress_str(self, eval_dir) -> str:
+        """Human-readable per-eval progress: 'NN.N MB (PP%)' (or just MB when
+        no reference size is known yet, i.e. before the first eval finishes)."""
+        b = self._openwq_out_bytes(eval_dir)
+        mb = b / 1_000_000.0
+        if self._ref_output_bytes and self._ref_output_bytes > 0:
+            pct = int(round(100.0 * b / self._ref_output_bytes))
+            pct = max(0, min(99, pct))  # cap < 100 until it actually finishes
+            return f"{mb:.1f} MB ({pct}%)"
+        return f"{mb:.1f} MB"
+
     def run_parallel_evaluations(self,
                                  eval_configs: List[Dict],
                                  n_parallel: int) -> List[Tuple[int, bool, float, str]]:
@@ -401,32 +517,45 @@ class ModelRunner:
         # periodic heartbeat so the user can see the run is alive even while
         # a long model evaluation is still in flight.
         _lock = threading.Lock()
-        _state = {"done": 0}
+        _done_ids = set()
         _t0 = time.time()
         _stop_hb = threading.Event()
 
         def _heartbeat():
             # Fires only if a chunk takes a while; short chunks never trigger
-            # it (no log spam), long ones get a reassuring "still running".
+            # it (no log spam), long ones get a reassuring per-model update of
+            # how much openWQ output each running simulation has written.
             while not _stop_hb.wait(15):
                 with _lock:
-                    done = _state["done"]
-                running = min(n_workers, total - done)
+                    done = set(_done_ids)
+                running = [c for c in eval_configs if c['eval_id'] not in done]
+                if not running:
+                    continue
+                elapsed = time.time() - _t0
                 logger.info(
-                    f"    ... still running: {done}/{total} done, "
-                    f"~{running} model(s) in progress "
-                    f"(elapsed {time.time() - _t0:.0f}s)")
+                    f"    progress | {len(done)}/{total} done | "
+                    f"{len(running)} running | elapsed {elapsed:.0f}s")
+                # One model per row, for readability.
+                for c in running:
+                    logger.info(
+                        f"        eval {c['eval_id']:<6} {self._progress_str(c['eval_dir'])}")
 
         def _run_one(config):
             success, runtime, error = self.run_single_evaluation(
                 config['eval_dir'], config['master_json'], config['eval_id'])
+            out_bytes = self._openwq_out_bytes(config['eval_dir'])
             with _lock:
-                _state["done"] += 1
-                n_done = _state["done"]
+                _done_ids.add(config['eval_id'])
+                n_done = len(_done_ids)
+                # A successful eval gives the true full-run output size; keep
+                # the largest seen as the reference and persist it for % est.
+                if success and out_bytes > (self._ref_output_bytes or 0):
+                    self._ref_output_bytes = out_bytes
+                    self._save_reference(out_bytes)
             status = "done " if success else "FAILED"
             logger.info(
                 f"    [{n_done}/{total}] eval {config['eval_id']} {status} "
-                f"({runtime:.1f}s)")
+                f"({runtime:.1f}s, {out_bytes / 1_000_000.0:.1f} MB output)")
             return (config['eval_id'], success, runtime, error)
 
         hb_thread = threading.Thread(target=_heartbeat, daemon=True)
