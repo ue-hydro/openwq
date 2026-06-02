@@ -72,6 +72,7 @@ def generate_results_report(
     performance_metrics: Optional[List[Dict[str, Any]]] = None,
     matched_data: Optional[Any] = None,
     report_stem: Optional[str] = None,
+    in_progress: bool = False,
 ) -> Optional[str]:
     """
     Generate the calibration results HTML report.
@@ -139,33 +140,54 @@ def generate_results_report(
             extra_css=extra_css
         ))
         H.append("<body>")
+        # Plotly.js + shared theme-aware chart helpers + per-figure Lock-zoom /
+        # branded PDF export.  Pass the project name so exported PDFs are stamped.
+        H.append(_plotly_bootstrap(model_config.get("project_name", "OpenWQ Calibration")))
         H.append('<div class="layout">')
 
-        # ── Sidebar ──
+        # ── Determine which of the two parts actually ran ──
+        _did_sens = bool(sensitivity_results)
+        _did_calib = (bool(calibration_results.get("calibration_ran", True))
+                      and bool(calibration_results.get("history")))
+        _mode = calibration_settings.get("calibration_mode") or (
+            "both" if (_did_sens and _did_calib)
+            else "sensitivity" if _did_sens else "calibration")
+
+        # ── Sidebar (Part 1: influential params, Part 2: calibration) ──
         nav_items = [
             {"id": "summary", "label": "Summary"},
+            {"id": "sensitivity", "label": "Influential params"},
         ]
-        # Observation map nav item — placed right after Summary so it
-        # mirrors the section order on the page.
-        if _has_observation_map_inputs(model_config):
-            nav_items.append({"id": "obs-map", "label": "Observation Map"})
-        nav_items.extend([
-            {"id": "best-params", "label": "Best Parameters"},
-            {"id": "convergence", "label": "Convergence"},
-            {"id": "param-evolution", "label": "Parameter Evolution"},
-            {"id": "param-correlations", "label": "Correlations"},
-        ])
-        if sensitivity_results:
-            nav_items.append({"id": "sensitivity", "label": "Sensitivity"})
+        if _did_calib:
+            if _has_observation_map_inputs(model_config):
+                nav_items.append({"id": "obs-map", "label": "Observation Map"})
+            nav_items.extend([
+                {"id": "best-params", "label": "Best Parameters"},
+                {"id": "convergence", "label": "Convergence"},
+                {"id": "param-evolution", "label": "Parameter Evolution"},
+                {"id": "param-correlations", "label": "Correlations"},
+            ])
+        else:
+            nav_items.append({"id": "best-params", "label": "Calibration"})
         try:
             _bgc_path = _ci.get_bgc_template_path(model_config)
         except Exception:
             _bgc_path = None
         if _bgc_path and os.path.isfile(_bgc_path):
             nav_items.append({"id": "bgc-network", "label": "BGC Network"})
-        if performance_metrics:
+        if performance_metrics and _did_calib:
             nav_items.append({"id": "performance", "label": "Performance"})
-        nav_items.append({"id": "run-best", "label": "Run Best Params"})
+        if _did_calib:
+            try:
+                _has_md = (matched_data is not None
+                           and hasattr(matched_data, "empty")
+                           and not matched_data.empty)
+            except Exception:
+                _has_md = False
+            if _has_md:
+                nav_items.append({"id": "timeseries", "label": "Time Series"})
+            # "Run Best Params" snippet lives at the very bottom of the report.
+            nav_items.append({"id": "run-best", "label": "Run Best Params"})
 
         H.append(rh.build_sidebar(nav_items, logo_text="OpenWQ Calibration"))
 
@@ -179,12 +201,28 @@ def generate_results_report(
         best_obj = calibration_results.get("best_objective", float('nan'))
         n_evals = calibration_results.get("n_evaluations", 0)
 
+        _mode_label = {"sensitivity": "Influential parameters only",
+                       "both": "Influential parameters + calibration",
+                       "calibration": "Calibration only"}.get(_mode, "")
         meta_items = [
             f"Authors: {authors}" if authors else "",
             f"Completed: {date_str}",
-            f"Best {calibration_settings.get('objective_function', 'KGE')}: {best_obj:.4f}",
-            f"Evaluations: {n_evals}",
+            f"Workflow: {_mode_label}" if _mode_label else "",
         ]
+        if _did_calib:
+            _ofn = calibration_settings.get('objective_function', 'KGE')
+            # Convert the minimised objective back to the real metric for the
+            # header (KGE/NSE: metric = 1 - objective), matching the Summary.
+            if _ofn in ("KGE", "NSE") and isinstance(best_obj, (int, float)) \
+                    and best_obj == best_obj:
+                _hdr_metric = 1.0 - best_obj
+            else:
+                _hdr_metric = best_obj
+            _bobj = (f"{_hdr_metric:.4f}"
+                     if isinstance(_hdr_metric, (int, float)) and _hdr_metric == _hdr_metric
+                     else "N/A")
+            meta_items.append(f"Best {_ofn}: {_bobj}")
+            meta_items.append(f"Evaluations: {n_evals}")
         meta_items = [m for m in meta_items if m]
 
         H.append(rh.build_header(
@@ -197,54 +235,124 @@ def generate_results_report(
 
         H.append('<div class="container">')
 
+        # ── In-progress banner (partial report opened mid-run) ──
+        if in_progress:
+            _n_so_far = calibration_results.get("n_evaluations", 0)
+            _sens_prog = calibration_results.get("sensitivity_progress")
+            _sens_line = (
+                f" Influential-parameter screening: "
+                f"<strong>{_sens_prog}</strong> model runs completed."
+                if _sens_prog else "")
+            H.append(f"""
+<div class="section" id="in-progress">
+    <div class="card" style="border-left:5px solid #3b82f6;
+         background:rgba(59,130,246,.08);">
+        <p style="margin:0;font-size:.95rem;">
+            &#9203; <strong>In progress.</strong> This is a partial report
+            generated from the latest results available right now
+            ({_n_so_far} calibration evaluation{'s' if _n_so_far != 1 else ''} so far).{_sens_line}
+            Re-run the <code>--report</code> command (or reopen this file) any
+            time for a fresher snapshot, and once more after the run finishes
+            for the complete report. (Sections still being computed may be
+            empty or show a placeholder.)
+        </p>
+    </div>
+</div>
+""")
+
         # ── Section: Summary ──
         H.append(_build_summary_section(
             calibration_results, calibration_settings, calibration_parameters,
             performance_metrics=performance_metrics,
         ))
 
-        # ── Section: Observation Map (now right after Summary) ──
-        # Same matching as the config-side viewer: stations are coloured
-        # by per-station performance (when available); marker size scales
-        # with the number of observations.  Skipped silently if no obs
-        # CSV or no shapefile is loaded.
-        try:
-            _map_section = _build_observation_map_section(
-                model_config, calibration_settings,
-                performance_metrics=performance_metrics,
-                matched_data=matched_data,
-            )
-        except Exception as _e:
-            logger.warning(f"Observation map skipped: {_e}")
-            _map_section = ""
-        if _map_section:
-            H.append(_map_section)
+        # ═══════════════════════════════════════════════════════════════
+        # PART 1 — Influential parameters (sensitivity screening)
+        # ═══════════════════════════════════════════════════════════════
+        H.append(_build_part_divider(
+            "Part 1 &mdash; Influential parameters",
+            "Morris / Sobol screening: which parameters most move the objective."))
+        if _did_sens:
+            H.append(_build_sensitivity_section(sensitivity_results, output_dir))
+        elif in_progress and _mode in ("sensitivity", "both"):
+            _sp = calibration_results.get("sensitivity_progress")
+            _msg = ("Influential-parameter screening is running"
+                    + (f" &mdash; {_sp} model runs completed so far."
+                       if _sp else
+                       " &mdash; results will appear here once it finishes.")
+                    + " Morris/Sobol indices are only computed after all "
+                    "screening runs complete; reopen this report then.")
+            H.append(_build_not_run_notice(
+                "sensitivity", "Influential parameters", _msg,
+                status="&#9203; In progress.", colour="#3b82f6"))
+        else:
+            H.append(_build_not_run_notice(
+                "sensitivity", "Influential parameters",
+                f"Sensitivity screening was not run for this workflow "
+                f"(mode = &lsquo;{_mode}&rsquo;). Set the workflow slider to "
+                "&lsquo;Influential parameters&rsquo; or &lsquo;Both&rsquo; to compute it."))
 
-        # ── Section: Best Parameters ──
-        H.append(_build_best_params_section(
-            calibration_parameters, calibration_results
-        ))
+        # ═══════════════════════════════════════════════════════════════
+        # PART 2 — Calibration
+        # ═══════════════════════════════════════════════════════════════
+        H.append(_build_part_divider(
+            "Part 2 &mdash; Calibration",
+            "Optimised parameters, convergence, and model performance."))
+        if _did_calib:
+            # Observation map (performance-coloured stations) belongs with
+            # the calibration results.
+            try:
+                _map_section = _build_observation_map_section(
+                    model_config, calibration_settings,
+                    performance_metrics=performance_metrics,
+                    matched_data=matched_data,
+                )
+            except Exception as _e:
+                logger.warning(f"Observation map skipped: {_e}")
+                _map_section = ""
+            if _map_section:
+                H.append(_map_section)
 
-        # ── Section: Convergence ──
-        H.append(_build_convergence_section(
-            calibration_results, calibration_settings, output_dir
-        ))
-
-        # ── Section: Parameter Evolution ──
-        H.append(_build_param_evolution_section(
-            calibration_results, calibration_parameters, output_dir
-        ))
-
-        # ── Section: Parameter Correlations ──
-        H.append(_build_correlations_section(
-            calibration_results, calibration_parameters, output_dir
-        ))
-
-        # ── Section: Sensitivity Analysis (if available) ──
-        if sensitivity_results:
-            H.append(_build_sensitivity_section(
-                sensitivity_results, output_dir
-            ))
+            H.append(_build_best_params_section(
+                calibration_parameters, calibration_results))
+            H.append(_build_convergence_section(
+                calibration_results, calibration_settings, output_dir))
+            H.append(_build_param_evolution_section(
+                calibration_results, calibration_parameters, output_dir))
+            H.append(_build_correlations_section(
+                calibration_results, calibration_parameters, output_dir))
+            if performance_metrics:
+                H.append(_build_performance_section(
+                    performance_metrics, matched_data,
+                    calibration_settings, output_dir,
+                    hostmodel=(model_config.get("hostmodel") or "mizuroute"),
+                ))
+            # Observed vs simulated time series at the best parameters, per
+            # calibrated species (driven by matched_data; independent of the
+            # numeric performance-metrics table above).  The "Run with Best
+            # Parameters" snippet is appended at the very END of the report.
+            try:
+                _ts_section = _build_calibrated_timeseries_section(
+                    matched_data, calibration_settings, model_config,
+                    output_dir)
+            except Exception as _e:
+                logger.warning(f"Time-series section skipped: {_e}")
+                _ts_section = ""
+            if _ts_section:
+                H.append(_ts_section)
+        elif in_progress and _mode in ("both", "calibration"):
+            H.append(_build_not_run_notice(
+                "best-params", "Calibration",
+                "Calibration is in progress &mdash; results will appear here as "
+                "evaluations complete. Reopen this report shortly.",
+                status="&#9203; In progress.", colour="#3b82f6"))
+        else:
+            H.append(_build_not_run_notice(
+                "best-params", "Calibration",
+                f"Calibration was not run for this workflow "
+                f"(mode = &lsquo;{_mode}&rsquo; &mdash; influential parameters only). "
+                "Set the workflow slider to &lsquo;Calibration&rsquo; or "
+                "&lsquo;Both&rsquo; to calibrate."))
 
         # ── Section: BGC Reaction Network (if template available) ──
         if _bgc_path and os.path.isfile(_bgc_path):
@@ -261,19 +369,13 @@ def generate_results_report(
             except Exception:
                 pass
 
-        # ── Section: Performance Metrics (if available) ──
-        if performance_metrics:
-            H.append(_build_performance_section(
-                performance_metrics, matched_data,
-                calibration_settings, output_dir,
-                hostmodel=(model_config.get("hostmodel") or "mizuroute"),
+        # ── Section: Run with Best Parameters (kept LAST in the report, per
+        # request — it's the actionable "what to run next" snippet) ──
+        if _did_calib:
+            H.append(_build_run_best_section(
+                calibration_results, model_config, calibration_settings,
+                calibration_parameters=calibration_parameters,
             ))
-
-        # ── Section: Run Best Parameters ──
-        H.append(_build_run_best_section(
-            calibration_results, model_config, calibration_settings,
-            calibration_parameters=calibration_parameters,
-        ))
 
         H.append('</div>')  # container
         H.append(rh.build_footer())
@@ -296,6 +398,37 @@ def generate_results_report(
         import traceback
         logger.debug(traceback.format_exc())
         return None
+
+
+def _build_part_divider(title: str, subtitle: str = "") -> str:
+    """A bold banner that separates the two report parts (influential
+    parameters vs calibration)."""
+    sub = (f'<p style="margin:.3rem 0 0;color:var(--text2);font-size:.92rem;">'
+           f'{subtitle}</p>' if subtitle else "")
+    return f"""
+<div class="section part-divider">
+    <h2 style="margin-bottom:0;border-bottom:3px solid var(--primary);
+               padding-bottom:.45rem;font-size:1.5rem;">{title}</h2>
+    {sub}
+</div>
+"""
+
+
+def _build_not_run_notice(section_id: str, title: str, message: str,
+                          status: str = "&#9888; Not run.",
+                          colour: str = "#f59e0b") -> str:
+    """A notice card shown in a part that was skipped (or is still running)."""
+    return f"""
+<div class="section" id="{section_id}">
+    <h2>{title}</h2>
+    <div class="card" style="border-left:5px solid {colour};
+         background:{colour}14;">
+        <p style="margin:0;font-size:.95rem;">
+            <strong>{status}</strong> {message}
+        </p>
+    </div>
+</div>
+"""
 
 
 # =========================================================================
@@ -396,8 +529,20 @@ def _build_summary_section(
     else:
         runtime_str = "N/A"
 
-    # Objective value quality assessment (best)
-    obj_quality = _assess_objective(best_obj, obj_fn)
+    # best_obj is the value the optimiser MINIMISES.  For KGE/NSE that is
+    # (1 - metric), so convert it back to the ACTUAL metric for both the KPI
+    # value and the quality label.  Without this, a poor KGE of e.g. -5.7 is
+    # stored as objective 6.7 and was being mislabelled "Very Good" (and shown
+    # as "Best KGE = 6.7340", which is impossible — KGE ≤ 1).  For RMSE the
+    # minimised objective already IS the metric, so no conversion.  This also
+    # puts "Best" on the same raw-metric scale as the Mean/Median KPIs below.
+    if obj_fn in ("KGE", "NSE") and isinstance(best_obj, (int, float)) \
+            and best_obj == best_obj:  # finite, not NaN
+        best_metric = 1.0 - best_obj
+    else:
+        best_metric = best_obj
+    # Objective value quality assessment (best), on the real metric scale.
+    obj_quality = _assess_objective(best_metric, obj_fn)
 
     # \u2500\u2500 Mean + median across stations (when performance_metrics avail.) \u2500\u2500
     # For PBIAS the magnitude convention is |PBIAS|, so we average
@@ -422,7 +567,7 @@ def _build_summary_section(
 
     # Build KPI grid \u2014 best always, then mean+median when available.
     kpis = [
-        {"icon": "\U0001f3c6", "value": f"{best_obj:.4f}",
+        {"icon": "\U0001f3c6", "value": f"{best_metric:.4f}",
          "label": f"Best {obj_fn}"},
     ]
     if mean_obj is not None:
@@ -648,10 +793,42 @@ def _build_convergence_section(
     else:
         stats_html = ""
 
+    explain_html = f"""
+    <div class="card" style="border-left:4px solid var(--primary);">
+        <h3 style="margin-top:0;">How to read this</h3>
+        <ul style="margin:.3rem 0 .2rem;padding-left:1.2rem;line-height:1.7;
+                   color:var(--text2);font-size:.9rem;">
+            <li>Each <span style="color:#4d9ee8;font-weight:600;">light-blue
+                dot</span> is one model evaluation &mdash; the objective value
+                for the parameter set tried at that step.</li>
+            <li>The <span style="color:#10b981;font-weight:600;">green line</span>
+                is the <strong>best value found so far</strong>; the
+                <span style="color:#fb923c;font-weight:600;">orange star</span>
+                marks the overall best.</li>
+            <li>The optimiser <strong>minimises</strong> this objective, so
+                <strong>lower is better</strong>. For goodness-of-fit metrics
+                ({obj_fn} / NSE / R&sup2;) the plotted value is transformed so a
+                smaller number means a closer match to the observations
+                (&asymp;&nbsp;0 is near-perfect); for error metrics (RMSE,
+                |PBIAS|) it is the error itself.</li>
+            <li>A curve that <strong>drops then flattens</strong> means the
+                search has converged. If the green line is <strong>still
+                descending at the right edge</strong>, raising
+                <code>max_evaluations</code> would likely improve the fit
+                further.</li>
+            <li>Dots sitting well above the green line are <em>exploratory</em>
+                trials that didn't beat the best &mdash; expected for DDS, which
+                deliberately probes the whole parameter space before
+                fine-tuning.</li>
+        </ul>
+    </div>
+"""
+
     return f"""
 <div class="section" id="convergence">
     <h2>Convergence</h2>
     {plot_html}
+    {explain_html}
     {stats_html}
 </div>
 """
@@ -733,13 +910,36 @@ def _build_sensitivity_section(
 ) -> str:
     """Build the sensitivity analysis results section."""
 
-    method = sa_results.get("method", "unknown").upper()
-    param_names = sa_results.get("parameter_names", [])
+    # ── Normalise the saved format ────────────────────────────────────
+    # The driver writes mu_star / sigma / S1 / ST as DICTs keyed by parameter
+    # name, with no "method" / "parameter_names".  Re-shape into the
+    # name-list + value-list form the table/plot builders expect.
+    sa = dict(sa_results or {})
+    method = (sa.get("method")
+              or ("sobol" if ("S1" in sa or "ST" in sa) else "morris")).upper()
+    sa["method"] = method.lower()
+
+    param_names = sa.get("parameter_names")
+    if not param_names:
+        for k in ("mu_star", "ST", "S1", "mu"):
+            if isinstance(sa.get(k), dict):
+                param_names = list(sa[k].keys())
+                break
+        if not param_names and sa.get("rankings"):
+            param_names = [r[0] for r in sa["rankings"]]
+    param_names = param_names or []
+    sa["parameter_names"] = param_names
+
+    # Dict -> list aligned with param_names
+    for k in ("mu", "mu_star", "sigma", "S1", "ST"):
+        if isinstance(sa.get(k), dict):
+            sa[k] = [sa[k].get(n, 0.0) for n in param_names]
+    sa_results = sa
 
     if not param_names:
         return """
 <div class="section" id="sensitivity">
-    <h2>Sensitivity Analysis</h2>
+    <h2>Influential parameters</h2>
     <div class="card"><p>No sensitivity results available.</p></div>
 </div>
 """
@@ -759,9 +959,66 @@ def _build_sensitivity_section(
 
     return f"""
 <div class="section" id="sensitivity">
-    <h2>Sensitivity Analysis ({method})</h2>
+    <h2>Influential parameters &mdash; {method} screening</h2>
     {plot_html}
     {table_html}
+</div>
+"""
+
+
+def _build_calibrated_timeseries_section(
+    matched_data: Optional[Any],
+    settings: Dict[str, Any],
+    model_config: Dict[str, Any],
+    output_dir: str,
+) -> str:
+    """Observed-vs-simulated time series (+ obs-vs-sim scatter) for each
+    calibrated species, evaluated at the best-fit parameters.
+
+    Driven purely by ``matched_data`` (the obs/sim pairs the objective
+    function matched) so it renders even when the numeric performance-metrics
+    table is unavailable.  Placed after "Run with Best Parameters".
+    """
+    if not (HAS_MATPLOTLIB and HAS_NUMPY):
+        return ""
+    try:
+        import pandas as pd
+    except ImportError:
+        return ""
+    if not isinstance(matched_data, pd.DataFrame) or matched_data.empty:
+        return ""
+
+    hostmodel = (model_config.get("hostmodel") or "mizuroute")
+    # Interactive (Plotly) obs-vs-sim time series + scatter, per species.
+    plots_html = _generate_timeseries_charts(
+        matched_data, output_dir, hostmodel=hostmodel)
+    if not plots_html:
+        return ""
+
+    _species = []
+    try:
+        if "species" in matched_data.columns:
+            _species = [str(s) for s in matched_data["species"].unique()]
+    except Exception:
+        _species = []
+    _sp_txt = (", ".join(f"<code>{s}</code>" for s in _species)
+               if _species else "each calibrated species")
+
+    return f"""
+<div class="section" id="timeseries">
+    <h2>Observed vs Simulated &mdash; calibrated time series</h2>
+    <div class="card" style="border-left:4px solid var(--secondary);">
+        <p style="margin:.2rem 0;color:var(--text2);font-size:.92rem;line-height:1.6;">
+            Time series of <strong>observed</strong> vs <strong>simulated</strong>
+            concentrations at the best-fit parameters, for {_sp_txt}. Each block
+            pairs the <strong>time series</strong> (left) with an
+            <strong>observed-vs-simulated scatter</strong> (right) &mdash; points
+            on the dashed 1:1 line indicate perfect agreement; points above it
+            mean the model over-predicts, below it under-predicts. Per-element
+            traces are collapsed into expandable panels below each overview.
+        </p>
+    </div>
+    {plots_html}
 </div>
 """
 
@@ -796,13 +1053,17 @@ def _build_performance_section(
     # Build per-species performance cards
     species_cards = _build_species_perf_cards(perf_metrics)
 
-    # Generate performance plots if possible
-    plot_html = ""
-    if HAS_MATPLOTLIB and HAS_NUMPY and matched_data is not None:
-        plot_html = _generate_performance_plots(
-            matched_data, perf_metrics, output_dir,
-            hostmodel=hostmodel,
-        )
+    # The observed-vs-simulated time-series / scatter plots now live in their
+    # own "Observed vs Simulated — calibrated time series" section (placed
+    # after "Run with Best Parameters"), so they aren't duplicated here.  This
+    # section keeps the numeric metrics; a pointer links to the plots.
+    _ts_pointer = (
+        '<div class="highlight-box info" style="margin-top:1rem">'
+        'See the <a href="#timeseries" style="color:var(--primary);'
+        'font-weight:600;">Observed vs Simulated time series</a> section '
+        '(below &ldquo;Run with Best Parameters&rdquo;) for the per-species '
+        'time-series and observed-vs-simulated plots.</div>'
+        if matched_data is not None else "")
 
     temporal_res = settings.get("temporal_resolution", "native")
     agg_method = settings.get("aggregation_method", "mean")
@@ -840,7 +1101,7 @@ def _build_performance_section(
     {host_note}
     {species_cards}
     {metrics_html}
-    {plot_html}
+    {_ts_pointer}
 </div>
 """
 
@@ -1154,7 +1415,7 @@ def _fig_to_base64(fig) -> str:
     """Convert a matplotlib figure to base64-encoded PNG data URI."""
     buf = io.BytesIO()
     fig.savefig(buf, format='png', dpi=150, bbox_inches='tight',
-                facecolor='#1a1b2e', edgecolor='none')
+                facecolor='#ffffff', edgecolor='none')
     buf.seek(0)
     data = rh.embed_image_base64.__wrapped__(buf) if hasattr(rh.embed_image_base64, '__wrapped__') else None
 
@@ -1167,20 +1428,273 @@ def _fig_to_base64(fig) -> str:
 
 
 def _setup_plot_style():
-    """Configure matplotlib for the report's dark theme."""
+    """Configure matplotlib for clean, light, print-friendly figures.
+
+    Matches the light/vector aesthetic of the 1_Model_Config and
+    2_Read_Outputs workflows (white background, dark text) so the figures
+    look professional both in the report and when exported to PDF.
+    """
     plt.rcParams.update({
-        'figure.facecolor': '#1a1b2e',
-        'axes.facecolor': '#1e1f2e',
-        'axes.edgecolor': '#2a2b3d',
-        'axes.labelcolor': '#a0aec0',
-        'text.color': '#e2e8f0',
-        'xtick.color': '#a0aec0',
-        'ytick.color': '#a0aec0',
-        'grid.color': '#2d2e42',
-        'grid.alpha': 0.5,
+        'figure.facecolor': '#ffffff',
+        'axes.facecolor': '#ffffff',
+        'axes.edgecolor': '#cbd5e1',
+        'axes.labelcolor': '#374151',
+        'text.color': '#1f2937',
+        'xtick.color': '#4b5563',
+        'ytick.color': '#4b5563',
+        'grid.color': '#e5e7eb',
+        'grid.alpha': 0.9,
         'font.size': 10,
         'font.family': 'sans-serif',
     })
+
+
+# =========================================================================
+# Interactive Plotly charts (built in JS via Plotly.newPlot, loaded from the
+# same CDN the 1_Model_Config / 2_Read_Outputs reports use).  Charts are
+# theme-aware (light/dark follow the report toggle) and carry the mode-bar
+# SVG download — the native, vector "export" those workflows use.
+# =========================================================================
+
+_PLOT_SEQ = [0]
+
+
+def _plot_id(prefix: str) -> str:
+    """Unique DOM id for a chart container."""
+    _PLOT_SEQ[0] += 1
+    return f"owq-{prefix}-{_PLOT_SEQ[0]}"
+
+
+def _plotly_bootstrap(project_name: str = "") -> str:
+    """Plotly.js (CDN) + shared theme-aware layout/config helpers, sortable
+    tables, and the per-figure "Lock zoom" / branded "PDF" export (replicated
+    from the FLUXOS results report).  Emitted once, near the top of <body>."""
+    _head = (
+        "<style>\n"
+        ".plot-controls{display:flex;justify-content:flex-end;align-items:center;"
+        "gap:.4rem;margin:.5rem 0 -.1rem;font-size:.82rem;color:var(--text2);flex-wrap:wrap;}\n"
+        ".plot-controls .hint{font-size:.72rem;color:var(--text3);margin-right:auto;font-style:italic;}\n"
+        ".plot-controls label{display:inline-flex;align-items:center;gap:.4rem;cursor:pointer;"
+        "user-select:none;padding:.2rem .55rem;border-radius:6px;border:1px solid var(--border);"
+        "background:var(--surface);}\n"
+        ".plot-controls label:hover{border-color:var(--primary);}\n"
+        ".plot-controls input[type=checkbox]{cursor:pointer;accent-color:var(--primary);margin:0;}\n"
+        ".plot-controls .pdf-btn{display:inline-flex;align-items:center;gap:.35rem;cursor:pointer;"
+        "font:inherit;font-size:.82rem;color:var(--text2);padding:.2rem .6rem;border-radius:6px;"
+        "border:1px solid var(--border);background:var(--surface);}\n"
+        ".plot-controls .pdf-btn:hover{border-color:var(--primary);color:var(--primary);}\n"
+        ".plot-controls .pdf-btn:disabled{opacity:.55;cursor:wait;}\n"
+        "</style>\n"
+        "<script>\n"
+        "window.__OWQ_PROJECT_NAME = "
+        + json.dumps(project_name or "OpenWQ Calibration") + ";\n"
+        "window.__OWQ_GENERATED_AT = "
+        + json.dumps(datetime.now().isoformat()) + ";\n"
+        "</script>\n"
+    )
+    return _head + """
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script>
+window._owqPlots = window._owqPlots || [];
+function _owqDark(){
+  var t=(document.documentElement.getAttribute('data-theme')||
+         document.body.getAttribute('data-theme')||'');
+  return t==='dark';
+}
+function _owqLayout(extra){
+  var t=_owqDark();
+  var base={ autosize:true, margin:{l:64,r:24,t:48,b:52},
+    plot_bgcolor:t?'#1e1f2e':'#ffffff', paper_bgcolor:t?'#1e1f2e':'#ffffff',
+    font:{color:t?'#cbd5e0':'#374151', family:'Inter,system-ui,sans-serif', size:12},
+    title:{font:{size:15, color:t?'#e2e8f0':'#1f2937'}},
+    colorway:['#0066cc','#00a86b','#ff6b35','#004499','#34d399','#fb923c',
+              '#667eea','#764ba2','#e63946','#2ec4b6','#e9c46a','#264653'],
+    xaxis:{gridcolor:t?'#2a2b3d':'#eef2f7', zerolinecolor:t?'#3a3b4d':'#dfe6ee', linecolor:t?'#3a3b4d':'#dfe6ee'},
+    yaxis:{gridcolor:t?'#2a2b3d':'#eef2f7', zerolinecolor:t?'#3a3b4d':'#dfe6ee', linecolor:t?'#3a3b4d':'#dfe6ee'},
+    legend:{font:{size:11}, bgcolor:'rgba(0,0,0,0)'} };
+  extra=extra||{};
+  for(var k in extra){
+    if((k==='xaxis'||k==='yaxis'||k==='title'||k==='legend') &&
+       extra[k] && typeof extra[k]==='object'){
+      for(var kk in extra[k]) base[k][kk]=extra[k][kk];
+    } else base[k]=extra[k];
+  }
+  return base;
+}
+var _owqPCFG={responsive:true, displayModeBar:true, displaylogo:false, scrollZoom:true,
+  modeBarButtonsToRemove:['lasso2d','select2d'],
+  toImageButtonOptions:{format:'svg', filename:'openwq_calibration_plot', scale:2}};
+function _owqDraw(id, traces, extra){
+  var el=document.getElementById(id);
+  if(typeof Plotly==='undefined'){
+    if(el) el.innerHTML='<div style="padding:1rem;color:#888;font-size:.85rem;">'+
+      'Interactive chart could not load Plotly.js (needs internet).</div>';
+    return;
+  }
+  Plotly.newPlot(id, traces, _owqLayout(extra), _owqPCFG);
+  window._owqPlots.push({id:id, ex:extra});
+}
+function _owqRetheme(){ (window._owqPlots||[]).forEach(function(p){
+  try{ Plotly.relayout(p.id, _owqLayout(p.ex)); }catch(e){} }); }
+try{
+  new MutationObserver(_owqRetheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  new MutationObserver(_owqRetheme).observe(document.body,{attributes:true,attributeFilter:['data-theme']});
+}catch(e){}
+
+// ── Sortable result tables (click a column header to sort) ──────────────
+function _owqMakeSortable(tbl){
+  var head=tbl.tHead; if(!head) return;
+  var ths=head.rows[0] ? [].slice.call(head.rows[0].cells) : [];
+  ths.forEach(function(th, idx){
+    if(th.classList.contains('no-sort')) return;
+    th.style.cursor='pointer';
+    th.title='Click to sort';
+    if(!/[\\u21C5\\u25B2\\u25BC]/.test(th.textContent))
+      th.insertAdjacentHTML('beforeend',' <span class="owq-sort-ind" style="opacity:.45;font-size:.85em;">\\u21C5</span>');
+    th.addEventListener('click', function(){
+      var tb=tbl.tBodies[0]; if(!tb) return;
+      var rows=[].slice.call(tb.rows);
+      var asc=th.getAttribute('data-asc')!=='1';
+      rows.sort(function(a,b){
+        var x=(a.cells[idx]?a.cells[idx].textContent:'').trim();
+        var y=(b.cells[idx]?b.cells[idx].textContent:'').trim();
+        var nx=parseFloat(x.replace(/[^0-9eE.+\\-]/g,''));
+        var ny=parseFloat(y.replace(/[^0-9eE.+\\-]/g,''));
+        var cmp=(!isNaN(nx)&&!isNaN(ny)) ? (nx-ny) : x.localeCompare(y);
+        return asc?cmp:-cmp;
+      });
+      rows.forEach(function(r){ tb.appendChild(r); });
+      ths.forEach(function(o){ o.removeAttribute('data-asc');
+        var ind=o.querySelector('.owq-sort-ind'); if(ind) ind.textContent='\\u21C5'; });
+      th.setAttribute('data-asc', asc?'1':'0');
+      var myInd=th.querySelector('.owq-sort-ind'); if(myInd) myInd.textContent=asc?'\\u25B2':'\\u25BC';
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('table.sortable').forEach(_owqMakeSortable);
+});
+
+// ── Per-figure "Lock zoom" + branded PDF export (FLUXOS-style) ──────────
+function _owqAxisKeys(layout){
+  var keys=[]; Object.keys(layout||{}).forEach(function(k){ if(/^(x|y)axis(\\d*)$/.test(k)) keys.push(k); });
+  if(!keys.length) keys=['xaxis','yaxis']; return keys;
+}
+function _owqApplyLock(plot, locked){
+  plot.dataset.locked = locked?'true':'false';
+  var u={}; _owqAxisKeys(plot.layout||{}).forEach(function(k){ u[k+'.fixedrange']=!!locked; });
+  try{ Plotly.relayout(plot, u); }catch(e){}
+}
+function _owqInstallWheel(plot){
+  plot.addEventListener('wheel', function(e){
+    if(plot.dataset.locked==='true') e.stopImmediatePropagation();
+  }, {capture:true, passive:true});
+}
+var _OWQ_JSPDF_CDN='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+function _owqLoadJsPDF(){
+  if(window.jspdf&&window.jspdf.jsPDF) return Promise.resolve();
+  return new Promise(function(res,rej){
+    var s=document.createElement('script'); s.src=_OWQ_JSPDF_CDN; s.async=true;
+    s.onload=function(){ (window.jspdf&&window.jspdf.jsPDF)?res():rej(new Error('jsPDF global missing')); };
+    s.onerror=function(){ rej(new Error('Failed to load jsPDF from CDN')); };
+    document.head.appendChild(s);
+  });
+}
+function _owqFigTitle(plot){
+  var n=plot.closest('.section')||plot.parentElement;
+  while(n&&n!==document.body){ var h=n.querySelector('h2,h3'); if(h&&h.textContent.trim()) return h.textContent.trim(); n=n.parentElement; }
+  return plot.id;
+}
+function _owqSlug(s){ return (s||'').replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,''); }
+var _OPF={BG:'#ffffff',FG:'#1a1a1a',GRID:'#d4d4d4',FONT:'Inter,Helvetica,Arial,sans-serif',BASE:20,TICK:24,AXIS:28,HEAD:30};
+function _owqExportLayout(src){
+  var L=JSON.parse(JSON.stringify(src||{}));
+  L.paper_bgcolor=_OPF.BG; L.plot_bgcolor=_OPF.BG;
+  L.font=Object.assign({},L.font||{},{color:_OPF.FG,size:_OPF.BASE,family:_OPF.FONT});
+  if(L.title){ if(typeof L.title==='string') L.title={text:L.title}; L.title.font=Object.assign({},L.title.font||{},{color:_OPF.FG,size:_OPF.HEAD,family:_OPF.FONT}); }
+  L.margin=Object.assign({},L.margin||{}); L.margin.l=Math.max(L.margin.l||0,95); L.margin.r=Math.max(L.margin.r||0,50); L.margin.t=Math.max(L.margin.t||0,60); L.margin.b=Math.max(L.margin.b||0,95);
+  Object.keys(L).forEach(function(k){ if(!/^(x|y)axis\\d*$/.test(k)) return; var ax=L[k]=Object.assign({},L[k]||{});
+    ax.color=_OPF.FG; ax.linecolor=_OPF.FG; ax.gridcolor=_OPF.GRID; ax.zerolinecolor=_OPF.GRID; ax.tickcolor=_OPF.FG; ax.automargin=true;
+    ax.tickfont=Object.assign({},ax.tickfont||{},{color:_OPF.FG,size:_OPF.TICK,family:_OPF.FONT});
+    if(ax.title){ if(typeof ax.title==='string') ax.title={text:ax.title}; ax.title.font=Object.assign({},ax.title.font||{},{color:_OPF.FG,size:_OPF.AXIS,family:_OPF.FONT}); }
+  });
+  if(L.legend){ L.legend=Object.assign({},L.legend,{bgcolor:_OPF.BG,bordercolor:_OPF.GRID,font:Object.assign({},(L.legend.font||{}),{color:_OPF.FG,size:_OPF.BASE,family:_OPF.FONT})}); }
+  return L;
+}
+async function _owqDownloadPDF(plot, btn){
+  if(!window.Plotly){ alert('Plotly not loaded yet — try again.'); return; }
+  var orig=btn?btn.innerHTML:null;
+  try{
+    if(btn){ btn.disabled=true; btn.innerHTML='\\u231B Building\\u2026'; }
+    await _owqLoadJsPDF();
+    var cssW=Math.max(plot.clientWidth||1000,800), cssH=Math.max(plot.clientHeight||500,460);
+    var png=await Plotly.toImage({data:plot.data||[], layout:_owqExportLayout(plot.layout||{}), config:{displayModeBar:false,staticPlot:true}}, {format:'png', width:cssW*2, height:cssH*2});
+    var jsPDF=window.jspdf.jsPDF; var landscape=cssW>=cssH;
+    var pdf=new jsPDF({unit:'mm',format:'a4',orientation:landscape?'landscape':'portrait',compress:true});
+    var pageW=pdf.internal.pageSize.getWidth(), pageH=pdf.internal.pageSize.getHeight(), margin=12;
+    var proj=window.__OWQ_PROJECT_NAME||'OpenWQ', fig=_owqFigTitle(plot), gen=window.__OWQ_GENERATED_AT||new Date().toISOString();
+    var BR=[0,102,204], INK=[26,26,26], MUT=[110,110,110]; var ly=margin+2;
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(20);
+    pdf.setTextColor(INK[0],INK[1],INK[2]); pdf.text('open',margin,ly);
+    var ow=pdf.getTextWidth('open'); pdf.setTextColor(BR[0],BR[1],BR[2]); pdf.text('WQ',margin+ow,ly);
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(12); pdf.setTextColor(INK[0],INK[1],INK[2]); pdf.text(proj,pageW-margin,ly,{align:'right'});
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(10); pdf.setTextColor(MUT[0],MUT[1],MUT[2]); pdf.text(fig,pageW-margin,ly+5,{align:'right'});
+    pdf.setDrawColor(BR[0],BR[1],BR[2]); pdf.setLineWidth(0.4); var ruleY=margin+9; pdf.line(margin,ruleY,pageW-margin,ruleY);
+    var headerH=12, footerH=8, availW=pageW-2*margin, availH=pageH-2*margin-headerH-footerH, ratio=cssW/cssH;
+    var iw=availW, ih=availW/ratio; if(ih>availH){ ih=availH; iw=availH*ratio; }
+    var ox=margin+(availW-iw)/2, oy=margin+headerH+(availH-ih)/2;
+    pdf.addImage(png,'PNG',ox,oy,iw,ih,undefined,'FAST');
+    var fY=pageH-margin/2; pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.setTextColor(INK[0],INK[1],INK[2]); pdf.text('open',margin,fY);
+    var owf=pdf.getTextWidth('open'); pdf.setTextColor(BR[0],BR[1],BR[2]); pdf.text('WQ',margin+owf,fY);
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.setTextColor(MUT[0],MUT[1],MUT[2]);
+    pdf.text('  \\u00b7  generated '+gen.slice(0,19).replace('T',' '), margin+owf+pdf.getTextWidth('WQ'), fY);
+    pdf.text(plot.id, pageW-margin, fY, {align:'right'});
+    pdf.setProperties({title:fig+' \\u2014 '+proj, subject:'OpenWQ figure export', author:proj, creator:'OpenWQ results report'});
+    pdf.save((_owqSlug(proj)?_owqSlug(proj)+'_':'')+_owqSlug(plot.id||fig)+'.pdf');
+  }catch(e){ console.error('[owq-pdf]',e); alert('Could not export PDF: '+(e.message||e)); }
+  finally{ if(btn){ btn.disabled=false; btn.innerHTML=orig; } }
+}
+function _owqWireFigTools(){
+  document.querySelectorAll('.lock-zoom').forEach(function(cb){
+    var plot=document.getElementById(cb.getAttribute('data-target')); if(!plot) return;
+    _owqInstallWheel(plot); _owqApplyLock(plot, cb.checked);
+    cb.addEventListener('change', function(){ _owqApplyLock(plot, cb.checked); });
+  });
+  document.querySelectorAll('.pdf-btn').forEach(function(btn){
+    if(btn.__owqWired) return; btn.__owqWired=true;
+    btn.addEventListener('click', function(){ var plot=document.getElementById(btn.getAttribute('data-target')); if(plot) _owqDownloadPDF(plot, btn); });
+  });
+}
+// Charts are newPlot'd inline as the body parses; wire after a short tick so
+// each plot's layout exists before we lock the axes.
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(_owqWireFigTools,250); });
+else setTimeout(_owqWireFigTools,250);
+</script>
+"""
+
+
+def _plotly_chart(div_id: str, traces: list, layout_extra: dict = None,
+                  height: int = 440, card: bool = True) -> str:
+    """Emit a chart container + the Plotly.newPlot call (theme-aware), with a
+    per-figure toolbar carrying a "Lock zoom" toggle and a branded "PDF"
+    export button (same controls/aesthetics as the FLUXOS results report)."""
+    payload_t = json.dumps(traces)
+    payload_l = json.dumps(layout_extra or {})
+    toolbar = (
+        '<div class="plot-controls">'
+        '<span class="hint">Uncheck to scroll / drag-zoom &middot; double-click resets</span>'
+        f'<label title="Disable / enable scroll &amp; box zoom">'
+        f'<input type="checkbox" class="lock-zoom" data-target="{div_id}" checked> '
+        'Lock zoom</label>'
+        f'<button type="button" class="pdf-btn" data-target="{div_id}" '
+        f'title="Download this figure as a branded PDF (A4). First click '
+        f'fetches jsPDF from the CDN, then it is cached.">&#128196; PDF</button>'
+        '</div>')
+    inner = (toolbar
+             + f'<div id="{div_id}" class="plotly-chart" '
+               f'style="width:100%;height:{height}px;"></div>'
+               f'<script>_owqDraw({json.dumps(div_id)}, {payload_t}, {payload_l});</script>')
+    return f'<div class="card">{inner}</div>' if card else inner
 
 
 def _generate_convergence_plot(
@@ -1188,59 +1702,41 @@ def _generate_convergence_plot(
     obj_fn: str,
     output_dir: str
 ) -> str:
-    """Generate convergence plot and return HTML with embedded image."""
-    _setup_plot_style()
-
-    evals = []
-    objectives = []
-    best_so_far = []
-
+    """Interactive convergence chart: all-evaluation scatter + running-best
+    line + the best point."""
+    evals, objectives, best_so_far = [], [], []
     current_best = float('inf')
     for h in history:
         eval_id = h.get("eval_id", len(evals))
         obj = h.get("objective", h.get("best_objective", 0))
         evals.append(eval_id)
         objectives.append(obj)
-
         if obj < current_best:
             current_best = obj
         best_so_far.append(current_best)
 
-    evals = np.array(evals)
-    objectives = np.array(objectives)
-    best_so_far = np.array(best_so_far)
+    if not evals:
+        return '<div class="card"><p>No evaluation history available.</p></div>'
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-
-    # All evaluations as scatter
-    ax.scatter(evals, objectives, s=12, alpha=0.4, color='#4d9ee8',
-               label='All evaluations', zorder=2)
-
-    # Best-so-far line
-    ax.plot(evals, best_so_far, color='#34d399', linewidth=2.5,
-            label='Best so far', zorder=3)
-
-    # Mark the best point
-    best_idx = np.argmin(objectives)
-    ax.scatter([evals[best_idx]], [objectives[best_idx]],
-               s=100, color='#fb923c', marker='*', zorder=4,
-               label=f'Best: {objectives[best_idx]:.4f}')
-
-    ax.set_xlabel(f'Evaluation Number')
-    ax.set_ylabel(f'Objective ({obj_fn})')
-    ax.set_title('Calibration Convergence', fontsize=14, fontweight='bold',
-                 color='#e2e8f0')
-    ax.legend(facecolor='#1e1f2e', edgecolor='#2a2b3d',
-              fontsize=9, loc='upper right')
-    ax.grid(True, alpha=0.3)
-
-    data_uri = _fig_to_base64(fig)
-
-    return f"""
-    <div class="card">
-        <img src="{data_uri}" class="plot-img" alt="Convergence plot"/>
-    </div>
-    """
+    best_idx = objectives.index(min(objectives))
+    traces = [
+        {"type": "scatter", "mode": "markers", "x": evals, "y": objectives,
+         "name": "All evaluations",
+         "marker": {"size": 6, "color": "#4d9ee8", "opacity": 0.55},
+         "hovertemplate": "eval %{x}<br>objective %{y:.4f}<extra></extra>"},
+        {"type": "scatter", "mode": "lines", "x": evals, "y": best_so_far,
+         "name": "Best so far", "line": {"color": "#10b981", "width": 2.5}},
+        {"type": "scatter", "mode": "markers", "x": [evals[best_idx]],
+         "y": [objectives[best_idx]],
+         "name": f"Best: {objectives[best_idx]:.4f}",
+         "marker": {"size": 16, "color": "#fb923c", "symbol": "star",
+                    "line": {"color": "#fff", "width": 1}}},
+    ]
+    layout = {"title": {"text": "Calibration Convergence"},
+              "xaxis": {"title": "Evaluation Number"},
+              "yaxis": {"title": f"Objective ({obj_fn})"},
+              "hovermode": "closest"}
+    return _plotly_chart(_plot_id("conv"), traces, layout, height=430)
 
 
 def _generate_param_evolution_plots(
@@ -1248,87 +1744,77 @@ def _generate_param_evolution_plots(
     parameters: List[Dict],
     output_dir: str
 ) -> str:
-    """Generate parameter evolution subplots."""
-    _setup_plot_style()
-
-    n_params = len(parameters)
-    if n_params == 0:
+    """Interactive parameter-evolution chart with a dropdown to pick the
+    parameter; shows its sampled value per evaluation plus its initial value
+    and bounds as reference lines."""
+    if not parameters:
         return ""
 
-    # Determine grid layout
-    n_cols = min(3, n_params)
-    n_rows = (n_params + n_cols - 1) // n_cols
-    fig_height = max(4, n_rows * 3.2)
-
-    fig, axes = plt.subplots(n_rows, n_cols,
-                             figsize=(4 * n_cols, fig_height),
-                             squeeze=False)
-
+    traces, names, metas = [], [], []
     for i, param in enumerate(parameters):
-        row, col = divmod(i, n_cols)
-        ax = axes[row][col]
-
         pname = param.get("name", f"param_{i}")
-        initial = param.get("initial", 0)
-        bounds = param.get("bounds", (0, 1))
-
-        # Extract parameter values from history
-        eval_ids = []
-        values = []
+        ev, vals = [], []
         for h in history:
-            params_dict = h.get("parameters", {})
-            if pname in params_dict:
-                eval_ids.append(h.get("eval_id", len(eval_ids)))
-                values.append(params_dict[pname])
-
-        if not values:
-            ax.text(0.5, 0.5, 'No data', ha='center', va='center',
-                    color='#636e72', transform=ax.transAxes)
-            ax.set_title(pname, fontsize=8, color='#a0aec0')
+            pd_ = h.get("parameters", {})
+            if pname in pd_:
+                ev.append(h.get("eval_id", len(ev)))
+                vals.append(pd_[pname])
+        if not vals:
             continue
+        names.append(pname)
+        metas.append({"initial": param.get("initial"),
+                      "bounds": param.get("bounds")})
+        traces.append({
+            "type": "scatter", "mode": "markers+lines", "x": ev, "y": vals,
+            "name": pname, "visible": (len(traces) == 0),
+            "marker": {"size": 6, "color": "#4d9ee8"},
+            "line": {"width": 1, "color": "#4d9ee8"},
+            "hovertemplate": "eval %{x}<br>%{y:.5g}<extra></extra>"})
+    if not traces:
+        return ""
 
-        eval_ids = np.array(eval_ids)
-        values = np.array(values)
+    n = len(traces)
 
-        # Plot scatter
-        ax.scatter(eval_ids, values, s=8, alpha=0.5, color='#4d9ee8')
+    def _shapes_for(i):
+        sh = []
+        meta = metas[i]
+        ini = meta.get("initial")
+        if isinstance(ini, (int, float)):
+            sh.append({"type": "line", "xref": "paper", "x0": 0, "x1": 1,
+                       "y0": ini, "y1": ini,
+                       "line": {"color": "#9aa5b1", "width": 1, "dash": "dash"}})
+        b = meta.get("bounds")
+        if isinstance(b, (list, tuple)) and len(b) == 2:
+            for bv in b:
+                if isinstance(bv, (int, float)):
+                    sh.append({"type": "line", "xref": "paper", "x0": 0, "x1": 1,
+                               "y0": bv, "y1": bv,
+                               "line": {"color": "#e74c3c", "width": 1,
+                                        "dash": "dot"}})
+        return sh
 
-        # Mark initial and best
-        ax.axhline(y=initial, color='#636e72', linestyle='--',
-                   alpha=0.5, linewidth=1, label='Initial')
+    buttons = []
+    for i, pname in enumerate(names):
+        lbl = pname if len(pname) <= 34 else pname[:16] + "…" + pname[-14:]
+        buttons.append({
+            "label": lbl, "method": "update",
+            "args": [{"visible": [j == i for j in range(n)]},
+                     {"yaxis": {"title": pname}, "shapes": _shapes_for(i)}]})
 
-        # Bounds
-        if isinstance(bounds, (list, tuple)) and len(bounds) == 2:
-            ax.axhline(y=bounds[0], color='#e74c3c', linestyle=':',
-                       alpha=0.3, linewidth=1)
-            ax.axhline(y=bounds[1], color='#e74c3c', linestyle=':',
-                       alpha=0.3, linewidth=1)
-
-        # Shorten long names
-        display_name = pname
-        if len(display_name) > 25:
-            display_name = display_name[:12] + '..' + display_name[-11:]
-
-        ax.set_title(display_name, fontsize=8, color='#a0aec0')
-        ax.grid(True, alpha=0.2)
-        ax.tick_params(labelsize=7)
-
-    # Remove unused subplots
-    for i in range(n_params, n_rows * n_cols):
-        row, col = divmod(i, n_cols)
-        axes[row][col].set_visible(False)
-
-    fig.suptitle('Parameter Evolution', fontsize=14, fontweight='bold',
-                 color='#e2e8f0', y=1.02)
-    fig.tight_layout()
-
-    data_uri = _fig_to_base64(fig)
-
-    return f"""
-    <div class="card">
-        <img src="{data_uri}" class="plot-img" alt="Parameter evolution plots"/>
-    </div>
-    """
+    layout = {
+        "title": {"text": "Parameter Evolution"},
+        "xaxis": {"title": "Evaluation"},
+        "yaxis": {"title": names[0]},
+        "shapes": _shapes_for(0),
+        "showlegend": False,
+        "hovermode": "closest",
+        "updatemenus": [{
+            "buttons": buttons, "direction": "down", "showactive": True,
+            "x": 1.0, "xanchor": "right", "y": 1.16, "yanchor": "top",
+            "pad": {"r": 4, "t": 4},
+            "bgcolor": "rgba(127,127,127,.12)"}],
+    }
+    return _plotly_chart(_plot_id("evo"), traces, layout, height=470)
 
 
 def _generate_correlation_plot(
@@ -1336,86 +1822,52 @@ def _generate_correlation_plot(
     parameters: List[Dict],
     output_dir: str
 ) -> str:
-    """Generate parameter correlation heatmap."""
-    _setup_plot_style()
-
+    """Interactive parameter-correlation heatmap (Pearson r)."""
     param_names = [p.get("name", f"p{i}") for i, p in enumerate(parameters)]
-
-    # Build parameter matrix
     n_evals = len(history)
     n_params = len(param_names)
-
-    if n_evals < 3 or n_params < 2:
-        return '<div class="card"><p>Insufficient data for correlation analysis (need &ge;3 evaluations and &ge;2 parameters).</p></div>'
+    if n_evals < 3 or n_params < 2 or not HAS_NUMPY:
+        return ('<div class="card"><p>Insufficient data for correlation '
+                'analysis (need &ge;3 evaluations and &ge;2 parameters).</p></div>')
 
     matrix = np.full((n_evals, n_params), np.nan)
     for i, h in enumerate(history):
-        params_dict = h.get("parameters", {})
+        pd_ = h.get("parameters", {})
         for j, pname in enumerate(param_names):
-            if pname in params_dict:
-                matrix[i, j] = params_dict[pname]
+            if pname in pd_:
+                matrix[i, j] = pd_[pname]
 
-    # Remove columns/rows with all NaN
     valid_cols = ~np.all(np.isnan(matrix), axis=0)
-    if np.sum(valid_cols) < 2:
-        return '<div class="card"><p>Insufficient valid parameter data for correlation analysis.</p></div>'
-
+    if int(np.sum(valid_cols)) < 2:
+        return ('<div class="card"><p>Insufficient valid parameter data for '
+                'correlation analysis.</p></div>')
     matrix = matrix[:, valid_cols]
     valid_names = [n for n, v in zip(param_names, valid_cols) if v]
-
-    # Compute correlations (handle NaN)
-    # Use pairwise complete observations
     n_valid = matrix.shape[1]
+
     corr = np.eye(n_valid)
     for i in range(n_valid):
         for j in range(i + 1, n_valid):
             mask = ~(np.isnan(matrix[:, i]) | np.isnan(matrix[:, j]))
-            if np.sum(mask) > 2:
+            if int(np.sum(mask)) > 2:
                 r = np.corrcoef(matrix[mask, i], matrix[mask, j])[0, 1]
                 corr[i, j] = r
                 corr[j, i] = r
 
-    # Shorten names for display
-    short_names = []
-    for name in valid_names:
-        if len(name) > 18:
-            short_names.append(name[:8] + '..' + name[-8:])
-        else:
-            short_names.append(name)
-
-    fig, ax = plt.subplots(figsize=(max(6, n_valid * 0.8),
-                                    max(5, n_valid * 0.7)))
-
-    im = ax.imshow(corr, cmap='RdBu_r', vmin=-1, vmax=1, aspect='auto')
-
-    ax.set_xticks(range(n_valid))
-    ax.set_yticks(range(n_valid))
-    ax.set_xticklabels(short_names, rotation=45, ha='right', fontsize=7)
-    ax.set_yticklabels(short_names, fontsize=7)
-
-    # Add correlation values in cells
-    for i in range(n_valid):
-        for j in range(n_valid):
-            val = corr[i, j]
-            color = 'white' if abs(val) > 0.5 else '#a0aec0'
-            ax.text(j, i, f'{val:.2f}', ha='center', va='center',
-                    fontsize=7, color=color)
-
-    cbar = fig.colorbar(im, ax=ax, shrink=0.8)
-    cbar.ax.tick_params(labelsize=8)
-    cbar.set_label('Pearson Correlation', fontsize=9, color='#a0aec0')
-
-    ax.set_title('Parameter Correlations', fontsize=14, fontweight='bold',
-                 color='#e2e8f0')
-    fig.tight_layout()
-
-    data_uri = _fig_to_base64(fig)
-
-    return f"""
-    <div class="card">
-        <img src="{data_uri}" class="plot-img" alt="Parameter correlation heatmap"/>
-    </div>
-    """
+    z = [[float(corr[i][j]) for j in range(n_valid)] for i in range(n_valid)]
+    text = [[f"{corr[i][j]:.2f}" for j in range(n_valid)] for i in range(n_valid)]
+    traces = [{
+        "type": "heatmap", "z": z, "x": valid_names, "y": valid_names,
+        "colorscale": "RdBu", "reversescale": True,
+        "zmid": 0, "zmin": -1, "zmax": 1,
+        "text": text, "texttemplate": "%{text}", "textfont": {"size": 10},
+        "colorbar": {"title": "Pearson r"},
+        "hovertemplate": "%{x}<br>%{y}<br>r = %{z:.3f}<extra></extra>"}]
+    layout = {"title": {"text": "Parameter Correlations"},
+              "xaxis": {"tickangle": -45, "automargin": True},
+              "yaxis": {"automargin": True, "autorange": "reversed"}}
+    return _plotly_chart(_plot_id("corr"), traces, layout,
+                         height=max(420, n_valid * 36 + 140))
 
 
 def _generate_performance_plots(
@@ -1545,7 +1997,7 @@ def _generate_performance_plots(
         ax1.set_title(
             f'{species} — time series ({n_reaches} {feat_label_plural}'
             + (', outlet observations' if _is_summa else '') + ')',
-            fontsize=11, color='#e2e8f0')
+            fontsize=11, color='#1f2937')
         ax1.set_ylabel('Concentration')
         ax1.grid(True, alpha=0.3)
 
@@ -1562,7 +2014,7 @@ def _generate_performance_plots(
         ax2.set_xlabel('Observed')
         ax2.set_ylabel('Simulated')
         ax2.set_title(f'{species} — observed vs simulated',
-                      fontsize=11, color='#e2e8f0')
+                      fontsize=11, color='#1f2937')
         ax2.grid(True, alpha=0.3)
         ax2.set_aspect('equal', adjustable='box')
 
@@ -1572,7 +2024,7 @@ def _generate_performance_plots(
             handles, labels = ax2.get_legend_handles_labels()
             # tab20 distinct labels per reach + the 1:1 entry; cap at 20.
             ax2.legend(handles, labels, loc='upper left',
-                       facecolor='#1e1f2e', edgecolor='#2a2b3d',
+                       facecolor='#ffffff', edgecolor='#d1d5db',
                        fontsize=7, ncol=1,
                        bbox_to_anchor=(1.02, 1), borderaxespad=0)
         elif n_reaches > 1:
@@ -1584,15 +2036,15 @@ def _generate_performance_plots(
             sm.set_array([])
             cbar = fig.colorbar(sm, ax=ax2, fraction=0.04, pad=0.04)
             cbar.set_label(f'{feat_label} index (0 … {n_reaches - 1})',
-                           color='#a0aec0', fontsize=8)
+                           color='#4b5563', fontsize=8)
             cbar.ax.tick_params(labelsize=7)
         else:
             # Single reach — just show a basic legend.
-            ax1.legend(facecolor='#1e1f2e', edgecolor='#2a2b3d', fontsize=8)
-            ax2.legend(facecolor='#1e1f2e', edgecolor='#2a2b3d', fontsize=8)
+            ax1.legend(facecolor='#ffffff', edgecolor='#d1d5db', fontsize=8)
+            ax2.legend(facecolor='#ffffff', edgecolor='#d1d5db', fontsize=8)
 
         fig.suptitle(f'Performance: {species}', fontsize=14,
-                     fontweight='bold', color='#e2e8f0', y=1.02)
+                     fontweight='bold', color='#1f2937', y=1.02)
         fig.tight_layout()
 
         overview_uri = _fig_to_base64(fig)
@@ -1622,10 +2074,10 @@ def _generate_performance_plots(
                           alpha=0.95, label='Simulated')
                 rax1.set_title(
                     f'{species} — {feat_label} {rid}{outlet_suffix} — time series',
-                    fontsize=11, color='#e2e8f0')
+                    fontsize=11, color='#1f2937')
                 rax1.set_ylabel('Concentration')
                 rax1.grid(True, alpha=0.3)
-                rax1.legend(facecolor='#1e1f2e', edgecolor='#2a2b3d', fontsize=8)
+                rax1.legend(facecolor='#ffffff', edgecolor='#d1d5db', fontsize=8)
 
                 # Panel 2: obs-vs-sim scatter for THIS reach
                 ro = rd['observed'].values
@@ -1643,10 +2095,10 @@ def _generate_performance_plots(
                 rax2.set_ylabel('Simulated')
                 rax2.set_title(
                     f'{species} — {feat_label} {rid}{outlet_suffix} — observed vs simulated',
-                    fontsize=11, color='#e2e8f0')
+                    fontsize=11, color='#1f2937')
                 rax2.set_aspect('equal', adjustable='box')
                 rax2.grid(True, alpha=0.3)
-                rax2.legend(facecolor='#1e1f2e', edgecolor='#2a2b3d', fontsize=8)
+                rax2.legend(facecolor='#ffffff', edgecolor='#d1d5db', fontsize=8)
 
                 # Header: include the per-element KGE etc. if known
                 _hdr = f'Performance: {species} — {feat_label} {rid}{outlet_suffix}'
@@ -1663,7 +2115,7 @@ def _generate_performance_plots(
                                 _hdr += '  (' + ', '.join(_bits) + ')'
                             break
                 rfig.suptitle(_hdr, fontsize=13, fontweight='bold',
-                              color='#e2e8f0', y=1.02)
+                              color='#1f2937', y=1.02)
                 rfig.tight_layout()
                 per_reach_uri = _fig_to_base64(rfig)
                 per_reach_blocks.append(f"""
@@ -1705,6 +2157,106 @@ def _generate_performance_plots(
         """)
 
     return "\n".join(plots_html)
+
+
+def _generate_timeseries_charts(matched_data, output_dir,
+                                hostmodel: str = "mizuroute") -> str:
+    """Interactive (Plotly) observed-vs-simulated time series + obs-vs-sim
+    scatter, one block per calibrated species.  Each reach/HRU is a legend
+    entry the user can toggle; the mode-bar provides SVG export."""
+    try:
+        import pandas as pd
+    except ImportError:
+        return ""
+    if not isinstance(matched_data, pd.DataFrame) or matched_data.empty:
+        return ""
+
+    _is_summa = (hostmodel or "").lower() == "summa"
+    feat_label = "HRU" if _is_summa else "Reach"
+    feat_label_plural = "HRUs" if _is_summa else "reaches"
+    has_reach = 'reach_id' in matched_data.columns
+    species_list = (matched_data['species'].unique()
+                    if 'species' in matched_data.columns else [])
+    blocks = []
+
+    for species in species_list:
+        sp = matched_data[matched_data['species'] == species]
+        if sp.empty:
+            continue
+        if has_reach:
+            reach_ids = sorted(sp['reach_id'].dropna().unique(),
+                               key=lambda x: (str(type(x).__name__), x))
+        else:
+            reach_ids = [None]
+        n_reaches = len(reach_ids)
+
+        ts_traces, sc_traces, all_v = [], [], []
+        for rid in reach_ids:
+            rd = sp if rid is None else sp[sp['reach_id'] == rid]
+            if rd.empty:
+                continue
+            if 'datetime' in rd.columns:
+                rd = rd.sort_values('datetime')
+                x = [str(v) for v in pd.to_datetime(rd['datetime'])]
+            else:
+                x = list(range(len(rd)))
+            obs = [None if v != v else float(v) for v in rd['observed']]
+            sim = [None if v != v else float(v) for v in rd['simulated']]
+            label = f'{feat_label} {rid}' if rid is not None else 'all'
+            ts_traces.append({
+                "type": "scatter", "mode": "markers", "x": x, "y": obs,
+                "name": f"obs · {label}", "legendgroup": label,
+                "marker": {"size": 6, "symbol": "circle-open"},
+                "hovertemplate": "%{x}<br>obs %{y:.4g}<extra></extra>"})
+            ts_traces.append({
+                "type": "scatter", "mode": "lines", "x": x, "y": sim,
+                "name": f"sim · {label}", "legendgroup": label,
+                "line": {"width": 1.5},
+                "hovertemplate": "%{x}<br>sim %{y:.4g}<extra></extra>"})
+            sc_traces.append({
+                "type": "scatter", "mode": "markers", "x": obs, "y": sim,
+                "name": label, "marker": {"size": 7, "opacity": 0.6},
+                "hovertemplate": "obs %{x:.4g}<br>sim %{y:.4g}<extra></extra>"})
+            all_v += [v for v in obs if v is not None]
+            all_v += [v for v in sim if v is not None]
+
+        if not ts_traces:
+            continue
+        if all_v:
+            vmin, vmax = min(all_v), max(all_v)
+            m = (vmax - vmin) * 0.05 if vmax > vmin else (abs(vmax) * 0.05 or 0.05)
+            sc_traces.append({
+                "type": "scatter", "mode": "lines",
+                "x": [vmin - m, vmax + m], "y": [vmin - m, vmax + m],
+                "line": {"dash": "dash", "color": "#9aa5b1", "width": 1},
+                "name": "1:1 line", "hoverinfo": "skip"})
+
+        _leg = n_reaches <= 25
+        _outlet = " · outlet obs" if _is_summa else ""
+        ts_layout = {
+            "title": {"text": f"{species} — time series "
+                              f"({n_reaches} {feat_label_plural}{_outlet})"},
+            "xaxis": {"title": "Date"}, "yaxis": {"title": "Concentration"},
+            "hovermode": "closest", "showlegend": _leg}
+        sc_layout = {
+            "title": {"text": f"{species} — observed vs simulated"},
+            "xaxis": {"title": "Observed"}, "yaxis": {"title": "Simulated"},
+            "hovermode": "closest", "showlegend": _leg}
+        c1 = _plotly_chart(_plot_id("ts"), ts_traces, ts_layout,
+                           height=440, card=False)
+        c2 = _plotly_chart(_plot_id("sc"), sc_traces, sc_layout,
+                           height=440, card=False)
+        blocks.append(
+            f'<div class="card">'
+            f'<h3 style="margin:.2rem 0 .7rem;">{html_lib.escape(str(species))} '
+            f'&mdash; {n_reaches} '
+            f'{feat_label if n_reaches == 1 else feat_label_plural}</h3>'
+            f'<div style="display:flex;flex-wrap:wrap;gap:1rem;">'
+            f'<div style="flex:1 1 520px;min-width:300px;">{c1}</div>'
+            f'<div style="flex:1 1 360px;min-width:280px;">{c2}</div>'
+            f'</div></div>')
+
+    return "\n".join(blocks)
 
 
 # =========================================================================
@@ -1769,14 +2321,14 @@ def _build_morris_results(
             \u03c3 (sigma) measures non-linearity and interactions.
         </p>
         <div class="table-wrap">
-        <table class="param-table">
+        <table class="param-table sortable">
         <thead>
             <tr>
                 <th>Rank</th>
                 <th>Parameter</th>
                 <th>μ*</th>
                 <th>σ</th>
-                <th>Importance</th>
+                <th class="no-sort">Importance</th>
             </tr>
         </thead>
         <tbody>
@@ -1851,14 +2403,14 @@ def _build_sobol_results(
             S1 = first-order (main effect). ST = total-order (including interactions).
         </p>
         <div class="table-wrap">
-        <table class="param-table">
+        <table class="param-table sortable">
         <thead>
             <tr>
                 <th>Rank</th>
                 <th>Parameter</th>
                 <th>S1</th>
                 <th>ST</th>
-                <th>Importance</th>
+                <th class="no-sort">Importance</th>
             </tr>
         </thead>
         <tbody>
@@ -1885,37 +2437,45 @@ def _generate_morris_plot(
     sigma: List[float],
     output_dir: str
 ) -> str:
-    """Generate Morris mu* vs sigma scatter plot."""
-    _setup_plot_style()
+    """Interactive 2-panel Morris summary: μ* ranking bar chart +
+    μ* vs σ scatter (above the 1:1 line ⇒ interactions / non-linearity)."""
+    names = list(param_names)
+    mu = [float(x) for x in mu_star]
+    sg = [float(x) for x in sigma]
+    n = len(names)
+    order = sorted(range(n), key=lambda i: mu[i])   # ascending → biggest on top
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    bar = [{"type": "bar", "orientation": "h",
+            "x": [mu[i] for i in order], "y": [names[i] for i in order],
+            "marker": {"color": "#4d9ee8"},
+            "hovertemplate": "%{y}<br>μ* = %{x:.4g}<extra></extra>"}]
+    bar_layout = {"title": {"text": "Importance ranking (μ*)"},
+                  "xaxis": {"title": "μ* (overall importance)"},
+                  "yaxis": {"automargin": True}, "showlegend": False}
 
-    mu_arr = np.array(mu_star)
-    sig_arr = np.array(sigma)
+    mx = max(mu) if mu else 1.0
+    scat = [{"type": "scatter", "mode": "markers", "x": mu, "y": sg,
+             "text": names, "marker": {"size": 11, "color": "#10b981"},
+             "name": "parameters",
+             "hovertemplate": "%{text}<br>μ* = %{x:.4g}<br>σ = %{y:.4g}<extra></extra>"}]
+    if mx > 0:
+        scat.append({"type": "scatter", "mode": "lines", "x": [0, mx],
+                     "y": [0, mx], "name": "1:1",
+                     "line": {"dash": "dash", "color": "#9aa5b1", "width": 1},
+                     "hoverinfo": "skip"})
+    scat_layout = {"title": {"text": "μ* vs σ  (above 1:1 ⇒ interactions)"},
+                   "xaxis": {"title": "μ* (mean |elementary effect|)"},
+                   "yaxis": {"title": "σ (std of elementary effect)"},
+                   "showlegend": False, "hovermode": "closest"}
 
-    ax.scatter(mu_arr, sig_arr, s=60, color='#4d9ee8', alpha=0.7, zorder=3)
-
-    # Label each point
-    for i, name in enumerate(param_names):
-        short = name if len(name) <= 15 else name[:7] + '..' + name[-6:]
-        ax.annotate(short, (mu_arr[i], sig_arr[i]),
-                    fontsize=7, color='#a0aec0',
-                    xytext=(5, 5), textcoords='offset points')
-
-    ax.set_xlabel('μ* (Mean Absolute Elementary Effect)')
-    ax.set_ylabel('σ (Std of Elementary Effect)')
-    ax.set_title('Morris Screening: μ* vs σ', fontsize=14,
-                 fontweight='bold', color='#e2e8f0')
-    ax.grid(True, alpha=0.3)
-
-    fig.tight_layout()
-    data_uri = _fig_to_base64(fig)
-
-    return f"""
-    <div class="card">
-        <img src="{data_uri}" class="plot-img" alt="Morris sensitivity plot"/>
-    </div>
-    """
+    _h = max(360, n * 28 + 130)
+    c1 = _plotly_chart(_plot_id("morris-bar"), bar, bar_layout, height=_h, card=False)
+    c2 = _plotly_chart(_plot_id("morris-sc"), scat, scat_layout,
+                       height=max(360, _h), card=False)
+    return (f'<div class="card"><div style="display:flex;flex-wrap:wrap;gap:1rem;">'
+            f'<div style="flex:1 1 400px;min-width:300px;">{c1}</div>'
+            f'<div style="flex:1 1 340px;min-width:280px;">{c2}</div>'
+            f'</div></div>')
 
 
 def _generate_sobol_plot(
@@ -1924,44 +2484,22 @@ def _generate_sobol_plot(
     ST: List[float],
     output_dir: str
 ) -> str:
-    """Generate Sobol indices bar chart."""
-    _setup_plot_style()
-
-    n = len(param_names)
-    x = np.arange(n)
-    width = 0.35
-
-    # Shorten names
-    short_names = []
-    for name in param_names:
-        if len(name) > 15:
-            short_names.append(name[:7] + '..' + name[-6:])
-        else:
-            short_names.append(name)
-
-    fig, ax = plt.subplots(figsize=(max(8, n * 0.8), 5))
-
-    ax.bar(x - width / 2, S1, width, label='S1 (First-order)',
-           color='#4d9ee8', alpha=0.8)
-    ax.bar(x + width / 2, ST, width, label='ST (Total-order)',
-           color='#34d399', alpha=0.8)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(short_names, rotation=45, ha='right', fontsize=8)
-    ax.set_ylabel('Sensitivity Index')
-    ax.set_title('Sobol Sensitivity Indices', fontsize=14,
-                 fontweight='bold', color='#e2e8f0')
-    ax.legend(facecolor='#1e1f2e', edgecolor='#2a2b3d', fontsize=9)
-    ax.grid(True, alpha=0.3, axis='y')
-
-    fig.tight_layout()
-    data_uri = _fig_to_base64(fig)
-
-    return f"""
-    <div class="card">
-        <img src="{data_uri}" class="plot-img" alt="Sobol sensitivity indices"/>
-    </div>
-    """
+    """Interactive grouped-bar Sobol indices chart (S1 + ST)."""
+    names = list(param_names)
+    traces = [
+        {"type": "bar", "x": names, "y": [float(v) for v in S1],
+         "name": "S1 (First-order)", "marker": {"color": "#4d9ee8"},
+         "hovertemplate": "%{x}<br>S1 = %{y:.4f}<extra></extra>"},
+        {"type": "bar", "x": names, "y": [float(v) for v in ST],
+         "name": "ST (Total-order)", "marker": {"color": "#34d399"},
+         "hovertemplate": "%{x}<br>ST = %{y:.4f}<extra></extra>"},
+    ]
+    layout = {"title": {"text": "Sobol Sensitivity Indices"},
+              "barmode": "group",
+              "xaxis": {"tickangle": -45, "automargin": True},
+              "yaxis": {"title": "Sensitivity index"},
+              "hovermode": "closest"}
+    return _plotly_chart(_plot_id("sobol"), traces, layout, height=470)
 
 
 # =========================================================================
@@ -2328,6 +2866,32 @@ def _build_observation_map_section(
     # Load observations and pull station locations.
     obs_csv = obs_cfg.get("user_observation_csv")
     grqa_dir = obs_cfg.get("grqa_local_data_path")
+    # The model-config setup writes the *clipped* GRQA station/observation CSVs
+    # into <run_dir>/openwq_in/grqa_clipped_data/ — NOT into the raw GRQA
+    # database dir (grqa_local_data_path).  Resolve that folder so the map can
+    # find station coordinates.  (This was why the map came up empty for GRQA
+    # runs: it only looked inside the raw DB dir, where the clipped CSV never
+    # exists.)
+    def _resolve_clipped_dir():
+        cands = []
+        _rd = model_config.get("dir2save_input_files")
+        if not _rd:
+            try:
+                _exe = (_ci.get_container_config(model_config) or {}).get(
+                    "executable_path", "")
+            except Exception:
+                _exe = ""
+            _rd = os.path.dirname(os.path.abspath(_exe)) if _exe else ""
+        if _rd:
+            cands.append(os.path.join(_rd, "openwq_in", "grqa_clipped_data"))
+        if grqa_dir:
+            cands.append(os.path.join(grqa_dir, "grqa_clipped_data"))
+            cands.append(grqa_dir)
+        for _c in cands:
+            if _c and os.path.isdir(_c):
+                return _c
+        return None
+    _clipped_dir = _resolve_clipped_dir()
     station_locations: Dict[str, tuple] = {}
     if obs_csv and os.path.isfile(obs_csv):
         try:
@@ -2342,8 +2906,8 @@ def _build_observation_map_section(
                                                   float(row['lon']))
         except Exception:
             pass
-    if not station_locations and grqa_dir:
-        stn_csv = os.path.join(grqa_dir, "grqa_clipped_stations.csv")
+    if not station_locations and _clipped_dir:
+        stn_csv = os.path.join(_clipped_dir, "grqa_clipped_stations.csv")
         if os.path.isfile(stn_csv):
             try:
                 df = pd.read_csv(stn_csv)
@@ -2407,6 +2971,19 @@ def _build_observation_map_section(
                     station_stats[str(sid)]["n_obs"] = int(n)
         except Exception:
             pass
+    elif _clipped_dir:
+        # GRQA case: count rows per station from the clipped observations CSV
+        # (keyed by site_id) so the marker radius reflects data density.
+        _obs_clip = os.path.join(_clipped_dir, "grqa_clipped_observations.csv")
+        if os.path.isfile(_obs_clip):
+            try:
+                _df = pd.read_csv(
+                    _obs_clip, usecols=lambda c: c == "site_id")
+                for sid, n in _df.groupby("site_id").size().to_dict().items():
+                    if str(sid) in station_stats:
+                        station_stats[str(sid)]["n_obs"] = int(n)
+            except Exception:
+                pass
 
     # 2) Per-station, per-species metrics by reverse-lookup through s2f
     #    + performance_metrics (which is keyed on reach_id + species).
@@ -2494,6 +3071,71 @@ def _build_observation_map_section(
                 if vals:
                     agg[k] = float(sum(vals) / len(vals))
             st["metrics"] = agg
+
+    # 2b) Colour stations directly from matched_data (decoupled from the
+    # performance-metrics table, which may be unavailable).  Also handles the
+    # common case where match_stations() returns 0 matches — e.g. a SUMMA
+    # domain with only a lumped river network and no HRU polygons: then every
+    # marker would otherwise be gray.  We compute the objective metric from
+    # the obs/sim pairs and:
+    #   • per matched reach → colour that reach's stations
+    #   • if NOTHING matched but obs/sim pairs exist (lumped) → colour every
+    #     station by the single overall calibrated metric and treat them as
+    #     primary so the colormap (not gray) is used.
+    _obj_name = str((calibration_settings or {}).get("objective_function")
+                    or "KGE").upper()
+    _lumped_colour = False
+    try:
+        import pandas as _pd
+        import numpy as _np
+        from .objective_functions import ObjectiveFunction as _OF
+
+        def _calc_metric(o, s):
+            o = _np.asarray(o, dtype=float); s = _np.asarray(s, dtype=float)
+            mask = ~(_np.isnan(o) | _np.isnan(s))
+            o, s = o[mask], s[mask]
+            if o.size < 2:
+                return None
+            if _obj_name == "NSE":
+                return float(_OF.nse(o, s))
+            if _obj_name == "RMSE":
+                return float(_OF.rmse(o, s))
+            if _obj_name == "PBIAS":
+                return float(_OF.pbias(o, s))
+            return float(_OF.kge(o, s))
+
+        if isinstance(matched_data, _pd.DataFrame) and not matched_data.empty \
+                and {'observed', 'simulated'} <= set(matched_data.columns):
+            _by_reach: Dict[str, float] = {}
+            if 'reach_id' in matched_data.columns:
+                for _rid, _g in matched_data.groupby('reach_id'):
+                    _mv = _calc_metric(_g['observed'], _g['simulated'])
+                    if _mv is not None:
+                        _by_reach[_norm_id(_rid)] = _mv
+            _overall = _calc_metric(matched_data['observed'],
+                                    matched_data['simulated'])
+            # Fill matched stations (don't overwrite perf-metrics values).
+            for _sid, _fid in s2f.items():
+                if station_stats.get(_sid) and \
+                        station_stats[_sid]["metrics"].get(_obj_name) is None:
+                    _mv = _by_reach.get(_norm_id(_fid))
+                    if _mv is not None:
+                        station_stats[_sid]["metrics"][_obj_name] = _mv
+            _have_any = any(st["metrics"].get(_obj_name) is not None
+                            for st in station_stats.values())
+            if (not _have_any) and (_overall is not None):
+                primary = set(primary)
+                _lumped_reach = (next(iter(_by_reach)) if _by_reach else
+                                 (str(matched_data['reach_id'].iloc[0])
+                                  if 'reach_id' in matched_data.columns else ""))
+                for _sid in station_stats:
+                    station_stats[_sid]["metrics"][_obj_name] = _overall
+                    primary.add(_sid)
+                    if _sid not in s2f and _lumped_reach:
+                        s2f[_sid] = _lumped_reach
+                _lumped_colour = True
+    except Exception as _e:
+        logger.debug(f"obs-map matched_data colouring skipped: {_e}")
 
     # 3) The objective metric drives the marker colour.
     #
@@ -2628,9 +3270,35 @@ def _build_observation_map_section(
            + (f", {n_secondary} secondary" if n_secondary else "")
            + (f", {n_unmatched} unmatched" if n_unmatched else "")
            + f") — hostmodel: {hostmodel}")
+    if _lumped_colour:
+        sub += (f" &middot; stations coloured by the overall calibrated "
+                f"{_obj_name} (lumped network — no per-feature spatial match)")
     html = ['<div class="section" id="obs-map">']
     html.append('<h2>Observation Map</h2>')
     html.append(f'<p class="muted" style="margin-top:-8px">{sub}</p>')
+    # Map export button (uses html2pdf on the map div; crossOrigin tiles let
+    # html2canvas capture the basemap).  Mirrors the per-figure PDF buttons.
+    html.append(
+        '<div style="display:flex;justify-content:flex-end;margin:0 0 6px;">'
+        '<button type="button" class="no-pdf" onclick="_owqExportMap()" '
+        'title="Download the map as PDF" '
+        'style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;'
+        'font-size:11px;font-weight:600;background:#0066cc;color:#fff;border:none;'
+        'border-radius:7px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.25);">'
+        '⬇ Download map (PDF)</button></div>'
+        '<script>function _owqExportMap(){'
+        'var el=document.getElementById("obs-map-leaflet"); if(!el) return;'
+        'if(typeof html2pdf==="undefined"){ window.print(); return; }'
+        'var r=el.getBoundingClientRect(), mm=25.4/96;'
+        'var wmm=r.width*mm, hmm=r.height*mm;'
+        'html2pdf().set({margin:5, filename:"observation_map.pdf",'
+        'image:{type:"jpeg",quality:0.95},'
+        'html2canvas:{useCORS:true, scale:2, backgroundColor:"#ffffff", logging:false},'
+        'jsPDF:{unit:"mm", orientation:"portrait", format:[wmm+10,hmm+10]}'
+        '}).from(el).save().catch(function(e){console.error(e);'
+        'alert("Map export failed \\u2014 the basemap tiles may block capture. '
+        'Switch to the OpenStreetMap basemap and retry, or take a screenshot.");});'
+        '}</script>')
     # CSS + Leaflet (inline so the section is self-contained).
     html.append(
         '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>'
@@ -2714,10 +3382,10 @@ def _build_observation_map_section(
         'map.fitBounds(P.bounds,{padding:[10,10]});\n'
         '// ── Base layers (Satellite is DEFAULT now) ──\n'
         'var osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",\n'
-        '  {maxZoom:19, attribution:"&copy; OpenStreetMap contributors"});\n'
+        '  {maxZoom:19, crossOrigin:true, attribution:"&copy; OpenStreetMap contributors"});\n'
         'var sat = L.tileLayer(\n'
         '  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",\n'
-        '  {maxZoom:19, attribution:"Tiles &copy; Esri \\u2014 Source: Esri, Maxar, Earthstar Geographics, USDA, USGS"});\n'
+        '  {maxZoom:19, crossOrigin:true, attribution:"Tiles &copy; Esri \\u2014 Source: Esri, Maxar, Earthstar Geographics, USDA, USGS"});\n'
         'sat.addTo(map);\n'
         'L.control.layers({"Satellite":sat,"OpenStreetMap":osm},null,{position:"topright"}).addTo(map);\n'
         '// ── Feature colour + reachable styling ──\n'
@@ -3046,6 +3714,19 @@ def _build_pdf_export_block(project_name: str) -> str:
 #pdfExportBtn.busy .spin { display:inline-block; }
 @keyframes pdfspin { to { transform:rotate(360deg); } }
 @media print { #pdfExportBtn { display:none !important; } }
+
+/* Per-figure "Download PDF" buttons, pinned top-right of each plot card. */
+.fig-pdf-btn {
+    position:absolute; top:10px; right:10px; z-index:5;
+    display:inline-flex; align-items:center; gap:5px;
+    padding:5px 10px; font-size:11px; font-weight:600; line-height:1;
+    background:rgba(0,102,204,.92); color:#fff;
+    border:none; border-radius:7px; cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,.25);
+    font-family:inherit; opacity:.85; transition:opacity .15s, background .15s;
+}
+.fig-pdf-btn:hover { opacity:1; background:#004499; }
+@media print { .fig-pdf-btn { display:none !important; } }
 """
     return f"""
 <style>{css}</style>
@@ -3054,21 +3735,29 @@ def _build_pdf_export_block(project_name: str) -> str:
   <span class="label">&#x1F4C4; Download PDF</span>
 </button>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 function _owqExportPDF() {{
     var btn = document.getElementById('pdfExportBtn');
     if(!btn) return;
     if(typeof html2pdf === 'undefined') {{
-        alert('PDF library is still loading — please try again in a moment.');
+        // CDN didn't load (offline / blocked) — fall back to the browser's
+        // native print-to-PDF so the button still produces a document.
+        window.print();
         return;
     }}
     btn.disabled = true; btn.classList.add('busy');
     btn.querySelector('.label').textContent = ' Building PDF…';
 
     // Sections to include, in render order.  Skipped silently if absent.
-    var SECTIONS = ['summary','obs-map','best-params','convergence',
-                    'param-evolution','param-correlations','sensitivity',
-                    'performance','run-best'];
+    // 'obs-map' is intentionally excluded: its Leaflet satellite tiles are
+    // cross-origin and taint the html2canvas buffer, which makes the WHOLE
+    // export throw (the reason the button appeared to "do nothing").  The
+    // interactive map stays in the HTML report; its per-station metrics are
+    // also in the Performance section.
+    var SECTIONS = ['summary','sensitivity','best-params','convergence',
+                    'param-evolution','param-correlations',
+                    'performance','run-best','timeseries'];
 
     // Off-screen wrapper — forced white background, dark text.
     var wrap = document.createElement('div');
@@ -3149,5 +3838,93 @@ function _owqExportPDF() {{
         }});
     }}, 250);
 }}
+
+// ── Per-figure "Download PDF" buttons ──────────────────────────────────
+// Every matplotlib figure is a base64 PNG data-URI (same-origin → no canvas
+// taint), so a single-image jsPDF export is fast and reliable.  We inject a
+// button into each plot card on load.  jsPDF ships inside the html2pdf
+// bundle (window.jspdf); if that didn't load we fall back to a PNG download
+// so the button always does something.
+function _owqFigName(img) {{
+    var n = (img.getAttribute('alt') || 'figure');
+    n = n.replace(/[^A-Za-z0-9_\\- ]+/g, '').trim().replace(/\\s+/g, '_');
+    return n || 'figure';
+}}
+function _owqFigPdfImg(img) {{
+    if(!img) return;
+    var name = _owqFigName(img);
+    if(typeof html2pdf === 'undefined') {{   // CDN missing — download the PNG
+        var a = document.createElement('a');
+        a.href = img.src; a.download = name + '.png'; a.click();
+        return;
+    }}
+    // Build a clean WHITE export page with a header, then let html2pdf size
+    // and paginate it.  Scaling the figure to the page width guarantees the
+    // whole graph fits (no more cut-off), regardless of the figure's pixel
+    // dimensions — the same idea as the 1_config / 2_read_output exports.
+    var title = (img.getAttribute('alt') || 'Figure');
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:absolute;left:-10000px;top:0;width:1000px;'+
+        'background:#ffffff;padding:26px;box-sizing:border-box;'+
+        'font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;';
+    var head = document.createElement('div');
+    head.style.cssText = 'border-bottom:2px solid #0066cc;padding-bottom:10px;margin-bottom:16px;';
+    var h1 = document.createElement('div');
+    h1.style.cssText = 'font-size:20px;font-weight:700;color:#111;';
+    h1.textContent = title;
+    var sub = document.createElement('div');
+    sub.style.cssText = 'font-size:12px;color:#555;margin-top:3px;';
+    sub.textContent = 'OpenWQ \\u2014 Calibration Results  \\u00b7  ' + new Date().toLocaleString();
+    head.appendChild(h1); head.appendChild(sub);
+    var im = document.createElement('img');
+    im.style.cssText = 'display:block;width:100%;height:auto;';
+    wrap.appendChild(head); wrap.appendChild(im);
+    document.body.appendChild(wrap);
+    var opt = {{
+        margin:[10, 10, 12, 10], filename: name + '.pdf',
+        image:{{ type:'jpeg', quality:0.95 }},
+        html2canvas:{{ scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false }},
+        jsPDF:{{ unit:'mm', format:'a4', orientation:'portrait' }},
+        pagebreak:{{ mode:['css','legacy'] }}
+    }};
+    var _done = false;
+    function _run() {{
+        if(_done) return; _done = true;
+        html2pdf().set(opt).from(wrap).save().then(function(){{ wrap.remove(); }})
+          .catch(function(e){{ console.error('Figure PDF failed:', e); wrap.remove();
+            var a2 = document.createElement('a');
+            a2.href = img.src; a2.download = name + '.png'; a2.click(); }});
+    }}
+    // Wait for the (cloned) image to decode before capturing, otherwise
+    // html2canvas grabs an empty box and the figure is missing from the PDF.
+    im.onload = _run;
+    im.onerror = function(){{ wrap.remove();
+        var a3 = document.createElement('a');
+        a3.href = img.src; a3.download = name + '.png'; a3.click(); }};
+    im.src = img.src;
+    if(im.complete && im.naturalWidth) _run();   // already cached
+}}
+function _owqInjectFigButtons() {{
+    document.querySelectorAll('img.plot-img').forEach(function(img) {{
+        // Pin the button to the figure's container — a plot card, or (for the
+        // time-series figures that aren't wrapped in a card) the image's
+        // immediate parent.
+        var host = img.closest('.card') || img.parentElement;
+        if(!host || host.querySelector(':scope > .fig-pdf-btn')) return;
+        if(getComputedStyle(host).position === 'static')
+            host.style.position = 'relative';
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'fig-pdf-btn no-pdf';
+        b.title = 'Download this figure as PDF';
+        b.innerHTML = '\\u2B07 PDF';
+        b.addEventListener('click', function() {{ _owqFigPdfImg(img); }});
+        host.appendChild(b);
+    }});
+}}
+if(document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', _owqInjectFigButtons);
+else
+    _owqInjectFigButtons();
 </script>
 """

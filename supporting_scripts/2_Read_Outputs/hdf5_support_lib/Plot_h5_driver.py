@@ -920,6 +920,12 @@ a{color:var(--primary);text-decoration:none}
   <button class="tb-btn" onclick="_owqApplyRange('{div_id}')">Apply</button>
   <button class="tb-btn" onclick="_owqAxisTight('{div_id}')">Tight</button>
   <button class="tb-btn" onclick="_owqResetRange('{div_id}',this)">Reset</button>
+  <span class="tb-sep"></span>
+  <label style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;user-select:none"
+         title="Disable / enable scroll &amp; box zoom">
+    <input type="checkbox" class="lock-zoom" data-target="{div_id}" checked> Lock zoom</label>
+  <button type="button" class="tb-btn pdf-btn" data-target="{div_id}"
+          title="Download this figure as a branded PDF (A4). First click fetches jsPDF from the CDN.">&#128196; PDF</button>
 </div>
 <div class="plot-toolbar" data-plot="{div_id}" style="padding-top:0">
   <label style="font-weight:700">Active:</label>
@@ -1013,12 +1019,108 @@ function _owqLayout(extra){
   return base;
 }
 
-var PCFG = {responsive:true, displayModeBar:true,
+var PCFG = {responsive:true, displayModeBar:true, displaylogo:false, scrollZoom:true,
   modeBarButtonsToRemove:['lasso2d','select2d'],
   toImageButtonOptions:{format:'svg',filename:'openwq_plot'}};
 
 window._owqPlotIds = [];
 function _owqRegister(id){ window._owqPlotIds.push(id); }
+
+// ── Per-figure "Lock zoom" + branded PDF export (replicated from FLUXOS) ──
+window.__OWQ_PROJECT_NAME = window.__OWQ_PROJECT_NAME || 'OpenWQ Results';
+window.__OWQ_GENERATED_AT = window.__OWQ_GENERATED_AT || new Date().toISOString();
+function _owqAxisKeys(layout){
+  var keys=[]; Object.keys(layout||{}).forEach(function(k){ if(/^(x|y)axis(\\d*)$/.test(k)) keys.push(k); });
+  if(!keys.length) keys=['xaxis','yaxis']; return keys;
+}
+function _owqApplyLock(plot, locked){
+  plot.dataset.locked = locked?'true':'false';
+  var u={}; _owqAxisKeys(plot.layout||{}).forEach(function(k){ u[k+'.fixedrange']=!!locked; });
+  try{ Plotly.relayout(plot, u); }catch(e){}
+}
+function _owqInstallWheel(plot){
+  plot.addEventListener('wheel', function(e){
+    if(plot.dataset.locked==='true') e.stopImmediatePropagation();
+  }, {capture:true, passive:true});
+}
+var _OWQ_JSPDF_CDN='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+function _owqLoadJsPDF(){
+  if(window.jspdf&&window.jspdf.jsPDF) return Promise.resolve();
+  return new Promise(function(res,rej){
+    var s=document.createElement('script'); s.src=_OWQ_JSPDF_CDN; s.async=true;
+    s.onload=function(){ (window.jspdf&&window.jspdf.jsPDF)?res():rej(new Error('jsPDF global missing')); };
+    s.onerror=function(){ rej(new Error('Failed to load jsPDF from CDN')); };
+    document.head.appendChild(s);
+  });
+}
+function _owqFigTitle(plot){
+  var n=plot.closest('.section')||plot.parentElement;
+  while(n&&n!==document.body){ var h=n.querySelector('h1,h2,h3'); if(h&&h.textContent.trim()) return h.textContent.trim(); n=n.parentElement; }
+  return plot.id;
+}
+function _owqSlug(s){ return (s||'').replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,''); }
+var _OPF={BG:'#ffffff',FG:'#1a1a1a',GRID:'#d4d4d4',FONT:'Inter,Helvetica,Arial,sans-serif',BASE:20,TICK:24,AXIS:28,HEAD:30};
+function _owqExportLayout(src){
+  var L=JSON.parse(JSON.stringify(src||{}));
+  L.paper_bgcolor=_OPF.BG; L.plot_bgcolor=_OPF.BG;
+  L.font=Object.assign({},L.font||{},{color:_OPF.FG,size:_OPF.BASE,family:_OPF.FONT});
+  if(L.title){ if(typeof L.title==='string') L.title={text:L.title}; L.title.font=Object.assign({},L.title.font||{},{color:_OPF.FG,size:_OPF.HEAD,family:_OPF.FONT}); }
+  L.margin=Object.assign({},L.margin||{}); L.margin.l=Math.max(L.margin.l||0,95); L.margin.r=Math.max(L.margin.r||0,50); L.margin.t=Math.max(L.margin.t||0,60); L.margin.b=Math.max(L.margin.b||0,95);
+  Object.keys(L).forEach(function(k){ if(!/^(x|y)axis\\d*$/.test(k)) return; var ax=L[k]=Object.assign({},L[k]||{});
+    ax.color=_OPF.FG; ax.linecolor=_OPF.FG; ax.gridcolor=_OPF.GRID; ax.zerolinecolor=_OPF.GRID; ax.tickcolor=_OPF.FG; ax.automargin=true;
+    ax.tickfont=Object.assign({},ax.tickfont||{},{color:_OPF.FG,size:_OPF.TICK,family:_OPF.FONT});
+    if(ax.title){ if(typeof ax.title==='string') ax.title={text:ax.title}; ax.title.font=Object.assign({},ax.title.font||{},{color:_OPF.FG,size:_OPF.AXIS,family:_OPF.FONT}); }
+  });
+  if(L.legend){ L.legend=Object.assign({},L.legend,{bgcolor:_OPF.BG,bordercolor:_OPF.GRID,font:Object.assign({},(L.legend.font||{}),{color:_OPF.FG,size:_OPF.BASE,family:_OPF.FONT})}); }
+  return L;
+}
+async function _owqDownloadPDF(plot, btn){
+  if(!window.Plotly){ alert('Plotly not loaded yet — try again.'); return; }
+  var orig=btn?btn.innerHTML:null;
+  try{
+    if(btn){ btn.disabled=true; btn.innerHTML='\\u231B Building\\u2026'; }
+    await _owqLoadJsPDF();
+    var cssW=Math.max(plot.clientWidth||1000,800), cssH=Math.max(plot.clientHeight||500,460);
+    var png=await Plotly.toImage({data:plot.data||[], layout:_owqExportLayout(plot.layout||{}), config:{displayModeBar:false,staticPlot:true}}, {format:'png', width:cssW*2, height:cssH*2});
+    var jsPDF=window.jspdf.jsPDF; var landscape=cssW>=cssH;
+    var pdf=new jsPDF({unit:'mm',format:'a4',orientation:landscape?'landscape':'portrait',compress:true});
+    var pageW=pdf.internal.pageSize.getWidth(), pageH=pdf.internal.pageSize.getHeight(), margin=12;
+    var proj=window.__OWQ_PROJECT_NAME||'OpenWQ', fig=_owqFigTitle(plot), gen=window.__OWQ_GENERATED_AT||new Date().toISOString();
+    var BR=[0,102,204], INK=[26,26,26], MUT=[110,110,110]; var ly=margin+2;
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(20);
+    pdf.setTextColor(INK[0],INK[1],INK[2]); pdf.text('open',margin,ly);
+    var ow=pdf.getTextWidth('open'); pdf.setTextColor(BR[0],BR[1],BR[2]); pdf.text('WQ',margin+ow,ly);
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(12); pdf.setTextColor(INK[0],INK[1],INK[2]); pdf.text(proj,pageW-margin,ly,{align:'right'});
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(10); pdf.setTextColor(MUT[0],MUT[1],MUT[2]); pdf.text(fig,pageW-margin,ly+5,{align:'right'});
+    pdf.setDrawColor(BR[0],BR[1],BR[2]); pdf.setLineWidth(0.4); var ruleY=margin+9; pdf.line(margin,ruleY,pageW-margin,ruleY);
+    var headerH=12, footerH=8, availW=pageW-2*margin, availH=pageH-2*margin-headerH-footerH, ratio=cssW/cssH;
+    var iw=availW, ih=availW/ratio; if(ih>availH){ ih=availH; iw=availH*ratio; }
+    var ox=margin+(availW-iw)/2, oy=margin+headerH+(availH-ih)/2;
+    pdf.addImage(png,'PNG',ox,oy,iw,ih,undefined,'FAST');
+    var fY=pageH-margin/2; pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.setTextColor(INK[0],INK[1],INK[2]); pdf.text('open',margin,fY);
+    var owf=pdf.getTextWidth('open'); pdf.setTextColor(BR[0],BR[1],BR[2]); pdf.text('WQ',margin+owf,fY);
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.setTextColor(MUT[0],MUT[1],MUT[2]);
+    pdf.text('  \\u00b7  generated '+gen.slice(0,19).replace('T',' '), margin+owf+pdf.getTextWidth('WQ'), fY);
+    pdf.text(plot.id, pageW-margin, fY, {align:'right'});
+    pdf.setProperties({title:fig+' \\u2014 '+proj, subject:'OpenWQ figure export', author:proj, creator:'OpenWQ results report'});
+    pdf.save((_owqSlug(proj)?_owqSlug(proj)+'_':'')+_owqSlug(plot.id||fig)+'.pdf');
+  }catch(e){ console.error('[owq-pdf]',e); alert('Could not export PDF: '+(e.message||e)); }
+  finally{ if(btn){ btn.disabled=false; btn.innerHTML=orig; } }
+}
+function _owqWireFigTools(){
+  document.querySelectorAll('.lock-zoom').forEach(function(cb){
+    if(cb.__owqWired) return; cb.__owqWired=true;
+    var plot=document.getElementById(cb.getAttribute('data-target')); if(!plot) return;
+    _owqInstallWheel(plot); _owqApplyLock(plot, cb.checked);
+    cb.addEventListener('change', function(){ _owqApplyLock(plot, cb.checked); });
+  });
+  document.querySelectorAll('.pdf-btn').forEach(function(btn){
+    if(btn.__owqWired) return; btn.__owqWired=true;
+    btn.addEventListener('click', function(){ var plot=document.getElementById(btn.getAttribute('data-target')); if(plot) _owqDownloadPDF(plot, btn); });
+  });
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(_owqWireFigTools,400); });
+else setTimeout(_owqWireFigTools,400);
 var _owqObsMeta = """ + json.dumps(_obs_meta) + """;
 // Indexed lookup of which obs-trace tidx in each plot is a SECONDARY
 // (gray) station observation, so the "Show secondary obs" toggle can

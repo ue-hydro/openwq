@@ -2518,6 +2518,19 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         # Step 2: Run the model
         H.append('<h3 style="margin-top:1rem">2. Run the model</h3>')
 
+        # Keep the machine awake for the (long-running) model run so it doesn't
+        # sleep / throttle Docker mid-run.  Mechanism is OS-specific; Windows
+        # has no per-command wrapper, so we leave the command bare and add a
+        # guidance note instead (see below).
+        #   macOS  : caffeinate -i -s CMD   (built-in, releases on exit)
+        #   Linux  : systemd-inhibit … CMD  (built-in on systemd distros)
+        if _os_platform == 'Darwin':
+            _caf = 'caffeinate -i -s '
+        elif _os_platform == 'Linux':
+            _caf = 'systemd-inhibit --what=idle:sleep --why="OpenWQ model run" '
+        else:  # Windows
+            _caf = ''
+
         # Build the docker exec command with resolved container paths
         _docker_cmd = None
         if executable_path and file_manager_path:
@@ -2543,7 +2556,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                     # SUMMA-OpenWQ is serial (no MPI); force -np 1
                     _np = 1 if hostmodel.lower() == 'summa' else mpi_np
                     _docker_cmd = (
-                        f'docker exec {docker_container_name} /bin/bash -c '
+                        f'{_caf}docker exec {docker_container_name} /bin/bash -c '
                         f'"export HDF5_USE_FILE_LOCKING=FALSE && '
                         f'cd {_cont_wd} && '
                         f'mpirun --allow-run-as-root -np {_np} '
@@ -2558,7 +2571,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             _fm_flag = '-m ' if hostmodel.lower() == 'summa' else ''
             _np = 1 if hostmodel.lower() == 'summa' else mpi_np
             _docker_cmd = (
-                f'docker exec {docker_container_name} /bin/bash -c '
+                f'{_caf}docker exec {docker_container_name} /bin/bash -c '
                 f'"export HDF5_USE_FILE_LOCKING=FALSE && '
                 f'cd <container_path_to:{os.path.abspath(output_dir)}> && '
                 f'mpirun --allow-run-as-root -np {_np} '
@@ -2568,6 +2581,27 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
         if _docker_cmd:
             H.append(_code_block(_docker_cmd))
+            _wake_note_style = 'font-size:.8rem;color:var(--muted);margin-top:.3rem'
+            if _os_platform == 'Darwin':
+                H.append(
+                    f'<p style="{_wake_note_style}">'
+                    'The <code>caffeinate -i -s</code> prefix keeps macOS awake '
+                    '(and stops Docker being throttled) for the whole run, then '
+                    'releases automatically when it finishes.</p>')
+            elif _os_platform == 'Linux':
+                H.append(
+                    f'<p style="{_wake_note_style}">'
+                    'The <code>systemd-inhibit &hellip;</code> prefix stops the '
+                    'machine idle-sleeping for the whole run. It needs systemd '
+                    '(standard on most desktop Linux); drop it on non-systemd '
+                    'hosts or HPC schedulers, which don\'t idle-sleep.</p>')
+            else:  # Windows
+                H.append(
+                    f'<p style="{_wake_note_style}">'
+                    'Windows has no per-command keep-awake. For a long run, '
+                    'disable sleep first with <code>powercfg /change '
+                    'standby-timeout-ac 0</code> (re-enable afterwards), or via '
+                    'Settings &rarr; System &rarr; Power.</p>')
         else:
             H.append('<p style="color:var(--muted);font-style:italic">'
                      'Could not build Docker command &mdash; executable_path '
