@@ -751,36 +751,36 @@ aggregation_method = <span class="string">"mean"</span>
                 <div class="workflow-step">
                     <div class="number">1</div>
                     <div class="content">
-                        <h4>Prepare Observation Data</h4>
-                        <p>Choose source: Manual CSV, GRQA database extraction, or Copernicus synthetic generation</p>
+                        <h4>Configure the model</h4>
+                        <p>Set up &amp; validate your model with the <strong>1_Model_Config</strong> report (paths, modules, species, observation data).</p>
                     </div>
                 </div>
                 <div class="workflow-step">
                     <div class="number" style="background: var(--primary);">2</div>
                     <div class="content">
-                        <h4>Morris Screening (~200 runs)</h4>
-                        <p>Test all 100+ parameters → identify ~30-40 influential ones</p>
+                        <h4>Open the interactive calibration setup report</h4>
+                        <p>Run <code>calibration_config_template.py</code> → a browser report opens. Use the tabs to set <strong>Targets</strong> (species, reaches/HRUs, one compartment), <strong>Parameters</strong>, the <strong>workflow mode</strong> (influential parameters · both · calibration) and the <strong>calibration/validation period</strong> (slider shows per-species observation coverage).</p>
                     </div>
                 </div>
                 <div class="workflow-step">
                     <div class="number" style="background: var(--purple);">3</div>
                     <div class="content">
-                        <h4>Sobol Analysis (~1000 runs)</h4>
-                        <p>Detailed SA on 30 params → rank and select top 10-15</p>
+                        <h4>Pick how to run &amp; save the script</h4>
+                        <p>In the <strong>Execution</strong> tab choose <strong>Docker</strong> (local) or <strong>Apptainer</strong> (HPC) + parallel runs, then click <strong>“Save the script”</strong>.</p>
                     </div>
                 </div>
                 <div class="workflow-step">
                     <div class="number" style="background: var(--secondary);">4</div>
                     <div class="content">
-                        <h4>DDS Optimization (~300-500 runs)</h4>
-                        <p>Optimize top 10-15 parameters, fix others at defaults</p>
+                        <h4>Run it — locally or on HPC</h4>
+                        <p>Locally with Docker, or on HPC with the auto-filled <strong>SLURM job</strong> + one-paste <em>copy&nbsp;&amp;&nbsp;run</em> commands. The chosen mode runs Morris/Sobol screening and/or DDS calibration.</p>
                     </div>
                 </div>
                 <div class="workflow-step">
                     <div class="number" style="background: var(--teal);">5</div>
                     <div class="content">
-                        <h4>Validation</h4>
-                        <p>Test calibrated parameters on independent time period</p>
+                        <h4>Results &amp; validation</h4>
+                        <p>The interactive <strong>results report</strong> opens automatically — review the fit, apply the best parameters, and validate on the held-out window.</p>
                     </div>
                 </div>
             </div>
@@ -877,8 +877,9 @@ grqa_config = {
                             </table>
                         </div>
                         <div class="highlight-box success" style="margin-top: 15px;">
-                            <strong>Run extraction:</strong><br>
-                            <code style="font-size: 0.85rem;">python &lt;template&gt;_run.py --prepare-obs-only</code>
+                            <strong>Automatic:</strong> GRQA stations are extracted, matched to
+                            reaches/HRUs and clipped on the <em>first</em> run, then reused — the
+                            &gt;1&nbsp;GB raw database is never re-downloaded or re-processed.
                         </div>
                     </div>
                 </div>
@@ -988,41 +989,49 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
             <div class="slide-content">
                 <p style="font-size: 1.05rem; margin-bottom: 15px;">
-                    Configure parameters in the interactive config report, click
-                    <strong>&ldquo;Save the script&rdquo;</strong>, then run the generated script:
+                    Configure in the setup report, click <strong>&ldquo;Save the script&rdquo;</strong>,
+                    then run the generated <code>&lt;template&gt;_run.py</code>. The <strong>workflow
+                    mode</strong> (influential parameters · both · calibration) is set by the slider
+                    <em>in the report</em> and baked into the script — there is no mode flag.
                 </p>
                 <div class="two-column" style="gap: 30px;">
                     <div class="column">
                         <pre style="font-size: 0.78rem;">
-<span class="comment"># The config report's "Save the script" button writes</span>
-<span class="comment"># &lt;template&gt;_run.py into your calibration_work_dir.</span>
-
-<span class="comment"># Run it in different modes:</span>
-python &lt;template&gt;_run.py                    <span class="comment"># Full calibration</span>
-python &lt;template&gt;_run.py --sensitivity-only <span class="comment"># SA only</span>
-python &lt;template&gt;_run.py --prepare-obs-only <span class="comment"># Obs data only</span>
-python &lt;template&gt;_run.py --dry-run          <span class="comment"># Validate config</span>
-python &lt;template&gt;_run.py --resume           <span class="comment"># Resume from checkpoint</span>
+<span class="comment"># Run locally with Docker:</span>
+cd .../containers &amp;&amp; docker compose up -d  <span class="comment"># start container</span>
+cd .../3_Calibration                       <span class="comment"># where calibration_lib lives</span>
+python &lt;template&gt;_run.py            <span class="comment"># run (mode set in the report)</span>
+python &lt;template&gt;_run.py --resume   <span class="comment"># resume from last checkpoint</span>
+python &lt;template&gt;_run.py --clean    <span class="comment"># delete stale eval_* first</span>
+python &lt;template&gt;_run.py --dry-run  <span class="comment"># validate config, no run</span>
+python &lt;template&gt;_run.py --report   <span class="comment"># (re)build the results report</span>
                         </pre>
                         <div class="highlight-box success" style="margin-top: 10px;">
-                            <strong>Default save location:</strong> the Save button suggests
-                            <code>&lt;template&gt;_run.py</code> and points at your
-                            <code>calibration_work_dir</code> so the script sits next to its outputs.
+                            <strong>Keep it awake:</strong> long runs are auto-prefixed with
+                            <code>caffeinate</code> (macOS) / <code>systemd-inhibit</code> (Linux)
+                            so the machine doesn't sleep mid-run. Progress is reported by
+                            <strong>simulated date</strong> through the calibration window.
                         </div>
                     </div>
                     <div class="column">
                         <div class="card primary">
-                            <h3>Command-Line Flags</h3>
+                            <h3>Run modes (set in the report)</h3>
                             <table style="font-size: 0.85rem;">
-                                <tr><td><strong>--sensitivity-only</strong></td><td>Run Morris/Sobol only</td></tr>
-                                <tr><td><strong>--prepare-obs-only</strong></td><td>Prepare observations (GRQA/CSV)</td></tr>
-                                <tr><td><strong>--dry-run</strong></td><td>Validate without running</td></tr>
-                                <tr><td><strong>--resume</strong></td><td>Continue from checkpoint</td></tr>
+                                <tr><td><strong>Influential params</strong></td><td>Morris / Sobol screening only</td></tr>
+                                <tr><td><strong>Both</strong></td><td>Screening &rarr; DDS calibration</td></tr>
+                                <tr><td><strong>Calibration</strong></td><td>DDS optimisation only</td></tr>
                             </table>
+                            <p style="font-size:.82rem;margin-top:8px;">CLI flags: <code>--resume</code>,
+                            <code>--clean</code>, <code>--keep</code>, <code>--dry-run</code>,
+                            <code>--report</code>.</p>
                         </div>
                         <div class="card rose" style="margin-top: 10px;">
-                            <h3>In-File Options</h3>
-                            <p style="font-size: 0.9rem;"><code>run_sensitivity_first = True</code><br>→ Auto SA → Calibration pipeline</p>
+                            <h3>On HPC (Apptainer)</h3>
+                            <p style="font-size: 0.9rem;">Set <strong>Container runtime = apptainer</strong>
+                            in the Execution tab. The report builds a ready-to-run SLURM
+                            <code>.sbatch</code> and one-paste <em>copy &rarr; re-point &rarr; submit</em>
+                            commands (HPC details prefilled from <code>hpc_settings.json</code>) —
+                            nothing to edit.</p>
                         </div>
                     </div>
                 </div>
@@ -1070,7 +1079,10 @@ python &lt;template&gt;_run.py --resume           <span class="comment"># Resume
                             </table>
                         </div>
                         <div class="highlight-box info" style="margin-top: 15px;">
-                            <strong>HPC Tip:</strong> Use job arrays to run evaluations in parallel on cluster
+                            <strong>HPC:</strong> the setup report builds a ready-to-run SLURM
+                            <code>.sbatch</code> + one-paste copy &amp; submit commands (Apptainer);
+                            set parallel runs in the Execution tab. Restrict each eval to the
+                            calibration window (period slider) to keep runtime &amp; memory low.
                         </div>
                     </div>
                 </div>
@@ -1139,48 +1151,51 @@ python &lt;template&gt;_run.py --resume           <span class="comment"># Resume
             </div>
             <div class="slide-content">
                 <p style="font-size: 1.05rem; margin-bottom: 15px;">
-                    Calibration automatically generates self-contained HTML reports with interactive Plotly.js charts.
+                    Two self-contained, interactive HTML reports drive the workflow — a
+                    <strong>setup</strong> report (configure &amp; launch) and a
+                    <strong>results</strong> report (diagnose the fit).
                 </p>
                 <div class="two-column" style="gap: 35px;">
                     <div class="column">
                         <div class="card rose">
-                            <h3>6 Diagnostic Charts</h3>
+                            <h3>Setup report (configure &amp; run)</h3>
                             <ul style="margin-left: 15px;">
-                                <li style="font-size: 0.9rem;">Convergence curve (objective vs iteration)</li>
-                                <li style="font-size: 0.9rem;">Parameter evolution trajectories</li>
-                                <li style="font-size: 0.9rem;">Time series: observed vs simulated</li>
-                                <li style="font-size: 0.9rem;">Scatter plot with 1:1 line</li>
-                                <li style="font-size: 0.9rem;">Residual analysis</li>
-                                <li style="font-size: 0.9rem;">Parameter sensitivity ranking</li>
+                                <li style="font-size: 0.9rem;">Tabs: Overview · Settings · Targets · Parameters · <strong>Execution</strong></li>
+                                <li style="font-size: 0.9rem;">Workflow-mode slider (influential params · both · calibration)</li>
+                                <li style="font-size: 0.9rem;">Calibration/validation slider with <strong>per-species observation coverage</strong> lanes</li>
+                                <li style="font-size: 0.9rem;">Live-updating Python script + <strong>“Save the script”</strong></li>
+                                <li style="font-size: 0.9rem;">Flat step-by-step <em>run locally / on HPC</em> guide</li>
+                                <li style="font-size: 0.9rem;">HPC details prefilled from <code>hpc_settings.json</code></li>
                             </ul>
                         </div>
                         <div class="highlight-box success">
-                            <strong>Self-contained:</strong> Single HTML file with embedded data — share via email, no server needed
+                            <strong>Self-contained:</strong> single HTML file with embedded data — share via email, no server needed
                         </div>
                     </div>
                     <div class="column">
                         <div class="card primary">
-                            <h3>Report Features</h3>
-                            <table style="font-size: 0.85rem;">
-                                <tr><td><strong>Plotly.js</strong></td><td>Zoom, pan, hover tooltips</td></tr>
-                                <tr><td><strong>Dark/Light mode</strong></td><td>Theme toggle included</td></tr>
-                                <tr><td><strong>Parameter table</strong></td><td>Best values + bounds + position bar</td></tr>
-                                <tr><td><strong>Species metrics</strong></td><td>Per-species KGE/NSE/RMSE</td></tr>
-                                <tr><td><strong>Sidebar nav</strong></td><td>Jump to any section</td></tr>
+                            <h3>Results report (diagnose)</h3>
+                            <table style="font-size: 0.82rem;">
+                                <tr><td><strong>Plotly charts</strong></td><td>Convergence, parameter evolution, correlation, Morris/Sobol, obs-vs-sim + scatter</td></tr>
+                                <tr><td><strong>Observation map</strong></td><td>Stations coloured by performance</td></tr>
+                                <tr><td><strong>Per-figure export</strong></td><td>Lock-zoom + 📄&nbsp;PDF (white, branded)</td></tr>
+                                <tr><td><strong>Per-species metrics</strong></td><td>KGE / NSE / RMSE / PBIAS</td></tr>
+                                <tr><td><strong>Next Steps</strong></td><td>Apply best params · validate · refine</td></tr>
+                                <tr><td><strong>Dark/Light</strong></td><td>Theme toggle · sortable tables</td></tr>
                             </table>
                         </div>
                         <div class="card teal">
                             <h3>Auto-Generated</h3>
-                            <p style="font-size: 0.9rem;">Reports are created automatically when calibration completes, and named after the calibration template (<code>&lt;template&gt;_results_report.html</code>).</p>
+                            <p style="font-size: 0.9rem;">Both are named after the calibration template (<code>&lt;template&gt;_config_report.html</code> / <code>&lt;template&gt;_results_report.html</code>); the results report opens automatically and can be re-built mid-run with <code>--report</code>.</p>
                         </div>
                     </div>
                 </div>
                 <div class="highlight-box info" style="margin-top: 18px;">
                     <strong>Host-model observation semantics:</strong>
-                    for <strong>mizuRoute</strong> the report shows every observation matched within
-                    each river reach; for <strong>SUMMA</strong> it shows only the pouring-point
-                    (HRU outlet) observation, because that is what the objective function uses
-                    (<code>use_primary_only=True</code>).
+                    for <strong>mizuRoute</strong> every matched station is primary (scored);
+                    for <strong>SUMMA</strong> only the pouring-point (HRU-outlet) station feeds the
+                    metric by default (<code>use_primary_only=True</code>) — untick
+                    <em>“use only primary”</em> to score the secondary stations too.
                 </div>
             </div>
             <div class="slide-footer">
