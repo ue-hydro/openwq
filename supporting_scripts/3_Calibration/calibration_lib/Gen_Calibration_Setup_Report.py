@@ -1166,7 +1166,8 @@ def generate_interactive_setup(
         # visible (paths can be long) with the copy button pinned top-right.
         snippet_css = (
             "display:flex;align-items:flex-start;"
-            "background:var(--dark);color:#e2e8f0;border-radius:6px;"
+            "background:var(--code-bg);color:#e2e8f0;"
+            "border:1px solid var(--code-border);border-radius:6px;"
             "padding:.35rem .6rem;margin:.3rem 0 .5rem;font-family:'JetBrains Mono',monospace;"
             "font-size:.75rem;line-height:1.4;gap:.5rem;"
         )
@@ -1359,7 +1360,8 @@ def generate_interactive_setup(
         border:1px solid rgba(0,168,107,.55);color:#d1fae5;padding:.18rem .6rem;
         border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;
         font-weight:600;">Save .sbatch</button>
-      <pre id="sbatchPreview" style="background:var(--dark,#1a1a2e);color:#e2e8f0;
+      <pre id="sbatchPreview" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+        border:1px solid var(--code-border,#334155);
         border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
         font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
     </div>
@@ -1375,7 +1377,8 @@ def generate_interactive_setup(
         style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
         border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
         border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
-      <pre id="hpcRunCopy" style="background:var(--dark,#1a1a2e);color:#e2e8f0;
+      <pre id="hpcRunCopy" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+        border:1px solid var(--code-border,#334155);
         border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
         font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
     </div>
@@ -1387,7 +1390,8 @@ def generate_interactive_setup(
         style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
         border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
         border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
-      <pre id="hpcRunRemap" style="background:var(--dark,#1a1a2e);color:#e2e8f0;
+      <pre id="hpcRunRemap" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+        border:1px solid var(--code-border,#334155);
         border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
         font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
     </div>
@@ -1399,7 +1403,8 @@ def generate_interactive_setup(
         style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
         border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
         border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
-      <pre id="hpcRunSubmit" style="background:var(--dark,#1a1a2e);color:#e2e8f0;
+      <pre id="hpcRunSubmit" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+        border:1px solid var(--code-border,#334155);
         border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
         font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
     </div>
@@ -1625,6 +1630,9 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
             greyed span has no observations.
         </p>
         <div class="calib-slider-wrap" id="calibSliderWrap">
+            <!-- Per-species observation coverage, ABOVE the slider on the same
+                 time axis as the track below (one lane per species with data). -->
+            <div id="calibSpeciesLanes" style="margin-bottom:.6rem;"></div>
             <div class="calib-track" id="calibTrack">
                 <div class="calib-seg calib-gray"  id="segGrayLeft"></div>
                 <div class="calib-seg calib-calib" id="segCalib">
@@ -1755,28 +1763,10 @@ def _build_interactive_execution_section(
                 placeholder="/scratch/$USER/openwq_cal")}
             {rh.build_form_input(
                 "sif_local", "Local Apptainer image (.sif)", "",
-                hint="Path on THIS machine to your built openwq .sif - it is "
-                     "uploaded to the HPC working dir as openwq.sif.",
+                hint="Path on THIS machine to your built openwq .sif. The "
+                     "copy&run block uploads it to the HPC working dir as "
+                     "openwq.sif and points the model at it automatically.",
                 placeholder="/path/to/openwq.sif")}
-        </div>
-
-        <h4 style="margin:1rem 0 .3rem;font-size:.92rem;color:var(--text);">
-            Apptainer paths on the HPC
-            <span style="font-weight:400;opacity:.7;">(optional)</span></h4>
-        <div class="form-row">
-            {rh.build_form_input(
-                "apptainer_sif_path",
-                "Apptainer SIF path (HPC)", "",
-                hint="Optional. Forwarded to ModelRunner. The copy&run block "
-                     "sets this to the uploaded image automatically; leave "
-                     "blank unless running Apptainer locally.",
-                placeholder="e.g. /scratch/$USER/openwq.sif")}
-            {rh.build_form_input(
-                "apptainer_bind_path",
-                "Apptainer bind path (HPC)", "",
-                hint="Optional. Bind-mount root containing the config and "
-                     "outputs. Leave blank to derive from executable_path.",
-                placeholder="e.g. /scratch/$USER/openwq_root")}
         </div>
 
         <h4 style="margin:1rem 0 .3rem;font-size:.92rem;color:var(--text);">
@@ -2010,24 +2000,29 @@ def _build_interactive_targets_section(
         )
 
     if available_compartments:
+        # Single-select: exactly ONE compartment can be targeted. Pre-select
+        # the first previously-selected compartment, else the first available.
+        _default_comp = next((c for c in available_compartments
+                              if c in _sel_comp), available_compartments[0])
         _checks = []
         for _comp in available_compartments:
             _c = html_lib.escape(_comp)
-            _chk = "checked" if _comp in _sel_comp else ""
+            _chk = "checked" if _comp == _default_comp else ""
             _checks.append(
                 f'<label class="comp-check" style="display:flex;'
                 f'align-items:center;gap:.45rem;padding:.25rem 0;'
                 f'cursor:pointer;">'
-                f'<input type="checkbox" class="comp-cb" value="{_c}" {_chk}/>'
+                f'<input type="radio" name="compartment" class="comp-cb" '
+                f'value="{_c}" {_chk}/>'
                 f'<code style="font-size:.78rem;">{_c}</code></label>'
             )
         compartment_field_html = (
-            f'<label>Compartments</label>'
+            f'<label>Compartment</label>'
             f'<div class="compartment-checks" style="border:1px solid '
             f'var(--border);border-radius:8px;padding:.45rem .75rem;'
             f'max-height:9rem;overflow:auto;">{"".join(_checks)}</div>'
-            f'<div class="hint">Tick the compartments to include '
-            f'({hostmodel or "host"} model).</div>'
+            f'<div class="hint">Select <strong>one</strong> compartment to '
+            f'target ({hostmodel or "host"} model).</div>'
         )
     else:
         compartment_field_html = (
@@ -3197,8 +3192,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var cmd = document.getElementById('step3DockerCmd');
     if (rt === 'apptainer') {
       if (txt) txt.textContent = 'Apptainer / Singularity: build your openwq ' +
-        '.sif image and set the SIF & bind paths in the Execution settings ' +
-        'tab (no "docker compose" needed).';
+        '.sif image, fill in the HPC fields in the Execution tab, then use the ' +
+        '"Run the calibration on HPC" section below (no "docker compose" needed).';
       if (cmd) cmd.style.display = 'none';
     } else {
       if (txt) txt.textContent = 'Start the Docker container:';
@@ -3785,11 +3780,144 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       });
     }
 
+    // Per-species observation coverage lanes, drawn ABOVE the track on the
+    // SAME time axis [lo, hi].  One lane per species present in the obs data
+    // (ALL observations, not just the metric's primary ones) so a species
+    // with only secondary obs (e.g. NH4) still shows up — making it obvious
+    // why a configured species can contribute nothing to the fit.  Primary
+    // (scored) obs are drawn as solid ticks; secondary as faint ticks.
+    // Colours deliberately avoid the calibration (blue) / validation (green)
+    // hues used by the track below.
+    //
+    // Robust for ANY number of observations: the COUNTS + date range come from
+    // species_summary (true totals computed in Python on the uncapped data),
+    // while the ticks are subsampled for display so the DOM stays light even
+    // for hundreds of thousands of points.
+    var OBS_ALL = (OBS_PERIOD && OBS_PERIOD.dates_by_species_all) || OBS_MS;
+    var OBS_SUM = (OBS_PERIOD && OBS_PERIOD.species_summary) || {};
+    var LANE_MAX_TICKS = 600;   // max rendered ticks per layer per species
+    function renderSpeciesLanes() {
+      var host = document.getElementById('calibSpeciesLanes');
+      if (!host) return;
+      var keys = Object.keys(OBS_ALL).sort();
+      if (!keys.length) { host.innerHTML = ''; return; }
+      var loMs = lo.getTime(), hiMs = hi.getTime(), rng = hiMs - loMs;
+      // Warm / purple palette — distinct from track blue (#2563eb) & green (#10b981).
+      var palette = ['#ea580c', '#9333ea', '#db2777', '#ca8a04', '#be123c', '#7c3aed'];
+      // The metric scores primary obs only while "use_primary_only" is ON;
+      // when it's OFF every observation is scored. Reflect that live.
+      var _upo = document.getElementById('use_primary_only');
+      var primaryOnly = _upo ? !!_upo.checked : true;
+      // Some host models (mizuRoute) have no "secondary" stations — every
+      // matched obs is primary. Detect that from the data so the legend +
+      // per-species notes don't reference a category that doesn't exist.
+      var hasSecondary = keys.some(function(k) {
+        var sm = OBS_SUM[k]; return sm ? (sm.n > sm.n_primary) : false;
+      });
+      var legend;
+      if (!hasSecondary) {
+        legend = 'all observations are at matched target station(s), scored';
+      } else if (primaryOnly) {
+        legend = '<span style="opacity:.95;">solid&nbsp;=&nbsp;primary (scored)</span>, '
+               + '<span style="opacity:.55;">faint&nbsp;=&nbsp;secondary (not scored)</span>';
+      } else {
+        legend = '<span style="opacity:.95;">solid&nbsp;=&nbsp;primary</span>, '
+               + '<span style="opacity:.55;">faint&nbsp;=&nbsp;secondary</span> &mdash; all scored';
+      }
+      var html = '<div style="font-size:.62rem;color:var(--text3);margin:.1rem 0 .25rem;">'
+               + 'Observations by species (same time axis as the slider below) &mdash; '
+               + legend + ':</div>';
+      // Build ticks for one layer: filter to the visible axis, subsample to
+      // LANE_MAX_TICKS for display, and count the in-window points (fallback).
+      function tickLayer(arr, color, opacity, width) {
+        var inr = [];
+        for (var i = 0; i < arr.length; i++) {
+          var t = arr[i];
+          if (t >= loMs && t <= hiMs) inr.push(t);
+        }
+        var draw = inr;
+        if (inr.length > LANE_MAX_TICKS) {
+          var step = Math.ceil(inr.length / LANE_MAX_TICKS);
+          draw = [];
+          for (var j = 0; j < inr.length; j += step) draw.push(inr[j]);
+        }
+        var s = '';
+        for (var m = 0; m < draw.length; m++) {
+          var f = rng > 0 ? (draw[m] - loMs) / rng : 0;
+          s += '<span style="position:absolute;left:' + (f * 100) + '%;top:0;bottom:0;width:'
+             + width + 'px;margin-left:-' + (width / 2) + 'px;background:' + color
+             + ';opacity:' + opacity + ';"></span>';
+        }
+        return { html: s, n: inr.length };
+      }
+      keys.forEach(function(k, idx) {
+        var color = palette[idx % palette.length];
+        var allT  = tickLayer(OBS_ALL[k] || [], color, 0.28, 2);   // all (faint)
+        var primT = tickLayer(OBS_MS[k]  || [], color, 0.95, 2);   // primary (solid)
+        // True counts + full date range (accurate for any number of obs);
+        // fall back to the in-window tick counts if the summary is missing.
+        var sm = OBS_SUM[k] || null;
+        var nAll  = sm ? sm.n         : allT.n;
+        var nPrim = sm ? sm.n_primary : primT.n;
+        var startMs = sm ? sm.start : null, endMs = sm ? sm.end : null;
+        var span = '';
+        if (startMs !== null && rng > 0) {
+          var cs = Math.max(startMs, loMs), ce = Math.min(endMs, hiMs);
+          if (ce >= cs) {
+            var f0 = (cs - loMs) / rng, f1 = (ce - loMs) / rng;
+            span = '<span style="position:absolute;left:' + (f0 * 100) + '%;width:'
+                 + ((f1 - f0) * 100) + '%;top:50%;height:2px;transform:translateY(-50%);'
+                 + 'background:' + color + ';opacity:.22;"></span>';
+          }
+        }
+        var txt;
+        if (nAll > 0) {
+          var rangeTxt = (startMs !== null)
+            ? (fmt(new Date(startMs)).slice(0, 7) + ' → '
+               + fmt(new Date(endMs)).slice(0, 7) + '  ·  ')
+            : '';
+          if (hasSecondary) {
+            txt = rangeTxt + nAll
+                + ' obs (' + nPrim
+                + ' observations in primary target observation station(s))';
+            if (nPrim === 0) {
+              txt += primaryOnly
+                ? ' <span style="color:var(--danger,#dc2626);font-weight:700;">'
+                  + '— secondary only, not scored by the metric</span>'
+                : ' <span style="color:var(--text3);">'
+                  + '— secondary only (scored, since primary-only is off)</span>';
+            }
+          } else {
+            txt = rangeTxt + nAll + ' obs';
+          }
+        } else {
+          txt = 'no observations';
+        }
+        html += '<div style="margin:.2rem 0;">'
+              + '<div style="font-size:.62rem;color:var(--text2);margin-bottom:2px;">'
+              + '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;'
+              + 'background:' + color + ';margin-right:.35rem;"></span>'
+              + '<strong>' + k + '</strong> '
+              + '<span style="color:var(--text3);">' + txt + '</span></div>'
+              + '<div style="position:relative;height:9px;background:rgba(127,127,127,.12);'
+              + 'border-radius:3px;">' + span
+              + (hasSecondary ? (allT.html + primT.html) : (primT.html || allT.html))
+              + '</div></div>';
+      });
+      host.innerHTML = html;
+    }
+
     // Re-count when the target-species selection changes (Targets tab).
     document.querySelectorAll('.species-cb').forEach(function(cb) {
       cb.addEventListener('change', render);
     });
 
+    // Re-draw the species lanes when "use only primary observations" toggles,
+    // so the scored / not-scored wording tracks the actual metric setting.
+    var _upoLane = document.getElementById('use_primary_only');
+    if (_upoLane) _upoLane.addEventListener('change', renderSpeciesLanes);
+
+    renderSpeciesLanes();
     render();
   })();
 

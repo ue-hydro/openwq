@@ -1685,6 +1685,7 @@ def generate_simulation_report(
   --dark:#1a1a2e;--light:#f8f9fa;
   --bg:#f0f2f5;--surface:#fff;--text:#2d3436;--text2:#636e72;--text3:#a0aec0;
   --border:#e2e8f0;--border2:#d0d4da;
+  --code-bg:#1e293b;--code-border:#334155;
   --shadow:0 4px 20px rgba(0,0,0,.06);--shadow-lg:0 10px 40px rgba(0,0,0,.08);
   --plot-bg:#fff;--plot-grid:#f0f0f0;--plot-font:#333;
   --glass:rgba(255,255,255,.85);
@@ -1695,6 +1696,7 @@ def generate_simulation_report(
   --dark:#1a1a2e;--light:#1e1f2e;
   --bg:#0f1117;--surface:#1a1b2e;--text:#e2e8f0;--text2:#a0aec0;--text3:#636e72;
   --border:#2a2b3d;--border2:#3a3b4d;
+  --code-bg:#0b0e16;--code-border:#313347;
   --shadow:0 4px 20px rgba(0,0,0,.3);--shadow-lg:0 10px 40px rgba(0,0,0,.4);
   --plot-bg:#1e1f2e;--plot-grid:#2d2e42;--plot-font:#ccc;
   --glass:rgba(15,17,23,.92);
@@ -2438,8 +2440,11 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         # Helper: wrap a code snippet in a <pre> with a copy button.
         # The raw text is stored in a hidden <template> tag to avoid any
         # escaping issues with quotes / backslashes inside onclick attributes.
-        _pre_style = ('position:relative;background:var(--glass);padding:.8rem 2.5rem .8rem .8rem;'
-                      'border-radius:6px;overflow-x:auto;font-size:.82rem')
+        _pre_style = ('position:relative;background:var(--code-bg);color:#e2e8f0;'
+                      'border:1px solid var(--code-border);'
+                      'padding:.8rem 2.5rem .8rem .8rem;'
+                      'border-radius:6px;overflow-x:auto;font-size:.82rem;'
+                      "font-family:'JetBrains Mono',monospace")
         _btn_style = ('position:absolute;top:.4rem;right:.4rem;background:var(--primary);color:#fff;'
                       'border:none;border-radius:4px;padding:2px 8px;font-size:.7rem;cursor:pointer')
         _copy_id_counter = [0]

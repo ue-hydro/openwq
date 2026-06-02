@@ -70,6 +70,7 @@ def get_css_styles():
         --bg: #f0f2f5; --surface: #fff;
         --text: #2d3436; --text2: #636e72; --text3: #a0aec0;
         --border: #e2e8f0; --border2: #d0d4da;
+        --code-bg: #1e293b; --code-border: #334155;
         --shadow: 0 4px 20px rgba(0,0,0,.06);
         --shadow-lg: 0 10px 40px rgba(0,0,0,.08);
         --plot-bg: #fff; --plot-grid: #f0f0f0; --plot-font: #333;
@@ -81,6 +82,7 @@ def get_css_styles():
         --bg: #0f1117; --surface: #1a1b2e;
         --text: #e2e8f0; --text2: #a0aec0; --text3: #636e72;
         --border: #2a2b3d; --border2: #3a3b4d;
+        --code-bg: #0b0e16; --code-border: #313347;
         --shadow: 0 4px 20px rgba(0,0,0,.3);
         --shadow-lg: 0 10px 40px rgba(0,0,0,.4);
         --plot-bg: #1e1f2e; --plot-grid: #2d2e42; --plot-font: #ccc;
@@ -225,7 +227,8 @@ def get_css_styles():
 
     /* ── Code Blocks ──────────────────────────────────────────── */
     pre.code-block {
-        background: var(--dark); color: #e2e8f0; padding: 1.2rem;
+        background: var(--code-bg); color: #e2e8f0; padding: 1.2rem;
+        border: 1px solid var(--code-border);
         border-radius: 10px; overflow-x: auto; font-family: 'JetBrains Mono', monospace;
         font-size: .82rem; line-height: 1.6; margin: .8rem 0;
         position: relative;
