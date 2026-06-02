@@ -186,6 +186,7 @@ def generate_results_report(
                 _has_md = False
             if _has_md:
                 nav_items.append({"id": "timeseries", "label": "Time Series"})
+            nav_items.append({"id": "next-steps", "label": "Next Steps"})
             # "Run Best Params" snippet lives at the very bottom of the report.
             nav_items.append({"id": "run-best", "label": "Run Best Params"})
 
@@ -372,6 +373,8 @@ def generate_results_report(
         # ── Section: Run with Best Parameters (kept LAST in the report, per
         # request — it's the actionable "what to run next" snippet) ──
         if _did_calib:
+            H.append(_build_next_steps_section(
+                model_config, calibration_settings))
             H.append(_build_run_best_section(
                 calibration_results, model_config, calibration_settings,
                 calibration_parameters=calibration_parameters,
@@ -1338,6 +1341,61 @@ def _build_visualization_snippet(model_config: Dict[str, Any],
         ")\n"
     )
     return body
+
+
+def _build_next_steps_section(
+    model_config: Dict[str, Any],
+    settings: Dict[str, Any],
+) -> str:
+    """Flat, numbered 'what to do now' guide (mirrors the model-configuration
+    report's step-by-step 'Next Steps' presentation)."""
+    # Validation window, if it's in the settings, to make step 3 concrete.
+    vp = (settings.get("validation_period")
+          or settings.get("validation_window") or None)
+    vtxt = ""
+    if isinstance(vp, (list, tuple)) and len(vp) == 2 and vp[0] and vp[1]:
+        vtxt = (f" (your validation window: "
+                f"<code>{html_lib.escape(str(vp[0]))}</code> &rarr; "
+                f"<code>{html_lib.escape(str(vp[1]))}</code>)")
+
+    def _step(n, title, body):
+        return (
+            '<h3 style="margin-top:1.1rem;display:flex;align-items:center;'
+            'gap:.5rem;">'
+            '<span style="flex-shrink:0;display:inline-flex;width:1.5rem;'
+            'height:1.5rem;border-radius:50%;background:var(--primary);'
+            'color:#fff;align-items:center;justify-content:center;'
+            f'font-size:.8rem;font-weight:700;">{n}</span>{title}</h3>'
+            f'<div style="margin:.1rem 0 .2rem;line-height:1.6;">{body}</div>')
+
+    return f"""
+<div class="section" id="next-steps">
+    <h2>Next Steps</h2>
+    <div class="card primary">
+      <p style="margin-top:0;">Now that the calibration has finished, here's what
+      to do with the results:</p>
+      {_step(1, "Review the fit",
+             "Check the headline metric (KGE / NSE / RMSE / PBIAS) and the "
+             "<em>Convergence</em>, <em>parameter</em> and "
+             "<em>observed&nbsp;vs&nbsp;simulated time&nbsp;series</em> plots above. "
+             "The observation map colours each station by its performance.")}
+      {_step(2, "Apply the best parameters",
+             "Write the calibrated values into your model's BGC configuration "
+             "(<code>python &lt;your_calibration_template&gt;.py --apply-best</code>), "
+             "then re-run your model with them. The complete ready-to-run setup "
+             "is in <a href='#run-best'><em>Run with Best Parameters</em></a> "
+             "below.")}
+      {_step(3, "Validate",
+             "Run the model over the <strong>validation period</strong>" + vtxt +
+             " &mdash; the window held out after your calibration split &mdash; to "
+             "confirm the fit generalises to data the calibration never saw.")}
+      {_step(4, "Refine if needed",
+             "If the fit is weak, reopen the calibration setup report, widen or "
+             "adjust the parameter bounds (or pick different parameters / a "
+             "different calibration window), and re-calibrate.")}
+    </div>
+</div>
+"""
 
 
 def _build_run_best_section(

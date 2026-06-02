@@ -1,0 +1,14 @@
+{
+  "_README": "HPC / Apptainer settings for the openWQ calibration setup report. Fill in the values below once; when this file is present, the interactive setup report pre-fills its 'if running on HPC / Apptainer' fields (Execution tab) from here. You can still edit any field in the browser. Lines starting with '_' are ignored. Keys mirror the form fields: hpc_user/hpc_host/hpc_base/sif_local + the SLURM directives.",
+  "hpc_user": "",
+  "hpc_host": "",
+  "hpc_base": "/scratch/$USER/openwq_cal",
+  "sif_local": "",
+  "slurm_job_name": "openwq_calib",
+  "slurm_account": "",
+  "slurm_partition": "",
+  "slurm_time": "48:00:00",
+  "slurm_cpus": 4,
+  "slurm_mem": "16G",
+  "slurm_modules": ""
+}

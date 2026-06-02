@@ -1050,6 +1050,19 @@ def generate_interactive_setup(
         _run_script_name = f"{_calib_stem}_run.py"
         save_hint = html_lib.escape(os.path.join(cal_script_dir, _run_script_name))
 
+        def _step_header(n, title):
+            """Numbered step heading for the flat 'Next Steps'-style guide
+            (matches the model-configuration report's step presentation)."""
+            return (
+                '<div style="display:flex;align-items:center;gap:.55rem;'
+                'margin:1.15rem 1.2rem .25rem;">'
+                '<span style="flex-shrink:0;display:inline-flex;width:1.5rem;'
+                'height:1.5rem;border-radius:50%;background:var(--primary);'
+                'color:#fff;align-items:center;justify-content:center;'
+                f'font-size:.8rem;font-weight:700;">{n}</span>'
+                '<span style="font-weight:700;color:var(--text);font-size:.95rem;">'
+                f'{title}</span></div>')
+
         H.append('<div class="script-pane">')
         H.append(f"""
 <div class="script-pane-header">
@@ -1066,9 +1079,12 @@ def generate_interactive_setup(
             onclick="copyScript()">Copy</button>
     </div>
 </div>
-<div style="padding:.5rem 1.2rem .15rem;">
-    <div style="font-weight:700;color:var(--text);font-size:.92rem;margin-bottom:.3rem;">
-        1) Save the calibration python script</div>
+<div style="padding:.5rem 1.2rem .1rem;font-size:.78rem;color:var(--text3);line-height:1.5;">
+    You've set things up with the tabs on the left. Now follow these steps &mdash; run the
+    calibration <strong>either locally (step&nbsp;2) or on HPC (step&nbsp;3)</strong>.
+</div>
+{_step_header(1, "Save the calibration script")}
+<div style="padding:0 1.2rem;">
     <div style="font-size:.72rem;color:var(--text3);word-break:break-all;line-height:1.45;margin-bottom:.45rem;"
          title="{save_hint}">
         Save to: <code id="saveHint" style="font-size:.68rem;">{save_hint}</code>
@@ -1083,11 +1099,6 @@ def generate_interactive_setup(
         background:linear-gradient(135deg,rgba(0,102,204,.18),rgba(0,168,107,.18));
         border:1px solid var(--border);color:var(--secondary);border-radius:7px;
         cursor:pointer;">Save the script</button>
-
-    <div style="font-weight:700;color:var(--text);font-size:.92rem;margin:1.1rem 0 .15rem;">
-        2) Run the calibration</div>
-    <div style="font-size:.72rem;color:var(--text3);line-height:1.45;">
-        Pick how to run the saved script &mdash; expand a) or b) below.</div>
 </div>
 """)
         # Build the how-to section with OS-aware commands
@@ -1188,93 +1199,40 @@ def generate_interactive_setup(
         )
 
         H.append(f"""
-<details style="margin:.6rem 1rem 0;border:1px solid var(--border);border-radius:8px;padding:.2rem .8rem;font-size:.82rem;">
-  <summary style="cursor:pointer;font-weight:600;padding:.4rem 0;color:var(--primary);user-select:none;">
-    a) Locally &mdash; based on Docker (using the script below)
-  </summary>
-  <div style="padding:.3rem 0 .8rem;line-height:1.65;color:var(--text2);">
-
-    <div style="margin-bottom:.6rem;">
-      <strong>1.</strong> Configure calibration settings, species, and parameters
-      using the tabs on the left.
-    </div>
-
-    <div style="margin-bottom:.6rem;">
-      <strong>2.</strong> Save the script using the <em>Save the script</em> button above.
-    </div>
-
-    <div style="margin-bottom:.6rem;">
-      <strong>3.</strong> <span id="step3Text">Start the Docker container:</span>
-      <div id="step3DockerCmd" style="{snippet_css}">
-        <code id="cmdDocker" style="{snippet_code_css}">{docker_cmd}</code>
-        <button style="{copy_btn_css}"
-          onclick="navigator.clipboard.writeText(document.getElementById('cmdDocker').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-      </div>
-    </div>
-
-    <div style="margin-bottom:.6rem;">
-      <strong>4.</strong> Go to the calibration folder (the one that contains
-      <code>calibration_lib</code>) so the script's imports resolve:
-      <div style="{snippet_css}">
-        <code id="cmdCd" style="{snippet_code_css}">{cd_cmd}</code>
-        <button style="{copy_btn_css}"
-          onclick="navigator.clipboard.writeText(document.getElementById('cmdCd').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-      </div>
-    </div>
-
-    <div style="margin-bottom:.6rem;">
-      <strong>5.</strong> Run the calibration:{_caf_note}
-      <div style="{snippet_css}">
-        <code id="cmdRun" style="{snippet_code_css}">{run_cmd}</code>
-        <button style="{copy_btn_css}"
-          onclick="navigator.clipboard.writeText(document.getElementById('cmdRun').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-      </div>
-    </div>
-
-    <div style="margin-bottom:.6rem;">
-      <strong>6.</strong> Resume if interrupted:{_caf_note}
-      <div style="{snippet_css}">
-        <code id="cmdResume" style="{snippet_code_css}">{resume_cmd}</code>
-        <button style="{copy_btn_css}"
-          onclick="navigator.clipboard.writeText(document.getElementById('cmdResume').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-      </div>
-    </div>
-
-    <div style="margin-bottom:.6rem;">
-      <strong>7.</strong> Validate config (optional dry run):
-      <div style="{snippet_css}">
-        <code id="cmdDryrun" style="{snippet_code_css}">{dryrun_cmd}</code>
-        <button style="{copy_btn_css}"
-          onclick="navigator.clipboard.writeText(document.getElementById('cmdDryrun').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-      </div>
-    </div>
-
-    <div style="margin-bottom:.3rem;">
-      <strong>8.</strong> View results &mdash; the script auto-generates the
-      interactive results report and opens it at the end of the run. To see the
-      <strong>latest</strong> results <strong>while the run is still going</strong>
-      (e.g. during the long influential-parameters screening), open a
-      <em>second</em> terminal and <strong>regenerate</strong> the report from the
-      current on-disk state &mdash; it rebuilds from the newest checkpoint /
-      sensitivity data and opens it, with an &ldquo;in&nbsp;progress&rdquo; note
-      until the run finishes:
-      <div style="{snippet_css}">
-        <code id="cmdReport" style="{snippet_code_css}">{report_cmd}</code>
-        <button style="{copy_btn_css}"
-          onclick="navigator.clipboard.writeText(document.getElementById('cmdReport').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-      </div>
-      <div style="font-size:.72rem;color:var(--text3);margin:.1rem 0 .3rem;">
-        Or just open the last-rendered report file directly (no regeneration):
-      </div>
-      <div style="{snippet_css}">
-        <code id="cmdResults" style="{snippet_code_css}">{open_cmd} {html_lib.escape(results_path)}</code>
-        <button style="{copy_btn_css}"
-          onclick="navigator.clipboard.writeText(document.getElementById('cmdResults').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
-      </div>
-    </div>
-
+{_step_header(2, "Run it locally (Docker)")}
+<div style="padding:0 1.2rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
+  <p style="margin:.1rem 0 .35rem;"><span id="step3Text">Start the Docker
+  container</span>, go to the calibration folder (the one that contains
+  <code>calibration_lib</code>), then run the saved script:</p>
+  <div id="step3DockerCmd" style="{snippet_css}">
+    <code id="cmdDocker" style="{snippet_code_css}">{docker_cmd}</code>
+    <button style="{copy_btn_css}"
+      onclick="navigator.clipboard.writeText(document.getElementById('cmdDocker').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
   </div>
-</details>
+  <div style="{snippet_css}">
+    <code id="cmdCd" style="{snippet_code_css}">{cd_cmd}</code>
+    <button style="{copy_btn_css}"
+      onclick="navigator.clipboard.writeText(document.getElementById('cmdCd').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+  </div>
+  <div style="{snippet_css}">
+    <code id="cmdRun" style="{snippet_code_css}">{run_cmd}</code>
+    <button style="{copy_btn_css}"
+      onclick="navigator.clipboard.writeText(document.getElementById('cmdRun').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+  </div>
+  <div style="margin:-.2rem 0 .3rem;">{_caf_note}</div>
+  <p style="margin:.5rem 0 .2rem;">Resume if interrupted, or validate the config
+  without running (optional dry run):</p>
+  <div style="{snippet_css}">
+    <code id="cmdResume" style="{snippet_code_css}">{resume_cmd}</code>
+    <button style="{copy_btn_css}"
+      onclick="navigator.clipboard.writeText(document.getElementById('cmdResume').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+  </div>
+  <div style="{snippet_css}">
+    <code id="cmdDryrun" style="{snippet_code_css}">{dryrun_cmd}</code>
+    <button style="{copy_btn_css}"
+      onclick="navigator.clipboard.writeText(document.getElementById('cmdDryrun').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+  </div>
+</div>
 """)
 
         # ── HPC (Apptainer / Singularity) — copy-to-cluster code snippets ──
@@ -1346,82 +1304,100 @@ def generate_interactive_setup(
         }
 
         H.append(f"""
-<details style="margin:.2rem 1rem .6rem;border:1px solid var(--border);border-radius:8px;padding:.2rem .8rem;font-size:.82rem;">
-  <summary style="cursor:pointer;font-weight:600;padding:.4rem 0;color:var(--primary);user-select:none;">
-    b) HPC &mdash; based on Apptainer / Singularity (using the script below)
-  </summary>
-  <div style="padding:.3rem 0 .8rem;line-height:1.6;color:var(--text2);">
-    <p style="margin:.2rem 0 .6rem;">In the <strong>Execution</strong> tab set
-    <strong>Container runtime&nbsp;=&nbsp;apptainer</strong> and fill in the
-    <strong>HPC details</strong> + <strong>SLURM</strong> fields. The two things you need
-    appear below, already filled in from those fields &mdash; no editing required.</p>
+{_step_header(3, "Or run it on HPC (Apptainer / Singularity)")}
+<div style="padding:0 1.2rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
+  <p style="margin:.1rem 0 .5rem;">In the <strong>Execution</strong> tab set
+  <strong>Container runtime&nbsp;=&nbsp;apptainer</strong> and fill in the
+  <strong>HPC details</strong> + <strong>SLURM</strong> fields. The job file and the
+  copy&amp;run commands below fill in automatically from those fields &mdash; no editing
+  required.</p>
 
-    <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
-      1 &middot; SLURM job file &mdash; save <code>{html_lib.escape(_sbatch_name)}</code>
-      next to your run script</p>
-    <div style="position:relative;margin:.35rem 0 .9rem;">
-      <button id="saveSbatchBtn" onclick="downloadSbatch()"
-        style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,168,107,.25);
-        border:1px solid rgba(0,168,107,.55);color:#d1fae5;padding:.18rem .6rem;
-        border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;
-        font-weight:600;">Save .sbatch</button>
-      <pre id="sbatchPreview" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
-        border:1px solid var(--code-border,#334155);
-        border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
-        font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
-    </div>
-
-    <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
-      2 &middot; Copy &amp; run on the HPC &mdash; copy each block to a terminal, in order
-      (you'll be asked for your HPC password)</p>
-
-    <p style="margin:.4rem 0 .1rem;font-size:.78rem;color:var(--text2);">
-      a. Copy code, inputs &amp; the <code>.sif</code> image to the HPC</p>
-    <div style="position:relative;margin:.2rem 0 .7rem;">
-      <button onclick="copyHpcRun(this,'hpcRunCopy')"
-        style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
-        border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
-        border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
-      <pre id="hpcRunCopy" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
-        border:1px solid var(--code-border,#334155);
-        border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
-        font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
-    </div>
-
-    <p style="margin:.4rem 0 .1rem;font-size:.78rem;color:var(--text2);">
-      b. Re-point the absolute paths to the HPC (run once)</p>
-    <div style="position:relative;margin:.2rem 0 .7rem;">
-      <button onclick="copyHpcRun(this,'hpcRunRemap')"
-        style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
-        border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
-        border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
-      <pre id="hpcRunRemap" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
-        border:1px solid var(--code-border,#334155);
-        border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
-        font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
-    </div>
-
-    <p style="margin:.4rem 0 .1rem;font-size:.78rem;color:var(--text2);">
-      c. Submit the SLURM job</p>
-    <div style="position:relative;margin:.2rem 0 .7rem;">
-      <button onclick="copyHpcRun(this,'hpcRunSubmit')"
-        style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
-        border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
-        border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
-      <pre id="hpcRunSubmit" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
-        border:1px solid var(--code-border,#334155);
-        border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
-        font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
-    </div>
-
-    <div class="hint" style="margin-top:.3rem;">
-      Together these copy your code + inputs + the <code>.sif</code> under one
-      <code>$HPC_BASE</code>, re-point every absolute path to the cluster, and submit the
-      job. The heavy GRQA / Copernicus processing is <strong>reused</strong> and the
-      &gt;1&nbsp;GB raw GRQA database is <strong>not</strong> copied.
-    </div>
+  <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
+    Save the SLURM job file (<code>{html_lib.escape(_sbatch_name)}</code>) next to your
+    run script:</p>
+  <div style="position:relative;margin:.35rem 0 .9rem;">
+    <button id="saveSbatchBtn" onclick="downloadSbatch()"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,168,107,.25);
+      border:1px solid rgba(0,168,107,.55);color:#d1fae5;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;
+      font-weight:600;">Save .sbatch</button>
+    <pre id="sbatchPreview" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
-</details>
+
+  <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
+    Copy each block into a terminal, in order (you'll be asked for your HPC password):</p>
+
+  <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
+    a. Copy code, inputs &amp; the <code>.sif</code> image to the HPC</p>
+  <div style="position:relative;margin:.2rem 0 .7rem;">
+    <button onclick="copyHpcRun(this,'hpcRunCopy')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunCopy" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
+    b. Re-point the absolute paths to the HPC (run once)</p>
+  <div style="position:relative;margin:.2rem 0 .7rem;">
+    <button onclick="copyHpcRun(this,'hpcRunRemap')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunRemap" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
+    c. Submit the SLURM job</p>
+  <div style="position:relative;margin:.2rem 0 .7rem;">
+    <button onclick="copyHpcRun(this,'hpcRunSubmit')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunSubmit" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <div class="hint" style="margin-top:.3rem;">
+    Together these copy your code + inputs + the <code>.sif</code> under one
+    <code>$HPC_BASE</code>, re-point every absolute path to the cluster, and submit the
+    job. The heavy GRQA / Copernicus processing is <strong>reused</strong> and the
+    &gt;1&nbsp;GB raw GRQA database is <strong>not</strong> copied.
+  </div>
+</div>
+
+{_step_header(4, "View the results")}
+<div style="padding:0 1.2rem .6rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
+  <p style="margin:.1rem 0 .35rem;">The script auto-generates the interactive results
+  report and opens it when the run finishes. To watch progress <strong>while it's still
+  running</strong> (e.g. during the long influential-parameters screening), open a
+  <em>second</em> terminal and regenerate the report from the current on-disk state
+  &mdash; it rebuilds from the newest checkpoint with an &ldquo;in&nbsp;progress&rdquo;
+  note until the run completes:</p>
+  <div style="{snippet_css}">
+    <code id="cmdReport" style="{snippet_code_css}">{report_cmd}</code>
+    <button style="{copy_btn_css}"
+      onclick="navigator.clipboard.writeText(document.getElementById('cmdReport').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+  </div>
+  <div style="font-size:.72rem;color:var(--text3);margin:.1rem 0 .3rem;">
+    Or just open the last-rendered report file directly (no regeneration):</div>
+  <div style="{snippet_css}">
+    <code id="cmdResults" style="{snippet_code_css}">{open_cmd} {html_lib.escape(results_path)}</code>
+    <button style="{copy_btn_css}"
+      onclick="navigator.clipboard.writeText(document.getElementById('cmdResults').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+  </div>
+</div>
 """)
 
         H.append("""
@@ -1786,9 +1762,21 @@ def _build_interactive_execution_section(
             Fill these in to run the calibration on an HPC cluster with
             Apptainer / Singularity. You won't edit any code: the values below
             are dropped straight into the ready-to-run <strong>SLURM job file</strong>
-            and <strong>copy&nbsp;&amp;&nbsp;run</strong> block shown in the
-            <em>Run the calibration on HPC</em> section of the script pane &mdash;
-            just save the <code>.sbatch</code> and paste the block into a terminal.
+            and <strong>copy&nbsp;&amp;&nbsp;run</strong> commands shown under
+            <em>step&nbsp;3 (Run it on HPC)</em> in the script pane &mdash; just
+            save the <code>.sbatch</code> and paste the commands into a terminal.
+        </p>
+        <p class="hint" style="margin-top:.45rem;background:rgba(0,102,204,.06);
+            border:1px solid var(--border);border-left:3px solid var(--primary);
+            border-radius:6px;padding:.5rem .65rem;">
+            <strong>&#128190;&nbsp;Reuse across runs (recommended):</strong> these fields are
+            pre-filled from a <code>hpc_settings.json</code> file. To avoid re-typing your HPC
+            details every time, <strong>make a copy</strong> of <code>hpc_settings.json</code>,
+            <strong>complete it</strong> with your values, and <strong>point your calibration
+            template at it</strong> &mdash; set
+            <code>hpc_settings_json&nbsp;=&nbsp;"/path/to/your_copy.json"</code> near the top of
+            <code>calibration_config_template.py</code>. Every regenerated report then opens with
+            these fields already filled in (you can still tweak them here).
         </p>
 
         <h4 style="margin:.6rem 0 .3rem;font-size:.92rem;color:var(--text);">
