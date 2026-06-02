@@ -1855,12 +1855,11 @@ def _generate_correlation_plot(
                 corr[j, i] = r
 
     z = [[float(corr[i][j]) for j in range(n_valid)] for i in range(n_valid)]
-    text = [[f"{corr[i][j]:.2f}" for j in range(n_valid)] for i in range(n_valid)]
+    # No in-cell value labels — just the colour scale (exact r is in the hover).
     traces = [{
         "type": "heatmap", "z": z, "x": valid_names, "y": valid_names,
         "colorscale": "RdBu", "reversescale": True,
         "zmid": 0, "zmin": -1, "zmax": 1,
-        "text": text, "texttemplate": "%{text}", "textfont": {"size": 10},
         "colorbar": {"title": "Pearson r"},
         "hovertemplate": "%{x}<br>%{y}<br>r = %{z:.3f}<extra></extra>"}]
     layout = {"title": {"text": "Parameter Correlations"},
@@ -3171,18 +3170,22 @@ def _build_observation_map_section(
     # Sources: Gupta et al. (2009), Nash & Sutcliffe (1970), Moriasi
     # et al. (2007).
     METRIC_RANGES: Dict[str, Optional[Dict[str, Any]]] = {
-        # higher = better, fixed range
-        "KGE":   {"vmin": 0.0, "vmax": 1.0, "reversed": False, "use_abs": False},
-        "NSE":   {"vmin": 0.0, "vmax": 1.0, "reversed": False, "use_abs": False},
-        "R2":    {"vmin": 0.0, "vmax": 1.0, "reversed": False, "use_abs": False},
-        "LOGNSE": {"vmin": 0.0, "vmax": 1.0, "reversed": False, "use_abs": False},
-        "R":     {"vmin": -1.0, "vmax": 1.0, "reversed": False, "use_abs": False},
-        # symmetric around zero — visualise |.|, low is good
-        "PBIAS": {"vmin": 0.0, "vmax": 25.0, "reversed": True,  "use_abs": True},
-        "MAPE":  {"vmin": 0.0, "vmax": 50.0, "reversed": True,  "use_abs": False},
-        # unbounded — use observed range
-        "RMSE":  None,
-        "MAE":   None,
+        # KGE / NSE / logNSE are bounded ABOVE at 1 (perfect) but unbounded
+        # below, so we visualise the 0–1 SKILL scale (0 = no better than the
+        # mean of obs) and clamp negative values to the "worst" colour.
+        "KGE":    {"vmin": 0.0,  "vmax": 1.0, "reversed": False, "use_abs": False, "kind": "skill"},
+        "NSE":    {"vmin": 0.0,  "vmax": 1.0, "reversed": False, "use_abs": False, "kind": "skill"},
+        "LOGNSE": {"vmin": 0.0,  "vmax": 1.0, "reversed": False, "use_abs": False, "kind": "skill"},
+        # Genuinely bounded by definition.
+        "R2":     {"vmin": 0.0,  "vmax": 1.0, "reversed": False, "use_abs": False, "kind": "theoretical"},
+        "R":      {"vmin": -1.0, "vmax": 1.0, "reversed": False, "use_abs": False, "kind": "theoretical"},
+        # No theoretical max — 0 is best; coloured by Moriasi et al. (2007)
+        # performance cutoffs (|PBIAS| ≤ 25 % = satisfactory).  Uses |.|.
+        "PBIAS":  {"vmin": 0.0,  "vmax": 25.0, "reversed": True, "use_abs": True,  "kind": "performance"},
+        "MAPE":   {"vmin": 0.0,  "vmax": 50.0, "reversed": True, "use_abs": False, "kind": "performance"},
+        # Unbounded and units-dependent → derive the scale from the data.
+        "RMSE":   None,
+        "MAE":    None,
     }
     objective_metric = str(
         (calibration_settings or {}).get("objective_function") or "KGE"
@@ -3206,7 +3209,7 @@ def _build_observation_map_section(
             "vmax":       _preset["vmax"],
             "reversed":   _preset["reversed"],
             "use_abs":    _preset["use_abs"],
-            "range_kind": "theoretical",
+            "range_kind": _preset.get("kind", "theoretical"),
         }
     elif metric_vals:
         # Unbounded metric (RMSE / MAE / ...) — derive from the data.
@@ -3541,6 +3544,12 @@ def _build_observation_map_section(
         '    if(CB.range_kind === "theoretical"){\n'
         '      kindHint = "<span style=\\"font-size:10px;color:#666;margin-left:6px\\">'
         '(theoretical range)</span>";\n'
+        '    } else if(CB.range_kind === "skill"){\n'
+        '      kindHint = "<span style=\\"font-size:10px;color:#666;margin-left:6px\\">'
+        '(skill scale \\u00b7 1 = perfect, 0 = mean)</span>";\n'
+        '    } else if(CB.range_kind === "performance"){\n'
+        '      kindHint = "<span style=\\"font-size:10px;color:#666;margin-left:6px\\">'
+        '(0 = best \\u00b7 performance cutoff)</span>";\n'
         '    } else if(CB.range_kind === "observed"){\n'
         '      kindHint = "<span style=\\"font-size:10px;color:#666;margin-left:6px\\">'
         '(observed range)</span>";\n'
@@ -3679,42 +3688,6 @@ def _build_pdf_export_block(project_name: str) -> str:
     # everything we don't want printed (the Theme toggle, the sidebar,
     # the floating button itself).
     css = """
-.pdf-wrap, .pdf-wrap * {
-    background:#ffffff !important;
-    color:#222 !important;
-    border-color:#ccc !important;
-    box-shadow:none !important;
-    text-shadow:none !important;
-}
-.pdf-wrap pre, .pdf-wrap code {
-    background:#f5f5f5 !important;
-    color:#222 !important;
-    border:1px solid #ddd !important;
-}
-.pdf-wrap a { color:#0066cc !important; }
-.pdf-wrap .copy-btn, .pdf-wrap .no-pdf, .pdf-wrap button { display:none !important; }
-.pdf-wrap table { border-collapse:collapse; }
-.pdf-wrap th, .pdf-wrap td { border:1px solid #ddd; padding:4px 8px; }
-.pdf-wrap h1, .pdf-wrap h2, .pdf-wrap h3 { color:#111 !important; }
-.pdf-page-break { page-break-before:always; }
-
-#pdfExportBtn {
-    position:fixed; right:18px; bottom:18px;
-    z-index:9999; padding:10px 18px;
-    background:#0066cc; color:#fff;
-    border:none; border-radius:30px; font-weight:600; font-size:14px;
-    cursor:pointer; box-shadow:0 3px 12px rgba(0,0,0,.3);
-    display:inline-flex; align-items:center; gap:8px;
-}
-#pdfExportBtn:hover  { background:#004499; }
-#pdfExportBtn:disabled{ background:#888; cursor:wait; }
-#pdfExportBtn .spin { display:none; width:14px; height:14px;
-    border:2px solid #fff; border-top-color:transparent;
-    border-radius:50%; animation:pdfspin .9s linear infinite; }
-#pdfExportBtn.busy .spin { display:inline-block; }
-@keyframes pdfspin { to { transform:rotate(360deg); } }
-@media print { #pdfExportBtn { display:none !important; } }
-
 /* Per-figure "Download PDF" buttons, pinned top-right of each plot card. */
 .fig-pdf-btn {
     position:absolute; top:10px; right:10px; z-index:5;
@@ -3730,115 +3703,9 @@ def _build_pdf_export_block(project_name: str) -> str:
 """
     return f"""
 <style>{css}</style>
-<button id="pdfExportBtn" class="no-pdf" title="Export the entire report as a PDF" onclick="_owqExportPDF()">
-  <span class="spin"></span>
-  <span class="label">&#x1F4C4; Download PDF</span>
-</button>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-function _owqExportPDF() {{
-    var btn = document.getElementById('pdfExportBtn');
-    if(!btn) return;
-    if(typeof html2pdf === 'undefined') {{
-        // CDN didn't load (offline / blocked) — fall back to the browser's
-        // native print-to-PDF so the button still produces a document.
-        window.print();
-        return;
-    }}
-    btn.disabled = true; btn.classList.add('busy');
-    btn.querySelector('.label').textContent = ' Building PDF…';
-
-    // Sections to include, in render order.  Skipped silently if absent.
-    // 'obs-map' is intentionally excluded: its Leaflet satellite tiles are
-    // cross-origin and taint the html2canvas buffer, which makes the WHOLE
-    // export throw (the reason the button appeared to "do nothing").  The
-    // interactive map stays in the HTML report; its per-station metrics are
-    // also in the Performance section.
-    var SECTIONS = ['summary','sensitivity','best-params','convergence',
-                    'param-evolution','param-correlations',
-                    'performance','run-best','timeseries'];
-
-    // Off-screen wrapper — forced white background, dark text.
-    var wrap = document.createElement('div');
-    wrap.className = 'pdf-wrap';
-    wrap.style.cssText =
-        'position:absolute;left:-10000px;top:0;width:794px;'+   // 210mm @ 96dpi
-        'background:#ffffff;color:#222;'+
-        'font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;'+
-        'padding:24px;line-height:1.45;';
-
-    // ── Title page ─────────────────────────────────────────────
-    var title = document.createElement('div');
-    title.style.cssText = 'text-align:center;padding:40px 0 20px';
-    title.innerHTML =
-        '<h1 style="font-size:30px;margin:0 0 10px;color:#111">'+ {project_name_js} +'</h1>'+
-        '<p style="font-size:15px;color:#444;margin:0">OpenWQ Calibration Results Report</p>'+
-        '<p style="font-size:12px;color:#666;margin-top:14px">Generated: '+
-        new Date().toLocaleString() +'</p>'+
-        '<hr style="margin-top:30px;border:0;border-top:1px solid #ccc"/>';
-    wrap.appendChild(title);
-
-    // ── Clone each section, force its background, prepend page-break ─
-    SECTIONS.forEach(function(sid, idx) {{
-        var src = document.getElementById(sid);
-        if(!src) return;
-        var clone = src.cloneNode(true);
-        clone.classList.add('pdf-page-break');
-        // Strip elements that don't render in the PDF (copy buttons,
-        // floating tooltips, code-block expand/collapse triangles).
-        clone.querySelectorAll('.copy-btn, .no-pdf, button').forEach(function(el){{
-            el.parentNode && el.parentNode.removeChild(el);
-        }});
-        // Some plot images are emitted inside <details><summary>; force-open
-        // them so they appear in the captured DOM.
-        clone.querySelectorAll('details').forEach(function(el){{ el.open = true; }});
-        wrap.appendChild(clone);
-    }});
-
-    document.body.appendChild(wrap);
-
-    // Give the cloned Leaflet tiles a moment to load before capture.
-    // Map tiles in the original are already on screen; the clone shares
-    // their <img> srcs so they should render almost immediately, but a
-    // 250ms grace covers slow CDN responses on the satellite tiles.
-    setTimeout(function() {{
-        var opt = {{
-            margin: [10, 10, 12, 10],
-            filename: ('openwq_calibration_results_'+
-                       new Date().toISOString().slice(0,10) +'.pdf'),
-            image:    {{ type: 'jpeg', quality: 0.92 }},
-            html2canvas: {{
-                scale: 2,
-                useCORS: true,
-                backgroundColor: '#ffffff',
-                logging: false,
-                allowTaint: false,
-                ignoreElements: function(el) {{
-                    return el.id === 'pdfExportBtn' ||
-                           (el.classList && el.classList.contains('no-pdf'));
-                }}
-            }},
-            jsPDF: {{ unit: 'mm', format: 'a4', orientation: 'portrait' }},
-            pagebreak: {{ mode: ['css'], before: '.pdf-page-break' }}
-        }};
-        html2pdf().set(opt).from(wrap).save().then(function() {{
-            wrap.remove();
-            btn.disabled = false; btn.classList.remove('busy');
-            btn.querySelector('.label').textContent = ' \\u2705 Saved \\u2014 Download PDF';
-            setTimeout(function() {{
-                btn.querySelector('.label').textContent = ' \\u1F4C4 Download PDF';
-            }}, 2500);
-        }}).catch(function(err) {{
-            console.error('PDF export failed:', err);
-            wrap.remove();
-            btn.disabled = false; btn.classList.remove('busy');
-            btn.querySelector('.label').textContent = ' \\u26A0 Export failed \\u2014 retry';
-            alert('PDF export failed: '+(err && err.message ? err.message : err));
-        }});
-    }}, 250);
-}}
-
 // ── Per-figure "Download PDF" buttons ──────────────────────────────────
 // Every matplotlib figure is a base64 PNG data-URI (same-origin → no canvas
 // taint), so a single-image jsPDF export is fast and reliable.  We inject a

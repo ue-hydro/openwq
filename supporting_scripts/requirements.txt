@@ -41,18 +41,26 @@ SALib>=1.4.0
 jsonschema>=4.0.0
 
 # ─────────────────────────────────────────────────────────────────────────
-# Browser-side dependency (NOT a pip package)
+# Browser-side dependencies (NOT pip packages — loaded from a CDN at view time)
 # ─────────────────────────────────────────────────────────────────────────
-# The interactive HTML reports (config viewer + calibration results report)
-# embed Leaflet 1.9.4 directly from the unpkg CDN:
-#     https://unpkg.com/leaflet@1.9.4/dist/leaflet.{js,css}
+# The interactive HTML reports pull a few JavaScript libraries directly from
+# public CDNs, so the machine that OPENS a report in its browser needs
+# internet access.  These are NOT Python packages — do not pip-install them.
 #
-# This requires INTERNET ACCESS from the machine that opens the report in
-# its browser.  If you regularly view reports on an air-gapped HPC login
-# node or behind a strict firewall, mirror the two files locally and patch
-# the <link>/<script> tags in the report generators:
+#   * Leaflet 1.9.4    https://unpkg.com/leaflet@1.9.4/dist/leaflet.{js,css}
+#                      — observation / river-network maps
+#   * Plotly.js 2.35.2 https://cdn.plot.ly/plotly-2.35.2.min.js
+#                      — all interactive charts (config viewer, output results
+#                        report, and calibration results report)
+#   * jsPDF 2.5.1      https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js
+#                      — per-figure "PDF" export buttons (lazy-loaded on first click)
+#   * html2pdf 0.10.1  https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js
+#                      — whole-report / map "Download PDF"
+#
+# Air-gapped HPC login node or behind a strict firewall?  Mirror these files
+# locally and patch the <link>/<script> tags in the report generators
+# (search for "unpkg", "cdn.plot.ly", "jspdf", "html2pdf"):
 #   - 1_Model_Config/config_support_lib/Gen_Report.py
+#   - 2_Read_Outputs/hdf5_support_lib/Plot_h5_driver.py
 #   - 3_Calibration/calibration_lib/Gen_Calibration_Results_Report.py
-# (search for "unpkg.com/leaflet" — there are 2 occurrences per file).
-#
-# Plotly.js is loaded the same way in the config viewer (also via unpkg).
+#   - 3_Calibration/calibration_lib/report_helpers.py
