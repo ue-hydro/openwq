@@ -127,6 +127,9 @@ class ModelRunner:
         # reference; subsequent evals only grow it.  Reset per ModelRunner.
         self._ref_calibrated_this_run = False
         self._init_reference()
+        # Cache of the per-eval simulated window (start, end) datetimes, so the
+        # date-based progress % doesn't re-parse the control file every poll.
+        self._sim_win_cache: Dict[str, Optional[tuple]] = {}
 
         # Parse Docker compose to get volume mapping
         self.docker_host_path = None
@@ -580,14 +583,130 @@ class ModelRunner:
             pass
         return total
 
+    # Month abbreviations as written by openWQ's HDF5 export log
+    # (e.g. "2001APR22-11:00:00").
+    _MONTH3 = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+               "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
+
+    @staticmethod
+    def _parse_dt(s):
+        """Parse a 'YYYY-MM-DD[ HH:MM[:SS]]' timestamp → datetime, or None."""
+        from datetime import datetime
+        s = str(s).strip().strip("'\"")
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(s, fmt)
+            except ValueError:
+                continue
+        return None
+
+    def _sim_window(self, eval_dir):
+        """The (start, end) datetimes each evaluation actually simulates.
+
+        Drives the date-based progress %. Prefers the explicit calibration
+        window passed to ModelRunner; otherwise reads it from the per-eval
+        control file (SUMMA fileManager or mizuRoute ``.control``), so it also
+        works when running the model's full period. Cached per eval_dir.
+        """
+        key = str(eval_dir)
+        if key in self._sim_win_cache:
+            return self._sim_win_cache[key]
+        win = None
+        # 1. Explicit calibration window (the recommended default).
+        if self.calibration_period:
+            s = self._parse_dt(self.calibration_period[0])
+            e = self._parse_dt(self.calibration_period[1])
+            if s and e and e > s:
+                win = (s, e)
+        # 2. Fall back to the per-eval control file.
+        if win is None:
+            import re
+            try:
+                ed = Path(eval_dir)
+                txt = ""
+                fm = ed / "fileManager_eval.txt"
+                ctrls = ([fm] if fm.is_file() else []) + list(ed.glob("*.control"))
+                for cf in ctrls:
+                    try:
+                        txt = cf.read_text(errors="replace")
+                    except OSError:
+                        continue
+                    # SUMMA fileManager: simStartTime 'YYYY-MM-DD HH:MM'
+                    ms = re.search(r"simStartTime\s+'([^']+)'", txt)
+                    me = re.search(r"simEndTime\s+'([^']+)'", txt)
+                    # mizuRoute control: <sim_start> YYYY-MM-DD HH:MM
+                    if not (ms and me):
+                        ms = re.search(r"<sim_start>\s*([0-9][0-9\-: ]+)", txt)
+                        me = re.search(r"<sim_end>\s*([0-9][0-9\-: ]+)", txt)
+                    if ms and me:
+                        s = self._parse_dt(ms.group(1))
+                        e = self._parse_dt(me.group(1))
+                        if s and e and e > s:
+                            win = (s, e)
+                            break
+            except Exception:
+                win = None
+        self._sim_win_cache[key] = win
+        return win
+
+    def _current_sim_dt(self, eval_dir):
+        """Most recent simulated date openWQ has exported, parsed from the tail
+        of its HDF5 export log (host-agnostic; never opens the HDF5)."""
+        import re
+        try:
+            logs = list((Path(eval_dir) / "openwq_out").rglob("Log_OpenWQ.txt"))
+        except OSError:
+            return None
+        if not logs:
+            return None
+        try:
+            with open(logs[0], "rb") as f:
+                f.seek(0, 2)
+                size = f.tell()
+                f.seek(max(0, size - 16384))   # tail: plenty of export lines
+                tail = f.read().decode("utf-8", "replace")
+        except OSError:
+            return None
+        # openWQ logs e.g. "... (HDF5): 2001APR22-11:00:00"
+        matches = re.findall(r"(\d{4})([A-Za-z]{3})(\d{2})-(\d{2}):(\d{2}):(\d{2})",
+                             tail)
+        if not matches:
+            return None
+        from datetime import datetime
+        y, mon, d, hh, mm, ss = matches[-1]
+        month = self._MONTH3.get(mon.upper())
+        if not month:
+            return None
+        try:
+            return datetime(int(y), month, int(d), int(hh), int(mm), int(ss))
+        except ValueError:
+            return None
+
     def _progress_str(self, eval_dir) -> str:
-        """Human-readable per-eval progress: 'NN.N MB (PP%)' (or just MB when
-        no reference size is known yet, i.e. before the first eval finishes)."""
+        """Human-readable per-eval progress.
+
+        Primary signal is DATE-based: how far the current simulated date has
+        advanced through the calibration window — independent of output size
+        (so it isn't thrown off by a stale size reference or a longer window).
+        Falls back to the output-size estimate only when the window / current
+        date can't be determined yet.
+        """
+        win = self._sim_window(eval_dir)
+        cur = self._current_sim_dt(eval_dir)
+        if win and cur:
+            s, e = win
+            total = (e - s).total_seconds()
+            if total > 0:
+                done = (cur - s).total_seconds()
+                pct = int(round(100.0 * done / total))
+                pct = max(0, min(99, pct))   # cap < 100 until it truly finishes
+                return f"{pct}%  (sim {cur:%Y-%m-%d})"
+        # Fallback: output-size estimate (older behaviour).
         b = self._openwq_out_bytes(eval_dir)
         mb = b / 1_000_000.0
         if self._ref_output_bytes and self._ref_output_bytes > 0:
             pct = int(round(100.0 * b / self._ref_output_bytes))
-            pct = max(0, min(99, pct))  # cap < 100 until it actually finishes
+            pct = max(0, min(99, pct))
             return f"{mb:.1f} MB ({pct}%)"
         return f"{mb:.1f} MB"
 

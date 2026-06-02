@@ -67,6 +67,14 @@ model_config_path = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRout
 # Directory where calibration evaluations are stored
 calibration_work_dir = "/Users/diogocosta/Documents/openwq_code/calibration_workflow_test"
 
+# Optional: path to an HPC settings JSON that pre-fills the HPC / Apptainer
+# fields in the interactive report (Execution tab) — HPC username, host,
+# working dir, .sif path, and the SLURM directives.  Defaults to the shipped
+# "hpc_settings.json" next to this template.  Copy that file anywhere, fill in
+# your HPC details once, and point this at your copy to reuse it across runs.
+hpc_settings_json = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "hpc_settings.json")
+
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
 # ║                                                                       ║
@@ -206,6 +214,7 @@ def _main():
         module_selections=module_selections,
         species_obs_availability=species_obs_availability,
         ss_species_with_loads=ss_load_species,
+        hpc_settings_path=hpc_settings_json,
     )
 
     if report_path:
