@@ -118,6 +118,14 @@ class ModelRunner:
         self._ref_file = (Path(calibration_work_dir) / ".openwq_output_reference.txt"
                           if calibration_work_dir else None)
         self._ref_output_bytes = None
+        # The persisted reference can be STALE-LARGE: an earlier run with
+        # run_mode_debug on, or over the full simulation period, writes a much
+        # bigger output than the current (debug-off / short-window) run.  If we
+        # only ever GREW the reference, every tiny eval of the new run would be
+        # divided by that old huge number → % pinned near 0-1% forever.  So the
+        # first successful eval of THIS run authoritatively (re)sets the
+        # reference; subsequent evals only grow it.  Reset per ModelRunner.
+        self._ref_calibrated_this_run = False
         self._init_reference()
 
         # Parse Docker compose to get volume mapping
@@ -781,11 +789,20 @@ class ModelRunner:
             with _lock:
                 _done_ids.add(config['eval_id'])
                 n_done = len(_done_ids)
-                # A successful eval gives the true full-run output size; keep
-                # the largest seen as the reference and persist it for % est.
-                if success and out_bytes > (self._ref_output_bytes or 0):
-                    self._ref_output_bytes = out_bytes
-                    self._save_reference(out_bytes)
+                # A successful eval gives the true full-run output size for the
+                # CURRENT run's settings (period / debug mode).  The first
+                # completion of this run authoritatively (re)sets the reference
+                # — this corrects a stale-large persisted value from an earlier
+                # debug-on / full-period run that would otherwise pin % near 0.
+                # After that, only grow it (largest seen wins).
+                if success and out_bytes > 0:
+                    if not self._ref_calibrated_this_run:
+                        self._ref_output_bytes = out_bytes
+                        self._ref_calibrated_this_run = True
+                        self._save_reference(out_bytes)
+                    elif out_bytes > (self._ref_output_bytes or 0):
+                        self._ref_output_bytes = out_bytes
+                        self._save_reference(out_bytes)
             status = "done " if success else "FAILED"
             logger.info(
                 f"    [{n_done}/{total}] eval {config['eval_id']} {status} "

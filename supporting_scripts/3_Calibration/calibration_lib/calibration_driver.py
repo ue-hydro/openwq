@@ -50,6 +50,76 @@ from .sensitivity.sobol_analysis import SobolAnalysis
 from .postprocessing.results_analysis import ResultsAnalyzer
 
 
+# Filename of the machine-readable snapshot the running calibration persists
+# (alongside the HTML report) so a *separate* `--report` process can regenerate
+# the report from the latest on-disk state while the run is still going.
+_LIVE_SNAPSHOT_NAME = "live_report_snapshot.json"
+
+
+def _json_default(o):
+    """json.dump default: make numpy scalars / arrays serialisable."""
+    try:
+        import numpy as _np
+        if isinstance(o, _np.integer):
+            return int(o)
+        if isinstance(o, _np.floating):
+            return float(o)
+        if isinstance(o, _np.ndarray):
+            return o.tolist()
+    except Exception:
+        pass
+    return str(o)
+
+
+def _write_live_snapshot(results_dir, calibration_results,
+                         calibration_settings, in_progress):
+    """Persist a JSON snapshot of the current results so a separate
+    ``--report`` invocation can rebuild the HTML report from disk mid-run.
+
+    The HTML report itself is throttled; this snapshot is the authoritative,
+    machine-readable state (calibration history + settings + in_progress flag).
+    Best-effort: never raise into the calibration loop.
+    """
+    try:
+        results_dir = Path(results_dir)
+        results_dir.mkdir(parents=True, exist_ok=True)
+        snap = {
+            "in_progress": bool(in_progress),
+            "timestamp": datetime.now().isoformat(),
+            "calibration_results": calibration_results,
+            "calibration_settings": calibration_settings,
+        }
+        with open(results_dir / _LIVE_SNAPSHOT_NAME, "w") as f:
+            json.dump(snap, f, indent=2, default=_json_default)
+    except Exception as _e:
+        logger.debug(f"Live snapshot skipped: {_e}")
+
+
+def _count_sensitivity_evals(work_dir) -> int:
+    """Count completed sensitivity model runs by their eval folders.
+
+    Sensitivity samples use eval ids 10000+i (see _run_sensitivity_analysis),
+    so their working dirs are evaluations/eval_1XXXX (id >= 10000).  Lets a
+    separate ``--report`` process show Morris/Sobol progress while the
+    screening is still running (sensitivity_results.json only appears at the
+    very end).
+    """
+    try:
+        evdir = Path(work_dir) / "evaluations"
+        if not evdir.is_dir():
+            return 0
+        n = 0
+        for p in evdir.glob("eval_*"):
+            try:
+                if int(p.name.split("_")[-1]) >= 10000:
+                    n += 1
+            except (ValueError, IndexError):
+                continue
+        return n
+    except Exception:
+        return 0
+
+
 def _validate_observation_csv(path: str, obs_source: str) -> str:
     """Make sure the observation path is a calibration-ready CSV.
 
@@ -410,8 +480,96 @@ def run_calibration(
     # Sensitivity Analysis (if requested)
     # =========================================================================
 
+    # Workflow mode (from the setup-report slider):
+    #   "sensitivity"  → identify influential parameters only (no calibration)
+    #   "both"         → sensitivity first, then calibration
+    #   "calibration"  → calibration only (no sensitivity)
+    # Back-compat: when calibration_mode isn't supplied, derive it from the
+    # legacy run_sensitivity_first flag.
+    calibration_mode = kwargs.get("calibration_mode")
+    if calibration_mode not in ("sensitivity", "both", "calibration"):
+        calibration_mode = "both" if run_sensitivity_first else "calibration"
+    _do_sensitivity = calibration_mode in ("sensitivity", "both")
+    _do_calibration = calibration_mode in ("both", "calibration")
+    logger.info(f"Workflow mode: {calibration_mode} "
+                f"(sensitivity={_do_sensitivity}, calibration={_do_calibration})")
+
+    # ── Interim (partial) results report ────────────────────────────────
+    # Lets the user open the <stem>_results_report.html WHILE the run is still
+    # going — it renders whatever is available so far (influential parameters
+    # and/or partial calibration history) with an "in progress" banner.  The
+    # generated run-script writes the final (complete) report at the end.
+    report_stem = kwargs.get("report_stem")
+    _live_history = []          # appended after each optimization evaluation
+    _last_report_t = [0.0]
+
+    def _partial_report(in_progress=True, throttle=0.0):
+        """Write the user-facing results report from results available so far."""
+        if not report_stem or model_config is None:
+            return
+        now = datetime.now().timestamp()
+        if throttle and (now - _last_report_t[0]) < throttle:
+            return
+        _last_report_t[0] = now
+        try:
+            from . import Gen_Calibration_Results_Report as _GRR
+            _hist = list(_live_history)
+            _objs = [h["objective"] for h in _hist] or [float("nan")]
+            _best = min(_objs)
+            _bestp = next((h["parameters"] for h in _hist
+                           if h["objective"] == _best), {})
+            _cr = {
+                "calibration_mode": calibration_mode,
+                "calibration_ran": bool(_hist),
+                "best_params": _bestp,
+                "best_objective": _best,
+                "n_evaluations": len(_hist),
+                "history": _hist,
+                "converged": False,
+                "convergence_reason": "in progress",
+            }
+            _sr = None
+            _sp = work_dir / "results" / "sensitivity_results.json"
+            if _sp.exists():
+                with open(_sp) as _f:
+                    _sr = json.load(_f)
+            _cs = {
+                "algorithm": algorithm, "max_evaluations": max_evaluations,
+                "objective_function": objective_function,
+                "temporal_resolution": kwargs.get("temporal_resolution", "native"),
+                "aggregation_method": kwargs.get("aggregation_method", "mean"),
+                "calibration_targets": calibration_targets or {},
+                "random_seed": random_seed,
+                "calibration_mode": calibration_mode,
+                "use_primary_only": kwargs.get("use_primary_only", True),
+            }
+            try:
+                _md = obj_func.get_matched_data()
+            except Exception:
+                _md = None
+            # Persist matched data so a separate `--report` process can render
+            # the performance/obs-map sections from disk mid-run.
+            _results_dir = work_dir / "results"
+            try:
+                if _md is not None and not _md.empty:
+                    _results_dir.mkdir(parents=True, exist_ok=True)
+                    _md.to_csv(_results_dir / "matched_data.csv", index=False)
+            except Exception:
+                pass
+            # Persist the machine-readable snapshot (authoritative state for
+            # on-demand regeneration via the run-script's --report flag).
+            _write_live_snapshot(_results_dir, _cr, _cs, in_progress)
+            _GRR.generate_results_report(
+                output_dir=str(work_dir), model_config=model_config,
+                calibration_parameters=calibration_parameters,
+                calibration_settings=_cs, calibration_results=_cr,
+                sensitivity_results=_sr, matched_data=_md,
+                report_stem=report_stem, in_progress=in_progress)
+        except Exception as _e:
+            logger.debug(f"Interim report skipped: {_e}")
+
     sensitive_params = None
-    if run_sensitivity_first:
+    if _do_sensitivity:
         logger.info("=" * 60)
         logger.info("RUNNING SENSITIVITY ANALYSIS")
         logger.info("=" * 60)
@@ -441,6 +599,37 @@ def run_calibration(
         logger.info(f"Non-influential parameters will be fixed at initial values")
 
         # TODO: Filter calibration_parameters to only include sensitive ones
+
+        # Interim report so influential parameters are viewable immediately
+        # (and while calibration runs, in 'both' mode).
+        _partial_report(in_progress=_do_calibration)
+
+    # =========================================================================
+    # Sensitivity-only workflow → skip calibration entirely and return.
+    # =========================================================================
+    if not _do_calibration:
+        logger.info("=" * 60)
+        logger.info("WORKFLOW: influential-parameters only — calibration skipped")
+        logger.info("=" * 60)
+        results_dir = work_dir / "results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        sens_only = {
+            "calibration_mode": calibration_mode,
+            "calibration_ran": False,
+            "best_params": {},
+            "best_objective": float("nan"),
+            "n_evaluations": 0,
+            "converged": False,
+            "convergence_reason": "Calibration not run (sensitivity-only workflow)",
+            "history": [],
+            "sensitive_params": sensitive_params,
+            "results_dir": str(results_dir),
+        }
+        sa_path = results_dir / "sensitivity_results.json"
+        if sa_path.exists():
+            with open(sa_path) as f:
+                sens_only["sensitivity_results"] = json.load(f)
+        return sens_only
 
     # =========================================================================
     # Check for resume
@@ -513,6 +702,16 @@ def run_calibration(
             f.write(f"success: {success}\n")
 
         logger.info(f"Evaluation {eval_id}: obj = {obj_val:.6f}, runtime = {runtime:.1f}s")
+
+        # Accumulate live history and refresh the partial report (throttled),
+        # so the user can open the results report mid-run and see progress.
+        _live_history.append({
+            "eval_id": int(eval_id),
+            "objective": float(obj_val),
+            "parameters": {n: float(v) for n, v in zip(param_names, params_real)},
+        })
+        _partial_report(in_progress=True, throttle=20.0)
+
         return obj_val
 
     # =========================================================================
@@ -788,6 +987,8 @@ def run_calibration(
     # Build the comprehensive results dict
     # (compatible with Gen_Calibration_Results_Report.generate_results_report)
     calibration_results = {
+        "calibration_mode": calibration_mode,
+        "calibration_ran": True,
         "best_params": best_params_real,
         "best_objective": result.best_objective,
         "n_evaluations": result.n_evaluations + start_eval,
@@ -820,7 +1021,157 @@ def run_calibration(
     except Exception as e:
         logger.debug(f"Could not attach performance data: {e}")
 
+    # Final snapshot marking the run complete (in_progress=False).  A later
+    # `--report` invocation reads this so it knows the run finished and drops
+    # the "in progress" banner.  We strip the in-memory DataFrame first (the
+    # matched data is already persisted to results/matched_data.csv).
+    _snap_cr = {k: v for k, v in calibration_results.items()
+                if k not in ("matched_data", "performance_metrics")}
+    _snap_cs = {
+        "algorithm": algorithm, "max_evaluations": max_evaluations,
+        "objective_function": objective_function,
+        "temporal_resolution": kwargs.get("temporal_resolution", "native"),
+        "aggregation_method": kwargs.get("aggregation_method", "mean"),
+        "calibration_targets": calibration_targets or {},
+        "random_seed": random_seed,
+        "calibration_mode": calibration_mode,
+        "use_primary_only": kwargs.get("use_primary_only", True),
+    }
+    _write_live_snapshot(results_dir, _snap_cr, _snap_cs, in_progress=False)
+
     return calibration_results
+
+
+def regenerate_results_report(*, calibration_work_dir, model_config,
+                              calibration_parameters, calibration_settings,
+                              report_stem):
+    """Rebuild the calibration results report from whatever state is on disk.
+
+    Safe to call WHILE a calibration / sensitivity run is still going (e.g.
+    from a second terminal via the run-script's ``--report`` flag): it reads
+    the persisted live snapshot + result files and regenerates the HTML,
+    keeping an "in progress" banner until the run has finished.  Returns the
+    report path (or None).
+    """
+    from . import Gen_Calibration_Results_Report as _GRR
+    work_dir = Path(calibration_work_dir)
+    results_dir = work_dir / "results"
+    cs = dict(calibration_settings or {})
+    mode = cs.get("calibration_mode") or "both"
+
+    cr = {
+        "calibration_mode": mode,
+        "calibration_ran": False,
+        "best_params": {},
+        "best_objective": float("nan"),
+        "n_evaluations": 0,
+        "history": [],
+        "converged": False,
+        "convergence_reason": "in progress",
+    }
+    in_progress = True
+
+    # 1) Live snapshot — authoritative interim/final state written by the run.
+    snap_path = results_dir / _LIVE_SNAPSHOT_NAME
+    if snap_path.exists():
+        try:
+            with open(snap_path) as f:
+                snap = json.load(f)
+            if isinstance(snap.get("calibration_results"), dict):
+                cr.update(snap["calibration_results"])
+            if isinstance(snap.get("calibration_settings"), dict):
+                for k, v in snap["calibration_settings"].items():
+                    cs.setdefault(k, v)   # caller's settings win
+            in_progress = bool(snap.get("in_progress", True))
+        except Exception as _e:
+            logger.debug(f"Snapshot read failed: {_e}")
+
+    # 2) Final result files override once the run has completed.
+    hist_path = results_dir / "calibration_history.json"
+    if hist_path.exists():
+        try:
+            with open(hist_path) as f:
+                hist = json.load(f)
+            if hist:
+                cr["history"] = hist
+                cr["n_evaluations"] = len(hist)
+                cr["calibration_ran"] = True
+        except Exception:
+            pass
+    bp_path = results_dir / "best_parameters.json"
+    if bp_path.exists():
+        try:
+            with open(bp_path) as f:
+                cr["best_params"] = json.load(f)
+        except Exception:
+            pass
+    opt_path = results_dir / "optimization_results.json"
+    if opt_path.exists():
+        try:
+            with open(opt_path) as f:
+                _opt = json.load(f)
+            cr["best_objective"] = _opt.get("best_objective", cr["best_objective"])
+            cr["converged"] = _opt.get("converged", cr["converged"])
+            cr["convergence_reason"] = _opt.get("convergence_reason",
+                                                cr["convergence_reason"])
+        except Exception:
+            pass
+
+    # ── Sensitivity state ──
+    sr = None
+    sp = results_dir / "sensitivity_results.json"
+    if sp.exists():
+        try:
+            with open(sp) as f:
+                sr = json.load(f)
+        except Exception:
+            sr = None
+
+    # Sensitivity expected but not finished → surface live screening progress
+    # (count of completed model runs) so the banner isn't empty during Morris.
+    if sr is None and mode in ("sensitivity", "both"):
+        _done = _count_sensitivity_evals(work_dir)
+        if _done:
+            _traj = cs.get("sensitivity_morris_trajectories")
+            try:
+                _total = (int(_traj) * (len(calibration_parameters) + 1)
+                          if _traj else None)
+            except (TypeError, ValueError):
+                _total = None
+            cr["sensitivity_progress"] = (f"{_done}/{_total}" if _total
+                                          else str(_done))
+
+    # ── Matched data (performance / observation map) ──
+    md = None
+    md_path = results_dir / "matched_data.csv"
+    if md_path.exists():
+        try:
+            import pandas as _pd
+            md = _pd.read_csv(md_path)
+        except Exception:
+            md = None
+
+    # ── Performance metrics (same best-effort path as the driver) ──
+    perf = None
+    if md is not None and not md.empty:
+        try:
+            from .objective_functions import compute_all_metrics
+            perf = compute_all_metrics(
+                md, (cs.get("calibration_targets") or {}).get("species", []))
+        except Exception:
+            perf = None
+
+    # Nothing computed yet → definitely still in progress.
+    if not cr.get("history") and sr is None:
+        in_progress = True
+
+    return _GRR.generate_results_report(
+        output_dir=str(work_dir), model_config=model_config or {},
+        calibration_parameters=calibration_parameters,
+        calibration_settings=cs, calibration_results=cr,
+        sensitivity_results=sr, performance_metrics=perf,
+        matched_data=md, report_stem=report_stem,
+        in_progress=in_progress)
 
 
 def _run_sensitivity_analysis(

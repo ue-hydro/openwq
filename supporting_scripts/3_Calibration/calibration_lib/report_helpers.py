@@ -303,6 +303,22 @@ def get_css_styles():
     }
     table.param-table tr.param-disabled { opacity: .4; }
 
+    /* Reaction this BGC parameter controls: consumed -> produced */
+    .rxn-io {
+        display: inline-flex; align-items: center; gap: .35rem;
+        margin-top: .28rem;
+        font-family: 'JetBrains Mono', monospace; font-size: .68rem;
+        font-weight: 700; line-height: 1.3;
+        padding: .1rem .45rem; border-radius: 6px;
+        background: rgba(99,102,241,.10);
+        border: 1px solid rgba(99,102,241,.30);
+    }
+    .rxn-io .rxn-c { color: #d97706; }          /* consumed — amber */
+    .rxn-io .rxn-p { color: #0d9488; }          /* produced — teal  */
+    [data-theme="dark"] .rxn-io .rxn-c { color: #f59e0b; }
+    [data-theme="dark"] .rxn-io .rxn-p { color: #2dd4bf; }
+    .rxn-io .rxn-arrow { color: var(--primary); font-weight: 800; }
+
     /* Species checkboxes */
     .species-grid { display: flex; flex-wrap: wrap; gap: .8rem; margin: .5rem 0; }
     .species-item {
@@ -1037,13 +1053,31 @@ def build_editable_param_table(parameters: List[Dict],
         if p.get("_framework"):
             fw_attr = f' data-fw="{html_lib.escape(p["_framework"])}"'
 
+        # Reaction this BGC parameter controls, as "consumed -> produced".
+        # Attached upstream from the parsed BGC network (data-driven, works
+        # for any template). Rendered as a small coloured badge under the name.
+        rio_html = ""
+        rio = p.get("reaction_io")
+        if isinstance(rio, dict):
+            _cons = [html_lib.escape(str(s)) for s in (rio.get("consumed") or [])]
+            _prod = [html_lib.escape(str(s)) for s in (rio.get("produced") or [])]
+            if _cons or _prod:
+                _c = " + ".join(_cons) if _cons else "&empty;"
+                _pr = " + ".join(_prod) if _prod else "&empty;"
+                rio_html = (
+                    '<div class="rxn-io" title="Reaction this parameter '
+                    'controls (species consumed → produced)">'
+                    f'<span class="rxn-c">{_c}</span>'
+                    '<span class="rxn-arrow">&rarr;</span>'
+                    f'<span class="rxn-p">{_pr}</span></div>')
+
         rows.append(f"""
 <tr class="{row_cls}" data-param-idx="{gi}" data-param='{html_lib.escape(param_json)}'{fw_attr}{row_style}>
     <td style="text-align:center;">
         <input type="checkbox" class="param-cb" data-idx="{gi}"{cb_checked}{cb_disabled}
                style="accent-color:var(--primary);"/>
     </td>
-    <td><code style="font-size:.8rem;">{html_lib.escape(name)}</code>{no_obs_note}</td>
+    <td><code style="font-size:.8rem;">{html_lib.escape(name)}</code>{no_obs_note}{rio_html}</td>
     <td class="num">{initial_str}</td>
     <td><input type="number" class="inline-input param-min" data-idx="{gi}"
                value="{bounds[0]}" step="any"/></td>
@@ -1485,6 +1519,82 @@ def get_interactive_layout_css() -> str:
     }
     .calib-sw-c { background: #3b82f6; }
     .calib-sw-v { background: #10b981; }
+
+    /* ── Workflow mode: 3-option segmented control ──────────────── */
+    /* Rendered as three distinct, clickable segments (NOT a continuous
+       slider) so it's obvious there are exactly three choices.  A pill
+       "thumb" slides under the active option to keep a tactile feel. */
+    .mode-slider-wrap { margin: .6rem 0 .2rem; }
+    .mode-seg {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        padding: 5px;
+        border-radius: 14px;
+        background: var(--bg, #f0f2f5);
+        border: 1px solid var(--border, #e2e8f0);
+    }
+    .mode-seg-thumb {
+        position: absolute;
+        top: 5px;
+        bottom: 5px;
+        left: 5px;
+        width: calc((100% - 10px) / 3);
+        border-radius: 10px;
+        background: var(--surface, #fff);
+        border: 2px solid var(--primary, #0066cc);
+        box-shadow: 0 2px 7px rgba(0,0,0,.16);
+        transition: transform .24s cubic-bezier(.34,1.1,.4,1);
+        transform: translateX(0);
+        z-index: 0;
+        pointer-events: none;
+    }
+    .mode-seg-btn {
+        position: relative;
+        z-index: 1;
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+        padding: .62rem .55rem;
+        border-radius: 10px;
+        font-family: inherit;
+        color: var(--text2, #636e72);
+        transition: color .18s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: .15rem;
+        min-width: 0;
+        text-align: center;
+    }
+    .mode-seg-btn .mode-seg-title {
+        font-size: .86rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .mode-seg-btn .mode-seg-sub {
+        font-size: .7rem;
+        font-weight: 500;
+        line-height: 1.18;
+        opacity: .85;
+    }
+    .mode-seg-btn:hover:not(.active) { color: var(--text, #2d3436); }
+    .mode-seg-btn.active { color: var(--primary, #0066cc); }
+    .mode-seg-btn:focus-visible {
+        outline: 2px solid var(--primary, #0066cc);
+        outline-offset: 3px;
+    }
+    .mode-desc {
+        margin-top: .7rem;
+        padding: .55rem .8rem;
+        border-radius: 8px;
+        border-left: 3px solid var(--primary, #0066cc);
+        background: rgba(0,102,204,.08);
+        font-size: .85rem;
+        color: var(--text, #2d3436);
+    }
     """
 
 

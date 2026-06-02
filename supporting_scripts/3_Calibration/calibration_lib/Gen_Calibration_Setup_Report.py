@@ -707,11 +707,26 @@ def _build_run_commands_section(
     calibration_settings: Dict[str, Any]
 ) -> str:
     """Build the run commands section with code snippets."""
+    import platform
+
+    # Prefix the long-running commands (calibration, resume, and the
+    # influential-parameters / sensitivity run) with the OS-native keep-awake
+    # wrapper so the machine doesn't sleep / throttle Docker mid-run.  Fast
+    # validation/inspection commands are left un-prefixed.
+    #   macOS  : caffeinate -i -s        Linux: systemd-inhibit …
+    #   Windows: none (no per-command wrapper) — see report note
+    _sys = platform.system()
+    if _sys == "Darwin":
+        _wake = "caffeinate -i -s "
+    elif _sys == "Linux":
+        _wake = 'systemd-inhibit --what=idle:sleep --why="OpenWQ calibration run" '
+    else:  # Windows
+        _wake = ""
 
     # Determine the calibration command
-    run_cmd = "python calibration_config_template.py"
-    resume_cmd = "python calibration_config_template.py --resume"
-    sa_cmd = "python calibration_config_template.py --sensitivity-only"
+    run_cmd = f"{_wake}python calibration_config_template.py"
+    resume_cmd = f"{_wake}python calibration_config_template.py --resume"
+    sa_cmd = f"{_wake}python calibration_config_template.py --sensitivity-only"
     dry_run_cmd = "python calibration_config_template.py --dry-run"
     show_params_cmd = "python calibration_config_template.py --show-parameters"
 
@@ -900,10 +915,13 @@ def generate_interactive_setup(
         H.append('</div>')
 
         # ── Tab: Settings ──
+        # Order follows the workflow decision above: the influential-parameters
+        # (sensitivity) settings come first, then the calibration settings.
         H.append('<div class="tab-panel" data-tab="settings">')
+        H.append(_build_workflow_mode_section())
+        H.append(_build_interactive_sensitivity_section())
         H.append(_build_interactive_settings_section(
             container_config.get("container_runtime", "docker")))
-        H.append(_build_interactive_sensitivity_section())
         H.append('</div>')
 
         # ── Tab: Targets ──
@@ -1061,6 +1079,23 @@ def generate_interactive_setup(
         results_path = os.path.join(calibration_work_dir,
                                     f'{_calib_stem}_results_report.html')
 
+        # Keep the machine awake for the (long) calibration / sensitivity run
+        # so it doesn't sleep or throttle Docker mid-run — important for long
+        # overnight runs.  The mechanism is OS-specific; the same prefix covers
+        # both the influential-parameters and calibration phases (one run
+        # command launches whichever workflow mode is selected).  The fast
+        # dry-run is left un-prefixed.
+        #   macOS  : caffeinate -i -s CMD       (built-in, releases on exit)
+        #   Linux  : systemd-inhibit … CMD      (built-in on systemd distros)
+        #   Windows: no per-command wrapper     -> guidance note instead
+        if os_name == "Darwin":
+            _wake = "caffeinate -i -s "
+        elif os_name == "Linux":
+            _wake = ('systemd-inhibit --what=idle:sleep '
+                     '--why="OpenWQ calibration run" ')
+        else:  # Windows
+            _wake = ""
+
         if os_name == "Windows":
             docker_cmd = html_lib.escape(
                 f'cd /d "{containers_dir}" && docker compose up -d')
@@ -1068,15 +1103,44 @@ def generate_interactive_setup(
             run_cmd = html_lib.escape(f'python "{_run_script_name}"')
             resume_cmd = html_lib.escape(f'python "{_run_script_name}" --resume')
             dryrun_cmd = html_lib.escape(f'python "{_run_script_name}" --dry-run')
+            report_cmd = html_lib.escape(
+                f'cd /d "{cal_script_dir}" && python "{_run_script_name}" --report')
             open_cmd = "start"
         else:
             docker_cmd = html_lib.escape(
                 f"cd {containers_dir} && docker compose up -d")
             cd_cmd = html_lib.escape(f"cd {cal_script_dir}")
-            run_cmd = html_lib.escape(f"python {_run_script_name}")
-            resume_cmd = html_lib.escape(f"python {_run_script_name} --resume")
+            run_cmd = html_lib.escape(f"{_wake}python {_run_script_name}")
+            resume_cmd = html_lib.escape(f"{_wake}python {_run_script_name} --resume")
             dryrun_cmd = html_lib.escape(f"python {_run_script_name} --dry-run")
+            report_cmd = html_lib.escape(
+                f"cd {cal_script_dir} && python {_run_script_name} --report")
             open_cmd = "open" if os_name == "Darwin" else "xdg-open"
+
+        # OS-specific explanatory note appended to the run / resume steps so the
+        # reader understands the keep-awake prefix and how to adapt it.
+        _note_css = 'color:var(--text3);font-size:.78rem;'
+        if os_name == "Darwin":
+            _caf_note = (
+                f' <span style="{_note_css}">'
+                '(the <code>caffeinate&nbsp;-i&nbsp;-s</code> prefix keeps macOS '
+                'awake for the whole run &mdash; covers both the influential-'
+                'parameters and calibration phases; releases automatically when '
+                'it finishes)</span>')
+        elif os_name == "Linux":
+            _caf_note = (
+                f' <span style="{_note_css}">'
+                '(the <code>systemd-inhibit&nbsp;&hellip;</code> prefix stops the '
+                'machine idle-sleeping for the whole run; needs systemd &mdash; '
+                'drop it on non-systemd hosts or HPC schedulers, which don\'t '
+                'idle-sleep)</span>')
+        else:  # Windows
+            _caf_note = (
+                f' <span style="{_note_css}">'
+                '(Windows has no per-command keep-awake; before a long run '
+                'disable sleep with <code>powercfg /change standby-timeout-ac 0'
+                '</code> and re-enable it afterwards, or use Settings &rarr; '
+                'System &rarr; Power)</span>')
 
         # Inline CSS for the mini code snippets with copy buttons.
         # align-items:flex-start + wrapping code so the full command is
@@ -1134,7 +1198,7 @@ def generate_interactive_setup(
     </div>
 
     <div style="margin-bottom:.6rem;">
-      <strong>5.</strong> Run the calibration:
+      <strong>5.</strong> Run the calibration:{_caf_note}
       <div style="{snippet_css}">
         <code id="cmdRun" style="{snippet_code_css}">{run_cmd}</code>
         <button style="{copy_btn_css}"
@@ -1143,7 +1207,7 @@ def generate_interactive_setup(
     </div>
 
     <div style="margin-bottom:.6rem;">
-      <strong>6.</strong> Resume if interrupted:
+      <strong>6.</strong> Resume if interrupted:{_caf_note}
       <div style="{snippet_css}">
         <code id="cmdResume" style="{snippet_code_css}">{resume_cmd}</code>
         <button style="{copy_btn_css}"
@@ -1161,8 +1225,22 @@ def generate_interactive_setup(
     </div>
 
     <div style="margin-bottom:.3rem;">
-      <strong>8.</strong> View results &mdash; the script auto-generates an interactive
-      results report and opens it in your browser. To reopen it:
+      <strong>8.</strong> View results &mdash; the script auto-generates the
+      interactive results report and opens it at the end of the run. To see the
+      <strong>latest</strong> results <strong>while the run is still going</strong>
+      (e.g. during the long influential-parameters screening), open a
+      <em>second</em> terminal and <strong>regenerate</strong> the report from the
+      current on-disk state &mdash; it rebuilds from the newest checkpoint /
+      sensitivity data and opens it, with an &ldquo;in&nbsp;progress&rdquo; note
+      until the run finishes:
+      <div style="{snippet_css}">
+        <code id="cmdReport" style="{snippet_code_css}">{report_cmd}</code>
+        <button style="{copy_btn_css}"
+          onclick="navigator.clipboard.writeText(document.getElementById('cmdReport').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+      </div>
+      <div style="font-size:.72rem;color:var(--text3);margin:.1rem 0 .3rem;">
+        Or just open the last-rendered report file directly (no regeneration):
+      </div>
       <div style="{snippet_css}">
         <code id="cmdResults" style="{snippet_code_css}">{open_cmd} {html_lib.escape(results_path)}</code>
         <button style="{copy_btn_css}"
@@ -1407,10 +1485,20 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                      "main concentration output. Tick only if you need the "
                      "diagnostics during calibration.")}
         </div>
+        <div style="margin-top:.6rem;padding:.55rem .75rem;border-radius:8px;
+             background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.45);
+             border-left:4px solid #f59e0b;font-size:.8rem;color:var(--text);line-height:1.5;">
+            <strong style="color:#d97706;">&#9888;&nbsp;WARNING&nbsp;(!)</strong>
+            &mdash; enabling debug mode <strong>significantly slows down the
+            calibration</strong> (5 extra diagnostic HDF5 files written per
+            species/compartment on <em>every</em> evaluation) and is
+            <strong>NOT recommended</strong>. Keep it <strong>OFF</strong> unless
+            you specifically need the diagnostics.
+        </div>
     </div>
 
     <!-- Theme: optimization algorithm -->
-    <div class="card">
+    <div class="card" id="optCard">
         <h3>Optimization algorithm</h3>
         <div class="form-row">
             {rh.build_form_select("algorithm", "Algorithm",
@@ -1707,19 +1795,31 @@ def _build_interactive_targets_section(
     feat_plural = "Reaches" if feature_label == "Reach" else f"{feature_label}s"
 
     if available_reaches:
-        _opts = [f'<option value="all" selected>all '
-                 f'({len(available_reaches)} {feat_plural})</option>']
+        _n = len(available_reaches)
+        # Count-aware word so a single feature reads "1 HRU", not "1 HRUs".
+        _word = feature_label if _n == 1 else feat_plural
+        # Size the list to its contents (+1 for the "all" row), clamped so it's
+        # neither a cramped 1-liner nor a tall box full of empty rows.
+        _size = max(3, min(10, _n + 1))
+        _opts = [f'<option value="all" selected '
+                 f'style="font-weight:700;color:var(--primary);">'
+                 f'&#10003; all ({_n} {_word})</option>']
         for _rid in available_reaches:
             _r = html_lib.escape(str(_rid))
             _opts.append(f'<option value="{_r}">{_r}</option>')
         reach_field_html = (
-            f'<label for="reach_ids">Target {feature_label} IDs</label>'
-            f'<select class="form-input" id="reach_ids" multiple size="8" '
-            f'style="height:auto;min-height:9rem;font-family:monospace;">'
+            f'<label for="reach_ids">Target {feature_label} IDs'
+            f'<span style="font-weight:500;font-size:.68rem;color:var(--text3);'
+            f'margin-left:.45rem;background:var(--bg);border:1px solid var(--border);'
+            f'border-radius:10px;padding:.05rem .45rem;vertical-align:middle;">'
+            f'{_n} available</span></label>'
+            f'<select class="form-input" id="reach_ids" multiple size="{_size}" '
+            f'style="height:auto;font-family:\'JetBrains Mono\',monospace;'
+            f'padding:.3rem;line-height:1.65;">'
             f'{"".join(_opts)}</select>'
-            f'<div class="hint">Ctrl / Cmd-click to select multiple '
-            f'{feat_lower}s; choose <strong>all</strong> to use every '
-            f'{feat_lower}.</div>'
+            f'<div class="hint">The highlighted <strong>all</strong> option '
+            f'uses every {feat_lower}. To target specific {feat_plural.lower()} '
+            f'instead, Ctrl / Cmd-click to pick one or more.</div>'
         )
     else:
         reach_field_html = (
@@ -1727,7 +1827,7 @@ def _build_interactive_targets_section(
             f'<input class="form-input" type="text" id="reach_ids" '
             f'value="all" placeholder="all or comma-separated IDs"/>'
             f'<div class="hint">"all" or comma-separated IDs '
-            f'(no shapefile found to list {feat_lower}s).</div>'
+            f'(no shapefile found to list {feat_plural.lower()}).</div>'
         )
 
     if available_compartments:
@@ -1877,6 +1977,24 @@ def _build_interactive_parameters_section_grouped(
     _active_fws: set = _reach["reachable_frameworks"]
     _active_reactions: set = _reach["reachable_reactions"]   # (fw, rxn_name)
 
+    # Map each reaction to the species it consumes/produces so we can show
+    # "A -> B" under every BGC parameter.  Keyed by BOTH (framework, 1-based
+    # index) and (framework, reaction name) — mirroring compute_obs_reachable
+    # — so it matches whichever tag a parameter carries (_reaction_num /
+    # _reaction).  Fully data-driven: works for any NATIVE_BGC_FLEX template.
+    _rxn_io_lookup: Dict[tuple, Dict[str, list]] = {}
+    if bgc_network:
+        for _fw_name, _fw_info in (bgc_network.get("frameworks") or {}).items():
+            for _i, _r in enumerate(_fw_info.get("reactions") or []):
+                _io = {
+                    "consumed": list(rh._yield_species(_r.get("consumed"))),
+                    "produced": list(rh._yield_species(_r.get("produced"))),
+                }
+                _rxn_io_lookup[(_fw_name, str(_i + 1))] = _io
+                _nm = _r.get("name") or ""
+                if _nm:
+                    _rxn_io_lookup[(_fw_name, _nm)] = _io
+
     # Set of model species that have SS loads (already resolved by the
     # config template, which applied stoichiometric conversions).
     _ss_load_species = ss_species_with_loads or set()
@@ -1968,6 +2086,16 @@ def _build_interactive_parameters_section_grouped(
         for p in params:
             pp = dict(p)  # shallow copy
             pp["_calibratable"] = _is_calibratable(p, group_key)
+            # Attach the reaction's consumed/produced species (BGC params only)
+            # so the table can render "A -> B" under the parameter name.
+            if group_key == "bgc":
+                _fw = pp.get("_framework", "")
+                _rnum = str(pp.get("_reaction_num", "") or "")
+                _rname = str(pp.get("_reaction", "") or "")
+                _io = (_rxn_io_lookup.get((_fw, _rnum))
+                       or _rxn_io_lookup.get((_fw, _rname)))
+                if _io and (_io["consumed"] or _io["produced"]):
+                    pp["reaction_io"] = _io
             annotated.append(pp)
         all_params.extend(annotated)
         group_meta.append((group_key, label, start_idx, len(annotated)))
@@ -2016,18 +2144,60 @@ def _build_interactive_parameters_section_grouped(
     return '\n'.join(H)
 
 
+def _build_workflow_mode_section() -> str:
+    """Top-of-settings 3-way workflow selector rendered as a segmented control
+    (three distinct, clickable options — not a continuous slider):
+    Influential parameters (Morris) · Both · Calibration."""
+    return """
+<div class="section" id="workflow">
+    <h2>Workflow</h2>
+    <div class="card primary">
+        <h3>What to run</h3>
+        <p class="hint" style="margin-top:0;">
+            Choose <strong>one</strong> of the three options below. The selected
+            one is highlighted, and the settings panels update to match it.
+        </p>
+        <div class="mode-slider-wrap">
+            <div class="mode-seg" role="radiogroup" aria-label="Workflow to run">
+                <span class="mode-seg-thumb" id="modeThumb" aria-hidden="true"></span>
+                <button type="button" class="mode-seg-btn" data-m="0"
+                        role="radio" aria-checked="false">
+                    <span class="mode-seg-title">Influential parameters</span>
+                    <span class="mode-seg-sub">Screening only &mdash; no calibration</span>
+                </button>
+                <button type="button" class="mode-seg-btn" data-m="1"
+                        role="radio" aria-checked="true">
+                    <span class="mode-seg-title">Both</span>
+                    <span class="mode-seg-sub">Screening first, then calibrate</span>
+                </button>
+                <button type="button" class="mode-seg-btn" data-m="2"
+                        role="radio" aria-checked="false">
+                    <span class="mode-seg-title">Calibration</span>
+                    <span class="mode-seg-sub">Calibration only</span>
+                </button>
+            </div>
+            <input type="hidden" id="calibration_mode" value="1"/>
+            <div class="mode-desc" id="modeDesc"></div>
+        </div>
+    </div>
+</div>
+"""
+
+
 def _build_interactive_sensitivity_section() -> str:
-    """Sensitivity analysis section with collapsible fields."""
+    """Influential-parameters (sensitivity) settings.  Hidden by the workflow
+    slider when the user selects 'Calibration' only."""
     return f"""
 <div class="section" id="sensitivity">
-    <h2>Sensitivity Analysis</h2>
+    <h2>Influential parameters (sensitivity)</h2>
     <div class="card secondary">
-        {rh.build_form_checkbox("run_sensitivity_first",
-            "Run sensitivity analysis before calibration",
-            checked=False,
-            hint="Identifies influential parameters; less-sensitive ones are fixed")}
-        <div class="sa-fields hidden" id="saFields">
-            <div class="form-row" style="margin-top:.8rem;">
+        <p class="hint" style="margin-top:0;">
+            Morris (or Sobol) screening ranks parameters by how much they move
+            the objective. In <strong>Both</strong> mode the least-sensitive
+            ones can be fixed during calibration.
+        </p>
+        <div class="sa-fields" id="saFields">
+            <div class="form-row">
                 {rh.build_form_select("sensitivity_method", "Method",
                     ["morris", "sobol"], "morris")}
                 {rh.build_form_number("sensitivity_threshold", "Threshold",
@@ -2293,7 +2463,13 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       s.compartments = compVal.split(',').map(function(c){ return c.trim(); }).filter(Boolean);
     }
 
-    s.run_sensitivity_first = document.getElementById('run_sensitivity_first').checked;
+    // Workflow mode slider: 0=influential params only, 1=both, 2=calibration only.
+    var _modeEl = document.getElementById('calibration_mode');
+    var _modeVal = _modeEl ? (parseInt(_modeEl.value)) : 1;
+    s.calibration_mode = (_modeVal === 0) ? 'sensitivity'
+                       : (_modeVal === 2) ? 'calibration' : 'both';
+    // Legacy flag derived from the mode (sensitivity runs unless 'calibration').
+    s.run_sensitivity_first = (s.calibration_mode !== 'calibration');
     s.sensitivity_method = document.getElementById('sensitivity_method').value;
     s.sensitivity_morris_trajectories = parseInt(document.getElementById('sensitivity_morris_trajectories').value) || 10;
     s.sensitivity_morris_levels = parseInt(document.getElementById('sensitivity_morris_levels').value) || 4;
@@ -2342,7 +2518,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('sys.path.insert(0, ' + pyRepr(CALIB_LIB_DIR) + ')');
     lines.push('sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))');
     lines.push('');
-    lines.push('from calibration_lib.calibration_driver import run_calibration');
+    lines.push('from calibration_lib.calibration_driver import run_calibration, regenerate_results_report');
     lines.push('from calibration_lib import config_integration');
     lines.push('from calibration_lib import Gen_Calibration_Results_Report');
     lines.push('');
@@ -2433,6 +2609,12 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('objective_weights = ' + pyRepr(s.objective_weights));
     lines.push('');
 
+    lines.push('# Workflow mode (from the report slider):');
+    lines.push('#   "sensitivity" -> identify influential parameters only (no calibration)');
+    lines.push('#   "both"        -> sensitivity first, then calibration');
+    lines.push('#   "calibration" -> calibration only (no sensitivity)');
+    lines.push('calibration_mode = ' + pyRepr(s.calibration_mode || 'both'));
+    lines.push('');
     lines.push('# Sensitivity analysis');
     lines.push('run_sensitivity_first = ' + pyRepr(s.run_sensitivity_first));
     lines.push('sensitivity_method = ' + pyRepr(s.sensitivity_method));
@@ -2486,6 +2668,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('                             "(no prompt; ideal for HPC/batch jobs)")');
     lines.push('    parser.add_argument("--keep", action="store_true",');
     lines.push('                        help="Keep stale eval_* folders (no prompt)")');
+    lines.push('    parser.add_argument("--report", action="store_true",');
+    lines.push('                        help="Regenerate the results report from the latest "');
+    lines.push('                             "on-disk state and open it, then exit. Works "');
+    lines.push('                             "while a run is still going (run in a 2nd terminal).")');
     lines.push('    args = parser.parse_args()');
     lines.push('    # CLI flags override the report default (clean_work_dir).');
     lines.push('    if args.clean:');
@@ -2499,6 +2685,47 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('');
     lines.push('    print("\\nLoading model config...")');
     lines.push('    model_cfg = config_integration.load_model_config(model_config_path)');
+    lines.push('');
+    lines.push('    # Settings echoed into the results report (shared by the final');
+    lines.push('    # report and the --report regeneration below).');
+    lines.push('    cal_settings = {');
+    lines.push('        "algorithm": algorithm, "max_evaluations": max_evaluations,');
+    lines.push('        "objective_function": objective_function,');
+    lines.push('        "temporal_resolution": temporal_resolution,');
+    lines.push('        "aggregation_method": aggregation_method,');
+    lines.push('        "calibration_targets": calibration_targets,');
+    lines.push('        "objective_weights": objective_weights,');
+    lines.push('        "random_seed": random_seed,');
+    lines.push('        "run_sensitivity_first": run_sensitivity_first,');
+    lines.push('        "calibration_mode": calibration_mode,');
+    lines.push('        "sensitivity_method": sensitivity_method,');
+    lines.push('        # Lets --report estimate Morris/Sobol screening progress.');
+    lines.push('        "sensitivity_morris_trajectories": sensitivity_morris_trajectories,');
+    lines.push('        # Echo HPC + primary-only choices so the results report\'s');
+    lines.push('        # Apptainer / SLURM snippets show the actual user paths.');
+    lines.push('        "use_primary_only": use_primary_only,');
+    lines.push('        "apptainer_sif_path": apptainer_sif_path,');
+    lines.push('        "apptainer_bind_path": apptainer_bind_path,');
+    lines.push('    }');
+    lines.push('');
+    lines.push('    # --report: rebuild the results report from the latest on-disk state');
+    lines.push('    #   (works while a run is still going — launch in a 2nd terminal),');
+    lines.push('    #   open it, and stop without running any evaluations.');
+    lines.push('    if args.report:');
+    lines.push('        rp = regenerate_results_report(');
+    lines.push('            calibration_work_dir=calibration_work_dir,');
+    lines.push('            model_config=model_cfg,');
+    lines.push('            calibration_parameters=calibration_parameters,');
+    lines.push('            calibration_settings=cal_settings,');
+    lines.push('            report_stem=report_stem,');
+    lines.push('        )');
+    lines.push('        if rp:');
+    lines.push('            print(f"Results report (regenerated from latest state): {rp}")');
+    lines.push('            webbrowser.open("file://" + os.path.abspath(rp))');
+    lines.push('        else:');
+    lines.push('            print("No results available yet — nothing to report.")');
+    lines.push('        sys.exit(0)');
+    lines.push('');
     lines.push('    container_config = config_integration.get_container_config(model_cfg)');
     lines.push('    obs_config = config_integration.get_observation_config(model_cfg)');
     lines.push('');
@@ -2520,6 +2747,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        calibration_targets=calibration_targets,');
     lines.push('        random_seed=random_seed,');
     lines.push('        run_sensitivity_first=run_sensitivity_first,');
+    lines.push('        # Workflow: "sensitivity" | "both" | "calibration".');
+    lines.push('        calibration_mode=calibration_mode,');
+    lines.push('        # Lets the driver refresh the results report mid-run.');
+    lines.push('        report_stem=report_stem,');
     lines.push('        sensitivity_method=sensitivity_method,');
     lines.push('        sensitivity_morris_trajectories=sensitivity_morris_trajectories,');
     lines.push('        sensitivity_morris_levels=sensitivity_morris_levels,');
@@ -2554,23 +2785,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        apptainer_bind_path=apptainer_bind_path,');
     lines.push('    )');
     lines.push('');
-    lines.push('    # Generate results report');
-    lines.push('    cal_settings = {');
-    lines.push('        "algorithm": algorithm, "max_evaluations": max_evaluations,');
-    lines.push('        "objective_function": objective_function,');
-    lines.push('        "temporal_resolution": temporal_resolution,');
-    lines.push('        "aggregation_method": aggregation_method,');
-    lines.push('        "calibration_targets": calibration_targets,');
-    lines.push('        "objective_weights": objective_weights,');
-    lines.push('        "random_seed": random_seed,');
-    lines.push('        "run_sensitivity_first": run_sensitivity_first,');
-    lines.push('        "sensitivity_method": sensitivity_method,');
-    lines.push('        # Echo HPC + primary-only choices so the results report\'s');
-    lines.push('        # Apptainer / SLURM snippets show the actual user paths.');
-    lines.push('        "use_primary_only": use_primary_only,');
-    lines.push('        "apptainer_sif_path": apptainer_sif_path,');
-    lines.push('        "apptainer_bind_path": apptainer_bind_path,');
-    lines.push('    }');
+    lines.push('    # Generate the final results report (cal_settings built above).');
     lines.push('    report_path = Gen_Calibration_Results_Report.generate_results_report(');
     lines.push('        output_dir=calibration_work_dir,');
     lines.push('        model_config=model_cfg,');
@@ -2875,15 +3090,42 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     }
   });
 
-  // SA enable checkbox
-  var saCheckbox = document.getElementById('run_sensitivity_first');
-  var saFields = document.getElementById('saFields');
-  if (saCheckbox && saFields) {
-    saCheckbox.addEventListener('change', function() {
-      saFields.classList.toggle('hidden', !this.checked);
+  // Workflow mode slider (0=influential params, 1=both, 2=calibration).
+  // Shows/hides the Sensitivity card and the Optimization card accordingly.
+  function updateWorkflowUI() {
+    var el = document.getElementById('calibration_mode');
+    var m = el ? parseInt(el.value) : 1;
+    if (isNaN(m)) m = 1;
+    var sensCard = document.getElementById('sensitivity');
+    var optCard = document.getElementById('optCard');
+    var desc = document.getElementById('modeDesc');
+    if (sensCard) sensCard.style.display = (m === 2) ? 'none' : '';
+    if (optCard)  optCard.style.display  = (m === 0) ? 'none' : '';
+    // The screening method (Morris or Sobol) is chosen later, in the
+    // Influential-parameters settings below — so name both here.
+    var txt = (m === 0)
+        ? 'Only influential parameters will be identified (Morris or Sobol screening). No calibration will run.'
+      : (m === 2)
+        ? 'Only calibration will run, using the settings you provide. No sensitivity screening.'
+        : 'Both, in sequence: influential parameters are identified first (Morris or Sobol screening), then calibration runs.';
+    if (desc) desc.textContent = txt;
+    document.querySelectorAll('.mode-seg-btn').forEach(function(b) {
+      var on = parseInt(b.dataset.m) === m;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    var thumb = document.getElementById('modeThumb');
+    if (thumb) thumb.style.transform = 'translateX(' + (m * 100) + '%)';
+  }
+  // Each option is a discrete button; clicking sets the hidden value.
+  document.querySelectorAll('.mode-seg-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      var el = document.getElementById('calibration_mode');
+      if (el) el.value = this.dataset.m;
+      updateWorkflowUI();
       updateScript();
     });
-  }
+  });
 
   // SA method toggle
   var saMethodEl = document.getElementById('sensitivity_method');
@@ -3159,6 +3401,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
 
   // Initial render
   updateScript();
+
+  // Workflow mode: reflect the default (Both) — show/hide sensitivity & opt cards.
+  updateWorkflowUI();
 
   // Container-runtime UI: reflect the current choice and update on change.
   updateRuntimeUI();

@@ -297,6 +297,32 @@ class ParameterHandler:
         shutil.copy2(src_master, eval_dir / "openWQ_master.json")
         (eval_dir / "openwq_out" / "HDF5").mkdir(parents=True, exist_ok=True)
 
+        # Apply the calibration's run_mode_debug override to the copied master.
+        # The baseline master keeps whatever RUN_MODE_DEBUG the model-config
+        # script wrote, and this fast path copies it VERBATIM — so without this
+        # patch the setup-report "debug OFF" choice is silently ignored and
+        # openWQ keeps writing the 5 extra diagnostic HDF5 files per
+        # species/compartment (chemistry/transport/ewf/ic/ss).  The override is
+        # set on self.model_config by run_calibration; mirror it into the
+        # COMPUTATIONAL_SETTINGS.RUN_MODE_DEBUG flag of the per-eval master.
+        rmd = mc.get("run_mode_debug")
+        if rmd is not None:
+            try:
+                dst_master = eval_dir / "openWQ_master.json"
+                data, header = self._read_json_with_header(dst_master)
+                cs = data.get("COMPUTATIONAL_SETTINGS")
+                if isinstance(cs, dict):
+                    if bool(cs.get("RUN_MODE_DEBUG")) != bool(rmd):
+                        cs["RUN_MODE_DEBUG"] = bool(rmd)
+                        self._write_json_with_header(dst_master, data, header)
+                        logger.debug(
+                            f"eval_{eval_id:04d}: set master RUN_MODE_DEBUG="
+                            f"{bool(rmd)} (calibration override)")
+            except Exception as e:
+                logger.warning(
+                    f"Could not apply run_mode_debug override to baseline "
+                    f"master (eval_{eval_id:04d}): {e}")
+
         logger.debug(
             f"Created evaluation directory (reused baseline config from "
             f"{base}): {eval_dir}")
