@@ -897,6 +897,7 @@ def generate_interactive_setup(
     <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">Settings</button>
     <button class="tab-btn" data-tab="targets" onclick="switchTab('targets')">Targets</button>
     <button class="tab-btn" data-tab="parameters" onclick="switchTab('parameters')">Parameters</button>
+    <button class="tab-btn" data-tab="execution" onclick="switchTab('execution')">Execution</button>
 </div>
 """)
 
@@ -1019,6 +1020,14 @@ def generate_interactive_setup(
             ))
         H.append('</div>')
 
+        # ── Tab: Execution ──
+        # Model-execution backend + HPC/Apptainer settings live here (moved
+        # out of Settings).  The HPC card also auto-fills a SLURM sbatch file.
+        H.append('<div class="tab-panel" data-tab="execution">')
+        H.append(_build_interactive_execution_section(
+            container_config.get("container_runtime", "docker")))
+        H.append('</div>')
+
         H.append('</div>')  # config-pane
 
         # ── Resizer Handle ──
@@ -1039,7 +1048,8 @@ def generate_interactive_setup(
         H.append('<div class="script-pane">')
         H.append(f"""
 <div class="script-pane-header">
-    <h3>Generated Script</h3>
+    <h3 title="Save the calibration script, then run it locally (Docker) or on HPC (Apptainer). The script updates live as you change the settings on the left.">
+        Let's run the calibration&#8230;</h3>
     <div style="display:flex;gap:.4rem;align-items:center;">
         <button class="copy-btn" id="wrapToggleBtn" style="position:static;font-size:.75rem;padding:.25rem .6rem;
             background:rgba(0,102,204,.1);border:1px solid var(--border);color:var(--primary);
@@ -1049,21 +1059,30 @@ def generate_interactive_setup(
             background:rgba(0,102,204,.1);border:1px solid var(--border);color:var(--primary);
             border-radius:6px;cursor:pointer;"
             onclick="copyScript()">Copy</button>
-        <button id="downloadBtnHeader" style="position:static;font-size:.75rem;padding:.25rem .6rem;
-            background:linear-gradient(135deg,rgba(0,102,204,.15),rgba(0,168,107,.15));
-            border:1px solid var(--border);color:var(--secondary);
-            border-radius:6px;cursor:pointer;font-weight:600;"
-            onclick="downloadScript()">Save the script</button>
     </div>
 </div>
-<div style="padding:.2rem 1.2rem .1rem;font-size:.7rem;color:var(--text3);word-break:break-all;line-height:1.45;"
-     title="{save_hint}">
-    Save to: <code id="saveHint" style="font-size:.68rem;">{save_hint}</code>
-    <button id="copyHintBtn" onclick="copySaveHint()" title="Copy path to clipboard"
-        style="margin-left:.4rem;font-size:.62rem;padding:.05rem .4rem;
-        background:rgba(0,102,204,.1);border:1px solid var(--border);
-        color:var(--primary);border-radius:4px;cursor:pointer;
-        font-family:inherit;white-space:nowrap;vertical-align:baseline;">Copy</button>
+<div style="padding:.5rem 1.2rem .15rem;">
+    <div style="font-weight:700;color:var(--text);font-size:.92rem;margin-bottom:.3rem;">
+        1) Save the calibration python script</div>
+    <div style="font-size:.72rem;color:var(--text3);word-break:break-all;line-height:1.45;margin-bottom:.45rem;"
+         title="{save_hint}">
+        Save to: <code id="saveHint" style="font-size:.68rem;">{save_hint}</code>
+        <button id="copyHintBtn" onclick="copySaveHint()" title="Copy path to clipboard"
+            style="margin-left:.4rem;font-size:.62rem;padding:.05rem .4rem;
+            background:rgba(0,102,204,.1);border:1px solid var(--border);
+            color:var(--primary);border-radius:4px;cursor:pointer;
+            font-family:inherit;white-space:nowrap;vertical-align:baseline;">Copy</button>
+    </div>
+    <button id="downloadBtnHeader" onclick="downloadScript()"
+        style="font-size:.8rem;padding:.4rem .95rem;font-weight:600;
+        background:linear-gradient(135deg,rgba(0,102,204,.18),rgba(0,168,107,.18));
+        border:1px solid var(--border);color:var(--secondary);border-radius:7px;
+        cursor:pointer;">Save the script</button>
+
+    <div style="font-weight:700;color:var(--text);font-size:.92rem;margin:1.1rem 0 .15rem;">
+        2) Run the calibration</div>
+    <div style="font-size:.72rem;color:var(--text3);line-height:1.45;">
+        Pick how to run the saved script &mdash; expand a) or b) below.</div>
 </div>
 """)
         # Build the how-to section with OS-aware commands
@@ -1165,7 +1184,7 @@ def generate_interactive_setup(
         H.append(f"""
 <details style="margin:.6rem 1rem 0;border:1px solid var(--border);border-radius:8px;padding:.2rem .8rem;font-size:.82rem;">
   <summary style="cursor:pointer;font-weight:600;padding:.4rem 0;color:var(--primary);user-select:none;">
-    How to use this script
+    a) Locally &mdash; based on Docker (using the script below)
   </summary>
   <div style="padding:.3rem 0 .8rem;line-height:1.65;color:var(--text2);">
 
@@ -1252,11 +1271,13 @@ def generate_interactive_setup(
 </details>
 """)
 
-        # ── HPC (Apptainer / Singularity) folder checklist ──
-        # Derive the concrete folders the user must copy to the cluster from
-        # the paths already in their model config.  The heavy GRQA /
-        # Copernicus processing is reused from the model-config setup, so the
-        # raw GRQA database is NOT needed on the HPC.
+        # ── HPC (Apptainer / Singularity) — copy-to-cluster code snippets ──
+        # Replace the old "folders to copy" checklist with ready-to-run shell:
+        # an auto-generated SLURM sbatch, an rsync copy that preserves the
+        # local layout under ONE HPC base dir, a one-time path-remap (so every
+        # baked-in absolute path re-points to its HPC copy), and a submit
+        # command.  All the local source paths are baked in; the user only
+        # edits HPC_USER / HPC_HOST / HPC_BASE / SIF and the SLURM account.
         _supp_dir = os.path.dirname(cal_script_dir)  # supporting_scripts (1_/2_/3_)
         _exe = (container_config.get("executable_path", "")
                 or model_config.get("executable_path", ""))
@@ -1272,71 +1293,122 @@ def generate_interactive_setup(
                            else (_dom_parts[0] if _dom_parts else ""))
         except ValueError:
             _domain_dir = _model_run_dir
+        _mc_dir = (os.path.dirname(os.path.abspath(model_config_path))
+                   if model_config_path else "")
+        _run_local = os.path.join(cal_script_dir, _run_script_name)
+        # Source trees to copy + the single common local root used for the
+        # path-remap (rsync -R preserves the full local path under HPC_BASE,
+        # so re-pointing is just: <root>  ->  $HPC_BASE<root>).
+        _src_roots = [os.path.abspath(d) for d in
+                      (_supp_dir, _mc_dir, _domain_dir) if d]
+        # de-dup + drop any root that's a subpath of another (rsync -R of the
+        # parent already carries it).
+        _src_roots = sorted(set(_src_roots))
+        _src_roots = [d for d in _src_roots
+                      if not any(d != o and d.startswith(o + os.sep)
+                                 for o in _src_roots)]
+        try:
+            _common_root = (os.path.commonpath(
+                _src_roots + [os.path.abspath(_run_local),
+                              os.path.abspath(model_config_path or _supp_dir),
+                              os.path.abspath(calibration_work_dir or _supp_dir)])
+                if _src_roots else "")
+        except ValueError:
+            _common_root = ""
+        _remap_ok = bool(_common_root) and _common_root not in ("/", "")
 
-        def _hpc_row(path_html, why_html):
-            return (
-                '<tr>'
-                '<td style="vertical-align:top;padding:.25rem .5rem;">'
-                f'<code style="font-size:.72rem;word-break:break-all;">{path_html}</code></td>'
-                '<td style="padding:.25rem .5rem;font-size:.82rem;color:var(--text2);">'
-                f'{why_html}</td></tr>')
+        # ── 0. SLURM job file ──
+        # The sbatch is built in the browser (Execution tab) from the SLURM
+        # form fields + this run-script path, and saved there with the
+        # "Save .sbatch" button.  We only need its name + local save path
+        # here so the copy snippet can rsync it to the cluster.
+        _sbatch_name = f"{_calib_stem}.sbatch"
+        _sbatch_local = os.path.join(cal_script_dir, _sbatch_name)
 
-        _hpc_rows = [
-            _hpc_row(html_lib.escape(_supp_dir or "(supporting_scripts)"),
-                     "<strong>Supporting scripts</strong> &mdash; the openWQ "
-                     "<code>1_Model_Config</code>, <code>2_Read_Outputs</code> and "
-                     "<code>3_Calibration</code> tree (calibration_lib, the model-config "
-                     "template, BGC templates, spatial_matching)."),
-            _hpc_row(html_lib.escape(_domain_dir or "(domain folder)"),
-                     "<strong>Domain folder</strong> &mdash; the model run dir (the "
-                     "<em>already-processed</em> openWQ config in <code>openwq_in/</code> + the "
-                     "clipped GRQA in <code>grqa_clipped_data/</code>), the "
-                     "<code>shapefiles/</code>, and the host-model settings / forcing / "
-                     "control file the executable reads."),
-            _hpc_row("&lt;your openwq.sif&gt;",
-                     "<strong>Apptainer / Singularity image</strong> &mdash; build/transfer it "
-                     "and set its path in the <em>Apptainer SIF path</em> field (Execution settings)."),
-            _hpc_row(html_lib.escape(calibration_work_dir or "(calibration_work_dir)"),
-                     "<strong>Calibration work dir</strong> &mdash; created on the HPC; "
-                     "evaluations + results are written here (no need to pre-copy)."),
-        ]
+        # Baked local paths handed to the browser so the "copy & run" block in
+        # the HPC section can be assembled (pre-filled) from the Execution-tab
+        # fields — the user edits nothing, just pastes & runs.
+        _hpc_baked = {
+            "src_roots": _src_roots,
+            "common_root": _common_root,
+            "run_local": _run_local,
+            "mc_path": model_config_path or "",
+            "sbatch_local": _sbatch_local,
+            "sbatch_name": _sbatch_name,
+            "work_dir": calibration_work_dir or "",
+            "remap_ok": bool(_remap_ok),
+        }
 
         H.append(f"""
 <details style="margin:.2rem 1rem .6rem;border:1px solid var(--border);border-radius:8px;padding:.2rem .8rem;font-size:.82rem;">
   <summary style="cursor:pointer;font-weight:600;padding:.4rem 0;color:var(--primary);user-select:none;">
-    Running on HPC (Apptainer / Singularity) &mdash; folders to copy
+    b) HPC &mdash; based on Apptainer / Singularity (using the script below)
   </summary>
   <div style="padding:.3rem 0 .8rem;line-height:1.6;color:var(--text2);">
-    <p style="margin:.2rem 0 .5rem;">Copy these to the cluster. The heavy GRQA / Copernicus
-    processing is <strong>reused</strong> from your model-config setup &mdash; nothing is
-    re-downloaded or re-processed per evaluation:</p>
-    <table style="width:100%;border-collapse:collapse;font-size:.8rem;">
-      <tr style="border-bottom:1px solid var(--border);">
-        <th style="text-align:left;padding:.25rem .5rem;">Folder / file</th>
-        <th style="text-align:left;padding:.25rem .5rem;">Why</th></tr>
-      {''.join(_hpc_rows)}
-    </table>
-    <div class="hint" style="margin-top:.6rem;">
-      <strong>Paths:</strong> keep the same directory layout on the HPC, <em>or</em> edit the
-      absolute paths in your model config (<code>executable_path</code>, <code>file_manager_path</code>,
-      <code>river_network_shapefile</code>, the basin shapefile, <code>dir2save_input_files</code>) to the
-      HPC locations and set the <strong>Apptainer bind path</strong> to the shared root that contains them.
+    <p style="margin:.2rem 0 .6rem;">In the <strong>Execution</strong> tab set
+    <strong>Container runtime&nbsp;=&nbsp;apptainer</strong> and fill in the
+    <strong>HPC details</strong> + <strong>SLURM</strong> fields. The two things you need
+    appear below, already filled in from those fields &mdash; no editing required.</p>
+
+    <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
+      1 &middot; SLURM job file &mdash; save <code>{html_lib.escape(_sbatch_name)}</code>
+      next to your run script</p>
+    <div style="position:relative;margin:.35rem 0 .9rem;">
+      <button id="saveSbatchBtn" onclick="downloadSbatch()"
+        style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,168,107,.25);
+        border:1px solid rgba(0,168,107,.55);color:#d1fae5;padding:.18rem .6rem;
+        border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;
+        font-weight:600;">Save .sbatch</button>
+      <pre id="sbatchPreview" style="background:var(--dark,#1a1a2e);color:#e2e8f0;
+        border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+        font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
     </div>
-    <div class="hint" style="margin-top:.4rem;">
-      <strong>Not needed on the HPC:</strong> the raw GRQA database
-      (<code>grqa_local_data_path</code>, often &gt;1&nbsp;GB) &mdash; the calibration reuses the
-      already-clipped GRQA inside the model run dir.
+
+    <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
+      2 &middot; Copy &amp; run on the HPC &mdash; copy each block to a terminal, in order
+      (you'll be asked for your HPC password)</p>
+
+    <p style="margin:.4rem 0 .1rem;font-size:.78rem;color:var(--text2);">
+      a. Copy code, inputs &amp; the <code>.sif</code> image to the HPC</p>
+    <div style="position:relative;margin:.2rem 0 .7rem;">
+      <button onclick="copyHpcRun(this,'hpcRunCopy')"
+        style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+        border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+        border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+      <pre id="hpcRunCopy" style="background:var(--dark,#1a1a2e);color:#e2e8f0;
+        border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+        font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
     </div>
-    <div class="hint" style="margin-top:.4rem;">
-      Finally, set <strong>Container runtime = apptainer</strong> and fill the
-      <strong>Apptainer SIF / bind path</strong> fields above.
+
+    <p style="margin:.4rem 0 .1rem;font-size:.78rem;color:var(--text2);">
+      b. Re-point the absolute paths to the HPC (run once)</p>
+    <div style="position:relative;margin:.2rem 0 .7rem;">
+      <button onclick="copyHpcRun(this,'hpcRunRemap')"
+        style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+        border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+        border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+      <pre id="hpcRunRemap" style="background:var(--dark,#1a1a2e);color:#e2e8f0;
+        border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+        font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
     </div>
-    <div class="hint" style="margin-top:.4rem;">
-      <strong>Batch jobs can't answer prompts:</strong> set
-      <strong>Stale evaluation folders = clean</strong> (or run with
-      <code>--clean</code>) so old <code>eval_*</code> folders are removed
-      automatically with no terminal prompt. Use <code>--keep</code> to keep
-      them.
+
+    <p style="margin:.4rem 0 .1rem;font-size:.78rem;color:var(--text2);">
+      c. Submit the SLURM job</p>
+    <div style="position:relative;margin:.2rem 0 .7rem;">
+      <button onclick="copyHpcRun(this,'hpcRunSubmit')"
+        style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+        border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+        border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+      <pre id="hpcRunSubmit" style="background:var(--dark,#1a1a2e);color:#e2e8f0;
+        border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+        font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+    </div>
+
+    <div class="hint" style="margin-top:.3rem;">
+      Together these copy your code + inputs + the <code>.sif</code> under one
+      <code>$HPC_BASE</code>, re-point every absolute path to the cluster, and submit the
+      job. The heavy GRQA / Copernicus processing is <strong>reused</strong> and the
+      &gt;1&nbsp;GB raw GRQA database is <strong>not</strong> copied.
     </div>
   </div>
 </details>
@@ -1396,6 +1468,7 @@ def generate_interactive_setup(
             report_stem=_calib_stem,
             observation_period=_obs_period,
             model_sim_period=_sim_period,
+            hpc_baked=_hpc_baked,
         ))
 
         H.append("</body></html>")
@@ -1454,9 +1527,9 @@ def _build_interactive_summary(
     <h2>Summary</h2>
     {rh.build_kpi_grid(kpis)}
     {rh.build_highlight_box(
-        "<strong>How to use:</strong> Configure calibration settings below, "
-        "then scroll to <em>Generated Script</em> at the bottom to download "
-        "a ready-to-run Python script.",
+        "<strong>How to use:</strong> Configure calibration settings using the "
+        "tabs, then use the <em>Let's run the calibration&#8230;</em> panel on the "
+        "right to save the script and run it locally or on HPC.",
         "info"
     )}
 </div>
@@ -1539,56 +1612,6 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
         </div>
     </div>
 
-    <!-- Theme: how the models are executed -->
-    <div class="card">
-        <h3>Model execution</h3>
-        <div class="form-row">
-            {rh.build_form_select(
-                "container_runtime", "Container runtime",
-                ["docker", "apptainer"], container_runtime_default,
-                "How to run the model: 'docker' (local Docker Desktop / "
-                "docker compose) or 'apptainer' (Singularity, typical on HPC "
-                "clusters). The Apptainer SIF / bind paths below apply only "
-                "when 'apptainer' is selected.")}
-            {rh.build_form_number(
-                "n_parallel", "Parallel model runs", 1, min_val=1, step=1,
-                hint="How many model evaluations to run concurrently during "
-                     "the sensitivity analysis (the runs are independent). "
-                     "Works for both Docker and Apptainer. DDS calibration is "
-                     "sequential by design, so this only speeds up the "
-                     "sensitivity stage. Auto-capped to fit container memory.")}
-        </div>
-        <div class="form-row">
-            {rh.build_form_select(
-                "clean_work_dir", "Stale evaluation folders",
-                ["prompt", "clean", "keep"], "prompt",
-                "What to do with leftover eval_* folders from a previous run "
-                "in the calibration work dir. 'prompt' asks at the terminal "
-                "(interactive only). 'clean' always deletes them first - use "
-                "this on HPC / batch jobs where you can't answer a prompt. "
-                "'keep' leaves them in place. (Resume runs never clean.)")}
-        </div>
-    </div>
-
-    <!-- Theme: HPC / Apptainer (optional) -->
-    <div class="card">
-        <h3>HPC / Apptainer <span style="font-weight:400;opacity:.7;">(optional)</span></h3>
-        <div class="form-row">
-            {rh.build_form_input(
-                "apptainer_sif_path",
-                "Apptainer SIF path (HPC)", "",
-                hint="Optional. Used by the results report's Apptainer / "
-                     "SLURM snippets and forwarded to ModelRunner when "
-                     "running on HPC. Leave blank to fall back to 'openwq.sif'.",
-                placeholder="e.g. /scratch/$USER/openwq.sif")}
-            {rh.build_form_input(
-                "apptainer_bind_path",
-                "Apptainer bind path (HPC)", "",
-                hint="Optional. Bind-mount root containing the config and "
-                     "outputs. Leave blank to derive from executable_path.",
-                placeholder="e.g. /scratch/$USER/openwq_root")}
-        </div>
-    </div>
     <div class="card" id="calibPeriodCard">
         <h3>Calibration / validation period</h3>
         <p class="hint" style="margin-top:0;">
@@ -1650,6 +1673,162 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
         <input type="hidden" id="calibration_period_end" value="">
         <input type="hidden" id="validation_period_start" value="">
         <input type="hidden" id="validation_period_end" value="">
+    </div>
+</div>
+"""
+
+
+def _build_interactive_execution_section(
+        container_runtime_default: str = "docker") -> str:
+    """Model-execution backend + HPC / Apptainer settings (own tab).
+
+    Moved out of the Settings tab so the execution choices live together.
+    The HPC card additionally exposes the SLURM directives that auto-fill a
+    SLURM job (sbatch) file: the file is assembled in JavaScript from these
+    fields plus the baked run-script path, shown as a live preview, and
+    written to disk with a Save button (no Copy button - it's a file).
+    """
+    return f"""
+<div class="section" id="execution">
+    <h2>Model execution</h2>
+
+    <!-- Theme: how the models are executed -->
+    <div class="card">
+        <h3>Execution backend</h3>
+        <div class="form-row">
+            {rh.build_form_select(
+                "container_runtime", "Container runtime",
+                ["docker", "apptainer"], container_runtime_default,
+                "How to run the model: 'docker' (local Docker Desktop / "
+                "docker compose) or 'apptainer' (Singularity, typical on HPC "
+                "clusters). The Apptainer SIF / bind paths and the SLURM job "
+                "below apply only when 'apptainer' is selected.")}
+            {rh.build_form_number(
+                "n_parallel", "Parallel model runs", 1, min_val=1, step=1,
+                hint="How many model evaluations to run concurrently during "
+                     "the sensitivity analysis (the runs are independent). "
+                     "Works for both Docker and Apptainer. DDS calibration is "
+                     "sequential by design, so this only speeds up the "
+                     "sensitivity stage. Auto-capped to fit container memory.")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_select(
+                "clean_work_dir", "Stale evaluation folders",
+                ["prompt", "clean", "keep"], "prompt",
+                "What to do with leftover eval_* folders from a previous run "
+                "in the calibration work dir. 'prompt' asks at the terminal "
+                "(interactive only). 'clean' always deletes them first - use "
+                "this on HPC / batch jobs where you can't answer a prompt. "
+                "'keep' leaves them in place. (Resume runs never clean.)")}
+        </div>
+    </div>
+
+    <!-- Theme: HPC / Apptainer (optional) -->
+    <div class="card" id="hpcCard">
+        <h3>if running on HPC / Apptainer</h3>
+        <p class="hint" style="margin-top:0;">
+            Fill these in to run the calibration on an HPC cluster with
+            Apptainer / Singularity. You won't edit any code: the values below
+            are dropped straight into the ready-to-run <strong>SLURM job file</strong>
+            and <strong>copy&nbsp;&amp;&nbsp;run</strong> block shown in the
+            <em>Run the calibration on HPC</em> section of the script pane &mdash;
+            just save the <code>.sbatch</code> and paste the block into a terminal.
+        </p>
+
+        <h4 style="margin:.6rem 0 .3rem;font-size:.92rem;color:var(--text);">
+            Your HPC connection</h4>
+        <div class="form-row">
+            {rh.build_form_input(
+                "hpc_user", "HPC username", "",
+                hint="Your login name on the cluster (the part before @).",
+                placeholder="your_username")}
+            {rh.build_form_input(
+                "hpc_host", "HPC hostname", "",
+                hint="The cluster you ssh into.",
+                placeholder="hpc.your-institution.edu")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_input(
+                "hpc_base", "HPC working directory", "/scratch/$USER/openwq_cal",
+                hint="A writable dir on the cluster. Everything is copied "
+                     "under here and all paths re-point to it automatically.",
+                placeholder="/scratch/$USER/openwq_cal")}
+            {rh.build_form_input(
+                "sif_local", "Local Apptainer image (.sif)", "",
+                hint="Path on THIS machine to your built openwq .sif - it is "
+                     "uploaded to the HPC working dir as openwq.sif.",
+                placeholder="/path/to/openwq.sif")}
+        </div>
+
+        <h4 style="margin:1rem 0 .3rem;font-size:.92rem;color:var(--text);">
+            Apptainer paths on the HPC
+            <span style="font-weight:400;opacity:.7;">(optional)</span></h4>
+        <div class="form-row">
+            {rh.build_form_input(
+                "apptainer_sif_path",
+                "Apptainer SIF path (HPC)", "",
+                hint="Optional. Forwarded to ModelRunner. The copy&run block "
+                     "sets this to the uploaded image automatically; leave "
+                     "blank unless running Apptainer locally.",
+                placeholder="e.g. /scratch/$USER/openwq.sif")}
+            {rh.build_form_input(
+                "apptainer_bind_path",
+                "Apptainer bind path (HPC)", "",
+                hint="Optional. Bind-mount root containing the config and "
+                     "outputs. Leave blank to derive from executable_path.",
+                placeholder="e.g. /scratch/$USER/openwq_root")}
+        </div>
+
+        <h4 style="margin:1rem 0 .3rem;font-size:.92rem;color:var(--text);">
+            SLURM job file (sbatch)</h4>
+        <p class="hint" style="margin-top:0;">
+            These populate the <code>#SBATCH</code> directives in the job file.
+        </p>
+        <div class="form-row">
+            {rh.build_form_input(
+                "slurm_job_name", "Job name", "openwq_calib",
+                hint="SLURM --job-name (also names the .out log).")}
+            {rh.build_form_input(
+                "slurm_account", "Account / allocation", "",
+                hint="SLURM --account. Your compute allocation (required on "
+                     "most clusters, e.g. Compute Canada / Slurm fairshare).",
+                placeholder="e.g. def-yourpi")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_input(
+                "slurm_partition", "Partition / queue", "",
+                hint="SLURM --partition. Leave blank to use the cluster "
+                     "default queue.",
+                placeholder="e.g. batch / cpu2023")}
+            {rh.build_form_input(
+                "slurm_time", "Wall time (HH:MM:SS)", "48:00:00",
+                hint="SLURM --time. Max run time before the job is killed.",
+                placeholder="48:00:00")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_number(
+                "slurm_cpus", "CPUs per task", 4, min_val=1, step=1,
+                hint="SLURM --cpus-per-task. Should be >= parallel model "
+                     "runs.")}
+            {rh.build_form_input(
+                "slurm_mem", "Memory", "16G",
+                hint="SLURM --mem (per node). Include the unit, e.g. 16G.",
+                placeholder="16G")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_input(
+                "slurm_modules",
+                "Module load / env activation (optional)", "",
+                hint="Command(s) run on the compute node to make Python + "
+                     "Apptainer available. Leave blank to insert a commented "
+                     "placeholder you can edit later.",
+                placeholder="module load apptainer python")}
+        </div>
+        <p class="hint" style="margin:.6rem 0 0;">
+            &#10142;&nbsp;The filled-in <code>.sbatch</code> file and the
+            copy&nbsp;&amp;&nbsp;run terminal block are in the
+            <em>Run the calibration on HPC</em> section of the script pane.
+        </p>
     </div>
 </div>
 """
@@ -2290,7 +2469,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                           report_stem="calibration",
                           calib_lib_dir="",
                           observation_period=None,
-                          model_sim_period=None):
+                          model_sim_period=None,
+                          hpc_baked=None):
     """Build the JavaScript for the interactive setup report."""
     import json as json_mod
     # Absolute path to the openWQ "3_Calibration" folder (the parent of
@@ -2321,6 +2501,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     cwd = json_mod.dumps(calibration_work_dir)
     rstem = json_mod.dumps(report_stem or "calibration")
     clibdir = json_mod.dumps(calib_lib_dir)
+    hpc_json = json_mod.dumps(hpc_baked or {})
     obs_period_json = json_mod.dumps(_obs_period)
     sim_period_json = json_mod.dumps(_sim_period)
 
@@ -2336,6 +2517,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   var CALIBRATION_WORK_DIR = ''' + cwd + r''';
   var REPORT_STEM = ''' + rstem + r''';
   var CALIB_LIB_DIR = ''' + clibdir + r''';
+  var HPC = ''' + hpc_json + r''';
   var PARAMS = ''' + params_json + r''';
   var OBS_PERIOD = ''' + obs_period_json + r''';
   var SIM_PERIOD = ''' + sim_period_json + r''';
@@ -2420,6 +2602,25 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.apptainer_sif_path = _sifEl ? (_sifEl.value.trim() || null) : null;
     var _bindEl = document.getElementById('apptainer_bind_path');
     s.apptainer_bind_path = _bindEl ? (_bindEl.value.trim() || null) : null;
+    // SLURM directives -> auto-filled sbatch (Execution tab). All optional;
+    // guarded so older/customised reports without these fields still work.
+    function _gv(id, dflt) {
+      var el = document.getElementById(id);
+      return (el && el.value != null && String(el.value).trim() !== '')
+             ? String(el.value).trim() : dflt;
+    }
+    s.slurm_job_name  = _gv('slurm_job_name', 'openwq_calib');
+    s.slurm_account   = _gv('slurm_account', '');
+    s.slurm_partition = _gv('slurm_partition', '');
+    s.slurm_time      = _gv('slurm_time', '48:00:00');
+    s.slurm_cpus      = parseInt(_gv('slurm_cpus', '4')) || 4;
+    s.slurm_mem       = _gv('slurm_mem', '16G');
+    s.slurm_modules   = _gv('slurm_modules', '');
+    // HPC connection (drives the pre-filled copy & run block).
+    s.hpc_user  = _gv('hpc_user', 'your_username');
+    s.hpc_host  = _gv('hpc_host', 'hpc.your-institution.edu');
+    s.hpc_base  = _gv('hpc_base', '/scratch/$USER/openwq_cal');
+    s.sif_local = _gv('sif_local', '/path/to/openwq.sif');
 
     var speciesCbs = document.querySelectorAll('.species-cb');
     var species = [];
@@ -2819,34 +3020,54 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-    // Order matters: comments first, then strings, then keywords/numbers
-    // Comments
-    escaped = escaped.replace(/(#[^\n]*)/g, '<span class="syn-comment">$1</span>');
-    // Single/double quoted strings (simple, non-nested)
-    escaped = escaped.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, function(m) {
-      if (m.indexOf('syn-') >= 0) return m;
-      return '<span class="syn-str">' + m + '</span>';
-    });
+    // Each highlighting pass below wraps tokens in <span class="syn-...">.
+    // The trouble: the *next* pass would then re-scan that markup and, e.g.,
+    // the keyword pass would match the Python keyword "class" *inside* the
+    // class="syn-..." attribute and mangle the tag.  To avoid this entirely
+    // we replace every highlighted token with a placeholder made of
+    // Private-Use-Area characters (which no later regex can match: they are
+    // not \w, not digits, not [a-zA-Z_]) and restore the real spans only at
+    // the very end.
+    var stash = [];
+    // SENT = Private-Use delimiter; built via fromCharCode so this
+    // source file stays pure ASCII (no invisible characters).
+    var SENT = String.fromCharCode(0xE000);
+    function stub(cls, text) {
+      var i = stash.length;
+      stash.push('<span class="' + cls + '">' + text + '</span>');
+      var hi = 0xE001 + Math.floor(i / 6399);
+      var lo = 0xE001 + (i % 6399);
+      return SENT + String.fromCharCode(hi) + String.fromCharCode(lo) + SENT;
+    }
+    // Comments and strings together, left-to-right, so a '#' inside a string
+    // is not mistaken for a comment (and a quote inside a comment is ignored).
+    escaped = escaped.replace(
+      /(#[^\n]*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,
+      function(m, comment, str) {
+        return comment ? stub('syn-comment', comment) : stub('syn-str', str);
+      });
     // Constants: True, False, None
-    escaped = escaped.replace(/\b(True|False|None)\b/g, '<span class="syn-const">$1</span>');
+    escaped = escaped.replace(/\b(True|False|None)\b/g,
+      function(m) { return stub('syn-const', m); });
     // Keywords
-    escaped = escaped.replace(/\b(import|from|def|if|elif|else|return|as|for|in|not|and|or|class|try|except|finally|with|raise|pass|break|continue|while|yield|lambda|global|nonlocal|assert|del|is)\b/g, function(m) {
-      // Avoid re-highlighting inside already-highlighted spans
-      return '<span class="syn-kw">' + m + '</span>';
-    });
+    escaped = escaped.replace(/\b(import|from|def|if|elif|else|return|as|for|in|not|and|or|class|try|except|finally|with|raise|pass|break|continue|while|yield|lambda|global|nonlocal|assert|del|is)\b/g,
+      function(m) { return stub('syn-kw', m); });
     // Numbers (integers and floats)
-    escaped = escaped.replace(/\b(\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g, function(m, num, offset, str) {
-      // Avoid highlighting numbers inside already-highlighted spans
-      var before = str.substring(Math.max(0, offset - 20), offset);
-      if (before.indexOf('syn-') >= 0 && before.lastIndexOf('>') < before.lastIndexOf('syn-')) return m;
-      return '<span class="syn-num">' + num + '</span>';
-    });
+    escaped = escaped.replace(/\b(\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g,
+      function(m) { return stub('syn-num', m); });
     // Function calls
     escaped = escaped.replace(/\b([a-zA-Z_]\w*)\s*\(/g, function(m, fn) {
       if (['if','for','while','return','and','or','not','in','is','import','from','def','class','print'].indexOf(fn) >= 0) return m;
-      if (m.indexOf('syn-') >= 0) return m;
-      return '<span class="syn-fn">' + fn + '</span>(';
+      return stub('syn-fn', fn) + '(';
     });
+    // Restore the real <span> markup.
+    var RANGE = '[' + String.fromCharCode(0xE001) + '-' +
+                String.fromCharCode(0xF8FF) + ']';
+    var restoreRe = new RegExp(SENT + '(' + RANGE + ')(' + RANGE + ')' + SENT, 'g');
+    escaped = escaped.replace(restoreRe,
+      function(m, a, b) {
+        return stash[(a.charCodeAt(0) - 0xE001) * 6399 + (b.charCodeAt(0) - 0xE001)];
+      });
     return escaped;
   }
 
@@ -3014,8 +3235,181 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
         state.species.length + ' species \u2022 ' +
         state.algorithm + ' \u2022 ' + state.objective_function;
     }
+    updateSbatch(state);
+    updateHpcRun(state);
     updateProgress();
   }
+
+  // \u2500\u2500 SLURM sbatch (Execution tab) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Assemble the SLURM job file from the Execution-tab fields + the baked
+  // run-script path.  Kept consistent with the copy & submit snippets:
+  // it is parameterised by HPC_BASE (passed at submit time) and runs the
+  // generated calibration script with --clean.
+  function sbatchName() {
+    return (REPORT_STEM ? REPORT_STEM : 'calibration') + '.sbatch';
+  }
+  function buildSbatch(s) {
+    var runLocal = CALIB_LIB_DIR + '/' +
+                   (REPORT_STEM ? REPORT_STEM : 'calibration') + '_run.py';
+    var name = sbatchName();
+    var L = [];
+    L.push('#!/bin/bash');
+    L.push('#SBATCH --job-name=' + (s.slurm_job_name || 'openwq_calib'));
+    if (s.slurm_account)   L.push('#SBATCH --account=' + s.slurm_account);
+    else L.push('#SBATCH --account=def-YOUR_ACCOUNT      # <-- EDIT: your SLURM allocation');
+    if (s.slurm_partition) L.push('#SBATCH --partition=' + s.slurm_partition);
+    L.push('#SBATCH --time=' + (s.slurm_time || '48:00:00'));
+    L.push('#SBATCH --cpus-per-task=' + (s.slurm_cpus || 4) + '               # >= n_parallel');
+    L.push('#SBATCH --mem=' + (s.slurm_mem || '16G'));
+    L.push('#SBATCH --output=' + (s.slurm_job_name || 'openwq_calib') + '_%j.out');
+    L.push('set -euo pipefail');
+    L.push(': "${HPC_BASE:?Pass HPC_BASE, e.g. sbatch --export=ALL,HPC_BASE=/scratch/$USER/openwq_cal ' + name + '}"');
+    L.push('');
+    if (s.slurm_modules) {
+      L.push('# Make Python + Apptainer available on the compute node:');
+      L.push(s.slurm_modules);
+    } else {
+      L.push('# --- EDIT: make Python + Apptainer available on the compute node ---');
+      L.push('# module load apptainer python      # or: source ~/miniconda3/bin/activate openwq');
+    }
+    L.push('');
+    L.push('RUN="$HPC_BASE' + runLocal + '"');
+    L.push('cd "$(dirname "$RUN")"');
+    L.push('python "$(basename "$RUN")" --clean');
+    L.push('');
+    return L.join('\n');
+  }
+  function updateSbatch(state) {
+    var pre = document.getElementById('sbatchPreview');
+    if (!pre) return;            // Execution tab not present
+    var s = state || collectFormState();
+    pre.textContent = buildSbatch(s);
+    var nm = document.getElementById('sbatchName');
+    if (nm) nm.textContent = '\u2014 ' + sbatchName();
+  }
+
+  // Save the sbatch to disk (Save-As dialog when available).  Deliberately
+  // a SAVE (not Copy): it's a file the copy snippet then rsyncs to the HPC.
+  window.downloadSbatch = function() {
+    var s = collectFormState();
+    var text = buildSbatch(s);
+    var blob = new Blob([text], {type: 'text/x-sh'});
+    var btn = document.getElementById('saveSbatchBtn');
+    var sugName = sbatchName();
+    function onSaved() {
+      if (btn) {
+        btn.textContent = '\u2713 Saved!';
+        setTimeout(function(){ btn.textContent = 'Save .sbatch'; }, 2000);
+      }
+    }
+    if (window.showSaveFilePicker) {
+      window.showSaveFilePicker({
+        suggestedName: sugName,
+        types: [{description: 'SLURM job file',
+                 accept: {'text/x-sh': ['.sbatch', '.sh']}}],
+      }).then(function(handle) {
+        return handle.createWritable().then(function(writable) {
+          return writable.write(blob).then(function() { return writable.close(); });
+        });
+      }).then(onSaved).catch(function(err) {
+        if (err.name !== 'AbortError') console.error(err);
+      });
+    } else {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = sugName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      onSaved();
+    }
+  };
+
+  // ── HPC copy & run blocks (Run-on-HPC section) ─────────────────────────
+  // Three independently-pasteable blocks, each pre-filled from the
+  // Execution-tab HPC fields + the paths baked into HPC.  Each block restates
+  // the HPC_USER/HOST/BASE vars so it works on its own (a fresh terminal),
+  // and they run in order: (a) copy, (b) re-point paths, (c) submit.
+  function _hpcVars(s) {
+    return [
+      'HPC_USER=' + (s.hpc_user || 'your_username'),
+      'HPC_HOST=' + (s.hpc_host || 'hpc.your-institution.edu'),
+      'HPC_BASE=' + (s.hpc_base || '/scratch/$USER/openwq_cal'),
+    ];
+  }
+  function buildHpcCopy(s) {
+    var roots = (HPC && HPC.src_roots) || [];
+    var L = _hpcVars(s);
+    L.push('SIF_LOCAL=' + (s.sif_local || '/path/to/openwq.sif'));
+    L.push('');
+    L.push('# Copy code, inputs, the .sif image and the SLURM job to the HPC.');
+    L.push('# rsync -R keeps the local layout; eval_*/results + old HDF5 are skipped.');
+    L.push('ssh "$HPC_USER@$HPC_HOST" "mkdir -p $HPC_BASE"');
+    L.push('rsync -avzR \\');
+    L.push("  --exclude '0_*_calibration/evaluations' \\");
+    L.push("  --exclude '0_*_calibration/results' \\");
+    L.push("  --exclude 'openwq_out/HDF5' \\");
+    roots.forEach(function(r){ L.push('  "' + r + '" \\'); });
+    L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/"');
+    L.push('rsync -avz "$SIF_LOCAL" "$HPC_USER@$HPC_HOST:$HPC_BASE/openwq.sif"');
+    if (HPC && HPC.sbatch_local)
+      L.push('rsync -avz "' + HPC.sbatch_local + '" "$HPC_USER@$HPC_HOST:$HPC_BASE/"');
+    return L.join('\n');
+  }
+  function buildHpcRemap(s) {
+    var L = _hpcVars(s);
+    L.push('');
+    if (HPC && HPC.remap_ok) {
+      L.push('# Re-point the absolute paths to their HPC copies (runs once).');
+      L.push('ssh "$HPC_USER@$HPC_HOST" "HPC_BASE=\'$HPC_BASE\' bash -s" <<\'EOF\'');
+      L.push('set -euo pipefail');
+      L.push('ROOT="' + (HPC.common_root || '') + '"');
+      L.push('RUN="$HPC_BASE' + (HPC.run_local || '') + '"');
+      L.push('MC="$HPC_BASE' + (HPC.mc_path || '') + '"');
+      L.push('if [ ! -f "$HPC_BASE/.owq_remapped" ]; then');
+      L.push('  sed -i "s#$ROOT#$HPC_BASE$ROOT#g" "$RUN" "$MC"');
+      L.push('  sed -i "s#^apptainer_sif_path = .*#apptainer_sif_path = \\"$HPC_BASE/openwq.sif\\"#" "$RUN"');
+      L.push('  sed -i "s#^apptainer_bind_path = .*#apptainer_bind_path = \\"$HPC_BASE$ROOT\\"#" "$RUN"');
+      L.push('  sed -i "s#^container_runtime = .*#container_runtime = \\"apptainer\\"#" "$RUN"');
+      L.push('  touch "$HPC_BASE/.owq_remapped"');
+      L.push('else');
+      L.push('  echo "Already re-pointed (rm $HPC_BASE/.owq_remapped to redo)."');
+      L.push('fi');
+      L.push('EOF');
+    } else {
+      L.push('# NOTE: your inputs span different drives, so paths cannot be re-pointed');
+      L.push('# automatically. After copying, edit the absolute paths in your run script');
+      L.push('# + model config to their $HPC_BASE locations by hand.');
+    }
+    return L.join('\n');
+  }
+  function buildHpcSubmit(s) {
+    var L = _hpcVars(s);
+    L.push('');
+    L.push('# Submit the SLURM job.');
+    L.push('ssh "$HPC_USER@$HPC_HOST" "cd $HPC_BASE && sbatch --export=ALL,HPC_BASE=$HPC_BASE $HPC_BASE/' +
+           ((HPC && HPC.sbatch_name) || 'calibration.sbatch') + '"');
+    L.push('');
+    L.push('# Monitor:  ssh "$HPC_USER@$HPC_HOST" "squeue -u $HPC_USER"');
+    if (HPC && HPC.work_dir)
+      L.push('# Results:  rsync -avz "$HPC_USER@$HPC_HOST:$HPC_BASE' + HPC.work_dir + '/" ./hpc_results/');
+    return L.join('\n');
+  }
+  function updateHpcRun(state) {
+    var s = state || collectFormState();
+    var c = document.getElementById('hpcRunCopy');   if (c) c.textContent = buildHpcCopy(s);
+    var r = document.getElementById('hpcRunRemap');  if (r) r.textContent = buildHpcRemap(s);
+    var b = document.getElementById('hpcRunSubmit'); if (b) b.textContent = buildHpcSubmit(s);
+  }
+  window.copyHpcRun = function(btn, targetId) {
+    var pre = document.getElementById(targetId);
+    if (!pre) return;
+    navigator.clipboard.writeText(pre.textContent);
+    if (btn) {
+      var t = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(function(){ btn.textContent = t; }, 1500);
+    }
+  };
 
   // Save script — uses Save-As dialog when available.
   // The suggested filename follows the originating template stem
