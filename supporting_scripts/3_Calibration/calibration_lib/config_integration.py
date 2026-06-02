@@ -481,7 +481,8 @@ def get_observation_period(model_config: Dict[str, Any],
     import pandas as pd
     _log = log or (lambda *a, **k: None)
     source = model_config.get("observation_data_source", "skip")
-    dd = None   # DataFrame with columns: datetime, species
+    dd = None      # primary-only obs → slider range + in-window count
+    dd_all = None  # ALL obs (primary + secondary) → per-species coverage lanes
 
     # 1) Prefer the already-prepared objective CSV in the calibration work
     #    dir — it carries the ``is_primary`` flag, so the slider's range and
@@ -496,14 +497,22 @@ def get_observation_period(model_config: Dict[str, Any],
             if os.path.isfile(_prep):
                 pf = pd.read_csv(_prep)
                 if 'datetime' in pf.columns and 'species' in pf.columns:
-                    if 'is_primary' in pf.columns:
-                        pf = pf[pf['is_primary'].fillna(True).astype(bool)]
-                    dd = pd.DataFrame({
-                        'datetime': pd.to_datetime(pf['datetime'], errors='coerce'),
+                    _base = pd.DataFrame({
+                        'datetime': pd.to_datetime(pf['datetime'],
+                                                   errors='coerce'),
                         'species': pf['species'].astype(str),
+                        'is_primary': (
+                            pf['is_primary'].fillna(True).astype(bool)
+                            if 'is_primary' in pf.columns else True),
                     }).dropna(subset=['datetime'])
-                    if len(dd) == 0:
-                        dd = None
+                    if len(_base):
+                        # ALL obs → coverage lanes (so secondary-only species
+                        # like NH4 still show up); primary subset → range/count.
+                        dd_all = _base[['datetime', 'species']].copy()
+                        _prim = _base[_base['is_primary']]
+                        dd = _prim[['datetime', 'species']].copy()
+                        if len(dd) == 0:
+                            dd = None
     except Exception as exc:
         _log(f"Could not read prepared observation CSV: {exc}")
         dd = None
@@ -558,24 +567,56 @@ def get_observation_period(model_config: Dict[str, Any],
     if dd is None or len(dd) == 0:
         return None
 
+    # Raw fallback sources (GRQA / user CSV) carry no is_primary flag, so the
+    # "all obs" coverage is the same data as the primary set there.
+    if dd_all is None:
+        dd_all = dd
+
     dates = dd['datetime']
-    # Epoch-ms timestamps grouped by species → powers the slider's live
-    # "observations in window" count.  Cap per species to keep the embedded
-    # payload small (the count stays representative for window selection).
+    # Epoch-ms timestamps grouped by species. Cap per species to keep the
+    # embedded payload small (counts stay representative for the window).
     _MAX_PER_SP = 6000
-    dates_by_species: Dict[str, list] = {}
-    for sp, grp in dd.groupby('species'):
-        ms = (grp['datetime'].astype('int64') // 1_000_000).tolist()
-        if len(ms) > _MAX_PER_SP:
-            step = len(ms) // _MAX_PER_SP + 1
-            ms = ms[::step]
-        dates_by_species[str(sp)] = ms
+
+    def _by_species(frame):
+        out: Dict[str, list] = {}
+        for sp, grp in frame.groupby('species'):
+            ms = (grp['datetime'].astype('int64') // 1_000_000).tolist()
+            if len(ms) > _MAX_PER_SP:
+                step = len(ms) // _MAX_PER_SP + 1
+                ms = ms[::step]
+            out[str(sp)] = ms
+        return out
+
+    # Primary-only → drives the in-window obs count (what the metric scores).
+    dates_by_species = _by_species(dd)
+    # All obs (primary + secondary) → per-species coverage lanes, so a species
+    # with only secondary obs (e.g. NH4 here) still appears under the slider.
+    dates_by_species_all = _by_species(dd_all)
+
+    # TRUE per-species totals + full date range (computed on the UNCAPPED
+    # frames). The tick arrays above are subsampled for very large datasets,
+    # so the coverage-lane LABELS must read their counts/ranges from here to
+    # stay correct for ANY number of observations.
+    _prim_n: Dict[str, int] = {
+        str(sp): int(len(grp)) for sp, grp in dd.groupby('species')
+    }
+    species_summary: Dict[str, Dict[str, Any]] = {}
+    for sp, grp in dd_all.groupby('species'):
+        d = grp['datetime']
+        species_summary[str(sp)] = {
+            "n": int(len(grp)),
+            "n_primary": _prim_n.get(str(sp), 0),
+            "start": int(d.min().value // 1_000_000),
+            "end": int(d.max().value // 1_000_000),
+        }
 
     return {
         "obs_start": dates.min().strftime('%Y-%m-%d %H:%M'),
         "obs_end": dates.max().strftime('%Y-%m-%d %H:%M'),
         "n_obs": int(len(dates)),
         "dates_by_species": dates_by_species,
+        "dates_by_species_all": dates_by_species_all,
+        "species_summary": species_summary,
     }
 
 
