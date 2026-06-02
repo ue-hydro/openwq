@@ -791,6 +791,7 @@ def generate_interactive_setup(
     module_selections: Optional[Dict[str, Any]] = None,
     species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
     ss_species_with_loads: Optional[set] = None,
+    hpc_settings_path: Optional[str] = None,
 ) -> Optional[str]:
     """
     Generate an **interactive** calibration setup HTML report.
@@ -1023,9 +1024,13 @@ def generate_interactive_setup(
         # ── Tab: Execution ──
         # Model-execution backend + HPC/Apptainer settings live here (moved
         # out of Settings).  The HPC card also auto-fills a SLURM sbatch file.
+        # HPC fields are pre-filled from hpc_settings.json — the user-provided
+        # path (their own copy) if given, else the shipped template.
+        _hpc_defaults = _load_hpc_settings(hpc_settings_path)
         H.append('<div class="tab-panel" data-tab="execution">')
         H.append(_build_interactive_execution_section(
-            container_config.get("container_runtime", "docker")))
+            container_config.get("container_runtime", "docker"),
+            hpc_defaults=_hpc_defaults))
         H.append('</div>')
 
         H.append('</div>')  # config-pane
@@ -1686,8 +1691,35 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
 """
 
 
+def _load_hpc_settings(path: Optional[str] = None) -> Dict[str, Any]:
+    """Load HPC settings JSON so the HPC fields come pre-filled.
+
+    Tries, in order: the explicit ``path`` (a user's own copy, set in the
+    calibration template), then the shipped ``hpc_settings.json`` next to the
+    run-script templates.  Returns ``{}`` if none readable.  Keys starting with
+    ``_`` (e.g. ``_README``) are ignored.
+    """
+    _cal_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _candidates = []
+    if path:
+        _candidates.append(path)
+    _candidates.append(os.path.join(_cal_dir, "hpc_settings.json"))
+    for _p in _candidates:
+        try:
+            if _p and os.path.isfile(_p):
+                with open(_p, encoding="utf-8") as _f:
+                    _d = json.load(_f)
+                if isinstance(_d, dict):
+                    return {k: v for k, v in _d.items()
+                            if not str(k).startswith("_")}
+        except Exception:
+            continue
+    return {}
+
+
 def _build_interactive_execution_section(
-        container_runtime_default: str = "docker") -> str:
+        container_runtime_default: str = "docker",
+        hpc_defaults: Optional[Dict[str, Any]] = None) -> str:
     """Model-execution backend + HPC / Apptainer settings (own tab).
 
     Moved out of the Settings tab so the execution choices live together.
@@ -1695,7 +1727,23 @@ def _build_interactive_execution_section(
     SLURM job (sbatch) file: the file is assembled in JavaScript from these
     fields plus the baked run-script path, shown as a live preview, and
     written to disk with a Save button (no Copy button - it's a file).
+
+    The HPC fields are pre-filled from ``hpc_settings.json`` (shipped next to
+    the run-script templates) when present; the user can still edit them.
     """
+    if hpc_defaults is None:
+        hpc_defaults = _load_hpc_settings()
+
+    def _hd(key, fallback):
+        """String default for an HPC field: JSON value if set, else fallback."""
+        v = hpc_defaults.get(key)
+        return fallback if v is None or v == "" else str(v)
+
+    try:
+        _slurm_cpus_default = int(hpc_defaults.get("slurm_cpus") or 4)
+    except (TypeError, ValueError):
+        _slurm_cpus_default = 4
+
     return f"""
 <div class="section" id="execution">
     <h2>Model execution</h2>
@@ -1747,22 +1795,23 @@ def _build_interactive_execution_section(
             Your HPC connection</h4>
         <div class="form-row">
             {rh.build_form_input(
-                "hpc_user", "HPC username", "",
+                "hpc_user", "HPC username", _hd("hpc_user", ""),
                 hint="Your login name on the cluster (the part before @).",
                 placeholder="your_username")}
             {rh.build_form_input(
-                "hpc_host", "HPC hostname", "",
+                "hpc_host", "HPC hostname", _hd("hpc_host", ""),
                 hint="The cluster you ssh into.",
                 placeholder="hpc.your-institution.edu")}
         </div>
         <div class="form-row">
             {rh.build_form_input(
-                "hpc_base", "HPC working directory", "/scratch/$USER/openwq_cal",
+                "hpc_base", "HPC working directory",
+                _hd("hpc_base", "/scratch/$USER/openwq_cal"),
                 hint="A writable dir on the cluster. Everything is copied "
                      "under here and all paths re-point to it automatically.",
                 placeholder="/scratch/$USER/openwq_cal")}
             {rh.build_form_input(
-                "sif_local", "Local Apptainer image (.sif)", "",
+                "sif_local", "Local Apptainer image (.sif)", _hd("sif_local", ""),
                 hint="Path on THIS machine to your built openwq .sif. The "
                      "copy&run block uploads it to the HPC working dir as "
                      "openwq.sif and points the model at it automatically.",
@@ -1776,39 +1825,40 @@ def _build_interactive_execution_section(
         </p>
         <div class="form-row">
             {rh.build_form_input(
-                "slurm_job_name", "Job name", "openwq_calib",
+                "slurm_job_name", "Job name", _hd("slurm_job_name", "openwq_calib"),
                 hint="SLURM --job-name (also names the .out log).")}
             {rh.build_form_input(
-                "slurm_account", "Account / allocation", "",
+                "slurm_account", "Account / allocation", _hd("slurm_account", ""),
                 hint="SLURM --account. Your compute allocation (required on "
                      "most clusters, e.g. Compute Canada / Slurm fairshare).",
                 placeholder="e.g. def-yourpi")}
         </div>
         <div class="form-row">
             {rh.build_form_input(
-                "slurm_partition", "Partition / queue", "",
+                "slurm_partition", "Partition / queue", _hd("slurm_partition", ""),
                 hint="SLURM --partition. Leave blank to use the cluster "
                      "default queue.",
                 placeholder="e.g. batch / cpu2023")}
             {rh.build_form_input(
-                "slurm_time", "Wall time (HH:MM:SS)", "48:00:00",
+                "slurm_time", "Wall time (HH:MM:SS)", _hd("slurm_time", "48:00:00"),
                 hint="SLURM --time. Max run time before the job is killed.",
                 placeholder="48:00:00")}
         </div>
         <div class="form-row">
             {rh.build_form_number(
-                "slurm_cpus", "CPUs per task", 4, min_val=1, step=1,
+                "slurm_cpus", "CPUs per task", _slurm_cpus_default,
+                min_val=1, step=1,
                 hint="SLURM --cpus-per-task. Should be >= parallel model "
                      "runs.")}
             {rh.build_form_input(
-                "slurm_mem", "Memory", "16G",
+                "slurm_mem", "Memory", _hd("slurm_mem", "16G"),
                 hint="SLURM --mem (per node). Include the unit, e.g. 16G.",
                 placeholder="16G")}
         </div>
         <div class="form-row">
             {rh.build_form_input(
                 "slurm_modules",
-                "Module load / env activation (optional)", "",
+                "Module load / env activation (optional)", _hd("slurm_modules", ""),
                 hint="Command(s) run on the compute node to make Python + "
                      "Apptainer available. Leave blank to insert a commented "
                      "placeholder you can edit later.",
