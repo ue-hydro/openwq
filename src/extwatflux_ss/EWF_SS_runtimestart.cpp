@@ -309,10 +309,8 @@ void OpenWQ_extwatflux_ss::CheckApply_EWF_h5(
     // Loop over all requests
     for (unsigned int reqi = 0; reqi < num_ewfh5_requests; reqi++){
 
-        const unsigned long long num_chems = 
+        const unsigned long long num_chems =
             (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_data)[reqi].size();
-        const unsigned long long num_timeStamps = 
-            (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_time)[reqi].size();
 
         /* ########################################
         // OPTIMIZED #11: Find timestamp at or above current simTime using binary search
@@ -902,7 +900,7 @@ void OpenWQ_extwatflux_ss::UpdateAllElemTimeIncremts(
             // Try DD increments
             const int DD_max = OpenWQ_utils.getNumberOfDaysInMonthYear(YYYY_json, MM_json);
             if (all_DD_flag){
-                while (jsonTime < simTime && (DD_json + increm3) < DD_max){
+                while (jsonTime < simTime && (DD_json + (int)increm3) < DD_max){
                     increm3++;
                     jsonTime = OpenWQ_units.convertTime_ints2time_t(
                         OpenWQ_wqconfig,

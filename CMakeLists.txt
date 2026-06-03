@@ -49,13 +49,13 @@ Project(OpenWQ)
 #####
 
 # A) Set Compilation target:
-# optA1) openwq -> compile standalone using main
-# optA2) crhm_openwq -> compile with crhm using hydrolink
-# optA3) summa_openwq -> compile with summa using hydrolink
-# optA4) mizuroute_openwq -> compile with mizuRoute using hydrolink
-# optA5) fluxos_openwq -> compile with fluxos using hydrolink
+# optA1) crhm_openwq -> compile with crhm using hydrolink
+# optA2) summa_openwq -> compile with summa using hydrolink
+# optA3) mizuroute_openwq -> compile with mizuRoute using hydrolink
+# optA4) mizuroute_lakes_openwq -> compile with mizuroute-lakes using hydrolink
 # optA5) mizuroute_lakes_cslm_openwq -> compile with mizuroute-cslm using hydrolink
-set(VALID_COMPILE_TARGETS "openwq" "crhm_openwq" "summa_openwq" 
+# optA6) fluxos_openwq -> compile with fluxos using hydrolink
+set(VALID_COMPILE_TARGETS "crhm_openwq" "summa_openwq"
                           "mizuroute_openwq" "mizuroute_lakes_openwq" "mizuroute_lakes_cslm_openwq" "fluxos_openwq")
 
 if(NOT HOST_MODEL_TARGET)
@@ -183,26 +183,11 @@ ELSEIF("${COMPILE_MODE}" STREQUAL "Release")
     SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops -Wall -pedantic ${OpenMP_CXX_FLAGS}")
 ENDIF()
 
-IF("${COMPILE_TARGET}" STREQUAL "openwq")
-    FIND_PACKAGE(SUNDIALS REQUIRED)
-    SET(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    FILE(GLOB SOURCES "main.cpp" ${OPENWQ_SOURCES})
-    ADD_EXECUTABLE(${exec_name} ${SOURCES})
-    TARGET_INCLUDE_DIRECTORIES(${exec_name} PUBLIC 
-                               ${OPENWQ_INCLUDES}
-                               ${HDF5_INCLUDE_DIRS}
-                               ${PHREEQRM_INCLUDE_DIR}
-                               ${ARMADILLO_INCLUDE_DIR})
-    TARGET_LINK_LIBRARIES(${exec_name} PUBLIC
-                          ${HDF5_C_LIBRARY_hdf5}
-                          ${ARMADILLO_LIBRARIES}
-                          SUNDIALS::cvode
-                          PhreeqcRM::PhreeqcRM)
 # ..................
 # IF TARGET = crhm_openwq
 # Only supports compilation in linux
 # ..................
-ELSEIF("${COMPILE_TARGET}" STREQUAL "crhm_openwq")
+IF("${COMPILE_TARGET}" STREQUAL "crhm_openwq")
 
     IF(UNIX AND NOT APPLE)
         MESSAGE(STATUS "** OpenWQ **: current platform is Linux")

@@ -152,8 +152,7 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// OUT
 	double mobilisedsed_EWF = 0.0; // mobilised suspended sediment from rainfall (g/m2)
 	double mobilisedsed_LE = 0.0;  // mobilised suspended sediment from surface runoff (g/m2)
-	double erodedsed = 0.0;        // <eroded (transported) sediment (kg/km2)
-	
+
 	// Check if cropcover + groundcover is equal to 1
 	// Otherwise, scale it back
 	std::string msg_string;
@@ -239,7 +238,7 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 
 	// Transport capacity of fast flowing water may limit transport of sediment
 	// transportfactor = MIN(1.,(flow / trans1)**trans2) 
-	transportfactor = std::min(1.0d, pow(wflux_s2r / trans1, trans2));
+	transportfactor = std::min(1.0, pow(wflux_s2r / trans1, trans2));
 
 	// #####################################
 	// Eroded sediment calculated from mobilised sediment, possibly limited by the transport capacity

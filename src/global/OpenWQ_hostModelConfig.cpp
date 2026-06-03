@@ -289,7 +289,7 @@ int OpenWQ_hostModelconfig::get_HydroComp_index(
     }
 
     // if not found, set to -1
-    if (icmp == get_num_HydroComp()){
+    if (icmp == (int)get_num_HydroComp()){
         icmp = -1;
     }
 
