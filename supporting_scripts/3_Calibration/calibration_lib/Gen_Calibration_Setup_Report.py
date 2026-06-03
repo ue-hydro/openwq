@@ -1440,6 +1440,31 @@ def generate_interactive_setup(
     directly. (Block <strong>a</strong> copies <em>from</em> your laptop, so it always
     runs locally.)</p>
 
+  <p style="margin:.5rem 0 .1rem;font-size:.78rem;">
+    0. Set up the Python environment on the HPC <strong>(one-time)</strong></p>
+  <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
+       background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
+       border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
+    <strong style="color:#1d4ed8;">&#8505; Do this once.</strong> The calibration
+    <strong>driver</strong> runs on the compute node and needs Python packages
+    (<code>numpy</code>, <code>scipy</code>, <code>pandas</code>, <code>h5py</code>,
+    <code>netCDF4</code>, <code>SALib</code>&hellip;). This block builds a virtual env
+    from the <code>requirements.txt</code> already in your cloned openWQ &mdash; on the
+    <strong>login node</strong>, because compute nodes usually have no internet for
+    <code>pip</code>. It prints the exact <em>Modules to load</em> line to paste back
+    into the Execution tab.
+  </div>
+  <div style="position:relative;margin:.2rem 0 .7rem;">
+    <button onclick="copyHpcRun(this,'hpcRunEnv')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunEnv" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
   <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
     a. Copy code &amp; inputs to the HPC</p>
   <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
@@ -3578,8 +3603,14 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('# Make Python + Apptainer available on the compute node:');
       L.push(s.slurm_modules);
     } else {
-      L.push('# --- EDIT: make Python + Apptainer available on the compute node ---');
-      L.push('# module load apptainer python      # or: source ~/miniconda3/bin/activate openwq');
+      L.push('# --- EDIT (REQUIRED): make Python 3 + Apptainer available on the compute node ---');
+      L.push('# Compute nodes start with a bare PATH - without this the job fails with');
+      L.push('# "python: command not found".  Find the names with: module avail python apptainer');
+      L.push('# Then set the "Modules to load" field, e.g.:');
+      L.push('#   module load apptainer python && source $HPC_BASE/calib_venv/bin/activate');
+      L.push('#       (calib_venv is created by the one-time setup block "0" in the report), OR');
+      L.push('#   source ~/miniconda3/bin/activate openwq   # a conda env with the');
+      L.push('#                                              # calibration deps (numpy, scipy, ...)');
     }
     L.push('');
     L.push('# calibration_lib is used from your cloned openWQ on the HPC (not copied).');
@@ -3601,7 +3632,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('');
     L.push('RUN="$HPC_BASE' + runLocal + '"');
     L.push('cd "$(dirname "$RUN")"');
-    L.push('python "$(basename "$RUN")" --clean');
+    L.push('# Use python3 if present, else fall back to python (conda envs provide both).');
+    L.push('PY="$(command -v python3 || command -v python)"');
+    L.push(': "${PY:?No python3/python on PATH - load a Python module or activate a conda env above (see the EDIT line near the top)}"');
+    L.push('"$PY" "$(basename "$RUN")" --clean');
     L.push('');
     return L.join('\n');
   }
@@ -3675,6 +3709,74 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var i = q.lastIndexOf('/');
     return i > 0 ? q.slice(0, i) : q;
   }
+  function buildHpcEnv(s) {
+    var L = _hpcVars(s);
+    var owqDir = (s.hpc_openwq_dir || '').replace(/\/+$/, '') || '/path/to/openwq';
+    L.push('OWQ_REPO="' + owqDir + '"' + (s.hpc_openwq_dir ? '' : '   # <-- EDIT: your cloned openWQ'));
+    L.push('');
+    L.push('# 0. ONE-TIME build of the calibration Python env from requirements.txt.');
+    L.push('#    Run it on the HPC login node, or from your laptop - it auto-detects.');
+    L.push('#    See the report note above for details.');
+    L.push('if command -v sbatch >/dev/null 2>&1; then');
+    L.push('  owq_login() { HPC_BASE="$HPC_BASE" OWQ_REPO="$OWQ_REPO" bash -l; }');
+    L.push('else');
+    L.push('  owq_login() { ssh "$HPC_USER@$HPC_HOST" "HPC_BASE=\'$HPC_BASE\' OWQ_REPO=\'$OWQ_REPO\' bash -l -s"; }');
+    L.push('fi');
+    L.push('owq_login <<\'EOF\'');
+    L.push('set -euo pipefail');
+    L.push('# Remove any stale venv FIRST.  If the modules line below activates an old');
+    L.push('# venv (e.g. one built earlier with python 3.6), its python would shadow the');
+    L.push('# module python and the version guard would wrongly see the old version.');
+    L.push('rm -rf "$HPC_BASE/calib_venv"');
+    if (s.slurm_modules) {
+      L.push('# Same modules as your job (the Execution-tab "Modules to load") - so the');
+      L.push('# venv is built with the SAME python the job uses.  Run tolerantly: the venv');
+      L.push('# it activates was just removed above, so that part no-ops here; this block');
+      L.push('# rebuilds + activates it below.');
+      L.push('set +e');
+      L.push(s.slurm_modules);
+      L.push('set -e');
+    } else {
+      L.push('module load python 2>/dev/null || true   # get a python3 (rename via: module avail python)');
+    }
+    L.push('# These deps need Python >= 3.8.  HPC DEFAULT python modules are often old');
+    L.push('# (e.g. 3.6, where the mirror only offers numpy<=1.19 and the install fails).');
+    L.push('# Abort early with guidance rather than build a broken venv.');
+    L.push('PYV="$(python3 -c \'import sys;print("%d.%d"%sys.version_info[:2])\' 2>/dev/null || echo none)"');
+    L.push('echo "Using python3 = $PYV"');
+    L.push('case "$PYV" in');
+    L.push('  none|2.*|3.[0-7]) echo "ERROR: python $PYV is too old (need >=3.8). Run \'module avail python\', then load a newer one (e.g. python/3.11) and re-run." >&2; exit 1 ;;');
+    L.push('esac');
+    L.push('# requirements.txt sits one level above 3_Calibration (repo OR its parent).');
+    L.push('for _s in "$OWQ_REPO/supporting_scripts" "$OWQ_REPO/openwq/supporting_scripts"; do');
+    L.push('  [ -f "$_s/requirements.txt" ] && REQ="$_s/requirements.txt" && break');
+    L.push('done');
+    L.push(': "${REQ:?requirements.txt not found under $OWQ_REPO - check the openWQ clone path}"');
+    L.push('python3 -m venv --clear "$HPC_BASE/calib_venv"   # --clear: rebuild cleanly on re-run');
+    L.push('source "$HPC_BASE/calib_venv/bin/activate"');
+    L.push('python -m pip install --upgrade pip');
+    L.push('python -m pip install -r "$REQ"');
+    L.push('echo');
+    if (s.slurm_modules) {
+      L.push('echo "Env ready: $HPC_BASE/calib_venv built.  Your job already activates it"');
+      L.push('echo "via the configured Modules-to-load field - nothing else to set."');
+    } else {
+      L.push('echo "Env ready.  Set the Modules-to-load field (Execution tab) to e.g.:"');
+      L.push('echo "  module load <your python module> && source $HPC_BASE/calib_venv/bin/activate"');
+    }
+    L.push('');
+    L.push('# ── ALTERNATIVE (conda-forge) - copy/uncomment ONLY if the pip install above');
+    L.push('#    fails: e.g. the geospatial wheels (geopandas/fiona/rasterio/pyproj) will');
+    L.push('#    not build, or the mirror has no numpy for your python.  conda brings its');
+    L.push('#    own python + compiled/geo deps, so it sidesteps both.  Needs conda or');
+    L.push('#    mamba on PATH (module load it, or source your miniconda).  Package');
+    L.push('#    renames vs requirements.txt: netCDF4 -> netcdf4, SALib -> salib.');
+    L.push('#  conda create -y -p "$HPC_BASE/calib_env" -c conda-forge python=3.11 numpy pandas scipy xarray h5py netcdf4 imageio geopandas shapely fiona pyproj rasterio pyogrio contextily matplotlib tqdm requests scikit-learn xgboost joblib salib jsonschema');
+    L.push('#    then set Modules-to-load to (adjust the conda.sh path for your install):');
+    L.push('#  module load apptainer && source ~/miniconda3/etc/profile.d/conda.sh && conda activate "$HPC_BASE/calib_env"');
+    L.push('EOF');
+    return L.join('\n');
+  }
   function buildHpcCopy(s) {
     var roots = (HPC && HPC.src_roots) || [];
     var L = _hpcVars(s);
@@ -3685,10 +3787,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('#   ssh "$HPC_USER@$HPC_HOST"');
     L.push('#   mkdir -p "$(dirname "$SIF_HPC")" && cd "$(dirname "$SIF_HPC")"');
     L.push('#   apptainer build "$SIF_HPC" <openwq>/containers/openwq_apptainer.def');
+    L.push('#   # on clusters that ship Singularity instead: swap "apptainer" -> "singularity"');
     L.push('');
     L.push('# Copy your model config + inputs to the HPC.  The calibration_lib CODE');
-    L.push('# is NOT copied - it is used from your cloned openWQ on the HPC (see the');
-    L.push('# OWQ_CALIB_LIB_DIR export in the .sbatch).');
+    L.push('# is NOT copied - it is used from your cloned openWQ on the HPC; see the');
+    L.push('# OWQ_CALIB_LIB_DIR export in the .sbatch.');
     L.push('# Each tree is dropped straight into $HPC_BASE/<project>/... : only the');
     L.push('# path BELOW your project root is kept, never the local machine prefix.');
     L.push('# -L dereferences any input symlinks to real files.  eval_*/results +');
@@ -3806,6 +3909,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   }
   function updateHpcRun(state) {
     var s = state || collectFormState();
+    var e = document.getElementById('hpcRunEnv');    if (e) e.textContent = buildHpcEnv(s);
     var c = document.getElementById('hpcRunCopy');   if (c) c.textContent = buildHpcCopy(s);
     var r = document.getElementById('hpcRunRemap');  if (r) r.textContent = buildHpcRemap(s);
     var b = document.getElementById('hpcRunSubmit'); if (b) b.textContent = buildHpcSubmit(s);
