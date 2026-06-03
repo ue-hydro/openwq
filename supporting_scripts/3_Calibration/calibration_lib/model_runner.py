@@ -90,6 +90,12 @@ class ModelRunner:
         self.docker_compose_path = docker_compose_path
         self.apptainer_sif_path = apptainer_sif_path
         self.apptainer_bind_path = apptainer_bind_path
+        # Apptainer and Singularity are CLI-compatible for `exec`; clusters ship
+        # one or the other (e.g. Deucalion provides `singularity`, not apptainer).
+        # Resolve once - prefer apptainer, fall back to singularity - so the same
+        # code runs on either.  Falls back to the literal name (clear error later).
+        self._container_cli = (shutil.which("apptainer")
+                               or shutil.which("singularity") or "apptainer")
         self.executable_name = executable_name
         self.executable_args = executable_args
         self.file_manager_path = file_manager_path
@@ -393,7 +399,7 @@ class ModelRunner:
         # cwd = the eval dir so openWQ's relative RESULTS_FOLDERPATH (openwq_out/)
         # lands in this evaluation's folder.
         cmd = [
-            "apptainer", "exec",
+            self._container_cli, "exec",
             "--bind", self.apptainer_bind_path,
             *extra_binds,
             "--pwd", container_eval_dir,
@@ -1111,8 +1117,9 @@ done
 echo "Starting evaluation $EVAL_ID at $(date)"
 echo "Working directory: $EVAL_DIR"
 
-# Run the model
-apptainer exec \\
+# Run the model (apptainer or singularity - whichever this cluster provides)
+APPTAINER="$(command -v apptainer || command -v singularity)"
+"$APPTAINER" exec \\
     --bind $BIND_PATH \\
     --pwd $EXEC_DIR \\
     --env master_json=$MASTER_JSON \\
@@ -1182,8 +1189,9 @@ done
 
 echo "Starting evaluation $EVAL_ID at $(date)"
 
-# Run the model
-apptainer exec \\
+# Run the model (apptainer or singularity - whichever this cluster provides)
+APPTAINER="$(command -v apptainer || command -v singularity)"
+"$APPTAINER" exec \\
     --bind $BIND_PATH \\
     --pwd $EXEC_DIR \\
     --env master_json=$MASTER_JSON \\
