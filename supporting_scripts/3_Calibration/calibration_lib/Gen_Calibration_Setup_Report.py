@@ -1432,9 +1432,13 @@ def generate_interactive_setup(
   </div>
 
   <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
-    Run all three blocks from <strong>your LOCAL terminal</strong>, in order &mdash; each
-    one connects to the HPC for you (<code>rsync</code>/<code>ssh</code>), so you'll be
-    asked for your HPC password.  No need to log into the cluster first.</p>
+    Run these blocks in order. The simplest way is from <strong>your LOCAL terminal</strong>
+    &mdash; each one connects to the HPC for you (<code>rsync</code>/<code>ssh</code>), so
+    you'll be asked for your HPC password and you don't need to log in first.
+    Blocks <strong>b</strong> and <strong>c</strong> <em>also</em> work if you've already
+    <code>ssh</code>-ed into the cluster &mdash; they auto-detect that and run there
+    directly. (Block <strong>a</strong> copies <em>from</em> your laptop, so it always
+    runs locally.)</p>
 
   <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
     a. Copy code &amp; inputs to the HPC</p>
@@ -1473,6 +1477,17 @@ def generate_interactive_setup(
 
   <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
     c. Submit the SLURM job</p>
+  <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
+       background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
+       border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
+    <strong style="color:#1d4ed8;">&#8505; This runs on the cluster.</strong>
+    Submitting hands the job to the HPC's <strong>SLURM scheduler</strong>, which only
+    exists on the cluster &mdash; so the actual <code>sbatch</code> always executes there.
+    The block figures out how to reach it: run it <strong>from your laptop</strong> and it
+    <code>ssh</code>-es in to submit for you; run it <strong>after logging into the
+    HPC</strong> (<code>ssh&nbsp;$HPC_USER@$HPC_HOST</code>) and it calls <code>sbatch</code>
+    directly. Either way works &mdash; nothing to edit.
+  </div>
   <div style="position:relative;margin:.2rem 0 .7rem;">
     <button onclick="copyHpcRun(this,'hpcRunSubmit')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -3645,6 +3660,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   // and they run in order: (a) copy, (b) re-point paths, (c) submit.
   function _hpcVars(s) {
     return [
+      // zsh (macOS default) does NOT treat '#' as a comment when you paste into
+      // an interactive shell, so the comment lines below would error.  This line
+      // enables it; in bash/sh `setopt` does not exist, so it is a silent no-op.
+      'setopt interactive_comments 2>/dev/null || true',
       'HPC_USER=' + (s.hpc_user || 'your_username'),
       'HPC_HOST=' + (s.hpc_host || 'hpc.your-institution.edu'),
       'HPC_BASE=' + (s.hpc_base || '/scratch/$USER/openwq_cal'),
