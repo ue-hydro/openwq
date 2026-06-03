@@ -1056,6 +1056,7 @@ def get_container_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "executable_path": model_config.get("executable_path", ""),
         "file_manager_path": model_config.get("file_manager_path", ""),
+        "control_file_path": model_config.get("control_file_path", ""),
         "mpi_np": model_config.get("mpi_np", 2),
         "hostmodel": model_config.get("hostmodel", "mizuroute"),
         "container_runtime": model_config.get("container_runtime", "docker"),

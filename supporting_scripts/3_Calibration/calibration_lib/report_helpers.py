@@ -1475,6 +1475,7 @@ def get_interactive_layout_css() -> str:
                        45deg, #d1d5db, #d1d5db 6px, #c7ccd4 6px, #c7ccd4 12px); }
     .calib-calib { background: linear-gradient(135deg, #2563eb, #3b82f6); }
     .calib-valid { background: linear-gradient(135deg, #059669, #10b981); }
+    .calib-excl  { background: linear-gradient(135deg, #94a3b8, #cbd5e1); }
     .calib-seg-label {
         color: #fff;
         font-size: .72rem;
@@ -1522,6 +1523,28 @@ def get_interactive_layout_css() -> str:
     }
     .calib-sw-c { background: #3b82f6; }
     .calib-sw-v { background: #10b981; }
+
+    /* Container-runtime two-button toggle (single-select) */
+    .rt-btn {
+        flex: 1;
+        padding: .5rem .6rem;
+        border: 1px solid var(--border, #d1d5db);
+        background: var(--glass, rgba(127,127,127,.06));
+        color: var(--text2, #6b7280);
+        border-radius: 7px;
+        font-family: inherit;
+        font-size: .82rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background .12s, border-color .12s, color .12s;
+    }
+    .rt-btn:hover { border-color: var(--primary, #2563eb); }
+    .rt-btn.rt-active {
+        background: var(--primary, #2563eb);
+        border-color: var(--primary, #2563eb);
+        color: #fff;
+        box-shadow: 0 1px 4px rgba(37,99,235,.30);
+    }
 
     /* ── Workflow mode: 3-option segmented control ──────────────── */
     /* Rendered as three distinct, clickable segments (NOT a continuous
