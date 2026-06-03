@@ -3790,8 +3790,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('#   # on clusters that ship Singularity instead: swap "apptainer" -> "singularity"');
     L.push('');
     L.push('# Copy your model config + inputs to the HPC.  The calibration_lib CODE');
-    L.push('# is NOT copied - it is used from your cloned openWQ on the HPC; see the');
-    L.push('# OWQ_CALIB_LIB_DIR export in the .sbatch.');
+    L.push('# is NOT copied - it runs from your cloned openWQ on the HPC (keep it current');
+    L.push('# with: git pull); see the OWQ_CALIB_LIB_DIR export in the .sbatch.');
     L.push('# Each tree is dropped straight into $HPC_BASE/<project>/... : only the');
     L.push('# path BELOW your project root is kept, never the local machine prefix.');
     L.push('# -L dereferences any input symlinks to real files.  eval_*/results +');
