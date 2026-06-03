@@ -50,7 +50,6 @@ This page describes the organization of the OpenWQ GitHub repository to help you
     │   └── source/              # RST files for ReadTheDocs
     │
     ├── CMakeLists.txt           # Main CMake build configuration
-    ├── main.cpp                 # Entry point (standalone mode)
     ├── README.md                # Quick start guide
     └── LICENSE                  # GNU GPL v3 license
 
@@ -154,6 +153,5 @@ Key Files
 ~~~~~~~~~~
 
 - ``CMakeLists.txt``: CMake build configuration. Set ``COMPILE_TARGET`` and ``SOLVER_TYPE`` here.
-- ``main.cpp``: Standalone entry point (used when OpenWQ runs independently, not coupled to a host model)
 - ``README.md``: Quick start guide with compilation and Docker instructions
 - ``.readthedocs.yaml``: Configuration for automatic documentation builds

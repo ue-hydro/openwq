@@ -205,9 +205,6 @@ int OpenWQ_output::writeCSV(
     header(2) = "iz [-]";
 
     // Get chemical names for header
-    const bool is_native_flex = 
-        (OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0;
-    
     for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
         const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
         
@@ -279,8 +276,6 @@ int OpenWQ_output::writeHDF5(
     const double watervol_minlim = OpenWQ_hostModelconfig.get_watervol_minlim();
     const double noWaterConc = OpenWQ_wqconfig.noWaterConc;
     const unsigned int num_threads = OpenWQ_wqconfig.get_num_threads_requested();
-    const bool is_native_flex = 
-        (OpenWQ_wqconfig.CH_model->BGC_module).compare("NATIVE_BGC_FLEX") == 0;
 
     // Get unit multipliers
     const double unit_mult_num = OpenWQ_wqconfig.get_output_units_numerator();

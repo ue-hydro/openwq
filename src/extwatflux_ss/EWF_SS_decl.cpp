@@ -169,8 +169,6 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
     std::string Type;                           // from JSON filec (only used in SS)
     std::string ascii_FilePath;                 // additional information for ASCII data input
     std::string ascii_delimiter;                // additional information for ASCII data input
-    unsigned int ascii_numHeaderRows;           // additional information for ASCII data input
-    unsigned int ascii_headerKeyRow;            // additional information for ASCII data input
     unsigned int lineCount;                     // row count for ASCII file
     std::string rowEntryASCII;                  // row data
     std::string headerRowASCII;                 // row with header data
@@ -353,8 +351,6 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                         // Auto-detect: header row is the first line containing "YYYY"
                         if (!headerFound && lineUpper.find("YYYY") != std::string::npos){
                             headerFound = true;
-                            ascii_headerKeyRow = lineCount;
-                            ascii_numHeaderRows = lineCount;  // all lines up to and including header
                             headerRowASCII = lineUpper;
                             headerKeys = OpenWQ_utils.StringSplit(headerRowASCII, ascii_delimiter);
                         }
@@ -1198,7 +1194,6 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
     bool flag_newJSON_h5Request = true;      // flag for new json block for ewf-h5
     bool flag_newChem = true;               // flag for new chem from json ewf-h5 clock
     int h5EWF_request_index;                // Index of ewf-h5 index
-    bool volume_unit_flag;
 
     // Get request index
     h5EWF_request_index = (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_time).size();
@@ -1258,8 +1253,8 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
         ewf_h5_units_file.replace(it,1, "|");
     }
 
-    // Get unit conversion multipliers
-    volume_unit_flag = OpenWQ_units.Calc_Unit_Multipliers(
+    // Get unit conversion multipliers (return value unused; call populates unit_multiplers)
+    OpenWQ_units.Calc_Unit_Multipliers(
         OpenWQ_wqconfig,
         OpenWQ_output,
         unit_multiplers,    // multiplers (numerator and denominator)

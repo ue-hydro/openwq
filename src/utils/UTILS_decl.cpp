@@ -277,7 +277,7 @@ int OpenWQ_utils::RequestJsonKeyVal_int(
     bool abort_flag){
 
     // Local variables
-    int jsonVal_int;
+    int jsonVal_int = 0;
     std::string varType = "integer";
 
     try{
@@ -313,7 +313,7 @@ double OpenWQ_utils::RequestJsonKeyVal_double(
     bool abort_flag){
 
     // Local variables
-    double jsonVal_double;
+    double jsonVal_double = 0.0;
     std::string varType = "integer";
 
     try{
@@ -383,19 +383,17 @@ std::string OpenWQ_utils::RemoveStrLeadTrailWhiteSpaces(
 
     // Remove Leading Spaces
     String2RemWhiteSpace.erase(
-        String2RemWhiteSpace.begin(), 
-        std::find_if(String2RemWhiteSpace.begin(), 
-        String2RemWhiteSpace.end(), 
-        std::bind1st(std::not_equal_to<char>(), 
-        ' ')));
+        String2RemWhiteSpace.begin(),
+        std::find_if(String2RemWhiteSpace.begin(),
+        String2RemWhiteSpace.end(),
+        [](char c){ return c != ' '; }));
 
     // Remove trailling spaces
     String2RemWhiteSpace.erase(
         std::find_if(
-            String2RemWhiteSpace.rbegin(), 
-            String2RemWhiteSpace.rend(), 
-            std::bind1st(std::not_equal_to<char>(), 
-            ' ')).base(), String2RemWhiteSpace.end());
+            String2RemWhiteSpace.rbegin(),
+            String2RemWhiteSpace.rend(),
+            [](char c){ return c != ' '; }).base(), String2RemWhiteSpace.end());
 
     return String2RemWhiteSpace;
 

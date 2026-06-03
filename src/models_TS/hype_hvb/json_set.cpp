@@ -43,8 +43,10 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
     // iteractive variables
     std::string icmp_i_name;
     int input_direction_index;
-    int erodingInhibit_cmpt_index;
-    bool erodingInhibit_cmpt_index_exist;
+    // NOTE: the inhibiting-compartment index lookup is not yet implemented;
+    // initialise to a deterministic in-range default so the value passed to
+    // HypeHVB_infoVect() is never indeterminate.
+    int erodingInhibit_cmpt_index = 0;
     // Other local variables
     typedef std::tuple<
         unsigned int,   // input_direction_index

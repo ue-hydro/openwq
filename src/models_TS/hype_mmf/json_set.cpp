@@ -44,11 +44,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     // iteractive variables
     std::string icmp_i_name;
     int input_direction_index;
-    int erodingFlux_cmpt_index;
-    int sedCmp_index;
     int erodingInhibit_cmpt_index;
-    bool erodingFlux_cmpt_index_exist;
-    bool erodingInhibit_cmpt_index_exist;
     // Other local variables
     typedef std::tuple<
         unsigned int,   // input_direction_index
@@ -61,8 +57,9 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_MMF_hype(
     // Get LATERAL_EXCHANGE module name
     errorMsgIdentifier = "Master file in MODULES > TRANSPORT_SEDIMENTS";
 
-    // Getting eroding (sediment) compartment name
-    sedCmp_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+    // Validate that the eroding (sediment) compartment name exists
+    // (get_HydroComp_index aborts if not found; the returned index is unused here)
+    OpenWQ_hostModelconfig.get_HydroComp_index(
         OpenWQ_wqconfig.TS_model->SedCmpt,
         errorMsgIdentifier,
         true);

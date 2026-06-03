@@ -115,13 +115,12 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
                 auto& d_chemass = (*user_data.vars.d_chemass)(icmp)(chemi);
                 auto& d_chemass_ic = (*user_data.vars.d_chemass_ic)(icmp)(chemi);
                 auto& d_chemass_ss = (*user_data.vars.d_chemass_ss)(icmp)(chemi);
-                auto& d_chemass_ss_out = (*user_data.vars.d_chemass_ss_out)(icmp)(chemi);
                 auto& d_chemass_ewf = (*user_data.vars.d_chemass_ewf)(icmp)(chemi);
-                auto& d_chemass_ewf_out = (*user_data.vars.d_chemass_ewf_out)(icmp)(chemi);
                 auto& d_chemass_dt_chem = (*user_data.vars.d_chemass_dt_chem)(icmp)(chemi);
-                auto& d_chemass_dt_chem_out = (*user_data.vars.d_chemass_dt_chem_out)(icmp)(chemi);
                 auto& d_chemass_dt_transp = (*user_data.vars.d_chemass_dt_transp)(icmp)(chemi);
-                auto& d_chemass_dt_transp_out = (*user_data.vars.d_chemass_dt_transp_out)(icmp)(chemi);
+                // Note: the *_out accumulators are intentionally NOT pre-fetched
+                // here — they are updated once after CVode() returns, not inside
+                // this RHS callback (see note below).
 
                 d_chemass.zeros();
 

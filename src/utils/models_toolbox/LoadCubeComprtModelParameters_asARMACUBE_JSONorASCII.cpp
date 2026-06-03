@@ -36,7 +36,7 @@ arma::Cube<double>  OpenWQ_utils::LoadCubeComprtModelParameters_asARMACUBE_JSONo
     double default_parameter_val;                       // default parameter value taken from JSON
     json json_paramData;                                // entire json entry for parameter
     json json_paramData_row;                            // sub-json struture with parameter entry row
-    unsigned int num_rowdata;                           // number of json or ASCII-file rows
+    unsigned int num_rowdata = 0;                       // number of json or ASCII-file rows
     std::vector<std::string> headerKeys;                // vector with header keys
     std::string ascii_FilePath;                         // additional information for ASCII data input
     double num_to_pushBack;                             // numerical value to add to parameter vector
@@ -332,7 +332,7 @@ arma::Cube<double>  OpenWQ_utils::LoadCubeComprtModelParameters_asARMACUBE_JSONo
 
         // loop over entires
 
-        for (int row_i = 0; row_i < table_data_entry.size(); row_i++){
+        for (std::size_t row_i = 0; row_i < table_data_entry.size(); row_i++){
 
             // get values in row
             // need to do "-1" because c++ starts at zero, but
