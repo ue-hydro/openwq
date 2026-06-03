@@ -1039,29 +1039,51 @@ def generate_interactive_setup(
         H.append('<div class="pane-resizer" id="paneResizer"></div>')
 
         # ── Script Pane (Right) ──
-        # Recommended save path: the openWQ "3_Calibration" folder, because
-        # the generated script does `from calibration_lib...` and that
-        # package lives there.  (The script also bakes this folder into its
-        # sys.path, so it still runs if saved elsewhere.)  Results are
-        # written to calibration_work_dir as set in the calibration config
-        # template.  Filename follows the originating template stem
-        # (e.g. "model_config_template_mizuRoute_run.py").
+        # Where to save the run-script + SLURM job file: the *calibration working
+        # directory* (calibration_work_dir) - the host-model-agnostic folder where
+        # evaluations + results also live - NOT inside a specific host-model clone
+        # (the shared "3_Calibration" folder can resolve into another model's
+        # checkout via a symlink, e.g. mizuRoute's, which is wrong for a SUMMA run).
+        # The generated script bakes CALIB_LIB_DIR into sys.path, so
+        # `from calibration_lib...` works wherever the script is saved.  Falls back
+        # to the 3_Calibration folder only when no work dir is given.  Filename
+        # follows the originating template stem.
         cal_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _save_dir = (os.path.abspath(calibration_work_dir)
+                     if calibration_work_dir else cal_script_dir)
         _run_script_name = f"{_calib_stem}_run.py"
-        save_hint = html_lib.escape(os.path.join(cal_script_dir, _run_script_name))
+        save_hint = html_lib.escape(os.path.join(_save_dir, _run_script_name))
 
-        def _step_header(n, title):
+        def _step_header(n, title, collapsible=False, body_id=None):
             """Numbered step heading for the flat 'Next Steps'-style guide
-            (matches the model-configuration report's step presentation)."""
-            return (
-                '<div style="display:flex;align-items:center;gap:.55rem;'
-                'margin:1.15rem 1.2rem .25rem;">'
+            (matches the model-configuration report's step presentation).
+
+            When ``collapsible`` is set (with a ``body_id``) the heading becomes
+            a clickable toggle and an opening ``<div id=body_id>`` (collapsed by
+            default) is returned with it; that div must be closed (``</div>``)
+            before the next step header."""
+            circle = (
                 '<span style="flex-shrink:0;display:inline-flex;width:1.5rem;'
                 'height:1.5rem;border-radius:50%;background:var(--primary);'
                 'color:#fff;align-items:center;justify-content:center;'
-                f'font-size:.8rem;font-weight:700;">{n}</span>'
-                '<span style="font-weight:700;color:var(--text);font-size:.95rem;">'
-                f'{title}</span></div>')
+                f'font-size:.8rem;font-weight:700;">{n}</span>')
+            label = ('<span style="font-weight:700;color:var(--text);'
+                     f'font-size:.95rem;">{title}</span>')
+            if collapsible and body_id:
+                return (
+                    f'<div onclick="toggleStep(\'{body_id}\', this)" '
+                    'title="Click to expand / collapse" '
+                    'style="display:flex;align-items:center;gap:.55rem;'
+                    'margin:1.15rem 1.2rem .25rem;cursor:pointer;user-select:none;">'
+                    + circle + label +
+                    '<span class="step-caret" style="margin-left:auto;'
+                    'margin-right:1.2rem;color:var(--text3);font-size:.7rem;'
+                    'transition:transform .15s;">&#9656;</span></div>'
+                    f'<div id="{body_id}" class="step-body" style="display:none;">')
+            return (
+                '<div style="display:flex;align-items:center;gap:.55rem;'
+                'margin:1.15rem 1.2rem .25rem;">'
+                + circle + label + '</div>')
 
         H.append('<div class="script-pane">')
         H.append(f"""
@@ -1134,22 +1156,22 @@ def generate_interactive_setup(
         if os_name == "Windows":
             docker_cmd = html_lib.escape(
                 f'cd /d "{containers_dir}" && docker compose up -d')
-            cd_cmd = html_lib.escape(f'cd /d "{cal_script_dir}"')
+            cd_cmd = html_lib.escape(f'cd /d "{_save_dir}"')
             run_cmd = html_lib.escape(f'python "{_run_script_name}"')
             resume_cmd = html_lib.escape(f'python "{_run_script_name}" --resume')
             dryrun_cmd = html_lib.escape(f'python "{_run_script_name}" --dry-run')
             report_cmd = html_lib.escape(
-                f'cd /d "{cal_script_dir}" && python "{_run_script_name}" --report')
+                f'cd /d "{_save_dir}" && python "{_run_script_name}" --report')
             open_cmd = "start"
         else:
             docker_cmd = html_lib.escape(
                 f"cd {containers_dir} && docker compose up -d")
-            cd_cmd = html_lib.escape(f"cd {cal_script_dir}")
+            cd_cmd = html_lib.escape(f"cd {_save_dir}")
             run_cmd = html_lib.escape(f"{_wake}python {_run_script_name}")
             resume_cmd = html_lib.escape(f"{_wake}python {_run_script_name} --resume")
             dryrun_cmd = html_lib.escape(f"python {_run_script_name} --dry-run")
             report_cmd = html_lib.escape(
-                f"cd {cal_script_dir} && python {_run_script_name} --report")
+                f"cd {_save_dir} && python {_run_script_name} --report")
             open_cmd = "open" if os_name == "Darwin" else "xdg-open"
 
         # OS-specific explanatory note appended to the run / resume steps so the
@@ -1199,7 +1221,7 @@ def generate_interactive_setup(
         )
 
         H.append(f"""
-{_step_header(2, "Run it locally (Docker)")}
+{_step_header(2, "Run it locally (Docker)", collapsible=True, body_id="step2body")}
 <div style="padding:0 1.2rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
   <p style="margin:.1rem 0 .35rem;"><span id="step3Text">Start the Docker
   container</span>, go to the calibration folder (the one that contains
@@ -1259,12 +1281,40 @@ def generate_interactive_setup(
             _domain_dir = _model_run_dir
         _mc_dir = (os.path.dirname(os.path.abspath(model_config_path))
                    if model_config_path else "")
-        _run_local = os.path.join(cal_script_dir, _run_script_name)
-        # Source trees to copy + the single common local root used for the
-        # path-remap (rsync -R preserves the full local path under HPC_BASE,
-        # so re-pointing is just: <root>  ->  $HPC_BASE<root>).
+        _run_local = os.path.join(_save_dir, _run_script_name)
+        # Source trees to copy + the common local root for the path-remap.
+        # (rsync -R with the "/./" marker copies each tree RELATIVE to the common
+        # root, so re-pointing is just: <common_root>  ->  $HPC_BASE.)
+        # Only the calibration_lib PACKAGE is needed at run time (the run-script
+        # does `from calibration_lib import ...`) - NOT the whole supporting_scripts
+        # tree (other numbered folders, templates, HTML guides...).
+        #
+        # Anchor it on the ACTIVE PROJECT folder - the common parent of the model
+        # config + domain + work dir (e.g. ".../century_basins_tested") - via the
+        # project's OWN "3_Calibration" entry (typically a symlink to the openWQ
+        # clone).  This way nothing is pulled from an unrelated host-model clone
+        # and every copied path stays under the project (=> clean
+        # $HPC_BASE/3_Calibration/calibration_lib).  Falls back to calibration_lib's
+        # resolved location only when the project has no 3_Calibration of its own.
+        _proj_parts = [os.path.abspath(d) for d in (_mc_dir, _domain_dir, _save_dir) if d]
+        try:
+            _project_root = (os.path.commonpath(_proj_parts) if len(_proj_parts) > 1
+                             else (_proj_parts[0] if _proj_parts else cal_script_dir))
+        except ValueError:
+            _project_root = cal_script_dir
+        _proj_calib_lib = os.path.join(_project_root, "3_Calibration", "calibration_lib")
+        if os.path.isdir(_proj_calib_lib):
+            _calib_lib_src = _proj_calib_lib                       # project path (often a symlink)
+            _calib_lib_dir = os.path.join(_project_root, "3_Calibration")
+        else:
+            _calib_lib_src = os.path.join(cal_script_dir, "calibration_lib")
+            _calib_lib_dir = cal_script_dir
+        # calibration_lib is NOT copied: on the HPC it is used from the user's
+        # already-cloned openWQ repo (the "openWQ clone path on the HPC" field),
+        # via the OWQ_CALIB_LIB_DIR env var the sbatch exports.  We only ship the
+        # project's model config + domain inputs + the calibration work dir.
         _src_roots = [os.path.abspath(d) for d in
-                      (_supp_dir, _mc_dir, _domain_dir) if d]
+                      (_mc_dir, _domain_dir, _save_dir) if d]
         # de-dup + drop any root that's a subpath of another (rsync -R of the
         # parent already carries it).
         _src_roots = sorted(set(_src_roots))
@@ -1279,6 +1329,16 @@ def generate_interactive_setup(
                 if _src_roots else "")
         except ValueError:
             _common_root = ""
+        # If everything to copy lives inside the project folder, the common root
+        # collapses to that folder - which would STRIP it from the HPC layout
+        # (giving $HPC_BASE/1_Model_Config...).  Anchor one level UP so the project
+        # folder is preserved as a clean top level: $HPC_BASE/<project>/...  (not
+        # the full local path, not its bare contents).
+        if (_common_root
+                and os.path.normpath(_common_root) == os.path.normpath(_project_root)):
+            _parent = os.path.dirname(_common_root)
+            if _parent and _parent not in ("/", ""):
+                _common_root = _parent
         _remap_ok = bool(_common_root) and _common_root not in ("/", "")
 
         # ── 0. SLURM job file ──
@@ -1287,11 +1347,43 @@ def generate_interactive_setup(
         # "Save .sbatch" button.  We only need its name + local save path
         # here so the copy snippet can rsync it to the cluster.
         _sbatch_name = f"{_calib_stem}.sbatch"
-        _sbatch_local = os.path.join(cal_script_dir, _sbatch_name)
+        _sbatch_local = os.path.join(_save_dir, _sbatch_name)
 
         # Baked local paths handed to the browser so the "copy & run" block in
         # the HPC section can be assembled (pre-filled) from the Execution-tab
         # fields — the user edits nothing, just pastes & runs.
+        # Host-model setup dirs in the domain to KEEP, by basename: the active
+        # model-run dir (e.g. 0_SUMMA_OPENWQ) + the calibration work dir.  The copy
+        # then drops sibling host-model setups (e.g. 0_MIZUROUTE_OPENWQ) that are
+        # irrelevant to THIS run.
+        _keep_dirs = []
+        for _kd in (_model_run_dir,
+                    os.path.abspath(calibration_work_dir) if calibration_work_dir else ""):
+            _b = os.path.basename(_kd.rstrip(os.sep)) if _kd else ""
+            if _b and _b not in _keep_dirs:
+                _keep_dirs.append(_b)
+        # CONTAINER prefix the model's config files use for the project (e.g.
+        # "/code/openwq_code"), parsed from the fileManager/control file.  The HPC
+        # Apptainer bind maps $HPC_BASE -> this prefix so every baked container
+        # path (SUMMA fileManager, mizuRoute control, ...) resolves to the copied
+        # data - identically for any host-model coupling.
+        _container_prefix = ""
+        _proj_folder = (os.path.basename(_project_root.rstrip(os.sep))
+                        if _project_root else "")
+        # SUMMA -> fileManager, mizuRoute -> .control; current templates put
+        # either under file_manager_path, but accept control_file_path too.
+        _fm = ((container_config.get("file_manager_path")
+                or container_config.get("control_file_path") or "")
+               if container_config else "")
+        if _proj_folder and _fm and os.path.isfile(_fm):
+            try:
+                import re as _re
+                _fm_txt = open(_fm, encoding="utf-8", errors="ignore").read()
+                _pm = _re.search(r"(/\S*?)/" + _re.escape(_proj_folder) + r"/", _fm_txt)
+                if _pm:
+                    _container_prefix = _pm.group(1)   # e.g. /code/openwq_code
+            except Exception:
+                _container_prefix = ""
         _hpc_baked = {
             "src_roots": _src_roots,
             "common_root": _common_root,
@@ -1301,10 +1393,13 @@ def generate_interactive_setup(
             "sbatch_name": _sbatch_name,
             "work_dir": calibration_work_dir or "",
             "remap_ok": bool(_remap_ok),
+            "keep_dirs": _keep_dirs,
+            "container_prefix": _container_prefix,
         }
 
         H.append(f"""
-{_step_header(3, "Or run it on HPC (Apptainer / Singularity)")}
+</div>
+{_step_header(3, "Run on HPC (Apptainer / Singularity)", collapsible=True, body_id="step3body")}
 <div style="padding:0 1.2rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
   <p style="margin:.1rem 0 .5rem;">In the <strong>Execution</strong> tab set
   <strong>Container runtime&nbsp;=&nbsp;apptainer</strong> and fill in the
@@ -1315,6 +1410,15 @@ def generate_interactive_setup(
   <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
     Save the SLURM job file (<code>{html_lib.escape(_sbatch_name)}</code>) next to your
     run script:</p>
+  <div style="font-size:.72rem;color:var(--text3);word-break:break-all;line-height:1.45;margin:.1rem 0 .5rem;"
+       title="{html_lib.escape(_sbatch_local)}">
+    Save to: <code id="sbatchSaveHint" style="font-size:.68rem;">{html_lib.escape(_sbatch_local)}</code>
+    <button id="copySbatchHintBtn" onclick="copySbatchHint()" title="Copy path to clipboard"
+        style="margin-left:.4rem;font-size:.62rem;padding:.05rem .4rem;
+        background:rgba(0,102,204,.1);border:1px solid var(--border);
+        color:var(--primary);border-radius:4px;cursor:pointer;
+        font-family:inherit;white-space:nowrap;vertical-align:baseline;">Copy</button>
+  </div>
   <div style="position:relative;margin:.35rem 0 .9rem;">
     <button id="saveSbatchBtn" onclick="downloadSbatch()"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,168,107,.25);
@@ -1328,10 +1432,21 @@ def generate_interactive_setup(
   </div>
 
   <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
-    Copy each block into a terminal, in order (you'll be asked for your HPC password):</p>
+    Run all three blocks from <strong>your LOCAL terminal</strong>, in order &mdash; each
+    one connects to the HPC for you (<code>rsync</code>/<code>ssh</code>), so you'll be
+    asked for your HPC password.  No need to log into the cluster first.</p>
 
   <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
-    a. Copy code, inputs &amp; the <code>.sif</code> image to the HPC</p>
+    a. Copy code &amp; inputs to the HPC</p>
+  <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
+       background:rgba(217,119,6,.10);border:1px solid rgba(217,119,6,.45);
+       border-left:3px solid #d97706;border-radius:6px;color:var(--text);line-height:1.5;">
+    <strong style="color:#b45309;">&#9888; Note:</strong> the openWQ
+    <code>.sif</code> is <strong>not</strong> copied &mdash; you must
+    <strong>build it on the HPC</strong> (the copy block below shows the command).
+    It is expected at:
+    <code id="sifExpectedPath" style="word-break:break-all;">$HPC_BASE/openwq.sif</code>
+  </div>
   <div style="position:relative;margin:.2rem 0 .7rem;">
     <button onclick="copyHpcRun(this,'hpcRunCopy')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -1377,7 +1492,8 @@ def generate_interactive_setup(
   </div>
 </div>
 
-{_step_header(4, "View the results")}
+</div>
+{_step_header(4, "View the results", collapsible=True, body_id="step4body")}
 <div style="padding:0 1.2rem .6rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
   <p style="margin:.1rem 0 .35rem;">The script auto-generates the interactive results
   report and opens it when the run finishes. To watch progress <strong>while it's still
@@ -1397,6 +1513,7 @@ def generate_interactive_setup(
     <button style="{copy_btn_css}"
       onclick="navigator.clipboard.writeText(document.getElementById('cmdResults').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
   </div>
+</div>
 </div>
 """)
 
@@ -1451,6 +1568,7 @@ def generate_interactive_setup(
             auto_extracted_parameters=auto_extracted_parameters,
             module_parameters=module_parameters,
             container_config=container_config,
+            calib_lib_dir=_calib_lib_dir,
             report_stem=_calib_stem,
             observation_period=_obs_period,
             model_sim_period=_sim_period,
@@ -1581,7 +1699,7 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
         <h3>Objective metric</h3>
         <div class="form-row">
             {rh.build_form_select("temporal_resolution", "Temporal Resolution",
-                ["native", "daily", "weekly", "monthly"], "monthly",
+                ["native", "daily", "weekly", "monthly"], "daily",
                 "Aggregate obs/model to this scale before computing metrics")}
             {rh.build_form_select("aggregation_method", "Aggregation Method",
                 ["mean", "median"], "mean")}
@@ -1604,11 +1722,14 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
             Each evaluation simulates <strong>only the calibration window</strong>
             instead of the model's full period &mdash; this keeps runtime and
             memory low (a full multi-year run can exhaust container RAM and be
-            OOM-killed). The split below defaults to the <strong>middle of your
-            observation period</strong>: the first part is used to
-            <strong>calibrate</strong>, the second is reserved to
-            <strong>validate</strong> later. Drag the handle to adjust; the
-            greyed span has no observations.
+            OOM-killed). By default the <strong>first third</strong> of your
+            observation period is used to <strong>calibrate</strong> and the
+            remaining <strong>two thirds</strong> are reserved to
+            <strong>validate</strong> later. Drag the <strong>two handles</strong>
+            to set the calibration window's <strong>start</strong> (left handle) and
+            the calibration&nbsp;/&nbsp;validation <strong>split</strong> (right
+            handle); any data before the start handle is <strong>excluded</strong>.
+            The greyed span has no observations.
         </p>
         <div class="calib-slider-wrap" id="calibSliderWrap">
             <!-- Per-species observation coverage, ABOVE the slider on the same
@@ -1616,11 +1737,15 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
             <div id="calibSpeciesLanes" style="margin-bottom:.6rem;"></div>
             <div class="calib-track" id="calibTrack">
                 <div class="calib-seg calib-gray"  id="segGrayLeft"></div>
+                <div class="calib-seg calib-excl"  id="segExclLeft">
+                    <span class="calib-seg-label">Excluded</span></div>
                 <div class="calib-seg calib-calib" id="segCalib">
                     <span class="calib-seg-label">Calibration</span></div>
                 <div class="calib-seg calib-valid" id="segValid">
                     <span class="calib-seg-label">Validation</span></div>
                 <div class="calib-seg calib-gray"  id="segGrayRight"></div>
+                <div class="calib-handle" id="calibHandleStart"
+                     title="Drag to move the calibration window START"></div>
                 <div class="calib-handle" id="calibHandle"
                      title="Drag to move the calibration / validation split"></div>
             </div>
@@ -1667,13 +1792,32 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
 """
 
 
+# hpc_settings.json uses explicit, self-describing key names; map them to the
+# (shorter) internal form-field ids the report/JS use. Unknown keys pass
+# through unchanged, so older files using the internal names still work.
+_HPC_KEY_ALIASES = {
+    "hpc_username":              "hpc_user",
+    "hpc_login_hostname":        "hpc_host",
+    "hpc_working_dir":           "hpc_base",
+    "apptainer_sif_path_on_hpc": "sif_hpc",
+    "openwq_repo_path_on_hpc":   "hpc_openwq_dir",
+    "executable_path_on_hpc":    "hpc_exe",
+    "slurm_walltime":            "slurm_time",
+    "slurm_cpus_per_task":       "slurm_cpus",
+    "slurm_mem_per_node":        "slurm_mem",
+    "slurm_modules_to_load":     "slurm_modules",
+}
+
+
 def _load_hpc_settings(path: Optional[str] = None) -> Dict[str, Any]:
     """Load HPC settings JSON so the HPC fields come pre-filled.
 
     Tries, in order: the explicit ``path`` (a user's own copy, set in the
     calibration template), then the shipped ``hpc_settings.json`` next to the
     run-script templates.  Returns ``{}`` if none readable.  Keys starting with
-    ``_`` (e.g. ``_README``) are ignored.
+    ``_`` (e.g. ``_README``) are ignored, and the explicit JSON key names are
+    translated to internal field ids via ``_HPC_KEY_ALIASES`` (unknown keys
+    pass through unchanged for backward compatibility).
     """
     _cal_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _candidates = []
@@ -1686,7 +1830,8 @@ def _load_hpc_settings(path: Optional[str] = None) -> Dict[str, Any]:
                 with open(_p, encoding="utf-8") as _f:
                     _d = json.load(_f)
                 if isinstance(_d, dict):
-                    return {k: v for k, v in _d.items()
+                    return {_HPC_KEY_ALIASES.get(k, k): v
+                            for k, v in _d.items()
                             if not str(k).startswith("_")}
         except Exception:
             continue
@@ -1720,6 +1865,15 @@ def _build_interactive_execution_section(
     except (TypeError, ValueError):
         _slurm_cpus_default = 4
 
+    # Container-runtime selector: two mutually-exclusive buttons (not a dropdown).
+    _rt = (container_runtime_default
+           if container_runtime_default in ("docker", "apptainer") else "docker")
+    _rt_docker_cls = "rt-btn rt-active" if _rt == "docker" else "rt-btn"
+    _rt_appt_cls   = "rt-btn rt-active" if _rt == "apptainer" else "rt-btn"
+    # Stale-folder handling defaults to the runtime: docker -> prompt (interactive),
+    # apptainer -> clean (HPC/batch jobs can't answer an interactive prompt).
+    _stale_default = "clean" if _rt == "apptainer" else "prompt"
+
     return f"""
 <div class="section" id="execution">
     <h2>Model execution</h2>
@@ -1728,13 +1882,23 @@ def _build_interactive_execution_section(
     <div class="card">
         <h3>Execution backend</h3>
         <div class="form-row">
-            {rh.build_form_select(
-                "container_runtime", "Container runtime",
-                ["docker", "apptainer"], container_runtime_default,
-                "How to run the model: 'docker' (local Docker Desktop / "
-                "docker compose) or 'apptainer' (Singularity, typical on HPC "
-                "clusters). The Apptainer SIF / bind paths and the SLURM job "
-                "below apply only when 'apptainer' is selected.")}
+            <div class="form-group">
+                <label>Container runtime</label>
+                <div id="runtimeToggle" style="display:flex;gap:.4rem;margin-top:.25rem;">
+                    <button type="button" class="{_rt_docker_cls}" data-rt="docker"
+                        onclick="setRuntime('docker')">&#128051;&nbsp;Docker</button>
+                    <button type="button" class="{_rt_appt_cls}" data-rt="apptainer"
+                        onclick="setRuntime('apptainer')">&#128230;&nbsp;Apptainer</button>
+                </div>
+                <input type="hidden" id="container_runtime" value="{_rt}">
+                <div class="hint" style="margin-top:.3rem;">How to run the model:
+                    <strong>Docker</strong> (local Docker&nbsp;Desktop) or
+                    <strong>Apptainer</strong> (Singularity, typical on HPC clusters).
+                    The Apptainer SIF&nbsp;/&nbsp;bind paths and the SLURM job below
+                    apply only when Apptainer is selected. Selecting a runtime also
+                    sets the stale&#8209;folder default below
+                    (<em>prompt</em> for Docker, <em>clean</em> for Apptainer).</div>
+            </div>
             {rh.build_form_number(
                 "n_parallel", "Parallel model runs", 1, min_val=1, step=1,
                 hint="How many model evaluations to run concurrently during "
@@ -1746,7 +1910,7 @@ def _build_interactive_execution_section(
         <div class="form-row">
             {rh.build_form_select(
                 "clean_work_dir", "Stale evaluation folders",
-                ["prompt", "clean", "keep"], "prompt",
+                ["prompt", "clean", "keep"], _stale_default,
                 "What to do with leftover eval_* folders from a previous run "
                 "in the calibration work dir. 'prompt' asks at the terminal "
                 "(interactive only). 'clean' always deletes them first - use "
@@ -1757,7 +1921,7 @@ def _build_interactive_execution_section(
 
     <!-- Theme: HPC / Apptainer (optional) -->
     <div class="card" id="hpcCard">
-        <h3>if running on HPC / Apptainer</h3>
+        <h3>HPC/Apptainer Settings</h3>
         <p class="hint" style="margin-top:0;">
             Fill these in to run the calibration on an HPC cluster with
             Apptainer / Singularity. You won't edit any code: the values below
@@ -1765,6 +1929,16 @@ def _build_interactive_execution_section(
             and <strong>copy&nbsp;&amp;&nbsp;run</strong> commands shown under
             <em>step&nbsp;3 (Run it on HPC)</em> in the script pane &mdash; just
             save the <code>.sbatch</code> and paste the commands into a terminal.
+        </p>
+        <p class="hint" style="margin-top:.45rem;background:rgba(217,119,6,.07);
+            border:1px solid var(--border);border-left:3px solid #d97706;
+            border-radius:6px;padding:.5rem .65rem;">
+            <strong>&#9881;&nbsp;Build the <code>.sif</code> on the HPC:</strong> the openWQ
+            Apptainer image must be built <strong>on the cluster itself</strong> (images are
+            architecture-specific, and Deucalion-class systems have ARM and x86 nodes) &mdash; it
+            is <strong>not</strong> uploaded. Build it once with
+            <code>apptainer build openwq.sif &lt;openwq&gt;/containers/openwq_apptainer.def</code>,
+            then put its absolute cluster path in <em>Apptainer image (.sif) on the HPC</em> below.
         </p>
         <p class="hint" style="margin-top:.45rem;background:rgba(0,102,204,.06);
             border:1px solid var(--border);border-left:3px solid var(--primary);
@@ -1799,11 +1973,38 @@ def _build_interactive_execution_section(
                      "under here and all paths re-point to it automatically.",
                 placeholder="/scratch/$USER/openwq_cal")}
             {rh.build_form_input(
-                "sif_local", "Local Apptainer image (.sif)", _hd("sif_local", ""),
-                hint="Path on THIS machine to your built openwq .sif. The "
-                     "copy&run block uploads it to the HPC working dir as "
-                     "openwq.sif and points the model at it automatically.",
-                placeholder="/path/to/openwq.sif")}
+                "sif_hpc", "Apptainer image (.sif) on the HPC", _hd("sif_hpc", ""),
+                hint="Absolute path to the openwq .sif ON the cluster. Build the "
+                     ".sif on the HPC itself (Apptainer images must be built where "
+                     "they run, so the CPU architecture matches the compute nodes) "
+                     "- it is NOT uploaded. The model is pointed at this path "
+                     "automatically.",
+                placeholder="$HPC_BASE/openwq.sif")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_input(
+                "hpc_openwq_dir", "openWQ clone path on the HPC",
+                _hd("hpc_openwq_dir", ""),
+                hint="Absolute path to the openWQ checkout INSIDE your host-model "
+                     "clone on the cluster - the folder that contains "
+                     "supporting_scripts/ (the inner '.../openwq/openwq').  Point at "
+                     "that folder (or its parent); the sbatch auto-locates "
+                     "supporting_scripts/3_Calibration/calibration_lib under it.  The "
+                     "code is used FROM there (not copied) - exported as "
+                     "OWQ_CALIB_LIB_DIR.",
+                placeholder="/home/$USER/.../openwq/openwq")}
+        </div>
+        <div class="form-row">
+            {rh.build_form_input(
+                "hpc_exe", "Model executable on the HPC",
+                _hd("hpc_exe", ""),
+                hint="Absolute path to the host-model binary you COMPILED on the "
+                     "cluster (summa / mizuroute / mizuroute_cslm - whichever you "
+                     "built).  The .sif is dependency-only, so the binary is run from "
+                     "here.  This is the only per-coupling path the tool can't guess; "
+                     "everything else (inputs, .sif, calibration_lib) is automatic.  "
+                     "Exported as OWQ_EXEC_PATH.",
+                placeholder="$HPC_BASE/.../bin/summa_openwq_Release")}
         </div>
 
         <h4 style="margin:1rem 0 .3rem;font-size:.92rem;color:var(--text);">
@@ -2653,7 +2854,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.hpc_user  = _gv('hpc_user', 'your_username');
     s.hpc_host  = _gv('hpc_host', 'hpc.your-institution.edu');
     s.hpc_base  = _gv('hpc_base', '/scratch/$USER/openwq_cal');
-    s.sif_local = _gv('sif_local', '/path/to/openwq.sif');
+    s.sif_hpc = _gv('sif_hpc', '$HPC_BASE/openwq.sif');
+    s.hpc_openwq_dir = _gv('hpc_openwq_dir', '');
+    s.hpc_exe = _gv('hpc_exe', '');
 
     var speciesCbs = document.querySelectorAll('.species-cb');
     var species = [];
@@ -2749,7 +2952,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('# calibration_lib lives in the openWQ "3_Calibration" folder.  Add');
     lines.push('# that folder to sys.path (absolute, baked at generation time) so');
     lines.push('# this script imports calibration_lib no matter where it is saved.');
-    lines.push('sys.path.insert(0, ' + pyRepr(CALIB_LIB_DIR) + ')');
+    lines.push('# calibration_lib location: on HPC the sbatch exports');
+    lines.push('# OWQ_CALIB_LIB_DIR (the cloned openWQ 3_Calibration); otherwise fall');
+    lines.push('# back to the path baked here at generation time (local runs).');
+    lines.push('_CALIB_LIB_DIR = os.environ.get("OWQ_CALIB_LIB_DIR") or ' + pyRepr(CALIB_LIB_DIR));
+    lines.push('sys.path.insert(0, _CALIB_LIB_DIR)');
     lines.push('sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))');
     lines.push('');
     lines.push('from calibration_lib.calibration_driver import run_calibration, regenerate_results_report');
@@ -3004,7 +3211,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        container_runtime=container_runtime,');
     lines.push('        docker_container_name=container_config.get("docker_container_name", "docker_openwq"),');
     lines.push('        docker_compose_path=container_config.get("docker_compose_path", ""),');
-    lines.push('        executable_full_path=container_config.get("executable_path", ""),');
+    lines.push('        # On HPC the sbatch exports OWQ_EXEC_PATH (the binary you');
+    lines.push('        # compiled there); locally fall back to the model config path.');
+    lines.push('        executable_full_path=(os.environ.get("OWQ_EXEC_PATH")');
+    lines.push('                              or container_config.get("executable_path", "")),');
     lines.push('        file_manager_path=container_config.get("file_manager_path", ""),');
     lines.push('        excluded_frameworks=excluded_frameworks,');
     lines.push('        # Spatial-matching options consumed by ObjectiveFunction.');
@@ -3223,6 +3433,24 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   // Reflect the selected container runtime in the "How to use this script"
   // steps: Docker shows the `docker compose up -d` command; Apptainer
   // (Singularity) drops it and points the user at the SIF / bind paths.
+  // Container-runtime toggle (two buttons, single-select).  Mirrors the choice
+  // into the hidden #container_runtime input, flips the active button, and sets
+  // the stale-folder default (docker -> prompt, apptainer -> clean).
+  window.setRuntime = function(val) {
+    if (val !== 'docker' && val !== 'apptainer') val = 'docker';
+    var hid = document.getElementById('container_runtime');
+    if (hid) hid.value = val;
+    document.querySelectorAll('#runtimeToggle .rt-btn').forEach(function(b) {
+      var on = (b.getAttribute('data-rt') === val);
+      b.classList.toggle('rt-active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    var cwd = document.getElementById('clean_work_dir');
+    if (cwd) cwd.value = (val === 'apptainer') ? 'clean' : 'prompt';
+    if (typeof updateRuntimeUI === 'function') updateRuntimeUI();
+    if (typeof updateScript === 'function') updateScript();
+  };
+
   function updateRuntimeUI() {
     var crEl = document.getElementById('container_runtime');
     var rt = crEl ? crEl.value : 'docker';
@@ -3230,7 +3458,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var cmd = document.getElementById('step3DockerCmd');
     if (rt === 'apptainer') {
       if (txt) txt.textContent = 'Apptainer / Singularity: build your openwq ' +
-        '.sif image, fill in the HPC fields in the Execution tab, then use the ' +
+        '.sif image ON the HPC (so it matches the compute-node architecture), ' +
+        'fill in the HPC fields in the Execution tab, then use the ' +
         '"Run the calibration on HPC" section below (no "docker compose" needed).';
       if (cmd) cmd.style.display = 'none';
     } else {
@@ -3239,12 +3468,35 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     }
   }
 
+  // Expand / collapse a numbered run step (steps 2 & 3 start collapsed).
+  window.toggleStep = function(id, hdr) {
+    var body = document.getElementById(id);
+    if (!body) return;
+    var hidden = (body.style.display === 'none' || body.style.display === '');
+    body.style.display = hidden ? 'block' : 'none';
+    var caret = hdr ? hdr.querySelector('.step-caret') : null;
+    if (caret) caret.style.transform = hidden ? 'rotate(90deg)' : 'rotate(0deg)';
+  };
+
   // Copy the recommended save path (shown after "Save to:") to the
   // clipboard.  Uses the live text, which the load-time hook refines to
   // wherever the report HTML is actually opened from.
   window.copySaveHint = function() {
     var el = document.getElementById('saveHint');
     var btn = document.getElementById('copyHintBtn');
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent.trim());
+    if (btn) {
+      var prev = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(function(){ btn.textContent = prev; }, 1500);
+    }
+  };
+
+  // Copy the .sbatch save location (next to the run script) to the clipboard.
+  window.copySbatchHint = function() {
+    var el = document.getElementById('sbatchSaveHint');
+    var btn = document.getElementById('copySbatchHintBtn');
     if (!el) return;
     navigator.clipboard.writeText(el.textContent.trim());
     if (btn) {
@@ -3281,9 +3533,18 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   function sbatchName() {
     return (REPORT_STEM ? REPORT_STEM : 'calibration') + '.sbatch';
   }
+  // Map a baked LOCAL absolute path to its clean location under $HPC_BASE.
+  // Everything is rsync'd RELATIVE to the common local root, so on the cluster
+  // it lives at $HPC_BASE/<path-relative-to-common-root> (no /Users/... prefix).
+  function _owqRelToRoot(p) {
+    var r = (HPC && HPC.common_root) || '';
+    return (r && p && p.indexOf(r) === 0) ? p.slice(r.length) : p;
+  }
   function buildSbatch(s) {
-    var runLocal = CALIB_LIB_DIR + '/' +
-                   (REPORT_STEM ? REPORT_STEM : 'calibration') + '_run.py';
+    var runLocalAbs = (HPC && HPC.run_local) ? HPC.run_local
+                 : (CALIB_LIB_DIR + '/' +
+                    (REPORT_STEM ? REPORT_STEM : 'calibration') + '_run.py');
+    var runLocal = _owqRelToRoot(runLocalAbs);
     var name = sbatchName();
     var L = [];
     L.push('#!/bin/bash');
@@ -3305,6 +3566,23 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('# --- EDIT: make Python + Apptainer available on the compute node ---');
       L.push('# module load apptainer python      # or: source ~/miniconda3/bin/activate openwq');
     }
+    L.push('');
+    L.push('# calibration_lib is used from your cloned openWQ on the HPC (not copied).');
+    var owqDir = (s.hpc_openwq_dir || '').replace(/\/+$/, '') || '/path/to/openwq';
+    L.push('# OWQ_REPO = your cloned openWQ (the folder that contains supporting_scripts/).');
+    L.push('OWQ_REPO="' + owqDir + '"' + (s.hpc_openwq_dir ? '' : '   # <-- EDIT: your cloned openWQ'));
+    L.push('# Locate calibration_lib (accepts the openWQ repo folder OR its parent).');
+    L.push('for _c in "$OWQ_REPO/supporting_scripts/3_Calibration" "$OWQ_REPO/openwq/supporting_scripts/3_Calibration"; do');
+    L.push('  [ -d "$_c/calibration_lib" ] && export OWQ_CALIB_LIB_DIR="$_c" && break');
+    L.push('done');
+    L.push(': "${OWQ_CALIB_LIB_DIR:?No supporting_scripts/3_Calibration/calibration_lib under $OWQ_REPO - check the openWQ clone path}"');
+    L.push('');
+    L.push('# Model binary you compiled ON the HPC (the .sif is dependency-only).');
+    var _exe = (s.hpc_exe || '').trim();
+    if (_exe)
+      L.push('export OWQ_EXEC_PATH="' + _exe + '"');
+    else
+      L.push('export OWQ_EXEC_PATH="/path/to/your/bin/<model>_openwq_Release"   # <-- EDIT: your HPC-compiled binary');
     L.push('');
     L.push('RUN="$HPC_BASE' + runLocal + '"');
     L.push('cd "$(dirname "$RUN")"');
@@ -3338,9 +3616,12 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     if (window.showSaveFilePicker) {
       window.showSaveFilePicker({
         suggestedName: sugName,
+        id: 'owqCalibSave',            // shared dir memory with the run-script save
+        startIn: window._owqSaveHandle || 'documents',  // reopen the last-used folder
         types: [{description: 'SLURM job file',
                  accept: {'text/x-sh': ['.sbatch', '.sh']}}],
       }).then(function(handle) {
+        window._owqSaveHandle = handle;   // remember this folder for the next save
         return handle.createWritable().then(function(writable) {
           return writable.write(blob).then(function() { return writable.close(); });
         });
@@ -3369,43 +3650,110 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       'HPC_BASE=' + (s.hpc_base || '/scratch/$USER/openwq_cal'),
     ];
   }
+  // Parent directory of a path (no trailing slash, never returns "").
+  function _owqDirOf(p) {
+    var q = (p || '').replace(/\/+$/, '');
+    var i = q.lastIndexOf('/');
+    return i > 0 ? q.slice(0, i) : q;
+  }
   function buildHpcCopy(s) {
     var roots = (HPC && HPC.src_roots) || [];
     var L = _hpcVars(s);
-    L.push('SIF_LOCAL=' + (s.sif_local || '/path/to/openwq.sif'));
+    L.push('SIF_HPC=' + (s.sif_hpc || '$HPC_BASE/openwq.sif'));
     L.push('');
-    L.push('# Copy code, inputs, the .sif image and the SLURM job to the HPC.');
-    L.push('# rsync -R keeps the local layout; eval_*/results + old HDF5 are skipped.');
-    L.push('ssh "$HPC_USER@$HPC_HOST" "mkdir -p $HPC_BASE"');
-    L.push('rsync -avzR \\');
-    L.push("  --exclude '0_*_calibration/evaluations' \\");
-    L.push("  --exclude '0_*_calibration/results' \\");
-    L.push("  --exclude 'openwq_out/HDF5' \\");
-    roots.forEach(function(r){ L.push('  "' + r + '" \\'); });
-    L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/"');
-    L.push('rsync -avz "$SIF_LOCAL" "$HPC_USER@$HPC_HOST:$HPC_BASE/openwq.sif"');
-    if (HPC && HPC.sbatch_local)
-      L.push('rsync -avz "' + HPC.sbatch_local + '" "$HPC_USER@$HPC_HOST:$HPC_BASE/"');
+    L.push('# The openwq .sif is NOT uploaded - build it ONCE on the HPC itself,');
+    L.push('# so its CPU architecture matches the compute nodes, e.g.:');
+    L.push('#   ssh "$HPC_USER@$HPC_HOST"');
+    L.push('#   mkdir -p "$(dirname "$SIF_HPC")" && cd "$(dirname "$SIF_HPC")"');
+    L.push('#   apptainer build "$SIF_HPC" <openwq>/containers/openwq_apptainer.def');
+    L.push('');
+    L.push('# Copy your model config + inputs to the HPC.  The calibration_lib CODE');
+    L.push('# is NOT copied - it is used from your cloned openWQ on the HPC (see the');
+    L.push('# OWQ_CALIB_LIB_DIR export in the .sbatch).');
+    L.push('# Each tree is dropped straight into $HPC_BASE/<project>/... : only the');
+    L.push('# path BELOW your project root is kept, never the local machine prefix.');
+    L.push('# -L dereferences any input symlinks to real files.  eval_*/results +');
+    L.push('# old HDF5 + __pycache__ are skipped.');
+    // Shared rsync filter lines, applied to every source.  None are "/"-anchored,
+    // so they match at any depth regardless of which source tree is being copied.
+    var FILT = [
+      "  --exclude '0_*_calibration/evaluations' \\",
+      "  --exclude '0_*_calibration/results' \\",
+      "  --exclude 'openwq_out/HDF5' \\",
+      "  --exclude '__pycache__' \\",
+      "  --exclude '.DS_Store' \\",
+    ];
+    // Keep this run's host-model dirs (e.g. 0_SUMMA_OPENWQ + its calibration dir);
+    // drop sibling setups for OTHER host models (e.g. 0_MIZUROUTE_OPENWQ).
+    ((HPC && HPC.keep_dirs) || []).forEach(function(d){
+      FILT.push("  --include '" + d + "/***' \\");
+    });
+    FILT.push("  --exclude '0_*_OPENWQ' \\");
+    FILT.push("  --exclude '0_*_OPENWQ_calibration' \\");
+    var _croot = (HPC && HPC.common_root) || '';
+    var _clean = !!(HPC && HPC.remap_ok) && !!_croot;
+    if (_clean) {
+      // Group sources by the parent dir they share UNDER the common root, then
+      // rsync each group (NO -R) straight into $HPC_BASE/<that-parent>/.  macOS
+      // ships openrsync, which ignores the "/./" dot-anchor and would otherwise
+      // recreate the whole local /Users/... path on the cluster - so we set the
+      // destination explicitly and copy each source by its basename instead.
+      var groups = {};      // relParent -> [src, ...]
+      var order = [];
+      roots.forEach(function(r){
+        var rel = _owqRelToRoot(_owqDirOf(r));   // e.g. "/century_basins_tested" or ""
+        if (!(rel in groups)) { groups[rel] = []; order.push(rel); }
+        groups[rel].push(r);
+      });
+      order.forEach(function(rel){
+        var dest = '$HPC_BASE' + rel;
+        L.push('ssh "$HPC_USER@$HPC_HOST" "mkdir -p ' + dest + '"');
+        L.push('rsync -avzL \\');
+        FILT.forEach(function(f){ L.push(f); });
+        groups[rel].forEach(function(src){ L.push('  "' + src + '" \\'); });
+        L.push('  "$HPC_USER@$HPC_HOST:' + dest + '/"');
+      });
+    } else {
+      // Fallback: no clean common root (inputs span drives).  Copy each tree by
+      // its basename into $HPC_BASE and re-point the absolute paths by hand.
+      L.push('ssh "$HPC_USER@$HPC_HOST" "mkdir -p $HPC_BASE"');
+      L.push('rsync -avzL \\');
+      FILT.forEach(function(f){ L.push(f); });
+      roots.forEach(function(r){ L.push('  "' + r + '" \\'); });
+      L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/"');
+    }
     return L.join('\n');
   }
   function buildHpcRemap(s) {
     var L = _hpcVars(s);
+    L.push('SIF_HPC=' + (s.sif_hpc || '$HPC_BASE/openwq.sif'));
     L.push('');
     if (HPC && HPC.remap_ok) {
       L.push('# Re-point the absolute paths to their HPC copies (runs once).');
-      L.push('ssh "$HPC_USER@$HPC_HOST" "HPC_BASE=\'$HPC_BASE\' bash -s" <<\'EOF\'');
+      L.push('# Run this on your LAPTOP or after logging into the HPC - it auto-detects:');
+      L.push('# if sbatch is on PATH it edits the files here, else it ssh-es into the HPC.');
+      L.push('if command -v sbatch >/dev/null 2>&1; then');
+      L.push('  owq_sh() { HPC_BASE="$HPC_BASE" SIF_HPC="$SIF_HPC" bash; }');
+      L.push('else');
+      L.push('  owq_sh() { ssh "$HPC_USER@$HPC_HOST" "HPC_BASE=\'$HPC_BASE\' SIF_HPC=\'$SIF_HPC\' bash -s"; }');
+      L.push('fi');
+      L.push('owq_sh <<\'EOF\'');
       L.push('set -euo pipefail');
       L.push('ROOT="' + (HPC.common_root || '') + '"');
-      L.push('RUN="$HPC_BASE' + (HPC.run_local || '') + '"');
-      L.push('MC="$HPC_BASE' + (HPC.mc_path || '') + '"');
-      L.push('if [ ! -f "$HPC_BASE/.owq_remapped" ]; then');
-      L.push('  sed -i "s#$ROOT#$HPC_BASE$ROOT#g" "$RUN" "$MC"');
-      L.push('  sed -i "s#^apptainer_sif_path = .*#apptainer_sif_path = \\"$HPC_BASE/openwq.sif\\"#" "$RUN"');
-      L.push('  sed -i "s#^apptainer_bind_path = .*#apptainer_bind_path = \\"$HPC_BASE$ROOT\\"#" "$RUN"');
+      L.push('RUN="$HPC_BASE' + _owqRelToRoot(HPC.run_local || '') + '"');
+      L.push('MC="$HPC_BASE' + _owqRelToRoot(HPC.mc_path || '') + '"');
+      var _bindVal = (HPC && HPC.container_prefix) ? ('$HPC_BASE:' + HPC.container_prefix) : '$HPC_BASE';
+      L.push('# Idempotent + self-healing: re-point only while local $ROOT paths remain,');
+      L.push('# so re-copying fresh inputs later just re-points them again (no stale flag).');
+      L.push('if grep -qF "$ROOT" "$RUN" "$MC"; then');
+      L.push('  # Re-point every baked-in local root ($ROOT) to its clean $HPC_BASE copy.');
+      L.push('  sed -i "s#$ROOT#$HPC_BASE#g" "$RUN" "$MC"');
+      L.push('  sed -i "s#^apptainer_sif_path = .*#apptainer_sif_path = \\"$SIF_HPC\\"#" "$RUN"');
+      L.push('  sed -i "s#^apptainer_bind_path = .*#apptainer_bind_path = \\"' + _bindVal + '\\"#" "$RUN"');
       L.push('  sed -i "s#^container_runtime = .*#container_runtime = \\"apptainer\\"#" "$RUN"');
-      L.push('  touch "$HPC_BASE/.owq_remapped"');
+      L.push('  echo "Re-pointed absolute paths to $HPC_BASE."');
       L.push('else');
-      L.push('  echo "Already re-pointed (rm $HPC_BASE/.owq_remapped to redo)."');
+      L.push('  echo "Already re-pointed - no $ROOT paths remain."');
       L.push('fi');
       L.push('EOF');
     } else {
@@ -3418,13 +3766,23 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   function buildHpcSubmit(s) {
     var L = _hpcVars(s);
     L.push('');
-    L.push('# Submit the SLURM job.');
-    L.push('ssh "$HPC_USER@$HPC_HOST" "cd $HPC_BASE && sbatch --export=ALL,HPC_BASE=$HPC_BASE $HPC_BASE/' +
-           ((HPC && HPC.sbatch_name) || 'calibration.sbatch') + '"');
+    var _sbatchHpc = '$HPC_BASE' + ((HPC && HPC.sbatch_local)
+                       ? _owqRelToRoot(HPC.sbatch_local)
+                       : ('/' + ((HPC && HPC.sbatch_name) || 'calibration.sbatch')));
+    L.push('# Submit the SLURM job (it was copied inside the work dir by step a).');
+    L.push('# Run this on your LAPTOP or after logging into the HPC - it auto-detects:');
+    L.push('# if sbatch is on PATH it submits here, otherwise it ssh-es into the HPC.');
+    L.push('SBATCH_FILE="' + _sbatchHpc + '"');
+    L.push('if command -v sbatch >/dev/null 2>&1; then');
+    L.push('  cd "$HPC_BASE" && sbatch --export=ALL,HPC_BASE="$HPC_BASE" "$SBATCH_FILE"');
+    L.push('else');
+    L.push('  ssh "$HPC_USER@$HPC_HOST" "cd $HPC_BASE && sbatch --export=ALL,HPC_BASE=$HPC_BASE $SBATCH_FILE"');
+    L.push('fi');
     L.push('');
-    L.push('# Monitor:  ssh "$HPC_USER@$HPC_HOST" "squeue -u $HPC_USER"');
+    L.push('# Monitor (on the HPC):  squeue -u $HPC_USER');
+    L.push('#       (from laptop):   ssh "$HPC_USER@$HPC_HOST" "squeue -u $HPC_USER"');
     if (HPC && HPC.work_dir)
-      L.push('# Results:  rsync -avz "$HPC_USER@$HPC_HOST:$HPC_BASE' + HPC.work_dir + '/" ./hpc_results/');
+      L.push('# Results (from laptop): rsync -avz "$HPC_USER@$HPC_HOST:$HPC_BASE' + _owqRelToRoot(HPC.work_dir) + '/" ./hpc_results/');
     return L.join('\n');
   }
   function updateHpcRun(state) {
@@ -3432,6 +3790,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var c = document.getElementById('hpcRunCopy');   if (c) c.textContent = buildHpcCopy(s);
     var r = document.getElementById('hpcRunRemap');  if (r) r.textContent = buildHpcRemap(s);
     var b = document.getElementById('hpcRunSubmit'); if (b) b.textContent = buildHpcSubmit(s);
+    // Keep the "expected .sif location" warning in sync with the HPC sif field.
+    var sp = document.getElementById('sifExpectedPath');
+    if (sp) sp.textContent = (s.sif_hpc && String(s.sif_hpc).trim())
+                           ? String(s.sif_hpc).trim() : '$HPC_BASE/openwq.sif';
   }
   window.copyHpcRun = function(btn, targetId) {
     var pre = document.getElementById(targetId);
@@ -3470,11 +3832,14 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     if (window.showSaveFilePicker) {
       window.showSaveFilePicker({
         suggestedName: sugName,
+        id: 'owqCalibSave',            // shared dir memory with the .sbatch save
+        startIn: window._owqSaveHandle || 'documents',  // reopen the last-used folder
         types: [{
           description: 'Python Script',
           accept: {'text/x-python': ['.py']},
         }],
       }).then(function(handle) {
+        window._owqSaveHandle = handle;   // remember this folder for the next save
         return handle.createWritable().then(function(writable) {
           return writable.write(blob).then(function() {
             return writable.close();
@@ -3661,14 +4026,17 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   })();
 
   // ── Calibration / validation period slider ──
-  // Greys out the span without observations; one draggable handle splits
-  // the observation period into Calibration (left) and Validation (right),
-  // defaulting to the middle.  Populates the hidden period inputs that
-  // collectFormState() / generateScript() read.
+  // Greys out the span without observations.  Two draggable handles set the
+  // calibration window START (left) and the Calibration / Validation split
+  // (right); any data before the start handle is excluded.  Defaults: start at
+  // the first observation, split at 1/3 (calibration = first third, validation
+  // = last two-thirds).  Populates the hidden period
+  // inputs that collectFormState() / generateScript() read.
   (function() {
     var wrap   = document.getElementById('calibSliderWrap');
     var track  = document.getElementById('calibTrack');
     var handle = document.getElementById('calibHandle');
+    var handleStart = document.getElementById('calibHandleStart');
     if (!wrap || !track || !handle) return;
 
     function parseDate(s) {
@@ -3723,7 +4091,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     function frac(d) { return (d.getTime() - lo.getTime()) / span; }
     function dateAtFrac(f) { return new Date(lo.getTime() + f * span); }
     var aStartF = frac(aStart), aEndF = frac(aEnd);
-    var splitF = (aStartF + aEndF) / 2;   // default: middle of obs period
+    // default: calibration = first 1/3 of the obs period, validation = last 2/3
+    var splitF = aStartF + (aEndF - aStartF) / 3;
+    var calStartF = aStartF;              // calibration-window START (left handle)
 
     // Observation timestamps (epoch ms) per species → live in-window count.
     // Counts only the SELECTED target species when any are ticked, else all
@@ -3757,49 +4127,67 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     function render() {
       var pct = function(f) { return (f * 100) + '%'; };
       var gl = document.getElementById('segGrayLeft');
+      var ex = document.getElementById('segExclLeft');
       var sc = document.getElementById('segCalib');
       var sv = document.getElementById('segValid');
       var gr = document.getElementById('segGrayRight');
-      gl.style.left = '0%';         gl.style.width = pct(aStartF);
-      sc.style.left = pct(aStartF); sc.style.width = pct(splitF - aStartF);
-      sv.style.left = pct(splitF);  sv.style.width = pct(aEndF - splitF);
-      gr.style.left = pct(aEndF);   gr.style.width = pct(1 - aEndF);
+      gl.style.left = '0%';            gl.style.width = pct(aStartF);
+      ex.style.left = pct(aStartF);    ex.style.width = pct(calStartF - aStartF);
+      sc.style.left = pct(calStartF);  sc.style.width = pct(splitF - calStartF);
+      sv.style.left = pct(splitF);     sv.style.width = pct(aEndF - splitF);
+      gr.style.left = pct(aEndF);      gr.style.width = pct(1 - aEndF);
       handle.style.left = pct(splitF);
+      if (handleStart) handleStart.style.left = pct(calStartF);
 
+      var cStart = dateAtFrac(calStartF);
       var cEnd = dateAtFrac(splitF);
-      var cN = countObs(aStart.getTime(), cEnd.getTime());
+      var cN = countObs(cStart.getTime(), cEnd.getTime());
       var vN = countObs(cEnd.getTime(), aEnd.getTime());
       var cSuf = (cN === null) ? '' : ('  ·  ' + cN + ' obs');
       var vSuf = (vN === null) ? '' : ('  ·  ' + vN + ' obs');
       var cEl = document.getElementById('calibWindowText');
-      cEl.textContent = fmt(aStart) + '  →  ' + fmt(cEnd) + cSuf;
+      cEl.textContent = fmt(cStart) + '  →  ' + fmt(cEnd) + cSuf;
       // Flag an empty calibration window (no eligible obs) in red.
       cEl.style.color = (cN === 0) ? 'var(--danger, #dc2626)' : '';
       cEl.style.fontWeight = (cN === 0) ? '700' : '';
       document.getElementById('valWindowText').textContent   = fmt(cEnd)   + '  →  ' + fmt(aEnd) + vSuf;
       document.getElementById('calibAxisStart').textContent  = fmt(lo);
       document.getElementById('calibAxisEnd').textContent    = fmt(hi);
-      document.getElementById('calibration_period_start').value = fmt(aStart);
+      document.getElementById('calibration_period_start').value = fmt(cStart);
       document.getElementById('calibration_period_end').value   = fmt(cEnd);
       document.getElementById('validation_period_start').value  = fmt(cEnd);
       document.getElementById('validation_period_end').value    = fmt(aEnd);
     }
 
+    var active = 'split';   // which handle is being dragged: 'start' | 'split'
     function setFromClientX(clientX) {
       var rect = track.getBoundingClientRect();
       var f = (clientX - rect.left) / rect.width;
-      f = Math.max(aStartF, Math.min(aEndF, f));
-      splitF = f;
+      if (active === 'start') {
+        calStartF = Math.max(aStartF, Math.min(splitF, f));   // can't pass the split
+      } else {
+        splitF = Math.max(calStartF, Math.min(aEndF, f));     // can't pass the start
+      }
       render();
       if (typeof updateScript === 'function') updateScript();
     }
 
     var dragging = false;
     handle.addEventListener('mousedown', function(e) {
-      e.preventDefault(); dragging = true; document.body.style.userSelect = 'none';
+      e.preventDefault(); active = 'split'; dragging = true;
+      document.body.style.userSelect = 'none';
+    });
+    if (handleStart) handleStart.addEventListener('mousedown', function(e) {
+      e.preventDefault(); active = 'start'; dragging = true;
+      document.body.style.userSelect = 'none';
     });
     track.addEventListener('mousedown', function(e) {
-      setFromClientX(e.clientX); dragging = true; document.body.style.userSelect = 'none';
+      // Clicking the track grabs whichever handle is nearer the click point.
+      var rect = track.getBoundingClientRect();
+      var f = (e.clientX - rect.left) / rect.width;
+      active = (Math.abs(f - calStartF) < Math.abs(f - splitF)) ? 'start' : 'split';
+      dragging = true; document.body.style.userSelect = 'none';
+      setFromClientX(e.clientX);
     });
     document.addEventListener('mousemove', function(e) {
       if (dragging) setFromClientX(e.clientX);

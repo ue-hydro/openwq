@@ -362,8 +362,23 @@ class ModelRunner:
         container_master_json = f"{container_eval_dir}/openWQ_master.json"
         container_file_manager = _to_container(self.file_manager_path)
 
-        # Build executable path
-        exec_dir = f"{container_path}/route/build/openwq/openwq/bin"
+        # Executable: prefer the explicit full path (the HPC-compiled binary set
+        # via OWQ_EXEC_PATH / executable_path_on_hpc) - works for ANY coupling
+        # (summa, mizuroute, mizuroute_cslm).  If it lives under the bound host
+        # tree it is reachable at its in-container path; otherwise bind its
+        # directory in as-is.  Fall back to the legacy bin location only when no
+        # full path is given.
+        extra_binds = []
+        if self.executable_full_path:
+            if str(self.executable_full_path).startswith(host_path):
+                exec_path = _to_container(self.executable_full_path)
+            else:
+                _exe_dir = os.path.dirname(str(self.executable_full_path))
+                extra_binds = ["--bind", _exe_dir]
+                exec_path = str(self.executable_full_path)
+        else:
+            exec_path = (f"{container_path}/route/build/openwq/openwq/bin/"
+                         f"{self.executable_name}")
 
         # SUMMA → `-m <fileManager>` with a per-eval fileManager that writes
         # into this eval's own summa_out (isolated, fresh each run).
@@ -375,13 +390,16 @@ class ModelRunner:
             eval_ctrl = self._mizuroute_eval_control(eval_dir, container_eval_dir)
             model_args = [eval_ctrl or container_file_manager]
 
+        # cwd = the eval dir so openWQ's relative RESULTS_FOLDERPATH (openwq_out/)
+        # lands in this evaluation's folder.
         cmd = [
             "apptainer", "exec",
             "--bind", self.apptainer_bind_path,
-            "--pwd", exec_dir,
+            *extra_binds,
+            "--pwd", container_eval_dir,
             "--env", f"master_json={container_master_json}",
             self.apptainer_sif_path,
-            f"./{self.executable_name}",
+            exec_path,
             *self.executable_args.split(),
             *model_args
         ]
