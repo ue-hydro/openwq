@@ -249,6 +249,35 @@ def get_gen_input_driver_module(model_config: Dict[str, Any]):
     # relative to the model config file.
     # We can locate it from executable_path or from a known relative path.
 
+    # ── Preferred: load the engine from the openWQ CLONE that ships THIS
+    # calibration_lib, so a `git pull` of the clone updates it — never a stale
+    # project copy.  Layout (mirrors how calibration_lib itself is used):
+    #   <clone>/supporting_scripts/3_Calibration/calibration_lib/   (this file)
+    #   <clone>/supporting_scripts/1_Model_Config/config_support_lib/
+    import importlib, types
+    this_dir = os.path.dirname(os.path.abspath(__file__))
+    clone_csl = os.path.normpath(
+        os.path.join(this_dir, '..', '..', '1_Model_Config', 'config_support_lib'))
+    if os.path.isfile(os.path.join(clone_csl, 'Gen_Input_Driver.py')):
+        # Evict any config_support_lib modules already imported from a PROJECT
+        # copy (e.g. cached when the model config was exec-loaded), so the
+        # clone's versions — and their sibling imports — load fresh.
+        _marker = os.path.join('1_Model_Config', 'config_support_lib')
+        _clone_prefix = os.path.abspath(clone_csl) + os.sep
+        for _name in list(sys.modules):
+            _m = sys.modules.get(_name)
+            if not isinstance(_m, types.ModuleType):
+                continue
+            _f = getattr(_m, '__file__', None) or ''
+            if _marker in _f and not os.path.abspath(_f).startswith(_clone_prefix):
+                del sys.modules[_name]
+        # Make the clone's config_support_lib win on sys.path.
+        while clone_csl in sys.path:
+            sys.path.remove(clone_csl)
+        sys.path.insert(0, clone_csl)
+        return importlib.import_module('Gen_Input_Driver')
+
+    # ── Legacy fallback (no clone layout found) ──────────────────────────────
     # Try multiple strategies to find it
     search_paths = []
 
