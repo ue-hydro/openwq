@@ -1139,6 +1139,28 @@ def calc_copernicus_lulc(
     clipped_rasters_dir = ss_output_dir / 'lulc_clipped_rasters'
     clipped_rasters_dir.mkdir(exist_ok=True)
 
+    # ── Reuse precomputed LULC areas if present ─────────────────────────────
+    # The LULC areas are climate-INDEPENDENT (they depend only on the basin +
+    # ESA-CCI maps).  When lulc_areas_all.csv already exists (produced by the
+    # model-config run and seeded into each calibration eval), reuse it instead
+    # of re-reading the multi-GB ESA-CCI rasters.  Only the downstream load /
+    # climate-adjustment steps re-run — so dynamic coefficients still affect the
+    # loading, just without the slow re-clip.  Delete the CSV to force a re-clip.
+    _areas_csv = ss_output_dir / 'lulc_areas_all.csv'
+    if _areas_csv.is_file():
+        print(f"\n  Reusing precomputed LULC areas ({_areas_csv.name}) — "
+              "skipping the slow ESA-CCI NetCDF clipping.")
+        results_df = pd.read_csv(_areas_csv)
+        summaries = {}
+        try:
+            _an = OptimizedLULCAnalyzer(
+                ss_method_copernicus_basin_info, output_dir=str(ss_output_dir))
+            summaries = _an.create_summary_statistics(results_df)
+        except Exception:
+            summaries = {}
+        existing_rasters = sorted(str(p) for p in clipped_rasters_dir.glob('*.tif'))
+        return results_df, summaries, existing_rasters
+
     # ── Auto-download from CDS if no local directory provided ──────────
     if ss_method_copernicus_nc_lc_dir is None:
         cache_dir = str(ss_output_dir / 'copernicus_cache')

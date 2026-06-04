@@ -1127,8 +1127,17 @@ def generate_interactive_setup(
         import platform
         os_name = platform.system()  # "Darwin", "Linux", "Windows"
 
-        containers_dir = os.path.normpath(
-            os.path.join(cal_script_dir, '..', '..', '..', '..', 'containers'))
+        # Containers dir for the local `docker compose up`.  Use the SAME directory
+        # the runner resolves (parent of the model's docker_compose_path) so the
+        # command matches the runner AND actually exists.  Honors an explicit
+        # docker_compose_path in the model config, and the executable's own openWQ.
+        # Only fall back to THIS calibration_lib's openWQ/containers if none resolved.
+        _dc = (container_config or {}).get("docker_compose_path", "")
+        if _dc:
+            containers_dir = os.path.dirname(_dc)
+        else:
+            containers_dir = os.path.normpath(
+                os.path.join(cal_script_dir, '..', '..', 'containers'))
         # The run-script is recommended to live in cal_script_dir (the
         # "3_Calibration" folder that contains calibration_lib).  The how-to
         # therefore cd's into that folder first, then runs the script by name

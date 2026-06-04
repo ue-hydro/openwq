@@ -324,6 +324,27 @@ def generate_config_for_eval(
     eval_config = copy.deepcopy(model_config)
     eval_config['dir2save_input_files'] = str(eval_dir)
 
+    # Reuse the heavy Copernicus LULC processing: seed this eval's
+    # ss_copernicus_files with the baseline's already-computed LULC areas, so the
+    # per-eval (dynamic-coefficient) regeneration only re-applies the cheap
+    # climate adjustment instead of re-clipping the multi-GB ESA-CCI rasters.
+    # The climate params still affect the loading every eval; only the slow
+    # raster clipping is skipped.
+    try:
+        import shutil as _shutil
+        _exe = model_config.get('executable_path', '')
+        if _exe:
+            _base_areas = os.path.join(os.path.dirname(_exe), 'openwq_in',
+                                       'ss_copernicus_files', 'lulc_areas_all.csv')
+            if os.path.isfile(_base_areas):
+                _eval_ss = os.path.join(str(eval_dir), 'openwq_in', 'ss_copernicus_files')
+                os.makedirs(_eval_ss, exist_ok=True)
+                _dst = os.path.join(_eval_ss, 'lulc_areas_all.csv')
+                if not os.path.isfile(_dst):
+                    _shutil.copy2(_base_areas, _dst)
+    except Exception:
+        pass  # fall back to full regeneration if seeding fails
+
     # Suppress report generation during calibration
     if suppress_report:
         eval_config.pop('generate_report', None)
@@ -371,6 +392,11 @@ def generate_config_for_eval(
         if _cfg_dir and os.path.isdir(_cfg_dir):
             os.chdir(_cfg_dir)
 
+        # Calibration deliberately (re)generates each evaluation's config every
+        # time - reusing the template's already-processed GRQA/Copernicus via the
+        # baseline manifest, NOT re-running them.  So the interactive
+        # "inputs already exist" guard must never fire here.
+        eval_config["force_regenerate"] = True
         # Call Gen_Input_Driver
         try:
             gJSON_lib.Gen_Input_Driver(**eval_config)
