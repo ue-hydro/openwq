@@ -509,6 +509,10 @@ def Gen_Input_Driver(
         # Optional parameters (MUST be at the end)
         ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class: Optional[Dict[int, Dict[str, float]]] = None,
 
+        # Skip the "inputs already exist" prompt and regenerate unconditionally
+        # (set force_regenerate = True in your config for non-interactive reruns).
+        force_regenerate: bool = False,
+
         # Accept extra kwargs so model_config_template.py can pass locals() cleanly
         **kwargs
 
@@ -516,6 +520,31 @@ def Gen_Input_Driver(
 
     print(f"Project: {project_name}")
     print(f"Authors: {authors}")
+
+    # ── Guard: don't silently overwrite existing input files ────────────────
+    # Regenerating re-runs the (slow) GRQA / Copernicus / BGC processing and
+    # overwrites the openWQ inputs in dir2save_input_files.  If they already
+    # exist, ask before proceeding.  Skip with force_regenerate=True, or in a
+    # non-interactive shell (where we default to NOT touching existing inputs).
+    import sys as _sys
+    # Key only on INPUT artifacts (openwq_out is model OUTPUT, not input).
+    _existing = [n for n in ("openwq_in", "openWQ_master.json",
+                             "openwq_baseline_manifest.json")
+                 if os.path.exists(os.path.join(dir2save_input_files, n))]
+    if _existing and not force_regenerate:
+        print(f"\n⚠  openWQ input files already exist in:\n     {dir2save_input_files}")
+        print(f"     (found: {', '.join(_existing)})")
+        print("   Regenerating will OVERWRITE them and re-run the slow "
+              "GRQA / Copernicus processing.")
+        if _sys.stdin.isatty():
+            _ans = input("   Delete & regenerate the input files? [y/N]: ").strip().lower()
+        else:
+            _ans = ""   # non-interactive: default to keeping existing inputs
+            print("   (non-interactive shell — set force_regenerate=True to regenerate)")
+        if _ans not in ("y", "yes"):
+            print("   ↳ Keeping existing inputs; skipping generation.\n")
+            return
+        print("   ↳ Regenerating…\n")
 
     # Docker path correction setup
     # This script runs on the HOST but generates JSON files with paths that will be

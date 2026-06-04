@@ -808,6 +808,24 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
         print("  GRQA tools not available (missing geopandas/shapely). Skipping.")
         return None, None
 
+    # ── Reuse already-extracted clipped GRQA if present ─────────────────────
+    # Re-running the report must NOT re-read the multi-GB raw GRQA archive.
+    # If openwq_in/grqa_clipped_data/ already holds the clipped observations
+    # (produced by a previous run / the config workflow), load those instead.
+    # To force a fresh extraction, delete that folder before re-running.
+    _clipped_csv = os.path.join(output_dir, 'openwq_in', 'grqa_clipped_data',
+                                'grqa_clipped_observations.csv')
+    if os.path.isfile(_clipped_csv):
+        print("  Reusing pre-extracted GRQA from grqa_clipped_data/ "
+              "(skipping the slow raw-archive extraction).")
+        try:
+            _g, _s = _load_clipped_observations_for_report(output_dir, chemical_species)
+            if _s is not None:
+                return _g, _s
+            print("  Pre-extracted data unusable — re-extracting from raw GRQA…")
+        except Exception as _e:
+            print(f"  WARNING: reuse failed ({_e}) — re-extracting from raw GRQA…")
+
     import geopandas as _gpd
     from shapely.geometry import mapping as _shp_mapping
     from shapely.ops import unary_union as _unary_union
