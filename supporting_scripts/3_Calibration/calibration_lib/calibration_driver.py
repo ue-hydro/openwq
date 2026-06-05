@@ -1042,6 +1042,93 @@ def run_calibration(
     return calibration_results
 
 
+# Failure penalty an evaluation gets when it cannot be scored (must match
+# objective_functions._FAIL value of 1e10).
+_REPORT_PENALTY = 1e10
+
+
+def _reconstruct_history_from_evals(work_dir):
+    """Rebuild the calibration history from the per-evaluation folders.
+
+    Each completed calibration evaluation writes ``evaluations/eval_<id>/
+    objective.txt`` (``objective: <loss>`` + ``success: <bool>``) and
+    ``parameters.json`` (flat ``{name: value}``) AS IT FINISHES.  These are the
+    ground truth and survive an interrupted run, an empty/zero-length history
+    pickle, or a stale ``results/*.json`` that a re-run or an HPC fetch left
+    behind.  Returns a list sorted by eval id:
+    ``[{eval_id, objective, parameters, success}, ...]`` (empty if none).
+    """
+    import re as _re
+    out = []
+    evdir = Path(work_dir) / "evaluations"
+    if not evdir.is_dir():
+        return out
+    for d in sorted(evdir.glob("eval_*")):
+        m = _re.search(r"eval_(\d+)", d.name)
+        if not m:
+            continue
+        objp = d / "objective.txt"
+        if not objp.exists():       # sensitivity-screening evals have none
+            continue
+        try:
+            txt = objp.read_text()
+        except Exception:
+            continue
+        om = _re.search(r"objective:\s*([-+0-9.eE]+)", txt)
+        if not om:
+            continue
+        try:
+            obj = float(om.group(1))
+        except ValueError:
+            continue
+        params = {}
+        pp = d / "parameters.json"
+        if pp.exists():
+            try:
+                with open(pp) as f:
+                    pj = json.load(f)
+                if isinstance(pj, dict):
+                    params = pj.get("parameters", pj)
+            except Exception:
+                params = {}
+        out.append({"eval_id": int(m.group(1)), "objective": obj,
+                    "parameters": params,
+                    "success": ("success: True" in txt)})
+    out.sort(key=lambda e: e["eval_id"])
+    return out
+
+
+def _load_checkpoint_best(work_dir):
+    """Return ``(best_objective, best_params, current_eval)`` from the optimizer
+    checkpoint (``checkpoints/calibration_state.json``), which is updated every
+    evaluation and therefore holds the authoritative best even when the run was
+    interrupted before the final ``results/`` files were written.  Returns
+    ``(None, None, None)`` if unavailable."""
+    p = Path(work_dir) / "checkpoints" / "calibration_state.json"
+    if not p.exists():
+        return None, None, None
+    try:
+        with open(p) as f:
+            st = json.load(f)
+    except Exception:
+        return None, None, None
+    bo = st.get("best_objective")
+    bo = bo if isinstance(bo, (int, float)) and bo == bo else None
+    ce = st.get("current_eval")
+    ce = ce if isinstance(ce, int) else None
+    return bo, (st.get("best_params") or None), ce
+
+
+def _n_valid_evals(history):
+    """Count history entries with a finite, non-penalty objective."""
+    n = 0
+    for e in history or []:
+        o = e.get("objective") if isinstance(e, dict) else None
+        if isinstance(o, (int, float)) and o == o and o < _REPORT_PENALTY:
+            n += 1
+    return n
+
+
 def regenerate_results_report(*, calibration_work_dir, model_config,
                               calibration_parameters, calibration_settings,
                               report_stem):
@@ -1116,6 +1203,50 @@ def regenerate_results_report(*, calibration_work_dir, model_config,
                                                 cr["convergence_reason"])
         except Exception:
             pass
+
+    # ── Robustness: trust the per-eval folders + checkpoint over stale aggregates ──
+    # results/*.json can be stale, empty, or left over from a DIFFERENT run (an
+    # interrupted run never wrote its finals; the live history pickle can be
+    # empty; a re-run or an HPC fetch can overwrite results/ with another run's
+    # files).  The per-evaluation ``objective.txt`` folders and the optimizer
+    # checkpoint are written continuously and are the ground truth, so reconcile
+    # against them: if they reveal MORE successful evaluations — or a BETTER
+    # best — than the loaded aggregates, use them.  This keeps the report honest
+    # for ANY user without depending on a pristine results/ directory.  In a
+    # cleanly-finished run all sources agree, so this is a no-op.
+    recon = _reconstruct_history_from_evals(work_dir)
+    if _n_valid_evals(recon) > _n_valid_evals(cr.get("history")):
+        logger.info(
+            "Report: results/ history had %d valid evals; reconstructed %d from "
+            "evaluations/ folders - using the reconstruction.",
+            _n_valid_evals(cr.get("history")), _n_valid_evals(recon))
+        cr["history"] = recon
+        cr["n_evaluations"] = max(cr.get("n_evaluations", 0), len(recon))
+        cr["calibration_ran"] = True
+
+    ck_best, ck_params, ck_eval = _load_checkpoint_best(work_dir)
+
+    # Best objective = lowest (best) finite, non-penalty value across every
+    # source: the loaded aggregate, the checkpoint, and the reconstructed evals.
+    _cands = []   # list of (objective, params)
+    _bo = cr.get("best_objective")
+    if isinstance(_bo, (int, float)) and _bo == _bo:
+        _cands.append((_bo, cr.get("best_params") or {}))
+    if ck_best is not None:
+        _cands.append((ck_best, ck_params or {}))
+    _rb = min((e for e in cr.get("history", [])
+               if isinstance(e.get("objective"), (int, float))),
+              key=lambda e: e["objective"], default=None)
+    if _rb is not None:
+        _cands.append((_rb["objective"], _rb.get("parameters") or {}))
+    _finite = [(o, p) for (o, p) in _cands if o < _REPORT_PENALTY]
+    if _finite:
+        _best_o, _best_p = min(_finite, key=lambda x: x[0])
+        cr["best_objective"] = _best_o
+        if _best_p:
+            cr["best_params"] = _best_p
+    if ck_eval is not None:
+        cr["n_evaluations"] = max(cr.get("n_evaluations", 0), ck_eval + 1)
 
     # ── Sensitivity state ──
     sr = None

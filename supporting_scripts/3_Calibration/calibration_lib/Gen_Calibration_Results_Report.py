@@ -1003,6 +1003,35 @@ def _build_sensitivity_section(
 </div>
 """
 
+    # Detect a DEGENERATE screening: every sensitivity index is ~0, so no
+    # parameter shows any influence.  This happens when all screening
+    # evaluations produced the SAME objective (typically the failure penalty -
+    # i.e. the model runs failed / produced no comparable output, so changing a
+    # parameter changed nothing).  It does NOT mean the parameters are
+    # unimportant.  Surface a clear warning instead of a table of zeros that
+    # reads as "nothing matters".
+    _all_idx = []
+    for _k in ("mu_star", "ST", "S1", "mu"):
+        _v = sa.get(_k)
+        if isinstance(_v, list):
+            _all_idx.extend(x for x in _v if isinstance(x, (int, float)))
+    _degenerate = bool(_all_idx) and all(abs(x) < 1e-12 for x in _all_idx)
+    _n_sens = sa.get("n_evaluations") or 0
+    _degenerate_html = ""
+    if _degenerate:
+        _degenerate_html = rh.build_highlight_box(
+            "<strong>&#9888;&#65039; Screening could not rank any parameter.</strong> "
+            f"Every {method} sensitivity index is zero across all "
+            f"{len(param_names)} parameters &mdash; meaning the "
+            f"{(str(_n_sens) + ' ') if _n_sens else ''}screening evaluation(s) all "
+            "produced the <strong>same</strong> objective value. That is the "
+            "signature of a <strong>failed screening run</strong> (e.g. every model "
+            "run returned the failure penalty, so varying a parameter changed "
+            "nothing). It does <em>not</em> mean the parameters are uninfluential. "
+            "Re-run the influential-parameter screening on a working model, then "
+            "regenerate this report.",
+            "warning")
+
     # Build sensitivity table and bar chart
     if method == "MORRIS":
         table_html, plot_html = _build_morris_results(
@@ -1019,6 +1048,7 @@ def _build_sensitivity_section(
     return f"""
 <div class="section" id="sensitivity">
     <h2>Influential parameters &mdash; {method} screening</h2>
+    {_degenerate_html}
     {plot_html}
     {table_html}
 </div>
