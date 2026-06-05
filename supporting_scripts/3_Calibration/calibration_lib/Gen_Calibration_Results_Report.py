@@ -62,6 +62,24 @@ except ImportError:
     HAS_NUMPY = False
 
 
+# Failure penalty returned by the objective function for any evaluation that
+# could not be scored (no model output, no obs-sim overlap, etc.).  Must match
+# the ``1e10`` used in objective_functions.py.  When the optimiser's BEST score
+# is still this penalty, NO evaluation ever succeeded — converting it back to a
+# metric would read as "Best KGE = 1 - 1e10 = -9999999999", which is meaningless.
+_FAIL_PENALTY = 1e10
+
+
+def _no_successful_eval(best_obj) -> bool:
+    """True when the best objective is missing/NaN or still the failure
+    penalty — i.e. the calibration produced no scorable evaluation."""
+    if not isinstance(best_obj, (int, float)):
+        return True
+    if best_obj != best_obj:  # NaN
+        return True
+    return best_obj >= _FAIL_PENALTY * 0.9
+
+
 def generate_results_report(
     output_dir: str,
     model_config: Dict[str, Any],
@@ -178,14 +196,10 @@ def generate_results_report(
         if performance_metrics and _did_calib:
             nav_items.append({"id": "performance", "label": "Performance"})
         if _did_calib:
-            try:
-                _has_md = (matched_data is not None
-                           and hasattr(matched_data, "empty")
-                           and not matched_data.empty)
-            except Exception:
-                _has_md = False
-            if _has_md:
-                nav_items.append({"id": "timeseries", "label": "Time Series"})
+            # The time-series section is always rendered for a calibration run
+            # (when no obs-sim pairs exist it shows a placeholder explaining
+            # why), so always provide its nav link.
+            nav_items.append({"id": "timeseries", "label": "Time Series"})
             nav_items.append({"id": "next-steps", "label": "Next Steps"})
             # "Run Best Params" snippet lives at the very bottom of the report.
             nav_items.append({"id": "run-best", "label": "Run Best Params"})
@@ -214,14 +228,18 @@ def generate_results_report(
             _ofn = calibration_settings.get('objective_function', 'KGE')
             # Convert the minimised objective back to the real metric for the
             # header (KGE/NSE: metric = 1 - objective), matching the Summary.
-            if _ofn in ("KGE", "NSE") and isinstance(best_obj, (int, float)) \
-                    and best_obj == best_obj:
-                _hdr_metric = 1.0 - best_obj
+            # When NO evaluation succeeded the "best" is still the penalty, so
+            # show "n/a" rather than a nonsensical 1 - 1e10 = -9999999999.
+            if _no_successful_eval(best_obj):
+                _bobj = "n/a (no successful evaluations)"
             else:
-                _hdr_metric = best_obj
-            _bobj = (f"{_hdr_metric:.4f}"
-                     if isinstance(_hdr_metric, (int, float)) and _hdr_metric == _hdr_metric
-                     else "N/A")
+                if _ofn in ("KGE", "NSE"):
+                    _hdr_metric = 1.0 - best_obj
+                else:
+                    _hdr_metric = best_obj
+                _bobj = (f"{_hdr_metric:.4f}"
+                         if isinstance(_hdr_metric, (int, float)) and _hdr_metric == _hdr_metric
+                         else "N/A")
             meta_items.append(f"Best {_ofn}: {_bobj}")
             meta_items.append(f"Evaluations: {n_evals}")
         meta_items = [m for m in meta_items if m]
@@ -335,7 +353,7 @@ def generate_results_report(
             try:
                 _ts_section = _build_calibrated_timeseries_section(
                     matched_data, calibration_settings, model_config,
-                    output_dir)
+                    output_dir, n_evals=n_evals)
             except Exception as _e:
                 logger.warning(f"Time-series section skipped: {_e}")
                 _ts_section = ""
@@ -539,13 +557,24 @@ def _build_summary_section(
     # as "Best KGE = 6.7340", which is impossible — KGE ≤ 1).  For RMSE the
     # minimised objective already IS the metric, so no conversion.  This also
     # puts "Best" on the same raw-metric scale as the Mean/Median KPIs below.
-    if obj_fn in ("KGE", "NSE") and isinstance(best_obj, (int, float)) \
-            and best_obj == best_obj:  # finite, not NaN
+    # When NO evaluation succeeded the optimiser's "best" is still the failure
+    # penalty (1e10).  Converting that back would read as "Best KGE = 1 - 1e10
+    # = -9999999999", which is meaningless, so flag it and show a clear
+    # diagnostic instead of a fake number.
+    no_success = _no_successful_eval(best_obj)
+    if no_success:
+        best_metric = None
+        best_value_str = "n/a"
+        obj_quality = None
+    elif obj_fn in ("KGE", "NSE"):
         best_metric = 1.0 - best_obj
+        best_value_str = f"{best_metric:.4f}"
+        # Objective value quality assessment (best), on the real metric scale.
+        obj_quality = _assess_objective(best_metric, obj_fn)
     else:
         best_metric = best_obj
-    # Objective value quality assessment (best), on the real metric scale.
-    obj_quality = _assess_objective(best_metric, obj_fn)
+        best_value_str = f"{best_metric:.4f}"
+        obj_quality = _assess_objective(best_metric, obj_fn)
 
     # \u2500\u2500 Mean + median across stations (when performance_metrics avail.) \u2500\u2500
     # For PBIAS the magnitude convention is |PBIAS|, so we average
@@ -570,7 +599,7 @@ def _build_summary_section(
 
     # Build KPI grid \u2014 best always, then mean+median when available.
     kpis = [
-        {"icon": "\U0001f3c6", "value": f"{best_metric:.4f}",
+        {"icon": "\U0001f3c6", "value": best_value_str,
          "label": f"Best {obj_fn}"},
     ]
     if mean_obj is not None:
@@ -606,12 +635,31 @@ def _build_summary_section(
         conv_style
     )
 
-    # Quality assessment box (based on the BEST score)
-    quality_html = rh.build_highlight_box(
-        f"<strong>{obj_quality['icon']} {obj_fn} Quality (best):</strong> "
-        f"{obj_quality['label']} ({obj_quality['description']})",
-        obj_quality['style']
-    )
+    # Quality assessment box (based on the BEST score) — or, when NO evaluation
+    # ever succeeded, a prominent diagnostic explaining why there is no score
+    # and no observed-vs-simulated time series (instead of a fake metric).
+    if no_success:
+        quality_html = rh.build_highlight_box(
+            f"<strong>&#9888;&#65039; No successful evaluations.</strong> "
+            f"All <strong>{n_evals}</strong> model evaluation(s) returned the "
+            f"failure penalty, so no <strong>{obj_fn}</strong> score could be "
+            f"computed and there are <strong>no observed-vs-simulated pairs to "
+            f"plot</strong>. This means the model did not produce output that "
+            f"overlaps the observations &mdash; <em>not</em> that the fit was "
+            f"poor. Common causes: the model / container did not run to "
+            f"completion (check the SLURM <code>.out</code> log and "
+            f"<code>calibration.log</code>), the simulated output file or "
+            f"variable was not found, or the simulated period / reach does not "
+            f"overlap the observation dates. Fix the underlying model run, then "
+            f"re-run the calibration.",
+            "warning"
+        )
+    else:
+        quality_html = rh.build_highlight_box(
+            f"<strong>{obj_quality['icon']} {obj_fn} Quality (best):</strong> "
+            f"{obj_quality['label']} ({obj_quality['description']})",
+            obj_quality['style']
+        )
 
     # When we have per-station metrics, also evaluate the MEAN against
     # the same quality scale so the user can compare the optimizer's
@@ -770,20 +818,28 @@ def _build_convergence_section(
         worst_obj = max(objectives) if objectives else 0
         mean_obj = sum(objectives) / len(objectives) if objectives else 0
 
+        # Failed evaluations carry the penalty objective (1e10).  Show "n/a"
+        # for any statistic that is still the penalty, so a fully-failed run
+        # reads "Best/Mean/Worst = n/a" instead of "10000000000.0000".
+        def _fmt_obj(v):
+            if not isinstance(v, (int, float)) or v != v or v >= _FAIL_PENALTY * 0.9:
+                return "n/a"
+            return f"{v:.4f}"
+
         stats_html = f"""
     <div class="card">
-        <h3>Objective Function Statistics</h3>
+        <h3>Objective Function Statistics <span style="font-weight:400;font-size:.8rem;color:var(--text3);">(minimised objective; lower is better)</span></h3>
         <div class="perf-card" style="grid-template-columns: repeat(4, 1fr);">
             <div class="perf-metric">
-                <div class="perf-value result-good">{best_obj:.4f}</div>
+                <div class="perf-value result-good">{_fmt_obj(best_obj)}</div>
                 <div class="perf-label">Best</div>
             </div>
             <div class="perf-metric">
-                <div class="perf-value">{mean_obj:.4f}</div>
+                <div class="perf-value">{_fmt_obj(mean_obj)}</div>
                 <div class="perf-label">Mean</div>
             </div>
             <div class="perf-metric">
-                <div class="perf-value result-poor">{worst_obj:.4f}</div>
+                <div class="perf-value result-poor">{_fmt_obj(worst_obj)}</div>
                 <div class="perf-label">Worst</div>
             </div>
             <div class="perf-metric">
@@ -974,6 +1030,7 @@ def _build_calibrated_timeseries_section(
     settings: Dict[str, Any],
     model_config: Dict[str, Any],
     output_dir: str,
+    n_evals: int = 0,
 ) -> str:
     """Observed-vs-simulated time series (+ obs-vs-sim scatter) for each
     calibrated species, evaluated at the best-fit parameters.
@@ -981,15 +1038,46 @@ def _build_calibrated_timeseries_section(
     Driven purely by ``matched_data`` (the obs/sim pairs the objective
     function matched) so it renders even when the numeric performance-metrics
     table is unavailable.  Placed after "Run with Best Parameters".
+
+    When there are no obs-sim pairs (e.g. every evaluation failed), it renders
+    an explanatory placeholder rather than silently disappearing.
     """
-    if not (HAS_MATPLOTLIB and HAS_NUMPY):
-        return ""
+    # Do we have any obs-sim pairs to plot?  (Check before the matplotlib guard
+    # so the placeholder still shows when plotting libs are missing.)
+    _has_pairs = False
     try:
         import pandas as pd
+        _has_pairs = isinstance(matched_data, pd.DataFrame) and not matched_data.empty
     except ImportError:
+        _has_pairs = (matched_data is not None
+                      and getattr(matched_data, "empty", True) is False)
+
+    if not _has_pairs:
+        _n = n_evals if isinstance(n_evals, int) and n_evals > 0 else 0
+        _eval_txt = (f"across the {_n} evaluation(s)" if _n
+                     else "in this run")
+        return f"""
+<div class="section" id="timeseries">
+    <h2>Observed vs Simulated &mdash; calibrated time series</h2>
+    <div class="card" style="border-left:4px solid #ff6b35;">
+        <p style="margin:.2rem 0;color:var(--text2);font-size:.92rem;line-height:1.6;">
+            &#9888;&#65039; <strong>No observed-vs-simulated pairs are available,
+            so there is nothing to plot here.</strong> The objective function
+            matched zero observations to model output {_eval_txt} &mdash; usually
+            because the model did not produce output overlapping the observation
+            dates/locations (see the diagnostic in the <a href="#summary"
+            style="color:var(--primary);font-weight:600;">Results&nbsp;Summary</a>
+            above). Once at least one evaluation produces comparable output, this
+            section will show the observed-vs-simulated time series and scatter for
+            each calibrated species.
+        </p>
+    </div>
+</div>
+"""
+
+    if not (HAS_MATPLOTLIB and HAS_NUMPY):
         return ""
-    if not isinstance(matched_data, pd.DataFrame) or matched_data.empty:
-        return ""
+    import pandas as pd
 
     hostmodel = (model_config.get("hostmodel") or "mizuroute")
     # Interactive (Plotly) obs-vs-sim time series + scatter, per species.
@@ -1776,6 +1864,17 @@ def _generate_convergence_plot(
     if not evals:
         return '<div class="card"><p>No evaluation history available.</p></div>'
 
+    # If every evaluation hit the failure penalty there is nothing meaningful
+    # to plot (a flat line at 1e10), so show a short note instead of a chart
+    # full of "10000000000" values.
+    if all((not isinstance(o, (int, float))) or o != o or o >= _FAIL_PENALTY * 0.9
+           for o in objectives):
+        return ('<div class="card"><p>&#9888;&#65039; Convergence plot omitted '
+                '&mdash; every evaluation returned the failure penalty, so there '
+                'is no successful model run to plot. See the diagnostic in the '
+                '<a href="#summary" style="color:var(--primary);font-weight:600;">'
+                'Results&nbsp;Summary</a>.</p></div>')
+
     best_idx = objectives.index(min(objectives))
     traces = [
         {"type": "scatter", "mode": "markers", "x": evals, "y": objectives,
@@ -2264,12 +2363,12 @@ def _generate_timeseries_charts(matched_data, output_dir,
                 "type": "scatter", "mode": "markers", "x": x, "y": obs,
                 "name": f"obs · {label}", "legendgroup": label,
                 "marker": {"size": 6, "symbol": "circle-open"},
-                "hovertemplate": "%{x}<br>obs %{y:.4g}<extra></extra>"})
+                "hovertemplate": "%{x|%Y-%m-%d}<br>obs %{y:.4g}<extra></extra>"})
             ts_traces.append({
                 "type": "scatter", "mode": "lines", "x": x, "y": sim,
                 "name": f"sim · {label}", "legendgroup": label,
                 "line": {"width": 1.5},
-                "hovertemplate": "%{x}<br>sim %{y:.4g}<extra></extra>"})
+                "hovertemplate": "%{x|%Y-%m-%d}<br>sim %{y:.4g}<extra></extra>"})
             sc_traces.append({
                 "type": "scatter", "mode": "markers", "x": obs, "y": sim,
                 "name": label, "marker": {"size": 7, "opacity": 0.6},
