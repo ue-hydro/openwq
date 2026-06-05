@@ -1585,16 +1585,20 @@ def generate_interactive_setup(
   <div style="{_subhdr_css}margin-top:1.1rem;">&#128421;&nbsp;On HPC (Apptainer / Singularity)</div>
   <p style="margin:.1rem 0 .3rem;">The SLURM job (step&nbsp;3) writes the results report
   <em>on the cluster</em> when the calibration completes. <strong>After the job
-  finishes</strong>, pull the report (and the <code>results/</code> folder) back to your
+  finishes</strong>, pull <strong>just the self-contained report</strong> back to your
   laptop with the command below, then open it locally.</p>
   <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
        background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
        border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
     <strong style="color:#1d4ed8;">&#8505; Run when the job completes.</strong>
-    Pulls the self-contained <strong>results report</strong> (model-vs-obs time series +
-    metrics) plus the <code>results/</code> folder (best parameters, matched data,
-    convergence &amp; correlation plots) to your laptop. Set where to save it below
-    (defaults to your local calibration folder); the command updates as you edit it.
+    Copies <strong>only the self-contained results report</strong> (model-vs-obs time
+    series + metrics, every plot embedded). It <strong>does not pull the
+    <code>results/</code> folder</strong>, so it can never overwrite a local run's
+    data, and it <strong>asks before overwriting</strong> an existing report of the
+    same name. A failed run? An optional one-liner in the snippet pulls the logs
+    (<code>calibration.log</code> + SLURM <code>.out</code>) into a separate
+    <code>hpc_diagnostics/</code> folder. Set where to save it below (defaults to your
+    local calibration folder); the command updates as you edit it.
   </div>
   <div style="margin:.15rem 0 .45rem;font-size:.74rem;">
     <label for="fetch_dest" style="display:block;margin-bottom:.2rem;color:var(--text2);">
@@ -1609,6 +1613,23 @@ def generate_interactive_setup(
       border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunFetch" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <div style="margin:.7rem 0 .15rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>Optional &mdash; pull the full <code>results/</code> folder</strong> (raw
+    best parameters, matched data, convergence &amp; correlation plots, history JSONs).
+    It writes into <code>&lt;folder&gt;/results</code> and <strong>asks before
+    overwriting</strong> if that folder is not empty &mdash; so it won't silently
+    clobber a local run's results.</div>
+  <div style="position:relative;margin:.2rem 0 .3rem;">
+    <button onclick="copyHpcRun(this,'hpcRunFetchResults')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunFetchResults" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
       border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
@@ -3970,17 +3991,80 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // calibration work dir.  Trailing slash stripped for clean path joins.
     var _local = ((s && s.fetch_dest && s.fetch_dest.trim())
                   || (HPC && HPC.work_dir) || '<your calibration work dir>').replace(/\/+$/, '');
-    L.push('# Fetch the calibration RESULTS report (self-contained HTML) + the results/');
-    L.push('# folder (best parameters, matched data, convergence/correlation plots) from');
-    L.push('# the HPC to your laptop.  Run this AFTER the job finishes - the results report');
-    L.push('# is written when the calibration completes.');
-    L.push('rsync -avz \\');
-    L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE' + _rel + '/' + _stem + '_results_report.html" \\');
-    L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE' + _rel + '/results" \\');
-    L.push('  "' + _local + '/"');
+    var _job = (s && s.slurm_job_name && String(s.slurm_job_name).trim())
+               ? String(s.slurm_job_name).trim() : 'openwq_calib';
+    var _report = _stem + '_results_report.html';
+    L.push('# Copy ONLY the self-contained calibration RESULTS report (interactive HTML with');
+    L.push('# every plot embedded) from the HPC to your laptop.  It deliberately does NOT pull');
+    L.push('# the results/ folder, so it can never clobber a LOCAL run\'s results/ in this folder.');
+    L.push('# Run this AFTER the job finishes.');
+    L.push('DEST="' + _local + '"');
+    L.push('REPORT="' + _report + '"');
+    L.push('SRC="$HPC_USER@$HPC_HOST:$HPC_BASE' + _rel + '/$REPORT"');
+    L.push('');
+    L.push('# Overwrite check: if a report with that name already exists locally, ASK first.');
+    L.push('# (read from /dev/tty so it still prompts when this whole block is pasted at once.)');
+    L.push('if [ -e "$DEST/$REPORT" ]; then');
+    L.push('  echo "A report named $REPORT already exists in:"');
+    L.push('  echo "  $DEST"');
+    L.push('  printf "Overwrite it with the HPC copy? [y/N] "');
+    L.push('  read -r _ans </dev/tty || _ans=n');
+    L.push('else');
+    L.push('  _ans=y');
+    L.push('fi');
+    L.push('case "$_ans" in');
+    L.push('  [yY]|[yY][eE][sS])');
+    L.push('    rsync -avz "$SRC" "$DEST/" && echo "Saved: $DEST/$REPORT" ;;');
+    L.push('  *) echo "Skipped - kept the existing $DEST/$REPORT (nothing was overwritten)." ;;');
+    L.push('esac');
     L.push('# then open it locally:');
-    L.push('#   open "' + _local + '/' + _stem + '_results_report.html"       # macOS');
-    L.push('#   xdg-open "' + _local + '/' + _stem + '_results_report.html"   # Linux');
+    L.push('#   open "' + _local + '/' + _report + '"       # macOS');
+    L.push('#   xdg-open "' + _local + '/' + _report + '"   # Linux');
+    L.push('');
+    L.push('# ---- OPTIONAL: only if a run FAILED and you want to diagnose it ----');
+    L.push('# Pulls the run logs (+ results/) into a SEPARATE hpc_diagnostics/ subfolder, so it');
+    L.push('# never overwrites your local results/.  calibration.log = per-eval objectives +');
+    L.push('# "returning penalty" reasons; the SLURM .out = model stdout/stderr (crashes/segfaults).');
+    L.push('#   mkdir -p "$DEST/hpc_diagnostics" && rsync -avz \\');
+    L.push('#     "$HPC_USER@$HPC_HOST:$HPC_BASE' + _rel + '/calibration.log" \\');
+    L.push('#     "$HPC_USER@$HPC_HOST:$HPC_BASE/' + _job + '_*.out" \\');
+    L.push('#     "$HPC_USER@$HPC_HOST:$HPC_BASE' + _rel + '/results" \\');
+    L.push('#     "$DEST/hpc_diagnostics/"');
+    L.push('#   grep -E "penalty|No simulated|No matched|ERROR" "$DEST/hpc_diagnostics/calibration.log" | head');
+    return L.join('\n');
+  }
+  // Copy the FULL results/ folder HPC -> laptop, asking before overwriting a
+  // non-empty destination results/ (so it never silently clobbers local data).
+  function buildHpcFetchResults(s) {
+    var L = _hpcVars(s);
+    L.push('');
+    var _rel = (HPC && HPC.work_dir) ? _owqRelToRoot(HPC.work_dir) : '';
+    var _local = ((s && s.fetch_dest && s.fetch_dest.trim())
+                  || (HPC && HPC.work_dir) || '<your calibration work dir>').replace(/\/+$/, '');
+    L.push('# Copy the FULL results/ folder from the HPC (best parameters, matched data,');
+    L.push('# convergence/correlation plots, history JSONs) to your laptop.  Run AFTER the');
+    L.push('# job finishes.  It lands in <folder>/results.');
+    L.push('DEST="' + _local + '"');
+    L.push('RESULTS_DIR="$DEST/results"');
+    L.push('SRC="$HPC_USER@$HPC_HOST:$HPC_BASE' + _rel + '/results/"');
+    L.push('');
+    L.push('# Overwrite check: if the destination results/ is NOT empty, ASK first.');
+    L.push('# (read from /dev/tty so it still prompts when this whole block is pasted at once.)');
+    L.push('if [ -d "$RESULTS_DIR" ] && [ -n "$(ls -A "$RESULTS_DIR" 2>/dev/null)" ]; then');
+    L.push('  echo "The destination already contains a results/ folder with files:"');
+    L.push('  echo "  $RESULTS_DIR"');
+    L.push('  printf "Overwrite its contents with the HPC results? [y/N] "');
+    L.push('  read -r _ans </dev/tty || _ans=n');
+    L.push('else');
+    L.push('  _ans=y');
+    L.push('fi');
+    L.push('case "$_ans" in');
+    L.push('  [yY]|[yY][eE][sS])');
+    L.push('    mkdir -p "$RESULTS_DIR" \\');
+    L.push('      && rsync -avz "$SRC" "$RESULTS_DIR/" \\');
+    L.push('      && echo "Results saved to: $RESULTS_DIR" ;;');
+    L.push('  *) echo "Skipped - kept the existing $RESULTS_DIR (nothing was overwritten)." ;;');
+    L.push('esac');
     return L.join('\n');
   }
   function updateHpcRun(state) {
@@ -3990,6 +4074,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var r = document.getElementById('hpcRunRemap');  if (r) r.textContent = buildHpcRemap(s);
     var b = document.getElementById('hpcRunSubmit'); if (b) b.textContent = buildHpcSubmit(s);
     var fch = document.getElementById('hpcRunFetch'); if (fch) fch.textContent = buildHpcFetch(s);
+    var frs = document.getElementById('hpcRunFetchResults'); if (frs) frs.textContent = buildHpcFetchResults(s);
     // Keep the "expected .sif location" warning in sync with the HPC sif field.
     var sp = document.getElementById('sifExpectedPath');
     if (sp) sp.textContent = (s.sif_hpc && String(s.sif_hpc).trim())
