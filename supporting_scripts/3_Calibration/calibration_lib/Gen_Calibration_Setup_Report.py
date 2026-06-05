@@ -1116,6 +1116,14 @@ def generate_interactive_setup(
             color:var(--primary);border-radius:4px;cursor:pointer;
             font-family:inherit;white-space:nowrap;vertical-align:baseline;">Copy</button>
     </div>
+    <details class="script-collapse" style="margin:.1rem 0 .7rem;">
+      <summary style="cursor:pointer;font-weight:600;padding:.5rem .2rem;
+        color:var(--primary);user-select:none;font-size:.8rem;list-style:revert;">
+        View the generated calibration script</summary>
+      <pre class="code-block" id="scriptBlock" style="margin-top:.4rem;">
+<code id="scriptCode">Loading&#8230;</code>
+      </pre>
+    </details>
     <button id="downloadBtnHeader" onclick="downloadScript()"
         style="font-size:.8rem;padding:.4rem .95rem;font-weight:600;
         background:linear-gradient(135deg,rgba(0,102,204,.18),rgba(0,168,107,.18));
@@ -1227,6 +1235,14 @@ def generate_interactive_setup(
             "border:1px solid rgba(255,255,255,.2);color:#e2e8f0;"
             "padding:.15rem .4rem;border-radius:4px;font-size:.65rem;"
             "cursor:pointer;font-family:inherit;white-space:nowrap;"
+        )
+        # Pill-style label used to split a step into "Local (Docker)" vs "HPC".
+        _subhdr_css = (
+            "display:inline-flex;align-items:center;gap:.4rem;"
+            "margin:.2rem 0 .5rem;padding:.18rem .7rem;"
+            "font-size:.74rem;font-weight:700;letter-spacing:.02em;"
+            "color:var(--primary);background:rgba(0,102,204,.10);"
+            "border:1px solid var(--border);border-radius:999px;"
         )
 
         H.append(f"""
@@ -1537,19 +1553,22 @@ def generate_interactive_setup(
     Together these copy your code + inputs + the <code>.sif</code> under one
     <code>$HPC_BASE</code>, re-point every absolute path to the cluster, and submit the
     job. The heavy GRQA / Copernicus processing is <strong>reused</strong> and the
-    &gt;1&nbsp;GB raw GRQA database is <strong>not</strong> copied.
+    &gt;1&nbsp;GB raw GRQA database is <strong>not</strong> copied. When the job
+    finishes, <strong>fetch and open the results in step&nbsp;4 below</strong>.
   </div>
 </div>
 
 </div>
 {_step_header(4, "View the results", collapsible=True, body_id="step4body")}
 <div style="padding:0 1.2rem .6rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
-  <p style="margin:.1rem 0 .35rem;">The script auto-generates the interactive results
-  report and opens it when the run finishes. To watch progress <strong>while it's still
-  running</strong> (e.g. during the long influential-parameters screening), open a
-  <em>second</em> terminal and regenerate the report from the current on-disk state
-  &mdash; it rebuilds from the newest checkpoint with an &ldquo;in&nbsp;progress&rdquo;
-  note until the run completes:</p>
+
+  <div style="{_subhdr_css}">&#128187;&nbsp;Local (Docker)</div>
+  <p style="margin:.1rem 0 .35rem;">When you run locally (step&nbsp;2) the script
+  auto-generates the interactive results report and opens it when the run finishes. To
+  watch progress <strong>while it's still running</strong> (e.g. during the long
+  influential-parameters screening), open a <em>second</em> terminal and regenerate the
+  report from the current on-disk state &mdash; it rebuilds from the newest checkpoint
+  with an &ldquo;in&nbsp;progress&rdquo; note until the run completes:</p>
   <div style="{snippet_css}">
     <code id="cmdReport" style="{snippet_code_css}">{report_cmd}</code>
     <button style="{copy_btn_css}"
@@ -1562,17 +1581,42 @@ def generate_interactive_setup(
     <button style="{copy_btn_css}"
       onclick="navigator.clipboard.writeText(document.getElementById('cmdResults').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
   </div>
+
+  <div style="{_subhdr_css}margin-top:1.1rem;">&#128421;&nbsp;On HPC (Apptainer / Singularity)</div>
+  <p style="margin:.1rem 0 .3rem;">The SLURM job (step&nbsp;3) writes the results report
+  <em>on the cluster</em> when the calibration completes. <strong>After the job
+  finishes</strong>, pull the report (and the <code>results/</code> folder) back to your
+  laptop with the command below, then open it locally.</p>
+  <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
+       background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
+       border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
+    <strong style="color:#1d4ed8;">&#8505; Run when the job completes.</strong>
+    Pulls the self-contained <strong>results report</strong> (model-vs-obs time series +
+    metrics) plus the <code>results/</code> folder (best parameters, matched data,
+    convergence &amp; correlation plots) to your laptop. Set where to save it below
+    (defaults to your local calibration folder); the command updates as you edit it.
+  </div>
+  <div style="margin:.15rem 0 .45rem;font-size:.74rem;">
+    <label for="fetch_dest" style="display:block;margin-bottom:.2rem;color:var(--text2);">
+      Save results to (local folder):</label>
+    <input class="form-input" type="text" id="fetch_dest" name="fetch_dest"
+      value="{html_lib.escape(_save_dir)}"
+      style="width:100%;box-sizing:border-box;font-size:.72rem;font-family:'JetBrains Mono',monospace;"/>
+  </div>
+  <div style="position:relative;margin:.2rem 0 .3rem;">
+    <button onclick="copyHpcRun(this,'hpcRunFetch')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunFetch" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
 </div>
 </div>
 """)
 
-        H.append("""
-<div class="script-pane-body">
-    <pre class="code-block" id="scriptBlock">
-<code id="scriptCode">Loading...</code>
-    </pre>
-</div>
-""")
         H.append('</div>')  # script-pane
         H.append('</div>')  # panes-row
 
@@ -2906,6 +2950,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.sif_hpc = _gv('sif_hpc', '$HPC_BASE/openwq.sif');
     s.hpc_openwq_dir = _gv('hpc_openwq_dir', '');
     s.hpc_exe = _gv('hpc_exe', '');
+    s.fetch_dest = _gv('fetch_dest', '');   // local folder to save the fetched results report (step 4, HPC)
 
     var speciesCbs = document.querySelectorAll('.species-cb');
     var species = [];
@@ -3912,8 +3957,30 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('');
     L.push('# Monitor (on the HPC):  squeue -u $HPC_USER');
     L.push('#       (from laptop):   ssh "$HPC_USER@$HPC_HOST" "squeue -u $HPC_USER"');
-    if (HPC && HPC.work_dir)
-      L.push('# Results (from laptop): rsync -avz "$HPC_USER@$HPC_HOST:$HPC_BASE' + _owqRelToRoot(HPC.work_dir) + '/" ./hpc_results/');
+    L.push('# When it finishes, fetch + view the results report in step 4 below.');
+    return L.join('\n');
+  }
+  // Step 4 (HPC): fetch the calibration results report (+ data/plots) HPC -> laptop.
+  function buildHpcFetch(s) {
+    var L = _hpcVars(s);
+    L.push('');
+    var _rel = (HPC && HPC.work_dir) ? _owqRelToRoot(HPC.work_dir) : '';
+    var _stem = (typeof REPORT_STEM !== 'undefined' && REPORT_STEM) ? REPORT_STEM : 'calibration';
+    // Local destination = the "Save results to" field (user-chosen), else the
+    // calibration work dir.  Trailing slash stripped for clean path joins.
+    var _local = ((s && s.fetch_dest && s.fetch_dest.trim())
+                  || (HPC && HPC.work_dir) || '<your calibration work dir>').replace(/\/+$/, '');
+    L.push('# Fetch the calibration RESULTS report (self-contained HTML) + the results/');
+    L.push('# folder (best parameters, matched data, convergence/correlation plots) from');
+    L.push('# the HPC to your laptop.  Run this AFTER the job finishes - the results report');
+    L.push('# is written when the calibration completes.');
+    L.push('rsync -avz \\');
+    L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE' + _rel + '/' + _stem + '_results_report.html" \\');
+    L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE' + _rel + '/results" \\');
+    L.push('  "' + _local + '/"');
+    L.push('# then open it locally:');
+    L.push('#   open "' + _local + '/' + _stem + '_results_report.html"       # macOS');
+    L.push('#   xdg-open "' + _local + '/' + _stem + '_results_report.html"   # Linux');
     return L.join('\n');
   }
   function updateHpcRun(state) {
@@ -3922,6 +3989,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var c = document.getElementById('hpcRunCopy');   if (c) c.textContent = buildHpcCopy(s);
     var r = document.getElementById('hpcRunRemap');  if (r) r.textContent = buildHpcRemap(s);
     var b = document.getElementById('hpcRunSubmit'); if (b) b.textContent = buildHpcSubmit(s);
+    var fch = document.getElementById('hpcRunFetch'); if (fch) fch.textContent = buildHpcFetch(s);
     // Keep the "expected .sif location" warning in sync with the HPC sif field.
     var sp = document.getElementById('sifExpectedPath');
     if (sp) sp.textContent = (s.sif_hpc && String(s.sif_hpc).trim())
