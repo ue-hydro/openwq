@@ -583,8 +583,15 @@ def Gen_Input_Driver(
             ss_method_csv_config = _correct_list_paths_for_docker(
                 ss_method_csv_config, _docker_host_root, _docker_container_root)
     else:
-        print("WARNING: Could not determine Docker path mapping from docker-compose.yml. "
-              "Paths will NOT be corrected.")
+        # The docker-compose mapping is ONLY used to rewrite CSV source/sink
+        # Filepaths (the only absolute paths embedded in the generated JSON).
+        # openWQ's config otherwise uses relative paths, and Apptainer/Singularity
+        # runs (e.g. the HPC calibration) bind host->container at run time — so
+        # there is nothing to correct unless CSV source/sink entries are used.
+        # Only warn when that mapping is actually needed.
+        if ss_method_csv_config:
+            print("WARNING: Could not determine Docker path mapping from "
+                  "docker-compose.yml. CSV source/sink paths will NOT be corrected.")
 
     # =============================================
     # Cross-module compatibility validation
