@@ -494,6 +494,22 @@ def run_calibration(
     logger.info(f"Workflow mode: {calibration_mode} "
                 f"(sensitivity={_do_sensitivity}, calibration={_do_calibration})")
 
+    # ── Pre-flight ──────────────────────────────────────────────────────
+    # Verify the container image + model executable exist BEFORE launching
+    # hundreds of evaluations.  Without this, a misconfigured executable path
+    # (e.g. a stale .sbatch that never exported OWQ_EXEC_PATH, so the runner
+    # falls back to the remapped model-config path) makes EVERY eval die in
+    # <1 s with no output — a whole run wasted on cryptic failures.  Fail fast
+    # and clearly instead.
+    _pf_ok, _pf_msg = model_runner.preflight()
+    if not _pf_ok:
+        logger.error("=" * 60)
+        logger.error("PRE-FLIGHT CHECK FAILED - aborting before any model run.")
+        for _ln in _pf_msg.splitlines():
+            logger.error("  " + _ln)
+        logger.error("=" * 60)
+        raise RuntimeError("Pre-flight check failed - " + _pf_msg.splitlines()[0])
+
     # ── Interim (partial) results report ────────────────────────────────
     # Lets the user open the <stem>_results_report.html WHILE the run is still
     # going — it renders whatever is available so far (influential parameters

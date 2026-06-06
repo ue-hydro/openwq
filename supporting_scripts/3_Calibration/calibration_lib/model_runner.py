@@ -180,6 +180,41 @@ class ModelRunner:
         except Exception as e:
             logger.warning(f"Could not parse docker-compose.yml: {e}")
 
+    def preflight(self) -> Tuple[bool, str]:
+        """Verify prerequisites exist BEFORE launching (potentially hundreds of)
+        evaluations, so a misconfiguration fails fast with ONE clear, actionable
+        message instead of N cryptic per-eval container errors.
+
+        For the Apptainer/Singularity path (HPC) this checks that the .sif image
+        and the host-side model executable actually exist.  The classic failure
+        it catches: the executable path resolved to the wrong place (e.g. a stale
+        .sbatch that never exported OWQ_EXEC_PATH, so the runner fell back to the
+        remapped model-config path) — every eval then dies in <1 s with no output.
+
+        Returns ``(ok, message)``; ``message`` is empty when ok.
+        """
+        if self.runtime == "apptainer":
+            sif = self.apptainer_sif_path
+            if sif and not os.path.exists(sif):
+                return False, (
+                    f"Apptainer/Singularity image (.sif) not found:\n"
+                    f"    {sif}\n"
+                    f"Build the .sif ON the HPC (it is CPU-arch specific) and point "
+                    f"apptainer_sif_path_on_hpc at it.")
+            exe = self.executable_full_path
+            if exe and os.path.isabs(str(exe)) and not os.path.exists(str(exe)):
+                return False, (
+                    f"Model executable not found on the host:\n"
+                    f"    {exe}\n"
+                    f"This is the path the run resolved to (from OWQ_EXEC_PATH if set, "
+                    f"otherwise the model config's executable_path).  On HPC, set "
+                    f"executable_path_on_hpc (exported by the .sbatch as OWQ_EXEC_PATH) "
+                    f"to your HPC-compiled binary, then RE-SAVE the .sbatch + run script "
+                    f"and re-copy them to the cluster (older copies may predate this "
+                    f"setting and fall back to the wrong path).  Or compile the binary "
+                    f"at that path.")
+        return True, ""
+
     def run_single_evaluation(self,
                               eval_dir: Path,
                               master_json_path: str,
@@ -568,10 +603,10 @@ class ModelRunner:
 
     @staticmethod
     def _oom_message(returncode, stderr) -> Optional[str]:
-        """If a failure looks like an out-of-memory kill, return an
-        actionable message; otherwise ``None``.  Exit 137 = 128 + signal 9
-        (SIGKILL), which the Linux OOM-killer uses when the container hits its
-        memory ceiling."""
+        """If a failure matches a KNOWN failure mode (out-of-memory kill or a
+        model-side segmentation fault), return an actionable message; otherwise
+        ``None``.  Exit 137 = 128 + signal 9 (SIGKILL, OOM-killer); exit -11 (or
+        139 = 128 + 11) = SIGSEGV (a crash inside the model binary)."""
         s = stderr or ""
         low = s.lower()
         if (returncode == 137 or "signal 9 (killed)" in low
@@ -583,6 +618,24 @@ class ModelRunner:
                     "memory. Fixes: shorten the calibration period in the "
                     "setup report, lower n_parallel, or give Docker / the "
                     "container more RAM.")
+        if (returncode in (-11, 139) or "sigsegv" in low
+                or "segmentation fault" in low):
+            return ("Model crashed with a SEGMENTATION FAULT (signal 11). This "
+                    "is a bug INSIDE the openWQ/SUMMA binary - NOT the "
+                    "calibration framework, the per-eval inputs, or the "
+                    "parameter values (every eval crashes at the same point, "
+                    "and the same config runs in other builds). It almost "
+                    "always means the HPC build differs from a working build: "
+                    "a different compiler version/flags or a different openWQ "
+                    "source commit. To pin it down: (1) reproduce with a single "
+                    "manual run of one eval's command; (2) run your BASELINE "
+                    "(non-calibration) openWQ case with this same binary - if "
+                    "that also segfaults, it is purely the build; (3) recompile "
+                    "openWQ with debug + backtrace (gfortran: -g -O0 -fbacktrace "
+                    "-fcheck=all; C++: -g -O0) so the trace names the source "
+                    "file+line, and build it INSIDE the same .sif you run in; "
+                    "(4) verify the openWQ source commit matches your working "
+                    "(e.g. Docker) build.")
         return None
 
     @staticmethod
