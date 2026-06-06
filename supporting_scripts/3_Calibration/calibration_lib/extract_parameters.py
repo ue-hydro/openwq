@@ -732,7 +732,7 @@ def extract_all_module_parameters(
                     f"SS_COP_scale_{sp_clean}",
                     species=sp,
                     initial=1.0,
-                    bounds=(0.1, 20.0),
+                    bounds=(0.1, 100.0),
                     description=f"Load scaling factor for {sp}"))
         else:
             # Fallback: use custom coefficient species if ss_load_species
@@ -752,7 +752,7 @@ def extract_all_module_parameters(
                                     f"SS_COP_scale_{sp_clean}",
                                     species=sp,
                                     initial=1.0,
-                                    bounds=(0.1, 20.0),
+                                    bounds=(0.1, 100.0),
                                     description=f"Load scaling factor for {sp}"))
 
         # Climate response params (dynamic SS only)
@@ -764,17 +764,17 @@ def extract_all_module_parameters(
             ss_params.extend([
                 {"name": "SS_climate_precip_power", "file_type": "ss_climate",
                  "path": {"param": "precip_scaling_power"},
-                 "initial": psp, "bounds": (0.5, 2.5), "transform": "linear",
+                 "initial": psp, "bounds": (0.1667, 5.0), "transform": "linear",
                  "units": "", "description": "Precipitation load exponent",
                  "source": "auto-extracted"},
                 {"name": "SS_climate_Q10", "file_type": "ss_climate",
                  "path": {"param": "Q10_biological"},
-                 "initial": q10, "bounds": (1.5, 4.0), "transform": "linear",
+                 "initial": q10, "bounds": (0.5, 8.0), "transform": "linear",
                  "units": "", "description": "Temperature Q10 factor",
                  "source": "auto-extracted"},
                 {"name": "SS_climate_T_reference", "file_type": "ss_climate",
                  "path": {"param": "T_reference"},
-                 "initial": tref, "bounds": (10.0, 25.0), "transform": "linear",
+                 "initial": tref, "bounds": (3.3333, 50.0), "transform": "linear",
                  "units": "C", "description": "Reference temperature",
                  "source": "auto-extracted"},
             ])
