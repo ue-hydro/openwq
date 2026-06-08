@@ -441,17 +441,26 @@ ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
 ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform'
 
 
-# ── Climate data for seasonal distribution ────────────────────────────────────
-#  Used in TWO contexts:
-#    1) ss_method_copernicus_annual_to_seasonal_loads_method = "seasonal"
-#       → weights monthly loads by precipitation + temperature
-#       → if climate data is absent for a year, falls back to a sine-curve
-#    2) ss_method = "using_copernicus_lulc_with_dynamic_coeff"
-#       → climate-adjusted export coefficients (always required)
+# ══ Climate data — drives the SEASONAL / DYNAMIC source-sink loads ════════════
+# Needed when either is set above:
+#   • ss_method_copernicus_annual_to_seasonal_loads_method = "seasonal", and/or
+#   • ss_method = "using_copernicus_lulc_with_dynamic_coeff"
+# Each month's load is scaled by:  precip_mm^precip_power × Q10^((temp_c − T_ref)/10)
 #
-#  Monthly weight formula: w_m = P_m^alpha × Q10^((T_m − T_ref) / 10)
-#  Requires one entry per simulation year.  Sum of 12 monthly loads = annual load.
+# Set it up in 2 steps:
+#   STEP 1 — choose WHERE the monthly precip + temperature come from, and fill the
+#            ONE matching block below.
+#   STEP 2 — set the response coefficients that scale that climate.
 
+# ── STEP 1: choose the climate data source ───────────────────────────────────
+#   "fixed_parameters" → you type the monthly values by hand   → fill ss_climate_data
+#   "time_series"      → read them from a NetCDF/CSV file       → fill ss_climate_data_source
+#                        (keeps openWQ independent of any host model)
+ss_climate_data_type = "fixed_parameters"   # "fixed_parameters" or "time_series"
+
+# STEP 1a — fill this ONLY if ss_climate_data_type = "fixed_parameters" (else ignored).
+#   One entry per simulation year; 12 monthly values, Jan→Dec, for each variable.
+#   (Any year without an entry falls back to a generic seasonal sine curve.)
 ss_climate_data = {
     1993: {
         'precip_mm': [80, 70, 90, 100, 110, 120, 80, 60, 70, 90, 100, 85],  # Jan→Dec
@@ -462,9 +471,30 @@ ss_climate_data = {
         'temp_c':    [1,   4,  8,  13,  18,  23, 26, 25, 20, 14,   8,  2]
     }
 }
-ss_climate_precip_scaling_power = 1.0    # Precipitation exponent (1.0 = linear scaling)
-ss_climate_temp_q10 = 2.0               # Q10 factor: rate doubles per 10°C increase
-ss_climate_temp_reference_c = 15.0       # Reference temperature [°C]
+
+# STEP 1b — fill this ONLY if ss_climate_data_type = "time_series" (else ignored).
+#   Give a 'precip' and a 'temp' entry, each with these 4 fields:
+#     file_type          : "nc" or "csv"
+#     path               : absolute path to the file
+#     nc_key_or_column   : the variable (NetCDF) / column (CSV) holding the values
+#     time_key_or_column : the time variable (NetCDF) / date column (CSV) — this
+#                          is what aligns the data to the simulation years/months
+#   precip + temp may live in the SAME file or in two different files. The driver
+#   sums precip per month and averages temperature, and converts units
+#   automatically: NetCDF rates (e.g. kg m-2 s-1) → mm/month, and Kelvin → °C.
+ss_climate_data_source = {
+    'precip': {'file_type': 'nc', 'path': '/path/to/forcing.nc',
+               'nc_key_or_column': 'pptrate', 'time_key_or_column': 'time'},
+    'temp':   {'file_type': 'nc', 'path': '/path/to/forcing.nc',
+               'nc_key_or_column': 'airtemp', 'time_key_or_column': 'time'},
+}
+
+# ── STEP 2: response coefficients — ALWAYS used, for BOTH sources above ───────
+#   They scale the chosen monthly climate, and ARE the calibratable SS_climate_*
+#   parameters in the calibration / sensitivity workflow.
+ss_climate_precip_scaling_power = 1.0    # precip exponent (1.0 = linear)
+ss_climate_temp_q10             = 2.0    # Q10: load rate doubles per +10 °C
+ss_climate_temp_reference_c     = 15.0   # reference temperature [°C]
 
 
 # ── METHOD 4: Machine Learning model ─────────────────────────────────────────
