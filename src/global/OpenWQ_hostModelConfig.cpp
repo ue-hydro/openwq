@@ -404,9 +404,27 @@ void OpenWQ_hostModelconfig::add_dependVar(arma::Cube<double> dependVar)
 {
     (*this->dependVar).push_back(dependVar);
 }
-double OpenWQ_hostModelconfig::get_dependVar_at(int index, int ix, int iy, int iz) 
+double OpenWQ_hostModelconfig::get_dependVar_at(int index, int ix, int iy, int iz)
 {
-    return (*this->dependVar)[index](ix,iy,iz);
+    // A dependency cube can be LOWER-DIMENSIONAL than the compartment currently
+    // being processed in bgc_flex_transform.  The SUMMA coupling, for example,
+    // declares SWrad_Wm2 with nz=1 (a per-HRU surface scalar) while the soil and
+    // snow compartments have nz = nSoilLayers / max_snow_layers.  Because the BGC
+    // dependency-fill loop reads EVERY dependency at the compartment's layer
+    // index iz, reading SWrad at iz>0 over-runs the cube: arma throws
+    // std::out_of_range and aborts when bounds-checking is ON (debug / any build
+    // without -DARMA_NO_DEBUG), while a build with it OFF silently returns
+    // adjacent garbage.  Clamp the index into each dependency's own extent so a
+    // lower-dimensional dependency BROADCASTS across the compartment's cells
+    // (the correct behaviour for a per-HRU scalar) instead of reading OOB.
+    const arma::Cube<double>& dep = (*this->dependVar)[index];
+    arma::uword cx = (ix > 0) ? static_cast<arma::uword>(ix) : 0;
+    arma::uword cy = (iy > 0) ? static_cast<arma::uword>(iy) : 0;
+    arma::uword cz = (iz > 0) ? static_cast<arma::uword>(iz) : 0;
+    if (dep.n_rows   && cx >= dep.n_rows)   cx = dep.n_rows   - 1;
+    if (dep.n_cols   && cy >= dep.n_cols)   cy = dep.n_cols   - 1;
+    if (dep.n_slices && cz >= dep.n_slices) cz = dep.n_slices - 1;
+    return dep(cx, cy, cz);
 }
 void OpenWQ_hostModelconfig::set_dependVar_at(int index, int ix, int iy, int iz, double value) 
 {
