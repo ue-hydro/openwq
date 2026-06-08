@@ -279,6 +279,67 @@ def generate_results_report(
 </div>
 """)
 
+        # ── Warning: a targeted species has NO primary observations ──
+        # The objective function scores only PRIMARY observations (the basin
+        # outlet / pouring-point station).  If a species set as a calibration
+        # target has none, it cannot be matched or calibrated (e.g. SUMMA: the
+        # outlet station simply has no data for that species).  Surface it so the
+        # user isn't left wondering why a targeted species is absent from the
+        # metric and the observed-vs-simulated plots.
+        try:
+            _targets = [str(s) for s in
+                        ((calibration_settings or {}).get("calibration_targets") or {})
+                        .get("species", [])]
+        except Exception:
+            _targets = []
+        if _did_calib and _targets:
+            _species_with_primary = set()
+            _obs_csv = os.path.join(output_dir, "calibration_observations.csv")
+            if os.path.isfile(_obs_csv):
+                try:
+                    import pandas as _pd
+                    _odf = _pd.read_csv(_obs_csv)
+                    if "species" in _odf.columns:
+                        if "is_primary" in _odf.columns:
+                            _odf = _odf[_odf["is_primary"].fillna(False).astype(bool)]
+                        _species_with_primary = {str(s) for s in _odf["species"].unique()}
+                except Exception:
+                    _species_with_primary = set()
+            _no_primary = [s for s in _targets if s not in _species_with_primary]
+            # Only warn when we could actually read the obs AND some species DO
+            # have primary obs — i.e. this is "these species specifically", not a
+            # totally empty/failed observation set (covered elsewhere).
+            if _no_primary and _species_with_primary:
+                _n = len(_no_primary)
+                _ws = ", ".join(f"<strong>{html_lib.escape(s)}</strong>"
+                                for s in _no_primary)
+                _subj = "These species were" if _n > 1 else "This species was"
+                _tgt = "calibration targets" if _n > 1 else "a calibration target"
+                _it = "them" if _n > 1 else "it"
+                _itwas = "they were" if _n > 1 else "it was"
+                _itdoes = "they do" if _n > 1 else "it does"
+                _have = ", ".join(html_lib.escape(s)
+                                  for s in sorted(_species_with_primary)) or "none"
+                _objfn = str((calibration_settings or {}).get(
+                    "objective_function", "objective-function"))
+                H.append(f"""
+<div class="section" id="no-primary-obs">
+    <div class="card" style="border-left:5px solid #ff6b35;
+         background:rgba(255,107,53,.08);">
+        <p style="margin:0;font-size:.95rem;line-height:1.6;">
+            &#9888;&#65039; <strong>No primary observations for {_ws}.</strong>
+            {_subj} set as {_tgt} for the objective function, but the metric only
+            uses <em>primary</em> observations (the basin outlet / pouring-point
+            station) and that station has no data for {_it}. So {_itwas}
+            <strong>not matched or calibrated</strong>, and {_itdoes} not appear
+            in the {html_lib.escape(_objfn)} metric or the
+            observed-vs-simulated plots. Species that DO have primary
+            observations: <strong>{_have}</strong>.
+        </p>
+    </div>
+</div>
+""")
+
         # ── Section: Summary ──
         H.append(_build_summary_section(
             calibration_results, calibration_settings, calibration_parameters,
