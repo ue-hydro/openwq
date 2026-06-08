@@ -1846,6 +1846,350 @@ def _apply_climate_adjustment(
     return temporal_entries
 
 
+def _read_climate_series(spec: Dict[str, str], kind: str):
+    """Read ONE climate variable (precip or temp) into a pandas Series indexed
+    by datetime, from a NetCDF or CSV file.
+
+    ``spec`` keys:
+      file_type          : 'nc' or 'csv'
+      path               : path to the file
+      nc_key_or_column   : NetCDF variable name, or CSV column name (the values)
+      time_key_or_column : NetCDF time variable/dim, or CSV date column.  This is
+                           what aligns the climate to the SIMULATION period, so
+                           the right months/years are used.  Optional: defaults
+                           to 'time' (NetCDF) or the first date-like CSV column.
+
+    For ``kind='precip'`` the series is returned as a DEPTH per record [mm]:
+    rate inputs (e.g. ``kg m-2 s-1`` / ``mm/s`` / ``m/s``) are converted to
+    depth using the record's own time step.  For ``kind='temp'`` the series is
+    in °C (Kelvin auto-converted).  This is host-model agnostic — the climate is
+    supplied as data, not pulled from SUMMA/mizuRoute.
+    """
+    import os
+    import pandas as pd
+
+    ftype = str(spec.get("file_type", "")).strip().lower()
+    path = spec.get("path")
+    key = spec.get("nc_key_or_column")
+    tkey = spec.get("time_key_or_column")      # explicit time axis (optional)
+    if not path or not os.path.exists(str(path)):
+        raise FileNotFoundError(
+            f"ss_climate_data_source[{kind}]: file not found: {path}")
+    if not key:
+        raise ValueError(
+            f"ss_climate_data_source[{kind}]: 'nc_key_or_column' is required.")
+
+    if ftype == "nc" or str(path).lower().endswith(".nc"):
+        import xarray as xr
+        ds = xr.open_dataset(path)
+        try:
+            if key not in ds.variables:
+                raise KeyError(
+                    f"Variable '{key}' not in {path}. "
+                    f"Available: {list(ds.data_vars)}")
+            da = ds[key]
+            # Time dimension: explicit time_key_or_column wins, else 'time',
+            # else the variable's first dim.
+            if tkey and tkey in da.dims:
+                tdim = tkey
+            elif "time" in da.dims:
+                tdim = "time"
+            else:
+                tdim = da.dims[0] if da.dims else None
+            reduce_dims = [d for d in da.dims if d != tdim]   # basin-average
+            if reduce_dims:
+                da = da.mean(dim=reduce_dims)
+            ser = da.to_series()
+            # Index by the named time coordinate when available, so the
+            # alignment is explicit rather than positional.
+            tcoord = (tkey if (tkey and tkey in ds.variables)
+                      else (tdim if (tdim and tdim in ds.variables) else None))
+            if tcoord is not None:
+                ser.index = pd.to_datetime(ds[tcoord].values)
+            units = str(da.attrs.get("units", "")).lower()
+        finally:
+            ds.close()
+    elif ftype == "csv" or str(path).lower().endswith(".csv"):
+        df = pd.read_csv(path)
+        if tkey and tkey in df.columns:
+            dtcol = tkey
+        else:
+            dtcol = next((c for c in df.columns
+                          if str(c).lower() in ("datetime", "date", "time", "timestamp")),
+                         df.columns[0])
+        if key not in df.columns:
+            raise KeyError(
+                f"Column '{key}' not in {path}. Available: {list(df.columns)}")
+        idx = pd.to_datetime(df[dtcol], errors="coerce")
+        ser = pd.Series(pd.to_numeric(df[key], errors="coerce").values,
+                        index=idx).dropna()
+        units = ""
+    else:
+        raise ValueError(
+            f"ss_climate_data_source[{kind}]: file_type must be 'nc' or 'csv' "
+            f"(got '{ftype}').")
+
+    # A usable datetime index is REQUIRED so the monthly aggregation aligns with
+    # the simulation period; otherwise tell the user to set time_key_or_column.
+    if not isinstance(ser.index, pd.DatetimeIndex):
+        try:
+            ser.index = pd.to_datetime(ser.index)
+        except Exception:
+            raise ValueError(
+                f"ss_climate_data_source[{kind}]: could not interpret the time "
+                f"axis of '{path}'. Set 'time_key_or_column' to the NetCDF time "
+                f"variable / CSV date column.")
+
+    ser = ser.sort_index()
+    ser = ser[ser.index.notna()]
+    # Record time step in seconds (for rate→depth conversion).
+    try:
+        dt_s = float(pd.Series(ser.index).diff().dropna()
+                     .dt.total_seconds().median())
+    except Exception:
+        dt_s = 3600.0
+    if not dt_s or dt_s != dt_s:
+        dt_s = 3600.0
+
+    if kind == "precip":
+        rate_tokens = ("/s", "s-1", "s^-1", "mm/s", "m/s", "kg m-2 s-1",
+                       "kg/m2/s", "kg m**-2 s**-1")
+        is_rate = any(tok in units for tok in rate_tokens)
+        if not units:                       # no units attr → magnitude heuristic
+            try:
+                is_rate = float(ser.mean()) < 1e-3   # kg/m2/s ~ 1e-5
+            except Exception:
+                is_rate = False
+        if is_rate:
+            ser = ser * dt_s                # rate [.. /s] × step [s] = depth [mm]
+        return ser
+    else:  # temp
+        try:
+            if float(ser.mean()) > 60.0:    # clearly Kelvin
+                ser = ser - 273.15
+        except Exception:
+            pass
+        return ser
+
+
+def build_climate_data_from_timeseries(
+        climate_source: Dict[str, Dict[str, str]],
+        years: Optional[List[int]] = None,
+        cache: bool = True) -> Dict[int, Dict[str, List[float]]]:
+    """Build ``{year: {'precip_mm':[12], 'temp_c':[12]}}`` from user-supplied
+    precipitation + temperature TIME SERIES (NetCDF or CSV).
+
+    This is the data-driven alternative to the hand-entered ``ss_climate_data``
+    dict: the dynamic climate-adjusted source/sink loads get their monthly
+    precip/temperature straight from a file, keeping openWQ INDEPENDENT of any
+    host model (the climate is provided as data, not read from SUMMA/mizuRoute).
+
+    Parameters
+    ----------
+    climate_source : dict
+        ``{'precip': {file_type, path, nc_key_or_column},
+            'temp':   {file_type, path, nc_key_or_column}}``.
+    years : list[int], optional
+        Restrict to these years.  Default: all years present in BOTH series.
+    cache : bool
+        Cache the computed monthly dict (keyed by source spec) in the temp dir
+        and reuse it while the source files are unchanged — the result does not
+        depend on calibration parameters, so this avoids re-reading large
+        NetCDFs on every evaluation.
+
+    Returns
+    -------
+    dict : ``{year: {'precip_mm': [12 floats], 'temp_c': [12 floats]}}``
+    """
+    import os
+    import json
+    import hashlib
+    import tempfile
+
+    if (not isinstance(climate_source, dict)
+            or "precip" not in climate_source or "temp" not in climate_source):
+        raise ValueError(
+            "ss_climate_data_source must be a dict with 'precip' and 'temp' "
+            "entries, each {'file_type': 'nc'|'csv', 'path': ..., "
+            "'nc_key_or_column': ...}.")
+    p_spec = climate_source["precip"]
+    t_spec = climate_source["temp"]
+
+    cache_path = None
+    if cache:
+        try:
+            key = json.dumps({"p": p_spec, "t": t_spec,
+                              "y": sorted(int(y) for y in years) if years else None},
+                             sort_keys=True)
+            h = hashlib.md5(key.encode()).hexdigest()[:10]
+            cache_path = os.path.join(tempfile.gettempdir(),
+                                      f"ss_climate_monthly_{h}.json")
+            src_mtime = max(os.path.getmtime(p_spec["path"]),
+                            os.path.getmtime(t_spec["path"]))
+            if (os.path.exists(cache_path)
+                    and os.path.getmtime(cache_path) >= src_mtime):
+                with open(cache_path) as f:
+                    return {int(k): v for k, v in json.load(f).items()}
+        except Exception:
+            cache_path = None
+
+    import pandas as pd
+    p_ser = _read_climate_series(p_spec, "precip")   # depth per record [mm]
+    t_ser = _read_climate_series(t_spec, "temp")     # °C
+
+    p_mon = p_ser.groupby([p_ser.index.year, p_ser.index.month]).sum()
+    t_mon = t_ser.groupby([t_ser.index.year, t_ser.index.month]).mean()
+
+    common = sorted({y for (y, _m) in p_mon.index}
+                    & {y for (y, _m) in t_mon.index})
+    if years:
+        want = {int(y) for y in years}
+        common = [y for y in common if int(y) in want]
+
+    out: Dict[int, Dict[str, List[float]]] = {}
+    for y in common:
+        precip = [float(p_mon.get((y, m), 0.0)) for m in range(1, 13)]
+        temp = [float(t_mon.get((y, m), float("nan"))) for m in range(1, 13)]
+        valid = [v for v in temp if v == v]
+        fill = (sum(valid) / len(valid)) if valid else 15.0
+        temp = [v if v == v else fill for v in temp]
+        out[int(y)] = {"precip_mm": [round(v, 3) for v in precip],
+                       "temp_c": [round(v, 3) for v in temp]}
+
+    if not out:
+        raise ValueError(
+            "build_climate_data_from_timeseries: no overlapping years between the "
+            "precip/temp series and the requested simulation period. Check the "
+            "ss_climate_data_source paths/keys and the period.")
+
+    if cache_path:
+        try:
+            with open(cache_path, "w") as f:
+                json.dump(out, f)
+        except Exception:
+            pass
+    return out
+
+
+def build_daily_climate_from_timeseries(
+        climate_source: Dict[str, Dict[str, str]],
+        years: Optional[List[int]] = None,
+        cache: bool = True) -> Dict[int, Dict[str, List]]:
+    """Like :func:`build_climate_data_from_timeseries` but at DAILY resolution.
+
+    Used for ``ss_climate_data_type = "time_series"`` so the source/sink load is
+    adjusted at EVERY time step (each day) — tracking the actual day-to-day
+    precip/temperature — instead of being held constant within a calendar month.
+
+    Returns ``{year: {'month': [...], 'day': [...], 'precip_mm': [...],
+    'temp_c': [...]}}`` with one aligned record per day present in the data for
+    that year (precip summed per day, temperature averaged per day).
+    """
+    import os
+    import json
+    import hashlib
+    import tempfile
+
+    if (not isinstance(climate_source, dict)
+            or "precip" not in climate_source or "temp" not in climate_source):
+        raise ValueError(
+            "ss_climate_data_source must be a dict with 'precip' and 'temp' "
+            "entries, each {'file_type': 'nc'|'csv', 'path': ..., "
+            "'nc_key_or_column': ...}.")
+    p_spec = climate_source["precip"]
+    t_spec = climate_source["temp"]
+
+    cache_path = None
+    if cache:
+        try:
+            key = json.dumps({"p": p_spec, "t": t_spec,
+                              "y": sorted(int(y) for y in years) if years else None,
+                              "res": "daily"}, sort_keys=True)
+            h = hashlib.md5(key.encode()).hexdigest()[:10]
+            cache_path = os.path.join(tempfile.gettempdir(),
+                                      f"ss_climate_daily_{h}.json")
+            src_mtime = max(os.path.getmtime(p_spec["path"]),
+                            os.path.getmtime(t_spec["path"]))
+            if (os.path.exists(cache_path)
+                    and os.path.getmtime(cache_path) >= src_mtime):
+                with open(cache_path) as f:
+                    return {int(k): v for k, v in json.load(f).items()}
+        except Exception:
+            cache_path = None
+
+    import pandas as pd
+    p_ser = _read_climate_series(p_spec, "precip")   # depth per record [mm]
+    t_ser = _read_climate_series(t_spec, "temp")     # °C
+
+    p_day = p_ser.resample("1D").sum()
+    t_day = t_ser.resample("1D").mean()
+    df = pd.DataFrame({"precip_mm": p_day, "temp_c": t_day})
+    # Keep temperature finite (a NaN day would poison its Q10 weight).
+    if df["temp_c"].isna().any():
+        _fill = df["temp_c"].mean() if df["temp_c"].notna().any() else 15.0
+        df["temp_c"] = df["temp_c"].fillna(_fill)
+    df["precip_mm"] = df["precip_mm"].fillna(0.0)
+
+    want = {int(y) for y in years} if years else None
+    out: Dict[int, Dict[str, List]] = {}
+    for ts, r in df.iterrows():
+        y = int(ts.year)
+        if want is not None and y not in want:
+            continue
+        rec = out.setdefault(y, {"month": [], "day": [],
+                                 "precip_mm": [], "temp_c": []})
+        rec["month"].append(int(ts.month))
+        rec["day"].append(int(ts.day))
+        rec["precip_mm"].append(round(float(r["precip_mm"]), 4))
+        rec["temp_c"].append(round(float(r["temp_c"]), 3))
+
+    if not out:
+        raise ValueError(
+            "build_daily_climate_from_timeseries: no overlapping days between the "
+            "precip/temp series and the requested period. Check the "
+            "ss_climate_data_source paths/keys and the period.")
+
+    if cache_path:
+        try:
+            with open(cache_path, "w") as f:
+                json.dump(out, f)
+        except Exception:
+            pass
+    return out
+
+
+def _apply_climate_adjustment_daily(
+        annual_load_kg: float,
+        months: List[int],
+        days: List[int],
+        daily_precip_mm: List[float],
+        daily_temp_c: List[float],
+        precip_scaling_power: float = 1.0,
+        temp_q10: float = 2.0,
+        temp_reference_c: float = 15.0) -> List[tuple]:
+    """Distribute an annual load across the DAYS of a year by daily climate
+    weight: ``w_d = P_d^alpha * Q10^((T_d - T_ref)/10)``; ``L_d = annual *
+    w_d / sum(w_d)``.  Returns ``[(month, day, load_kg), ...]`` (one per day),
+    summing exactly to ``annual_load_kg``.  If a year has no precip at all the
+    load is spread uniformly so the annual total is preserved.
+    """
+    n = len(daily_precip_mm)
+    if n == 0:
+        return []
+    weights = []
+    for i in range(n):
+        p = max(float(daily_precip_mm[i]), 0.0)
+        t = float(daily_temp_c[i])
+        weights.append((p ** precip_scaling_power)
+                       * (temp_q10 ** ((t - temp_reference_c) / 10.0)))
+    tot = sum(weights)
+    if tot <= 0:
+        share = annual_load_kg / n
+        return [(int(months[i]), int(days[i]), share) for i in range(n)]
+    return [(int(months[i]), int(days[i]), annual_load_kg * weights[i] / tot)
+            for i in range(n)]
+
+
 def set_ss_climate_adjusted_export_coefficients(
         ss_config_filepath: str,
         json_header_comment: List[str],
@@ -1865,7 +2209,17 @@ def set_ss_climate_adjusted_export_coefficients(
         file_pattern: str = 'ESACCI-LC-*.nc',
         simulation_period: Optional[List[int]] = None,
         bgc_engine_label: str = "",
-        chemical_species_list: Optional[List[str]] = None
+        chemical_species_list: Optional[List[str]] = None,
+        # Where the monthly climate came from (for the report metadata):
+        #   climate_data_type   = "fixed_parameters" | "time_series"
+        #   climate_data_source = the ss_climate_data_source dict (time_series only)
+        climate_data_type: str = "fixed_parameters",
+        climate_data_source: Optional[Dict[str, Dict[str, str]]] = None,
+        # When provided (time_series mode), the annual load is distributed at
+        # DAILY resolution from this {year:{month,day,precip_mm,temp_c}} dict —
+        # one SS entry per day — so the load is adjusted at every time step
+        # instead of being constant within a month.
+        daily_climate_data: Optional[Dict[int, Dict[str, List]]] = None
 ) -> None:
     """
     Generate climate-adjusted source/sink JSON from Copernicus LULC data.
@@ -1994,7 +2348,25 @@ def set_ss_climate_adjusted_export_coefficients(
         f"// METADATA - Chemical_Species: {', '.join(chemical_species_list) if chemical_species_list else ''}",
         f"// METADATA - Climate_Adjustment: precip_scaling_power={precip_scaling_power}, "
         f"temp_Q10={temp_q10}, temp_reference_C={temp_reference_c}",
+        f"// METADATA - Climate_Data_Type: {climate_data_type}",
+        f"// METADATA - Climate_Resolution: "
+        f"{'daily (per-time-step)' if daily_climate_data else 'monthly'}",
     ]
+    # When the climate comes from a time series, record which file(s)/variables
+    # were read, so the report shows it (kept colon-free so the report's
+    # "// METADATA - Key: Value" parser splits cleanly).
+    if str(climate_data_type).lower() == "time_series" and isinstance(climate_data_source, dict):
+        _src_parts = []
+        for _kind in ("precip", "temp"):
+            _s = climate_data_source.get(_kind) or {}
+            if _s:
+                _src_parts.append(
+                    f"{_kind} = {_s.get('path', '?')} "
+                    f"[{_s.get('file_type', '?')}, var={_s.get('nc_key_or_column', '?')}, "
+                    f"time={_s.get('time_key_or_column', 'time')}]")
+        if _src_parts:
+            metadata_comments.append(
+                "// METADATA - Climate_Data_Source: " + "; ".join(_src_parts))
 
     # Helper: find nearest climate data year
     climate_years = sorted(climate_data.keys())
@@ -2006,6 +2378,16 @@ def set_ss_climate_adjusted_export_coefficients(
         nearest = min(climate_years, key=lambda y: abs(y - yr))
         print(f"    (using climate data from {nearest} for year {yr})")
         return climate_data[nearest]
+
+    # Daily-resolution lookup (time_series mode): one record-set per day.
+    _use_daily = bool(daily_climate_data)
+    _daily_years = sorted(int(k) for k in daily_climate_data.keys()) if _use_daily else []
+
+    def _get_daily_climate_for_year(yr):
+        if yr in daily_climate_data:
+            return daily_climate_data[yr]
+        nearest = min(_daily_years, key=lambda y: abs(y - yr))
+        return daily_climate_data[nearest]
 
     # Build year mapping: simulation years → Copernicus data years
     if simulation_period is not None:
@@ -2058,7 +2440,29 @@ def set_ss_climate_adjusted_export_coefficients(
                 # Use cell_id directly - OpenWQ C++ will do the lookup
                 spatial_id = hru_id
 
-                # Climate-adjusted temporal distribution
+                if _use_daily:
+                    # DAILY (time_series) — one SS entry per day, scaled by that
+                    # day's precip + temperature, so the load is adjusted at
+                    # every time step rather than constant within a month.
+                    dc = _get_daily_climate_for_year(sim_year)
+                    for month, day, day_load_kg in _apply_climate_adjustment_daily(
+                            annual_load_kg=annual_load_kg,
+                            months=dc['month'], days=dc['day'],
+                            daily_precip_mm=dc['precip_mm'],
+                            daily_temp_c=dc['temp_c'],
+                            precip_scaling_power=precip_scaling_power,
+                            temp_q10=temp_q10,
+                            temp_reference_c=temp_reference_c):
+                        data_entries[str(sub_idx)] = [
+                            sim_year, int(month), int(day), "all", "all", "all",
+                            spatial_id, "all", "all",
+                            float(day_load_kg),
+                            "continuous", "day"
+                        ]
+                        sub_idx += 1
+                    continue
+
+                # MONTHLY (fixed_parameters) — constant daily rate within month.
                 temporal_entries = _apply_climate_adjustment(
                     annual_load_kg=annual_load_kg,
                     year=sim_year,

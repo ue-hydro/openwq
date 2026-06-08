@@ -492,7 +492,17 @@ def Gen_Input_Driver(
 
         # Climate-adjusted export coefficient parameters
         # (used when ss_method = "using_copernicus_lulc_with_dynamic_coeff")
+        # How the monthly climate is sourced:
+        #   "fixed_parameters" → use the hand-entered ss_climate_data dict below
+        #   "time_series"      → read precip + temperature from a NetCDF/CSV file
+        #                        (ss_climate_data_source), so openWQ stays
+        #                        independent of any host model.
+        ss_climate_data_type: str = "fixed_parameters",
         ss_climate_data: Optional[Dict[int, Dict[str, List[float]]]] = None,
+        # Used only when ss_climate_data_type = "time_series":
+        #   {'precip': {file_type:'nc'|'csv', path:..., nc_key_or_column:...},
+        #    'temp':   {file_type:'nc'|'csv', path:..., nc_key_or_column:...}}
+        ss_climate_data_source: Optional[Dict[str, Dict[str, str]]] = None,
         ss_climate_precip_scaling_power: float = 1.0,
         ss_climate_temp_q10: float = 2.0,
         ss_climate_temp_reference_c: float = 15.0,
@@ -1015,11 +1025,38 @@ def Gen_Input_Driver(
         )
     elif (ss_method == "using_copernicus_lulc_with_dynamic_coeff"):
 
-        if ss_climate_data is None:
-            raise ValueError(
-                "ss_method='using_copernicus_lulc_with_dynamic_coeff' requires ss_climate_data.\n"
-                "Provide a dict of {year: {'precip_mm': [12 values], 'temp_c': [12 values]}}"
-            )
+        # Resolve the monthly climate (precip + temperature) per the selected
+        # source: a hand-entered fixed dict, or a NetCDF/CSV time series read
+        # straight from file (host-model independent).
+        _daily_climate = None
+        if str(ss_climate_data_type).lower() == "time_series":
+            if not ss_climate_data_source:
+                raise ValueError(
+                    "ss_climate_data_type='time_series' requires ss_climate_data_source "
+                    "= {'precip': {file_type, path, nc_key_or_column}, "
+                    "'temp': {file_type, path, nc_key_or_column}}."
+                )
+            _years = list(range(int(req_start), int(req_end) + 1))
+            # Monthly (for the proxy-year fallback) AND daily (so the load is
+            # adjusted at every time step, not held constant within a month).
+            _resolved_climate = ssJSON_lib.build_climate_data_from_timeseries(
+                ss_climate_data_source, years=_years)
+            _daily_climate = ssJSON_lib.build_daily_climate_from_timeseries(
+                ss_climate_data_source, years=_years)
+            _ndays = sum(len(v.get('day', [])) for v in _daily_climate.values())
+            print(f"  Climate (dynamic SS): built from time series for "
+                  f"{len(_resolved_climate)} year(s) "
+                  f"[{min(_resolved_climate)}-{max(_resolved_climate)}] — "
+                  f"DAILY resolution ({_ndays} days; SS adjusted every time step)")
+        else:
+            if ss_climate_data is None:
+                raise ValueError(
+                    "ss_method='using_copernicus_lulc_with_dynamic_coeff' with "
+                    "ss_climate_data_type='fixed_parameters' requires ss_climate_data.\n"
+                    "Provide {year: {'precip_mm': [12], 'temp_c': [12]}}, or set "
+                    "ss_climate_data_type='time_series' + ss_climate_data_source."
+                )
+            _resolved_climate = ss_climate_data
 
         ssJSON_lib.set_ss_climate_adjusted_export_coefficients(
             ss_config_filepath=ss_config_filepath,
@@ -1029,7 +1066,7 @@ def Gen_Input_Driver(
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
             ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
-            climate_data=ss_climate_data,
+            climate_data=_resolved_climate,
             precip_scaling_power=ss_climate_precip_scaling_power,
             temp_q10=ss_climate_temp_q10,
             temp_reference_c=ss_climate_temp_reference_c,
@@ -1037,6 +1074,9 @@ def Gen_Input_Driver(
             simulation_period=[req_start, req_end],
             bgc_engine_label=_bgc_engine_label,
             chemical_species_list=_chem_species_list,
+            climate_data_type=ss_climate_data_type,
+            climate_data_source=ss_climate_data_source,
+            daily_climate_data=_daily_climate,
         )
 
     elif (ss_method == "ml_model"):
