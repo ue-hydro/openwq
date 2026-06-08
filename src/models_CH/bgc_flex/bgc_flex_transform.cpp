@@ -135,7 +135,15 @@ void OpenWQ_CH_model::bgc_flex_transform(
                         chemass_cubes[chem] = &((*OpenWQ_vars.chemass)(icmp)(index_chemtransf[chem]));
                     }
 
-                    #pragma omp parallel
+                    // Cap the thread count to exactly what the thread-local
+                    // arrays (thread_chemass_InTransfEq / thread_dependVar_scalar /
+                    // thread_BGCexpressions_eq) were sized for at init
+                    // (nativeFlex->num_omp_threads).  Without this clause the
+                    // region spawns the run-time default (OMP_NUM_THREADS, else
+                    // ALL node cores), so on a many-core node tid runs past the
+                    // array bounds → out-of-range Cube access / abort.  Every
+                    // other OpenMP region in openWQ already caps itself this way.
+                    #pragma omp parallel num_threads(nativeFlex->num_omp_threads)
                     {
                         #ifdef _OPENMP
                         const int tid = omp_get_thread_num();
