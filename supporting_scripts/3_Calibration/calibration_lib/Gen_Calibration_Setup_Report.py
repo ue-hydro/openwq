@@ -458,8 +458,68 @@ def _build_model_config_section(
         ("Sediment Transport", _module_badge(ts)),
         ("Sorption Isotherm", _module_badge(si)),
         ("Source/Sink Method", _module_badge(ss)),
-        ("Chemical Species", species_str),
     ]
+
+    # Source/Sink climate detail — mirrors the model-config report's
+    # "Source/Sink Setup" card.  For the Copernicus seasonal/dynamic methods,
+    # spell out HOW annual loads are distributed across months and WHERE the
+    # climate that scales them comes from: hand-typed fixed monthly values vs a
+    # NetCDF/CSV time series (adjusted at every time step).  All openWQ-level, so
+    # this is host-model-independent.  Defensive .get() means older configs that
+    # lack these keys simply omit the extra rows.
+    if "copernicus" in str(ss).lower():
+        _seasonal = model_config.get(
+            "ss_method_copernicus_annual_to_seasonal_loads_method")
+        if _seasonal:
+            rows.append(("&#8627; Seasonal distribution", _module_badge(_seasonal)))
+        _uses_climate = ("dynamic_coeff" in str(ss).lower()
+                         or str(_seasonal).lower() == "seasonal")
+        if _uses_climate:
+            _cdt = model_config.get("ss_climate_data_type", "fixed_parameters")
+            _cdt_label = ("time series &mdash; adjusted every time step"
+                          if _cdt == "time_series"
+                          else "fixed hand-typed monthly values")
+            rows.append(("&#8627; Climate data type",
+                         _module_badge(_cdt) + f" &mdash; {_cdt_label}"))
+            if _cdt == "time_series":
+                _src = model_config.get("ss_climate_data_source") or {}
+                for _var in ("precip", "temp"):
+                    _spec = _src.get(_var) or {}
+                    if _spec:
+                        _ft = _spec.get("file_type", "?")
+                        _col = _spec.get("nc_key_or_column", "?")
+                        _tk = _spec.get("time_key_or_column", "?")
+                        _fn = os.path.basename(str(_spec.get("path", ""))) or "?"
+                        rows.append((
+                            f"&nbsp;&nbsp;&#8226; {_var} source",
+                            f'<code>{_ft}</code> &middot; var <code>{_col}</code> '
+                            f'&middot; time <code>{_tk}</code> &middot; '
+                            f'<code>{_fn}</code>'))
+            else:
+                _cd = model_config.get("ss_climate_data") or {}
+                if isinstance(_cd, dict) and _cd:
+                    _yrs = ", ".join(str(y) for y in sorted(_cd.keys()))
+                    rows.append(("&nbsp;&nbsp;&#8226; climate values",
+                                 f"hand-typed monthly values &mdash; "
+                                 f"{len(_cd)} year(s): {_yrs}"))
+                else:
+                    rows.append(("&nbsp;&nbsp;&#8226; climate values",
+                                 "generic seasonal sine fallback"))
+            # Response coefficients that scale the chosen climate into monthly
+            # weights — these ARE the calibratable SS_climate_* parameters.
+            _coeffs = []
+            for _lbl, _k in (("precip_power", "ss_climate_precip_scaling_power"),
+                             ("Q10", "ss_climate_temp_q10"),
+                             ("T_ref", "ss_climate_temp_reference_c")):
+                _cv = model_config.get(_k)
+                if _cv is not None:
+                    _coeffs.append(f"{_lbl}=<code>{_cv}</code>")
+            if _coeffs:
+                rows.append(("&nbsp;&nbsp;&#8226; response coeffs",
+                             " &middot; ".join(_coeffs)
+                             + ' <em style="opacity:.7">(baseline; calibrated)</em>'))
+
+    rows.append(("Chemical Species", species_str))
 
     table_rows = "".join(
         f"<tr><td><strong>{k}</strong></td><td>{v}</td></tr>"
