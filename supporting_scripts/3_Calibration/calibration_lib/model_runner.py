@@ -334,9 +334,14 @@ class ModelRunner:
                 f"-np {n_ranks} -x master_json {exec_path} {model_arg}"
             )
 
+        # Single-threaded openWQ by default (its BGC OpenMP path is unsafe on
+        # many-core hosts - see _run_apptainer); overridable via OMP_NUM_THREADS.
+        _omp_threads = os.environ.get("OMP_NUM_THREADS", "1")
+
         cmd = [
             "docker", "exec",
             "-e", f"master_json={container_master_json}",
+            "-e", f"OMP_NUM_THREADS={_omp_threads}",
             self.docker_container_name,
             "/bin/bash", "-c",
             shell_cmd
@@ -431,6 +436,19 @@ class ModelRunner:
             eval_ctrl = self._mizuroute_eval_control(eval_dir, container_eval_dir)
             model_args = [eval_ctrl or container_file_manager]
 
+        # Threads for openWQ inside the container.  openWQ's BGC OpenMP path
+        # (bgc_flex_transform) is unsafe on many-core nodes - it aborts with an
+        # out-of-range arma::Cube access / SIGABRT once the run-time thread count
+        # is high (fine on a 4-core laptop, fatal on a 128-core HPC node).  For an
+        # HRU-scale domain the BGC spatial loop is a handful of cells, so threading
+        # it buys nothing while the calibration already parallelises across
+        # evaluations.  Default to single-threaded and inject it EXPLICITLY via
+        # --env so it reaches the model regardless of the cluster's Apptainer
+        # env-forwarding policy (--cleanenv, a restricted apptainer.conf, or a
+        # %environment block in the .sif can all otherwise strip/reset a plain
+        # `export`).  Override from the sbatch: `export OMP_NUM_THREADS=N`.
+        _omp_threads = os.environ.get("OMP_NUM_THREADS", "1")
+
         # cwd = the eval dir so openWQ's relative RESULTS_FOLDERPATH (openwq_out/)
         # lands in this evaluation's folder.
         cmd = [
@@ -439,6 +457,7 @@ class ModelRunner:
             *extra_binds,
             "--pwd", container_eval_dir,
             "--env", f"master_json={container_master_json}",
+            "--env", f"OMP_NUM_THREADS={_omp_threads}",
             self.apptainer_sif_path,
             exec_path,
             *self.executable_args.split(),
@@ -1170,12 +1189,15 @@ done
 echo "Starting evaluation $EVAL_ID at $(date)"
 echo "Working directory: $EVAL_DIR"
 
-# Run the model (apptainer or singularity - whichever this cluster provides)
+# Run the model (apptainer or singularity - whichever this cluster provides).
+# Force single-threaded openWQ by default (its BGC OpenMP path aborts on
+# many-core nodes); override with `export OMP_NUM_THREADS=N` before submission.
 APPTAINER="$(command -v apptainer || command -v singularity)"
 "$APPTAINER" exec \\
     --bind $BIND_PATH \\
     --pwd $EXEC_DIR \\
     --env master_json=$MASTER_JSON \\
+    --env OMP_NUM_THREADS=${{OMP_NUM_THREADS:-1}} \\
     $SIF_PATH \\
     ./$EXECUTABLE $EXEC_ARGS -m $FILE_MANAGER
 
@@ -1242,12 +1264,15 @@ done
 
 echo "Starting evaluation $EVAL_ID at $(date)"
 
-# Run the model (apptainer or singularity - whichever this cluster provides)
+# Run the model (apptainer or singularity - whichever this cluster provides).
+# Force single-threaded openWQ by default (its BGC OpenMP path aborts on
+# many-core nodes); override with `export OMP_NUM_THREADS=N` before submission.
 APPTAINER="$(command -v apptainer || command -v singularity)"
 "$APPTAINER" exec \\
     --bind $BIND_PATH \\
     --pwd $EXEC_DIR \\
     --env master_json=$MASTER_JSON \\
+    --env OMP_NUM_THREADS=${{OMP_NUM_THREADS:-1}} \\
     $SIF_PATH \\
     ./$EXECUTABLE $EXEC_ARGS -m $FILE_MANAGER
 
