@@ -115,6 +115,7 @@ def generate_setup_report(
             {"id": "settings", "label": "Settings"},
             {"id": "model-config", "label": "Model Configuration"},
             {"id": "observations", "label": "Observations"},
+            {"id": "output-config", "label": "Output Configuration"},
             {"id": "run-commands", "label": "Run Commands"},
         ]
         H.append(rh.build_sidebar(nav_items, logo_text="OpenWQ Calibration"))
@@ -160,6 +161,9 @@ def generate_setup_report(
 
         # ── Section: Observation Data ──
         H.append(_build_observations_section(observation_config))
+
+        # ── Section: Output Configuration (last, after Observation Data) ──
+        H.append(_build_output_config_section(model_config))
 
         # ── Section: Run Commands ──
         H.append(_build_run_commands_section(
@@ -541,6 +545,77 @@ def _build_model_config_section(
     <div class="card">
         <h3>Initial Conditions</h3>
         <p>Uniform IC: <strong>{ic_value} {ic_units}</strong> (all species, all compartments)</p>
+    </div>
+</div>
+"""
+
+
+def _build_output_config_section(model_config: Dict[str, Any]) -> str:
+    """Build the 'Output Configuration' section (what openWQ writes out).
+
+    Standalone (split out of the Module Summary) so reports can place it where
+    they want — in the setup report it sits at the END of the Overview tab,
+    after Observation Data.
+    """
+    species = model_config.get("chemical_species", [])
+    species_str = ", ".join(species) if isinstance(species, list) else str(species)
+
+    _out_format = model_config.get("output_format", "HDF5")
+    _out_units = model_config.get("units", "N/A")
+    _nodata = model_config.get("no_water_conc_flag", -9999)
+    _exp_sed = model_config.get("export_sediment", False)
+    _ts = model_config.get("timestep", [])
+    _ts_str = (f"{_ts[0]} {_ts[1]}"
+               if isinstance(_ts, (list, tuple)) and len(_ts) == 2 else str(_ts))
+    _cc = model_config.get("compartments_and_cells", {})
+    if isinstance(_cc, dict) and _cc:
+        _cc_parts = []
+        for _comp, _cells in _cc.items():
+            # _cells = {entry_index: [x, y, z], ...}.  Show the x/y/z cell
+            # SELECTOR(s), not the entry keys (which are just 1, 2, 3 …).
+            if isinstance(_cells, dict) and _cells:
+                _specs = []
+                for _sel in _cells.values():
+                    if isinstance(_sel, (list, tuple)):
+                        if all(str(_x).lower() == "all" for _x in _sel):
+                            _specs.append("all cells (x, y, z)")
+                        else:
+                            _specs.append("[" + ", ".join(map(str, _sel)) + "]")
+                    else:
+                        _specs.append(str(_sel))
+                _cc_parts.append(f"<code>{_comp}</code> &rarr; "
+                                 f"{'; '.join(_specs)}")
+            else:
+                _cc_parts.append(f"<code>{_comp}</code>")
+        _cc_str = "<br>".join(_cc_parts)
+    else:
+        _cc_str = "N/A"
+
+    _fmt_badge = (f'<span class="badge badge-secondary">{_out_format}</span>'
+                  if _out_format not in ("NONE", "none", "N/A", "")
+                  else f'<span class="badge badge-none">{_out_format}</span>')
+
+    out_rows = [
+        ("Output Format", _fmt_badge),
+        ("Output Species", species_str),
+        ("Units", _out_units),
+        ("Output Timestep", _ts_str),
+        ("Export Sediment", "Yes" if _exp_sed else "No"),
+        ("No-water Conc. Flag", _nodata),
+        ("Output Compartments / Cells", _cc_str),
+    ]
+    out_table_rows = "".join(
+        f"<tr><td><strong>{k}</strong></td><td>{v}</td></tr>"
+        for k, v in out_rows
+    )
+
+    return f"""
+<div class="section" id="output-config">
+    <h2>Output Configuration</h2>
+    <div class="card">
+        <table class="param-table" style="max-width:700px;">
+            <tbody>{out_table_rows}</tbody>
+        </table>
     </div>
 </div>
 """
@@ -974,6 +1049,8 @@ def generate_interactive_setup(
             species_obs_availability=species_obs_availability,
         ))
         H.append(_build_observations_section(observation_config))
+        # Output Configuration goes last in the Overview tab, after Observation Data.
+        H.append(_build_output_config_section(model_config))
         H.append('</div>')
 
         # ── Tab: Settings ──

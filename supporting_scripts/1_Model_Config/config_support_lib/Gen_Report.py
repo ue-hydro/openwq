@@ -1402,6 +1402,10 @@ def generate_simulation_report(
         openwq_h5_mapping_key=None,
         seasonal_loads_method=None,
         plot_separator=' | ',
+        # Output settings surfaced in the "Output Configuration" section.
+        output_format="HDF5",
+        no_water_conc_flag=-9999,
+        export_sediment=False,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -1974,6 +1978,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     nav_items.append(('config', 'Configuration'))
     if ss_summary:
         nav_items.append(('sources', 'Source/Sink Setup'))
+    nav_items.append(('output-config', 'Output Configuration'))
     nav_items.append(('metadata', 'Run Metadata'))
     _any_errors = bool(_section_errors)
     if _any_errors:
@@ -2450,6 +2455,54 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
             H.append('</div>')
 
+    # --- SECTION: Output Configuration ---
+    # What openWQ writes out: format, the species/units it exports, the cadence,
+    # which compartments/cells, and the special flags.
+    with _SectionGuard(H, 'output-config', 'Output Configuration'):
+        H.append('<div class="section" id="output-config">'
+                 '<h2>Output Configuration</h2>')
+        H.append('<div class="card primary"><div class="table-wrap"><table>')
+        H.append('<tr><th>Property</th><th>Value</th></tr>')
+        _ts_str = (f'{timestep[0]} {timestep[1]}'
+                   if isinstance(timestep, (list, tuple)) and len(timestep) == 2
+                   else str(timestep))
+        _out_species = (', '.join(chemical_species)
+                        if isinstance(chemical_species, (list, tuple))
+                        else str(chemical_species))
+        if isinstance(compartments_and_cells, dict) and compartments_and_cells:
+            _cc_parts = []
+            for _comp, _cells in compartments_and_cells.items():
+                # _cells = {entry_index: [x, y, z], ...}.  Show the x/y/z cell
+                # SELECTOR(s), not the entry keys (which are just 1, 2, 3 …).
+                if isinstance(_cells, dict) and _cells:
+                    _specs = []
+                    for _sel in _cells.values():
+                        if isinstance(_sel, (list, tuple)):
+                            if all(str(_x).lower() == 'all' for _x in _sel):
+                                _specs.append('all cells (x, y, z)')
+                            else:
+                                _specs.append('[' + ', '.join(map(str, _sel)) + ']')
+                        else:
+                            _specs.append(str(_sel))
+                    _cc_parts.append(f'<code>{_comp}</code> &rarr; '
+                                     f'{"; ".join(_specs)}')
+                else:
+                    _cc_parts.append(f'<code>{_comp}</code>')
+            _cc_str = '<br>'.join(_cc_parts)
+        else:
+            _cc_str = 'N/A'
+        for _k, _v in (
+            ('Output Format', f'<span class="badge badge-secondary">{output_format}</span>'),
+            ('Output Species', _out_species),
+            ('Units', units),
+            ('Output Timestep', _ts_str),
+            ('Export Sediment', 'Yes' if export_sediment else 'No'),
+            ('No-water Concentration Flag', no_water_conc_flag),
+            ('Output Compartments / Cells', _cc_str),
+        ):
+            H.append(f'<tr><td>{_k}</td><td>{_v}</td></tr>')
+        H.append('</table></div></div></div>')
+
     # --- SECTION: Run Metadata ---
     with _SectionGuard(H, 'metadata', 'Run Metadata'):
         H.append('<div class="section" id="metadata"><h2>Run Metadata</h2>')
@@ -2459,7 +2512,6 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                  f'<td style="font-family:monospace;font-size:.8rem">{output_dir}</td></tr>')
         H.append(f'<tr><td>Report Generated</td><td>{now}</td></tr>')
         H.append(f'<tr><td>Solver</td><td>{solver}</td></tr>')
-        H.append(f'<tr><td>Output Timestep</td><td>{timestep[0]} {timestep[1]}</td></tr>')
         H.append('</table></div></div></div>')
 
     # --- SECTION: Errors (when any errors occurred) ---
@@ -3601,6 +3653,10 @@ def generate_report(
         openwq_h5_mapping_key=None,
         seasonal_loads_method=None,
         plot_separator=' | ',
+        # Output settings surfaced in the "Output Configuration" section.
+        output_format="HDF5",
+        no_water_conc_flag=-9999,
+        export_sediment=False,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -3664,6 +3720,9 @@ def generate_report(
             openwq_h5_mapping_key=openwq_h5_mapping_key,
             seasonal_loads_method=seasonal_loads_method,
             plot_separator=plot_separator,
+            output_format=output_format,
+            no_water_conc_flag=no_water_conc_flag,
+            export_sediment=export_sediment,
         )
 
         print(f"  Report saved: {report_path}")
