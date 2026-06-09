@@ -779,6 +779,7 @@ if generate_report:
             no_water_conc_flag=no_water_conc_flag,
             export_sediment=export_sediment,
             run_mode_debug=run_mode_debug,
+            docker_compose_path=docker_compose_path,
             river_network_shapefile=river_network_shapefile,
             river_network_mapping_key=river_network_mapping_key,
             basin_shapefile=_basin_shp,
