@@ -163,6 +163,74 @@ def _load_observation_data(obs_dir=None, obs_csv=None):
     return obs_by_species, station_locations
 
 
+# ── Time-series decimation ──────────────────────────────────────────────────
+# A full multi-year hourly run across many reaches embeds hundreds of MB of
+# inline JSON in the report (e.g. 179 reaches x ~120k hourly steps ~= 550 MB),
+# which crashes the browser tab.  Decimate each trace to a bounded number of
+# points — visually identical at screen resolution while keeping the file
+# loadable.  The budget is shared across traces so the TOTAL embedded size is
+# bounded no matter how many features are plotted.  The full-resolution data
+# always remains in the HDF5 outputs.  Tunable via env vars:
+#   OWQ_PLOT_POINT_BUDGET  total points across one plot   (default 500000)
+#   OWQ_PLOT_MIN_POINTS / OWQ_PLOT_MAX_POINTS  per-trace clamp
+_PLOT_POINT_BUDGET = int(os.environ.get("OWQ_PLOT_POINT_BUDGET", "500000"))
+_PLOT_MIN_POINTS = int(os.environ.get("OWQ_PLOT_MIN_POINTS", "1500"))
+_PLOT_MAX_POINTS = int(os.environ.get("OWQ_PLOT_MAX_POINTS", "10000"))
+_DECIM_LOGGED = set()
+
+
+def _per_trace_cap(n_features):
+    """Per-trace point cap so a whole plot stays within the point budget."""
+    n = max(1, int(n_features or 1))
+    return max(_PLOT_MIN_POINTS, min(_PLOT_MAX_POINTS, _PLOT_POINT_BUDGET // n))
+
+
+def _decimate_series(series, max_points):
+    """Peak-preserving downsample of a Series to <= max_points points.
+
+    Uses a min/max envelope: the series is split into ``max_points // 2`` equal
+    buckets and each bucket contributes BOTH its minimum and maximum sample
+    (emitted in time order), so sharp peaks and troughs survive instead of being
+    skipped the way plain stride sampling can.  The first and last samples are
+    always kept, and an all-NaN bucket keeps one sample so gaps stay visible.
+    Returns the series unchanged when it already fits or max_points <= 0; falls
+    back to stride sampling if the envelope can't be computed.  Logs once per
+    distinct cap.  Full-resolution data always remains in the HDF5 outputs."""
+    n = len(series)
+    if not max_points or max_points <= 0 or n <= max_points:
+        return series
+    if max_points not in _DECIM_LOGGED:
+        _DECIM_LOGGED.add(max_points)
+        print(f"  ℹ Long time series downsampled to ≤{max_points} points/trace "
+              f"(peak-preserving min/max envelope) for a browser-loadable "
+              f"report (full data stays in the HDF5 outputs).")
+    try:
+        vals = np.asarray(series.values, dtype='float64')
+        n_buckets = max(1, max_points // 2)
+        edges = np.linspace(0, n, n_buckets + 1).astype(int)
+        keep = {0, n - 1}
+        for b in range(n_buckets):
+            lo, hi = int(edges[b]), int(edges[b + 1])
+            if hi <= lo:
+                continue
+            seg = vals[lo:hi]
+            finite = ~np.isnan(seg)
+            if finite.any():
+                sub = np.nonzero(finite)[0]
+                keep.add(lo + int(sub[np.argmin(seg[sub])]))   # trough
+                keep.add(lo + int(sub[np.argmax(seg[sub])]))   # peak
+            else:
+                keep.add(lo)  # all-NaN bucket → keep one sample so the gap shows
+        return series.iloc[sorted(keep)]
+    except Exception:
+        # Robust fallback: uniform stride, keeping the last sample.
+        stride = int(math.ceil(n / max_points))
+        decim = series.iloc[::stride]
+        if len(decim) and decim.index[-1] != series.index[-1]:
+            decim = pd.concat([decim, series.iloc[[-1]]])
+        return decim
+
+
 def _build_traces(feature_data, n_visible=10, feature_label='Feature'):
     """Build Plotly trace dicts from a {fid: pd.Series} dictionary.
 
@@ -183,8 +251,10 @@ def _build_traces(feature_data, n_visible=10, feature_label='Feature'):
     """
     traces = []
     n_features = len(feature_data)
+    _cap = _per_trace_cap(n_features)
 
     for idx, (fid, series) in enumerate(feature_data.items()):
+        series = _decimate_series(series, _cap)
         # Convert time index to ISO strings for Plotly
         if isinstance(series.index, pd.DatetimeIndex):
             x_vals = series.index.strftime('%Y-%m-%dT%H:%M:%S').tolist()
@@ -273,8 +343,10 @@ def _build_traces_with_colors(feature_data, n_visible=10, feature_label='Feature
     traces = []
     color_map = {}
     n_features = len(feature_data)
+    _cap = _per_trace_cap(n_features)
 
     for idx, (fid, series) in enumerate(feature_data.items()):
+        series = _decimate_series(series, _cap)
         if global_color_map and fid in global_color_map:
             color = global_color_map[fid]
         else:
@@ -317,8 +389,10 @@ def _build_debug_traces(feature_data, color_map, ext_label, dash_style,
     They start visible and can be toggled with the Debug button.
     """
     traces = []
+    _cap = _per_trace_cap(len(feature_data))
 
     for fid, series in feature_data.items():
+        series = _decimate_series(series, _cap)
         color = color_map.get(fid, '#888')
 
         if isinstance(series.index, pd.DatetimeIndex):
