@@ -348,8 +348,10 @@ def generate_results_report(
         # needing to cross-reference the config report.  Defensive: never let a
         # missing key break the results report.
         try:
-            from .Gen_Calibration_Setup_Report import _build_model_config_section
+            from .Gen_Calibration_Setup_Report import (
+                _build_model_config_section, _build_output_config_section)
             H.append(_build_model_config_section(model_config))
+            H.append(_build_output_config_section(model_config))
         except Exception as _e:
             logger.warning(f"Model configuration summary skipped: {_e}")
 
