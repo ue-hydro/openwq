@@ -173,6 +173,7 @@ def generate_results_report(
 
         # ── Sidebar (Part 1: influential params, Part 2: calibration) ──
         nav_items = [
+            {"id": "model-config", "label": "Model Setup"},
             {"id": "summary", "label": "Summary"},
             {"id": "sensitivity", "label": "Influential params"},
         ]
@@ -339,6 +340,18 @@ def generate_results_report(
     </div>
 </div>
 """)
+
+        # ── Section: Model Configuration (general model setup) ──
+        # Reuse the calibration setup report's "Module Summary" builder so the
+        # results report stands on its own — the reader sees the host model,
+        # solver, modules and Source/Sink climate detail up front, without
+        # needing to cross-reference the config report.  Defensive: never let a
+        # missing key break the results report.
+        try:
+            from .Gen_Calibration_Setup_Report import _build_model_config_section
+            H.append(_build_model_config_section(model_config))
+        except Exception as _e:
+            logger.warning(f"Model configuration summary skipped: {_e}")
 
         # ── Section: Summary ──
         H.append(_build_summary_section(

@@ -491,6 +491,35 @@ def _render_module_params(module_data, module_name, output_dir=None,
     return H
 
 
+def _count_bgc_species(bgc_module_name, bgc_template_path, fallback=0):
+    """Count the chemical species DEFINED by the BGC model.
+
+    For NATIVE_BGC_FLEX this is the number of entries in the template JSON's
+    ``CHEMICAL_SPECIES.LIST`` (e.g. ``SWAT_full_nutrients.json`` defines 19) —
+    NOT the length of the user's OUTPUT list (that is reported separately as the
+    "Output Species" KPI).  Mirrors the species-parsing logic used to build the
+    Chemical Species table.  Falls back to ``fallback`` for PHREEQC, a missing/
+    unreadable template, or any parse error.
+    """
+    try:
+        if (not bgc_template_path
+                or str(bgc_module_name).upper() != "NATIVE_BGC_FLEX"
+                or not str(bgc_template_path).lower().endswith(".json")
+                or not os.path.isfile(bgc_template_path)):
+            return fallback
+        with open(bgc_template_path) as _f:
+            _d = json.load(_f)
+        _bgc = _d.get("BIOGEOCHEMISTRY_CONFIGURATION", _d)
+        _cs = _bgc.get("CHEMICAL_SPECIES", {})
+        if isinstance(_cs.get("LIST"), dict):
+            return len(_cs["LIST"]) or fallback
+        _names = [k for k, v in _cs.items()
+                  if not k.startswith("_") and isinstance(v, dict)]
+        return len(_names) or fallback
+    except Exception:
+        return fallback
+
+
 def _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, units):
     """Read HDF5 simulation outputs.
 
@@ -2005,7 +2034,12 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
     # --- SECTION: Summary KPIs ---
     try:
-        n_species = len(chemical_species)
+        # "Chemical Species" KPI = species DEFINED by the BGC model (e.g.
+        # SWAT_full_nutrients.json defines 19).  The user's OUTPUT list is
+        # reported separately as the "Output Species" KPI below.
+        n_output_species = len(chemical_species)
+        n_species = _count_bgc_species(bgc_module_name, bgc_template_path,
+                                       fallback=n_output_species)
         n_compartments = len(compartments_and_cells)
         # Count spatial elements from river network shapefile if available,
         # otherwise fall back to counting config output entries.
@@ -2021,7 +2055,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         if n_cells == 0:
             n_cells = sum(1 for cmp in compartments_and_cells.values()
                           for _ in cmp.values())
-        n_outputs = n_species
+        n_outputs = n_output_species
         comp_names = ', '.join(compartments_and_cells.keys())
 
         # Extract simulation period from host-model control file
