@@ -449,6 +449,25 @@ class ModelRunner:
         # `export`).  Override from the sbatch: `export OMP_NUM_THREADS=N`.
         _omp_threads = os.environ.get("OMP_NUM_THREADS", "1")
 
+        # MPI launcher, INSIDE the container.  mizuRoute (ESCOMP) is
+        # MPI-domain-decomposed and REQUIRES >=2 ranks: with a single rank the
+        # mainstem/tributary split leaves NETOPO_main empty, so init_state_data
+        # indexes NETOPO_main(1) and dies with a Fortran runtime error
+        # "Index '1' of dimension 1 of array 'netopo_main' above upper bound of
+        # 0" (init_model_data.f90:416) - a fast crash with no output, on every
+        # eval.  The Docker path already wraps with `mpirun -np 2`; this mirrors
+        # it so Apptainer/Singularity matches (previously it ran the binary bare
+        # = 1 rank = guaranteed crash for mizuRoute).  SUMMA is NOT
+        # MPI-decomposed -> run it bare (extra ranks duplicate the sim and
+        # collide on the shared output).  Rank count overridable from the sbatch
+        # via OWQ_MPI_RANKS.  `-x` forwards the env vars to every rank;
+        # `--oversubscribe` avoids "not enough slots" under a tight SLURM alloc.
+        mpi_prefix = []
+        if self.hostmodel != "summa":
+            _ranks = os.environ.get("OWQ_MPI_RANKS", "2")
+            mpi_prefix = ["mpirun", "-np", _ranks, "--oversubscribe",
+                          "-x", "master_json", "-x", "OMP_NUM_THREADS"]
+
         # cwd = the eval dir so openWQ's relative RESULTS_FOLDERPATH (openwq_out/)
         # lands in this evaluation's folder.
         cmd = [
@@ -459,6 +478,7 @@ class ModelRunner:
             "--env", f"master_json={container_master_json}",
             "--env", f"OMP_NUM_THREADS={_omp_threads}",
             self.apptainer_sif_path,
+            *mpi_prefix,
             exec_path,
             *self.executable_args.split(),
             *model_args
