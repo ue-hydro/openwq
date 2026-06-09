@@ -1406,6 +1406,9 @@ def generate_simulation_report(
         output_format="HDF5",
         no_water_conc_flag=-9999,
         export_sediment=False,
+        # When False the model exported no derivative/source outputs, so the
+        # "Include debug outputs" control is greyed out.
+        run_mode_debug=True,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -2980,13 +2983,31 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                  'A per-plot <em>Debug</em> toggle lets you show / hide them.</p>')
         H.append('<div id="debugCbRow" style="display:flex;flex-wrap:wrap;gap:.5rem .8rem;'
                  'margin:.5rem 0 1rem;align-items:center">')
-        H.append(
-            '<label style="display:inline-flex;align-items:center;gap:.3rem;'
-            'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'
-            'border:1px solid var(--border);border-radius:6px;'
-            'background:var(--surface);transition:border-color .15s">'
-            '<input type="checkbox" id="debugModeCb" checked> '
-            'Include debug outputs</label>')
+        if run_mode_debug:
+            H.append(
+                '<label style="display:inline-flex;align-items:center;gap:.3rem;'
+                'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'
+                'border:1px solid var(--border);border-radius:6px;'
+                'background:var(--surface);transition:border-color .15s">'
+                '<input type="checkbox" id="debugModeCb" checked> '
+                'Include debug outputs</label>')
+        else:
+            # run_mode_debug = False → the model exported no derivative/source
+            # outputs (dC/dt chem, dC/dt transp, SS, EWF, IC), so there is nothing
+            # to include.  Grey the control out (disabled + unchecked) and say why.
+            H.append(
+                '<label title="No debug outputs were exported '
+                '(run_mode_debug = False in the config)." '
+                'style="display:inline-flex;align-items:center;gap:.3rem;'
+                'font-size:.85rem;cursor:not-allowed;padding:.25rem .5rem;'
+                'border:1px solid var(--border);border-radius:6px;'
+                'background:var(--surface);opacity:.5">'
+                '<input type="checkbox" id="debugModeCb" disabled> '
+                'Include debug outputs</label>')
+            H.append('<span style="font-size:.78rem;color:var(--muted)">'
+                     '&#9432; Disabled &mdash; this run was configured with '
+                     '<code>run_mode_debug = False</code>, so no debug outputs '
+                     'were exported.</span>')
         H.append('</div>')
 
         # --- 4a: Interactive 3D Spatial Viewer (WebGL) ---
@@ -3302,6 +3323,8 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
       updateSnippets();
     }});
   }}
+
+  updateSnippets();
 }})();
 </script>""")
 
@@ -3657,6 +3680,7 @@ def generate_report(
         output_format="HDF5",
         no_water_conc_flag=-9999,
         export_sediment=False,
+        run_mode_debug=True,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -3723,6 +3747,7 @@ def generate_report(
             output_format=output_format,
             no_water_conc_flag=no_water_conc_flag,
             export_sediment=export_sediment,
+            run_mode_debug=run_mode_debug,
         )
 
         print(f"  Report saved: {report_path}")
