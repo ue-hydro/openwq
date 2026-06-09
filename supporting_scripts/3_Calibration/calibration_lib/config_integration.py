@@ -724,6 +724,103 @@ def get_model_sim_period(model_config: Dict[str, Any],
     return None
 
 
+def get_model_forcing_period(model_config: Dict[str, Any],
+                             log=None) -> Optional[Dict[str, Any]]:
+    """Return the ACTUAL forcing-data availability window (host-readable).
+
+    Unlike :func:`get_model_sim_period` (the *declared* period in the control
+    file), this reads the real time axis of the forcing/runoff file.  A
+    control file can request a period the forcing doesn't cover; calibrating
+    outside the forcing yields empty output (no matched obs-sim pairs), so the
+    report draws this as its own bar so the mismatch is visible.
+
+      mizuRoute → time span of the runoff file  <input_dir>/<fname_qsim>
+
+    Control-file paths are *container* paths (e.g. ``/code/...``); they are
+    translated back to host paths using the known host location of the control
+    file itself (longest-common-suffix prefix swap).  Returns
+    ``{"forcing_start", "forcing_end", "source"}`` (``'YYYY-MM-DD HH:MM'``
+    strings) or ``None`` when it can't be determined (missing file, no
+    netCDF4, unreadable) — the report then simply omits the forcing bar.
+    """
+    import re
+    _log = log or (lambda *a, **k: None)
+    fm = (model_config.get('file_manager_path')
+          or model_config.get('control_file_path') or '')
+    if not fm or not os.path.isfile(fm):
+        return None
+    try:
+        with open(fm, 'r') as fh:
+            text = fh.read()
+    except Exception:
+        return None
+
+    def _c2h(cpath, cref, href):
+        """Translate a container path to host using a reference dir known on
+        both sides (the control-file dir == its <ancil_dir>)."""
+        if not cpath:
+            return cpath
+        cp = cref.rstrip('/').split('/')
+        hp = href.rstrip('/').split('/')
+        i = 0
+        while i < len(cp) and i < len(hp) and cp[-1 - i] == hp[-1 - i]:
+            i += 1
+        if i == 0:
+            return cpath
+        c_pre = '/'.join(cp[:len(cp) - i])
+        h_pre = '/'.join(hp[:len(hp) - i])
+        return (h_pre + cpath[len(c_pre):]) if (c_pre and cpath.startswith(c_pre)) else cpath
+
+    def _nc_span(p):
+        """First/last 'time' value of a NetCDF as 'YYYY-MM-DD HH:MM' strings."""
+        try:
+            from netCDF4 import Dataset, num2date  # type: ignore
+        except Exception:
+            return None
+        if not p or not os.path.isfile(p):
+            return None
+        try:
+            ds = Dataset(p)
+            try:
+                tv = ds.variables.get('time')
+                if tv is None or len(tv) == 0:
+                    return None
+                u = getattr(tv, 'units', None)
+                if not u:
+                    return None
+                cal = getattr(tv, 'calendar', 'standard')
+                d0 = num2date(tv[0], u, cal)
+                d1 = num2date(tv[-1], u, cal)
+                f = lambda d: ('%04d-%02d-%02d %02d:%02d'
+                               % (d.year, d.month, d.day,
+                                  getattr(d, 'hour', 0), getattr(d, 'minute', 0)))
+                return (f(d0), f(d1))
+            finally:
+                ds.close()
+        except Exception as exc:
+            _log("forcing nc read failed (%s): %s" % (p, exc))
+            return None
+
+    host_dir = os.path.dirname(os.path.abspath(fm))
+
+    # mizuRoute: runoff file = <input_dir>/<fname_qsim>.  <ancil_dir> (container)
+    # corresponds to the control-file dir (host), giving the prefix swap.
+    m_anc = re.search(r"<ancil_dir>\s*([^!<\n]+)", text)
+    m_in = re.search(r"<input_dir>\s*([^!<\n]+)", text)
+    m_q = re.search(r"<fname_qsim>\s*([^!<\n]+)", text)
+    if m_in and m_q:
+        in_dir = m_in.group(1).strip()
+        cref = m_anc.group(1).strip() if m_anc else os.path.dirname(in_dir)
+        host_in = _c2h(in_dir, cref, host_dir)
+        span = _nc_span(os.path.join(host_in, m_q.group(1).strip()))
+        if span:
+            return {"forcing_start": span[0], "forcing_end": span[1],
+                    "source": m_q.group(1).strip(),
+                    "hostmodel": (model_config.get('hostmodel') or 'mizuroute').lower()}
+
+    return None
+
+
 def get_spatial_mapping(model_config: Dict[str, Any]) -> Dict[str, Any]:
     """Return the resolved spatial-mapping convention for this model run.
 

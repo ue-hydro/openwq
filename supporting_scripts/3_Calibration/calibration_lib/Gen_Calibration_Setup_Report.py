@@ -1812,6 +1812,10 @@ def generate_interactive_setup(
             _sim_period = _ci.get_model_sim_period(model_config)
         except Exception:
             _sim_period = None
+        try:
+            _forcing_period = _ci.get_model_forcing_period(model_config)
+        except Exception:
+            _forcing_period = None
 
         H.append(_build_interactive_js(
             model_config_path=model_config_path,
@@ -1823,6 +1827,7 @@ def generate_interactive_setup(
             report_stem=_calib_stem,
             observation_period=_obs_period,
             model_sim_period=_sim_period,
+            model_forcing_period=_forcing_period,
             hpc_baked=_hpc_baked,
         ))
 
@@ -1986,6 +1991,9 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
             <!-- Per-species observation coverage, ABOVE the slider on the same
                  time axis as the track below (one lane per species with data). -->
             <div id="calibSpeciesLanes" style="margin-bottom:.6rem;"></div>
+            <!-- Forcing-data availability bar (e.g. mizuRoute runoff file). On
+                 the SAME time axis; calibrating outside it yields empty output. -->
+            <div id="calibForcingLane" style="margin-bottom:.6rem;"></div>
             <div class="calib-track" id="calibTrack">
                 <div class="calib-seg calib-gray"  id="segGrayLeft"></div>
                 <div class="calib-seg calib-excl"  id="segExclLeft">
@@ -2151,7 +2159,7 @@ def _build_interactive_execution_section(
                     (<em>prompt</em> for Docker, <em>clean</em> for Apptainer).</div>
             </div>
             {rh.build_form_number(
-                "n_parallel", "Parallel model runs", 1, min_val=1, step=1,
+                "n_parallel", "Parallel model runs", 3, min_val=1, step=1,
                 hint="How many model evaluations to run concurrently during "
                      "the sensitivity analysis (the runs are independent). "
                      "Works for both Docker and Apptainer. DDS calibration is "
@@ -2955,6 +2963,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                           calib_lib_dir="",
                           observation_period=None,
                           model_sim_period=None,
+                          model_forcing_period=None,
                           hpc_baked=None):
     """Build the JavaScript for the interactive setup report."""
     import json as json_mod
@@ -2980,6 +2989,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     # (no obs data, or control file unreadable) and the slider JS copes.
     _obs_period = observation_period
     _sim_period = model_sim_period
+    _forcing_period = model_forcing_period
 
     # Escape paths for JS string embedding
     mcp = json_mod.dumps(model_config_path)
@@ -2989,6 +2999,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     hpc_json = json_mod.dumps(hpc_baked or {})
     obs_period_json = json_mod.dumps(_obs_period)
     sim_period_json = json_mod.dumps(_sim_period)
+    forcing_period_json = json_mod.dumps(_forcing_period)
 
     # Build the JS as a plain string (not f-string) to avoid issues
     # with JS curly braces and Python triple-quote conflicts.
@@ -3006,6 +3017,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   var PARAMS = ''' + params_json + r''';
   var OBS_PERIOD = ''' + obs_period_json + r''';
   var SIM_PERIOD = ''' + sim_period_json + r''';
+  var FORCING_PERIOD = ''' + forcing_period_json + r''';
 
   // Helper: Python repr
   function pyRepr(v, indent) {
@@ -4513,9 +4525,20 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     function frac(d) { return (d.getTime() - lo.getTime()) / span; }
     function dateAtFrac(f) { return new Date(lo.getTime() + f * span); }
     var aStartF = frac(aStart), aEndF = frac(aEnd);
-    // default: calibration = first 1/3 of the obs period, validation = last 2/3
-    var splitF = aStartF + (aEndF - aStartF) / 3;
+    // Default the calibration-window START (left handle) to the FORCING-DATA
+    // start when it falls inside the active range — so the default window
+    // begins where forcing actually exists (calibrating before the forcing
+    // produces empty output / "no matched pairs").  Falls back to the active
+    // range start when there's no forcing info or it starts earlier.
     var calStartF = aStartF;              // calibration-window START (left handle)
+    var _forcStart = FORCING_PERIOD ? parseDate(FORCING_PERIOD.forcing_start) : null;
+    if (_forcStart) {
+      var _fsf = frac(_forcStart);
+      if (_fsf > calStartF && _fsf < aEndF) calStartF = _fsf;
+    }
+    // default: calibration = first 1/3 of the window (start handle → end),
+    // validation = remaining two-thirds
+    var splitF = calStartF + (aEndF - calStartF) / 3;
 
     // Observation timestamps (epoch ms) per species → live in-window count.
     // Counts only the SELECTED target species when any are ticked, else all
@@ -4755,6 +4778,65 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       host.innerHTML = html;
     }
 
+    // Forcing-data availability bar (host-readable runoff/forcing time span),
+    // drawn on the SAME axis as the species lanes + slider, BETWEEN them.
+    // Where the bar is ABSENT (grey) the model has no forcing, so a
+    // calibration window placed there produces empty output — the exact trap
+    // that yields "no matched observation-simulation pairs".
+    function renderForcingLane() {
+      var host = document.getElementById('calibForcingLane');
+      if (!host) return;
+      var fS = FORCING_PERIOD ? parseDate(FORCING_PERIOD.forcing_start) : null;
+      var fE = FORCING_PERIOD ? parseDate(FORCING_PERIOD.forcing_end)   : null;
+      if (!fS || !fE || fE <= fS) { host.innerHTML = ''; return; }
+      var loMs = lo.getTime(), hiMs = hi.getTime(), rng = hiMs - loMs;
+      if (rng <= 0) { host.innerHTML = ''; return; }
+      var color = '#0891b2';   // teal — distinct from species (warm) & track (blue/green)
+      // Clip the bar to the visible axis; keep the TRUE range for the label.
+      var cs = Math.max(fS.getTime(), loMs), ce = Math.min(fE.getTime(), hiMs);
+      var bar = '';
+      if (ce > cs) {
+        var f0 = (cs - loMs) / rng, f1 = (ce - loMs) / rng;
+        bar = '<span style="position:absolute;left:' + (f0 * 100) + '%;width:'
+            + ((f1 - f0) * 100) + '%;top:0;bottom:0;background:' + color
+            + ';opacity:.28;border-left:2px solid ' + color
+            + ';border-right:2px solid ' + color + ';"></span>'
+            + '<span style="position:absolute;left:' + (f0 * 100) + '%;top:50%;'
+            + 'transform:translateY(-50%);margin-left:5px;font-size:.56rem;'
+            + 'color:' + color + ';font-weight:700;white-space:nowrap;">forcing data</span>';
+      }
+      var startsAfter = fS.getTime() > loMs;
+      var extendR     = fE.getTime() > hiMs;
+      var endsBefore  = fE.getTime() < hiMs;
+      var note = '';
+      if (startsAfter)
+        note += ' <span style="color:var(--danger,#dc2626);font-weight:600;">'
+              + '⚠ no forcing before ' + fmt(fS).slice(0, 10) + '</span>';
+      if (extendR)
+        note += ' <span style="color:var(--text3);">(continues to '
+              + fmt(fE).slice(0, 10) + ', beyond model period)</span>';
+      else if (endsBefore)
+        note += ' <span style="color:var(--danger,#dc2626);font-weight:600;">'
+              + '⚠ no forcing after ' + fmt(fE).slice(0, 10) + '</span>';
+      // Host-model display name for the label (SUMMA / mizuRoute).
+      var _hm = (FORCING_PERIOD && FORCING_PERIOD.hostmodel)
+              || (SIM_PERIOD && SIM_PERIOD.hostmodel) || '';
+      var _hmDisp = /summa/i.test(_hm) ? 'SUMMA'
+                  : (/mizu/i.test(_hm) ? 'mizuRoute' : '');
+      var _hmLabel = (_hmDisp ? _hmDisp + ' ' : '') + 'Forcing period';
+      var label = '<div style="font-size:.62rem;color:var(--text2);margin-bottom:2px;">'
+                + '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;'
+                + 'background:' + color + ';margin-right:.35rem;"></span>'
+                + '<strong>' + _hmLabel + '</strong> '
+                + '<span style="color:var(--text3);">'
+                + fmt(fS).slice(0, 10) + ' → ' + fmt(fE).slice(0, 10)
+                + (FORCING_PERIOD.source ? ('  ·  ' + FORCING_PERIOD.source) : '')
+                + '</span>' + note + '</div>';
+      host.innerHTML = label
+                + '<div style="position:relative;height:11px;background:rgba(127,127,127,.12);'
+                + 'border-radius:3px;overflow:hidden;">' + bar + '</div>';
+    }
+
     // Re-count when the target-species selection changes (Targets tab).
     document.querySelectorAll('.species-cb').forEach(function(cb) {
       cb.addEventListener('change', render);
@@ -4766,6 +4848,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     if (_upoLane) _upoLane.addEventListener('change', renderSpeciesLanes);
 
     renderSpeciesLanes();
+    renderForcingLane();
     render();
   })();
 
