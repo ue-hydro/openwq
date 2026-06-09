@@ -1409,6 +1409,9 @@ def generate_simulation_report(
         # When False the model exported no derivative/source outputs, so the
         # "Include debug outputs" control is greyed out.
         run_mode_debug=True,
+        # Path to the openWQ container's docker-compose.yml (from the template).
+        # Used for the "Start the Docker container" cd path + the run command.
+        docker_compose_path=None,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -2620,8 +2623,15 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
         # Step 1: Start Docker container
         _script_dir = os.path.dirname(os.path.abspath(__file__))
-        _containers_dir = os.path.normpath(
-            os.path.join(_script_dir, '..', '..', '..', 'containers'))
+        # Prefer the docker-compose path the template provides (correct even when
+        # the executable is a standalone copy / the report runs from the project
+        # config_support_lib).  Only fall back to deriving it from this script's
+        # location when the template didn't set it.
+        if docker_compose_path:
+            _containers_dir = os.path.dirname(os.path.abspath(docker_compose_path))
+        else:
+            _containers_dir = os.path.normpath(
+                os.path.join(_script_dir, '..', '..', '..', 'containers'))
         _step1_cmd = f'{_cd_cmd(_containers_dir)}\ndocker compose up -d'
         H.append('<h3 style="margin-top:1rem">1. Start the Docker container</h3>')
         H.append('<p>If the container is not already running:</p>')
@@ -2648,9 +2658,12 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         if executable_path and file_manager_path:
             try:
                 import Gen_Input_Driver as _gJSON
-                _dc_path = os.path.normpath(
-                    os.path.join(_script_dir, '..', '..', '..', 'containers',
-                                 'docker-compose.yml'))
+                if docker_compose_path:
+                    _dc_path = os.path.abspath(docker_compose_path)
+                else:
+                    _dc_path = os.path.normpath(
+                        os.path.join(_script_dir, '..', '..', '..', 'containers',
+                                     'docker-compose.yml'))
                 _host_root, _cont_root = _gJSON._parse_docker_volume_mount(_dc_path)
                 if _host_root and _cont_root:
                     _cont_exec = _gJSON._correct_path_for_docker(
@@ -3681,6 +3694,7 @@ def generate_report(
         no_water_conc_flag=-9999,
         export_sediment=False,
         run_mode_debug=True,
+        docker_compose_path=None,
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -3748,6 +3762,7 @@ def generate_report(
             no_water_conc_flag=no_water_conc_flag,
             export_sediment=export_sediment,
             run_mode_debug=run_mode_debug,
+            docker_compose_path=docker_compose_path,
         )
 
         print(f"  Report saved: {report_path}")

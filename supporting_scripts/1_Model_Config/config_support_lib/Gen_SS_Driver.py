@@ -1148,18 +1148,70 @@ def calc_copernicus_lulc(
     # loading, just without the slow re-clip.  Delete the CSV to force a re-clip.
     _areas_csv = ss_output_dir / 'lulc_areas_all.csv'
     if _areas_csv.is_file():
-        print(f"\n  Reusing precomputed LULC areas ({_areas_csv.name}) — "
-              "skipping the slow ESA-CCI NetCDF clipping.")
-        results_df = pd.read_csv(_areas_csv)
-        summaries = {}
+        # Before reusing the cache, VERIFY it was built for the CURRENT basin:
+        # compare the cached GRU_IDs against the basin shapefile's mapping_key
+        # values.  Acknowledge the outcome in the console either way — reuse when
+        # they match, reprocess when they don't (e.g. the basin shapefile was
+        # swapped, lumped GRU → delineated per-reach; reusing would silently
+        # mis-key every load and produce all-zero output).
+        _reuse_cache = True
+        _msg = (f"  Reusing cached LULC areas ({_areas_csv.name}) — "
+                "skipping the slow ESA-CCI re-clip.")
         try:
-            _an = OptimizedLULCAnalyzer(
-                ss_method_copernicus_basin_info, output_dir=str(ss_output_dir))
-            summaries = _an.create_summary_statistics(results_df)
+            _bi = ss_method_copernicus_basin_info or {}
+            _shp = _bi.get('path_to_shp')
+            _mk = _bi.get('mapping_key', 'GRU_ID')
+
+            def _norm_id(v):
+                try:
+                    _fv = float(v)
+                    return str(int(_fv)) if _fv.is_integer() else str(v)
+                except (TypeError, ValueError):
+                    return str(v)
+
+            _cur_ids = set()
+            _shp_name = os.path.basename(_shp) if _shp else '?'
+            if _shp and os.path.isfile(_shp):
+                import geopandas as _gpd
+                _bg = _gpd.read_file(_shp)
+                if _mk in _bg.columns:
+                    _cur_ids = {_norm_id(v) for v in _bg[_mk].tolist()}
+            _cached = pd.read_csv(_areas_csv, usecols=['GRU_ID'])
+            _cache_ids = {_norm_id(v) for v in _cached['GRU_ID'].unique()}
+            if _cur_ids and _cache_ids:
+                if _cur_ids == _cache_ids:
+                    _msg = (f"  ✓ Cached LULC areas match the current basin "
+                            f"({len(_cache_ids)} unit(s) in {_shp_name}) — "
+                            "reusing them, skipping the ESA-CCI re-clip.")
+                else:
+                    _reuse_cache = False
+                    _msg = (f"  ↻ Cached LULC areas were built for a DIFFERENT "
+                            f"basin ({len(_cache_ids)} cached unit(s) vs "
+                            f"{len(_cur_ids)} in {_shp_name}) — reprocessing the "
+                            "LULC for the current basin.")
+            else:
+                _msg = (f"  Reusing cached LULC areas ({_areas_csv.name}) — could "
+                        "not verify against the basin shapefile; assuming a match.")
         except Exception:
+            _reuse_cache = True  # verification failed → keep the safe reuse default
+
+        print("\n" + _msg)
+        if _reuse_cache:
+            results_df = pd.read_csv(_areas_csv)
             summaries = {}
-        existing_rasters = sorted(str(p) for p in clipped_rasters_dir.glob('*.tif'))
-        return results_df, summaries, existing_rasters
+            try:
+                _an = OptimizedLULCAnalyzer(
+                    ss_method_copernicus_basin_info, output_dir=str(ss_output_dir))
+                summaries = _an.create_summary_statistics(results_df)
+            except Exception:
+                summaries = {}
+            existing_rasters = sorted(str(p) for p in clipped_rasters_dir.glob('*.tif'))
+            return results_df, summaries, existing_rasters
+        else:
+            try:
+                _areas_csv.unlink()   # drop the stale cache, then re-clip below
+            except Exception:
+                pass
 
     # ── Auto-download from CDS if no local directory provided ──────────
     if ss_method_copernicus_nc_lc_dir is None:
