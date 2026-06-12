@@ -2242,6 +2242,131 @@ def _apply_climate_adjustment_daily(
             for i in range(n)]
 
 
+def build_subannual_climate_from_timeseries(
+        climate_source: Dict[str, Dict[str, str]],
+        years: Optional[List[int]] = None,
+        resolution: str = "hourly",
+        cache: bool = True) -> Dict[int, Dict[str, List]]:
+    """Like :func:`build_daily_climate_from_timeseries` but at HOURLY resolution,
+    or at the file's NATIVE step (``resolution='native'`` → no resampling).
+
+    Used by ``ss_climate_data_source_adjusting_resolution in ('hourly','native')``
+    so the source/sink load is adjusted at every (sub-daily) time step.
+
+    Returns ``{year: {'month':[], 'day':[], 'hour':[], 'precip_mm':[],
+    'temp_c':[]}}`` with one aligned record per period present for that year
+    (precip summed, temperature averaged).
+    """
+    import os
+    import json
+    import hashlib
+    import tempfile
+
+    if (not isinstance(climate_source, dict)
+            or "precip" not in climate_source or "temp" not in climate_source):
+        raise ValueError(
+            "ss_climate_data_source must be a dict with 'precip' and 'temp' "
+            "entries, each {'file_type': 'nc'|'csv', 'path': ..., "
+            "'nc_key_or_column': ...}.")
+    p_spec = climate_source["precip"]
+    t_spec = climate_source["temp"]
+    res = str(resolution).lower()
+
+    cache_path = None
+    if cache:
+        try:
+            key = json.dumps({"p": p_spec, "t": t_spec,
+                              "y": sorted(int(y) for y in years) if years else None,
+                              "res": res}, sort_keys=True)
+            h = hashlib.md5(key.encode()).hexdigest()[:10]
+            cache_path = os.path.join(tempfile.gettempdir(),
+                                      f"ss_climate_{res}_{h}.json")
+            src_mtime = max(os.path.getmtime(p_spec["path"]),
+                            os.path.getmtime(t_spec["path"]))
+            if (os.path.exists(cache_path)
+                    and os.path.getmtime(cache_path) >= src_mtime):
+                with open(cache_path) as f:
+                    return {int(k): v for k, v in json.load(f).items()}
+        except Exception:
+            cache_path = None
+
+    import pandas as pd
+    p_ser = _read_climate_series(p_spec, "precip")   # depth per record [mm]
+    t_ser = _read_climate_series(t_spec, "temp")     # °C
+
+    if res == "native":
+        # No resampling — use the file's own timestamps as-is.
+        df = pd.DataFrame({"precip_mm": p_ser, "temp_c": t_ser})
+    else:  # hourly
+        df = pd.DataFrame({"precip_mm": p_ser.resample("1h").sum(),
+                           "temp_c": t_ser.resample("1h").mean()})
+    if df["temp_c"].isna().any():
+        _fill = df["temp_c"].mean() if df["temp_c"].notna().any() else 15.0
+        df["temp_c"] = df["temp_c"].fillna(_fill)
+    df["precip_mm"] = df["precip_mm"].fillna(0.0)
+
+    want = {int(y) for y in years} if years else None
+    out: Dict[int, Dict[str, List]] = {}
+    for ts, r in df.iterrows():
+        y = int(ts.year)
+        if want is not None and y not in want:
+            continue
+        rec = out.setdefault(y, {"month": [], "day": [], "hour": [],
+                                 "precip_mm": [], "temp_c": []})
+        rec["month"].append(int(ts.month))
+        rec["day"].append(int(ts.day))
+        rec["hour"].append(int(ts.hour))
+        rec["precip_mm"].append(round(float(r["precip_mm"]), 4))
+        rec["temp_c"].append(round(float(r["temp_c"]), 3))
+
+    if not out:
+        raise ValueError(
+            "build_subannual_climate_from_timeseries: no overlapping periods "
+            "between the precip/temp series and the requested period. Check the "
+            "ss_climate_data_source paths/keys and the period.")
+
+    if cache_path:
+        try:
+            with open(cache_path, "w") as f:
+                json.dump(out, f)
+        except Exception:
+            pass
+    return out
+
+
+def _apply_climate_adjustment_periodic(
+        annual_load_kg: float,
+        months: List[int],
+        days: List[int],
+        hours: List[int],
+        precip_mm: List[float],
+        temp_c: List[float],
+        precip_scaling_power: float = 1.0,
+        temp_q10: float = 2.0,
+        temp_reference_c: float = 15.0) -> List[tuple]:
+    """Distribute an annual load across sub-daily periods by climate weight
+    ``w = P^alpha * Q10^((T - T_ref)/10)``.  Returns
+    ``[(month, day, hour, load_kg), ...]`` summing exactly to
+    ``annual_load_kg`` (uniform fallback when the year has no precip weight).
+    """
+    n = len(precip_mm)
+    if n == 0:
+        return []
+    weights = []
+    for i in range(n):
+        p = max(float(precip_mm[i]), 0.0)
+        t = float(temp_c[i])
+        weights.append((p ** precip_scaling_power)
+                       * (temp_q10 ** ((t - temp_reference_c) / 10.0)))
+    tot = sum(weights)
+    if tot <= 0:
+        share = annual_load_kg / n
+        return [(int(months[i]), int(days[i]), int(hours[i]), share)
+                for i in range(n)]
+    return [(int(months[i]), int(days[i]), int(hours[i]),
+             annual_load_kg * weights[i] / tot) for i in range(n)]
+
+
 def set_ss_climate_adjusted_export_coefficients(
         ss_config_filepath: str,
         json_header_comment: List[str],
@@ -2271,7 +2396,11 @@ def set_ss_climate_adjusted_export_coefficients(
         # DAILY resolution from this {year:{month,day,precip_mm,temp_c}} dict —
         # one SS entry per day — so the load is adjusted at every time step
         # instead of being constant within a month.
-        daily_climate_data: Optional[Dict[int, Dict[str, List]]] = None
+        daily_climate_data: Optional[Dict[int, Dict[str, List]]] = None,
+        # Sub-daily (hourly / native) climate: {year:{month,day,hour,precip_mm,
+        # temp_c}} — one SS entry per sub-daily period, unit = subannual_unit.
+        subannual_climate_data: Optional[Dict[int, Dict[str, List]]] = None,
+        subannual_unit: str = "hour"
 ) -> None:
     """
     Generate climate-adjusted source/sink JSON from Copernicus LULC data.
@@ -2402,7 +2531,7 @@ def set_ss_climate_adjusted_export_coefficients(
         f"temp_Q10={temp_q10}, temp_reference_C={temp_reference_c}",
         f"// METADATA - Climate_Data_Type: {climate_data_type}",
         f"// METADATA - Climate_Resolution: "
-        f"{'daily (per-time-step)' if daily_climate_data else 'monthly'}",
+        f"{(subannual_unit + 'ly (' + subannual_unit + '-step)') if subannual_climate_data else ('daily (per-time-step)' if daily_climate_data else 'monthly')}",
     ]
     # When the climate comes from a time series, record which file(s)/variables
     # were read, so the report shows it (kept colon-free so the report's
@@ -2440,6 +2569,17 @@ def set_ss_climate_adjusted_export_coefficients(
             return daily_climate_data[yr]
         nearest = min(_daily_years, key=lambda y: abs(y - yr))
         return daily_climate_data[nearest]
+
+    # Sub-daily (hourly / native) lookup: one record-set per sub-daily period.
+    _use_subannual = bool(subannual_climate_data)
+    _sub_years = (sorted(int(k) for k in subannual_climate_data.keys())
+                  if _use_subannual else [])
+
+    def _get_subannual_climate_for_year(yr):
+        if yr in subannual_climate_data:
+            return subannual_climate_data[yr]
+        nearest = min(_sub_years, key=lambda y: abs(y - yr))
+        return subannual_climate_data[nearest]
 
     # Build year mapping: simulation years → Copernicus data years
     if simulation_period is not None:
@@ -2491,6 +2631,27 @@ def set_ss_climate_adjusted_export_coefficients(
 
                 # Use cell_id directly - OpenWQ C++ will do the lookup
                 spatial_id = hru_id
+
+                if _use_subannual:
+                    # HOURLY / NATIVE (time_series) — one SS entry per sub-daily
+                    # period, scaled by that period's precip + temperature.  The
+                    # entry pins month+day+hour and carries unit=subannual_unit.
+                    sc = _get_subannual_climate_for_year(sim_year)
+                    for month, day, hour, prd_load_kg in _apply_climate_adjustment_periodic(
+                            annual_load_kg=annual_load_kg,
+                            months=sc['month'], days=sc['day'], hours=sc['hour'],
+                            precip_mm=sc['precip_mm'], temp_c=sc['temp_c'],
+                            precip_scaling_power=precip_scaling_power,
+                            temp_q10=temp_q10,
+                            temp_reference_c=temp_reference_c):
+                        data_entries[str(sub_idx)] = [
+                            sim_year, int(month), int(day), int(hour), "all", "all",
+                            spatial_id, "all", "all",
+                            float(prd_load_kg),
+                            "continuous", subannual_unit
+                        ]
+                        sub_idx += 1
+                    continue
 
                 if _use_daily:
                     # DAILY (time_series) — one SS entry per day, scaled by that

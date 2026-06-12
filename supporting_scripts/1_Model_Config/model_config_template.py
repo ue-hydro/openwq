@@ -489,6 +489,19 @@ ss_climate_data_source = {
                'nc_key_or_column': 'airtemp', 'time_key_or_column': 'time'},
 }
 
+# Temporal resolution at which the time_series climate adjusts the source/sink
+# load — this sets HOW MANY SS entries are written (and the file size).
+#   "monthly" → 1 entry/month  (smallest file; load constant within a month)
+#   "daily"   → 1 entry/day     (default; good balance)
+#   "hourly"  → 1 entry/hour    (large)
+#   "native"  → the climate file's own step, auto-detected (largest)
+# Finer = more realistic dynamics but a MUCH bigger SS file. The input driver
+# ESTIMATES the size first (years x periods x reaches/HRUs x species) and, if it
+# would exceed ~200k entries, prompts you to coarsen (interactive) or aborts with
+# the line to set (HPC/batch) — so you never silently build a multi-GB file that
+# OOM-kills openWQ.
+ss_climate_data_source_adjusting_resolution = "daily"
+
 # ── STEP 2: response coefficients — ALWAYS used, for BOTH sources above ───────
 #   They scale the chosen monthly climate, and ARE the calibratable SS_climate_*
 #   parameters in the calibration / sensitivity workflow.

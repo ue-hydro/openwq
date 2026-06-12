@@ -426,8 +426,14 @@ def _build_settings_section(settings: Dict[str, Any]) -> str:
 def _build_model_config_section(
     model_config: Dict[str, Any],
     species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
+    config_template_path: Optional[str] = None,
 ) -> str:
-    """Build the model configuration summary section."""
+    """Build the model configuration summary section.
+
+    When ``config_template_path`` is given, a prominent "Based on config
+    template" callout is rendered right under the section heading (before the
+    Module Summary) — used by the calibration results report.
+    """
 
     bgc = model_config.get("bgc_module_name", "N/A")
     td = model_config.get("td_module_name", "N/A")
@@ -533,9 +539,26 @@ def _build_model_config_section(
     ic_value = model_config.get("ic_all_value", "N/A")
     ic_units = model_config.get("ic_all_units", "N/A")
 
+    _tpl_block = ""
+    if config_template_path:
+        _tp = config_template_path.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        _tpl_block = (
+            '<div style="border:1px solid var(--border,#e5e7eb);'
+            'border-left:5px solid var(--accent,#ff8c42);'
+            'background:rgba(127,127,127,.06);border-radius:8px;'
+            'padding:.8rem 1rem;margin:.2rem 0 1rem;">'
+            '<div style="font-weight:800;font-size:.78rem;letter-spacing:.04em;'
+            'text-transform:uppercase;color:var(--accent,#ff8c42);'
+            'margin-bottom:.35rem;">&#128196; Based on config template</div>'
+            '<code style="display:block;font-family:ui-monospace,SFMono-Regular,'
+            'Menlo,monospace;font-size:.84rem;font-weight:600;'
+            'color:var(--text,#1a1a2e);word-break:break-all;line-height:1.45;">'
+            + _tp + '</code></div>')
+
     return f"""
 <div class="section" id="model-config">
     <h2>Model Configuration</h2>
+    {_tpl_block}
     <div class="card">
         <h3>Module Summary</h3>
         <table class="param-table" style="max-width:700px;">
@@ -1044,6 +1067,23 @@ def generate_interactive_setup(
             total_params=total_params,
             module_selections=module_selections,
         ))
+        # Source config template — prominent callout directly under the Summary
+        # (critical: this is the file the whole calibration is built on).
+        _mc_tpl = model_config_path or ""
+        if _mc_tpl:
+            H.append(
+                '<div style="border:1px solid var(--border,#e5e7eb);'
+                'border-left:5px solid var(--accent,#ff8c42);'
+                'background:rgba(127,127,127,.06);border-radius:8px;'
+                'padding:.8rem 1rem;margin:.3rem 0 1.1rem;">'
+                '<div style="font-weight:800;font-size:.78rem;letter-spacing:.04em;'
+                'text-transform:uppercase;color:var(--accent,#ff8c42);'
+                'margin-bottom:.35rem;">&#128196; Based on config template</div>'
+                '<code style="display:block;font-family:ui-monospace,SFMono-Regular,'
+                'Menlo,monospace;font-size:.84rem;font-weight:600;'
+                'color:var(--text,#1a1a2e);word-break:break-all;line-height:1.45;">'
+                + _mc_tpl.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                + '</code></div>')
         H.append(_build_model_config_section(
             model_config,
             species_obs_availability=species_obs_availability,
