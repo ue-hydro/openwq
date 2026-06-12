@@ -4078,6 +4078,18 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     FILT.push("  --exclude '0_*_OPENWQ_calibration' \\");
     var _croot = (HPC && HPC.common_root) || '';
     var _clean = !!(HPC && HPC.remap_ok) && !!_croot;
+    // Wrap the copy in a function so the "already exists" prompt can abort
+    // cleanly (return) without killing an interactive shell.  Creates
+    // $HPC_BASE when missing; asks before updating an existing one (rsync
+    // overwrites changed files but never deletes extras).
+    L.push('owq_copy() {');
+    L.push('  if ssh "$HPC_USER@$HPC_HOST" "[ -d \\"$HPC_BASE\\" ]"; then');
+    L.push('    printf \'%s\\n\' "WARNING: $HPC_BASE already exists on the HPC."');
+    L.push('    read -r -p "Update/overwrite its contents (rsync; no files are deleted)? [y/N] " _owq_ans');
+    L.push('    case "$_owq_ans" in [Yy]*) echo "Updating $HPC_BASE ..." ;; *) echo "Aborted - nothing copied."; return 1 ;; esac');
+    L.push('  else');
+    L.push('    ssh "$HPC_USER@$HPC_HOST" "mkdir -p \\"$HPC_BASE\\"" && echo "Created $HPC_BASE on the HPC."');
+    L.push('  fi');
     if (_clean) {
       // Group sources by the parent dir they share UNDER the common root, then
       // rsync each group (NO -R) straight into $HPC_BASE/<that-parent>/.  macOS
@@ -4108,6 +4120,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       roots.forEach(function(r){ L.push('  "' + r + '" \\'); });
       L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/"');
     }
+    L.push('}');
+    L.push('owq_copy');
     return L.join('\n');
   }
   function buildHpcRemap(s) {
