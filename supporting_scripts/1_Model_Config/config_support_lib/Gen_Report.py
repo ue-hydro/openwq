@@ -58,6 +58,23 @@ def _caller_template_stem(default="openwq"):
         pass
     return default
 
+
+def _caller_template_path(default=""):
+    """Full absolute path of the *user template* that called into this module
+    (mirror of :func:`_caller_template_stem`), or *default* when unknown."""
+    try:
+        _here = os.path.dirname(os.path.abspath(__file__))
+        for fr in inspect.stack()[1:]:
+            fn = fr.filename or ""
+            if not fn or fn.startswith("<"):
+                continue
+            if os.path.dirname(os.path.abspath(fn)) == _here:
+                continue  # skip frames inside this library
+            return os.path.abspath(fn)
+    except Exception:
+        pass
+    return default
+
 # Ensure config_support_lib is on path (for local imports like Gen_BGC_Diagram)
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
@@ -1412,6 +1429,10 @@ def generate_simulation_report(
         # Path to the openWQ container's docker-compose.yml (from the template).
         # Used for the "Start the Docker container" cd path + the run command.
         docker_compose_path=None,
+        # Absolute path of the user's model-config template (the script that
+        # produced these results) — shown in the "Source Configuration
+        # Template" card above the Basin Map.  None → derive name from report_stem.
+        config_template_path=None,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -2017,8 +2038,28 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     H.append('<div class="main">')
 
     # Header
+    _tpl_path = config_template_path or ""
+    _tpl_disp = _tpl_path or ((report_stem + ".py")
+                              if report_stem and report_stem != "openwq" else "")
+    _tpl_esc = (_tpl_disp.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                if _tpl_disp else "")
+    # Prominent "Based on config template" callout (critical: the file the whole
+    # report is built on) — placed at the top of the Project Information section.
+    _tpl_callout = (
+        '<div style="border:1px solid var(--border,#e5e7eb);'
+        'border-left:5px solid var(--accent,#ff8c42);'
+        'background:rgba(127,127,127,.06);border-radius:8px;'
+        'padding:.8rem 1rem;margin:0 0 1rem;">'
+        '<div style="font-weight:800;font-size:.78rem;letter-spacing:.04em;'
+        'text-transform:uppercase;color:var(--accent,#ff8c42);'
+        'margin-bottom:.35rem;">&#128196; Based on config template</div>'
+        '<code style="display:block;font-family:ui-monospace,SFMono-Regular,'
+        'Menlo,monospace;font-size:.84rem;font-weight:600;'
+        'color:var(--text,#1a1a2e);word-break:break-all;line-height:1.45;">'
+        + _tpl_esc + '</code></div>'
+    ) if _tpl_disp else ""
     H.append(f"""<div class="header">
-<h1>Open<span>WQ</span> &mdash; {project_name}</h1>
+<h1>Open<span>WQ</span> &mdash; Configuration Report</h1>
 <p class="subtitle">{comment}</p>
 <div class="meta">
 <span>Authors: {authors}</span>
@@ -2033,6 +2074,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     # --- SECTION: Project Information ---
     H.append(f"""<div class="section" id="project">
 <h2>Project Information</h2>
+{_tpl_callout}
 <div class="card primary"><div class="table-wrap"><table>
 <tr><th>Property</th><th>Value</th></tr>
 <tr><td>Project Name</td><td><strong>{project_name}</strong></td></tr>
@@ -3248,6 +3290,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    mapping_key="{_shp_key}",\n'
             f'    feature_label="{_feature_label}",\n'
             f'    separator="{plot_separator}",\n'
+            f'    config_template_path={repr(config_template_path or "")},\n'
             f'{_obs_plot_param}'
             f')\n'
             f'\n'
@@ -3719,10 +3762,12 @@ def generate_report(
     # called us), e.g. model_config_template_SUMMA_X.py ->
     #   <stem>_config_report.html   and   <stem>_results_report.html
     _report_stem = _caller_template_stem(default="openwq")
+    _template_path = _caller_template_path()
 
     try:
         report_path = generate_simulation_report(
             report_stem=_report_stem,
+            config_template_path=_template_path,
             output_dir=dir2save_input_files,
             project_name=project_name,
             authors=authors,

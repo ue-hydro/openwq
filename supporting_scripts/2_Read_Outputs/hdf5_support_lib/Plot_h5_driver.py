@@ -427,7 +427,8 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 map_geom_type='line', station_locations=None,
                 station_to_feature=None,
                 pouring_point_stations=None, separator=' | ',
-                basin_geojson=None, river_line_geojson=None):
+                basin_geojson=None, river_line_geojson=None,
+                config_template_path=None):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -872,6 +873,21 @@ a{color:var(--primary);text-decoration:none}
                   if _n_obs_stations else 'None')
     _species_str = ', '.join(_species_list) if _species_list else 'N/A'
 
+    _tpl_p = (config_template_path or "")
+    _tpl_callout = (
+        '<div style="border:1px solid var(--border,#e5e7eb);'
+        'border-left:5px solid var(--accent,#ff8c42);'
+        'background:rgba(127,127,127,.06);border-radius:8px;'
+        'padding:.8rem 1rem;margin:0 0 1.1rem;">'
+        '<div style="font-weight:800;font-size:.78rem;letter-spacing:.04em;'
+        'text-transform:uppercase;color:var(--accent,#ff8c42);'
+        'margin-bottom:.35rem;">&#128196; Based on config template</div>'
+        '<code style="display:block;font-family:ui-monospace,SFMono-Regular,'
+        'Menlo,monospace;font-size:.84rem;font-weight:600;'
+        'color:var(--text,#1a1a2e);word-break:break-all;line-height:1.45;">'
+        + _tpl_p.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        + '</code></div>'
+    ) if _tpl_p else ""
     H.append(f"""<div class="header">
 <h1>Open<span>WQ</span> &mdash; Results</h1>
 <p class="subtitle">{mode_label} mode &mdash; {n_plots} time-series plot(s)</p>
@@ -890,6 +906,10 @@ a{color:var(--primary);text-decoration:none}
     H.append('</div>')  # close top-fixed
 
     H.append('<div class="container">')
+
+    # Prominent "Based on config template" callout at the top of the body.
+    if _tpl_callout:
+        H.append(_tpl_callout)
 
     # --- RIVER NETWORK MAP ---
     if river_geojson:
@@ -2209,7 +2229,8 @@ def Plot_h5_driver(what2map=None,
                    observation_dir=None,
                    observation_csv=None,
                    observation_compartments=None,
-                   separator=' | '):
+                   separator=' | ',
+                   config_template_path=None):
     """
     Generate interactive HTML time-series plots (Plotly.js).
 
@@ -3077,7 +3098,8 @@ def Plot_h5_driver(what2map=None,
                                pouring_point_stations=_pouring_point_stations,
                                separator=separator,
                                basin_geojson=_basin_geojson,
-                               river_line_geojson=_river_geojson)
+                               river_line_geojson=_river_geojson,
+                               config_template_path=config_template_path)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)

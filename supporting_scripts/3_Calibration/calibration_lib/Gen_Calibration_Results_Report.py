@@ -246,8 +246,8 @@ def generate_results_report(
         meta_items = [m for m in meta_items if m]
 
         H.append(rh.build_header(
-            title=project_name,
-            subtitle="Calibration Results Report",
+            title="Calibration Results Report",
+            subtitle=project_name,
             meta_items=meta_items,
             badge_text="RESULTS",
             badge_class="badge-secondary"
@@ -350,7 +350,10 @@ def generate_results_report(
         try:
             from .Gen_Calibration_Setup_Report import (
                 _build_model_config_section, _build_output_config_section)
-            H.append(_build_model_config_section(model_config))
+            H.append(_build_model_config_section(
+                model_config,
+                config_template_path=(model_config.get("_model_config_path")
+                                      if isinstance(model_config, dict) else None)))
             H.append(_build_output_config_section(model_config))
         except Exception as _e:
             logger.warning(f"Model configuration summary skipped: {_e}")

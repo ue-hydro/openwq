@@ -32,6 +32,125 @@ import Gen_SImodule_file as simJSON_lib
 import Gen_SS_Driver as ssJSON_lib
 import Gen_EWF_Driver as ewfJSON_lib
 
+# Upper bound on the number of source/sink JSON entries the climate-adjusted
+# (time_series) path may generate before it is considered too large for openWQ
+# to load (nlohmann::json balloons in RAM; a >1M-entry file OOM-kills the run).
+# The driver estimates the count BEFORE generating and refuses/prompts above it.
+_SS_ENTRY_GUARD_MAX = 200_000
+
+# SS entries written per year per spatial-unit per species, by resolution.
+# ("native" is detected from the climate file's own time step at run time.)
+_SS_PERIODS_PER_YEAR = {"monthly": 12, "daily": 365, "hourly": 8760}
+
+
+def _count_basin_spatial_units(basin_info):
+    """Number of features (HRUs for SUMMA / reaches for mizuRoute) in the basin
+    shapefile — the spatial dimension of the SS file.  Returns 1 on any failure
+    (keeps the estimate conservative-but-finite rather than crashing the guard).
+    """
+    try:
+        shp = (basin_info or {}).get("path_to_shp") or (basin_info or {}).get("path")
+        if not shp or not os.path.isfile(shp):
+            return 1
+        try:
+            import fiona
+            with fiona.open(shp) as src:
+                return max(int(len(src)), 1)
+        except Exception:
+            import geopandas as gpd
+            return max(int(len(gpd.read_file(shp))), 1)
+    except Exception:
+        return 1
+
+
+def _detect_native_periods_per_year(climate_source):
+    """Estimate SS periods/year for resolution='native' from the climate file's
+    own median time step (e.g. hourly → 8760, 3-hourly → 2920, daily → 365)."""
+    try:
+        from netCDF4 import Dataset, num2date
+        spec = climate_source["precip"]
+        ds = Dataset(spec["path"])
+        try:
+            tv = ds.variables[spec.get("time_key_or_column", "time")]
+            if tv is None or len(tv) < 2:
+                return 8760
+            import numpy as np
+            d0 = num2date(tv[0], tv.units, getattr(tv, "calendar", "standard"))
+            d1 = num2date(tv[1], tv.units, getattr(tv, "calendar", "standard"))
+            dt_h = abs((d1 - d0).total_seconds()) / 3600.0
+            return int(round(8760.0 / dt_h)) if dt_h > 0 else 8760
+        finally:
+            ds.close()
+    except Exception:
+        return 8760
+
+
+def _ss_resolution_size_guard(resolution, n_years, n_units, n_species,
+                              climate_source):
+    """Estimate the SS entry count for *resolution* and enforce
+    ``_SS_ENTRY_GUARD_MAX``.  Returns the (possibly user-downscaled) resolution.
+
+    Interactive terminal → explains the size and offers coarser options.
+    Non-interactive (HPC/batch) → raises with the exact line to set, instead of
+    silently generating a multi-GB file or hanging on input().
+    """
+    import sys
+
+    def _ppy(res):
+        if res == "native":
+            return _detect_native_periods_per_year(climate_source)
+        return _SS_PERIODS_PER_YEAR.get(res, 365)
+
+    def _est(res):
+        return int(max(n_years, 1) * _ppy(res)
+                   * max(n_units, 1) * max(n_species, 1))
+
+    res = str(resolution).lower()
+    est = _est(res)
+    if est <= _SS_ENTRY_GUARD_MAX:
+        return res
+
+    # Coarser options that would fit, in increasing fineness.
+    order = ["monthly", "daily", "hourly", "native"]
+    fits = [r for r in order if _est(r) <= _SS_ENTRY_GUARD_MAX]
+    approx_mb = est * 124 / 1e6   # ~124 bytes/entry observed
+    msg = (
+        f"\n  ⚠  Source/sink file too large at '{res}' resolution:\n"
+        f"     ~{est:,} entries (~{approx_mb:.0f} MB) "
+        f"= {n_years} yr x {_ppy(res):,}/yr x {n_units} units x {n_species} species.\n"
+        f"     openWQ will likely run out of memory loading it.\n"
+        f"     Guard limit: {_SS_ENTRY_GUARD_MAX:,} entries "
+        f"(set Gen_Input_Driver._SS_ENTRY_GUARD_MAX to change).")
+    if fits:
+        opts = ", ".join(f"'{r}' (~{_est(r):,})" for r in fits)
+        msg += f"\n     Resolutions that fit: {opts}."
+    print(msg)
+
+    if not sys.stdin or not sys.stdin.isatty():
+        raise ValueError(
+            "ss_climate_data_source_adjusting_resolution='" + res + "' produces ~"
+            + f"{est:,}" + " SS entries (> " + f"{_SS_ENTRY_GUARD_MAX:,}" + "). "
+            "Coarsen it — e.g. set "
+            "ss_climate_data_source_adjusting_resolution = "
+            + ("'" + fits[0] + "'" if fits else "'monthly'")
+            + " — then re-run. (Non-interactive run: not prompting.)")
+
+    # Interactive: let the user pick a coarser option.
+    choices = fits + [res]
+    print("\n  Choose a resolution:")
+    for i, r in enumerate(choices, 1):
+        tag = "  (keep — may OOM)" if r == res else ""
+        print(f"     {i}) {r} (~{_est(r):,} entries){tag}")
+    try:
+        sel = input("  Selection [1]: ").strip() or "1"
+        idx = int(sel) - 1
+        chosen = choices[idx] if 0 <= idx < len(choices) else choices[0]
+    except Exception:
+        chosen = choices[0]
+    print(f"  → using '{chosen}' resolution.")
+    return chosen
+
+
 def uniform_param(value):
     """Build a spatially-varying parameter table that applies *value* to all cells.
 
@@ -503,6 +622,16 @@ def Gen_Input_Driver(
         #   {'precip': {file_type:'nc'|'csv', path:..., nc_key_or_column:...},
         #    'temp':   {file_type:'nc'|'csv', path:..., nc_key_or_column:...}}
         ss_climate_data_source: Optional[Dict[str, Dict[str, str]]] = None,
+        # Temporal resolution at which the time_series climate adjusts the SS
+        # load (and thus the number of SS entries written): one of
+        #   "native"  → the climate file's own step (auto-detected)
+        #   "hourly"  → 1 entry / hour
+        #   "daily"   → 1 entry / day   (default)
+        #   "monthly" → 1 entry / month (smallest file; constant within a month)
+        # A finer step = more realistic dynamics but a MUCH larger SS file; the
+        # driver estimates the size first and refuses/prompts if it's too big
+        # (see _SS_ENTRY_GUARD_MAX).
+        ss_climate_data_source_adjusting_resolution: str = "daily",
         ss_climate_precip_scaling_power: float = 1.0,
         ss_climate_temp_q10: float = 2.0,
         ss_climate_temp_reference_c: float = 15.0,
@@ -1029,6 +1158,8 @@ def Gen_Input_Driver(
         # source: a hand-entered fixed dict, or a NetCDF/CSV time series read
         # straight from file (host-model independent).
         _daily_climate = None
+        _subannual_climate = None
+        _subannual_unit = "hour"
         if str(ss_climate_data_type).lower() == "time_series":
             if not ss_climate_data_source:
                 raise ValueError(
@@ -1037,17 +1168,39 @@ def Gen_Input_Driver(
                     "'temp': {file_type, path, nc_key_or_column}}."
                 )
             _years = list(range(int(req_start), int(req_end) + 1))
-            # Monthly (for the proxy-year fallback) AND daily (so the load is
-            # adjusted at every time step, not held constant within a month).
+
+            # Pick the SS temporal resolution, but FIRST estimate the resulting
+            # file size and refuse/downscale if it would be too big for openWQ
+            # (a per-step SS file over many units x species x years explodes —
+            # a 1M-entry / 100+ MB JSON OOM-kills the run).
+            _res = _ss_resolution_size_guard(
+                resolution=ss_climate_data_source_adjusting_resolution,
+                n_years=len(_years),
+                n_units=_count_basin_spatial_units(ss_method_copernicus_basin_info),
+                n_species=len(_chem_species_list or []) or 1,
+                climate_source=ss_climate_data_source)
+
+            # Monthly climate is always built — it's both the proxy-year fallback
+            # and the 'monthly' resolution itself.
             _resolved_climate = ssJSON_lib.build_climate_data_from_timeseries(
                 ss_climate_data_source, years=_years)
-            _daily_climate = ssJSON_lib.build_daily_climate_from_timeseries(
-                ss_climate_data_source, years=_years)
-            _ndays = sum(len(v.get('day', [])) for v in _daily_climate.values())
-            print(f"  Climate (dynamic SS): built from time series for "
-                  f"{len(_resolved_climate)} year(s) "
-                  f"[{min(_resolved_climate)}-{max(_resolved_climate)}] — "
-                  f"DAILY resolution ({_ndays} days; SS adjusted every time step)")
+            if _res == "monthly":
+                print(f"  Climate (dynamic SS): time series, MONTHLY resolution "
+                      f"({len(_resolved_climate)} year(s) "
+                      f"[{min(_resolved_climate)}-{max(_resolved_climate)}])")
+            elif _res == "daily":
+                _daily_climate = ssJSON_lib.build_daily_climate_from_timeseries(
+                    ss_climate_data_source, years=_years)
+                _ndays = sum(len(v.get('day', [])) for v in _daily_climate.values())
+                print(f"  Climate (dynamic SS): time series, DAILY resolution "
+                      f"({_ndays} days; SS adjusted every day)")
+            else:  # 'hourly' or 'native'
+                _subannual_climate = ssJSON_lib.build_subannual_climate_from_timeseries(
+                    ss_climate_data_source, years=_years, resolution=_res)
+                _subannual_unit = "hour"
+                _nper = sum(len(v.get('hour', [])) for v in _subannual_climate.values())
+                print(f"  Climate (dynamic SS): time series, {_res.upper()} resolution "
+                      f"({_nper} periods; SS adjusted every step)")
         else:
             if ss_climate_data is None:
                 raise ValueError(
@@ -1077,6 +1230,8 @@ def Gen_Input_Driver(
             climate_data_type=ss_climate_data_type,
             climate_data_source=ss_climate_data_source,
             daily_climate_data=_daily_climate,
+            subannual_climate_data=_subannual_climate,
+            subannual_unit=_subannual_unit,
         )
 
     elif (ss_method == "ml_model"):
