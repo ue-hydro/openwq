@@ -379,7 +379,8 @@ class ModelRunner:
 
             return True, ""
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
+            self._dump_partial_log(eval_dir, e)
             return False, f"Timeout after {self.timeout_seconds} seconds"
         except Exception as e:
             return False, str(e)
@@ -516,10 +517,32 @@ class ModelRunner:
 
             return True, ""
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
+            self._dump_partial_log(eval_dir, e)
             return False, f"Timeout after {self.timeout_seconds} seconds"
         except Exception as e:
             return False, str(e)
+
+    @staticmethod
+    def _dump_partial_log(eval_dir, exc):
+        """On a timeout, persist whatever the container emitted before the kill.
+
+        Without this a multi-hour hang leaves NO model_output.log and the cause
+        is invisible.  subprocess.TimeoutExpired carries the partial capture in
+        .stdout/.stderr (bytes or str depending on platform)."""
+        def _txt(v):
+            if v is None:
+                return ""
+            return v.decode("utf-8", "replace") if isinstance(v, (bytes, bytearray)) else str(v)
+        try:
+            with open(Path(eval_dir) / "model_output.log", "w") as f:
+                f.write(f"=== TIMED OUT — partial output captured before kill ===\n")
+                f.write("=== STDOUT ===\n")
+                f.write(_txt(getattr(exc, "stdout", "")))
+                f.write("\n=== STDERR ===\n")
+                f.write(_txt(getattr(exc, "stderr", "")))
+        except Exception:
+            pass
 
     def _init_reference(self):
         """Seed the reference output size so % progress is available from the

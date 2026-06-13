@@ -1236,9 +1236,24 @@ def calc_copernicus_lulc(
     # Convert directory path to Path object
     lc_dir = Path(ss_method_copernicus_nc_lc_dir)
 
-    # Check if directory exists
+    # Check if directory exists.  This point is reached ONLY when the cached
+    # LULC areas (ss_copernicus_files/lulc_areas_all.csv) were NOT reused — a
+    # fresh basin or a missing/mismatched cache — so the (multi-GB) ESA-CCI
+    # rasters are genuinely needed.  On HPC that source dir is usually a local
+    # path that was never copied, so fail with actionable guidance.
     if not lc_dir.exists():
-        raise FileNotFoundError(f"Directory not found: {ss_method_copernicus_nc_lc_dir}")
+        raise FileNotFoundError(
+            "Copernicus LULC source directory not found:\n"
+            f"    {ss_method_copernicus_nc_lc_dir}\n"
+            "It is needed only because the cached LULC areas "
+            "(ss_copernicus_files/lulc_areas_all.csv) were NOT reused for this "
+            "basin.  On HPC the ESA-CCI rasters are typically NOT copied (tens of "
+            "GB).  Fix by EITHER:\n"
+            "  (a) provide a VALID lulc_areas_all.csv built locally for THIS basin "
+            "shapefile (its GRU_IDs must match the basin's mapping_key values) so "
+            "the re-clip is skipped; or\n"
+            "  (b) copy the ESA-CCI raster(s) to a path that exists here and set "
+            "ss_method_copernicus_nc_lc_dir to it.")
 
     if not lc_dir.is_dir():
         raise NotADirectoryError(f"Path is not a directory: {ss_method_copernicus_nc_lc_dir}")

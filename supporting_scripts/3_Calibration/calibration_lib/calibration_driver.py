@@ -365,6 +365,18 @@ def run_calibration(
         observation_data_path = _validate_observation_csv(
             observation_data_path, _obs.get("source", "skip"))
 
+        # Preflight: for mizuRoute + Copernicus SS, warn early if the basin
+        # shapefile's mapping_key doesn't intersect the reach segIds (the
+        # lumped-vs-delineated trap → all-zero SS loads across every eval).
+        try:
+            _ss_warn = config_integration.validate_ss_reach_mapping(
+                model_config, log=logger.debug)
+            if _ss_warn:
+                for _ln in _ss_warn.splitlines():
+                    logger.warning(_ln)
+        except Exception:
+            pass  # never let a preflight check block the run
+
     logger.info("=" * 60)
     logger.info("OPENWQ CALIBRATION FRAMEWORK")
     logger.info("=" * 60)
