@@ -319,6 +319,11 @@ class ModelRunner:
             eval_ctrl = self._mizuroute_eval_control(eval_dir, container_eval_dir)
             model_arg = f"{eval_ctrl or container_file_manager}"
 
+        # Trim this eval's source/sink JSON to the calibration window too, so
+        # the run-period cut above is matched by a same-window SS (smaller file
+        # + fewer load steps for the solver).  No-op when no window is set.
+        self._trim_eval_ss_to_window(eval_dir)
+
         # Build the shell command using template or default
         if self.command_template:
             shell_cmd = self.command_template.format(
@@ -436,6 +441,10 @@ class ModelRunner:
         else:
             eval_ctrl = self._mizuroute_eval_control(eval_dir, container_eval_dir)
             model_args = [eval_ctrl or container_file_manager]
+
+        # Match the run-period trim with a same-window source/sink JSON
+        # (smaller file + fewer load steps).  No-op when no window is set.
+        self._trim_eval_ss_to_window(eval_dir)
 
         # Threads for openWQ inside the container.  openWQ's BGC OpenMP path
         # (bgc_flex_transform) is unsafe on many-core nodes - it aborts with an
@@ -662,6 +671,134 @@ class ModelRunner:
                 f"Could not write per-eval mizuRoute control file ({e}); "
                 f"using the shared one.")
             return None
+
+    def _trim_eval_ss_to_window(self, eval_dir):
+        """Shrink this eval's ALREADY-GENERATED source/sink JSON to the
+        calibration window: drop every load row whose date lies entirely
+        outside ``[start, end]``.
+
+        Operates purely on the emitted ``openwq_in/openWQ_SS_*.json`` — it does
+        NOT touch the Copernicus rasters or regenerate anything, so the
+        expensive LULC processing done at config time is reused untouched
+        (per the design: "go to the SS generated, and remove the parts not
+        within the calibration period").  A smaller SS file is less to parse
+        and, for daily/sub-daily loads, gives the solver far fewer load
+        discontinuities to step across — the same lever as the run-period trim
+        in the per-eval control/fileManager.  Best-effort and in-place: any
+        problem leaves the file untouched.  No-op unless a window is set.
+
+        SS row layout (all emitters): ``[year, month, day, hour, …]`` with
+        ``month``/``day`` possibly ``"all"`` (monthly/annual entries)."""
+        if not self.calibration_period:
+            return
+        import json
+        import re
+        import glob
+        import calendar
+        from datetime import date
+
+        def _to_date(s, end):
+            s = str(s).strip()
+            m = re.match(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+            if m:
+                return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            m = re.match(r"(\d{4})", s)
+            if m:
+                y = int(m.group(1))
+                return date(y, 12, 31) if end else date(y, 1, 1)
+            return None
+
+        cstart, cend = self.calibration_period
+        lo = _to_date(cstart, end=False) if cstart else None
+        hi = _to_date(cend, end=True) if cend else None
+        if not lo or not hi:
+            return
+
+        def _isint(v):
+            return str(v).strip().lstrip("-").isdigit()
+
+        def _row_span(row):
+            # Returns (lo_date, hi_date) the row covers, or None if the layout
+            # is unrecognised (then we keep it — never silently drop unknowns).
+            if not isinstance(row, list) or not row or not _isint(row[0]):
+                return None
+            y = int(row[0])
+            mo = row[1] if len(row) > 1 else "all"
+            da = row[2] if len(row) > 2 else "all"
+            try:
+                if not _isint(mo):
+                    return date(y, 1, 1), date(y, 12, 31)
+                mo = int(mo)
+                if not _isint(da):
+                    return date(y, mo, 1), date(y, mo, calendar.monthrange(y, mo)[1])
+                return date(y, mo, int(da)), date(y, mo, int(da))
+            except (ValueError, calendar.IllegalMonthError):
+                return None
+
+        def _compress(m):
+            s = re.sub(r"\s+", " ", m.group(0))
+            s = re.sub(r"\[\s+", "[", s)
+            s = re.sub(r"\s+\]", "]", s)
+            return re.sub(r"\s*,\s*", ", ", s)
+
+        for ss_path in glob.glob(
+                str(Path(eval_dir) / "openwq_in" / "openWQ_SS_*.json")):
+            try:
+                raw = Path(ss_path).read_text()
+                lines = raw.splitlines(keepends=True)
+                # The emitter writes comment/metadata lines first, then the JSON
+                # object whose top-level "{" sits at column 0.
+                ji = next((i for i, ln in enumerate(lines)
+                           if ln.startswith("{")), None)
+                if ji is None:
+                    continue
+                header = "".join(lines[:ji])
+                config = json.loads("".join(lines[ji:]))
+                if not isinstance(config, dict):
+                    continue
+
+                kept = dropped = 0
+                new_config = {}
+                out_e = 1
+                for ek in sorted(config, key=lambda k: int(k)
+                                 if str(k).isdigit() else 1 << 30):
+                    entry = config[ek]
+                    if not (isinstance(entry, dict)
+                            and isinstance(entry.get("DATA"), dict)):
+                        new_config[str(out_e)] = entry   # keep verbatim
+                        out_e += 1
+                        continue
+                    new_data = {}
+                    out_s = 1
+                    for sk in sorted(entry["DATA"], key=lambda k: int(k)
+                                     if str(k).isdigit() else 1 << 30):
+                        row = entry["DATA"][sk]
+                        span = _row_span(row)
+                        if span is None or (span[1] >= lo and span[0] <= hi):
+                            new_data[str(out_s)] = row
+                            out_s += 1
+                            kept += 1
+                        else:
+                            dropped += 1
+                    if new_data:
+                        e2 = dict(entry)
+                        e2["DATA"] = new_data
+                        new_config[str(out_e)] = e2
+                        out_e += 1
+
+                if dropped == 0:
+                    continue   # nothing outside the window — leave file as-is
+                body = re.sub(r"\[[^\[\]]*\]", _compress,
+                              json.dumps(new_config, indent=4))
+                Path(ss_path).write_text(header + body + "\n")
+                logger.info(
+                    f"    SS trimmed to window [{lo} .. {hi}] in "
+                    f"{Path(ss_path).name}: kept {kept}, dropped {dropped} "
+                    f"load entries")
+            except Exception as e:
+                logger.warning(
+                    f"    SS window-trim skipped for "
+                    f"{Path(ss_path).name}: {e}")
 
     @staticmethod
     def _oom_message(returncode, stderr) -> Optional[str]:

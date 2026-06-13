@@ -86,9 +86,16 @@ def _detect_native_periods_per_year(climate_source):
 
 
 def _ss_resolution_size_guard(resolution, n_years, n_units, n_species,
-                              climate_source):
+                              climate_source,
+                              scope_label="full simulation period"):
     """Estimate the SS entry count for *resolution* and enforce
     ``_SS_ENTRY_GUARD_MAX``.  Returns the (possibly user-downscaled) resolution.
+
+    *n_years* is the span the estimate is taken over and *scope_label*
+    describes it in the messages.  In the calibration step the caller passes
+    the (shorter) calibration-window span instead of the full simulation
+    period — the per-eval SS is trimmed to that window before openWQ reads it,
+    so a short window can make 'daily'/'hourly' perfectly affordable.
 
     Interactive terminal → explains the size and offers coarser options.
     Non-interactive (HPC/batch) → raises with the exact line to set, instead of
@@ -116,8 +123,8 @@ def _ss_resolution_size_guard(resolution, n_years, n_units, n_species,
     approx_mb = est * 124 / 1e6   # ~124 bytes/entry observed
     msg = (
         f"\n  ⚠  Source/sink file too large at '{res}' resolution:\n"
-        f"     ~{est:,} entries (~{approx_mb:.0f} MB) "
-        f"= {n_years} yr x {_ppy(res):,}/yr x {n_units} units x {n_species} species.\n"
+        f"     ~{est:,} entries (~{approx_mb:.0f} MB) over the {scope_label}\n"
+        f"     = {n_years} yr x {_ppy(res):,}/yr x {n_units} units x {n_species} species.\n"
         f"     openWQ will likely run out of memory loading it.\n"
         f"     Guard limit: {_SS_ENTRY_GUARD_MAX:,} entries "
         f"(set Gen_Input_Driver._SS_ENTRY_GUARD_MAX to change).")
@@ -129,7 +136,8 @@ def _ss_resolution_size_guard(resolution, n_years, n_units, n_species,
     if not sys.stdin or not sys.stdin.isatty():
         raise ValueError(
             "ss_climate_data_source_adjusting_resolution='" + res + "' produces ~"
-            + f"{est:,}" + " SS entries (> " + f"{_SS_ENTRY_GUARD_MAX:,}" + "). "
+            + f"{est:,}" + " SS entries over the " + scope_label
+            + " (> " + f"{_SS_ENTRY_GUARD_MAX:,}" + "). "
             "Coarsen it — e.g. set "
             "ss_climate_data_source_adjusting_resolution = "
             + ("'" + fits[0] + "'" if fits else "'monthly'")
@@ -632,6 +640,11 @@ def Gen_Input_Driver(
         # driver estimates the size first and refuses/prompts if it's too big
         # (see _SS_ENTRY_GUARD_MAX).
         ss_climate_data_source_adjusting_resolution: str = "daily",
+        # Calibration-only: (start, end) of the calibration window.  When set,
+        # the SS size guard is evaluated over this window (not the full sim
+        # period), because the per-eval SS is later trimmed to it — so a short
+        # window keeps 'daily'/'hourly' affordable.  None for a normal run.
+        calibration_period=None,
         ss_climate_precip_scaling_power: float = 1.0,
         ss_climate_temp_q10: float = 2.0,
         ss_climate_temp_reference_c: float = 15.0,
@@ -1173,12 +1186,27 @@ def Gen_Input_Driver(
             # file size and refuse/downscale if it would be too big for openWQ
             # (a per-step SS file over many units x species x years explodes —
             # a 1M-entry / 100+ MB JSON OOM-kills the run).
+            # Size the guard to the calibration window when one is set: the
+            # per-eval SS is trimmed to that window before openWQ reads it, so
+            # a short window can make a fine resolution affordable even when the
+            # full period would not.  Window year-span is clamped to [1, full].
+            _guard_years = len(_years)
+            _scope = "full simulation period"
+            if calibration_period:
+                try:
+                    _ws, _we = calibration_period
+                    _wy0, _wy1 = int(str(_ws)[:4]), int(str(_we)[:4])
+                    _guard_years = min(len(_years), max(1, _wy1 - _wy0 + 1))
+                    _scope = f"calibration window {_ws}..{_we}"
+                except (TypeError, ValueError):
+                    pass
             _res = _ss_resolution_size_guard(
                 resolution=ss_climate_data_source_adjusting_resolution,
-                n_years=len(_years),
+                n_years=_guard_years,
                 n_units=_count_basin_spatial_units(ss_method_copernicus_basin_info),
                 n_species=len(_chem_species_list or []) or 1,
-                climate_source=ss_climate_data_source)
+                climate_source=ss_climate_data_source,
+                scope_label=_scope)
 
             # Monthly climate is always built — it's both the proxy-year fallback
             # and the 'monthly' resolution itself.

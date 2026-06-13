@@ -405,7 +405,8 @@ def run_calibration(
         model_config=model_config,
         base_model_config_dir=base_model_config_dir,
         test_case_dir=test_case_dir,
-        running_on_docker=(container_runtime == "docker")
+        running_on_docker=(container_runtime == "docker"),
+        calibration_period=kwargs.get("calibration_period"),
     )
 
     model_runner = ModelRunner(
@@ -1465,7 +1466,8 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         model_config=_model_config,
         base_model_config_dir=kwargs.get('base_model_config_dir'),
         test_case_dir=kwargs.get('test_case_dir'),
-        running_on_docker=(_container_runtime == "docker")
+        running_on_docker=(_container_runtime == "docker"),
+        calibration_period=kwargs.get("calibration_period"),
     )
 
     model_runner = ModelRunner(
