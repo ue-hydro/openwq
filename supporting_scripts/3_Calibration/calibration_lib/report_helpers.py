@@ -277,13 +277,13 @@ def get_css_styles():
     .form-row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
     .form-row .form-group { flex: 1; min-width: 180px; }
 
-    select.form-select, input.form-input {
+    select.form-select, input.form-input, textarea.form-input {
         width: 100%; padding: .45rem .7rem; font-size: .85rem;
         border: 1px solid var(--border); border-radius: 8px;
         background: var(--surface); color: var(--text);
         font-family: inherit; transition: border-color .15s;
     }
-    select.form-select:focus, input.form-input:focus {
+    select.form-select:focus, input.form-input:focus, textarea.form-input:focus {
         outline: none; border-color: var(--primary);
         box-shadow: 0 0 0 3px rgba(0,102,204,.1);
     }
@@ -842,17 +842,51 @@ def build_form_input(
     default: str = "",
     hint: str = "",
     placeholder: str = "",
+    wrap: bool = False,
 ) -> str:
     """Build a form group with a plain-text ``<input type="text">``.
 
     Mirrors ``build_form_number`` / ``build_form_checkbox`` for callers
     that need free-form string fields (paths, hostnames, etc.).
+
+    ``wrap=True`` renders an auto-growing ``<textarea>`` (same ``.form-input``
+    class, so styling + live-update listeners apply unchanged) instead of a
+    single-line ``<input>`` — long values such as HPC paths WRAP and stay
+    fully visible instead of scrolling out of view.  Auto-sizing uses CSS
+    ``field-sizing:content`` where supported, with a JS fallback that also
+    re-measures after tab switches (a textarea inside a hidden tab has
+    scrollHeight 0 until shown).
     """
     import html as html_lib
     hint_html = (f'<div class="hint">{html_lib.escape(hint)}</div>'
                  if hint else "")
     placeholder_attr = (f' placeholder="{html_lib.escape(placeholder)}"'
                         if placeholder else "")
+    if wrap:
+        return f"""
+<div class="form-group">
+    <label for="{field_id}">{html_lib.escape(label)}</label>
+    <textarea class="form-input" id="{field_id}" name="{field_id}" rows="1"
+              spellcheck="false"{placeholder_attr}
+              style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-all;resize:none;overflow:hidden;line-height:1.45;min-height:2.15em;field-sizing:content;display:block;"
+              >{html_lib.escape(str(default))}</textarea>
+    <script>(function(){{
+      var t = document.getElementById("{field_id}");
+      if (!t) return;
+      if (window.CSS && CSS.supports && CSS.supports('field-sizing','content')) return;
+      function g() {{
+        if (!t.offsetParent) return;            /* hidden (inactive tab) */
+        t.style.height = 'auto';
+        t.style.height = t.scrollHeight + 'px';
+      }}
+      t.addEventListener('input', g);
+      /* re-measure after any click (covers tab switches revealing the field) */
+      document.addEventListener('click', function() {{ setTimeout(g, 60); }});
+      g();
+    }})();</script>
+    {hint_html}
+</div>
+"""
     return f"""
 <div class="form-group">
     <label for="{field_id}">{html_lib.escape(label)}</label>

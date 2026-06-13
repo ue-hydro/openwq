@@ -821,6 +821,81 @@ def get_model_forcing_period(model_config: Dict[str, Any],
     return None
 
 
+def validate_ss_reach_mapping(model_config: Dict[str, Any], log=None) -> Optional[str]:
+    """Preflight for mizuRoute + Copernicus SS: do the basin shapefile's
+    ``mapping_key`` values intersect the river-network reach ``segId``s?
+
+    Returns a warning STRING when they're DISJOINT (the loads would silently
+    apply to no reach → all-zero SS output — the lumped-vs-delineated-catchment
+    trap), else ``None``.  Best-effort: returns ``None`` on any read failure so
+    it never blocks a run.
+    """
+    import re
+    _log = log or (lambda *a, **k: None)
+    try:
+        hostmodel = (model_config.get('hostmodel') or '').lower()
+        ss_method = (model_config.get('ss_method') or '').lower()
+        if 'mizuroute' not in hostmodel or 'copernicus' not in ss_method:
+            return None
+        binfo = model_config.get('ss_method_copernicus_basin_info') or {}
+        shp = binfo.get('path_to_shp')
+        key = binfo.get('mapping_key')
+        fm = (model_config.get('file_manager_path')
+              or model_config.get('control_file_path') or '')
+        if not (shp and key and os.path.isfile(shp) and fm and os.path.isfile(fm)):
+            return None
+        text = open(fm, encoding='utf-8', errors='ignore').read()
+        _m = re.search(r"<fname_ntopOld>\s*([^\n!<]+)", text)
+        topo_name = _m.group(1).strip() if _m else 'topology.nc'
+        _ms = re.search(r"<varname_segId>\s*([^\n!<]+)", text)
+        seg_var = _ms.group(1).strip() if _ms else 'segId'
+        # topology lives in the control file's own dir (= <ancil_dir>).
+        topo = os.path.join(os.path.dirname(os.path.abspath(fm)), topo_name)
+        if not os.path.isfile(topo):
+            return None
+
+        def _norm(v):
+            try:
+                return str(int(float(v)))
+            except Exception:
+                return str(v).strip()
+
+        try:
+            import geopandas as gpd
+            _vals = list(gpd.read_file(shp)[key])
+        except Exception:
+            import fiona
+            with fiona.open(shp) as src:
+                _vals = [f['properties'].get(key) for f in src]
+        basin_ids = set(_norm(v) for v in _vals if v is not None)
+
+        from netCDF4 import Dataset
+        ds = Dataset(topo)
+        try:
+            seg = ds.variables.get(seg_var)
+            if seg is None:
+                return None
+            reach_ids = set(str(int(v)) for v in seg[:])
+        finally:
+            ds.close()
+
+        if not basin_ids or not reach_ids or (basin_ids & reach_ids):
+            return None
+        return (
+            "Copernicus SS reach-mapping mismatch: NONE of the basin shapefile's "
+            f"'{key}' values match the river-network reach segIds — openWQ would "
+            "apply the loads to no reach (ALL-ZERO source/sink output).\n"
+            f"    basin shapefile : {shp}\n"
+            f"    basin '{key}'    : {sorted(basin_ids)[:5]}{' ...' if len(basin_ids) > 5 else ''}\n"
+            f"    reach segIds     : {sorted(reach_ids)[:5]}{' ...' if len(reach_ids) > 5 else ''}\n"
+            "  Fix: point ss_method_copernicus_basin_info at the DELINEATED "
+            "per-reach catchment whose mapping_key == segId (not the lumped "
+            "HRUs_GRUs catchment).")
+    except Exception as exc:
+        _log(f"validate_ss_reach_mapping skipped: {exc}")
+        return None
+
+
 def get_spatial_mapping(model_config: Dict[str, Any]) -> Dict[str, Any]:
     """Return the resolved spatial-mapping convention for this model run.
 

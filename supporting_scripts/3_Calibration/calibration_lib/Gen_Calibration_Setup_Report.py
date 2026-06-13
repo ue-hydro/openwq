@@ -63,6 +63,42 @@ def _caller_template_stem(default="calibration"):
         pass
     return default
 
+
+def _true_case_path(p):
+    """Return *p* with every component in its TRUE on-disk case.
+
+    macOS filesystems are case-insensitive: a path typed with the wrong case
+    (e.g. ``model_config_template_mizuRoute_...py`` for a file actually named
+    ``..._MIZUROUTE_...py``) opens fine locally, but once baked into the
+    report's HPC snippets / generated run script and rsync'd to a
+    case-SENSITIVE cluster (Linux), only the real name exists — so the deploy
+    fails with "No such file or directory".  Canonicalising here makes every
+    baked path HPC-safe.  Returns *p* unchanged when it can't be resolved.
+    """
+    try:
+        if not p or not os.path.exists(p):
+            return p
+        parts = os.path.normpath(os.path.abspath(p)).split(os.sep)
+        out = os.sep
+        for comp in parts[1:]:
+            if not comp:
+                continue
+            try:
+                entries = os.listdir(out)
+            except Exception:
+                return p
+            if comp in entries:                      # exact-case match
+                out = os.path.join(out, comp)
+                continue
+            ci = [e for e in entries if e.lower() == comp.lower()]
+            if len(ci) == 1:                         # unique case-insensitive match
+                out = os.path.join(out, ci[0])
+            else:
+                return p
+        return out
+    except Exception:
+        return p
+
 logger = logging.getLogger(__name__)
 
 
@@ -492,6 +528,22 @@ def _build_model_config_section(
             rows.append(("&#8627; Climate data type",
                          _module_badge(_cdt) + f" &mdash; {_cdt_label}"))
             if _cdt == "time_series":
+                # How often the climate re-scales the SS load = how many SS
+                # entries get written (and thus file size + solver cost).  Spell
+                # it out: "daily" balloons the SS ~30x vs "monthly".
+                _res = model_config.get(
+                    "ss_climate_data_source_adjusting_resolution")
+                if _res:
+                    _res_map = {
+                        "monthly": "one SS load entry per month",
+                        "daily": "one SS load entry per day (large file)",
+                        "hourly": "one SS load entry per hour (very large file)",
+                        "native": "climate file&rsquo;s native step (largest)",
+                    }
+                    rows.append((
+                        "&#8627; Adjusting resolution",
+                        _module_badge(_res)
+                        + f" &mdash; {_res_map.get(str(_res).lower(), str(_res))}"))
                 _src = model_config.get("ss_climate_data_source") or {}
                 for _var in ("precip", "temp"):
                     _spec = _src.get(_var) or {}
@@ -991,6 +1043,13 @@ def generate_interactive_setup(
     """
     try:
         os.makedirs(output_dir, exist_ok=True)
+        # Canonicalise the model-config path to its TRUE on-disk case.  macOS
+        # filesystems are case-insensitive, so a path typed with the wrong case
+        # (..._mizuRoute_... vs ..._MIZUROUTE_...) works locally but gets baked
+        # into the report's HPC snippets + the generated run script — and on a
+        # case-sensitive cluster (Linux) the rsync'd file only exists under its
+        # real name, so the deploy's sed/open fail with "No such file".
+        model_config_path = _true_case_path(model_config_path)
         # Name the setup report after the calibration template that
         # invoked us, e.g. calibration_config_template_X.py ->
         #   <stem>_config_report.html
@@ -1586,6 +1645,30 @@ def generate_interactive_setup(
                     _container_prefix = _pm.group(1)   # e.g. /code/openwq_code
             except Exception:
                 _container_prefix = ""
+        # Also KEEP any domain subdir the control file READS FROM.  mizuRoute
+        # routes SUMMA's runoff, so its <input_dir> points into a SIBLING dir
+        # (e.g. 0_SUMMA_OPENWQ/summa_out) — that dir must be copied too, or the
+        # model can't find its runoff / param.nml and aborts (MPI_ABORT).  Parse
+        # the control file's dir entries and keep the component just below the
+        # domain folder.
+        _domain_b = (os.path.basename(os.path.dirname(_model_run_dir.rstrip(os.sep)))
+                     if _model_run_dir else "")
+        if _domain_b and _fm and os.path.isfile(_fm):
+            try:
+                import re as _re3
+                _fmtxt2 = open(_fm, encoding="utf-8", errors="ignore").read()
+                for _mm in _re3.finditer(
+                        r"(?:<(?:input_dir|ancil_dir|output_dir)>\s*|"
+                        r"(?:forcingPath|settingsPath|outputPath)\s+')"
+                        r"([^\n'!<]+)", _fmtxt2):
+                    _pp = _mm.group(1).strip().rstrip('/').split('/')
+                    if _domain_b in _pp:
+                        _ix = _pp.index(_domain_b)
+                        if _ix + 1 < len(_pp) and _pp[_ix + 1] \
+                                and _pp[_ix + 1] not in _keep_dirs:
+                            _keep_dirs.append(_pp[_ix + 1])
+            except Exception:
+                pass
         _hpc_baked = {
             "src_roots": _src_roots,
             "common_root": _common_root,
@@ -1629,7 +1712,7 @@ def generate_interactive_setup(
       font-weight:600;">Save .sbatch</button>
     <pre id="sbatchPreview" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -1663,7 +1746,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunEnv" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -1685,7 +1768,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunCopy" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -1698,7 +1781,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunRemap" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -1722,7 +1805,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunSubmit" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -1791,7 +1874,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunFetch" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -1808,7 +1891,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunFetchResults" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;overflow-x:auto;margin:0;white-space:pre;
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 </div>
@@ -2270,7 +2353,7 @@ def _build_interactive_execution_section(
                 _hd("hpc_base", "/scratch/$USER/openwq_cal"),
                 hint="A writable dir on the cluster. Everything is copied "
                      "under here and all paths re-point to it automatically.",
-                placeholder="/scratch/$USER/openwq_cal")}
+                placeholder="/scratch/$USER/openwq_cal", wrap=True)}
             {rh.build_form_input(
                 "sif_hpc", "Apptainer image (.sif) on the HPC", _hd("sif_hpc", ""),
                 hint="Absolute path to the openwq .sif ON the cluster. Build the "
@@ -2278,7 +2361,7 @@ def _build_interactive_execution_section(
                      "they run, so the CPU architecture matches the compute nodes) "
                      "- it is NOT uploaded. The model is pointed at this path "
                      "automatically.",
-                placeholder="$HPC_BASE/openwq.sif")}
+                placeholder="$HPC_BASE/openwq.sif", wrap=True)}
         </div>
         <div class="form-row">
             {rh.build_form_input(
@@ -2291,7 +2374,7 @@ def _build_interactive_execution_section(
                      "supporting_scripts/3_Calibration/calibration_lib under it.  The "
                      "code is used FROM there (not copied) - exported as "
                      "OWQ_CALIB_LIB_DIR.",
-                placeholder="/home/$USER/.../openwq/openwq")}
+                placeholder="/home/$USER/.../openwq/openwq", wrap=True)}
         </div>
         <div class="form-row">
             {rh.build_form_input(
@@ -2303,7 +2386,7 @@ def _build_interactive_execution_section(
                      "here.  This is the only per-coupling path the tool can't guess; "
                      "everything else (inputs, .sif, calibration_lib) is automatic.  "
                      "Exported as OWQ_EXEC_PATH.",
-                placeholder="$HPC_BASE/.../bin/summa_openwq_Release")}
+                placeholder="$HPC_BASE/.../bin/summa_openwq_Release", wrap=True)}
         </div>
 
         <h4 style="margin:1rem 0 .3rem;font-size:.92rem;color:var(--text);">
@@ -2350,7 +2433,7 @@ def _build_interactive_execution_section(
                 hint="Command(s) run on the compute node to make Python + "
                      "Apptainer available. Leave blank to insert a commented "
                      "placeholder you can edit later.",
-                placeholder="module load apptainer python")}
+                placeholder="module load apptainer python", wrap=True)}
         </div>
         <p class="hint" style="margin:.6rem 0 0;">
             &#10142;&nbsp;The filled-in <code>.sbatch</code> file and the
@@ -4063,11 +4146,27 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // Shared rsync filter lines, applied to every source.  None are "/"-anchored,
     // so they match at any depth regardless of which source tree is being copied.
     var FILT = [
+      // Calibration leftovers + caches (regenerated on the HPC).
       "  --exclude '0_*_calibration/evaluations' \\",
       "  --exclude '0_*_calibration/results' \\",
-      "  --exclude 'openwq_out/HDF5' \\",
+      "  --exclude '0_*_calibration/checkpoints' \\",
+      "  --exclude '0_*_calibration/logs' \\",
       "  --exclude '__pycache__' \\",
       "  --exclude '.DS_Store' \\",
+      "  --exclude '.git' \\",
+      // openWQ HDF5 output (regenerated every eval) — large, never an input.
+      "  --exclude 'openwq_out' \\",
+      "  --exclude '*.h5' \\",
+      // Compiled model binary: the HPC uses the one you built there (OWQ_EXEC_PATH),
+      // so the local copy (often 100s of MB) is never run on the cluster.
+      "  --exclude '*_openwq_Release' \\",
+      "  --exclude '*_openwq_Debug' \\",
+      // Per-eval runoff written during a previous calibration — mizuRoute routes
+      // the BASELINE runoff (run_*_timestep.nc), never the per-eval copies.
+      "  --exclude '*_eval_*' \\",
+      // Build artefacts that sometimes sit in input trees.
+      "  --exclude '*.o' \\",
+      "  --exclude '*.mod' \\",
     ];
     // Keep this run's host-model dirs (e.g. 0_SUMMA_OPENWQ + its calibration dir);
     // drop sibling setups for OTHER host models (e.g. 0_MIZUROUTE_OPENWQ).
@@ -4084,8 +4183,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // overwrites changed files but never deletes extras).
     L.push('owq_copy() {');
     L.push('  if ssh "$HPC_USER@$HPC_HOST" "[ -d \\"$HPC_BASE\\" ]"; then');
-    L.push('    printf \'%s\\n\' "WARNING: $HPC_BASE already exists on the HPC."');
-    L.push('    read -r -p "Update/overwrite its contents (rsync; no files are deleted)? [y/N] " _owq_ans');
+    L.push('    printf \'%s\\n\' "WARNING: $HPC_BASE already exists on the HPC." > /dev/tty');
+    L.push('    printf \'%s\' "Update/overwrite its contents (rsync; no files are deleted)? [y/N] " > /dev/tty');
+    L.push('    read -r _owq_ans </dev/tty || _owq_ans=n');
     L.push('    case "$_owq_ans" in [Yy]*) echo "Updating $HPC_BASE ..." ;; *) echo "Aborted - nothing copied."; return 1 ;; esac');
     L.push('  else');
     L.push('    ssh "$HPC_USER@$HPC_HOST" "mkdir -p \\"$HPC_BASE\\"" && echo "Created $HPC_BASE on the HPC."');
@@ -4142,6 +4242,13 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('ROOT="' + (HPC.common_root || '') + '"');
       L.push('RUN="$HPC_BASE' + _owqRelToRoot(HPC.run_local || '') + '"');
       L.push('MC="$HPC_BASE' + _owqRelToRoot(HPC.mc_path || '') + '"');
+      L.push('# Fail loud if either file is missing (copy step not run, or a filename-');
+      L.push('# CASE mismatch: Linux is case-sensitive, macOS is not).  Checking BEFORE');
+      L.push('# sed keeps the edit atomic - a partial run would re-point some files and');
+      L.push('# then wrongly report "Already re-pointed" on the next attempt.');
+      L.push('for _f in "$RUN" "$MC"; do');
+      L.push('  [ -f "$_f" ] || { echo "ERROR: not found on the HPC: $_f"; echo "       Run the copy step (a) first; if the file exists under a different name, check the filename CASE matches your local file exactly."; exit 1; }');
+      L.push('done');
       var _bindVal = (HPC && HPC.container_prefix) ? ('$HPC_BASE:' + HPC.container_prefix) : '$HPC_BASE';
       L.push('# Idempotent + self-healing: re-point only while local $ROOT paths remain,');
       L.push('# so re-copying fresh inputs later just re-points them again (no stale flag).');
@@ -4157,9 +4264,24 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('fi');
       L.push('EOF');
     } else {
-      L.push('# NOTE: your inputs span different drives, so paths cannot be re-pointed');
-      L.push('# automatically. After copying, edit the absolute paths in your run script');
-      L.push('# + model config to their $HPC_BASE locations by hand.');
+      // Inputs span different drives -> no single common root to sed-replace.
+      // The copy step landed each source tree at $HPC_BASE/<basename>; spell out
+      // every old->new mapping so the by-hand edit is mechanical, not guesswork.
+      function _base(p){ return String(p||'').replace(/[\/]+$/,'').split('/').pop(); }
+      L.push('# NOTE: your inputs span different drives, so there is no single common');
+      L.push('# root to re-point automatically. The copy step placed each source tree at');
+      L.push('# $HPC_BASE/<its-folder-name>. Edit the absolute paths in your run script');
+      L.push('# and model config by hand using exactly these mappings:');
+      L.push('#');
+      (HPC && HPC.src_roots ? HPC.src_roots : []).forEach(function(r){
+        L.push('#   ' + r + '  ->  $HPC_BASE/' + _base(r));
+      });
+      if (HPC && HPC.run_local) L.push('#   (edit in: ' + HPC.run_local + ')');
+      if (HPC && HPC.mc_path)   L.push('#   (edit in: ' + HPC.mc_path + ')');
+      L.push('# Then in the run script set:  container_runtime = "apptainer",');
+      L.push('#   apptainer_sif_path = "$SIF_HPC",  apptainer_bind_path = "'
+              + ((HPC && HPC.container_prefix) ? ('$HPC_BASE:' + HPC.container_prefix)
+                                               : '$HPC_BASE') + '".');
     }
     return L.join('\n');
   }
