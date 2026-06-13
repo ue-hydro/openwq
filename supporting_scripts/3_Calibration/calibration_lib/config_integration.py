@@ -39,7 +39,7 @@ import copy
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -330,7 +330,8 @@ def get_gen_input_driver_module(model_config: Dict[str, Any]):
 def generate_config_for_eval(
     model_config: Dict[str, Any],
     eval_dir: str,
-    suppress_report: bool = True
+    suppress_report: bool = True,
+    calibration_period: Optional[Tuple[str, str]] = None,
 ) -> None:
     """
     Generate OpenWQ config files for a calibration evaluation directory.
@@ -346,6 +347,10 @@ def generate_config_for_eval(
         Path to the evaluation working directory.
     suppress_report : bool
         If True, suppress HTML report generation during config generation.
+    calibration_period : (start, end), optional
+        The calibration window.  Forwarded to Gen_Input_Driver so the SS
+        size guard is evaluated over the window (the per-eval SS is trimmed
+        to it before the model runs), not the full simulation period.
     """
     gJSON_lib = get_gen_input_driver_module(model_config)
 
@@ -426,6 +431,10 @@ def generate_config_for_eval(
         # baseline manifest, NOT re-running them.  So the interactive
         # "inputs already exist" guard must never fire here.
         eval_config["force_regenerate"] = True
+        # Forward the calibration window so the SS size guard is evaluated over
+        # it (the per-eval SS is trimmed to this window before the model runs).
+        if calibration_period:
+            eval_config["calibration_period"] = calibration_period
         # Call Gen_Input_Driver
         try:
             gJSON_lib.Gen_Input_Driver(**eval_config)

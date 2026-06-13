@@ -51,7 +51,8 @@ class ParameterHandler:
                  model_config: Optional[Dict[str, Any]] = None,
                  base_model_config_dir: Optional[str] = None,
                  test_case_dir: Optional[str] = None,
-                 running_on_docker: bool = True):
+                 running_on_docker: bool = True,
+                 calibration_period: Optional[Tuple[str, str]] = None):
         """
         Initialize the parameter handler.
 
@@ -74,6 +75,9 @@ class ParameterHandler:
         """
         self.calibration_work_dir = Path(calibration_work_dir)
         self.running_on_docker = running_on_docker
+        # Calibration window — forwarded to the per-eval SS generation so the
+        # size guard is evaluated over the window (the SS is trimmed to it).
+        self.calibration_period = calibration_period
 
         # Integrated-mode config
         self.model_config = model_config
@@ -235,7 +239,8 @@ class ParameterHandler:
         # Generate config files using Gen_Input_Driver
         try:
             config_integration.generate_config_for_eval(
-                cfg, str(eval_dir), suppress_report=True
+                cfg, str(eval_dir), suppress_report=True,
+                calibration_period=self.calibration_period
             )
         except Exception as e:
             logger.error(
