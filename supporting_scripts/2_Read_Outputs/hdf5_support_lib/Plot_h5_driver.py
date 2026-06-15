@@ -714,7 +714,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OpenWQ Results</title>
+<title>OpenWQ &mdash; Simulation Report</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js" defer></script>
@@ -827,7 +827,7 @@ a{color:var(--primary);text-decoration:none}
     # --- SIDEBAR ---
     H.append('<div class="layout">')
     H.append('<aside class="sidebar">')
-    H.append('<div class="logo">Open<span>WQ</span> Results</div>')
+    H.append('<div class="logo">Open<span>WQ</span> Simulation Report</div>')
     H.append('<nav>')
     _map_title = 'HRU / Basin Map' if map_geom_type == 'polygon' else 'River Network Map'
     if river_geojson:
@@ -889,7 +889,7 @@ a{color:var(--primary);text-decoration:none}
         + '</code></div>'
     ) if _tpl_p else ""
     H.append(f"""<div class="header">
-<h1>Open<span>WQ</span> &mdash; Results</h1>
+<h1>Open<span>WQ</span> &mdash; Simulation Report</h1>
 <p class="subtitle">{mode_label} mode &mdash; {n_plots} time-series plot(s)</p>
 <div class="meta">
 <span>Host Model: {host_label}</span>
@@ -1121,7 +1121,7 @@ window._owqPlotIds = [];
 function _owqRegister(id){ window._owqPlotIds.push(id); }
 
 // ── Per-figure "Lock zoom" + branded PDF export (replicated from FLUXOS) ──
-window.__OWQ_PROJECT_NAME = window.__OWQ_PROJECT_NAME || 'OpenWQ Results';
+window.__OWQ_PROJECT_NAME = window.__OWQ_PROJECT_NAME || 'OpenWQ — Simulation Report';
 window.__OWQ_GENERATED_AT = window.__OWQ_GENERATED_AT || new Date().toISOString();
 function _owqAxisKeys(layout){
   var keys=[]; Object.keys(layout||{}).forEach(function(k){ if(/^(x|y)axis(\\d*)$/.test(k)) keys.push(k); });

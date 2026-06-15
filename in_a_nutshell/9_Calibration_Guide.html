@@ -135,18 +135,18 @@
         }
 
         .workflow-step {
-            display: flex; align-items: center; gap: 20px;
-            background: white; padding: 18px 25px; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 15px;
+            display: flex; align-items: center; gap: 18px;
+            background: white; padding: 9px 22px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 9px;
         }
         .workflow-step .number {
-            width: 45px; height: 45px; border-radius: 50%;
+            width: 42px; height: 42px; border-radius: 50%;
             background: var(--rose); color: white;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.3rem; font-weight: 700; flex-shrink: 0;
+            font-size: 1.25rem; font-weight: 700; flex-shrink: 0;
         }
-        .workflow-step .content h4 { font-size: 1.15rem; color: var(--dark); margin-bottom: 5px; }
-        .workflow-step .content p { font-size: 0.95rem; color: var(--text-light); }
+        .workflow-step .content h4 { font-size: 1.02rem; line-height: 1.25; color: var(--dark); margin-bottom: 3px; }
+        .workflow-step .content p { font-size: 0.9rem; line-height: 1.3; color: var(--text-light); }
 
         .metric-card {
             background: white; border-radius: 12px; padding: 20px;
@@ -343,10 +343,11 @@
                             OpenWQ includes a comprehensive calibration framework with:
                         </p>
                         <ul>
-                            <li><strong>106+ calibratable parameters</strong></li>
+                            <li><strong>106+ calibratable parameters</strong> auto-extracted</li>
+                            <li><strong>Config-integrated</strong> — reads your model_config</li>
                             <li><strong>DDS optimization</strong> algorithm</li>
-                            <li><strong>Morris screening</strong> for sensitivity</li>
-                            <li><strong>Sobol analysis</strong> for detailed SA</li>
+                            <li><strong>Morris &amp; Sobol</strong> sensitivity analysis</li>
+                            <li><strong>Parallel evaluations</strong> (local &amp; HPC)</li>
                             <li><strong>Docker/Apptainer</strong> deployment</li>
                             <li><strong>Checkpoint/restart</strong> capability</li>
                         </ul>
@@ -748,39 +749,76 @@ aggregation_method = <span class="string">"mean"</span>
                 <h2>Step-by-Step Workflow</h2>
             </div>
             <div class="slide-content">
-                <div class="workflow-step">
-                    <div class="number">1</div>
-                    <div class="content">
-                        <h4>Configure the model</h4>
-                        <p>Set up &amp; validate your model with the <strong>1_Model_Config</strong> report (paths, modules, species, observation data).</p>
-                    </div>
+                <div style="background: linear-gradient(135deg, #0f3460, #16213e); color: white; padding: 10px 22px; border-radius: 12px; text-align: center; margin-bottom: 14px;">
+                    <p style="font-size: 1.15rem; font-weight: 700; margin: 0;">
+                        Copy the template &rarr; edit <span style="color: #fda4af;">two paths</span> &rarr; run &rarr; configure in the report &rarr; run the calibration.
+                    </p>
+                    <p style="font-size: 0.9rem; opacity: 0.85; margin: 4px 0 0 0;">
+                        Paths, modules, species, observations and container settings are all read from your <span style="color:#fda4af;">model_config_template.py</span>.
+                    </p>
                 </div>
-                <div class="workflow-step">
-                    <div class="number" style="background: var(--primary);">2</div>
-                    <div class="content">
-                        <h4>Open the interactive calibration setup report</h4>
-                        <p>Run <code>calibration_config_template.py</code> → a browser report opens. Use the tabs to set <strong>Targets</strong> (species, reaches/HRUs, one compartment), <strong>Parameters</strong>, the <strong>workflow mode</strong> (influential parameters · both · calibration) and the <strong>calibration/validation period</strong> (slider shows per-species observation coverage).</p>
+                <div class="two-column" style="gap: 30px;">
+                    <div class="column">
+                        <h3 style="font-size: 1.1rem; margin-bottom: 12px; color: var(--dark);">How to run a calibration</h3>
+                        <div class="workflow-step">
+                            <div class="number">1</div>
+                            <div class="content">
+                                <h4>Copy the calibration template</h4>
+                                <p>Inside <code>supporting_scripts/3_Calibration/</code> (needs <code>calibration_lib/</code>): <code>cp calibration_config_template.py my_calibration.py</code></p>
+                            </div>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="number" style="background: var(--primary);">2</div>
+                            <div class="content">
+                                <h4>Edit the template copy</h4>
+                                <p>Set the two paths &mdash; <code>model_config_path</code> (your <code>model_config_template.py</code>) and <code>calibration_work_dir</code>. Optional: <code>hpc_settings_json</code> for HPC.</p>
+                            </div>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="number" style="background: var(--purple);">3</div>
+                            <div class="content">
+                                <h4>Run the template copy</h4>
+                                <p><code>python my_calibration.py</code> auto-extracts the calibratable parameters and builds the &ldquo;OpenWQ Calibration Setup Report&rdquo;.</p>
+                            </div>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="number" style="background: var(--secondary);">4</div>
+                            <div class="content">
+                                <h4>The Calibration Setup Report opens automatically</h4>
+                                <p>Set <strong>Targets</strong>, <strong>Parameters</strong>, the <strong>workflow-mode</strong> slider and the <strong>calibration/validation period</strong>; choose Docker or Apptainer in the <strong>Execution</strong> tab.</p>
+                            </div>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="number" style="background: var(--teal);">5</div>
+                            <div class="content">
+                                <h4>Execute the code snippets provided in the report</h4>
+                                <p>Run them sequentially.</p>
+                            </div>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="number" style="background: var(--accent);">6</div>
+                            <div class="content">
+                                <h4>Run the calibration &amp; examine results</h4>
+                                <p><code>python my_calibration_run.py</code> &mdash; Docker locally, or the auto-built SLURM job on HPC. The &ldquo;OpenWQ Calibration Results Report&rdquo; opens automatically.</p>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="workflow-step">
-                    <div class="number" style="background: var(--purple);">3</div>
-                    <div class="content">
-                        <h4>Pick how to run &amp; save the script</h4>
-                        <p>In the <strong>Execution</strong> tab choose <strong>Docker</strong> (local) or <strong>Apptainer</strong> (HPC) + parallel runs, then click <strong>“Save the script”</strong>.</p>
-                    </div>
-                </div>
-                <div class="workflow-step">
-                    <div class="number" style="background: var(--secondary);">4</div>
-                    <div class="content">
-                        <h4>Run it — locally or on HPC</h4>
-                        <p>Locally with Docker, or on HPC with the auto-filled <strong>SLURM job</strong> + one-paste <em>copy&nbsp;&amp;&nbsp;run</em> commands. The chosen mode runs Morris/Sobol screening and/or DDS calibration.</p>
-                    </div>
-                </div>
-                <div class="workflow-step">
-                    <div class="number" style="background: var(--teal);">5</div>
-                    <div class="content">
-                        <h4>Results &amp; validation</h4>
-                        <p>The interactive <strong>results report</strong> opens automatically — review the fit, apply the best parameters, and validate on the held-out window.</p>
+                    <div class="column">
+                        <div class="card rose">
+                            <h3>Prerequisite &mdash; configure the model first</h3>
+                            <p style="font-size:0.9rem;">Your <code>model_config_template.py</code> must already generate correct inputs &mdash; its <strong>&ldquo;OpenWQ &mdash; Configuration Report&rdquo;</strong> confirms it. The calibration template then reads every model setting from there, so you only set <strong>two paths</strong>.</p>
+                        </div>
+                        <div class="card primary">
+                            <h3>Two reports drive it</h3>
+                            <table style="font-size:0.82rem;">
+                                <tr><td><strong>Setup report</strong></td><td>Targets, parameters, mode, period &amp; execution &rarr; saves the run script</td></tr>
+                                <tr><td><strong>Results report</strong></td><td>Maps, convergence, per-species KGE / NSE / RMSE, Next Steps</td></tr>
+                            </table>
+                            <p style="font-size:0.8rem;margin-top:6px;color:var(--text-light);">Both are named after the calibration template.</p>
+                        </div>
+                        <div class="highlight-box success" style="margin-top:10px;">
+                            <strong>Workflow mode (slider in the report):</strong> influential parameters &middot; both &middot; calibration &mdash; Morris/Sobol screening, DDS optimisation, or both.
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1353,7 +1391,7 @@ python &lt;template&gt;_run.py --report   <span class="comment"># (re)build the 
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">
                 <p style="font-size: 1.2rem; color: #a0aec0;">
-                    <strong>Calibration scripts:</strong> supporting_scripts/Calibration/
+                    <strong>Calibration scripts:</strong> supporting_scripts/3_Calibration/
                 </p>
                 <p style="font-size: 1rem; color: #718096; margin-top: 0.5rem;">
                     Observation data: CSV | GRQA Database | Reports: HTML with interactive maps &amp; charts
