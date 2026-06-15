@@ -136,18 +136,18 @@
         }
 
         .workflow-step {
-            display: flex; align-items: center; gap: 20px;
-            background: white; padding: 18px 25px; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 15px;
+            display: flex; align-items: center; gap: 18px;
+            background: white; padding: 11px 22px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 10px;
         }
         .workflow-step .number {
-            width: 45px; height: 45px; border-radius: 50%;
+            width: 42px; height: 42px; border-radius: 50%;
             background: var(--teal); color: white;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.3rem; font-weight: 700; flex-shrink: 0;
+            font-size: 1.25rem; font-weight: 700; flex-shrink: 0;
         }
-        .workflow-step .content h4 { font-size: 1.15rem; color: var(--dark); margin-bottom: 5px; }
-        .workflow-step .content p { font-size: 0.95rem; color: var(--text-light); }
+        .workflow-step .content h4 { font-size: 1.02rem; line-height: 1.25; color: var(--dark); margin-bottom: 3px; }
+        .workflow-step .content p { font-size: 0.9rem; line-height: 1.3; color: var(--text-light); }
 
         .folder-tree {
             font-family: 'JetBrains Mono', monospace;
@@ -594,11 +594,11 @@ python calibration_config_template.py [flags]
                 <h2>Model Configuration (model_config_template.py)</h2>
             </div>
             <div class="slide-content">
-                <div style="background: linear-gradient(135deg, #0f3460, #16213e); color: white; padding: 18px 24px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
-                    <p style="font-size: 1.3rem; font-weight: 700; margin: 0;">
+                <div style="background: linear-gradient(135deg, #0f3460, #16213e); color: white; padding: 10px 22px; border-radius: 12px; text-align: center; margin-bottom: 14px;">
+                    <p style="font-size: 1.15rem; font-weight: 700; margin: 0;">
                         Edit <span style="color: #60a5fa;">one file</span> &rarr; run it &rarr; done.
                     </p>
-                    <p style="font-size: 0.95rem; opacity: 0.85; margin: 6px 0 0 0;">
+                    <p style="font-size: 0.9rem; opacity: 0.85; margin: 4px 0 0 0;">
                         All JSON configuration files, model execution, and HTML report are handled automatically.
                     </p>
                 </div>
@@ -609,42 +609,35 @@ python calibration_config_template.py [flags]
                             <div class="number">1</div>
                             <div class="content">
                                 <h4>Copy the template</h4>
-                                <p>Keep it in the same directory (needs <code>config_support_lib/</code>)</p>
+                                <p>Inside <code>supporting_scripts/1_Model_Config/</code> (needs <code>config_support_lib/</code>): <code>cp model_config_template.py my_config.py</code></p>
                             </div>
                         </div>
                         <div class="workflow-step">
                             <div class="number" style="background: var(--primary);">2</div>
                             <div class="content">
-                                <h4>Update paths (Section 1)</h4>
-                                <p>Set <code>executable_path</code> and <code>file_manager_path</code></p>
+                                <h4>Edit the template copy</h4>
+                                <p>Set the paths (<code>executable_path</code>, <code>file_manager_path</code>), model configurations, and active modules.</p>
                             </div>
                         </div>
                         <div class="workflow-step">
                             <div class="number" style="background: var(--purple);">3</div>
                             <div class="content">
-                                <h4>Choose modules (Section 4)</h4>
-                                <p>BGC, transport, sorption, sediment</p>
+                                <h4>Run the template copy that has been edited</h4>
+                                <p><code>python my_config.py</code> generates the OpenWQ input files and a &ldquo;OpenWQ &mdash; Configuration Report&rdquo;.</p>
                             </div>
                         </div>
                         <div class="workflow-step">
                             <div class="number" style="background: var(--teal);">4</div>
                             <div class="content">
-                                <h4>Configure loads (Section 5)</h4>
-                                <p>CSV, Copernicus LULC, climate-adjusted, or ML</p>
+                                <h4>The &ldquo;OpenWQ &mdash; Configuration Report&rdquo; will automatically open &mdash; Confirm everything is ok</h4>
+                                <p>Examine the report to confirm that the configuration is as desired.</p>
                             </div>
                         </div>
                         <div class="workflow-step">
                             <div class="number" style="background: var(--accent);">5</div>
                             <div class="content">
-                                <h4>Set output species (Section 7)</h4>
-                                <p>Use <code>"all"</code> to auto-detect from BGC file</p>
-                            </div>
-                        </div>
-                        <div class="workflow-step">
-                            <div class="number" style="background: var(--rose);">6</div>
-                            <div class="content">
-                                <h4>Generate report</h4>
-                                <p>Model configuration summary, run instructions, and how to examine results</p>
+                                <h4>Run code snippets provided in &ldquo;OpenWQ &mdash; Configuration Report&rdquo;</h4>
+                                <p>The report provides code snippets to run the model and read the results &mdash; execute them sequentially.</p>
                             </div>
                         </div>
                     </div>
@@ -660,7 +653,7 @@ python calibration_config_template.py [flags]
                             </ul>
                         </div>
                         <div class="card primary">
-                            <h3>9 Configuration Sections</h3>
+                            <h3>Configuration Sections (Step 2)</h3>
                             <p style="font-size: 0.82rem;">1) General Info &middot; 2) Computational &middot;
                             3) Initial Conditions &middot; 4) Modules (BGC, TD, LE, TS, SI) &middot;
                             5) Source/Sink &middot; 6) External Fluxes &middot; 7) Output &middot;
@@ -685,7 +678,7 @@ python calibration_config_template.py [flags]
         <!-- Slide 8: Configuration Sections -->
         <div class="slide" data-slide="8">
             <div class="slide-header">
-                <h2>Configuration Sections</h2>
+                <h2>Configuration Sections (Step 2)</h2>
             </div>
             <div class="slide-content">
                 <table style="font-size: 0.9rem;">
