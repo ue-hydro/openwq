@@ -3308,6 +3308,54 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    print("Check that the model has been run and HDF5 output files exist.")'
         )
 
+        # --- 4c: Full-resolution static plot matrices (one figure per species) ---
+        _static_out_dir = os.path.join(_abs_output_dir, "openwq_out",
+                                       "static_plots")
+        _static_out_dir_safe = _py_path(_static_out_dir)
+        _plot_static_body = (
+            f'{_python_preamble()}\n'
+            f'\n'
+            f'import Plot_h5_driver as h5_plib\n'
+            f'\n'
+            f'# Full-resolution static plots: one PNG matrix per species,\n'
+            f'# one subplot per reach/HRU, with observations overlaid.\n'
+            f'# (The interactive report decimates long series to stay small;\n'
+            f'#  this keeps every timestep at full resolution.)\n'
+            f'h5_plib.Plot_h5_driver(\n'
+            f'    what2map="openwq",\n'
+            f'    hostmodel="{hostmodel}",\n'
+            f'    mapping_key_values="all",\n'
+            f'    openwq_results=openwq_results,\n'
+            f'    chemSpec=[{_species_str}],\n'
+            f'    debugmode=True,\n'
+            f'    river_network_shp="{_shp_path_safe}",\n'
+            f'    basin_shapefile="{_basin_shp_path_safe}",\n'
+            f'    basin_mapping_key="{_basin_mapping_key}",\n'
+            f'    mapping_key="{_shp_key}",\n'
+            f'    feature_label="{_feature_label}",\n'
+            f'    separator="{plot_separator}",\n'
+            f'    config_template_path={repr(config_template_path or "")},\n'
+            f'{_obs_plot_param}'
+            f'    static_matrix_dir="{_static_out_dir_safe}",\n'
+            f')\n'
+            f'\n'
+            f'print("\\nFull-resolution static plot matrices saved to:")\n'
+            f'print("{_static_out_dir_safe}")\n'
+            f'\n'
+            f'# Open the output folder so the PNGs are easy to find\n'
+            f'import sys, os, subprocess\n'
+            f'_static_dir = "{_static_out_dir_safe}"\n'
+            f'try:\n'
+            f'    if sys.platform == "darwin":\n'
+            f'        subprocess.run(["open", _static_dir])\n'
+            f'    elif sys.platform.startswith("win"):\n'
+            f'        os.startfile(_static_dir)\n'
+            f'    else:\n'
+            f'        subprocess.run(["xdg-open", _static_dir])\n'
+            f'except Exception:\n'
+            f'    pass'
+        )
+
         # Two-column layout: 4a (left) and 4b (right) side by side
         H.append('<div style="display:flex;gap:1.5rem;margin-top:1rem;align-items:flex-start">')
         H.append('<div style="flex:1;min-width:0">')
@@ -3323,10 +3371,27 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append('</div>')
         H.append('</div>')
 
+        # 4c: full-resolution static plot matrices (full-width, below the two columns)
+        H.append('<p style="font-weight:600;margin-top:1.2rem">'
+                 'Full-resolution static plots '
+                 '(one matrix per species &mdash; a subplot per reach/HRU, with observations):</p>')
+        H.append('<p style="font-size:.82rem;color:var(--muted);margin:0 0 .4rem">'
+                 'The interactive report above decimates long time series to keep the '
+                 'HTML small. This snippet saves <strong>full-resolution PNG matrices</strong> '
+                 '&mdash; one figure per species, one subplot per reach/HRU &mdash; '
+                 'with the matching observations overlaid.</p>')
+        H.append(f'<p style="font-size:.82rem;color:var(--muted);margin:0 0 .4rem">'
+                 f'&#x1F4C1; Saved to <code style="word-break:break-all">'
+                 f'{_html_mod.escape(_static_out_dir)}</code> '
+                 f'&mdash; one PNG per species (e.g. <code>Water_NO3-N_matrix.png</code>); '
+                 f'this folder opens automatically when the run finishes.</p>')
+        _cb_id_4c = f'_cb{_copy_id_counter[0]}'  # ID before _code_block increments
+        H.append(_code_block(_terminal_snippet(_plot_static_body), max_h='20rem'))
+
         # JavaScript: update code snippets when species, compartment, or debug checkboxes change
         H.append(f"""<script>
 (function(){{
-  var preIds = ['{_cb_id_4a}', '{_cb_id_4b}'];
+  var preIds = ['{_cb_id_4a}', '{_cb_id_4b}', '{_cb_id_4c}'];
   var origTexts = preIds.map(function(id){{ return document.getElementById(id).textContent; }});
   var specCbs = document.querySelectorAll('.species-cb');
   var cmpCbs = document.querySelectorAll('.cmp-cb');

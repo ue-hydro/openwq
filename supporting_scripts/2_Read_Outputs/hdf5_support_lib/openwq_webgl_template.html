@@ -41,19 +41,21 @@ canvas#gl { width: 100%; height: 100%; display: block; }
 #info div { margin-bottom: 3px; }
 #info .hl { color: #ccddef; }
 #colorbar-wrap { position: fixed; bottom: 20px; right: 16px;
-    background: rgba(5,8,20,0.7); padding: 8px 12px 6px;
-    border-radius: 8px; border: 1px solid rgba(60,90,140,0.2); }
-#conc-colorbar-wrap { position: fixed; bottom: 80px; right: 16px;
-    background: rgba(5,8,20,0.7); padding: 8px 12px 6px;
-    border-radius: 8px; border: 1px solid rgba(60,90,140,0.2); }
-#conc-colorbar-wrap .cb-title { font-family: monospace; font-size: 11px;
-    color: #ffffff; margin-bottom: 4px; }
+    background: rgba(5,8,20,0.85); padding: 13px 16px 13px;
+    border-radius: 10px; border: 1px solid rgba(70,105,160,0.45);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35); }
+#conc-colorbar-wrap { position: fixed; bottom: 124px; right: 16px;
+    background: rgba(5,8,20,0.85); padding: 13px 16px 13px;
+    border-radius: 10px; border: 1px solid rgba(70,105,160,0.45);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35); }
+#conc-colorbar-wrap .cb-title { font-family: monospace; font-size: 14px; font-weight: 600;
+    color: #ffffff; margin-bottom: 7px; }
 #conc-colorbar-wrap .cb-labels { display: flex; justify-content: space-between;
     font-family: monospace; font-size: 10px; color: #ffffff; margin-top: 2px; }
-#colorbar-wrap .cb-title { font-family: monospace; font-size: 11px;
-    color: #8899bb; margin-bottom: 4px; }
+#colorbar-wrap .cb-title { font-family: monospace; font-size: 14px; font-weight: 600;
+    color: #cfe3ec; margin-bottom: 7px; }
 #colorbar-wrap .cb-labels { display: flex; justify-content: space-between;
-    font-family: monospace; font-size: 10px; color: #8899bb; margin-top: 2px; }
+    font-family: monospace; font-size: 13px; color: #cfe3ec; margin-top: 5px; }
 canvas#colorbar { display: block; border-radius: 3px; }
 #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
     color: #5577aa; font-family: monospace; font-size: 16px; }
@@ -141,14 +143,43 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
 
 <div id="colorbar-wrap" style="display:none;">
     <div class="cb-title" id="flow-cb-title">Flow magnitude</div>
-    <canvas id="colorbar" width="180" height="14"></canvas>
+    <canvas id="colorbar" width="240" height="20"></canvas>
     <div class="cb-labels"><span id="cb-min">0</span><span id="cb-max">--</span></div>
 </div>
 
 <div id="conc-colorbar-wrap" style="display:none;">
     <div class="cb-title">Concentration (mg/L)</div>
-    <canvas id="conc-colorbar" width="180" height="14"></canvas>
-    <div class="cb-labels"><span id="conc-cb-min">0</span><span id="conc-cb-max">--</span></div>
+    <canvas id="conc-colorbar" width="240" height="20"></canvas>
+    <div class="cb-labels" style="align-items:flex-end; gap:10px; margin-top:5px;">
+        <label style="display:flex; flex-direction:column; align-items:flex-start; gap:2px;">
+            <span style="font-size:11px; opacity:.7;">min</span>
+            <input type="number" id="conc-cb-min" value="0" step="any"
+                   title="Colorbar minimum (data units)"
+                   style="width:86px; font-family:monospace; font-size:14px; padding:3px 6px;
+                          background:rgba(20,30,55,0.85); color:#cfe3ec;
+                          border:1px solid rgba(80,120,180,0.5); border-radius:4px;">
+        </label>
+        <label style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
+            <span style="font-size:11px; opacity:.7;">max</span>
+            <input type="number" id="conc-cb-max" value="" step="any"
+                   title="Colorbar maximum (data units) — lower it to de-emphasize high-value outliers"
+                   style="width:86px; font-family:monospace; font-size:14px; padding:3px 6px;
+                          background:rgba(20,30,55,0.85); color:#cfe3ec;
+                          border:1px solid rgba(80,120,180,0.5); border-radius:4px;">
+        </label>
+    </div>
+    <div style="display:flex; gap:6px; margin-top:9px;">
+        <button id="conc-cb-apply" title="Apply this colour range and restart the animation"
+                style="flex:2; font-family:monospace; font-size:13px; font-weight:600;
+                       padding:6px 6px; cursor:pointer; color:#06121f;
+                       background:#37d0be; border:1px solid #37d0be; border-radius:5px;">
+            &#10003; Apply</button>
+        <button id="conc-cb-reset" title="Reset colour scale to the full data range"
+                style="flex:1; font-family:monospace; font-size:13px;
+                       padding:6px 6px; cursor:pointer; color:#cfe3ec;
+                       background:rgba(40,60,100,0.6); border:1px solid rgba(80,120,180,0.5);
+                       border-radius:5px;">&#8634; Reset</button>
+    </div>
 </div>
 
 <!-- ═══════ GLSL SHADERS ═══════ -->
@@ -623,6 +654,7 @@ uniform sampler2D u_velocity_next;
 uniform float u_time_frac;
 varying vec2 v_uv;
 varying float v_conc_t;
+varying float v_conc_present;
 varying float v_is_polygon;
 
 void main() {
@@ -632,7 +664,8 @@ void main() {
     float conc      = texture2D(u_concentration, a_texcoord).r;
     float poly_flag = texture2D(u_concentration, a_texcoord).g;
     float conc_wet  = texture2D(u_concentration, a_texcoord).a;
-    v_conc_t        = conc * step(0.5, conc_wet);
+    v_conc_t        = conc;                  // normalized concentration (0..1 of bake max)
+    v_conc_present  = step(0.5, conc_wet);   // 1 where the reach actually has data
     v_is_polygon    = poly_flag;
 
     // Sample water depth for surface elevation
@@ -664,23 +697,34 @@ void main() {
 precision mediump float;
 varying vec2 v_uv;
 varying float v_conc_t;
+varying float v_conc_present;
 varying float v_is_polygon;
+// Interactive colorbar range (data units). v_conc_t is normalized to the
+// baked maximum, so raw = v_conc_t * u_concDataMax. Remapping by the
+// user-set [min,max] lets a few very-high reaches be clipped so they no
+// longer dominate the colour scale.
+uniform float u_concDataMax;
+uniform float u_concUserMin;
+uniform float u_concUserMax;
 
-// Viridis-like yellow-orange-red heat ramp
+// Cool-to-warm heat ramp: blue -> violet -> magenta -> red
 vec3 concColor(float t) {
-    // Green to yellow to orange to red
-    vec3 c0 = vec3(0.0, 0.5, 0.0);   // green (low)
-    vec3 c1 = vec3(1.0, 1.0, 0.0);   // yellow
-    vec3 c2 = vec3(1.0, 0.5, 0.0);   // orange
-    vec3 c3 = vec3(1.0, 0.0, 0.0);   // red (high)
+    // Avoids green/yellow, which blend with the satellite basemap behind.
+    vec3 c0 = vec3(0.20, 0.25, 0.85);   // blue (low)
+    vec3 c1 = vec3(0.50, 0.15, 0.80);   // violet
+    vec3 c2 = vec3(0.85, 0.12, 0.50);   // magenta
+    vec3 c3 = vec3(0.92, 0.10, 0.12);   // red (high)
     if (t < 0.333) return mix(c0, c1, t * 3.0);
     if (t < 0.666) return mix(c1, c2, (t - 0.333) * 3.0);
     return mix(c2, c3, (t - 0.666) * 3.0);
 }
 
 void main() {
-    if (v_conc_t < 0.004) discard;  // no concentration
-    float t = clamp(v_conc_t, 0.0, 1.0);
+    if (v_conc_present < 0.5) discard;  // skip only cells with no data (keeps faint reaches)
+    // Remap the baked-normalized value into the user-selected data range.
+    float raw   = v_conc_t * u_concDataMax;
+    float denom = max(u_concUserMax - u_concUserMin, 1e-6);
+    float t = clamp((raw - u_concUserMin) / denom, 0.0, 1.0);
     vec3 col = concColor(t);
     // Branch on the polygon flag baked into the G channel of the
     // concentration texture:
@@ -1312,30 +1356,76 @@ class FloodViewer3D {
             const concMaxVal = (typeof m.conc_max === 'object' && m.chemical_species)
                 ? m.conc_max[m.chemical_species[0]]
                 : m.conc_max;
-            document.getElementById('conc-cb-max').textContent =
-                concMaxVal ? concMaxVal.toFixed(1) : '--';
+            // Interactive colorbar range state (data units)
+            this.concDataMax = concMaxVal || 1.0;
+            this.concUserMin = 0.0;
+            this.concUserMax = this.concDataMax;
+            document.getElementById('conc-cb-min').value = '0';
+            document.getElementById('conc-cb-max').value =
+                concMaxVal ? Number(concMaxVal.toFixed(3)) : '';
+            // Let the user clip the colour scale live (e.g. lower the max so a
+            // few very-high reaches stop dominating the whole network).
+            (function(self){
+                var cMin = document.getElementById('conc-cb-min');
+                var cMax = document.getElementById('conc-cb-max');
+                function applyRange(){
+                    var lo = parseFloat(cMin.value);
+                    var hi = parseFloat(cMax.value);
+                    if (!isNaN(lo)) self.concUserMin = lo;
+                    if (!isNaN(hi) && hi > self.concUserMin) self.concUserMax = hi;
+                }
+                // Restart the animation from the first frame (same as the
+                // main Reset button) so the new colour scale is seen cleanly.
+                function restart(){
+                    self.currentFrame = 0;
+                    self.timeFrac = 0;
+                    if (self.gl) {
+                        try { self.initTrailTextures(self.gl); } catch (e) {}
+                        try { self.initParticleState(self.gl); } catch (e) {}
+                    }
+                    self.playing = true;
+                    var pb = document.getElementById('btn-play');
+                    if (pb) { pb.innerHTML = '&#9646;&#9646; Pause'; pb.classList.add('active'); }
+                }
+                // Live preview: recolour immediately as the range is edited.
+                cMin.addEventListener('input', applyRange);
+                cMax.addEventListener('input', applyRange);
+                var cApply = document.getElementById('conc-cb-apply');
+                if (cApply) cApply.addEventListener('click', function(){
+                    applyRange();
+                    restart();
+                });
+                var cReset = document.getElementById('conc-cb-reset');
+                if (cReset) cReset.addEventListener('click', function(){
+                    self.concUserMin = 0.0;
+                    self.concUserMax = self.concDataMax;
+                    cMin.value = '0';
+                    cMax.value = (self.concDataMax != null)
+                        ? Number(self.concDataMax.toFixed(3)) : '';
+                    restart();
+                });
+            })(this);
             // Draw concentration colorbar
             const ccb = document.getElementById('conc-colorbar');
             const cctx = ccb.getContext('2d');
+            // Blue -> violet -> magenta -> red (matches the shader's concColor;
+            // avoids green/yellow which blend with the satellite basemap).
+            const _cstops = [
+                [0.20, 0.25, 0.85],
+                [0.50, 0.15, 0.80],
+                [0.85, 0.12, 0.50],
+                [0.92, 0.10, 0.12]
+            ];
             for (let x = 0; x < ccb.width; x++) {
                 const t = x / ccb.width;
-                let r2, g2, b2;
-                if (t < 0.333) {
-                    const f = t * 3.0;
-                    r2 = Math.round(f * 255);
-                    g2 = Math.round((0.5 + 0.5 * f) * 255);
-                    b2 = Math.round((1 - f) * 0);
-                } else if (t < 0.666) {
-                    const f = (t - 0.333) * 3.0;
-                    r2 = 255;
-                    g2 = Math.round((1.0 - 0.5 * f) * 255);
-                    b2 = 0;
-                } else {
-                    const f = (t - 0.666) * 3.0;
-                    r2 = 255;
-                    g2 = Math.round((0.5 - 0.5 * f) * 255);
-                    b2 = 0;
-                }
+                let seg, f;
+                if (t < 0.333)      { seg = 0; f = t * 3.0; }
+                else if (t < 0.666) { seg = 1; f = (t - 0.333) * 3.0; }
+                else                { seg = 2; f = (t - 0.666) * 3.0; }
+                const a = _cstops[seg], b = _cstops[seg + 1];
+                const r2 = Math.round((a[0] + (b[0] - a[0]) * f) * 255);
+                const g2 = Math.round((a[1] + (b[1] - a[1]) * f) * 255);
+                const b2 = Math.round((a[2] + (b[2] - a[2]) * f) * 255);
                 cctx.fillStyle = `rgb(${r2},${g2},${b2})`;
                 cctx.fillRect(x, 0, 1, ccb.height);
             }
@@ -1397,10 +1487,14 @@ class FloodViewer3D {
                             this.gl.deleteTexture(tex);
                         });
                         this.concFrameCache.clear();
-                        // Update conc_max display
+                        // Update conc_max display + reset interactive range
                         const newMax = m.conc_max[this.currentSpecies];
-                        document.getElementById('conc-cb-max').textContent =
-                            newMax ? newMax.toFixed(1) : '--';
+                        this.concDataMax = newMax || 1.0;
+                        this.concUserMin = 0.0;
+                        this.concUserMax = this.concDataMax;
+                        document.getElementById('conc-cb-min').value = '0';
+                        document.getElementById('conc-cb-max').value =
+                            newMax ? Number(newMax.toFixed(3)) : '';
                         // Update concentration units in colorbar title
                         const units = m.conc_units ? m.conc_units[this.currentSpecies] : '';
                         document.querySelector('#conc-colorbar-wrap .cb-title').textContent =
@@ -2042,6 +2136,13 @@ class FloodViewer3D {
                 gl.uniform1f(gl.getUniformLocation(cp, 'u_h_max'), m.h_max);
                 gl.uniform1f(gl.getUniformLocation(cp, 'u_z_range'), m.z_max - m.z_min);
                 gl.uniform1f(gl.getUniformLocation(cp, 'u_exaggeration'), this.exaggeration);
+                // Interactive colorbar range (data units)
+                var _cDataMax = this.concDataMax || 1.0;
+                var _cMin = (this.concUserMin != null) ? this.concUserMin : 0.0;
+                var _cMax = (this.concUserMax != null) ? this.concUserMax : _cDataMax;
+                gl.uniform1f(gl.getUniformLocation(cp, 'u_concDataMax'), _cDataMax);
+                gl.uniform1f(gl.getUniformLocation(cp, 'u_concUserMin'), _cMin);
+                gl.uniform1f(gl.getUniformLocation(cp, 'u_concUserMax'), _cMax);
 
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.terrainIBO);
                 gl.drawElements(gl.TRIANGLES, this.terrainMesh.nIndices, indexType, 0);
