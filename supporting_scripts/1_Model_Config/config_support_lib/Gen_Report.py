@@ -2601,14 +2601,20 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                       'border:none;border-radius:4px;padding:2px 8px;font-size:.7rem;cursor:pointer')
         _copy_id_counter = [0]
 
-        def _code_block(code_text):
-            """Return HTML for a <pre> block with a copy-to-clipboard button."""
+        def _code_block(code_text, max_h=None):
+            """Return HTML for a <pre> block with a copy-to-clipboard button.
+
+            When ``max_h`` is given (e.g. '20rem') the <pre> is height-capped and
+            gets a vertical scrollbar on its right edge, keeping tall snippets
+            compact.
+            """
             import html as _html
             safe = _html.escape(code_text)
             cid = f'_cb{_copy_id_counter[0]}'
             _copy_id_counter[0] += 1
+            _scroll = f'max-height:{max_h};overflow-y:auto;' if max_h else ''
             return (f'<div style="position:relative">'
-                    f'<pre id="{cid}" style="{_pre_style}">{safe}</pre>'
+                    f'<pre id="{cid}" style="{_pre_style};{_scroll}">{safe}</pre>'
                     f'<button style="{_btn_style}" '
                     f'onclick="var t=document.getElementById(\'{cid}\').textContent;'
                     f'navigator.clipboard.writeText(t);'
@@ -3307,13 +3313,13 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append('<div style="flex:1;min-width:0">')
         H.append(f'<p style="font-weight:600">{_viewer_title_html}</p>')
         _cb_id_4a = f'_cb{_copy_id_counter[0]}'  # ID before _code_block increments
-        H.append(_code_block(_terminal_snippet(_webgl_body)))
+        H.append(_code_block(_terminal_snippet(_webgl_body), max_h='20rem'))
         H.append('</div>')
         H.append('<div style="flex:1;min-width:0">')
         H.append('<p style="font-weight:600">Plot interactive '
                  'time series (all species):</p>')
         _cb_id_4b = f'_cb{_copy_id_counter[0]}'  # ID before _code_block increments
-        H.append(_code_block(_terminal_snippet(_plot_all_body)))
+        H.append(_code_block(_terminal_snippet(_plot_all_body), max_h='20rem'))
         H.append('</div>')
         H.append('</div>')
 

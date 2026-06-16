@@ -94,12 +94,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
         <input type="range" id="sl-speed" min="5" max="2000" value="80">
         <span class="val" id="v-speed">0.8x</span>
     </div>
-    <div class="ctrl-row">
+    <div class="ctrl-row" style="display:none;">
         <label>Particles</label>
         <input type="range" id="sl-particles" min="10" max="18" value="14">
         <span class="val" id="v-particles">16K</span>
     </div>
-    <div class="ctrl-row">
+    <div class="ctrl-row" style="display:none;">
         <label>Trail length</label>
         <input type="range" id="sl-trail" min="880" max="998" value="970">
         <span class="val" id="v-trail">0.97</span>
@@ -111,7 +111,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
     </div>
     <div class="ctrl-row" style="justify-content:center; gap:8px; margin-top:6px;">
         <button class="btn active" id="btn-water">&#128167; Water</button>
-        <button class="btn active" id="btn-particles">&#10024; Particles</button>
+        <button class="btn active" id="btn-particles" style="display:none;">&#10024; Particles</button>
         <button class="btn" id="btn-sat" style="display:none;">&#127760; Satellite</button>
         <button class="btn" id="btn-conc" style="display:none;">&#9762; Concentration</button>
     </div>
@@ -132,7 +132,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
 <div id="info" style="display:none;">
     <div>t = <span class="hl" id="i-time">0s</span></div>
     <div><span class="hl" id="i-fps">--</span> fps</div>
-    <div><span class="hl" id="i-particles">--</span> particles</div>
+    <div style="display:none;"><span class="hl" id="i-particles">--</span> particles</div>
     <div style="margin-top:6px; font-size:10px; color:#667799;">
         Drag: rotate | Scroll: zoom<br>
         Shift+drag: pan
@@ -1160,7 +1160,7 @@ class FloodViewer3D {
         this.useSatellite = false;
         // Water level surface
         this.showWater = true;
-        this.showParticles = true;
+        this.showParticles = false;   // Particles feature removed from UI
         // Concentration overlay
         this.showConcentration = false;
         this.concFrameCache = new Map();
