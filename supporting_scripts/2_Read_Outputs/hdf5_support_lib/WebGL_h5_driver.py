@@ -1549,11 +1549,16 @@ def WebGL_h5_driver(shpfile_info=None,
             cat_pos = cat_conc[cat_conc > 0]
             if len(cat_pos) > 0:
                 raw_max = float(cat_pos.max())
-                threshold = raw_max * 0.01
-                plume = cat_pos[cat_pos >= threshold]
-                conc_max_per_species[species_name] = float(
-                    np.percentile(plume, 95) if len(plume) > 0 else raw_max
-                )
+                # Robust colour-scale max: a high percentile of ALL positive
+                # values (not just the plume near the single highest value).
+                # A lone very-high reach used to set the scale so that every
+                # other reach fell below 1/255 and quantized to zero in the
+                # 8-bit texture — leaving only that one reach visible. Using a
+                # global percentile keeps the bulk of reaches resolvable;
+                # genuine outliers clip to the top colour and the interactive
+                # colorbar lets the user fine-tune.
+                p_hi = float(np.percentile(cat_pos, 98))
+                conc_max_per_species[species_name] = p_hi if p_hi > 0 else raw_max
             else:
                 conc_max_per_species[species_name] = 1.0
         else:

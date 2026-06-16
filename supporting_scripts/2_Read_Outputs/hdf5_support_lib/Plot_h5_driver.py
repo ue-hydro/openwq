@@ -163,6 +163,167 @@ def _load_observation_data(obs_dir=None, obs_csv=None):
     return obs_by_species, station_locations
 
 
+def _render_static_matrices(plots, openwq_results, mapping_key_values,
+                            observation_data, basin_geojson, basin_mapping_key,
+                            out_dir, feature_label, separator, extract_features,
+                            max_per_fig=30):
+    """Save FULL-RESOLUTION static plot matrices — one figure per species /
+    compartment, one subplot per reach/HRU, with matched observations overlaid.
+
+    Unlike the interactive HTML report (which decimates long series to stay
+    small), this reads the un-decimated model series straight from
+    ``openwq_results`` and renders them with matplotlib at full resolution.
+    Observations come from ``observation_data`` (already station→reach matched
+    by the caller), so no re-matching is needed. Large networks are paginated
+    into ``max_per_fig`` subplots per figure.
+    """
+    import math
+    import os as _os
+    import re as _re
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+    except Exception as e:
+        print(f"  matplotlib unavailable — static matrices skipped ({e})")
+        return []
+    import pandas as pd
+
+    _os.makedirs(out_dir, exist_ok=True)
+
+    # Rebuild the SUMMA sequential-id → real-shapefile-id remap (mirrors the
+    # interactive path) so model reach labels match the observation feature ids.
+    id_remap = {}
+    if basin_geojson and basin_geojson.get('features'):
+        for i, feat in enumerate(basin_geojson['features']):
+            seq = str(i + 1)
+            real = str(feat.get('properties', {}).get(basin_mapping_key, seq))
+            if real.endswith('.0'):
+                real = real[:-2]
+            if seq != real:
+                id_remap[seq] = real
+
+    def _remap(display_id):
+        m = _re.match(r'^(.+?) \((z\d+)\)$', str(display_id))
+        if m:
+            return f'{id_remap.get(m.group(1), m.group(1))} ({m.group(2)})'
+        return id_remap.get(str(display_id), str(display_id))
+
+    saved = []
+    for p in plots:
+        comp = p.get('compartment', '')
+        spec = p.get('species', '')
+        # Resolve the result key (mirrors the main plotting loop)
+        result_key = None
+        for key in openwq_results:
+            if key.split('@')[0] != comp:
+                continue
+            if spec == 'Sediment':
+                if key == f'{comp}@Sediment':
+                    result_key = key
+                    break
+            elif spec in key:
+                result_key = key
+                break
+        if result_key is None:
+            continue
+        main_tt = None
+        for ext, dl in openwq_results[result_key]:
+            if ext == 'main' and dl:
+                _, main_tt, _ = dl[0]
+                break
+        if main_tt is None:
+            continue
+        fd, _, _ = extract_features(main_tt, mapping_key_values)
+        if not fd:
+            continue
+
+        # Group already-matched observations by reach/HRU feature id.
+        # Normalise ids so they match the model reach ids regardless of
+        # formatting: strip a SUMMA layer suffix " (z1)" and a trailing ".0"
+        # from float-formatted shapefile ids.
+        def _norm(v):
+            s = str(v).strip()
+            s = _re.sub(r'\s*\(z\d+\)$', '', s)
+            return s[:-2] if s.endswith('.0') else s
+        obs_by_reach = {}
+        for ob in (observation_data or {}).get(p['id'], []):
+            fid = _norm(ob.get('feature_id', ''))
+            d = obs_by_reach.setdefault(fid, {'x': [], 'y': []})
+            d['x'].extend(ob.get('x', []))
+            d['y'].extend(ob.get('y', []))
+        _obs_avail = len((observation_data or {}).get(p['id'], []))
+        if _obs_avail:
+            print(f"  [{comp}/{spec}] {_obs_avail} obs station(s); "
+                  f"obs ids e.g. {list(obs_by_reach)[:3]}; "
+                  f"reach ids e.g. {[_norm(_remap(r)) for r in list(fd)[:3]]}")
+        elif observation_data is None:
+            print(f"  [{comp}/{spec}] no observation data available "
+                  f"(needs observation_dir/observation_csv + a shapefile)")
+
+        ylabel = p.get('ylabel', spec)
+        reach_ids = list(fd.keys())
+        n = len(reach_ids)
+        pages = max(1, math.ceil(n / max_per_fig))
+        for pg in range(pages):
+            sub = reach_ids[pg * max_per_fig:(pg + 1) * max_per_fig]
+            m = len(sub)
+            ncols = max(1, int(math.ceil(math.sqrt(m))))
+            nrows = int(math.ceil(m / ncols))
+            fig, axes = plt.subplots(nrows, ncols,
+                                     figsize=(ncols * 3.4, nrows * 2.4),
+                                     squeeze=False)
+            for ax in axes.flat:
+                ax.axis('off')
+            n_obs = 0
+            for idx, rid in enumerate(sub):
+                ax = axes.flat[idx]
+                ax.axis('on')
+                ser = fd[rid].dropna()
+                if len(ser) > 0:
+                    ax.plot(ser.index, ser.values, color='#1f6feb', lw=0.8)
+                real = _remap(rid)
+                ob = obs_by_reach.get(_norm(real)) or obs_by_reach.get(_norm(rid))
+                if ob and ob['x']:
+                    try:
+                        import numpy as _np
+                        ox = _np.asarray(pd.to_datetime(ob['x'], errors='coerce'))
+                        oy = _np.asarray(ob['y'], dtype=float)
+                        mask = ~pd.isna(ox)
+                        if mask.any():
+                            ax.scatter(ox[mask], oy[mask], s=18,
+                                       color='#e05500', edgecolor='#222',
+                                       linewidth=0.4, zorder=5, label='obs')
+                            ax.legend(fontsize=6, loc='best', frameon=False)
+                            n_obs += int(mask.sum())
+                    except Exception as _e_obs:
+                        print(f"    obs overlay skipped for reach {real}: {_e_obs}")
+                ax.set_title(f'{feature_label or "reach"} {real}', fontsize=8)
+                ax.tick_params(labelsize=6)
+                for lbl in ax.get_xticklabels():
+                    lbl.set_rotation(30)
+                    lbl.set_ha('right')
+            ttl = f'{comp}{separator}{spec}'
+            if pages > 1:
+                ttl += f'  (page {pg + 1}/{pages})'
+            fig.suptitle(f'{ttl}   [{ylabel}]', fontsize=12)
+            fig.tight_layout(rect=[0, 0, 1, 0.96])
+            safe = _re.sub(r'[^A-Za-z0-9_.-]', '_', f'{comp}_{spec}')
+            fname = _os.path.join(
+                out_dir,
+                f'{safe}_matrix' + (f'_p{pg + 1}' if pages > 1 else '') + '.png')
+            try:
+                fig.savefig(fname, dpi=150)
+                saved.append(fname)
+                print(f"  ✓ static matrix: {fname}  "
+                      f"({m} {feature_label or 'reach'}(s), "
+                      f"{n_obs} observation point(s) overlaid)")
+            finally:
+                plt.close(fig)
+    print(f"  Static plot matrices saved: {len(saved)} figure(s) → {out_dir}")
+    return saved
+
+
 # ── Time-series decimation ──────────────────────────────────────────────────
 # A full multi-year hourly run across many reaches embeds hundreds of MB of
 # inline JSON in the report (e.g. 179 reaches x ~120k hourly steps ~= 550 MB),
@@ -2230,7 +2391,8 @@ def Plot_h5_driver(what2map=None,
                    observation_csv=None,
                    observation_compartments=None,
                    separator=' | ',
-                   config_template_path=None):
+                   config_template_path=None,
+                   static_matrix_dir=None):
     """
     Generate interactive HTML time-series plots (Plotly.js).
 
@@ -3084,6 +3246,22 @@ def Plot_h5_driver(what2map=None,
                             if new_fid != old_fid:
                                 t['hovertemplate'] = (ht[:idx] + new_fid +
                                                       rest[br:])
+
+    # ── Optional: full-resolution static plot matrices ──
+    # One PNG matrix per species/compartment, a subplot per reach/HRU, with
+    # observations overlaid — full resolution (the interactive HTML decimates).
+    if static_matrix_dir:
+        try:
+            _render_static_matrices(
+                plots, openwq_results, mapping_key_values, _observation_data,
+                _basin_geojson, _basin_mapping_key, static_matrix_dir,
+                feature_label, separator, _extract_features)
+        except Exception as _e_sm:
+            print(f"  WARNING: static matrix generation failed: {_e_sm}")
+        if not output_path:
+            print("  (static_matrix_dir set with no output_path — "
+                  "skipping interactive HTML.)")
+            return static_matrix_dir
 
     html_content = _build_html(plots, what2map, hostmodel,
                                river_geojson=_primary_geojson,
