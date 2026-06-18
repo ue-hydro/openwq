@@ -4882,6 +4882,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       // openWQ HDF5 output (regenerated every eval) — large, never an input.
       "  --exclude 'openwq_out' \\",
       "  --exclude '*.h5' \\",
+      // mizuRoute history OUTPUT (run_*.h.<date>.nc) — regenerated on the HPC,
+      // never an input. Excluding it also avoids rsync's 'failed verification
+      // -- update discarded' abort when these files are still being written by
+      // a live run during the copy.
+      "  --exclude '*.h.*.nc' \\",
       // Compiled model binary: the HPC uses the one you built there (OWQ_EXEC_PATH),
       // so the local copy (often 100s of MB) is never run on the cluster.
       "  --exclude '*_openwq_Release' \\",
