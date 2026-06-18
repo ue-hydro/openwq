@@ -1195,6 +1195,37 @@ def calc_copernicus_lulc(
         except Exception:
             _reuse_cache = True  # verification failed → keep the safe reuse default
 
+        # Year-coverage check (independent of the basin check above): a cache
+        # for the CORRECT basin is still stale if it covers fewer years than
+        # the clipped rasters available for this basin.  Reusing such a cache
+        # silently collapses every simulation year onto the single cached year
+        # (the downstream proxy-year mapping then maps e.g. 1981..2009 → 1993).
+        # Drop & recompute whenever the clipped rasters span years the cache
+        # lacks.
+        if _reuse_cache:
+            try:
+                _raster_years = {
+                    _extract_year_from_filename(p.name)
+                    for p in clipped_rasters_dir.glob('*.tif')
+                }
+                _raster_years.discard(None)
+                _cache_years = {
+                    int(y) for y in
+                    pd.read_csv(_areas_csv, usecols=['Year'])['Year']
+                      .dropna().unique()
+                }
+                _missing_years = _raster_years - _cache_years
+                if _raster_years and _missing_years:
+                    _reuse_cache = False
+                    _msg = (
+                        f"  ↻ Cached LULC areas cover only {sorted(_cache_years)} "
+                        f"but clipped rasters span {min(_raster_years)}–"
+                        f"{max(_raster_years)} ({len(_raster_years)} years) — "
+                        "recomputing so the dynamic loads use every available "
+                        "land-cover year.")
+            except Exception:
+                pass  # if the check can't run, keep the basin-based decision
+
         print("\n" + _msg)
         if _reuse_cache:
             results_df = pd.read_csv(_areas_csv)
