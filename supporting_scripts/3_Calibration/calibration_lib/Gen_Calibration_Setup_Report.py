@@ -2805,6 +2805,24 @@ _TARGETS_MAP_TEMPLATE = """
       return div;
     };
     recenterBtn.addTo(map);
+    // Zoom-to-selected control (just below re-center): frames the currently
+    // ticked reaches/HRUs; falls back to the full extent when "all" is on.
+    var zoomSelBtn = L.control({position:'topleft'});
+    zoomSelBtn.onAdd = function(){
+      var div = L.DomUtil.create('div','leaflet-bar leaflet-control');
+      div.innerHTML = '<a href="#" title="Zoom to selected reaches" '
+        +'style="font-size:16px;line-height:30px;width:30px;height:30px;'
+        +'display:block;text-align:center;text-decoration:none;color:#333">'
+        +'&#128269;</a>';
+      div.firstChild.onclick = function(e){
+        e.preventDefault(); e.stopPropagation();
+        var ids = Object.keys(selectedSet());
+        if(ids.length){ zoomToFids(ids); }
+        else if(fitB){ map.fitBounds(fitB,{padding:[12,12]}); }
+      };
+      return div;
+    };
+    zoomSelBtn.addTo(map);
     restyle();
   }
   var el = document.getElementById(MAP_ID);
