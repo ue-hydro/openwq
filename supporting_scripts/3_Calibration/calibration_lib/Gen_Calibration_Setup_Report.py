@@ -1224,6 +1224,16 @@ def generate_interactive_setup(
         except Exception as _e:
             logger.warning(f"Could not load station locations: {_e}")
             _station_locs = []
+        # Per-reach obs timestamps → the list/map recompute "obs in window"
+        # live as the calibration-window slider moves (so the counts reflect the
+        # window the metric will actually score, not the full model period).
+        try:
+            _reach_obs_dates = _ci.get_observation_dates_by_reach(
+                model_config, work_dir=calibration_work_dir,
+                target_species=species_list)
+        except Exception as _e:
+            logger.warning(f"Could not load per-reach obs dates: {_e}")
+            _reach_obs_dates = {}
 
         # Compartments: keys defined in the model config are authoritative;
         # fall back to host-aware defaults when not present.
@@ -1263,6 +1273,7 @@ def generate_interactive_setup(
             feature_key=_feat_key,
             sim_window=(_sim_s, _sim_e),
             station_locations=_station_locs,
+            reach_obs_dates=_reach_obs_dates,
         ))
         H.append('</div>')
 
@@ -2647,7 +2658,13 @@ _TARGETS_MAP_TEMPLATE = """
     sel.dispatchEvent(new Event("change", {bubbles:true}));
   }
   var map=null, started=false, fitB=null, allFeatures=[];
-  function countOf(fid){ var c=P.counts[fid]; return c?c.in_window:0; }
+  function countOf(fid){
+    // Prefer the live calibration-window count (kept in sync with the slider);
+    // fall back to the static full-period count baked into the payload.
+    var w=window.__ridInWindow;
+    if(w && Object.prototype.hasOwnProperty.call(w, fid)) return w[fid];
+    var c=P.counts[fid]; return c?c.in_window:0;
+  }
   function baseColor(fid){
     if(P.have_counts) return countOf(fid)>0 ? COL_OBS : COL_NOOBS;
     return COL_OBS;
@@ -2839,6 +2856,9 @@ _TARGETS_MAP_TEMPLATE = """
     setTimeout(ensure, 500);
   }
   sel.addEventListener("change", restyle);
+  // Let the live recount (calibration-window slider) recolour the map when the
+  // in-window counts change.
+  window.__ridOnRecount = restyle;
   // Double-click a list entry -> zoom the map to that reach/HRU.
   function zoomToFids(fids){
     var feats = allFeatures.filter(function(l){ return fids.indexOf(l._fid) >= 0; });
@@ -2935,6 +2955,68 @@ _RID_CHECKLIST_SYNC_JS = """
 """
 
 
+# Recomputes each reach/HRU's "obs in window" count LIVE from the calibration-
+# window slider (the hidden #calibration_period_start/end fields in Settings),
+# so the Targets list + map reflect the window the metric will actually score —
+# not the full model period.  Reads window.__ridData (embedded per section) and
+# publishes window.__ridInWindow (read by the map's colouring).
+_RID_RECOUNT_JS = """
+<script>(function(){
+  function boot(){
+    var D = window.__ridData;
+    if(!D || !D.have_counts) return;
+    var list=document.getElementById('rid-checklist');
+    if(!list) return;
+    var rows=[].slice.call(list.querySelectorAll('.rid-row'));
+    var masterSpan=document.querySelector('#rid-all-row span');
+    var sEl=document.getElementById('calibration_period_start');
+    var eEl=document.getElementById('calibration_period_end');
+    function parseMs(v){ if(!v) return null;
+      var t=Date.parse((''+v).trim().replace(' ','T')); return isNaN(t)?null:t; }
+    function countIn(arr, a, b){
+      if(!arr || !arr.length) return 0;
+      if(a==null || b==null) return arr.length;       // no window → full record
+      function lb(x){ var lo=0,hi=arr.length; while(lo<hi){ var m=(lo+hi)>>1;
+        if(arr[m]<x) lo=m+1; else hi=m; } return lo; }
+      return lb(b+1) - lb(a);
+    }
+    function recount(){
+      var a=parseMs(sEl?sEl.value:null), b=parseMs(eEl?eEl.value:null);
+      var inWin={}, totalInwin=0;
+      rows.forEach(function(row){
+        var rid=row.getAttribute('data-rid');
+        var meta=D.meta[rid]||{total:0,ns:0};
+        var iw=countIn(D.dates[rid], a, b);
+        inWin[rid]=iw; totalInwin+=iw;
+        var span=row.querySelector('span'); if(!span) return;
+        if(meta.total>0){
+          span.textContent = rid+' \\u2014 '+iw+' obs in window ('+meta.total
+            +' total) \\u00b7 '+meta.ns+' station'+(meta.ns===1?'':'s');
+        } else { span.textContent = rid+' \\u2014 no obs'; }
+        row.style.color = iw>0 ? '' : 'var(--text3)';
+      });
+      window.__ridInWindow = inWin;
+      if(masterSpan){
+        masterSpan.textContent = '\\u2713 all ('+D.n+' '+D.word+') \\u00b7 '
+          +totalInwin+' obs in window ('+D.total_all+' total) \\u00b7 '
+          +D.total_stn+' stations';
+      }
+      if(typeof window.__ridOnRecount==='function'){ try{ window.__ridOnRecount(); }catch(e){} }
+    }
+    window.__ridRecount = recount;
+    var last=null;
+    function poll(){
+      var key=(sEl?sEl.value:'')+'|'+(eEl?eEl.value:'');
+      if(key!==last){ last=key; recount(); }
+    }
+    recount();
+    setInterval(poll, 300);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+})();</script>
+"""
+
+
 def _build_interactive_targets_section(
     species_list: List[str],
     species_obs_availability: Dict[str, Dict[str, Any]],
@@ -2949,6 +3031,7 @@ def _build_interactive_targets_section(
     feature_key: str = "SegId",
     sim_window: Optional[tuple] = None,
     station_locations: Optional[List[Dict[str, Any]]] = None,
+    reach_obs_dates: Optional[Dict[str, list]] = None,
 ) -> str:
     """Calibration targets with species checkboxes and observation info.
 
@@ -3085,9 +3168,25 @@ def _build_interactive_targets_section(
                         + (f' &middot; {_total_inwin} obs in window'
                            if _have_counts else ''))
         _count_hint = (
-            ' The number after each ID is how many observations fall inside '
-            'the simulated period (what the metric can actually fit).'
+            ' The counts update live with the calibration-window slider, so '
+            'they reflect the window the metric will actually score.'
             if _have_counts else '')
+        # Data for the live recount JS: per-reach obs timestamps + per-reach
+        # totals/stations + the "all"-row parts.  Guard against "</script>".
+        _rid_data = {
+            "have_counts": _have_counts,
+            "n": _n, "word": _word,
+            "total_all": _total_all, "total_stn": _total_stn,
+            "dates": {str(k): v for k, v in (reach_obs_dates or {}).items()},
+            "meta": {str(_rid): {
+                "total": int(reach_obs_counts.get(str(_rid), {}).get("total", 0)),
+                "ns": int(reach_obs_counts.get(str(_rid), {}).get("n_stations", 0)),
+            } for _rid in available_reaches},
+        }
+        _rid_data_js = (
+            '<script>window.__ridData = '
+            + json.dumps(_rid_data).replace("</", "<\\/")
+            + ';</script>')
         reach_field_html = (
             f'<label for="rid-checklist">Target {feature_label} IDs'
             f'<span style="font-weight:500;font-size:.68rem;color:var(--text3);'
@@ -3128,7 +3227,9 @@ def _build_interactive_targets_section(
             f'border-radius:8px;'
             f'font-family:\'JetBrains Mono\',monospace;font-size:.8rem;'
             f'line-height:1.55;">{"".join(_rows)}</div>'
+            f'{_rid_data_js}'
             f'{_RID_CHECKLIST_SYNC_JS}'
+            f'{_RID_RECOUNT_JS}'
             f'<div class="hint">Tick a box to use that {feat_lower} as a '
             f'calibration target; the <strong>all</strong> box above ticks '
             f'every {feat_lower}. Clicking a reach on the map ticks it too, and '

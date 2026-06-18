@@ -567,6 +567,88 @@ def run_calibration(
         raise RuntimeError(
             "No usable observations - " + _obs_chk.get("headline", "see log"))
 
+    # ── Pre-flight: Copernicus land-cover cache covers the simulation years ──
+    # The dynamic source/sink loads are built per simulation year from
+    # lulc_areas_all.csv.  A stale single-year cache silently maps EVERY sim
+    # year onto that one year (the "all → 1993" proxy trap, with land-cover
+    # change over time ignored).  Verify coverage and, interactively, offer to
+    # load the missing years before launching the run.
+    if model_config is not None:
+        try:
+            _mp_full = _cint.get_model_sim_period(model_config, log=logger.debug)
+            _lulc = _cint.get_lulc_cache_status(
+                model_config,
+                _mp_full.get("sim_start") if _mp_full else None,
+                _mp_full.get("sim_end") if _mp_full else None,
+                log=logger.debug)
+        except Exception as _e:
+            logger.warning(f"LULC cache check skipped: {_e}")
+            _lulc = None
+        if _lulc and not _lulc.get("ok", True):
+            _cy = _lulc["cache_years"]
+            _av = _lulc["available_years"]
+            _bn = "=" * 72
+            _expl = (
+                f"{_bn}\n"
+                "COPERNICUS LAND-COVER CACHE IS INCOMPLETE\n"
+                f"{_bn}\n"
+                f"  Cache file              : {_lulc['cache_path']}\n"
+                f"  Years currently in cache: "
+                f"{_cy if _cy else 'none'}\n"
+                f"  Years available (source): "
+                f"{(str(_av[0]) + '-' + str(_av[-1])) if _av else 'none'}\n"
+                f"  Missing years           : {_lulc['missing_years']}\n\n"
+                "Because the cache is missing these years, the dynamic source/sink\n"
+                "loads map EVERY simulation year onto the nearest cached year "
+                f"(e.g. all\n  years → "
+                f"{_cy[0] if _cy else 'the single cached year'}), so land-cover "
+                "change over time is ignored.\n" + _bn
+            )
+            print("\n" + _expl, file=sys.stderr)
+            for _ln in _expl.splitlines():
+                logger.warning(_ln)
+            _do = False
+            if getattr(sys.stdin, "isatty", lambda: False)():
+                try:
+                    _ans = input("Load the missing year(s) now and update "
+                                 "lulc_areas_all.csv? [y/N] ").strip().lower()
+                    _do = _ans in ("y", "yes")
+                except EOFError:
+                    _do = False
+            else:
+                print("(Non-interactive session — not prompting. Re-run "
+                      "interactively to load the missing years, or proceed "
+                      "with the proxy mapping.)", file=sys.stderr)
+            if _do:
+                _ok = False
+                try:
+                    _ok = _cint.regenerate_lulc_cache(
+                        model_config,
+                        _mp_full.get("sim_start") if _mp_full else None,
+                        _mp_full.get("sim_end") if _mp_full else None,
+                        log=lambda *a, **k: print(*a, file=sys.stderr))
+                except Exception as _e:
+                    logger.error(f"LULC regeneration failed: {_e}")
+                if _ok:
+                    # Drop stale per-eval copies so they re-seed from the fixed
+                    # baseline cache on the next evaluation.
+                    import glob as _glob
+                    for _f in _glob.glob(os.path.join(
+                            str(work_dir), "evaluations", "eval_*", "openwq_in",
+                            "ss_copernicus_files", "lulc_areas_all.csv")):
+                        try:
+                            os.remove(_f)
+                        except OSError:
+                            pass
+                    print("✓ lulc_areas_all.csv updated with all available "
+                          "years. Continuing with the run.\n", file=sys.stderr)
+                else:
+                    print("⚠ Could not update the cache — continuing with "
+                          "the current (proxy) land-cover data.\n", file=sys.stderr)
+            else:
+                print("Continuing — each simulation year will use the nearest "
+                      "available land-cover year.\n", file=sys.stderr)
+
     # ── Interim (partial) results report ────────────────────────────────
     # Lets the user open the <stem>_results_report.html WHILE the run is still
     # going — it renders whatever is available so far (influential parameters

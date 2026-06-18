@@ -825,6 +825,61 @@ def get_observation_counts_by_reach(model_config: Dict[str, Any],
         return {}
 
 
+def get_observation_dates_by_reach(model_config: Dict[str, Any],
+                                   work_dir: Optional[str] = None,
+                                   target_species: Optional[list] = None,
+                                   max_per_reach: int = 4000,
+                                   log=None) -> Dict[str, list]:
+    """Per-reach observation timestamps (epoch-ms) for the setup report, so the
+    Targets list + map can recompute "obs in window" live as the calibration-
+    window slider moves.  Primary obs only (what the metric scores).  Keys are
+    normalised (``740457350.0`` → ``"740457350"``) to match the option values.
+    """
+    import pandas as pd
+    _log = log or (lambda *a, **k: None)
+
+    def _norm_key(v):
+        try:
+            f = float(v)
+            return str(int(f)) if f == int(f) else str(f)
+        except (TypeError, ValueError):
+            return str(v).strip()
+
+    df = None
+    try:
+        if work_dir:
+            prep = os.path.join(work_dir, 'calibration_observations.csv')
+            if os.path.isfile(prep):
+                df = pd.read_csv(prep)
+    except Exception as exc:
+        _log(f"Could not read prepared obs CSV for reach dates: {exc}")
+        df = None
+    if (df is None or 'reach_id' not in df.columns
+            or 'datetime' not in df.columns):
+        return {}
+    try:
+        dt = pd.to_datetime(df['datetime'], errors='coerce')
+        if target_species and 'species' in df.columns:
+            keep = df['species'].astype(str).isin([str(s) for s in target_species])
+            df, dt = df[keep], dt[keep]
+        if 'is_primary' in df.columns:
+            prim = df['is_primary'].fillna(True).astype(bool)
+            if prim.any():
+                df, dt = df[prim], dt[prim]
+        out: Dict[str, list] = {}
+        for rid, grp in df.groupby('reach_id'):
+            ms = (dt.loc[grp.index].dropna().astype('int64') // 1_000_000).tolist()
+            ms.sort()
+            if len(ms) > max_per_reach:
+                step = len(ms) // max_per_reach + 1
+                ms = ms[::step]
+            out[_norm_key(rid)] = ms
+        return out
+    except Exception as exc:
+        _log(f"Could not compute per-reach obs dates: {exc}")
+        return {}
+
+
 def get_station_locations(model_config: Dict[str, Any],
                           work_dir: Optional[str] = None,
                           log=None) -> list:
@@ -996,6 +1051,154 @@ def get_model_forcing_period(model_config: Dict[str, Any],
                     "hostmodel": (model_config.get('hostmodel') or 'mizuroute').lower()}
 
     return None
+
+
+def get_lulc_cache_status(model_config: Dict[str, Any],
+                          sim_start: Optional[str] = None,
+                          sim_end: Optional[str] = None,
+                          log=None) -> Optional[Dict[str, Any]]:
+    """Check whether the Copernicus land-cover cache (``lulc_areas_all.csv``)
+    covers every land-cover year available within the simulation period.
+
+    The dynamic source/sink loads are built per simulation year; a cache that
+    holds only one year silently collapses every sim year onto that year (the
+    "all years → 1993" proxy trap).  Returns ``None`` when the check doesn't
+    apply (non-Copernicus SS, or paths missing); otherwise a dict:
+    ``{cache_path, cache_years, available_years, needed_years, missing_years,
+    ok}`` (years are sorted lists).
+    """
+    import re as _re
+    import pandas as pd
+    _log = log or (lambda *a, **k: None)
+    ss_method = (model_config.get('ss_method') or '').lower()
+    if 'copernicus' not in ss_method:
+        return None
+
+    exe = model_config.get('executable_path', '')
+    base = (model_config.get('dir2save_input_files')
+            or (os.path.dirname(os.path.abspath(exe)) if exe else None))
+    if not base:
+        return None
+    ss_dir = os.path.join(base, 'openwq_in', 'ss_copernicus_files')
+    cache = os.path.join(ss_dir, 'lulc_areas_all.csv')
+
+    def _years_in_dir(d, exts):
+        ys = set()
+        try:
+            if d and os.path.isdir(d):
+                for f in os.listdir(d):
+                    if any(f.lower().endswith(e) for e in exts):
+                        m = _re.search(r'(?:19|20)\d{2}', f)
+                        if m:
+                            ys.add(int(m.group(0)))
+        except OSError:
+            pass
+        return ys
+
+    # Years the model COULD use: prefer the source rasters, fall back to the
+    # already-clipped rasters sitting next to the cache.
+    src_dir = model_config.get('ss_method_copernicus_nc_lc_dir')
+    available = (_years_in_dir(src_dir, ('.nc', '.tif'))
+                 or _years_in_dir(os.path.join(ss_dir, 'lulc_clipped_rasters'),
+                                  ('.tif',)))
+
+    def _yr(s):
+        m = _re.search(r'(?:19|20)\d{2}', str(s)) if s else None
+        return int(m.group(0)) if m else None
+    y0, y1 = _yr(sim_start), _yr(sim_end)
+    if y0 and y1 and available:
+        sim_years = set(range(min(y0, y1), max(y0, y1) + 1))
+        # Only years that actually exist in the source are "needed" — sim years
+        # outside the land-cover record legitimately proxy to the nearest year.
+        needed = available & sim_years
+    else:
+        needed = set(available)
+
+    cache_years = set()
+    if os.path.isfile(cache):
+        try:
+            cache_years = {int(y) for y in
+                           pd.read_csv(cache, usecols=['Year'])['Year']
+                             .dropna().unique()}
+        except Exception as exc:
+            _log(f"Could not read {cache}: {exc}")
+            return None
+
+    missing = needed - cache_years
+    return {
+        "cache_path": cache,
+        "cache_years": sorted(cache_years),
+        "available_years": sorted(available),
+        "needed_years": sorted(needed),
+        "missing_years": sorted(missing),
+        "ok": len(missing) == 0,
+    }
+
+
+def regenerate_lulc_cache(model_config: Dict[str, Any],
+                          sim_start: Optional[str] = None,
+                          sim_end: Optional[str] = None,
+                          log=None) -> bool:
+    """Rebuild ``lulc_areas_all.csv`` so it covers all available land-cover
+    years in the simulation period: drops the stale cache + derived nutrient
+    files and re-runs the Copernicus LULC area computation (re-clipping from
+    the source rasters).  Returns True when the rebuilt cache is complete.
+    """
+    _log = log or (lambda *a, **k: print(*a))
+    status = get_lulc_cache_status(model_config, sim_start, sim_end, log=_log)
+    if not status:
+        _log("LULC cache regeneration not applicable.")
+        return False
+    available = status['available_years']
+    if not available:
+        _log("No source land-cover years found to load — check "
+             "ss_method_copernicus_nc_lc_dir.")
+        return False
+
+    # Import the SS driver from the same engine the calibration runs on.
+    try:
+        get_gen_input_driver_module(model_config)   # puts config_support_lib on sys.path
+        import Gen_SS_Driver as _ssd
+    except Exception as exc:
+        _log(f"Could not import Gen_SS_Driver: {exc}")
+        return False
+
+    ss_dir = os.path.dirname(status['cache_path'])
+    openwq_in = os.path.dirname(ss_dir)
+    for fn in ('lulc_areas_all.csv', 'nutrient_loads_pivot.csv',
+               'nutrient_loads_detailed.csv', 'nutrient_loads_summary_by_hru.csv'):
+        try:
+            os.remove(os.path.join(ss_dir, fn))
+        except OSError:
+            pass
+
+    basin_info = model_config.get('ss_method_copernicus_basin_info', {})
+    nc_dir = model_config.get('ss_method_copernicus_nc_lc_dir')
+    y0, y1 = min(available), max(available)
+    # Only the PARENT of ss_config_filepath matters (→ <openwq_in>/ss_copernicus_files).
+    ss_config_filepath = os.path.join(openwq_in, 'ss_regen.json')
+    _log(f"Recomputing LULC areas for {y0}-{y1} from {nc_dir} "
+         "(re-clipping source rasters; this can take a few minutes)…")
+    try:
+        _ssd.calc_copernicus_lulc(
+            ss_config_filepath=ss_config_filepath,
+            ss_method_copernicus_basin_info=basin_info,
+            ss_method_copernicus_nc_lc_dir=nc_dir,
+            ss_method_copernicus_period=[y0, y1],
+            recursive=False,
+            file_pattern='ESACCI-LC-*.nc',
+        )
+    except Exception as exc:
+        _log(f"LULC recompute failed: {exc}")
+        return False
+
+    after = get_lulc_cache_status(model_config, sim_start, sim_end, log=_log)
+    if after and after.get('ok'):
+        _cy = after['cache_years']
+        _log(f"Updated lulc_areas_all.csv now covers {_cy[0]}–{_cy[-1]} "
+             f"({len(_cy)} years).")
+        return True
+    return False
 
 
 def validate_ss_reach_mapping(model_config: Dict[str, Any], log=None) -> Optional[str]:
