@@ -1217,6 +1217,13 @@ def generate_interactive_setup(
         # River/HRU geometry for the interactive selection map (best-effort —
         # the map is simply omitted when the geometry can't be loaded).
         _feat_geojson = _load_targets_geojson(_feat_shp)
+        # Observation-station coordinates → dots on the map (best-effort).
+        try:
+            _station_locs = _ci.get_station_locations(
+                model_config, work_dir=calibration_work_dir)
+        except Exception as _e:
+            logger.warning(f"Could not load station locations: {_e}")
+            _station_locs = []
 
         # Compartments: keys defined in the model config are authoritative;
         # fall back to host-aware defaults when not present.
@@ -1255,6 +1262,7 @@ def generate_interactive_setup(
             feature_geojson=_feat_geojson,
             feature_key=_feat_key,
             sim_window=(_sim_s, _sim_e),
+            station_locations=_station_locs,
         ))
         H.append('</div>')
 
@@ -2577,22 +2585,23 @@ def _load_targets_geojson(shapefile_path: Optional[str]):
 _TARGETS_MAP_TEMPLATE = """
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-/* Legend text in normal black (the coloured square keeps its inline colour;
-   targeting the label only, not its child span, leaves the swatch intact). */
-#targets-reach-map .leaflet-control-layers label{ color:#1a1a2e !important; }
-</style>
 <div style="margin:.1rem 0 .4rem;">
   <div class="hint" style="margin:0 0 .45rem;">
     &#128205; Click a __LABEL__ on the map to add/remove it from
     <strong>Target __LABEL__ IDs</strong> &mdash; the map and list stay in
-    sync. <span style="color:#0066cc;">&#9632;</span> blue = has observations,
-    <span style="color:#9aa3ad;">&#9632;</span> grey = none; use the legend
-    (top-right) to show/hide each group. Unlock the map (&#128274;) to pan/zoom.
+    sync; <strong>click a list row's text</strong> to zoom to it.
+    <span style="color:#0066cc;">&#9632;</span> blue = has observations,
+    <span style="color:#9aa3ad;">&#9632;</span> grey = none,
+    <span style="color:#e63946;">&#9679;</span> red dots = monitoring stations;
+    use the legend (top-right) to show/hide each group. Unlock the map
+    (&#128274;) to pan/zoom.
   </div>
   <div id="targets-reach-map"
     style="height:280px;border:1px solid var(--border);border-radius:10px;
     overflow:hidden;background:#eef1f4;"></div>
+  <div id="targets-map-legend"
+    style="margin-top:.5rem;display:flex;flex-wrap:wrap;gap:.35rem 1rem;
+    align-items:center;font-size:.8rem;color:var(--text,#1a1a2e);"></div>
 </div>
 <script>(function(){
   // The Target-IDs <select> is rendered alongside/after this block in the DOM,
@@ -2678,6 +2687,37 @@ _TARGETS_MAP_TEMPLATE = """
       }
     });
   }
+  function buildLegend(baseLayers, overlayDefs){
+    var host = document.getElementById("targets-map-legend");
+    if(!host) return;
+    host.innerHTML = "";
+    function mk(tag, css){ var e=document.createElement(tag); if(css) e.style.cssText=css; return e; }
+    // Base-map radios (Satellite default).
+    var names = Object.keys(baseLayers);
+    names.forEach(function(name, i){
+      var lab = mk("label","display:inline-flex;gap:.25rem;align-items:center;cursor:pointer;");
+      var inp = mk("input"); inp.type="radio"; inp.name="tml-base"; inp.checked=(i===0);
+      inp.addEventListener("change", function(){
+        names.forEach(function(n){ if(map.hasLayer(baseLayers[n])) map.removeLayer(baseLayers[n]); });
+        baseLayers[name].addTo(map); baseLayers[name].bringToBack();
+      });
+      lab.appendChild(inp); lab.appendChild(document.createTextNode(name));
+      host.appendChild(lab);
+    });
+    host.appendChild(mk("span","width:1px;height:14px;background:var(--border,#ccc);margin:0 .15rem;"));
+    // Overlay checkboxes (reach groups + stations), all on by default.
+    overlayDefs.forEach(function(o){
+      var lab = mk("label","display:inline-flex;gap:.3rem;align-items:center;cursor:pointer;");
+      var inp = mk("input"); inp.type="checkbox"; inp.checked=true;
+      inp.addEventListener("change", function(){
+        if(inp.checked) o.layer.addTo(map); else map.removeLayer(o.layer);
+      });
+      lab.appendChild(inp);
+      if(o.swatch){ var sw=mk("span"); sw.innerHTML=o.swatch; lab.appendChild(sw); }
+      lab.appendChild(document.createTextNode(" " + o.label));
+      host.appendChild(lab);
+    });
+  }
   function init(){
     if(started) return; started=true;
     // Locked by default — exactly like the Simulation Report map.
@@ -2722,20 +2762,33 @@ _TARGETS_MAP_TEMPLATE = """
     new LockCtrl().addTo(map);
     L.control.zoom({position:'topleft'}).addTo(map);
 
-    // Reach layers + legend overlays (clickable show/hide).
-    var overlays = {};
+    // Reach layers + station dots; the legend is built OUTSIDE the map (an
+    // HTML panel below it) so it never overlaps the small map.
+    var overlayDefs = [];
     var PL = P.label_plural || (P.label + "s");
     if(P.have_counts){
       var obsLayer = makeLayer(function(fid){ return countOf(fid)>0; }).addTo(map);
       var noObsLayer = makeLayer(function(fid){ return countOf(fid)<=0; }).addTo(map);
-      overlays['<span style="color:'+COL_OBS+';">&#9632;</span> '+PL+' with observations'] = obsLayer;
-      overlays['<span style="color:'+COL_NOOBS+';">&#9632;</span> '+PL+' without observations'] = noObsLayer;
+      overlayDefs.push({layer:obsLayer, label:PL+' with observations',
+        swatch:'<span style="color:'+COL_OBS+';">&#9632;</span>'});
+      overlayDefs.push({layer:noObsLayer, label:PL+' without observations',
+        swatch:'<span style="color:'+COL_NOOBS+';">&#9632;</span>'});
     } else {
       var allLayer = makeLayer(function(){ return true; }).addTo(map);
-      overlays[PL] = allLayer;
+      overlayDefs.push({layer:allLayer, label:PL, swatch:''});
     }
-    L.control.layers({'Satellite':satTile,'Light':lightTile,'Topo':topoTile},
-                     overlays, {collapsed:false, position:'topright'}).addTo(map);
+    if(P.stations && P.stations.length){
+      var stnLayer = L.layerGroup(P.stations.map(function(s){
+        return L.circleMarker([s.lat, s.lon], {radius:4, fillColor:"#e63946",
+          color:"#fff", weight:1, opacity:1, fillOpacity:.9})
+          .bindTooltip("Station: " + (s.name || ""),
+                       {direction:"top", opacity:.95});
+      })).addTo(map);
+      overlayDefs.push({layer:stnLayer,
+        label:'Observation stations (' + P.stations.length + ')',
+        swatch:'<span style="color:#e63946;">&#9679;</span>'});
+    }
+    buildLegend({Satellite:satTile, Light:lightTile, Topo:topoTile}, overlayDefs);
     try { fitB = L.featureGroup(allFeatures).getBounds(); map.fitBounds(fitB,{padding:[12,12]}); } catch(e){}
     L.control.scale().addTo(map);
     // Re-center control (top-left), matching the Simulation Report glyph.
@@ -2768,10 +2821,98 @@ _TARGETS_MAP_TEMPLATE = """
     setTimeout(ensure, 500);
   }
   sel.addEventListener("change", restyle);
+  // Double-click a list entry -> zoom the map to that reach/HRU.
+  function zoomToFids(fids){
+    var feats = allFeatures.filter(function(l){ return fids.indexOf(l._fid) >= 0; });
+    if(!feats.length || !map) return;
+    try { map.fitBounds(L.featureGroup(feats).getBounds(),
+                        {padding:[20,20], maxZoom:13}); } catch(e){}
+  }
+  // Single-click a checklist row's text to zoom the map: a specific reach
+  // zooms in, the "all" row zooms back out.  Clicking the tick-box itself is
+  // ignored here (it only toggles the calibration target).
+  var _checklist = document.getElementById("rid-checklist");
+  if(_checklist){
+    _checklist.addEventListener("click", function(e){
+      if(e.target && e.target.classList && e.target.classList.contains("rid-cb")) return;
+      ensure();
+      var row = e.target && e.target.closest ? e.target.closest("[data-rid]") : null;
+      if(!row) return;
+      var rid = row.getAttribute("data-rid");
+      if(rid === "all"){ if(map && fitB) map.fitBounds(fitB, {padding:[12,12]}); return; }
+      zoomToFids([normId(rid)]);
+    });
+  }
+  // Clicking the "all" row's text zooms out to the entire region; clicking
+  // its tick-box (the <input>) only ticks every reach (no zoom).
+  var _allRow = document.getElementById("rid-all-row");
+  if(_allRow){
+    _allRow.addEventListener("click", function(e){
+      if(e.target && e.target.tagName === "INPUT") return;
+      ensure();
+      if(map && fitB) map.fitBounds(fitB, {padding:[12,12]});
+    });
+  }
   }
   if(document.readyState === "loading"){
     document.addEventListener("DOMContentLoaded", boot);
   } else { boot(); }
+})();</script>
+"""
+
+
+# Keeps the visible Target-IDs checkbox list in sync with the hidden
+# <select id="reach_ids"> that the run-command builder and the map read.  The
+# select stays the single source of truth; checking/unchecking a box updates it
+# (and fires its change event), and any change to the select (e.g. from a map
+# click) re-ticks the boxes.  Plain string — no Python interpolation needed.
+_RID_CHECKLIST_SYNC_JS = """
+<script>(function(){
+  function boot(){
+    var sel=document.getElementById('reach_ids');
+    var list=document.getElementById('rid-checklist');
+    var master=document.getElementById('rid-all');
+    if(!sel || !list) return;
+    var cbs=[].slice.call(list.querySelectorAll('.rid-cb'));
+    function cbFor(rid){ for(var i=0;i<cbs.length;i++){ if(cbs[i].getAttribute('data-rid')===rid) return cbs[i]; } return null; }
+    function updateMaster(){
+      if(!master) return;
+      var n=0; cbs.forEach(function(c){ if(c.checked) n++; });
+      master.checked=(n>0 && n===cbs.length);
+      master.indeterminate=(n>0 && n<cbs.length);
+    }
+    // Checked boxes are the calibration targets.  All-checked OR none-checked
+    // collapses to "all" (clean run-command, no per-reach map highlight);
+    // a strict subset selects exactly those reaches.
+    function pushToSelect(){
+      var n=0; cbs.forEach(function(c){ if(c.checked) n++; });
+      var allChecked=(n===cbs.length && n>0);
+      [].forEach.call(sel.options,function(o){
+        if(o.value==='all'){ o.selected=allChecked; return; }
+        var c=cbFor(o.value); o.selected = allChecked ? false : (c?c.checked:false);
+      });
+      // n===0 selects nothing; the run-command builder treats an empty
+      // selection as "all" (the safe default), and leaving 'all' unselected
+      // here avoids re-ticking every box via the change listener below.
+      sel.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    cbs.forEach(function(c){ c.addEventListener('change',function(){ updateMaster(); pushToSelect(); }); });
+    if(master){ master.addEventListener('change',function(){
+      var on=master.checked; master.indeterminate=false;
+      cbs.forEach(function(c){ c.checked=on; });
+      pushToSelect();
+    }); }
+    // Select changed elsewhere (e.g. a map click) -> reflect into the boxes.
+    sel.addEventListener('change', function(){
+      var sset={}, allSel=false;
+      [].forEach.call(sel.options,function(o){ if(o.selected){ if(o.value==='all') allSel=true; else sset[o.value]=true; } });
+      cbs.forEach(function(c){ var rid=c.getAttribute('data-rid');
+        c.checked = allSel ? true : !!sset[rid]; });
+      updateMaster();
+    });
+    updateMaster();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
 })();</script>
 """
 
@@ -2789,6 +2930,7 @@ def _build_interactive_targets_section(
     feature_geojson: Optional[Dict[str, Any]] = None,
     feature_key: str = "SegId",
     sim_window: Optional[tuple] = None,
+    station_locations: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """Calibration targets with species checkboxes and observation info.
 
@@ -2871,33 +3013,56 @@ def _build_interactive_targets_section(
         _size = max(3, min(12, _n + 1))
         _total_all = sum(int(c.get("total", 0))
                          for c in reach_obs_counts.values())
+        _total_stn = sum(int(c.get("n_stations", 0))
+                         for c in reach_obs_counts.values())
         _all_lbl = f'&#10003; all ({_n} {_word})'
         if _have_counts:
-            _all_lbl += f' &middot; {_total_inwin} obs in window ({_total_all} total)'
-        _opts = [f'<option value="all" selected '
-                 f'style="font-weight:700;color:var(--primary);">'
-                 f'{_all_lbl}</option>']
+            _all_lbl += (f' &middot; {_total_inwin} obs in window '
+                         f'({_total_all} total) &middot; {_total_stn} stations')
+        # The visible control is a CHECKBOX list (one tick-box per reach/HRU);
+        # it drives a hidden <select> that stays the single source of truth for
+        # the run-command builder + map.  Each ticked box → a calibration
+        # target reach in the objective function.
+        # Rows are <div>s (NOT <label>s): clicking the tick-box toggles the
+        # calibration target, while clicking the TEXT does not — it's reserved
+        # for map interaction (double-click a row's text to zoom to it).
+        _rowcss = ('display:flex;align-items:center;gap:.4rem;white-space:nowrap;'
+                   'padding:.1rem .25rem;border-radius:4px;')
+        _cbcss = 'cursor:pointer;flex:0 0 auto;'
+        _txtcss = 'cursor:zoom-in;'
+        _opts = [f'<option value="all" selected>all</option>']
+        _rows = []
         for _rid in available_reaches:
             _r = html_lib.escape(str(_rid))
             _info = reach_obs_counts.get(str(_rid), {})
             _iw = int(_info.get("in_window", 0))
             _tot = int(_info.get("total", 0))
             if _have_counts:
+                _ns = int(_info.get("n_stations", 0))
                 if _iw or _tot:
                     # Always show the total so the user can see whether ALL of
                     # a reach's observations fall inside the calibration window
-                    # (in-window == total) or only some of them.
-                    _label = f'{_r} &mdash; {_iw} obs in window ({_tot} total)'
+                    # (in-window == total) or only some of them, plus how many
+                    # distinct monitoring stations contribute on this reach.
+                    _stn = f' &middot; {_ns} station' + ('' if _ns == 1 else 's')
+                    _label = (f'{_r} &mdash; {_iw} obs in window '
+                              f'({_tot} total){_stn}')
                 else:
                     _label = f'{_r} &mdash; no obs'
                 # Grey out reaches the metric can't score (no in-window obs).
-                _ostyle = '' if _iw > 0 else ' style="color:var(--text3);"'
+                _rowextra = '' if _iw > 0 else 'color:var(--text3);'
             else:
                 _label = _r
-                _ostyle = ''
+                _rowextra = ''
             _opts.append(
                 f'<option value="{_r}" data-inwin="{_iw}" '
-                f'data-total="{_tot}"{_ostyle}>{_label}</option>')
+                f'data-total="{_tot}">{_r}</option>')
+            _rows.append(
+                f'<div class="rid-row" data-rid="{_r}" '
+                f'style="{_rowcss}{_rowextra}">'
+                f'<input type="checkbox" class="rid-cb" data-rid="{_r}" checked '
+                f'style="{_cbcss}">'
+                f'<span style="{_txtcss}">{_label}</span></div>')
         _avail_badge = (f'{_n} available'
                         + (f' &middot; {_total_inwin} obs in window'
                            if _have_counts else ''))
@@ -2906,21 +3071,51 @@ def _build_interactive_targets_section(
             'the simulated period (what the metric can actually fit).'
             if _have_counts else '')
         reach_field_html = (
-            f'<label for="reach_ids">Target {feature_label} IDs'
+            f'<label for="rid-checklist">Target {feature_label} IDs'
             f'<span style="font-weight:500;font-size:.68rem;color:var(--text3);'
             f'margin-left:.45rem;background:var(--bg);border:1px solid var(--border);'
             f'border-radius:10px;padding:.05rem .45rem;vertical-align:middle;">'
             f'{_avail_badge}</span></label>'
-            f'<select class="form-input" id="reach_ids" multiple size="{_size}" '
-            f'style="height:auto;width:100%;max-width:100%;box-sizing:border-box;'
-            f'white-space:nowrap;overflow-x:auto;'
-            f'font-family:\'JetBrains Mono\',monospace;'
-            f'padding:.3rem;line-height:1.65;">'
+            # Hidden source-of-truth select (read by the run-command builder
+            # and the map sync); the checkboxes below drive it.
+            f'<select id="reach_ids" multiple style="display:none;">'
             f'{"".join(_opts)}</select>'
-            f'<div class="hint">The highlighted <strong>all</strong> option '
-            f'uses every {feat_lower}. To target specific {feat_plural.lower()} '
-            f'instead, Ctrl / Cmd-click to pick one or more (or click them on '
-            f'the map above).{_count_hint}</div>'
+            # Master "all" tick-box lives ABOVE the list; ticking it checks
+            # every reach/HRU box.  The list itself has a distinct (contrasting)
+            # background + border + an always-visible scrollbar so the user can
+            # see there are more rows below.
+            f'<div id="rid-all-row" style="display:flex;align-items:flex-start;'
+            f'gap:.45rem;margin:.1rem 0 .45rem;font-weight:700;'
+            f'color:var(--primary);font-family:\'JetBrains Mono\',monospace;'
+            f'font-size:.8rem;line-height:1.4;">'
+            f'<input type="checkbox" id="rid-all" checked '
+            f'style="cursor:pointer;flex:0 0 auto;margin-top:.15rem;">'
+            f'<span style="cursor:zoom-in;">{_all_lbl}</span></div>'
+            f'<style>'
+            f'#rid-checklist{{background:var(--bg);'
+            f'background:color-mix(in srgb, var(--bg) 30%, var(--surface));'
+            f'box-shadow:inset 0 0 0 1px rgba(127,127,127,.05);'
+            f'overflow-y:scroll;scrollbar-width:thin;'
+            f'scrollbar-color:rgba(127,127,127,.5) transparent;}}'
+            f'[data-theme="dark"] #rid-checklist{{background:rgba(255,255,255,.14);}}'
+            f'#rid-checklist::-webkit-scrollbar{{width:11px;}}'
+            f'#rid-checklist::-webkit-scrollbar-track{{background:rgba(127,127,127,.12);border-radius:6px;}}'
+            f'#rid-checklist::-webkit-scrollbar-thumb{{background:rgba(127,127,127,.45);'
+            f'border-radius:6px;border:2px solid transparent;background-clip:content-box;}}'
+            f'#rid-checklist .rid-row:hover{{background:rgba(127,127,127,.12);}}'
+            f'</style>'
+            f'<div id="rid-checklist" style="height:auto;'
+            f'max-height:13rem;overflow-x:auto;width:100%;max-width:100%;'
+            f'box-sizing:border-box;padding:.3rem;border:1px solid var(--border);'
+            f'border-radius:8px;'
+            f'font-family:\'JetBrains Mono\',monospace;font-size:.8rem;'
+            f'line-height:1.55;">{"".join(_rows)}</div>'
+            f'{_RID_CHECKLIST_SYNC_JS}'
+            f'<div class="hint">Tick a box to use that {feat_lower} as a '
+            f'calibration target; the <strong>all</strong> box above ticks '
+            f'every {feat_lower}. Clicking a reach on the map ticks it too, and '
+            f'<strong>clicking a row\'s text</strong> zooms the map to '
+            f'it.{_count_hint}</div>'
         )
     else:
         reach_field_html = (
@@ -2996,8 +3191,13 @@ def _build_interactive_targets_section(
             "label_plural": feat_plural,
             "have_counts": _have_counts,
             "counts": {str(k): {"in_window": int(v.get("in_window", 0)),
-                                "total": int(v.get("total", 0))}
+                                "total": int(v.get("total", 0)),
+                                "n_stations": int(v.get("n_stations", 0))}
                        for k, v in reach_obs_counts.items()},
+            "stations": [{"lat": float(s["lat"]), "lon": float(s["lon"]),
+                          "name": str(s.get("name", ""))}
+                         for s in (station_locations or [])
+                         if s.get("lat") is not None and s.get("lon") is not None],
         }
         # Guard against an accidental "</script>" inside the embedded JSON.
         _pj = json.dumps(_payload).replace("</", "<\\/")
