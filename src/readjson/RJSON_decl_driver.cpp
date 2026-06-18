@@ -45,6 +45,11 @@ void OpenWQ_readjson::JSON_driver(
     // MASTER FILE
     // Read Master file (read)
     ######################## */
+    // Print progress BEFORE the (potentially slow) file read so the console
+    // shows which step is in progress / where a hang occurs
+    msg_string = "<OpenWQ> MASTER file loading... > " + OpenWQ_wqconfig.get_OpenWQ_masterjson();
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     OpenWQ_readjson::read_JSON_2class(
         OpenWQ_wqconfig,
         OpenWQ_output,

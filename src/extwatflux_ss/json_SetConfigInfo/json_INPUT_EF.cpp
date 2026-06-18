@@ -64,6 +64,10 @@ void OpenWQ_readjson::SetConfigInfo_INPUT_EF(
             errorMsgIdentifier,
             true);
 
+        // Print progress BEFORE the (potentially slow) file read
+        msg_string = "<OpenWQ> EXTERNAL_WATER_FLUXES file loading... > " + input_filepath;
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
         OpenWQ_readjson::read_JSON_2class(
             OpenWQ_wqconfig,
             OpenWQ_output,

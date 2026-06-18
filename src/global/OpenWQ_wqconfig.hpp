@@ -216,9 +216,27 @@ class OpenWQ_wqconfig
         std::unique_ptr<            
             arma::Mat<double>
             > SinkSource_FORC;              // SS
-        std::unique_ptr<            
+        std::unique_ptr<
             arma::Mat<double>
             > ExtFlux_FORC_jsonAscii;       // External fluxes (JSON and ASCII)
+
+        // OPTIMIZED (perf): flat row-major staging buffers used to build the
+        // FORC matrices in a SINGLE allocation instead of growing them one row
+        // at a time with arma::insert_rows (which reallocates+copies the whole
+        // matrix on every call -> O(n^2) for large sink-source files).
+        // Filled by AppendRow_SS_EWF_FORC_jsonAscii(), drained by
+        // Finalize_FORC_jsonAscii() at the end of Set_EWFandSS_driver().
+        std::vector<double> SinkSource_FORC_buffer;
+        std::vector<double> ExtFlux_FORC_jsonAscii_buffer;
+        unsigned int SinkSource_FORC_buffer_ncol = 0;        // columns per staged row
+        unsigned int ExtFlux_FORC_jsonAscii_buffer_ncol = 0; // columns per staged row
+
+        // OPTIMIZED (perf): per-row cached "next apply" time (time_t) so the
+        // per-timestep SS/EWF apply loop can skip not-yet-due rows without
+        // recomputing timegm() for every row at every timestep. Built on the
+        // first timestep in CheckApply_EWFandSS_jsonAscii().
+        std::vector<time_t> SinkSource_FORC_nextTime;
+        std::vector<time_t> ExtFlux_FORC_jsonAscii_nextTime;
         std::unique_ptr<
             std::vector<       
             std::vector<time_t>

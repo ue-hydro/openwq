@@ -34,6 +34,10 @@ void OpenWQ_readjson::SetConfigInfo_CHModule(
     std::string input_module_name;
     std::string input_filepath;
 
+    // Print progress BEFORE configuring this module
+    msg_string = "<OpenWQ> MODULE LOADING: BIOGEOCHEMISTRY...";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     // check if field MODULES exist
     // this field needs to exist
     errorMsgIdentifier = "Master file inside OPENWQ_INPUT";

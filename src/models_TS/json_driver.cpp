@@ -37,6 +37,10 @@ void OpenWQ_readjson::SetConfigInfo_TSModule(
     int sediment_cmp_index;
     int transport_cmp_index;
 
+    // Print progress BEFORE configuring this module
+    msg_string = "<OpenWQ> MODULE LOADING: TRANSPORT_SEDIMENTS...";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     errorMsgIdentifier = "Master file inside OPENWQ_INPUT";
 
     // check if field MODULES exist

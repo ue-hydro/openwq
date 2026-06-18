@@ -16,6 +16,8 @@
 
 #include "OpenWQ_wqconfig.hpp"
 #include "OpenWQ_hostModelConfig.hpp"
+#include <chrono>     // OPTIMIZED (perf): time the thread-local expression build
+#include <iostream>
 
 
 // Constructor
@@ -511,6 +513,21 @@ void OpenWQ_wqconfig::build_thread_local_expressions(
     typedef exprtk::expression<double> expression_t;
     typedef exprtk::parser<double> parser_t;
 
+    // OPTIMIZED (perf): compile the per-thread expression sets IN PARALLEL.
+    // exprtk's parser.compile() is expensive, and this was previously done
+    // serially nthreads x num_expressions times (a multi-second-to-minute
+    // one-time cost before the first timestep). Each loop iteration builds its
+    // own local parser / symbol_table / expression and writes only to its own
+    // per-thread slots ([t]), so the iterations are independent and safe to run
+    // concurrently. Wall time drops from O(nthreads * num_expr * compile) to
+    // ~O(num_expr * compile).
+    std::cout << "<OpenWQ> BGC thread-local expressions building... ("
+              << nthreads << " threads x " << num_expressions << " expr)" << std::endl;
+    const auto _t_build_start = std::chrono::steady_clock::now();
+
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(static)
+    #endif
     for (int t = 0; t < nthreads; t++) {
         // Allocate thread-local data vectors
         nativeFlex->thread_chemass_InTransfEq[t].resize(max_chemass_size, 0.0);
@@ -548,6 +565,12 @@ void OpenWQ_wqconfig::build_thread_local_expressions(
             nativeFlex->thread_BGCexpressions_eq[t][j] = expr;
         }
     }
+
+    const double _t_build_secs = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - _t_build_start).count();
+    std::cout << "<OpenWQ> [perf] thread-local BGC expression build: "
+              << nthreads << " threads x " << num_expressions
+              << " expr compiled in " << _t_build_secs << " s" << std::endl;
 
     nativeFlex->thread_local_ready = true;
 }
