@@ -124,19 +124,24 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_driver(
             }else{
 
                 // Create Message (Warning Message)
-                msg_string = 
-                    "<OpenWQ> WARNING: Unkown data format='" 
+                msg_string =
+                    "<OpenWQ> WARNING: Unkown data format='"
                     + DataFormat
                     + "' in SS or EWF json files > "
                     + " > DATA_FORMAT (only supports JSON, ASCII and HD5F) "
                     + "(entry skipped)";
 
                 // Print it (Console and/or Log file)
-                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true); 
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
             }
         }
     }
+
+    // OPTIMIZED (perf): all JSON/ASCII rows for this inputType have now been
+    // staged in a flat buffer; build the FORC matrix in a single allocation
+    // (see AppendRow_SS_EWF_FORC_jsonAscii / Finalize_FORC_jsonAscii).
+    Finalize_FORC_jsonAscii(OpenWQ_wqconfig, inputType);
 }
 
 
@@ -418,10 +423,20 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
     // Loop over row data in sink-source file
     ######################################## */
 
+    // OPTIMIZED (perf): resolve the "DATA" block once before the loop instead of
+    // doing EWF_SS_json_sub["DATA"] on every row. Combined with
+    // RequestJsonKeyVal_json now taking its argument by const reference, this
+    // removes a full deep-copy of the entire DATA block on every row iteration
+    // (previously O(rows^2) — the dominant sink-source ingestion cost).
+    json EWF_SS_DATA_block;
+    if (DataFormat.compare("JSON")==0){
+        EWF_SS_DATA_block = EWF_SS_json_sub["DATA"];
+    }
+
     for (unsigned int di=0;di<num_rowdata;di++){
-        
+
         // Reset the size to zero (the object will have no elements)
-        row_data_col.reset(); 
+        row_data_col.reset();
 
         // Get row-json di from EWF_SS_json_sub ["DATA"]
         // Only needed for JSON format (ASCII reads from file directly)
@@ -431,7 +446,7 @@ void OpenWQ_extwatflux_ss::Set_EWFandSS_jsonAscii(
                                 + DataFormat;
             EWF_SS_json_sub_rowi = OpenWQ_utils.RequestJsonKeyVal_json(
                 OpenWQ_wqconfig, OpenWQ_output,
-                EWF_SS_json_sub["DATA"], std::to_string(di+1),
+                EWF_SS_DATA_block, std::to_string(di+1),
                 errorMsgIdentifier,
                 true);
         }
@@ -1726,27 +1741,72 @@ void OpenWQ_extwatflux_ss::AppendRow_SS_EWF_FORC_jsonAscii(
     std::string inputType,
     arma::vec row_data_col){
 
-    // Local variables            
-    arma::Mat<double> row_data_row;                     // new row data (initially as col data)
-    int int_n_elem = 0;
+    // OPTIMIZED (perf): stage the row in a flat row-major buffer instead of
+    // calling arma::insert_rows per row. insert_rows reallocates and copies the
+    // entire growing matrix on every call, making ingestion O(n^2) in the number
+    // of rows (minutes for sink-source files with tens of thousands of loads).
+    // The buffer is converted to the FORC matrix in a single allocation by
+    // Finalize_FORC_jsonAscii() once all rows have been read.
+    const unsigned int ncol = row_data_col.n_elem;
 
-    // Transpose vector for adding to SinkSource_FORC as a new row
-    row_data_row = row_data_col.t();
-
-    // Get index of last element
-    if (inputType.compare("ss")==0)     int_n_elem = (*OpenWQ_wqconfig.SinkSource_FORC).n_rows;
-    if (inputType.compare("ewf")==0)    int_n_elem = (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).n_rows;
-    
-    // Add new row_data_row to SinkSource_FORC
-    if (inputType.compare("ss")==0){ 
-        (*OpenWQ_wqconfig.SinkSource_FORC).insert_rows(
-            std::max(int_n_elem-1,0),
-            row_data_row);}
+    if (inputType.compare("ss")==0){
+        OpenWQ_wqconfig.SinkSource_FORC_buffer.insert(
+            OpenWQ_wqconfig.SinkSource_FORC_buffer.end(),
+            row_data_col.begin(), row_data_col.end());
+        OpenWQ_wqconfig.SinkSource_FORC_buffer_ncol = ncol;
+    }
     else if (inputType.compare("ewf")==0){
-        (*OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii).insert_rows(
-            std::max(int_n_elem-1,0),
-            row_data_row);}
-   
+        OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii_buffer.insert(
+            OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii_buffer.end(),
+            row_data_col.begin(), row_data_col.end());
+        OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii_buffer_ncol = ncol;
+    }
+}
+
+// OPTIMIZED (perf): build the FORC matrix from the staged flat buffer in a
+// single allocation. Replaces the previous per-row arma::insert_rows growth.
+void OpenWQ_extwatflux_ss::Finalize_FORC_jsonAscii(
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    std::string inputType){
+
+    // Select the relevant buffer/matrix for this inputType
+    std::vector<double>* buf = nullptr;
+    unsigned int ncol = 0;
+    arma::Mat<double>* mat = nullptr;
+
+    if (inputType.compare("ss")==0){
+        buf  = &OpenWQ_wqconfig.SinkSource_FORC_buffer;
+        ncol = OpenWQ_wqconfig.SinkSource_FORC_buffer_ncol;
+        mat  = OpenWQ_wqconfig.SinkSource_FORC.get();
+    }
+    else if (inputType.compare("ewf")==0){
+        buf  = &OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii_buffer;
+        ncol = OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii_buffer_ncol;
+        mat  = OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii.get();
+    }
+    else { return; }
+
+    // Nothing staged (e.g. EWF provided only via HDF5) -> leave matrix as-is
+    if (buf->empty() || ncol == 0) return;
+
+    const unsigned int nrow = buf->size() / ncol;
+
+    // The buffer is row-major (ncol values per row). Armadillo is column-major,
+    // so interpret the buffer as an (ncol x nrow) matrix (each column = one row)
+    // and transpose once to obtain the desired (nrow x ncol) layout.
+    arma::Mat<double> staged(buf->data(), ncol, nrow);  // copies aux memory
+    arma::Mat<double> staged_t = staged.t();
+
+    if (mat->n_rows == 0){
+        *mat = std::move(staged_t);
+    } else {
+        // Preserve rows already present (defensive; normally the matrix is empty)
+        *mat = arma::join_cols(*mat, staged_t);
+    }
+
+    // Release the staging buffer
+    buf->clear();
+    buf->shrink_to_fit();
 }
 
 // Add new row to SinkSource_FORC or ExtFlux_FORC_jsonAscii

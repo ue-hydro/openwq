@@ -343,7 +343,7 @@ double OpenWQ_utils::RequestJsonKeyVal_double(
 json OpenWQ_utils::RequestJsonKeyVal_json(
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     OpenWQ_output& OpenWQ_output,
-    json json_struct,
+    const json& json_struct,   // OPTIMIZED (perf): by const ref, was by value
     std::string jsonKey,
     std::string msgIndetifier,
     bool abort_flag){
@@ -352,9 +352,17 @@ json OpenWQ_utils::RequestJsonKeyVal_json(
     json jsonVal_json;
     std::string varType = "json/sub-json structure";
 
-    // Try to access json key
-    jsonVal_json = json_struct[jsonKey]; 
-        
+    // Try to access json key.
+    // OPTIMIZED (perf): use find() rather than the non-const operator[]. This
+    // keeps json_struct const (no deep copy of the whole structure on entry),
+    // copies out only the requested sub-json, and — like the previous
+    // operator[] behaviour for the empty() check below — leaves jsonVal_json
+    // empty when the key is absent (find() also avoids inserting a null entry).
+    auto json_it = json_struct.find(jsonKey);
+    if (json_it != json_struct.end()){
+        jsonVal_json = *json_it;
+    }
+
     // If json empty,
     // abort and through error message
     if(jsonVal_json.empty()){

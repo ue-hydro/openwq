@@ -46,6 +46,10 @@ void OpenWQ_readjson::SetConfigInfo_INPUT_general(
         errorMsgIdentifier,
         true);
 
+    // Print progress BEFORE the (potentially slow) file read
+    msg_string = "<OpenWQ> CONFIG file loading... > " + input_filepath;
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     // Save CONFIG_FILEPATH json file and save it to OpenWQ_json.Config
     OpenWQ_readjson::read_JSON_2class(
         OpenWQ_wqconfig,

@@ -16,6 +16,8 @@
 
 #include "headerfile_EWF_SS.hpp"
 #include <algorithm> // for std::upper_bound (OPTIMIZED #11)
+#include <limits>    // for std::numeric_limits (OPTIMIZED: per-row next-apply cache)
+#include <chrono>    // [perf instrumentation] time the run-time SS apply phases
 
 
 /* #################################################
@@ -37,7 +39,26 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
     const unsigned int SEC,                             // current model step: sec
     std::string inputType,                              // flag for SS or EWF
     std::unique_ptr<arma::Mat<double>>& array_FORC){    // array FORC arma (SS or EWF)
-    
+
+    // [perf instrumentation] — measure the run-time SS apply phases
+    const auto _t_func0 = std::chrono::steady_clock::now();
+    const bool _was_tstep1 = OpenWQ_wqconfig.is_tstep1();
+    const unsigned int _rows_before = (*array_FORC).n_rows;
+    double _remove_s = 0.0, _update_s = 0.0;
+
+    const bool is_ss_input = (inputType.compare("ss") == 0);
+
+    // OPTIMIZED (perf): per-row cache of each row's "next apply" time_t. The
+    // apply loop below can then skip rows that are not yet due with a single
+    // integer comparison instead of recomputing timegm() for every row at every
+    // timestep. The cache is (re)built on the first timestep and refreshed
+    // whenever a row is applied/advanced/retired, so the skip is mathematically
+    // identical to the original "if (simTime < jsonTime) continue" test.
+    std::vector<time_t>& nextTimeCache = is_ss_input
+        ? OpenWQ_wqconfig.SinkSource_FORC_nextTime
+        : OpenWQ_wqconfig.ExtFlux_FORC_jsonAscii_nextTime;
+    const time_t NEXTTIME_RETIRED = std::numeric_limits<time_t>::max();
+
     /* ########################################
     // Data update/clean-up at 1st timestep
     // Applicable to both SS and EWF
@@ -45,11 +66,14 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
     if (OpenWQ_wqconfig.is_tstep1()){
 
         // Remove requested loads that are prior to the simulation start datetime
+        const auto _t_rm0 = std::chrono::steady_clock::now();
         RemoveLoadBeforeSimStart_jsonAscii(
             OpenWQ_wqconfig,
             OpenWQ_units,
             array_FORC,
             YYYY, MM, DD, HH, MIN, SEC);
+        const auto _t_rm1 = std::chrono::steady_clock::now();
+        _remove_s = std::chrono::duration<double>(_t_rm1 - _t_rm0).count();
 
         // Update time increments for rows with "all" elements
         UpdateAllElemTimeIncremts(
@@ -58,6 +82,15 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
             OpenWQ_utils,
             OpenWQ_units,
             YYYY, MM, DD, HH, MIN, SEC);
+        _update_s = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - _t_rm1).count();
+
+        // OPTIMIZED (perf): (re)size the per-row next-apply cache now that
+        // pre-simulation rows have been shed. Seed with the minimum time_t so
+        // every row is treated as "due" on this first timestep and gets its real
+        // next-apply time computed and stored below (no fast-skip on tstep 1).
+        nextTimeCache.assign((*array_FORC).n_rows,
+                             std::numeric_limits<time_t>::min());
     }
 
     // Convert sim time to time_t once
@@ -74,7 +107,13 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
 
     const unsigned int num_ewf = OpenWQ_hostModelconfig.get_num_HydroExtFlux();
     const unsigned int num_threads = OpenWQ_wqconfig.get_num_threads_requested();
-    const bool is_ss_input = (inputType.compare("ss") == 0);
+    // is_ss_input computed at the top of the function (reused for the cache)
+
+    // OPTIMIZED (perf): the cache is only trusted once it is sized for the
+    // current FORC (built on tstep1). On the first timestep we recompute every
+    // row's time normally and populate the cache.
+    const bool use_nextTime_cache =
+        (!OpenWQ_wqconfig.is_tstep1()) && (nextTimeCache.size() == num_rowdata);
 
     // Reset all ewf_conc values to ZERO for new time step (parallelized)
     #pragma omp parallel num_threads(num_threads)
@@ -92,10 +131,19 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
     // Process rows sequentially due to potential time-dependent updates
     ######################################## */
 
+    const auto _t_loop0 = std::chrono::steady_clock::now();
+
     for (unsigned int ri = 0; ri < num_rowdata; ri++){
 
         // Skip if row has already been used (not for continuous loads)
         if ((*array_FORC)(ri,14) == -2) continue;
+
+        // OPTIMIZED (perf): fast-skip rows that are not yet due using the cached
+        // next-apply time. Equivalent to the "if (simTime < jsonTime) continue"
+        // test below, but avoids recomputing timegm() for every (mostly future)
+        // row at every timestep. Falls through on the first timestep and applies
+        // the full computation, which (re)populates the cache.
+        if (use_nextTime_cache && simTime < nextTimeCache[ri]) continue;
 
         // ########################################
         // Check if time in array_FORC row ri matches the current model time
@@ -134,7 +182,12 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
             YYYY_json, MM_json, DD_json, HH_json, MIN_json, SEC_json);
 
         // Skip if not time to load yet
-        if (simTime < jsonTime) continue;
+        if (simTime < jsonTime){
+            // OPTIMIZED (perf): cache this row's next-apply time so subsequent
+            // timesteps fast-skip it without recomputing timegm()
+            nextTimeCache[ri] = jsonTime;
+            continue;
+        }
 
         // ########################################
         // Apply source/sink or update EWF concentration
@@ -181,6 +234,8 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
         // Mark as used if no "all" flags
         if (!anyAll_flag) {
             (*array_FORC)(ri,14) = -2;
+            // OPTIMIZED (perf): retired row -> never due again
+            nextTimeCache[ri] = NEXTTIME_RETIRED;
             continue;
         }
 
@@ -248,6 +303,8 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
         // Update or mark as used
         if (addAnyIncrem_flag){
             (*array_FORC)(ri,14) = -2;
+            // OPTIMIZED (perf): retired row -> never due again
+            nextTimeCache[ri] = NEXTTIME_RETIRED;
         }
         else {
             // Update increments (+1 because "all" fields use -1 as flag)
@@ -257,6 +314,36 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
             if (HHall_flag)   (*array_FORC)(ri,17) = HH_json + 1;
             if (MINall_flag)  (*array_FORC)(ri,18) = MIN_json + 1;
             if (SECall_flag)  (*array_FORC)(ri,19) = SEC_json + 1;
+            // OPTIMIZED (perf): cache the advanced next-apply time (matches what
+            // the recompute at the top of the loop would produce next timestep)
+            nextTimeCache[ri] = updated_jsonTime;
+        }
+    }
+
+    // [perf instrumentation] — report timings for the run-time SS apply.
+    // tstep1 line fires once per inputType per first timestep; if it prints many
+    // times it means this routine is being called per-reach (not per-timestep).
+    const double _loop_s = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - _t_loop0).count();
+    const double _call_s = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - _t_func0).count();
+    if (_was_tstep1){
+        std::cout << "<OpenWQ> [perf][SS-runtime] tstep1 " << inputType
+                  << ": rows " << _rows_before << "->" << num_rowdata
+                  << "  remove=" << _remove_s << "s  update=" << _update_s
+                  << "s  applyloop=" << _loop_s << "s" << std::endl;
+    }
+    {
+        static long   _ncalls = 0;
+        static double _acc_call = 0.0;
+        _ncalls++;
+        _acc_call += _call_s;
+        // print the first few calls (catch a slow start / per-reach storm) and
+        // then periodically (per-step rate once warmed up)
+        if (_ncalls <= 6 || (_ncalls % 5000) == 0){
+            std::cout << "<OpenWQ> [perf][SS-runtime] call#" << _ncalls << " (" << inputType
+                      << "): this call=" << _call_s << "s (applyloop=" << _loop_s
+                      << "s)  cumulative=" << _acc_call << "s" << std::endl;
         }
     }
 }

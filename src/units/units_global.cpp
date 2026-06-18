@@ -442,29 +442,40 @@ time_t OpenWQ_units::convertTime_ints2time_t(
 
 
     
-    // Local variables
-    std::time_t sim_time;
-    std::time_t sim_time_since1900;
-    std::tm tm;
-    
-    tm.tm_year = YYYY - 1900; // number of years since unix-epoch 1970
-    tm.tm_mon = MM - 1;
-    tm.tm_hour = HH;
-    tm.tm_mday = DD;
-    tm.tm_min = MIN;
-    tm.tm_sec = SEC;
-    sim_time = timegm(&tm);
+    // OPTIMIZED (perf): compute the UTC time_t with pure integer arithmetic
+    // instead of libc timegm().
+    //
+    // Why: timegm() is comparatively very slow — it runs an internal mktime
+    // search and, in glibc, touches timezone machinery that takes a global lock
+    // (tzset_lock). This routine is called EXTREMELY heavily by the sink-source
+    // run-time apply loop (once per row, and once per second while advancing
+    // "continuous"/"all" loads across a timestep). Live profiling showed the
+    // run pinned inside glibc's time-conversion code, single-threaded and
+    // CPU-bound — this was the dominant run-time cost for large SS files.
+    //
+    // The formula below ("days-from-civil", Howard Hinnant) is exact for the
+    // proleptic Gregorian calendar in UTC and was verified to match timegm()
+    // bit-for-bit across every datetime from 1970–2012. It expects normalized
+    // inputs (MM in [1,12], DD in [1, days-in-month]), which is how every caller
+    // here supplies them. Returns standard Unix time (negative before 1970),
+    // identical to the previous timegm() behaviour.
 
-    // Since the unix time epoch is 1970, which is used as a reference for timegm,
-    // the seconds become negative for years below 1970, 
-    // which will mess up time management.
-    // Thus, the number of seconds since 00:00 1 Jan 1970 GMT, 
-    // which is 2,208,988,800, is added.
-    // This value is saved in OpenWQ_wqconfig.secSinceUnixTimeEpoch).
-    
-    sim_time_since1900 = sim_time;
+    long long y = YYYY;
+    const unsigned m = static_cast<unsigned>(MM);
+    const unsigned d = static_cast<unsigned>(DD);
 
-    return sim_time_since1900;
+    y -= (m <= 2);
+    const long long era = (y >= 0 ? y : y - 399) / 400;
+    const unsigned yoe = static_cast<unsigned>(y - era * 400);            // [0, 399]
+    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;  // [0, 365]
+    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;           // [0, 146096]
+    const long long days = era * 146097 + static_cast<long long>(doe) - 719468;
+
+    return static_cast<time_t>(
+        days * 86400LL
+        + static_cast<long long>(HH) * 3600LL
+        + static_cast<long long>(MIN) * 60LL
+        + static_cast<long long>(SEC));
 }
 
 /* #################################################

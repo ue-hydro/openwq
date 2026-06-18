@@ -33,6 +33,10 @@ void OpenWQ_readjson::SetConfigInfo_TDModule(
     std::string input_module_name;
     std::string input_filepath;
 
+    // Print progress BEFORE configuring this module
+    msg_string = "<OpenWQ> MODULE LOADING: TRANSPORT_DISSOLVED...";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
     // Load OPENWQ_INPUT JSON structure
     errorMsgIdentifier = "Master file";
     jsonMaster_SubStruct = OpenWQ_utils.RequestJsonKeyVal_json(

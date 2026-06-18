@@ -128,10 +128,13 @@ class OpenWQ_utils{
         std::string msgIndetifier,
         bool abort_flag);
 
+    // OPTIMIZED (perf): json_struct taken by const reference (was by value).
+    // Passing by value deep-copies the whole structure on every call, which is
+    // catastrophic when called per-row over a large "DATA" block (O(rows^2)).
     json RequestJsonKeyVal_json(
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         OpenWQ_output& OpenWQ_output,
-        json json_struct,
+        const json& json_struct,
         std::string jsonKey,
         std::string msgIndetifier,
         bool abort_flag);

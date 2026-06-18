@@ -250,6 +250,13 @@ class OpenWQ_extwatflux_ss{
         std::string inputType,
         arma::vec row_data_col);
 
+    // OPTIMIZED (perf): build the FORC matrix from the staged flat buffer in a
+    // single allocation (see AppendRow_SS_EWF_FORC_jsonAscii). Called once per
+    // inputType at the end of Set_EWFandSS_driver().
+    void Finalize_FORC_jsonAscii(
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        std::string inputType);
+
     void AppendCube_SS_EWF_FORC_h5(
         OpenWQ_wqconfig& OpenWQ_wqconfig,
         int h5EWF_request_index,        // get request index
