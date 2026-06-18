@@ -671,10 +671,15 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_openwq")
                 SET(CMAKE_CXX_STANDARD 17)
 
                 IF("${COMPILE_MODE}" STREQUAL "Debug")
-                        SET(CMAKE_Fortran_FLAGS "-g3 -Wall -fmax-errors=0 -fbacktrace -fcheck=all -ffpe-trap=zero -ffree-line-length-none -lstdc++")
+                        # -cpp: run the C preprocessor on the Fortran sources so the
+                        # #if defined(VERSION)/#endif guards in mizuRoute (e.g.
+                        # src/standalone/model_setup.f90) are handled instead of
+                        # emitting "Illegal preprocessor directive" warnings.
+                        SET(CMAKE_Fortran_FLAGS "-g3 -Wall -fmax-errors=0 -fbacktrace -fcheck=all -ffpe-trap=zero -ffree-line-length-none -lstdc++ -cpp")
                         SET(CMAKE_CXX_FLAGS "-g3 -O0 -Wall -pedantic")
                 ELSEIF("${COMPILE_MODE}" STREQUAL "Release")
-                        SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp")
+                        # -cpp: see note in the Debug branch above.
+                        SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp -cpp")
                         # OPTIMIZED #15: Added -march=native, -DARMA_NO_DEBUG, -DNDEBUG, -funroll-loops
                         SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops ${OpenMP_CXX_FLAGS}")
                         FIND_PACKAGE(OpenMP)
@@ -904,10 +909,15 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_openwq")
                 SET(CMAKE_CXX_STANDARD 17)
 
                 IF("${COMPILE_MODE}" STREQUAL "Debug")
-                        SET(CMAKE_Fortran_FLAGS "-g3 -Wall -fmax-errors=0 -fbacktrace -fcheck=all -ffpe-trap=zero -ffree-line-length-none -lstdc++")
+                        # -cpp: run the C preprocessor on the Fortran sources so the
+                        # #if defined(VERSION)/#endif guards in mizuRoute (e.g.
+                        # src/standalone/model_setup.f90) are handled instead of
+                        # emitting "Illegal preprocessor directive" warnings.
+                        SET(CMAKE_Fortran_FLAGS "-g3 -Wall -fmax-errors=0 -fbacktrace -fcheck=all -ffpe-trap=zero -ffree-line-length-none -lstdc++ -cpp")
                         SET(CMAKE_CXX_FLAGS "-g3 -O0 -Wall -pedantic")
                 ELSEIF("${COMPILE_MODE}" STREQUAL "Release")
-                        SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp")
+                        # -cpp: see note in the Debug branch above.
+                        SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp -cpp")
                         # OPTIMIZED #15: Added -march=native, -DARMA_NO_DEBUG, -DNDEBUG, -funroll-loops
                         SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops ${OpenMP_CXX_FLAGS}")
                         FIND_PACKAGE(OpenMP)
@@ -1181,10 +1191,15 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "mizuroute_lakes_cslm_openwq")
                 SET(CMAKE_CXX_STANDARD 17)
 
                 IF("${COMPILE_MODE}" STREQUAL "Debug")
-                        SET(CMAKE_Fortran_FLAGS "-g3 -Wall -fmax-errors=0 -fbacktrace -fcheck=all -ffpe-trap=zero -ffree-line-length-none -lstdc++")
+                        # -cpp: run the C preprocessor on the Fortran sources so the
+                        # #if defined(VERSION)/#endif guards in mizuRoute (e.g.
+                        # src/standalone/model_setup.f90) are handled instead of
+                        # emitting "Illegal preprocessor directive" warnings.
+                        SET(CMAKE_Fortran_FLAGS "-g3 -Wall -fmax-errors=0 -fbacktrace -fcheck=all -ffpe-trap=zero -ffree-line-length-none -lstdc++ -cpp")
                         SET(CMAKE_CXX_FLAGS "-g3 -O0 -Wall -pedantic")
                 ELSEIF("${COMPILE_MODE}" STREQUAL "Release")
-                        SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp")
+                        # -cpp: see note in the Debug branch above.
+                        SET(CMAKE_Fortran_FLAGS "-O3 -fmax-errors=0 -ffree-line-length-none -lstdc++ -fopenmp -cpp")
                         # OPTIMIZED #15: Added -march=native, -DARMA_NO_DEBUG, -DNDEBUG, -funroll-loops
                         SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops ${OpenMP_CXX_FLAGS}")
                         FIND_PACKAGE(OpenMP)
