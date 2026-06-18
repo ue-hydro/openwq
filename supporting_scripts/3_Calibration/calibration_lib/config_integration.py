@@ -806,16 +806,99 @@ def get_observation_counts_by_reach(model_config: Dict[str, Any],
             in_win = (dt >= ws) & (dt <= we)
         else:
             in_win = pd.Series(True, index=df.index)
+        has_src = 'source' in df.columns
         out: Dict[str, Dict[str, int]] = {}
         for rid, grp in df.groupby('reach_id'):
+            gwin = grp[in_win.loc[grp.index]]
             out[_norm_key(rid)] = {
                 "total": int(len(grp)),
                 "in_window": int(in_win.loc[grp.index].sum()),
+                # number of distinct monitoring stations on this reach/HRU
+                # (the obs CSV's ``source`` column identifies the station)
+                "n_stations": int(grp['source'].nunique()) if has_src else 0,
+                "n_stations_in_window": (int(gwin['source'].nunique())
+                                         if has_src else 0),
             }
         return out
     except Exception as exc:
         _log(f"Could not compute per-reach obs counts: {exc}")
         return {}
+
+
+def get_station_locations(model_config: Dict[str, Any],
+                          work_dir: Optional[str] = None,
+                          log=None) -> list:
+    """Observation-station coordinates for the setup-report Targets map.
+
+    Returns a list of ``{"lat": float, "lon": float, "name": str}`` for every
+    monitoring station available to the calibration — read straight from the
+    data the model-config step already clipped (no re-download):
+
+      * ``grqa``     → ``grqa_clipped_stations.csv`` (``lat_wgs84``/``lon_wgs84``)
+      * ``user_csv`` → the user CSV's lat/lon columns (deduplicated by site)
+
+    Best-effort: returns ``[]`` when coordinates can't be found, in which case
+    the map simply omits the station dots.
+    """
+    import pandas as pd
+    _log = log or (lambda *a, **k: None)
+    src = (model_config.get('observation_data_source') or 'skip').strip().lower()
+
+    def _num(s):
+        return pd.to_numeric(s, errors='coerce')
+
+    try:
+        if src == 'grqa':
+            dir2save = model_config.get('dir2save_input_files')
+            if not dir2save:
+                exe = model_config.get('executable_path', '')
+                dir2save = (os.path.dirname(os.path.abspath(exe))
+                            if exe else None)
+            if not dir2save:
+                return []
+            stn_csv = os.path.join(dir2save, 'openwq_in', 'grqa_clipped_data',
+                                   'grqa_clipped_stations.csv')
+            if not os.path.isfile(stn_csv):
+                return []
+            df = pd.read_csv(stn_csv)
+            lat = _num(df.get('lat_wgs84'))
+            lon = _num(df.get('lon_wgs84'))
+            name = (df['site_name'] if 'site_name' in df.columns
+                    else df.get('site_id', pd.Series(['']*len(df))))
+        elif src == 'user_csv':
+            csv_path = model_config.get('user_observation_csv')
+            if not csv_path or not os.path.isfile(csv_path):
+                return []
+            df = pd.read_csv(csv_path)
+            cols = {c.lower(): c for c in df.columns}
+            latc = cols.get('lat') or cols.get('latitude') or cols.get('lat_wgs84')
+            lonc = (cols.get('lon') or cols.get('long') or cols.get('longitude')
+                    or cols.get('lng') or cols.get('lon_wgs84'))
+            if not latc or not lonc:
+                return []
+            namec = (cols.get('site_name') or cols.get('station')
+                     or cols.get('site_id') or cols.get('name'))
+            lat = _num(df[latc]); lon = _num(df[lonc])
+            name = (df[namec] if namec else pd.Series(['']*len(df)))
+            # one marker per distinct station coordinate
+            _d = pd.DataFrame({'lat': lat, 'lon': lon,
+                               'name': name.astype(str)}).dropna(
+                                   subset=['lat', 'lon'])
+            _d = _d.drop_duplicates(subset=['lat', 'lon'])
+            return [{"lat": float(r.lat), "lon": float(r.lon),
+                     "name": str(r.name)} for r in _d.itertuples()]
+        else:
+            return []
+
+        out = []
+        for la, lo, nm in zip(lat, lon, name.astype(str)):
+            if pd.isna(la) or pd.isna(lo):
+                continue
+            out.append({"lat": float(la), "lon": float(lo), "name": str(nm)})
+        return out
+    except Exception as exc:
+        _log(f"Could not read station locations: {exc}")
+        return []
 
 
 def get_model_forcing_period(model_config: Dict[str, Any],
