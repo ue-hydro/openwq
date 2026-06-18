@@ -1183,6 +1183,41 @@ def generate_interactive_setup(
             _feat_key = _spatial.get("river_network_mapping_key") or "SegId"
         _available_reaches = _read_feature_ids(_feat_shp, _feat_key)
 
+        # Per-reach/HRU observation counts within the simulated window — shown
+        # after each id in the Targets tab so the user can see, at a glance,
+        # how much data the metric would actually have to fit at each reach
+        # (and avoid picking a reach whose obs fall outside the run period).
+        #
+        # First-time / from-scratch setup: the counts read the prepared
+        # objective CSV (it carries the matched reach/HRU id), which normally
+        # only exists after a run.  Prepare it up-front here (best-effort,
+        # one-time — skipped if it already exists) by reshaping the GRQA / user
+        # observations the model-config step already clipped (no re-download),
+        # so the counts + map colouring also work on a brand-new project.
+        try:
+            _prep_csv = os.path.join(calibration_work_dir or "",
+                                     "calibration_observations.csv")
+            if (calibration_work_dir and obs_source in ("grqa", "user_csv")
+                    and not os.path.isfile(_prep_csv)):
+                _ci.prepare_calibration_observations_csv(
+                    model_config, calibration_work_dir,
+                    log=lambda *a, **k: None)
+        except Exception as _e:
+            logger.warning(f"Could not pre-prepare observations for counts: {_e}")
+        _sim_p = _ci.get_model_sim_period(model_config)
+        _sim_s = _sim_p.get("sim_start") if _sim_p else None
+        _sim_e = _sim_p.get("sim_end") if _sim_p else None
+        try:
+            _reach_obs_counts = _ci.get_observation_counts_by_reach(
+                model_config, work_dir=calibration_work_dir,
+                target_species=species_list, sim_start=_sim_s, sim_end=_sim_e)
+        except Exception as _e:
+            logger.warning(f"Could not compute per-reach obs counts: {_e}")
+            _reach_obs_counts = {}
+        # River/HRU geometry for the interactive selection map (best-effort —
+        # the map is simply omitted when the geometry can't be loaded).
+        _feat_geojson = _load_targets_geojson(_feat_shp)
+
         # Compartments: keys defined in the model config are authoritative;
         # fall back to host-aware defaults when not present.
         _cc = model_config.get("compartments_and_cells", {})
@@ -1216,6 +1251,10 @@ def generate_interactive_setup(
             available_reaches=_available_reaches,
             available_compartments=_available_compartments,
             selected_compartments=_selected_compartments,
+            reach_obs_counts=_reach_obs_counts,
+            feature_geojson=_feat_geojson,
+            feature_key=_feat_key,
+            sim_window=(_sim_s, _sim_e),
         ))
         H.append('</div>')
 
@@ -2509,6 +2548,234 @@ def _read_feature_ids(shapefile_path: Optional[str],
         return []
 
 
+def _load_targets_geojson(shapefile_path: Optional[str]):
+    """Best-effort load of a reach/HRU shapefile as a WGS84 GeoJSON dict for the
+    Targets-tab selection map.  Reuses the results-report converter so the two
+    maps stay consistent.  Returns ``None`` on any problem (missing file /
+    fiona / shapely) — the caller then renders the list without a map."""
+    if not shapefile_path or not os.path.isfile(shapefile_path):
+        return None
+    try:
+        from .Gen_Calibration_Results_Report import _load_shapefile_as_geojson
+        gj, _bounds = _load_shapefile_as_geojson(shapefile_path)
+        return gj
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning(f"Could not load targets map geometry "
+                       f"from {shapefile_path}: {e}")
+        return None
+
+
+# Interactive reach/HRU selection map for the Targets tab.  Plain string
+# (NOT an f-string) so the embedded JavaScript braces pass through untouched;
+# the caller substitutes the __PAYLOAD__ / __LABEL__ tokens.  Styled to match
+# the "OpenWQ — Simulation Report" map (Gen_Report.py): Esri/Light/Topo base
+# layers, locked-by-default with a lock toggle, a re-center button, scale bar,
+# and an L.control.layers legend whose overlay checkboxes show/hide the blue
+# (has observations) and grey (no observations) reach layers.  On top of that
+# it adds two-way sync with the Target-IDs <select multiple>: click a reach to
+# toggle it in the list, and list edits restyle the map.
+_TARGETS_MAP_TEMPLATE = """
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* Legend text in normal black (the coloured square keeps its inline colour;
+   targeting the label only, not its child span, leaves the swatch intact). */
+#targets-reach-map .leaflet-control-layers label{ color:#1a1a2e !important; }
+</style>
+<div style="margin:.1rem 0 .4rem;">
+  <div class="hint" style="margin:0 0 .45rem;">
+    &#128205; Click a __LABEL__ on the map to add/remove it from
+    <strong>Target __LABEL__ IDs</strong> &mdash; the map and list stay in
+    sync. <span style="color:#0066cc;">&#9632;</span> blue = has observations,
+    <span style="color:#9aa3ad;">&#9632;</span> grey = none; use the legend
+    (top-right) to show/hide each group. Unlock the map (&#128274;) to pan/zoom.
+  </div>
+  <div id="targets-reach-map"
+    style="height:280px;border:1px solid var(--border);border-radius:10px;
+    overflow:hidden;background:#eef1f4;"></div>
+</div>
+<script>(function(){
+  // The Target-IDs <select> is rendered alongside/after this block in the DOM,
+  // so defer setup until the document is parsed — otherwise
+  // getElementById('reach_ids') is null and the sync wiring never attaches.
+  function boot(){
+  var P = __PAYLOAD__;
+  var MAP_ID = "targets-reach-map";
+  var COL_OBS = "#0066cc", COL_NOOBS = "#9aa3ad", COL_SEL = "#ff8c42";
+  function normId(v){
+    var s = String(v==null?"":v).trim();
+    if(/^-?\\d+\\.0+$/.test(s)) return s.replace(/\\.0+$/,"");
+    if(/^-?\\d+$/.test(s)) return s;
+    var f = parseFloat(s);
+    if(!isNaN(f) && f===Math.round(f) && /^-?\\d+(\\.\\d+)?$/.test(s)) return String(Math.round(f));
+    return s;
+  }
+  function whenLeaflet(cb, tries){
+    tries = tries||0;
+    if(window.L){ cb(); return; }
+    if(tries>120) return;
+    setTimeout(function(){ whenLeaflet(cb, tries+1); }, 100);
+  }
+  var sel = document.getElementById("reach_ids");
+  if(!sel || sel.tagName.toLowerCase() !== "select") return;  // text fallback: nothing to sync
+  function selectedSet(){
+    var s = {};
+    Array.prototype.forEach.call(sel.options, function(o){
+      if(o.selected && o.value!=="all") s[normId(o.value)] = true;
+    });
+    return s;
+  }
+  function setOptionSelected(fid, on){
+    Array.prototype.forEach.call(sel.options, function(o){
+      if(o.value==="all"){ if(on && o.selected) o.selected=false; }
+      else if(normId(o.value)===fid){ o.selected=on; }
+    });
+    var any=false;
+    Array.prototype.forEach.call(sel.options, function(o){
+      if(o.selected && o.value!=="all") any=true; });
+    if(!any){ Array.prototype.forEach.call(sel.options, function(o){
+      if(o.value==="all") o.selected=true; }); }
+    sel.dispatchEvent(new Event("change", {bubbles:true}));
+  }
+  var map=null, started=false, fitB=null, allFeatures=[];
+  function countOf(fid){ var c=P.counts[fid]; return c?c.in_window:0; }
+  function baseColor(fid){
+    if(P.have_counts) return countOf(fid)>0 ? COL_OBS : COL_NOOBS;
+    return COL_OBS;
+  }
+  function styleFeat(l){
+    // fillColor / fillOpacity are ignored for line reaches (mizuRoute) but
+    // make HRU polygons (SUMMA) read clearly in blue / grey / orange.
+    var ss = selectedSet(), fid = l._fid;
+    if(ss[fid]) return {color:COL_SEL, weight:5, opacity:1, fillColor:COL_SEL, fillOpacity:0.25};
+    var c = baseColor(fid), noobs = (c===COL_NOOBS);
+    return {color:c, weight:3, opacity:(noobs?0.6:0.85),
+            fillColor:c, fillOpacity:(noobs?0.08:0.18)};
+  }
+  function restyle(){
+    allFeatures.forEach(function(l){ l.setStyle(styleFeat(l)); });
+  }
+  function makeLayer(keepFn){
+    return L.geoJSON(P.geojson, {
+      filter: function(f){ return keepFn(normId((f.properties||{})[P.key])); },
+      style: function(){ return {weight:3}; },
+      onEachFeature: function(f, l){
+        var fid = normId((f.properties||{})[P.key]);
+        l._fid = fid;
+        var c = P.counts[fid];
+        var tip = P.label + " " + fid;
+        if(P.have_counts){
+          tip += " &mdash; " + (c?c.in_window:0) + " obs in window"
+              + (c?(" ("+c.total+" total)"):"");
+        }
+        l.bindTooltip(tip, {sticky:true, opacity:.95});
+        l.on("click", function(){
+          var ss = selectedSet();
+          setOptionSelected(fid, !ss[fid]);
+          restyle();
+        });
+        allFeatures.push(l);
+      }
+    });
+  }
+  function init(){
+    if(started) return; started=true;
+    // Locked by default — exactly like the Simulation Report map.
+    map = L.map(MAP_ID, {
+      zoomControl:false, dragging:false, scrollWheelZoom:false,
+      doubleClickZoom:false, touchZoom:false, boxZoom:false, keyboard:false
+    });
+    var satTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+      attribution:'Esri, Maxar, Earthstar Geographics', maxZoom:19}).addTo(map);
+    var lightTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+      attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:19});
+    var topoTile = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{
+      attribution:'OpenTopoMap', maxZoom:17});
+    // Lock / unlock control (top-left, locked by default).
+    var mapLocked=true;
+    var LockCtrl=L.Control.extend({
+      options:{position:'topleft'},
+      onAdd:function(){
+        var btn=L.DomUtil.create('button','leaflet-bar');
+        btn.style.cssText='width:34px;height:34px;background:#fff;border:none;'
+          +'border-radius:4px;cursor:pointer;font-size:16px;line-height:34px;'
+          +'text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.3);';
+        btn.title='Unlock map'; btn.innerHTML='&#x1F512;';
+        L.DomEvent.disableClickPropagation(btn);
+        btn.addEventListener('click',function(){
+          mapLocked=!mapLocked;
+          if(mapLocked){
+            map.dragging.disable();map.scrollWheelZoom.disable();
+            map.doubleClickZoom.disable();map.touchZoom.disable();
+            map.boxZoom.disable();map.keyboard.disable();
+            btn.innerHTML='&#x1F512;';btn.title='Unlock map';
+          }else{
+            map.dragging.enable();map.scrollWheelZoom.enable();
+            map.doubleClickZoom.enable();map.touchZoom.enable();
+            map.boxZoom.enable();map.keyboard.enable();
+            btn.innerHTML='&#x1F513;';btn.title='Lock map';
+          }
+        });
+        return btn;
+      }
+    });
+    new LockCtrl().addTo(map);
+    L.control.zoom({position:'topleft'}).addTo(map);
+
+    // Reach layers + legend overlays (clickable show/hide).
+    var overlays = {};
+    var PL = P.label_plural || (P.label + "s");
+    if(P.have_counts){
+      var obsLayer = makeLayer(function(fid){ return countOf(fid)>0; }).addTo(map);
+      var noObsLayer = makeLayer(function(fid){ return countOf(fid)<=0; }).addTo(map);
+      overlays['<span style="color:'+COL_OBS+';">&#9632;</span> '+PL+' with observations'] = obsLayer;
+      overlays['<span style="color:'+COL_NOOBS+';">&#9632;</span> '+PL+' without observations'] = noObsLayer;
+    } else {
+      var allLayer = makeLayer(function(){ return true; }).addTo(map);
+      overlays[PL] = allLayer;
+    }
+    L.control.layers({'Satellite':satTile,'Light':lightTile,'Topo':topoTile},
+                     overlays, {collapsed:false, position:'topright'}).addTo(map);
+    try { fitB = L.featureGroup(allFeatures).getBounds(); map.fitBounds(fitB,{padding:[12,12]}); } catch(e){}
+    L.control.scale().addTo(map);
+    // Re-center control (top-left), matching the Simulation Report glyph.
+    var recenterBtn = L.control({position:'topleft'});
+    recenterBtn.onAdd = function(){
+      var div = L.DomUtil.create('div','leaflet-bar leaflet-control');
+      div.innerHTML = '<a href="#" title="Re-center map" style="font-size:18px;'
+        +'line-height:30px;width:30px;height:30px;display:block;text-align:center;'
+        +'text-decoration:none;color:#333">&#8982;</a>';
+      div.firstChild.onclick = function(e){
+        e.preventDefault(); e.stopPropagation();
+        if(fitB) map.fitBounds(fitB,{padding:[12,12]});
+      };
+      return div;
+    };
+    recenterBtn.addTo(map);
+    restyle();
+  }
+  var el = document.getElementById(MAP_ID);
+  function ensure(){ whenLeaflet(function(){
+    init();
+    if(map) setTimeout(function(){ map.invalidateSize(); restyle(); }, 60);
+  }); }
+  if(el && "IntersectionObserver" in window){
+    var io = new IntersectionObserver(function(ents){
+      ents.forEach(function(e){ if(e.isIntersecting) ensure(); });
+    });
+    io.observe(el);
+  } else {
+    setTimeout(ensure, 500);
+  }
+  sel.addEventListener("change", restyle);
+  }
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  } else { boot(); }
+})();</script>
+"""
+
+
 def _build_interactive_targets_section(
     species_list: List[str],
     species_obs_availability: Dict[str, Dict[str, Any]],
@@ -2518,6 +2785,10 @@ def _build_interactive_targets_section(
     available_reaches: Optional[List[str]] = None,
     available_compartments: Optional[List[str]] = None,
     selected_compartments: Optional[List[str]] = None,
+    reach_obs_counts: Optional[Dict[str, Dict[str, int]]] = None,
+    feature_geojson: Optional[Dict[str, Any]] = None,
+    feature_key: str = "SegId",
+    sim_window: Optional[tuple] = None,
 ) -> str:
     """Calibration targets with species checkboxes and observation info.
 
@@ -2584,32 +2855,72 @@ def _build_interactive_targets_section(
     feat_lower = (feature_label or "Reach").lower()
     feat_plural = "Reaches" if feature_label == "Reach" else f"{feature_label}s"
 
+    reach_obs_counts = reach_obs_counts or {}
+    # Do we have real per-reach counts to show?  (Only after the observations
+    # have been spatially matched to reaches — i.e. a prepared CSV exists.)
+    _have_counts = bool(reach_obs_counts)
+    _total_inwin = sum(int(c.get("in_window", 0))
+                       for c in reach_obs_counts.values())
+
     if available_reaches:
         _n = len(available_reaches)
         # Count-aware word so a single feature reads "1 HRU", not "1 HRUs".
         _word = feature_label if _n == 1 else feat_plural
         # Size the list to its contents (+1 for the "all" row), clamped so it's
         # neither a cramped 1-liner nor a tall box full of empty rows.
-        _size = max(3, min(10, _n + 1))
+        _size = max(3, min(12, _n + 1))
+        _total_all = sum(int(c.get("total", 0))
+                         for c in reach_obs_counts.values())
+        _all_lbl = f'&#10003; all ({_n} {_word})'
+        if _have_counts:
+            _all_lbl += f' &middot; {_total_inwin} obs in window ({_total_all} total)'
         _opts = [f'<option value="all" selected '
                  f'style="font-weight:700;color:var(--primary);">'
-                 f'&#10003; all ({_n} {_word})</option>']
+                 f'{_all_lbl}</option>']
         for _rid in available_reaches:
             _r = html_lib.escape(str(_rid))
-            _opts.append(f'<option value="{_r}">{_r}</option>')
+            _info = reach_obs_counts.get(str(_rid), {})
+            _iw = int(_info.get("in_window", 0))
+            _tot = int(_info.get("total", 0))
+            if _have_counts:
+                if _iw or _tot:
+                    # Always show the total so the user can see whether ALL of
+                    # a reach's observations fall inside the calibration window
+                    # (in-window == total) or only some of them.
+                    _label = f'{_r} &mdash; {_iw} obs in window ({_tot} total)'
+                else:
+                    _label = f'{_r} &mdash; no obs'
+                # Grey out reaches the metric can't score (no in-window obs).
+                _ostyle = '' if _iw > 0 else ' style="color:var(--text3);"'
+            else:
+                _label = _r
+                _ostyle = ''
+            _opts.append(
+                f'<option value="{_r}" data-inwin="{_iw}" '
+                f'data-total="{_tot}"{_ostyle}>{_label}</option>')
+        _avail_badge = (f'{_n} available'
+                        + (f' &middot; {_total_inwin} obs in window'
+                           if _have_counts else ''))
+        _count_hint = (
+            ' The number after each ID is how many observations fall inside '
+            'the simulated period (what the metric can actually fit).'
+            if _have_counts else '')
         reach_field_html = (
             f'<label for="reach_ids">Target {feature_label} IDs'
             f'<span style="font-weight:500;font-size:.68rem;color:var(--text3);'
             f'margin-left:.45rem;background:var(--bg);border:1px solid var(--border);'
             f'border-radius:10px;padding:.05rem .45rem;vertical-align:middle;">'
-            f'{_n} available</span></label>'
+            f'{_avail_badge}</span></label>'
             f'<select class="form-input" id="reach_ids" multiple size="{_size}" '
-            f'style="height:auto;font-family:\'JetBrains Mono\',monospace;'
+            f'style="height:auto;width:100%;max-width:100%;box-sizing:border-box;'
+            f'white-space:nowrap;overflow-x:auto;'
+            f'font-family:\'JetBrains Mono\',monospace;'
             f'padding:.3rem;line-height:1.65;">'
             f'{"".join(_opts)}</select>'
             f'<div class="hint">The highlighted <strong>all</strong> option '
             f'uses every {feat_lower}. To target specific {feat_plural.lower()} '
-            f'instead, Ctrl / Cmd-click to pick one or more.</div>'
+            f'instead, Ctrl / Cmd-click to pick one or more (or click them on '
+            f'the map above).{_count_hint}</div>'
         )
     else:
         reach_field_html = (
@@ -2654,6 +2965,108 @@ def _build_interactive_targets_section(
             '<div class="hint">Comma-separated (e.g. RIVER_NETWORK_REACHES)</div>'
         )
 
+    # ── Interactive reach/HRU selection map (best-effort) ──
+    # Slim the GeoJSON to just the mapping-key property so the embedded payload
+    # stays small, then wire it to the Target-IDs <select> for two-way sync.
+    map_html = ""
+    _slim_feats = []
+    if feature_geojson and isinstance(feature_geojson, dict):
+        try:
+            for _f in feature_geojson.get("features", []):
+                _props = _f.get("properties", {}) or {}
+                _kv = _props.get(feature_key)
+                if _kv is None:
+                    _lk = {k.lower(): k for k in _props}
+                    _rk = _lk.get(str(feature_key).lower())
+                    _kv = _props.get(_rk) if _rk else None
+                if _f.get("geometry") is None:
+                    continue
+                _slim_feats.append({
+                    "type": "Feature",
+                    "geometry": _f.get("geometry"),
+                    "properties": {feature_key: ("" if _kv is None else str(_kv))},
+                })
+        except Exception:
+            _slim_feats = []
+    if _slim_feats:
+        _payload = {
+            "geojson": {"type": "FeatureCollection", "features": _slim_feats},
+            "key": feature_key,
+            "label": feature_label,
+            "label_plural": feat_plural,
+            "have_counts": _have_counts,
+            "counts": {str(k): {"in_window": int(v.get("in_window", 0)),
+                                "total": int(v.get("total", 0))}
+                       for k, v in reach_obs_counts.items()},
+        }
+        # Guard against an accidental "</script>" inside the embedded JSON.
+        _pj = json.dumps(_payload).replace("</", "<\\/")
+        map_html = (_TARGETS_MAP_TEMPLATE
+                    .replace("__PAYLOAD__", _pj)
+                    .replace("__LABEL__", html_lib.escape(feature_label)))
+
+    # Layout: when a map is available, the selection area is two columns — map
+    # (left 50%) and the Target-IDs list + Compartment selector (right 50%),
+    # with a draggable splitter between them.  Without a map, fall back to the
+    # original reach | compartment row.
+    if map_html:
+        _selection_body = f"""
+        <div id="tgt-split" style="display:flex;align-items:stretch;flex-wrap:nowrap;gap:0;">
+            <div id="tgt-split-left" style="flex:1 1 0;min-width:0;">
+                {map_html}
+            </div>
+            <div id="tgt-split-bar" title="Drag to resize"
+                 style="flex:0 0 12px;cursor:col-resize;align-self:stretch;
+                 display:flex;align-items:center;justify-content:center;">
+                <div style="width:3px;height:48px;border-radius:3px;
+                     background:var(--border);"></div>
+            </div>
+            <div id="tgt-split-right" style="flex:1 1 0;min-width:0;
+                 display:flex;flex-direction:column;gap:1rem;">
+                <div class="form-group" style="min-width:0;">{reach_field_html}</div>
+                <div class="form-group" style="min-width:0;">{compartment_field_html}</div>
+            </div>
+        </div>
+        <script>(function(){{
+          var C=document.getElementById('tgt-split'),
+              Lc=document.getElementById('tgt-split-left'),
+              Rc=document.getElementById('tgt-split-right'),
+              B=document.getElementById('tgt-split-bar');
+          if(!C||!Lc||!Rc||!B) return;
+          var dragging=false;
+          function onMove(e){{
+            if(!dragging) return;
+            var rect=C.getBoundingClientRect();
+            var x=e.clientX-rect.left, min=200, max=rect.width-212;
+            if(x<min)x=min; if(x>max)x=max;
+            var pct=(x/rect.width)*100;
+            Lc.style.flex='0 0 '+pct+'%';
+            Rc.style.flex='1 1 0';
+            // keep the Leaflet map sized to its new column width
+            window.dispatchEvent(new Event('resize'));
+          }}
+          B.addEventListener('mousedown',function(e){{
+            dragging=true; e.preventDefault();
+            document.body.style.userSelect='none';
+          }});
+          window.addEventListener('mouseup',function(){{
+            if(!dragging) return;
+            dragging=false; document.body.style.userSelect='';
+            window.dispatchEvent(new Event('resize'));
+          }});
+          window.addEventListener('mousemove',onMove);
+        }})();</script>"""
+    else:
+        _selection_body = f"""
+        <div class="form-row">
+            <div class="form-group">
+                {reach_field_html}
+            </div>
+            <div class="form-group">
+                {compartment_field_html}
+            </div>
+        </div>"""
+
     return f"""
 <div class="section" id="targets">
     <h2>Calibration Targets</h2>
@@ -2669,14 +3082,7 @@ def _build_interactive_targets_section(
     </div>
     <div class="card">
         <h3>{feature_label} &amp; Compartment Selection</h3>
-        <div class="form-row">
-            <div class="form-group">
-                {reach_field_html}
-            </div>
-            <div class="form-group">
-                {compartment_field_html}
-            </div>
-        </div>
+        {_selection_body}
     </div>
 </div>
 """

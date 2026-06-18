@@ -190,6 +190,156 @@ class ObjectiveFunction:
                     f"{obs['species'].nunique()} species")
         return obs
 
+    def check_observation_availability(self,
+                                       sim_start=None,
+                                       sim_end=None) -> Dict:
+        """Pre-flight: are there observations the metric can actually score?
+
+        A calibration only yields a usable objective when at least two
+        observations fall within BOTH:
+
+          * the target reaches/HRUs and species — already enforced upstream by
+            :meth:`_load_observations` (so ``self.observations`` is the spatially
+            and species-filtered set), AND
+          * the simulated time window ``[sim_start, sim_end]``.
+
+        Supplying ``sim_start`` / ``sim_end`` catches the classic temporal-
+        mismatch trap: the gauge has data (e.g. 1999-2005) but the model only
+        simulates 1990-1997, so there are no observed-vs-simulated pairs and
+        EVERY evaluation silently returns the failure penalty (1e10).  This
+        check lets the driver abort up front with a clear explanation instead.
+
+        Parameters
+        ----------
+        sim_start, sim_end : str | datetime | None
+            The simulated period.  Strings are parsed with ``pd.to_datetime``.
+            When either is ``None`` the temporal filter is skipped (only
+            spatial/species availability is checked).
+
+        Returns
+        -------
+        Dict
+            ``ok`` (bool), ``headline`` (one-line reason), ``message`` (multi-
+            line, plain-text explanation suitable for the terminal/log),
+            ``n_total``, ``n_in_window``, ``per_reach`` and the resolved
+            ``sim_start`` / ``sim_end``.
+        """
+        obs = self.observations
+
+        ws = pd.to_datetime(sim_start) if sim_start is not None else None
+        we = pd.to_datetime(sim_end) if sim_end is not None else None
+        win_txt = (f"{ws:%Y-%m-%d} -> {we:%Y-%m-%d}"
+                   if (ws is not None and we is not None) else "unknown")
+
+        if self.target_reaches == "all" or not isinstance(self.target_reaches,
+                                                           list):
+            reach_txt = "all reaches with observations"
+        else:
+            reach_txt = ", ".join(str(r) for r in self.target_reaches)
+        species_txt = ", ".join(self.target_species)
+
+        # Case 0 — nothing matches the target species/reaches at all.
+        if obs is None or obs.empty:
+            msg = (
+                "No observations match the calibration targets.\n"
+                f"  Target species  : {species_txt}\n"
+                f"  Target reaches  : {reach_txt}\n"
+                f"  Simulated window: {win_txt}\n\n"
+                "No performance metric (KGE/NSE/RMSE) can be computed. Check "
+                "that the observation CSV contains these species and that the "
+                "target reach/HRU IDs match the observation 'reach_id' column "
+                "(spatial matching)."
+            )
+            return {
+                "ok": False,
+                "headline": "no observations match the target species/reaches",
+                "message": msg,
+                "n_total": 0, "n_in_window": 0, "per_reach": {},
+                "sim_start": str(sim_start) if sim_start else None,
+                "sim_end": str(sim_end) if sim_end else None,
+            }
+
+        # Per-reach breakdown (total vs. inside the simulated window).
+        dts = pd.to_datetime(obs['datetime'], errors='coerce')
+        if ws is not None and we is not None:
+            in_win_mask = (dts >= ws) & (dts <= we)
+        else:
+            in_win_mask = pd.Series(True, index=obs.index)
+
+        per_reach = {}
+        n_in_window = 0
+        for rid, grp in obs.groupby('reach_id'):
+            gmask = in_win_mask.loc[grp.index]
+            n_win = int(gmask.sum())
+            gdt = pd.to_datetime(grp['datetime'], errors='coerce').dropna()
+            per_reach[str(rid)] = {
+                "total": int(len(grp)),
+                "in_window": n_win,
+                "obs_start": gdt.min().strftime('%Y-%m-%d') if len(gdt) else "-",
+                "obs_end": gdt.max().strftime('%Y-%m-%d') if len(gdt) else "-",
+            }
+            n_in_window += n_win
+
+        n_total = int(len(obs))
+        # KGE/NSE/RMSE need >=2 paired points to be meaningful.
+        ok = n_in_window >= 2
+
+        if ok:
+            headline = f"{n_in_window} observation(s) inside the simulated window"
+            msg = (
+                f"OK: {n_in_window} of {n_total} target observation(s) fall "
+                f"inside the simulated window ({win_txt}).\n"
+                f"  Target species : {species_txt}\n"
+                f"  Target reaches : {reach_txt}"
+            )
+            return {"ok": True, "headline": headline, "message": msg,
+                    "n_total": n_total, "n_in_window": n_in_window,
+                    "per_reach": per_reach,
+                    "sim_start": (ws.strftime('%Y-%m-%d %H:%M')
+                                  if ws is not None else None),
+                    "sim_end": (we.strftime('%Y-%m-%d %H:%M')
+                                if we is not None else None)}
+
+        # Not OK — obs exist for the targets but (almost) none overlap the run.
+        lines = [
+            f"    reach {rid}: {info['in_window']} in-window / "
+            f"{info['total']} total (obs span {info['obs_start']} ... "
+            f"{info['obs_end']})"
+            for rid, info in sorted(per_reach.items())
+        ]
+        if n_in_window == 0:
+            why = ("NONE of them fall inside the simulated time window, so "
+                   "there are no observed-vs-simulated pairs")
+        else:
+            why = (f"only {n_in_window} observation(s) fall inside the "
+                   "simulated window (at least 2 are needed to compute a "
+                   "metric)")
+        headline = "observations exist but do not overlap the simulated period"
+        msg = (
+            "The target reach(es)/species have observations, but "
+            f"{why}. No metric (KGE/NSE/RMSE) can be computed and every "
+            "evaluation would return the failure penalty.\n\n"
+            f"  Target species  : {species_txt}\n"
+            f"  Target reaches  : {reach_txt}\n"
+            f"  Simulated window: {win_txt}\n"
+            f"  Obs on target reaches (total): {n_total}\n"
+            f"  Obs inside the window        : {n_in_window}\n\n"
+            "  Per-reach availability:\n" + "\n".join(lines) + "\n\n"
+            "Fix one of the following, then re-run:\n"
+            "  1. Extend the simulation period (control-file <sim_start> / "
+            "<sim_end>, or the calibration window) to cover the observation "
+            "dates above - make sure the model forcing also covers it; or\n"
+            "  2. Target a reach/HRU whose observations fall inside the "
+            "simulated window."
+        )
+        return {"ok": False, "headline": headline, "message": msg,
+                "n_total": n_total, "n_in_window": n_in_window,
+                "per_reach": per_reach,
+                "sim_start": (ws.strftime('%Y-%m-%d %H:%M')
+                              if ws is not None else None),
+                "sim_end": (we.strftime('%Y-%m-%d %H:%M')
+                            if we is not None else None)}
+
     def compute(self,
                 output_dir: Path,
                 units: str = "MG/L") -> float:

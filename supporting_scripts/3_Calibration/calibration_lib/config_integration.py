@@ -733,6 +733,91 @@ def get_model_sim_period(model_config: Dict[str, Any],
     return None
 
 
+def get_observation_counts_by_reach(model_config: Dict[str, Any],
+                                    work_dir: Optional[str] = None,
+                                    target_species: Optional[list] = None,
+                                    sim_start: Optional[str] = None,
+                                    sim_end: Optional[str] = None,
+                                    log=None) -> Dict[str, Dict[str, int]]:
+    """Per-reach / per-HRU observation counts for the setup-report Targets tab.
+
+    Reads the already-prepared objective CSV
+    (``<work_dir>/calibration_observations.csv`` — the same primary/secondary-
+    flagged data the metric scores) and returns, for each reach/HRU id, how
+    many observations exist in total and how many fall inside the simulated
+    window ``[sim_start, sim_end]``.
+
+    Counts use the PRIMARY observations only (when the ``is_primary`` column is
+    present) so they reflect exactly what the objective function will score by
+    default — mirroring ``ObjectiveFunction.use_primary_only=True``.
+
+    Returns
+    -------
+    Dict[str, Dict[str, int]]
+        ``{reach_id_str: {"total": int, "in_window": int}}``.  Returns an empty
+        dict when no prepared CSV with a ``reach_id`` column is available (the
+        caller then simply omits per-reach counts — they only exist after the
+        observations have been spatially matched to reaches).
+
+    Notes
+    -----
+    Keys are normalised so a float id like ``740457350.0`` becomes
+    ``"740457350"`` — matching the reach/HRU option values the setup report
+    renders from the shapefile.
+    """
+    import pandas as pd
+    _log = log or (lambda *a, **k: None)
+
+    def _norm_key(v):
+        try:
+            f = float(v)
+            return str(int(f)) if f == int(f) else str(f)
+        except (TypeError, ValueError):
+            return str(v).strip()
+
+    df = None
+    try:
+        if work_dir:
+            prep = os.path.join(work_dir, 'calibration_observations.csv')
+            if os.path.isfile(prep):
+                df = pd.read_csv(prep)
+    except Exception as exc:
+        _log(f"Could not read prepared obs CSV for reach counts: {exc}")
+        df = None
+    if (df is None or 'reach_id' not in df.columns
+            or 'datetime' not in df.columns):
+        return {}
+
+    try:
+        dt = pd.to_datetime(df['datetime'], errors='coerce')
+        # Filter to the target species (if given).
+        if target_species and 'species' in df.columns:
+            keep = df['species'].astype(str).isin(
+                [str(s) for s in target_species])
+            df, dt = df[keep], dt[keep]
+        # Prefer primary obs — what the metric scores by default.
+        if 'is_primary' in df.columns:
+            prim = df['is_primary'].fillna(True).astype(bool)
+            if prim.any():
+                df, dt = df[prim], dt[prim]
+        ws = pd.to_datetime(sim_start) if sim_start else None
+        we = pd.to_datetime(sim_end) if sim_end else None
+        if ws is not None and we is not None:
+            in_win = (dt >= ws) & (dt <= we)
+        else:
+            in_win = pd.Series(True, index=df.index)
+        out: Dict[str, Dict[str, int]] = {}
+        for rid, grp in df.groupby('reach_id'):
+            out[_norm_key(rid)] = {
+                "total": int(len(grp)),
+                "in_window": int(in_win.loc[grp.index].sum()),
+            }
+        return out
+    except Exception as exc:
+        _log(f"Could not compute per-reach obs counts: {exc}")
+        return {}
+
+
 def get_model_forcing_period(model_config: Dict[str, Any],
                              log=None) -> Optional[Dict[str, Any]]:
     """Return the ACTUAL forcing-data availability window (host-readable).

@@ -523,6 +523,50 @@ def run_calibration(
         logger.error("=" * 60)
         raise RuntimeError("Pre-flight check failed - " + _pf_msg.splitlines()[0])
 
+    # ── Pre-flight: observation availability ────────────────────────────
+    # Even with a valid executable + obs file, a calibration is futile if no
+    # observation overlaps BOTH the target reaches/HRUs AND the simulated time
+    # window.  Without this guard every evaluation silently returns the failure
+    # penalty (1e10) — the user only discovers the temporal mismatch after a
+    # whole run (hours).  Resolve the window the runs will actually simulate
+    # (explicit calibration window if set, else the model's declared
+    # <sim_start>/<sim_end>) and check ONCE, up front.
+    _cp = kwargs.get("calibration_period")
+    if _cp and len(_cp) == 2 and _cp[0] and _cp[1]:
+        _win_start, _win_end = _cp[0], _cp[1]
+    else:
+        _win_start = _win_end = None
+        if model_config is not None:
+            try:
+                _mp = _cint.get_model_sim_period(model_config, log=logger.debug)
+                if _mp:
+                    _win_start, _win_end = _mp["sim_start"], _mp["sim_end"]
+            except Exception:
+                pass  # fall through to a window-less (spatial-only) check
+    try:
+        _obs_chk = obj_func.check_observation_availability(_win_start, _win_end)
+    except Exception as _e:  # never let the guard itself crash the run
+        logger.warning(f"Observation-availability check skipped: {_e}")
+        _obs_chk = {"ok": True}
+    if not _obs_chk.get("ok", True):
+        _msg = _obs_chk.get("message", "")
+        logger.error("=" * 60)
+        logger.error("PRE-FLIGHT CHECK FAILED - no usable observations for "
+                     "the performance metric.")
+        for _ln in _msg.splitlines():
+            logger.error("  " + _ln)
+        logger.error("=" * 60)
+        # Print to the terminal too, so it's seen even when console logging is
+        # quiet (the file handler above always captures it as well).
+        _banner = "=" * 72
+        print("\n" + _banner, file=sys.stderr)
+        print("OPENWQ CALIBRATION ABORTED - no usable observations", file=sys.stderr)
+        print(_banner, file=sys.stderr)
+        print(_msg, file=sys.stderr)
+        print(_banner + "\n", file=sys.stderr)
+        raise RuntimeError(
+            "No usable observations - " + _obs_chk.get("headline", "see log"))
+
     # ── Interim (partial) results report ────────────────────────────────
     # Lets the user open the <stem>_results_report.html WHILE the run is still
     # going — it renders whatever is available so far (influential parameters
