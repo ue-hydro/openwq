@@ -61,6 +61,7 @@ class ModelRunner:
                  hostmodel: str = "",
                  calibration_work_dir: str = None,
                  calibration_period: Optional[Tuple[str, str]] = None,
+                 total_evaluations: int = None,
                  timeout_seconds: int = 7200):
         """
         Initialize model runner.
@@ -119,6 +120,13 @@ class ModelRunner:
         # low and avoids OOM kills (openWQ holds its output in RAM).
         self.calibration_period = calibration_period
         self.timeout_seconds = timeout_seconds
+        # Calibration-progress tracking for the per-eval ETA lines printed after
+        # each spinner finishes: wall-clock start, total planned evaluations,
+        # and a running count of completed evaluations (incremented per model
+        # run, both spinner and parallel paths, so the rate is accurate).
+        self._calib_total = total_evaluations
+        self._calib_t0 = time.time()
+        self._calib_done = 0
 
         # Reference size (bytes) of a COMPLETED evaluation's openWQ output,
         # used to estimate live % progress.  openWQ writes the SAME set of
@@ -359,8 +367,11 @@ class ModelRunner:
             logger.info(
                 f"Running openWQ simulation ({label}) — this is the long step; "
                 f"the model writes no per-timestep console output.")
-            return subprocess.run(cmd, capture_output=True, text=True,
-                                  timeout=self.timeout_seconds)
+            try:
+                return subprocess.run(cmd, capture_output=True, text=True,
+                                      timeout=self.timeout_seconds)
+            finally:
+                self._calib_done += 1
 
         # We own the live line: print a static intro, then animate below it.
         sys.stdout.write(
@@ -414,8 +425,9 @@ class ModelRunner:
         finally:
             done.set()
             th.join(timeout=1.0)
+            self._calib_done += 1
             # Erase the animated spinner line, then — on a clean finish — print
-            # how long this model run took so the duration stays in the log.
+            # how long this model run took plus cumulative/ETA progress.
             sys.stdout.write("\r" + " " * 72 + "\r")
             if _ok:
                 _el = int(time.time() - _t0)
@@ -424,8 +436,27 @@ class ModelRunner:
                 _dur = (f"{_hh:d}:{_mm:02d}:{_ss:02d}" if _hh
                         else f"{_mm:02d}:{_ss:02d}")
                 sys.stdout.write(
-                    f"\033[92m  ✔ {label} finished in {_dur}"
+                    f"\033[1;93m  ✔ {label} finished in {_dur}"
                     f"{' (h:mm:ss)' if _hh else ' (mm:ss)'}\033[0m\n")
+                # Cumulative elapsed + ETA for the whole calibration, from the
+                # average wall-time per completed eval (rate-based, so it holds
+                # for sequential AND parallel runs).
+                if self._calib_total and self._calib_done > 0:
+                    _cum = time.time() - self._calib_t0
+                    _rem = max(0, self._calib_total - self._calib_done)
+                    _eta = _rem * _cum / self._calib_done
+                    _fin = time.strftime(
+                        '%Y-%m-%d %H:%M', time.localtime(time.time() + _eta))
+                    sys.stdout.write(
+                        f"\033[1;93m  ✔ Cumulative elapsed time is {_cum:.0f} sec"
+                        f"  ({self._calib_done}/{self._calib_total} evals)"
+                        f"\033[0m\n")
+                    sys.stdout.write(
+                        f"\033[1;93m  ✔ Expected complete time in "
+                        f"{_eta / 3600:.1f} hours\033[0m\n")
+                    sys.stdout.write(
+                        f"\033[1;93m  ✔ Expected complete date/hour: {_fin}"
+                        f"\033[0m\n")
             sys.stdout.flush()
             try:
                 _SPINNER_LOCK.release()

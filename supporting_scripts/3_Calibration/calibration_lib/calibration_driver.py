@@ -462,6 +462,9 @@ def run_calibration(
         # eval's control file is rewritten to simulate only this window —
         # keeps runtime + memory low and avoids OOM kills.
         calibration_period=kwargs.get("calibration_period"),
+        # Total planned evaluations — drives the cumulative-elapsed + ETA
+        # progress lines printed after each eval's spinner finishes.
+        total_evaluations=max_evaluations,
     )
 
     # H5 reader path for objective function
