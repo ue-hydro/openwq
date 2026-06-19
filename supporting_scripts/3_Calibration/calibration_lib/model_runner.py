@@ -22,6 +22,7 @@ Executes OpenWQ model in Docker or Apptainer containers.
 """
 
 import subprocess
+import sys
 import os
 import time
 import threading
@@ -32,6 +33,13 @@ import logging
 import shutil
 
 logger = logging.getLogger(__name__)
+
+# Only ONE evaluation may own the live single-line "simulating" spinner at a
+# time: during the parallel sensitivity stage several evals run at once and
+# would otherwise clobber each other's \r-rewritten terminal line.  A process-
+# wide non-blocking lock lets the first eval animate while the others run
+# quietly (they still log a plain "running" line).
+_SPINNER_LOCK = threading.Lock()
 
 
 class ModelRunner:
@@ -193,7 +201,64 @@ class ModelRunner:
 
         Returns ``(ok, message)``; ``message`` is empty when ok.
         """
+        # ── Container-runtime vs machine mismatch ───────────────────────────
+        # Stop the WHOLE run (not just fail every eval) when the runtime chosen
+        # in the setup report isn't available on THIS machine but the other one
+        # is: e.g. "Apptainer" selected but launched on a local Docker Mac, or
+        # "Docker" selected but launched on an HPC node that only ships
+        # Apptainer/Singularity.  Without this the run dies on the first
+        # container call (or crashes cryptically every eval) with no clear cause.
+        docker_ok = shutil.which("docker") is not None
+        apptainer_ok = (shutil.which("apptainer")
+                        or shutil.which("singularity")) is not None
+
+        if self.runtime == "docker" and not docker_ok:
+            if apptainer_ok:
+                return False, (
+                    "Container-runtime MISMATCH: the setup report selected "
+                    "DOCKER, but this machine has Apptainer/Singularity and no "
+                    "`docker` command (this looks like an HPC node). Set "
+                    "container_runtime = \"apptainer\" in the setup report's "
+                    "Execution tab (with the .sif + bind paths) and regenerate "
+                    "the run script.")
+            return False, (
+                "container_runtime is 'docker' but no `docker` command was "
+                "found on this machine. Start/install Docker, or switch "
+                "container_runtime to the runtime available here.")
+
+        if self.runtime == "apptainer" and not apptainer_ok:
+            if docker_ok:
+                return False, (
+                    "Container-runtime MISMATCH: the setup report selected "
+                    "APPTAINER, but this machine has Docker and no "
+                    "`apptainer`/`singularity` command (this looks like a local "
+                    "Docker machine). Set container_runtime = \"docker\" in the "
+                    "setup report's Execution tab and regenerate the run "
+                    "script.")
+            return False, (
+                "container_runtime is 'apptainer' but no `apptainer` or "
+                "`singularity` command was found on this machine. Install "
+                "Apptainer/Singularity, or switch container_runtime to the "
+                "runtime available here.")
+
         if self.runtime == "apptainer":
+            # A missing bind path is the #1 way a LOCAL user trips the HPC
+            # path: the setup report's Execution tab left container_runtime on
+            # "apptainer" (with no bind/sif set), so every eval would dispatch
+            # to _run_apptainer and crash in <1 s on `":" in None` with the
+            # opaque "argument of type 'NoneType' is not iterable", silently
+            # scoring the 1e10 penalty for the whole run.  Catch it here.
+            if not self.apptainer_bind_path:
+                return False, (
+                    "container_runtime is 'apptainer' but apptainer_bind_path "
+                    "is not set.\n"
+                    "  - For a LOCAL run on this machine, set "
+                    "container_runtime = \"docker\" in the run script "
+                    "(or pick Docker in the setup report's Execution tab).\n"
+                    "  - For an HPC run, set the Apptainer bind path "
+                    "(host:container, e.g. \"/scratch/me/proj:/code\") in the "
+                    "setup report's Execution tab and regenerate the run "
+                    "script.")
             sif = self.apptainer_sif_path
             if sif and not os.path.exists(sif):
                 return False, (
@@ -246,6 +311,13 @@ class ModelRunner:
             else:
                 return False, 0.0, f"Unknown runtime: {self.runtime}"
         except Exception as e:
+            # [diagnostic] The short message alone (e.g. "argument of type
+            # 'NoneType' is not iterable") doesn't say WHERE it failed; log the
+            # full traceback so the exact file:line is visible in the terminal.
+            import traceback
+            logger.error(
+                f"run_single_evaluation crashed for eval {eval_id} "
+                f"(before/at model launch):\n{traceback.format_exc()}")
             return False, time.time() - start_time, str(e)
 
         elapsed = time.time() - start_time
@@ -260,6 +332,84 @@ class ModelRunner:
                 f.write(f"error: {error}\n")
 
         return success, elapsed, error
+
+    def _run_model_subprocess(self, cmd, eval_dir):
+        """Run the (blocking) model command, showing a live single-line spinner
+        on a TTY so the user can see the model is still simulating.
+
+        The container run captures all model output (``capture_output=True``),
+        so the terminal would otherwise sit silent for the whole simulation —
+        which reads as "frozen".  This animates a spinner + elapsed time (+ a
+        rough % from the growing HDF5 output) until the run returns.
+
+        Drop-in for ``subprocess.run``: returns the ``CompletedProcess`` and
+        lets ``subprocess.TimeoutExpired`` propagate, so each caller's existing
+        result handling and timeout ``except`` block work unchanged.  Falls
+        back to a plain run (with one log line) when stdout is not a TTY
+        (HPC/batch logs) or when another eval already owns the spinner line
+        (parallel sensitivity stage)."""
+        label = Path(eval_dir).name  # e.g. "eval_0001"
+        try:
+            is_tty = sys.stdout.isatty()
+        except Exception:
+            is_tty = False
+
+        use_spinner = is_tty and _SPINNER_LOCK.acquire(blocking=False)
+        if not use_spinner:
+            logger.info(
+                f"Running openWQ simulation ({label}) — this is the long step; "
+                f"the model writes no per-timestep console output.")
+            return subprocess.run(cmd, capture_output=True, text=True,
+                                  timeout=self.timeout_seconds)
+
+        # We own the live line: print a static intro, then animate below it.
+        sys.stdout.write(
+            f"\033[96m  ▶ openWQ is simulating {label} inside the container "
+            f"— no per-timestep output, this is the long step.\033[0m\n")
+        sys.stdout.flush()
+
+        done = threading.Event()
+
+        def _animate():
+            frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+            t0 = time.time()
+            i = 0
+            while not done.wait(0.15):
+                el = int(time.time() - t0)
+                mm, ss = divmod(el, 60)
+                pct = ""
+                try:
+                    ref = self._ref_output_bytes
+                    if ref:
+                        cur = self._openwq_out_bytes(eval_dir)
+                        if cur > 0:
+                            p = max(1, min(99, int(100 * cur / ref)))
+                            pct = f"  ~{p}%"
+                except Exception:
+                    pass
+                frame = frames[i % len(frames)]
+                i += 1
+                sys.stdout.write(
+                    f"\r\033[96m  {frame}\033[0m simulating … "
+                    f"{mm:02d}:{ss:02d}{pct}   ")
+                sys.stdout.flush()
+
+        th = threading.Thread(target=_animate, daemon=True)
+        th.start()
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                    timeout=self.timeout_seconds)
+        finally:
+            done.set()
+            th.join(timeout=1.0)
+            # Erase the animated line so the next log line starts clean.
+            sys.stdout.write("\r" + " " * 72 + "\r")
+            sys.stdout.flush()
+            try:
+                _SPINNER_LOCK.release()
+            except RuntimeError:
+                pass
+        return result
 
     def _run_docker(self,
                     eval_dir: Path,
@@ -355,12 +505,7 @@ class ModelRunner:
         logger.debug(f"Docker command: {' '.join(cmd)}")
 
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout_seconds
-            )
+            result = self._run_model_subprocess(cmd, eval_dir)
 
             # Save output
             log_file = eval_dir / "model_output.log"
@@ -398,7 +543,14 @@ class ModelRunner:
 
         Creates a new container instance per evaluation to enable parallelism.
         """
-        # Parse bind path
+        # Parse bind path.  preflight() already rejects a missing bind path
+        # before any eval runs; guard here too so a direct/bypassed call fails
+        # with a clear message instead of an opaque "NoneType is not iterable".
+        if not self.apptainer_bind_path:
+            return False, (
+                "apptainer_bind_path is not set - set it in the setup report's "
+                "Execution tab, or use container_runtime='docker' for a local "
+                "run.")
         if ":" in self.apptainer_bind_path:
             host_path, container_path = self.apptainer_bind_path.split(":", 1)
         else:
@@ -497,12 +649,7 @@ class ModelRunner:
         logger.debug(f"Apptainer command: {' '.join(cmd)}")
 
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout_seconds
-            )
+            result = self._run_model_subprocess(cmd, eval_dir)
 
             # Save output
             log_file = eval_dir / "model_output.log"
