@@ -732,7 +732,11 @@ def extract_all_module_parameters(
                     f"SS_COP_scale_{sp_clean}",
                     species=sp,
                     initial=1.0,
-                    bounds=(0.1, 100.0),
+                    # Load multiplier range kept physically plausible: a very
+                    # large multiplier (e.g. 45-100x) both runs the model far
+                    # slower (huge in-stream loads stiffen the solver) and
+                    # scores poorly, so it only wastes long evaluations.
+                    bounds=(0.1, 10.0),
                     description=f"Load scaling factor for {sp}"))
         else:
             # Fallback: use custom coefficient species if ss_load_species
@@ -752,7 +756,7 @@ def extract_all_module_parameters(
                                     f"SS_COP_scale_{sp_clean}",
                                     species=sp,
                                     initial=1.0,
-                                    bounds=(0.1, 100.0),
+                                    bounds=(0.1, 10.0),
                                     description=f"Load scaling factor for {sp}"))
 
         # Climate response params (dynamic SS only)

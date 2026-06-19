@@ -918,6 +918,10 @@ def run_calibration(
         n = len(points_opt)
         objs = [1e10] * n
         n_par = max(1, int(n_parallel or 1))
+        # For DDS parallel chains the optimizer hands us exactly one candidate
+        # per chain per call, in chain order → the position IS the chain id.
+        # Tag it so mid-run partial reports can also draw one path per chain.
+        _is_chains = algorithm in ("DDS_PARALLEL", "PARALLEL_DDS")
 
         for chunk_start in range(0, n, n_par):
             chunk = list(range(chunk_start, min(chunk_start + n_par, n)))
@@ -993,6 +997,7 @@ def run_calibration(
                     "objective": float(obj_val),
                     "parameters": {nm: float(v) for nm, v
                                    in zip(param_names, params_real)},
+                    "chain": (int(idx) if _is_chains else None),
                 })
             _partial_report(in_progress=True, throttle=20.0)
 
@@ -1094,11 +1099,14 @@ def run_calibration(
     with open(results_dir / "best_parameters.json", 'w') as f:
         json.dump(best_params_real, f, indent=2)
 
-    # Save calibration history in the format expected by ResultsAnalyzer
-    # result.history entries are tuples: (eval_num, objective, params_array)
+    # Save calibration history in the format expected by ResultsAnalyzer.
+    # Entries are (eval_num, objective, params_array) for DDS/RANDOM, or
+    # (eval_num, objective, params_array, chain_id) for ParallelDDS — the
+    # trailing chain id (None otherwise) lets the report draw one path/chain.
     calibration_history = []
     for entry in result.history:
-        eval_num, objective, params_array = entry  # Unpack tuple
+        eval_num, objective, params_array = entry[0], entry[1], entry[2]
+        chain = entry[3] if len(entry) > 3 else None
         hist_entry = {
             "eval_id": int(eval_num),
             "objective": float(objective),
@@ -1108,6 +1116,7 @@ def run_calibration(
                     zip(param_names, params_array))
             },
             "timestamp": 0,
+            "chain": (int(chain) if chain is not None else None),
         }
         calibration_history.append(hist_entry)
 

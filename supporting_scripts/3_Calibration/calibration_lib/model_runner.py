@@ -374,19 +374,28 @@ class ModelRunner:
             frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
             t0 = time.time()
             i = 0
+            pct = ""
+            last_poll = 0.0
             while not done.wait(0.15):
-                el = int(time.time() - t0)
+                now = time.time()
+                el = int(now - t0)
                 mm, ss = divmod(el, 60)
-                pct = ""
-                try:
-                    ref = self._ref_output_bytes
-                    if ref:
+                # Recompute the % from the on-disk output only every few
+                # SECONDS, not every frame.  The scan (rglob + stat) hits the
+                # filesystem — on a Docker-for-Mac bind mount that is slow and
+                # would contend with the container writing its output if done
+                # 6-7x/s.  The spinner glyph + elapsed clock still update every
+                # frame; only the (cosmetic) % polls slowly.
+                if self._ref_output_bytes and (now - last_poll) >= 5.0:
+                    last_poll = now
+                    try:
                         cur = self._openwq_out_bytes(eval_dir)
                         if cur > 0:
-                            p = max(1, min(99, int(100 * cur / ref)))
+                            p = max(1, min(99,
+                                    int(100 * cur / self._ref_output_bytes)))
                             pct = f"  ~{p}%"
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
                 frame = frames[i % len(frames)]
                 i += 1
                 sys.stdout.write(

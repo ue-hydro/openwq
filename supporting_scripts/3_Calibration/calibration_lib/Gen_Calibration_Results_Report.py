@@ -996,11 +996,29 @@ def _build_param_evolution_section(
             history, parameters, output_dir
         )
 
+    # When the run used DDS parallel chains, note how the budget was split and
+    # that each coloured path is one chain.
+    _chain_ids = sorted({h["chain"] for h in history
+                         if isinstance(h.get("chain"), int)})
+    chains_note = ""
+    if len(_chain_ids) > 1:
+        _per = {}
+        for h in history:
+            c = h.get("chain")
+            if isinstance(c, int):
+                _per[c] = _per.get(c, 0) + 1
+        _ev_each = min(_per.values()) if _per else 0
+        chains_note = (
+            f' <strong style="color:var(--text);">DDS parallel chains:</strong> '
+            f'{len(_chain_ids)} independent chains (~{_ev_each} evaluations each)'
+            f' &mdash; each coloured path is one chain; the best parameter set'
+            f' is taken across all of them.')
+
     return f"""
 <div class="section" id="param-evolution">
     <h2>Parameter Evolution</h2>
     <p style="color:var(--text2);margin-bottom:1rem;">
-        How each parameter changed across calibration evaluations.
+        How each parameter changed across calibration evaluations.{chains_note}
     </p>
     {plot_html}
 </div>
@@ -1985,22 +2003,57 @@ def _generate_convergence_plot(
                 'Results&nbsp;Summary</a>.</p></div>')
 
     best_idx = objectives.index(min(objectives))
-    traces = [
-        {"type": "scatter", "mode": "markers", "x": evals, "y": objectives,
-         "name": "All evaluations",
-         "marker": {"size": 6, "color": "#4d9ee8", "opacity": 0.55},
-         "hovertemplate": "eval %{x}<br>objective %{y:.4f}<extra></extra>"},
-        {"type": "scatter", "mode": "lines", "x": evals, "y": best_so_far,
-         "name": "Best so far", "line": {"color": "#10b981", "width": 2.5}},
-        {"type": "scatter", "mode": "markers", "x": [evals[best_idx]],
-         "y": [objectives[best_idx]],
-         "name": f"Best: {objectives[best_idx]:.4f}",
-         "marker": {"size": 16, "color": "#fb923c", "symbol": "star",
-                    "line": {"color": "#fff", "width": 1}}},
-    ]
+
+    # Parallel-chain runs: one running-best line PER chain (so you can see each
+    # chain converge and which one won), over a faint cloud of all evaluations.
+    chain_ids = sorted({h["chain"] for h in history
+                        if isinstance(h.get("chain"), int)})
+    has_chains = len(chain_ids) > 1
+    _PAL = ["#4d9ee8", "#fb923c", "#10b981", "#a78bfa", "#ef4444", "#14b8a6",
+            "#f59e0b", "#ec4899", "#6366f1", "#84cc16", "#06b6d4", "#f43f5e"]
+
+    if has_chains:
+        traces = [{
+            "type": "scatter", "mode": "markers", "x": evals, "y": objectives,
+            "name": "All evaluations", "showlegend": False,
+            "marker": {"size": 5, "color": "#9aa5b1", "opacity": 0.30},
+            "hovertemplate": "eval %{x}<br>objective %{y:.4f}<extra></extra>"}]
+        for ci, cid in enumerate(chain_ids):
+            pts = sorted((h.get("eval_id", 0),
+                          h.get("objective", h.get("best_objective", 0)))
+                         for h in history if h.get("chain") == cid)
+            cb, xs, ys = float("inf"), [], []
+            for e, o in pts:
+                if o < cb:
+                    cb = o
+                xs.append(e)
+                ys.append(cb)
+            traces.append({
+                "type": "scatter", "mode": "lines", "x": xs, "y": ys,
+                "name": f"Chain {cid + 1}",
+                "line": {"color": _PAL[ci % len(_PAL)], "width": 2},
+                "hovertemplate": (f"Chain {cid + 1}<br>eval %{{x}}<br>"
+                                  f"best %{{y:.4f}}<extra></extra>")})
+    else:
+        traces = [
+            {"type": "scatter", "mode": "markers", "x": evals, "y": objectives,
+             "name": "All evaluations",
+             "marker": {"size": 6, "color": "#4d9ee8", "opacity": 0.55},
+             "hovertemplate": "eval %{x}<br>objective %{y:.4f}<extra></extra>"},
+            {"type": "scatter", "mode": "lines", "x": evals, "y": best_so_far,
+             "name": "Best so far", "line": {"color": "#10b981", "width": 2.5}},
+        ]
+    # Global best star (both modes).
+    traces.append({
+        "type": "scatter", "mode": "markers", "x": [evals[best_idx]],
+        "y": [objectives[best_idx]],
+        "name": f"Best: {objectives[best_idx]:.4f}",
+        "marker": {"size": 16, "color": "#fb923c", "symbol": "star",
+                   "line": {"color": "#fff", "width": 1}}})
     layout = {"title": {"text": "Calibration Convergence"},
               "xaxis": {"title": "Evaluation Number"},
               "yaxis": {"title": f"Objective ({obj_fn})"},
+              "showlegend": True,
               "hovermode": "closest"}
     return _plotly_chart(_plot_id("conv"), traces, layout, height=430)
 
@@ -2012,34 +2065,74 @@ def _generate_param_evolution_plots(
 ) -> str:
     """Interactive parameter-evolution chart with a dropdown to pick the
     parameter; shows its sampled value per evaluation plus its initial value
-    and bounds as reference lines."""
+    and bounds as reference lines.  For DDS parallel-chain runs each parameter
+    is drawn as ONE coloured line per chain (Chain 1, Chain 2, …)."""
     if not parameters:
         return ""
 
-    traces, names, metas = [], [], []
+    # Detect a parallel-chain run: each evaluation may carry a 'chain' id.
+    chain_ids = sorted({h["chain"] for h in history
+                        if isinstance(h.get("chain"), int)})
+    has_chains = len(chain_ids) > 1
+    _PAL = ["#4d9ee8", "#fb923c", "#10b981", "#a78bfa", "#ef4444", "#14b8a6",
+            "#f59e0b", "#ec4899", "#6366f1", "#84cc16", "#06b6d4", "#f43f5e"]
+
+    # One "group" of traces per parameter; a group is N chain-lines (parallel
+    # run) or a single line (sequential).  group_sizes drives the dropdown.
+    traces, names, metas, group_sizes = [], [], [], []
     for i, param in enumerate(parameters):
         pname = param.get("name", f"param_{i}")
-        ev, vals = [], []
+        recs = []  # (eval_id, value, chain)
         for h in history:
             pd_ = h.get("parameters", {})
             if pname in pd_:
-                ev.append(h.get("eval_id", len(ev)))
-                vals.append(pd_[pname])
-        if not vals:
+                recs.append((h.get("eval_id", len(recs)), pd_[pname],
+                             h.get("chain")))
+        if not recs:
+            continue
+        first_param = (len(group_sizes) == 0)
+        added = 0
+        if has_chains:
+            for ci, cid in enumerate(chain_ids):
+                ev = [r[0] for r in recs if r[2] == cid]
+                vals = [r[1] for r in recs if r[2] == cid]
+                if not vals:
+                    continue
+                col = _PAL[ci % len(_PAL)]
+                traces.append({
+                    "type": "scatter", "mode": "markers+lines",
+                    "x": ev, "y": vals, "name": f"Chain {cid + 1}",
+                    "visible": first_param, "legendgroup": f"chain{cid}",
+                    "marker": {"size": 5, "color": col},
+                    "line": {"width": 1, "color": col},
+                    "hovertemplate": (f"Chain {cid + 1}<br>eval %{{x}}<br>"
+                                      f"%{{y:.5g}}<extra></extra>")})
+                added += 1
+        else:
+            ev = [r[0] for r in recs]
+            vals = [r[1] for r in recs]
+            traces.append({
+                "type": "scatter", "mode": "markers+lines", "x": ev, "y": vals,
+                "name": pname, "visible": first_param,
+                "marker": {"size": 6, "color": "#4d9ee8"},
+                "line": {"width": 1, "color": "#4d9ee8"},
+                "hovertemplate": "eval %{x}<br>%{y:.5g}<extra></extra>"})
+            added += 1
+        if added == 0:
             continue
         names.append(pname)
         metas.append({"initial": param.get("initial"),
                       "bounds": param.get("bounds")})
-        traces.append({
-            "type": "scatter", "mode": "markers+lines", "x": ev, "y": vals,
-            "name": pname, "visible": (len(traces) == 0),
-            "marker": {"size": 6, "color": "#4d9ee8"},
-            "line": {"width": 1, "color": "#4d9ee8"},
-            "hovertemplate": "eval %{x}<br>%{y:.5g}<extra></extra>"})
+        group_sizes.append(added)
     if not traces:
         return ""
 
     n = len(traces)
+    # First trace index of each parameter group (for dropdown toggling).
+    starts, _acc = [], 0
+    for g in group_sizes:
+        starts.append(_acc)
+        _acc += g
 
     def _shapes_for(i):
         sh = []
@@ -2061,10 +2154,13 @@ def _generate_param_evolution_plots(
 
     buttons = []
     for i, pname in enumerate(names):
+        vis = [False] * n
+        for t in range(starts[i], starts[i] + group_sizes[i]):
+            vis[t] = True
         lbl = pname if len(pname) <= 34 else pname[:16] + "…" + pname[-14:]
         buttons.append({
             "label": lbl, "method": "update",
-            "args": [{"visible": [j == i for j in range(n)]},
+            "args": [{"visible": vis},
                      {"yaxis": {"title": pname}, "shapes": _shapes_for(i)}]})
 
     layout = {
@@ -2072,7 +2168,7 @@ def _generate_param_evolution_plots(
         "xaxis": {"title": "Evaluation"},
         "yaxis": {"title": names[0]},
         "shapes": _shapes_for(0),
-        "showlegend": False,
+        "showlegend": has_chains,
         "hovermode": "closest",
         "updatemenus": [{
             "buttons": buttons, "direction": "down", "showactive": True,
