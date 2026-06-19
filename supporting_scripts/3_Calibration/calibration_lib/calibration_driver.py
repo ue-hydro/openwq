@@ -452,11 +452,11 @@ def run_calibration(
 
     # H5 reader path for objective function
     if base_model_config_dir:
-        h5_reader_path = str(Path(base_model_config_dir).parent / "Read_Outputs" / "hdf5_support_lib")
+        h5_reader_path = str(Path(base_model_config_dir).parent / "2_Read_Outputs" / "hdf5_support_lib")
     else:
         # Derive from this file's location
         _this_dir = Path(__file__).resolve().parent
-        h5_reader_path = str(_this_dir.parent.parent / "Read_Outputs" / "hdf5_support_lib")
+        h5_reader_path = str(_this_dir.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
 
     # Get temporal resolution settings from kwargs
     temporal_resolution = kwargs.get("temporal_resolution", "native")
@@ -1639,10 +1639,10 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
     )
 
     if kwargs.get('base_model_config_dir'):
-        h5_reader_path = str(Path(kwargs['base_model_config_dir']).parent / "Read_Outputs" / "hdf5_support_lib")
+        h5_reader_path = str(Path(kwargs['base_model_config_dir']).parent / "2_Read_Outputs" / "hdf5_support_lib")
     else:
         _this_dir = Path(__file__).resolve().parent
-        h5_reader_path = str(_this_dir.parent.parent / "Read_Outputs" / "hdf5_support_lib")
+        h5_reader_path = str(_this_dir.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
 
     # Get temporal resolution settings
     temporal_resolution = kwargs.get("temporal_resolution", "native")
