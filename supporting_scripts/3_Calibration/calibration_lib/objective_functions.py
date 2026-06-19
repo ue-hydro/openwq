@@ -371,6 +371,11 @@ class ObjectiveFunction:
         # Extract simulated values
         simulated = self._extract_simulated(output_dir, units)
 
+        # Keep the full simulated series (all target species at the target
+        # reaches, including species that have NO observations) so the results
+        # report can still plot a simulated-only time series for them.
+        self._last_simulated = simulated
+
         if simulated.empty:
             logger.warning("No simulated values extracted - returning penalty")
             return 1e10
@@ -950,6 +955,15 @@ class ObjectiveFunction:
         """
         if hasattr(self, '_last_matched_data'):
             return self._last_matched_data.copy()
+        return pd.DataFrame()
+
+    def get_simulated_data(self) -> pd.DataFrame:
+        """Return the full simulated series from the most recent ``compute``
+        (all target species at the target reaches, including species that have
+        NO observations).  Lets the report draw a simulated-only time series
+        for objective species that lack observations at the target reach(es)."""
+        if hasattr(self, '_last_simulated') and self._last_simulated is not None:
+            return self._last_simulated.copy()
         return pd.DataFrame()
 
     def get_temporal_resolution_info(self) -> Dict:

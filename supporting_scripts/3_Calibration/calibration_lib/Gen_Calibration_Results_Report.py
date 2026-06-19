@@ -1179,7 +1179,32 @@ def _build_calibrated_timeseries_section(
         _has_pairs = (matched_data is not None
                       and getattr(matched_data, "empty", True) is False)
 
-    if not _has_pairs:
+    # Load the persisted full simulated series so objective species with NO
+    # observations at the target reach still get a simulated-only plot.
+    _sim_all = None
+    _of_species = []
+    _simonly = []
+    try:
+        import os as _os, pandas as _pd
+        _of_species = [str(s) for s in
+                       ((settings or {}).get("calibration_targets") or {}).get(
+                           "species", [])]
+        _sim_csv = _os.path.join(str(output_dir), "results",
+                                 "simulated_data.csv")
+        if _os.path.isfile(_sim_csv):
+            _sim_all = _pd.read_csv(_sim_csv)
+        _matched_sp = set()
+        if _has_pairs and "species" in matched_data.columns:
+            _matched_sp = {str(s) for s in matched_data["species"].unique()}
+        if (_sim_all is not None and not _sim_all.empty
+                and "species" in _sim_all.columns):
+            _sim_sp = {str(s) for s in _sim_all["species"].unique()}
+            _simonly = [s for s in (_of_species or sorted(_sim_sp))
+                        if s not in _matched_sp and s in _sim_sp]
+    except Exception:
+        _sim_all = None
+
+    if not _has_pairs and not _simonly:
         _n = n_evals if isinstance(n_evals, int) and n_evals > 0 else 0
         _eval_txt = (f"across the {_n} evaluation(s)" if _n
                      else "in this run")
@@ -1207,9 +1232,11 @@ def _build_calibrated_timeseries_section(
     import pandas as pd
 
     hostmodel = (model_config.get("hostmodel") or "mizuroute")
-    # Interactive (Plotly) obs-vs-sim time series + scatter, per species.
+    # Interactive (Plotly) obs-vs-sim time series + scatter, per species; plus
+    # a simulated-only series for objective species with no obs at the reach.
     plots_html = _generate_timeseries_charts(
-        matched_data, output_dir, hostmodel=hostmodel)
+        matched_data, output_dir, hostmodel=hostmodel,
+        simulated_data=_sim_all, of_species=_of_species)
     if not plots_html:
         return ""
 
@@ -2521,23 +2548,34 @@ def _generate_performance_plots(
 
 
 def _generate_timeseries_charts(matched_data, output_dir,
-                                hostmodel: str = "mizuroute") -> str:
+                                hostmodel: str = "mizuroute",
+                                simulated_data=None, of_species=None) -> str:
     """Interactive (Plotly) observed-vs-simulated time series + obs-vs-sim
     scatter, one block per calibrated species.  Each reach/HRU is a legend
-    entry the user can toggle; the mode-bar provides SVG export."""
+    entry the user can toggle; the mode-bar provides SVG export.
+
+    Objective species that have simulated output but NO observations at the
+    target reach(es) get a simulated-only time series with a clear note (so a
+    selected species is never silently missing from the report)."""
     try:
         import pandas as pd
     except ImportError:
         return ""
-    if not isinstance(matched_data, pd.DataFrame) or matched_data.empty:
+    _has_matched = (isinstance(matched_data, pd.DataFrame)
+                    and not matched_data.empty)
+    _has_sim = (isinstance(simulated_data, pd.DataFrame)
+                and not simulated_data.empty)
+    if not _has_matched and not _has_sim:
         return ""
 
     _is_summa = (hostmodel or "").lower() == "summa"
     feat_label = "HRU" if _is_summa else "Reach"
     feat_label_plural = "HRUs" if _is_summa else "reaches"
-    has_reach = 'reach_id' in matched_data.columns
-    species_list = (matched_data['species'].unique()
-                    if 'species' in matched_data.columns else [])
+    has_reach = _has_matched and 'reach_id' in matched_data.columns
+    species_list = (list(matched_data['species'].unique())
+                    if _has_matched and 'species' in matched_data.columns
+                    else [])
+    matched_species = {str(s) for s in species_list}
     blocks = []
 
     for species in species_list:
@@ -2616,6 +2654,67 @@ def _generate_timeseries_charts(matched_data, output_dir,
             f'<div style="flex:1 1 520px;min-width:300px;">{c1}</div>'
             f'<div style="flex:1 1 360px;min-width:280px;">{c2}</div>'
             f'</div></div>')
+
+    # ── Simulated-only blocks for objective species lacking observations ──
+    # (e.g. NH4-N selected for the OF but no obs at the target reach).
+    if _has_sim and of_species:
+        _sim_has_reach = 'reach_id' in simulated_data.columns
+        for species in of_species:
+            if str(species) in matched_species:
+                continue  # already shown with observations above
+            sp = simulated_data[
+                simulated_data['species'].astype(str) == str(species)]
+            if sp.empty:
+                continue
+            if _sim_has_reach:
+                reach_ids = sorted(sp['reach_id'].dropna().unique(),
+                                   key=lambda x: (str(type(x).__name__), x))
+            else:
+                reach_ids = [None]
+            ts_traces = []
+            for rid in reach_ids:
+                rd = sp if rid is None else sp[sp['reach_id'] == rid]
+                if rd.empty:
+                    continue
+                if 'datetime' in rd.columns:
+                    rd = rd.sort_values('datetime')
+                    x = [str(v) for v in pd.to_datetime(rd['datetime'])]
+                else:
+                    x = list(range(len(rd)))
+                sim = [None if v != v else float(v) for v in rd['simulated']]
+                label = f'{feat_label} {rid}' if rid is not None else 'all'
+                ts_traces.append({
+                    "type": "scatter", "mode": "lines", "x": x, "y": sim,
+                    "name": f"sim · {label}", "line": {"width": 1.5},
+                    "hovertemplate":
+                        "%{x|%Y-%m-%d}<br>sim %{y:.4g}<extra></extra>"})
+            if not ts_traces:
+                continue
+            _reach_txt = ", ".join(str(r) for r in reach_ids if r is not None)
+            ts_layout = {
+                "title": {"text": f"{species} — simulated (no observations)"},
+                "xaxis": {"title": "Date"},
+                "yaxis": {"title": "Concentration"},
+                "hovermode": "closest", "showlegend": len(reach_ids) <= 25}
+            c1 = _plotly_chart(_plot_id("tsonly"), ts_traces, ts_layout,
+                               height=440, card=False)
+            note = (
+                f'<div style="margin:.2rem 0 .7rem;padding:.55rem .75rem;'
+                f'border-radius:8px;background:rgba(245,158,11,.12);'
+                f'border-left:4px solid #f59e0b;font-size:.85rem;'
+                f'color:var(--text);line-height:1.5;">'
+                f'<strong style="color:#d97706;">&#9888; No observation '
+                f'data</strong> for <code>{html_lib.escape(str(species))}</code>'
+                f' at the target {feat_label_plural} '
+                f'({html_lib.escape(_reach_txt) or "—"}). Showing the '
+                f'<strong>simulated</strong> series only &mdash; this species '
+                f'did <strong>not</strong> contribute to the calibration '
+                f'objective (nothing to match against here).</div>')
+            blocks.append(
+                f'<div class="card">'
+                f'<h3 style="margin:.2rem 0 .7rem;">'
+                f'{html_lib.escape(str(species))} &mdash; simulated only</h3>'
+                f'{note}<div>{c1}</div></div>')
 
     return "\n".join(blocks)
 
