@@ -750,6 +750,16 @@ def run_calibration(
                     _md.to_csv(_results_dir / "matched_data.csv", index=False)
             except Exception:
                 pass
+            # Persist the FULL simulated series (all objective species at the
+            # target reaches, incl. species with no obs) so the report can plot
+            # a simulated-only time series for them.
+            try:
+                _sd = obj_func.get_simulated_data()
+                if _sd is not None and not _sd.empty:
+                    _results_dir.mkdir(parents=True, exist_ok=True)
+                    _sd.to_csv(_results_dir / "simulated_data.csv", index=False)
+            except Exception:
+                pass
             # Persist the machine-readable snapshot (authoritative state for
             # on-demand regeneration via the run-script's --report flag).
             _write_live_snapshot(_results_dir, _cr, _cs, in_progress)
@@ -1177,6 +1187,16 @@ def run_calibration(
             # Save matched data for basin report aggregation
             matched_data.to_csv(
                 results_dir / "matched_data.csv", index=False)
+
+        # Save the full simulated series (all objective species at the target
+        # reaches, including those with no observations) so the report can plot
+        # a simulated-only time series for objective species that lack obs.
+        try:
+            _sim_all = obj_func.get_simulated_data()
+            if _sim_all is not None and not _sim_all.empty:
+                _sim_all.to_csv(results_dir / "simulated_data.csv", index=False)
+        except Exception as _e:
+            logger.debug(f"Could not persist simulated_data.csv: {_e}")
 
         # Generate comprehensive HTML report
         logger.info("Generating HTML calibration report...")
