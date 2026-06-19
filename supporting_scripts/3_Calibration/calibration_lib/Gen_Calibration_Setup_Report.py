@@ -2116,8 +2116,13 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
         <h3>Optimization algorithm</h3>
         <div class="form-row">
             {rh.build_form_select("algorithm", "Algorithm",
-                ["DDS", "RANDOM"], "DDS",
-                "DDS (Dynamically Dimensioned Search) is recommended")}
+                [("DDS", "DDS (sequential)"),
+                 ("RANDOM", "RANDOM (parallel)"),
+                 ("DDS_PARALLEL", "Parallel DDS chains (parallel)")], "DDS",
+                "DDS (sequential) is the most sample-efficient and is "
+                "recommended. RANDOM and Parallel DDS chains use n_parallel "
+                "concurrent model runs (faster wall-clock); Parallel DDS keeps "
+                "DDS's efficiency by running several independent chains at once.")}
             {rh.build_form_number("max_evaluations", "Max Evaluations",
                 500, min_val=1, step=1,
                 hint="Total number of model evaluations")}
@@ -4096,10 +4101,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('#   "apptainer" — Singularity/Apptainer (set the SIF + bind paths below)');
     lines.push('container_runtime = ' + pyRepr(s.container_runtime || 'docker'));
     lines.push('');
-    lines.push('# Number of model evaluations to run concurrently during the');
-    lines.push('# sensitivity analysis (independent runs; works for Docker and');
-    lines.push('# Apptainer). DDS calibration is sequential, so this only speeds');
-    lines.push('# up the sensitivity stage.');
+    lines.push('# Number of model evaluations to run concurrently (independent');
+    lines.push('# runs; works for Docker and Apptainer). Used by: the sensitivity');
+    lines.push('# stage, algorithm "RANDOM" (independent samples), and');
+    lines.push('# "DDS_PARALLEL" (this many concurrent DDS chains). Plain "DDS"');
+    lines.push('# is sequential, so n_parallel only affects its sensitivity stage.');
     lines.push('n_parallel = ' + pyRepr(s.n_parallel || 1));
     lines.push('');
     lines.push('# Handling of leftover eval_* folders from a previous run:');

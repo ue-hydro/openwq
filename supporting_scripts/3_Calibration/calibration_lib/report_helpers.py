@@ -769,18 +769,27 @@ def build_form_select(
     label : str
         Label text displayed above the dropdown.
     options : List[str]
-        List of option values (used as both value and display text).
+        Option values.  Each entry may be a plain string (value == display
+        text) OR a ``(value, label)`` pair so the visible label can differ
+        from the value (e.g. value ``"DDS"`` shown as ``"DDS (sequential)"``).
+        The ``value`` is what the form JS reads and writes to the run script.
     default : str
-        Which option is selected by default.
+        Which option *value* is selected by default.
     hint : str
         Optional hint text shown below the dropdown.
     """
     import html as html_lib
+
+    def _value_label(o):
+        if isinstance(o, (tuple, list)) and len(o) == 2:
+            return str(o[0]), str(o[1])
+        return str(o), str(o)
+
     opts_html = "\n".join(
-        f'<option value="{html_lib.escape(o)}"'
-        f'{" selected" if o == default else ""}>'
-        f'{html_lib.escape(o)}</option>'
-        for o in options
+        f'<option value="{html_lib.escape(_v)}"'
+        f'{" selected" if _v == default else ""}>'
+        f'{html_lib.escape(_lab)}</option>'
+        for _v, _lab in (_value_label(o) for o in options)
     )
     hint_html = f'<div class="hint">{html_lib.escape(hint)}</div>' if hint else ""
     return f"""

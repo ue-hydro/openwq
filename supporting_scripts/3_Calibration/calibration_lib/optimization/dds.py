@@ -394,3 +394,184 @@ class RandomSearch:
         """Generate random point within bounds."""
         return self.bounds[:, 0] + self.rng.random(self.n_params) * (
             self.bounds[:, 1] - self.bounds[:, 0])
+
+
+class ParallelDDS:
+    """Parallel DDS — several independent DDS chains advanced together.
+
+    DDS itself is strictly sequential: each step perturbs the *current best*,
+    so one chain cannot be parallelised internally.  But running ``n_chains``
+    INDEPENDENT chains (different seeds + initial points) and evaluating ONE
+    candidate from every chain per round lets up to ``n_chains`` model runs
+    proceed concurrently while preserving DDS's per-chain sample efficiency.
+    The global best across all chains is returned.
+
+    Wall-clock ≈ ``max_evals / n_chains`` sequential steps (≈ n_chains× faster);
+    quality ≈ DDS, often better — N chains explore N regions and you keep the
+    best, which also reduces sensitivity to the random seed / initial point.
+
+    Unlike ``DDS``/``RandomSearch`` (whose ``optimize`` calls a single-point
+    objective), this drives a BATCH objective: ``batch_objective_func(points)``
+    receives a list of parameter vectors and returns a list of objective values
+    (lower = better), evaluating them in parallel.  The caller wires that to the
+    model runner's parallel evaluation.
+    """
+
+    def __init__(self,
+                 n_params: int,
+                 bounds: List[Tuple[float, float]],
+                 param_names: List[str],
+                 max_evals: int,
+                 n_chains: int = 4,
+                 r: float = 0.2,
+                 seed: Optional[int] = None):
+        self.n_params = n_params
+        self.bounds = np.array(bounds)
+        self.param_names = param_names
+        self.max_evals = max_evals
+        self.n_chains = max(1, int(n_chains))
+        self.r = r
+        # Evals per chain — at least 2 so each chain does its initial point
+        # plus >=1 perturbation round (and so the prob schedule's
+        # ln(evals_per_chain) denominator is never ln(1)=0).
+        self.evals_per_chain = max(2, max_evals // self.n_chains)
+        # One DDS engine per chain (own seed) — reused for its perturbation
+        # kernel + bounds/sigma; the search loop itself is driven here so we
+        # can interleave the chains round-by-round.
+        self.chains = [
+            DDS(n_params, bounds, param_names,
+                max_evals=self.evals_per_chain, r=r,
+                seed=(None if seed is None else seed + c))
+            for c in range(self.n_chains)
+        ]
+        logger.info(
+            f"ParallelDDS initialized: {self.n_chains} chains x "
+            f"{self.evals_per_chain} evals = "
+            f"{self.n_chains * self.evals_per_chain} total "
+            f"(requested max_evals={max_evals}), {n_params} params, r={r}")
+
+    def optimize(self,
+                 batch_objective_func: Callable[[List[np.ndarray]], List[float]],
+                 initial_point: np.ndarray = None,
+                 callback: Callable[[int, float, np.ndarray], None] = None
+                 ) -> DDSResult:
+        """Advance all chains round-by-round, evaluating one candidate per
+        chain per round through ``batch_objective_func`` (parallel)."""
+        history = []
+        eval_num = 0
+        x_best = [None] * self.n_chains
+        f_best = [np.inf] * self.n_chains
+
+        # ── Round 0: an initial point for every chain ──
+        init_points = []
+        for c, chain in enumerate(self.chains):
+            if c == 0 and initial_point is not None:
+                x0 = np.clip(initial_point,
+                             self.bounds[:, 0], self.bounds[:, 1])
+            else:
+                x0 = chain._random_point()
+            init_points.append(x0)
+        init_objs = batch_objective_func(init_points)
+        for c in range(self.n_chains):
+            x_best[c] = init_points[c]
+            f_best[c] = init_objs[c]
+            history.append((eval_num, init_objs[c], init_points[c].copy()))
+            eval_num += 1
+        gbest = int(np.argmin(f_best))
+        if callback:
+            callback(eval_num - 1, f_best[gbest], x_best[gbest])
+        logger.info(f"ParallelDDS round 0: best of {self.n_chains} initial "
+                    f"chains = {f_best[gbest]:.6f}")
+
+        # ── Perturbation rounds ──
+        for i in range(1, self.evals_per_chain):
+            # DDS dimension-perturbation probability (same schedule as DDS),
+            # decreasing from ~1 to ~0 across each chain's own budget.
+            prob = 1.0 - np.log(i) / np.log(self.evals_per_chain)
+            cands = [self.chains[c]._perturb(x_best[c], prob)
+                     for c in range(self.n_chains)]
+            objs = batch_objective_func(cands)
+            for c in range(self.n_chains):
+                if objs[c] < f_best[c]:           # greedy per-chain acceptance
+                    x_best[c] = cands[c]
+                    f_best[c] = objs[c]
+                history.append((eval_num, objs[c], cands[c].copy()))
+                eval_num += 1
+            gbest = int(np.argmin(f_best))
+            if callback:
+                callback(eval_num - 1, f_best[gbest], x_best[gbest])
+            logger.info(f"ParallelDDS round {i}/{self.evals_per_chain - 1}: "
+                        f"global best = {f_best[gbest]:.6f}")
+
+        gbest = int(np.argmin(f_best))
+        return DDSResult(
+            best_params=x_best[gbest],
+            best_objective=f_best[gbest],
+            param_names=self.param_names,
+            history=history,
+            n_evaluations=eval_num,
+            converged=False,
+            convergence_reason=(f"Completed {self.n_chains} parallel DDS "
+                                f"chains ({eval_num} evaluations)")
+        )
+
+
+class ParallelRandom:
+    """Random search that evaluates points in parallel batches.
+
+    Random samples are independent, so up to ``batch`` of them run at once
+    through a BATCH objective (same contract as :class:`ParallelDDS`).  This is
+    the honest "RANDOM (parallel)" path; with ``batch == 1`` it degrades to the
+    plain sequential random baseline.
+    """
+
+    def __init__(self,
+                 n_params: int,
+                 bounds: List[Tuple[float, float]],
+                 param_names: List[str],
+                 max_evals: int,
+                 batch: int = 4,
+                 seed: Optional[int] = None):
+        self.n_params = n_params
+        self.bounds = np.array(bounds)
+        self.param_names = param_names
+        self.max_evals = max_evals
+        self.batch = max(1, int(batch))
+        self.rng = np.random.default_rng(seed)
+
+    def _random_point(self) -> np.ndarray:
+        return self.bounds[:, 0] + self.rng.random(self.n_params) * (
+            self.bounds[:, 1] - self.bounds[:, 0])
+
+    def optimize(self,
+                 batch_objective_func: Callable[[List[np.ndarray]], List[float]],
+                 initial_point: np.ndarray = None,
+                 callback: Callable[[int, float, np.ndarray], None] = None
+                 ) -> DDSResult:
+        history = []
+        eval_num = 0
+        x_best = None
+        f_best = np.inf
+        remaining = self.max_evals
+        while remaining > 0:
+            k = min(self.batch, remaining)
+            pts = [self._random_point() for _ in range(k)]
+            objs = batch_objective_func(pts)
+            for j in range(k):
+                if objs[j] < f_best:
+                    x_best = pts[j]
+                    f_best = objs[j]
+                history.append((eval_num, objs[j], pts[j].copy()))
+                eval_num += 1
+            if callback:
+                callback(eval_num - 1, f_best, x_best)
+            remaining -= k
+        return DDSResult(
+            best_params=x_best,
+            best_objective=f_best,
+            param_names=self.param_names,
+            history=history,
+            n_evaluations=eval_num,
+            converged=False,
+            convergence_reason="Maximum evaluations reached (parallel random)"
+        )
