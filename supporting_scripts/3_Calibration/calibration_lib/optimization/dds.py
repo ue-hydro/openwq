@@ -65,7 +65,9 @@ class DDSResult:
             "convergence_reason": self.convergence_reason,
             "history": [
                 {"eval": int(h[0]), "objective": float(h[1]),
-                 "params": [float(p) for p in h[2]]}
+                 "params": [float(p) for p in h[2]],
+                 # ParallelDDS appends a 4th element = chain id; omit otherwise.
+                 **({"chain": int(h[3])} if len(h) > 3 else {})}
                 for h in self.history
             ]
         }
@@ -475,7 +477,9 @@ class ParallelDDS:
         for c in range(self.n_chains):
             x_best[c] = init_points[c]
             f_best[c] = init_objs[c]
-            history.append((eval_num, init_objs[c], init_points[c].copy()))
+            # 4-tuple: (eval_num, objective, params, chain_id) — the trailing
+            # chain id lets the results report draw one path per chain.
+            history.append((eval_num, init_objs[c], init_points[c].copy(), c))
             eval_num += 1
         gbest = int(np.argmin(f_best))
         if callback:
@@ -495,7 +499,7 @@ class ParallelDDS:
                 if objs[c] < f_best[c]:           # greedy per-chain acceptance
                     x_best[c] = cands[c]
                     f_best[c] = objs[c]
-                history.append((eval_num, objs[c], cands[c].copy()))
+                history.append((eval_num, objs[c], cands[c].copy(), c))
                 eval_num += 1
             gbest = int(np.argmin(f_best))
             if callback:
