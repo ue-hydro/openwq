@@ -138,9 +138,15 @@ class ObjectiveFunction:
         logger.info(f"Objective function configured with temporal_resolution='{temporal_resolution}', "
                     f"aggregation_method='{aggregation_method}'")
 
-        # Setup H5 reader import path
+        # Setup H5 reader import path.  `from hdf5_support_lib import
+        # Read_h5_driver` needs the PARENT of the hdf5_support_lib package dir
+        # on sys.path — so insert both the given path AND its parent, making
+        # the import resolve whether h5_reader_path points at the package dir
+        # (…/2_Read_Outputs/hdf5_support_lib) or at its parent (…/2_Read_Outputs).
         if h5_reader_path:
-            sys.path.insert(0, str(Path(h5_reader_path)))
+            _hp = Path(h5_reader_path)
+            sys.path.insert(0, str(_hp))
+            sys.path.insert(0, str(_hp.parent))
 
         self.observations = self._load_observations()
 
@@ -492,6 +498,13 @@ class ObjectiveFunction:
                 noDataFlag=self.no_data_flag
             )
 
+            # Only the target reaches/HRUs are ever used (the rest are dropped
+            # by _match_obs_sim).  Keep just those so we don't melt every reach
+            # × every timestep into a multi-million-row frame per eval — slow
+            # and a real OOM risk under n_parallel.  None => keep all.
+            _target_set = (set(self.target_reaches)
+                           if isinstance(self.target_reaches, list) else None)
+
             # Convert results to DataFrame
             all_data = []
             for key, extensions in results.items():
@@ -517,6 +530,8 @@ class ObjectiveFunction:
                             # normalise to the base feature id (int 1) so it
                             # matches the integer observation 'reach_id'.
                             reach_id = self._normalize_feature_id(col)
+                            if _target_set is not None and reach_id not in _target_set:
+                                continue
 
                             for dt, val in df[col].items():
                                 all_data.append({
@@ -542,6 +557,10 @@ class ObjectiveFunction:
 
         all_data = []
         h5_dir = output_dir / "HDF5"
+        # Keep only target reaches/HRUs (see _extract_simulated) so the fallback
+        # also avoids a multi-million-row frame per eval.  None => keep all.
+        _target_set = (set(self.target_reaches)
+                       if isinstance(self.target_reaches, list) else None)
 
         for species in self.target_species:
             for compartment in self.compartments:
@@ -579,6 +598,45 @@ class ObjectiveFunction:
                         else:
                             reach_ids = list(range(hf[list(hf.keys())[0]].shape[1]))
 
+                        # NEW extensible layout: a single /concentrations
+                        # [time x cells] dataset + /timestamps (current openWQ
+                        # writer).  Mirror hdf5_support_lib/Read_h5_driver so
+                        # this fallback stays correct even when that library
+                        # can't be imported.  (The block below handles the
+                        # LEGACY one-dataset-per-timestep files.)
+                        if 'concentrations' in hf and 'timestamps' in hf:
+                            ts_raw = hf['timestamps'][:]
+                            conc = np.asarray(hf['concentrations'][:],
+                                              dtype=np.float64)  # (ntime,ncells)
+                            conc[conc == self.no_data_flag] = np.nan
+                            norm_ids = [self._normalize_feature_id(r)
+                                        for r in reach_ids]
+                            for ti in range(conc.shape[0]):
+                                ts = ts_raw[ti]
+                                ts = (ts.decode()
+                                      if isinstance(ts, (bytes, bytearray))
+                                      else str(ts))
+                                try:
+                                    dt = pd.to_datetime(
+                                        ts, format='%Y%b%d-%H:%M:%S')
+                                except Exception:
+                                    try:
+                                        dt = pd.to_datetime(ts)
+                                    except Exception:
+                                        continue
+                                row = conc[ti, :]
+                                for i, rid in enumerate(norm_ids):
+                                    if (_target_set is not None
+                                            and rid not in _target_set):
+                                        continue
+                                    val = (row[i] if i < row.shape[0]
+                                           else np.nan)
+                                    all_data.append({
+                                        'datetime': dt, 'reach_id': rid,
+                                        'species': species,
+                                        'simulated': val})
+                            continue  # file done; skip legacy per-timestep block
+
                         # Get timestamps (skip the well-known metadata keys)
                         _metadata_keys = {
                             'xyz_elements', 'reachID', 'hruId',
@@ -605,6 +663,9 @@ class ObjectiveFunction:
                                 # / strip 'reachID_' etc. so they match the
                                 # integer observation 'reach_id'.
                                 rid = self._normalize_feature_id(reach_id)
+                                if (_target_set is not None
+                                        and rid not in _target_set):
+                                    continue
 
                                 val = data[i] if i < len(data) else np.nan
                                 if val == self.no_data_flag:
