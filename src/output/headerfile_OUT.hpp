@@ -78,7 +78,8 @@ class OpenWQ_output{
 
     // append data to HDF5 file 
         bool appendData_to_HDF5_file(
-            hid_t file,
+            hid_t conc_ds,
+            hid_t time_ds,
             arma::mat& data,
             std::string name);
 

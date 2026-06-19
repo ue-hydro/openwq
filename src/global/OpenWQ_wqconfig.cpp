@@ -115,6 +115,11 @@ OpenWQ_wqconfig::SI_model_::~SI_model_() {
 // Destructor
 OpenWQ_wqconfig::~OpenWQ_wqconfig() {
 
+    // [REDESIGN] close the kept-open time-series dataset handles before the
+    // files (so the final partial chunk and metadata are flushed cleanly).
+    for (auto x: conc_dsets) { if (x.second >= 0) H5Dclose(x.second); }
+    for (auto x: time_dsets) { if (x.second >= 0) H5Dclose(x.second); }
+
     for (auto x: files) {
         H5Fclose(x.second);
     }

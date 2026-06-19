@@ -16,6 +16,60 @@
 
 #include "output/headerfile_OUT.hpp"
 
+// ############################################################################
+// [REDESIGN] Time-series output layout.
+//
+// Previously openWQ created ONE new dataset per timestep (named by timestamp),
+// so a multi-decade hourly run produced hundreds of thousands of datasets in a
+// single group -> a huge link B-tree that corrupts on weakly-consistent
+// filesystems (Docker bind mount, Lustre/NFS) and is slow.
+//
+// New layout (created ONCE per file, then appended to each step):
+//   /concentrations : 2D double, shape [time x cells], chunked, time-unlimited
+//   /timestamps     : 1D variable-length strings, shape [time], time-unlimited
+// plus the existing one-shot metadata datasets (xyz_elements, xyz_elements_size,
+// and the host-id label dataset). Only ~5 datasets per file regardless of run
+// length, so the group metadata stays tiny and robust on any filesystem.
+static void create_timeseries_datasets(hid_t fh, unsigned int num_cells,
+                                       OpenWQ_wqconfig& wqcfg,
+                                       const std::string& filename){
+    if (num_cells == 0) return;
+
+    // ---- /concentrations : [time x cells], unlimited in time, chunked ----
+    hsize_t dims[2]    = {0, (hsize_t)num_cells};
+    hsize_t maxdims[2] = {H5S_UNLIMITED, (hsize_t)num_cells};
+    hid_t   space = H5Screate_simple(2, dims, maxdims);
+    hid_t   dcpl  = H5Pcreate(H5P_DATASET_CREATE);
+    // Target ~1 MB per chunk so per-step row appends accumulate in the chunk
+    // cache and flush a chunk at a time (scales with domain size).
+    hsize_t chunk_time = (hsize_t)(1048576UL / (num_cells * sizeof(double)));
+    if (chunk_time < 1)    chunk_time = 1;
+    if (chunk_time > 8192) chunk_time = 8192;
+    hsize_t chunk[2] = {chunk_time, (hsize_t)num_cells};
+    H5Pset_chunk(dcpl, 2, chunk);
+    hid_t ds = H5Dcreate(fh, "concentrations", H5T_NATIVE_DOUBLE, space,
+                         H5P_DEFAULT, dcpl, H5P_DEFAULT);
+    wqcfg.conc_dsets[filename] = ds;   // keep open (closed in OpenWQ_wqconfig dtor)
+    H5Pclose(dcpl);
+    H5Sclose(space);
+
+    // ---- /timestamps : 1D variable-length strings, unlimited, chunked ----
+    hsize_t tdims[1] = {0};
+    hsize_t tmax[1]  = {H5S_UNLIMITED};
+    hid_t   tspace = H5Screate_simple(1, tdims, tmax);
+    hid_t   tdcpl  = H5Pcreate(H5P_DATASET_CREATE);
+    hsize_t tchunk[1] = {1024};
+    H5Pset_chunk(tdcpl, 1, tchunk);
+    hid_t   stype = H5Tcopy(H5T_C_S1);
+    H5Tset_size(stype, H5T_VARIABLE);
+    hid_t   tds = H5Dcreate(fh, "timestamps", stype, tspace,
+                            H5P_DEFAULT, tdcpl, H5P_DEFAULT);
+    wqcfg.time_dsets[filename] = tds;  // keep open (closed in OpenWQ_wqconfig dtor)
+    H5Tclose(stype);
+    H5Pclose(tdcpl);
+    H5Sclose(tspace);
+}
+
 int OpenWQ_output::writeResults(
     OpenWQ_json& OpenWQ_json,
     OpenWQ_vars& OpenWQ_vars,
@@ -323,8 +377,14 @@ int OpenWQ_output::writeHDF5(
         // File properties: latest format (fractal heaps), no locking
         hid_t fcpl = H5Pcreate(H5P_FILE_CREATE);
         hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
+        // Locking off: required on bind-mount / network filesystems that don't
+        // support file locking. Otherwise use HDF5's DEFAULT format and DEFAULT
+        // metadata cache — the new few-dataset layout (one extensible dataset per
+        // file, created below) keeps metadata tiny, so the LATEST/fractal-heap
+        // format and the no-evict metadata cache are no longer needed. (The
+        // LATEST-format extensible-array chunk index combined with frequent
+        // H5Dset_extent was an unnecessary risk.)
         H5Pset_file_locking(fapl, 0, 0);
-        H5Pset_libver_bounds(fapl, H5F_LIBVER_V18, H5F_LIBVER_LATEST);
 
         for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
 
@@ -386,6 +446,10 @@ int OpenWQ_output::writeHDF5(
                 H5Sclose(space);
             }
 
+            // [REDESIGN] create the time-extensible datasets that each timestep
+            // appends to (/concentrations + /timestamps)
+            create_timeseries_datasets(fh, num_cells2print, OpenWQ_wqconfig, filename);
+
             // Store handle — file stays open until destructor
             OpenWQ_wqconfig.files[filename] = fh;
 
@@ -445,7 +509,20 @@ int OpenWQ_output::writeHDF5(
                 }
             }
 
-            appendData_to_HDF5_file(it->second, data2print, timestr);
+            // [FIX] libhdf5_serial (1.10.10) is NOT thread-safe. This loop runs
+            // under "#pragma omp parallel for", so the actual HDF5 write must be
+            // serialized — otherwise concurrent threads corrupt HDF5's global
+            // metadata cache (HDF5 error: "Target already protected") and the
+            // heap, producing non-deterministic munmap_chunk aborts at random
+            // simulation times. The data extraction above stays parallel.
+            #pragma omp critical (openwq_hdf5_write)
+            {
+                auto _cit = OpenWQ_wqconfig.conc_dsets.find(filename);
+                auto _tit = OpenWQ_wqconfig.time_dsets.find(filename);
+                hid_t _cds = (_cit != OpenWQ_wqconfig.conc_dsets.end()) ? _cit->second : -1;
+                hid_t _tds = (_tit != OpenWQ_wqconfig.time_dsets.end()) ? _tit->second : -1;
+                appendData_to_HDF5_file(_cds, _tds, data2print, timestr);
+            }
         }
     }
 
@@ -515,8 +592,8 @@ int OpenWQ_output::writeHDF5_Sediment(
         // Create file with latest format (fractal heaps, not B-trees)
         hid_t fcpl_s = H5Pcreate(H5P_FILE_CREATE);
         hid_t fapl_s = H5Pcreate(H5P_FILE_ACCESS);
+        // Locking off (see note in writeHDF5); default format + metadata cache.
         H5Pset_file_locking(fapl_s, 0, 0);
-        H5Pset_libver_bounds(fapl_s, H5F_LIBVER_V18, H5F_LIBVER_LATEST);
 
         hid_t file_h = H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, fcpl_s, fapl_s);
         if (file_h >= 0){
@@ -567,6 +644,10 @@ int OpenWQ_output::writeHDF5_Sediment(
                 H5Sclose(space);
             }
 
+            // [REDESIGN] create the time-extensible datasets that each timestep
+            // appends to (/concentrations + /timestamps)
+            create_timeseries_datasets(file_h, num_cells2print, OpenWQ_wqconfig, filename);
+
             // Store handle — file stays open until destructor
             OpenWQ_wqconfig.files[filename] = file_h;
         }
@@ -612,39 +693,79 @@ int OpenWQ_output::writeHDF5_Sediment(
         }
     }
 
-    appendData_to_HDF5_file(it->second, data2print, timestr);
+    {
+        auto _cit = OpenWQ_wqconfig.conc_dsets.find(filename);
+        auto _tit = OpenWQ_wqconfig.time_dsets.find(filename);
+        hid_t _cds = (_cit != OpenWQ_wqconfig.conc_dsets.end()) ? _cit->second : -1;
+        hid_t _tds = (_tit != OpenWQ_wqconfig.time_dsets.end()) ? _tit->second : -1;
+        appendData_to_HDF5_file(_cds, _tds, data2print, timestr);
+    }
 
     return EXIT_SUCCESS;
 }
 
 /* ########################################
-// Append data to HDF5 file
+// Append one timestep to the HDF5 file.
+// [REDESIGN] Instead of creating a NEW dataset per timestep (which exploded the
+// group's link metadata for long runs and corrupted on weak filesystems), this
+// appends one row to the pre-created extensible datasets:
+//   data (num_cells x 1) -> new row of /concentrations
+//   name (timestamp str) -> new element of /timestamps
 ######################################## */
 bool OpenWQ_output::appendData_to_HDF5_file(
-    hid_t file,
+    hid_t conc_ds,
+    hid_t time_ds,
     arma::mat& data,
     std::string name){
 
-    hsize_t dims[2] = {data.n_cols, data.n_rows};
+    // conc_ds / time_ds are the per-file dataset handles kept open for the whole
+    // run (no per-step H5Dopen/H5Dclose), so the active chunk stays in the chunk
+    // cache and is flushed once per full chunk instead of read-modify-written
+    // every timestep.
+    if (conc_ds < 0) return false;
+    const hsize_t ncells = (hsize_t) data.n_rows;   // data is (num_cells x 1)
 
-    hid_t dataspace = H5Screate_simple(2, dims, NULL);
-    hid_t datatype = H5Tcopy(H5T_NATIVE_DOUBLE);
-    hid_t dataset = H5Dcreate(file, name.c_str(), datatype, dataspace,
-                              H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    // -------- append a row to /concentrations --------
+    hid_t fspace = H5Dget_space(conc_ds);
+    hsize_t cur[2] = {0, 0};
+    H5Sget_simple_extent_dims(fspace, cur, NULL);
+    H5Sclose(fspace);
 
-    if (dataset < 0){
-        H5Sclose(dataspace);
-        H5Tclose(datatype);
-        return false;
+    hsize_t newdims[2] = {cur[0] + 1, ncells};
+    if (H5Dset_extent(conc_ds, newdims) < 0) return false;
+
+    fspace = H5Dget_space(conc_ds);
+    hsize_t start[2] = {cur[0], 0};
+    hsize_t count[2] = {1, ncells};
+    H5Sselect_hyperslab(fspace, H5S_SELECT_SET, start, NULL, count, NULL);
+    hid_t mspace = H5Screate_simple(2, count, NULL);
+    H5Dwrite(conc_ds, H5T_NATIVE_DOUBLE, mspace, fspace, H5P_DEFAULT, data.mem);
+    H5Sclose(mspace);
+    H5Sclose(fspace);
+
+    // -------- append the timestamp to /timestamps --------
+    if (time_ds >= 0){
+        hid_t tfs = H5Dget_space(time_ds);
+        hsize_t tcur[1] = {0};
+        H5Sget_simple_extent_dims(tfs, tcur, NULL);
+        H5Sclose(tfs);
+
+        hsize_t tnew[1] = {tcur[0] + 1};
+        H5Dset_extent(time_ds, tnew);
+
+        tfs = H5Dget_space(time_ds);
+        hsize_t tstart[1] = {tcur[0]};
+        hsize_t tcount[1] = {1};
+        H5Sselect_hyperslab(tfs, H5S_SELECT_SET, tstart, NULL, tcount, NULL);
+        hid_t tms = H5Screate_simple(1, tcount, NULL);
+        hid_t stype = H5Tcopy(H5T_C_S1);
+        H5Tset_size(stype, H5T_VARIABLE);
+        const char* sptr = name.c_str();
+        H5Dwrite(time_ds, stype, tms, tfs, H5P_DEFAULT, &sptr);
+        H5Tclose(stype);
+        H5Sclose(tms);
+        H5Sclose(tfs);
     }
-
-    // Write data
-    H5Dwrite(dataset, datatype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.mem);
-
-    // Cleanup
-    H5Dclose(dataset);
-    H5Sclose(dataspace);
-    H5Tclose(datatype);
 
     return true;
 }

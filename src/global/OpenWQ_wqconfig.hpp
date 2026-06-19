@@ -202,6 +202,15 @@ class OpenWQ_wqconfig
 
         std::unordered_map<std::string, hid_t> files;
 
+        // [REDESIGN] Open handles of the per-file time-extensible datasets,
+        // kept open for the whole run (keyed by filename, same as `files`) so
+        // each timestep just extends+writes — the active chunk stays in the
+        // chunk cache and is flushed once per full chunk, instead of a
+        // read-modify-write of the whole chunk on every step. Closed in the
+        // destructor before the files.
+        std::unordered_map<std::string, hid_t> conc_dsets;  // /concentrations
+        std::unordered_map<std::string, hid_t> time_dsets;  // /timestamps
+
         // TODO: Below needs to be moved to private
 
          // ##########################
