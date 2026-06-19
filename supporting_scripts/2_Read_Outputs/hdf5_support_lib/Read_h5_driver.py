@@ -126,15 +126,11 @@ def Read_h5_save_engine(
     # Single file open for all operations to improve performance
     try:
         with h5py.File(filepath_i, 'r') as hf:
-            # Get datasets (timestamps)
-            all_keys = list(hf.keys())
-            timestamps = all_keys[:-3]  # Exclude last 2 entries
 
-            # Read xyz_elements
+            # Read xyz_elements (cell coordinates) — present in both layouts
             if '/xyz_elements' not in hf:
                 print(f"<main_hdf5> Warning: '/xyz_elements' not found in {filename_fix}.h5")
                 return []
-            # print(all_keys)
             xyz_elements_source = hf['/xyz_elements'][:]
 
             # Skip if no data
@@ -156,32 +152,43 @@ def Read_h5_save_engine(
                 print(f"<main_hdf5> Warning: No matching cells found for {filename_fix}.h5")
                 return []
 
-            num_validated = len(indices_validated)
-            num_timesteps = len(timestamps)
-
-            # Get corresponding hostmodel ids for the indices_validated
+            # Get corresponding hostmodel ids for the columns
             mapKey_values = np.array([x.decode('utf-8') if isinstance(x, bytes) else x for x in hf[f'/{mappingKey}'][:]])
 
-            # Pre-allocate arrays
-            data_all = np.full((num_timesteps, num_validated), np.nan, dtype=np.float64)
-            time_all = []
-
-            # Read all timestep data in single file context
-            for tstep, timestamp in enumerate(timestamps):
-                dataset_path = f'/{timestamp}'
-                if dataset_path not in hf:
-                    print(f"Warning: Dataset {dataset_path} not found, skipping")
-                    continue
-
-                # Read data for this timestep
-                data_i = hf[dataset_path][:]
-
-                # Replace noDataFlag with NaN
-                data_i[data_i==noDataFlag] = np.nan
-                #data_i[data_i != noDataFlag] = 0.1 * tstep # TO REMOVE AFTER DEBUGGING
-
-                data_all[tstep, :] = data_i[0, indices_validated]
-                time_all.append(timestamp)
+            # ----------------------------------------------------------------
+            # Two on-disk layouts are supported:
+            #  (NEW) a single time-extensible dataset '/concentrations'
+            #        [time x cells] plus '/timestamps' [time] -> one dataset per
+            #        file, robust on any filesystem (current writer).
+            #  (OLD) one dataset per timestep, named by timestamp -> legacy files.
+            # ----------------------------------------------------------------
+            if 'concentrations' in hf and 'timestamps' in hf:
+                # NEW layout
+                ts_raw = hf['/timestamps'][:]
+                time_all = [t.decode('utf-8') if isinstance(t, (bytes, bytearray)) else str(t)
+                            for t in ts_raw]
+                conc = np.asarray(hf['/concentrations'][:], dtype=np.float64)  # (ntime, ncells)
+                conc[conc == noDataFlag] = np.nan
+                data_all = conc[:, indices_validated]
+            else:
+                # OLD layout (legacy per-timestep datasets).
+                # Group keys are [<timestamps...>, xyz_elements, xyz_elements_size,
+                # <mappingKey>]; the last 3 are metadata.
+                all_keys = list(hf.keys())
+                timestamps = all_keys[:-3]
+                num_validated = len(indices_validated)
+                num_timesteps = len(timestamps)
+                data_all = np.full((num_timesteps, num_validated), np.nan, dtype=np.float64)
+                time_all = []
+                for tstep, timestamp in enumerate(timestamps):
+                    dataset_path = f'/{timestamp}'
+                    if dataset_path not in hf:
+                        print(f"Warning: Dataset {dataset_path} not found, skipping")
+                        continue
+                    data_i = hf[dataset_path][:]
+                    data_i[data_i==noDataFlag] = np.nan
+                    data_all[tstep, :] = data_i[0, indices_validated]
+                    time_all.append(timestamp)
 
     except (FileNotFoundError, OSError) as e:
         print(f"<main_hdf5> Warning: Could not open file {filepath_i}: {e}")
