@@ -2179,16 +2179,12 @@ def _generate_param_evolution_plots(
                                         "dash": "dot"}})
         return sh
 
-    buttons = []
-    for i, pname in enumerate(names):
-        vis = [False] * n
-        for t in range(starts[i], starts[i] + group_sizes[i]):
-            vis[t] = True
-        lbl = pname if len(pname) <= 34 else pname[:16] + "…" + pname[-14:]
-        buttons.append({
-            "label": lbl, "method": "update",
-            "args": [{"visible": vis},
-                     {"yaxis": {"title": pname}, "shapes": _shapes_for(i)}]})
+    # Per-parameter trace-visibility groups + reference-line shapes, fed to a
+    # NATIVE <select> picker.  (Plotly's own updatemenus dropdown does not
+    # scroll, so with 30+ parameters the lower ones get clipped/unreachable —
+    # a native <select> scrolls like any other dropdown.)
+    groups = [[starts[i], group_sizes[i]] for i in range(len(names))]
+    shapes = [_shapes_for(i) for i in range(len(names))]
 
     layout = {
         "title": {"text": "Parameter Evolution"},
@@ -2197,13 +2193,39 @@ def _generate_param_evolution_plots(
         "shapes": _shapes_for(0),
         "showlegend": has_chains,
         "hovermode": "closest",
-        "updatemenus": [{
-            "buttons": buttons, "direction": "down", "showactive": True,
-            "x": 1.0, "xanchor": "right", "y": 1.16, "yanchor": "top",
-            "pad": {"r": 4, "t": 4},
-            "bgcolor": "rgba(127,127,127,.12)"}],
     }
-    return _plotly_chart(_plot_id("evo"), traces, layout, height=470)
+    pid = _plot_id("evo")
+    chart = _plotly_chart(pid, traces, layout, height=470)
+
+    # Native (scrollable) parameter picker wired to Plotly.restyle/relayout.
+    opts = "\n".join(
+        f'<option value="{i}">{html_lib.escape(str(pn))}</option>'
+        for i, pn in enumerate(names))
+    sel_id = f"{pid}-sel"
+    selector = (
+        f'<div style="margin:.4rem 0 .2rem;display:flex;align-items:center;'
+        f'gap:.5rem;flex-wrap:wrap;">'
+        f'<label for="{sel_id}" style="font-size:.85rem;color:var(--text2);'
+        f'font-weight:600;">Parameter:</label>'
+        f'<select id="{sel_id}" style="max-width:520px;padding:.35rem .5rem;'
+        f'border:1px solid var(--border);border-radius:6px;'
+        f'background:var(--surface);color:var(--text);font-size:.85rem;">'
+        f'{opts}</select></div>')
+    script = (
+        '<script>(function(){'
+        f'var sel=document.getElementById({json.dumps(sel_id)});if(!sel)return;'
+        f'var pid={json.dumps(pid)},groups={json.dumps(groups)},'
+        f'shapes={json.dumps(shapes)},titles={json.dumps(names)},n={n};'
+        'sel.addEventListener("change",function(){'
+        'var i=parseInt(this.value,10)||0,vis=[],t;'
+        'for(t=0;t<n;t++){vis.push(false);}'
+        'for(t=groups[i][0];t<groups[i][0]+groups[i][1];t++){vis[t]=true;}'
+        'if(window.Plotly){'
+        'Plotly.restyle(pid,{visible:vis});'
+        'Plotly.relayout(pid,{"yaxis.title.text":titles[i],"shapes":shapes[i]});'
+        '}});'
+        '})();</script>')
+    return selector + chart + script
 
 
 def _generate_correlation_plot(
