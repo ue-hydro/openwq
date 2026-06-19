@@ -85,6 +85,14 @@ def _detect_native_periods_per_year(climate_source):
         return 8760
 
 
+# [calibration fix] Cache resolved SS resolutions so the size-guard question is
+# asked at most ONCE per process. During calibration the SS is regenerated in
+# THIS SAME process for every eval (parameter_handler -> Gen_Input_Driver /
+# Gen_SS_Driver), so without this the prompt would reappear on every eval and
+# block the run. Keyed by the inputs that determine the entry-count estimate.
+_SS_RESOLUTION_GUARD_CACHE = {}
+
+
 def _ss_resolution_size_guard(resolution, n_years, n_units, n_species,
                               climate_source,
                               scope_label="full simulation period"):
@@ -113,8 +121,17 @@ def _ss_resolution_size_guard(resolution, n_years, n_units, n_species,
                    * max(n_units, 1) * max(n_species, 1))
 
     res = str(resolution).lower()
+
+    # Asked-once cache (see _SS_RESOLUTION_GUARD_CACHE note above): reuse a prior
+    # resolution for identical sizing instead of re-prompting on every eval.
+    _cache_key = (res, int(max(n_years, 1)), int(max(n_units, 1)),
+                  int(max(n_species, 1)), str(scope_label))
+    if _cache_key in _SS_RESOLUTION_GUARD_CACHE:
+        return _SS_RESOLUTION_GUARD_CACHE[_cache_key]
+
     est = _est(res)
     if est <= _SS_ENTRY_GUARD_MAX:
+        _SS_RESOLUTION_GUARD_CACHE[_cache_key] = res
         return res
 
     # Coarser options that would fit, in increasing fineness.
@@ -156,6 +173,7 @@ def _ss_resolution_size_guard(resolution, n_years, n_units, n_species,
     except Exception:
         chosen = choices[0]
     print(f"  → using '{chosen}' resolution.")
+    _SS_RESOLUTION_GUARD_CACHE[_cache_key] = chosen
     return chosen
 
 
