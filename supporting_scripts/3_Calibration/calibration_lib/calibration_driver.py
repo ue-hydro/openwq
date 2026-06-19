@@ -57,7 +57,17 @@ from .postprocessing.results_analysis import ResultsAnalyzer
 _LIVE_SNAPSHOT_NAME = "live_report_snapshot.json"
 
 
-def _print_eval_banner(eval_id, max_evals=None, best_obj=None):
+# Human-readable names for the calibration scheme, shown in the per-eval
+# banner so it's obvious which algorithm produced each simulation.
+_ALGO_DISPLAY = {
+    "DDS": "DDS sequential",
+    "DDS_PARALLEL": "DDS parallel chains",
+    "PARALLEL_DDS": "DDS parallel chains",
+    "RANDOM": "RANDOM parallel",
+}
+
+
+def _print_eval_banner(eval_id, max_evals=None, best_obj=None, algorithm=None):
     """Print a prominent, colour-highlighted banner for each calibration
     simulation so its number stands out in the terminal amid the model's own
     (mizuRoute/openWQ) output. ANSI colour is used only when stdout is a TTY,
@@ -70,12 +80,15 @@ def _print_eval_banner(eval_id, max_evals=None, best_obj=None):
     DIM  = "\033[0;90m" if use_color else ""   # grey
     RST  = "\033[0m"    if use_color else ""
     total = f" / {max_evals}" if max_evals else ""
+    scheme = ""
+    if algorithm:
+        scheme = f" [{_ALGO_DISPLAY.get(algorithm, algorithm)}]"
     best = ""
     if best_obj is not None and best_obj < 1e9:
         best = f"{DIM}      best so far: {best_obj:.4g}{RST}"
     bar = "═" * 66
     print(f"\n{BOLD}{bar}{RST}", flush=True)
-    print(f"{BOLD}  ▶  SIMULATION {eval_id}{total}{RST}{best}", flush=True)
+    print(f"{BOLD}  ▶  SIMULATION {eval_id}{total}{scheme}{RST}{best}", flush=True)
     print(f"{BOLD}{bar}{RST}", flush=True)
 
 
@@ -838,7 +851,7 @@ def run_calibration(
         # Prominent, highlighted banner so this simulation's number is easy to
         # spot in the terminal amid the model's own output.
         _best_so_far = min((h["objective"] for h in _live_history), default=None)
-        _print_eval_banner(eval_id, max_evaluations, _best_so_far)
+        _print_eval_banner(eval_id, max_evaluations, _best_so_far, algorithm)
         logger.info(f"--- Evaluation {eval_id} ---")
 
         # Transform from optimization space to real space
@@ -942,10 +955,12 @@ def run_calibration(
             _best_so_far = min((h["objective"] for h in _live_history),
                                default=None)
             if first_id == last_id:
-                _print_eval_banner(first_id, max_evaluations, _best_so_far)
+                _print_eval_banner(first_id, max_evaluations, _best_so_far,
+                                   algorithm)
             else:
                 _print_eval_banner(f"{first_id}-{last_id}  ({len(eval_configs)} "
-                                   f"in parallel)", max_evaluations, _best_so_far)
+                                   f"in parallel)", max_evaluations,
+                                   _best_so_far, algorithm)
             logger.info(f"--- Evaluations {first_id}-{last_id} "
                         f"(n_parallel={n_par}) ---")
 

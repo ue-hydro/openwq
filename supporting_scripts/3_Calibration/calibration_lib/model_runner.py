@@ -394,16 +394,29 @@ class ModelRunner:
                     f"{mm:02d}:{ss:02d}{pct}   ")
                 sys.stdout.flush()
 
+        _t0 = time.time()
         th = threading.Thread(target=_animate, daemon=True)
         th.start()
+        _ok = False
         try:
             result = subprocess.run(cmd, capture_output=True, text=True,
                                     timeout=self.timeout_seconds)
+            _ok = True
         finally:
             done.set()
             th.join(timeout=1.0)
-            # Erase the animated line so the next log line starts clean.
+            # Erase the animated spinner line, then — on a clean finish — print
+            # how long this model run took so the duration stays in the log.
             sys.stdout.write("\r" + " " * 72 + "\r")
+            if _ok:
+                _el = int(time.time() - _t0)
+                _mm, _ss = divmod(_el, 60)
+                _hh, _mm = divmod(_mm, 60)
+                _dur = (f"{_hh:d}:{_mm:02d}:{_ss:02d}" if _hh
+                        else f"{_mm:02d}:{_ss:02d}")
+                sys.stdout.write(
+                    f"\033[92m  ✔ {label} finished in {_dur}"
+                    f"{' (h:mm:ss)' if _hh else ' (mm:ss)'}\033[0m\n")
             sys.stdout.flush()
             try:
                 _SPINNER_LOCK.release()

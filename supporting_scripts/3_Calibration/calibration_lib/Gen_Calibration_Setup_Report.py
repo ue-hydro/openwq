@@ -2116,13 +2116,14 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
         <h3>Optimization algorithm</h3>
         <div class="form-row">
             {rh.build_form_select("algorithm", "Algorithm",
-                [("DDS", "DDS (sequential)"),
-                 ("RANDOM", "RANDOM (parallel)"),
-                 ("DDS_PARALLEL", "Parallel DDS chains (parallel)")], "DDS",
-                "DDS (sequential) is the most sample-efficient and is "
-                "recommended. RANDOM and Parallel DDS chains use n_parallel "
-                "concurrent model runs (faster wall-clock); Parallel DDS keeps "
-                "DDS's efficiency by running several independent chains at once.")}
+                [("DDS", "DDS sequential"),
+                 ("DDS_PARALLEL", "DDS parallel chains"),
+                 ("RANDOM", "RANDOM parallel")], "DDS",
+                "DDS sequential is the most sample-efficient (1 chain, no "
+                "parallelism). DDS parallel chains runs n_parallel independent "
+                "DDS chains at once — same efficiency, ~n_parallel× faster "
+                "wall-clock (recommended when you have spare cores). RANDOM "
+                "parallel is a fast but low-efficiency baseline.")}
             {rh.build_form_number("max_evaluations", "Max Evaluations",
                 500, min_val=1, step=1,
                 hint="Total number of model evaluations")}
