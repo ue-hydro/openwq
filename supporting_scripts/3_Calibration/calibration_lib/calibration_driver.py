@@ -44,7 +44,8 @@ from .parameter_handler import ParameterHandler
 from .model_runner import ModelRunner, HPCJobGenerator
 from .objective_functions import ObjectiveFunction
 from .checkpoint import CheckpointManager
-from .optimization.dds import DDS, DDSResult, RandomSearch
+from .optimization.dds import (DDS, DDSResult, RandomSearch,
+                               ParallelDDS, ParallelRandom)
 from .sensitivity.morris_screening import MorrisScreening
 from .sensitivity.sobol_analysis import SobolAnalysis
 from .postprocessing.results_analysis import ResultsAnalyzer
@@ -895,6 +896,93 @@ def run_calibration(
 
         return obj_val
 
+    def batch_objective(points_opt):
+        """Evaluate a LIST of optimization-space parameter vectors, running up
+        to ``n_parallel`` model evaluations concurrently.  Same per-eval work
+        as ``objective_wrapper`` (setup → run → score → live history) but
+        batched + parallel; used by the parallel algorithms (DDS_PARALLEL and
+        RANDOM).  Returns objective values in the SAME order as the inputs."""
+        n = len(points_opt)
+        objs = [1e10] * n
+        n_par = max(1, int(n_parallel or 1))
+
+        for chunk_start in range(0, n, n_par):
+            chunk = list(range(chunk_start, min(chunk_start + n_par, n)))
+
+            # ── Setup each eval in the chunk (sequential, fast) ──
+            eval_configs = []
+            real_by_idx = {}
+            for idx in chunk:
+                params_opt = np.asarray(points_opt[idx])
+                eval_id = eval_counter[0]
+                eval_counter[0] += 1
+                params_real = np.array([
+                    ParameterHandler.transform_to_real(p, t)
+                    for p, t in zip(params_opt, transforms)
+                ])
+                real_by_idx[idx] = (eval_id, params_real)
+                eval_dir = param_handler.setup_working_directory(
+                    eval_id, calibration_parameters, params_real)
+                param_handler.apply_parameters(
+                    eval_dir, calibration_parameters, params_real)
+                with open(eval_dir / "parameters.json", 'w') as f:
+                    json.dump({nm: float(v) for nm, v
+                               in zip(param_names, params_real)}, f, indent=2)
+                eval_configs.append({
+                    "eval_id": eval_id,
+                    "eval_dir": eval_dir,
+                    "master_json": str(eval_dir / "openWQ_master.json"),
+                    "_idx": idx,
+                })
+
+            # Banner spanning the whole concurrent chunk so the simulation
+            # numbers stand out even when several run at once.
+            first_id = eval_configs[0]["eval_id"]
+            last_id = eval_configs[-1]["eval_id"]
+            _best_so_far = min((h["objective"] for h in _live_history),
+                               default=None)
+            if first_id == last_id:
+                _print_eval_banner(first_id, max_evaluations, _best_so_far)
+            else:
+                _print_eval_banner(f"{first_id}-{last_id}  ({len(eval_configs)} "
+                                   f"in parallel)", max_evaluations, _best_so_far)
+            logger.info(f"--- Evaluations {first_id}-{last_id} "
+                        f"(n_parallel={n_par}) ---")
+
+            # ── Run the chunk (parallel when n_par > 1) ──
+            run_results = model_runner.run_parallel_evaluations(
+                eval_configs, n_par)
+            by_id = {eid: (ok, rt, err)
+                     for (eid, ok, rt, err) in run_results}
+
+            # ── Objective for each (sequential; reads HDF5 output) ──
+            for cfg in eval_configs:
+                idx = cfg["_idx"]
+                eval_id, params_real = real_by_idx[idx]
+                ok, rt, err = by_id.get(cfg["eval_id"], (False, 0.0, "no result"))
+                if ok:
+                    obj_val = obj_func.compute(cfg["eval_dir"] / "openwq_out")
+                else:
+                    logger.warning(f"Evaluation {eval_id} failed: {err}")
+                    obj_val = 1e10
+                objs[idx] = obj_val
+
+                with open(cfg["eval_dir"] / "objective.txt", 'w') as f:
+                    f.write(f"objective: {obj_val}\n")
+                    f.write(f"success: {ok}\n")
+                logger.info(f"Evaluation {eval_id}: obj = {obj_val:.6f}, "
+                            f"runtime = {rt:.1f}s")
+
+                _live_history.append({
+                    "eval_id": int(eval_id),
+                    "objective": float(obj_val),
+                    "parameters": {nm: float(v) for nm, v
+                                   in zip(param_names, params_real)},
+                })
+            _partial_report(in_progress=True, throttle=20.0)
+
+        return objs
+
     # =========================================================================
     # Run Optimization
     # =========================================================================
@@ -934,15 +1022,36 @@ def run_calibration(
             callback=checkpoint_callback
         )
     elif algorithm == "RANDOM":
-        optimizer = RandomSearch(
+        # RANDOM (parallel): independent samples evaluated up to n_parallel at
+        # a time via the batch objective.  With n_parallel == 1 this is the
+        # plain sequential random baseline.
+        optimizer = ParallelRandom(
             n_params=len(calibration_parameters),
             bounds=bounds_opt,
             param_names=param_names,
             max_evals=max_evaluations - start_eval,
+            batch=n_parallel,
             seed=random_seed
         )
         result = optimizer.optimize(
-            objective_wrapper,
+            batch_objective,
+            callback=checkpoint_callback
+        )
+    elif algorithm in ("DDS_PARALLEL", "PARALLEL_DDS"):
+        # Parallel DDS chains: n_parallel independent DDS chains advanced
+        # together, one candidate per chain per round evaluated concurrently —
+        # keeps DDS's sample efficiency while using n_parallel model runs.
+        optimizer = ParallelDDS(
+            n_params=len(calibration_parameters),
+            bounds=bounds_opt,
+            param_names=param_names,
+            max_evals=max_evaluations - start_eval,
+            n_chains=n_parallel,
+            seed=random_seed
+        )
+        result = optimizer.optimize(
+            batch_objective,
+            initial_point=initial_opt,
             callback=checkpoint_callback
         )
     else:
