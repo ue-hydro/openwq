@@ -856,6 +856,23 @@ def run_calibration(
 
     eval_counter = [start_eval]
 
+    def _append_all_simulated(eval_id):
+        """Append this eval's simulated series (target reach(es), objective
+        species) to results/all_simulated.csv so the report can draw a light-
+        gray 'all simulations' overlay behind the best-fit time series.
+        Best-effort — never breaks an evaluation."""
+        try:
+            _sim = obj_func.get_simulated_data()
+            if _sim is None or _sim.empty:
+                return
+            _sim = _sim.copy()
+            _sim["eval_id"] = int(eval_id)
+            _asd = work_dir / "results" / "all_simulated.csv"
+            _asd.parent.mkdir(parents=True, exist_ok=True)
+            _sim.to_csv(_asd, mode="a", index=False, header=not _asd.exists())
+        except Exception:
+            pass
+
     def objective_wrapper(params_opt: np.ndarray) -> float:
         """Wrapper that handles parameter transformation and model execution."""
         eval_id = eval_counter[0]
@@ -918,6 +935,8 @@ def run_calibration(
             "objective": float(obj_val),
             "parameters": {n: float(v) for n, v in zip(param_names, params_real)},
         })
+        if success:
+            _append_all_simulated(eval_id)
         _partial_report(in_progress=True, throttle=20.0)
 
         return obj_val
@@ -994,6 +1013,7 @@ def run_calibration(
                 ok, rt, err = by_id.get(cfg["eval_id"], (False, 0.0, "no result"))
                 if ok:
                     obj_val = obj_func.compute(cfg["eval_dir"] / "openwq_out")
+                    _append_all_simulated(eval_id)
                 else:
                     logger.warning(f"Evaluation {eval_id} failed: {err}")
                     obj_val = 1e10
