@@ -1182,6 +1182,7 @@ def _build_calibrated_timeseries_section(
     # Load the persisted full simulated series so objective species with NO
     # observations at the target reach still get a simulated-only plot.
     _sim_all = None
+    _all_sim = None
     _of_species = []
     _simonly = []
     try:
@@ -1193,6 +1194,11 @@ def _build_calibrated_timeseries_section(
                                  "simulated_data.csv")
         if _os.path.isfile(_sim_csv):
             _sim_all = _pd.read_csv(_sim_csv)
+        # All evaluations' simulated series (for the light-gray overlay).
+        _allsim_csv = _os.path.join(str(output_dir), "results",
+                                    "all_simulated.csv")
+        if _os.path.isfile(_allsim_csv):
+            _all_sim = _pd.read_csv(_allsim_csv)
         _matched_sp = set()
         if _has_pairs and "species" in matched_data.columns:
             _matched_sp = {str(s) for s in matched_data["species"].unique()}
@@ -1236,7 +1242,7 @@ def _build_calibrated_timeseries_section(
     # a simulated-only series for objective species with no obs at the reach.
     plots_html = _generate_timeseries_charts(
         matched_data, output_dir, hostmodel=hostmodel,
-        simulated_data=_sim_all, of_species=_of_species)
+        simulated_data=_sim_all, of_species=_of_species, all_sim=_all_sim)
     if not plots_html:
         return ""
 
@@ -2569,9 +2575,140 @@ def _generate_performance_plots(
     return "\n".join(plots_html)
 
 
+def _gray_overlay(all_sim, species, pd, max_g=300, max_pts=200):
+    """ONE light-gray WebGL trace overlaying every evaluation's simulated
+    series for ``species`` (None-separated per eval/reach).  Per-point
+    ``customdata`` carries the evaluation number, so hovering shows ``sim N``
+    and a click can read which run it is.  A single trace regardless of eval
+    count → efficient and conflict-free.  Returns ``(trace_or_None, eval_ids)``.
+    """
+    if not (isinstance(all_sim, pd.DataFrame) and not all_sim.empty
+            and 'eval_id' in all_sim.columns):
+        return None, []
+    asp = all_sim[all_sim['species'].astype(str) == str(species)]
+    if asp.empty:
+        return None, []
+    eids = sorted(asp['eval_id'].unique())
+    if len(eids) > max_g:                           # sample to keep it light
+        st = len(eids) / max_g
+        eids = [eids[int(k * st)] for k in range(max_g)]
+    asp = asp[asp['eval_id'].isin(eids)]
+    has_reach = 'reach_id' in asp.columns
+    gx, gy, gcd = [], [], []
+    for eid in eids:
+        ie = int(eid)
+        g0 = asp[asp['eval_id'] == eid]
+        rgroups = ([grp for _, grp in g0.groupby('reach_id')]
+                   if has_reach else [g0])
+        for g in rgroups:
+            if 'datetime' in g.columns:
+                g = g.sort_values('datetime')
+                xs = [str(v) for v in pd.to_datetime(g['datetime'])]
+            else:
+                xs = list(range(len(g)))
+            ys = [None if v != v else float(v) for v in g['simulated']]
+            if len(xs) > max_pts:                   # thin long series
+                step = len(xs) // max_pts + 1
+                xs = xs[::step]
+                ys = ys[::step]
+            gx += xs + [None]
+            gy += ys + [None]
+            gcd += [ie] * len(xs) + [None]
+    if not gx:
+        return None, []
+    trace = {"type": "scattergl", "mode": "lines", "x": gx, "y": gy,
+             "customdata": gcd, "name": f"all simulations ({len(eids)})",
+             "_role": "graysim", "legendgroup": "allsim", "showlegend": True,
+             "line": {"color": "#c9ced6", "width": 0.6}, "opacity": 0.5,
+             "hovertemplate":
+                 "sim %{customdata}<br>%{x}<br>%{y:.4g}<extra></extra>"}
+    return trace, [int(e) for e in eids]
+
+
+def _isolated_trace():
+    """Empty placeholder trace (role 'isolated') that the JS fills in when the
+    user isolates a single simulation — kept on top, in a darker gray (it is
+    just one of the gray runs, not the best fit, so it stays gray)."""
+    return {"type": "scatter", "mode": "lines", "x": [], "y": [],
+            "name": "isolated simulation", "_role": "isolated",
+            "visible": False, "showlegend": True,
+            "line": {"color": "#6b7280", "width": 1.8},
+            "hovertemplate": "%{x}<br>%{y:.4g}<extra>isolated</extra>"}
+
+
+def _sim_controls(chart_id, y_values, eval_ids):
+    """``(yaxis_dict, controls_html)`` for a chart that carries a gray overlay.
+
+    Controls: a "Zoom to best fit" button (the chart also OPENS at that range),
+    an "Isolate" dropdown (highlights one run, hides the gray spaghetti), and a
+    "Show all simulations" button.  Traces are found by a ``_role`` tag, never
+    by index, so the observed/best-fit traces are never touched.  Clicking a
+    gray line also isolates that run (read from its per-point customdata)."""
+    yaxis = {"title": "Concentration"}
+    idj = json.dumps(chart_id)
+    bs = ("padding:.25rem .55rem;font-size:.78rem;border:1px solid "
+          "var(--border);border-radius:6px;background:var(--surface);"
+          "color:var(--text);cursor:pointer;margin-right:.4rem;")
+    vals = [v for v in (y_values or []) if v is not None]
+    zoom_btn = ""
+    if vals:
+        lo, hi = min(vals), max(vals)
+        pad = (hi - lo) * 0.08 if hi > lo else (abs(hi) * 0.08 or 0.1)
+        y0, y1 = round(lo - pad, 6), round(hi + pad, 6)
+        yaxis["range"] = [y0, y1]
+        zr = json.dumps({"yaxis.range": [y0, y1], "xaxis.autorange": True})
+        zoom_btn = ("<button type='button' style='" + bs + "' onclick='"
+                    "if(window.Plotly)Plotly.relayout(" + idj + "," + zr
+                    + ")'>&#128269; Zoom to best fit</button>")
+    sel_id = chart_id + "-iso"
+    all_id = chart_id + "-all"
+    opts = "<option value=''>— all simulations —</option>" + "".join(
+        "<option value='%d'>sim %d</option>" % (e, e) for e in eval_ids)
+    dropdown = ("<label style='font-size:.78rem;color:var(--text2);'>Isolate: "
+                "<select id='" + sel_id + "' style='" + bs
+                + "max-width:150px;margin-left:.3rem;'>" + opts
+                + "</select></label>")
+    all_btn = ("<button id='" + all_id + "' type='button' style='" + bs
+               + "'>&#8617; Show all simulations</button>")
+    script = (
+        "<script>(function(){var id=" + idj + ";"
+        "function gd(){return document.getElementById(id);}"
+        "function ti(g,r){var d=g.data||[];for(var i=0;i<d.length;i++)"
+        "if(d[i]._role===r)return i;return -1;}"
+        "function iso(v){var g=gd();if(!window.Plotly||!g)return;"
+        "var gi=ti(g,'graysim'),hi=ti(g,'isolated');if(gi<0)return;"
+        "if(!v){Plotly.restyle(id,{visible:true},[gi]);"
+        "if(hi>=0)Plotly.restyle(id,{visible:false},[hi]);return;}"
+        "if(hi<0)return;var t=g.data[gi],cd=t.customdata||[],xs=[],ys=[];"
+        "for(var i=0;i<cd.length;i++){if(String(cd[i])===String(v)){"
+        "xs.push(t.x[i]);ys.push(t.y[i]);}}"
+        "Plotly.restyle(id,{x:[xs],y:[ys],name:'sim '+v,visible:true},[hi]);"
+        "Plotly.restyle(id,{visible:false},[gi]);}"
+        "var sel=document.getElementById(" + json.dumps(sel_id) + ");"
+        "if(sel)sel.onchange=function(){iso(this.value);};"
+        "var ab=document.getElementById(" + json.dumps(all_id) + ");"
+        "if(ab)ab.onclick=function(){if(sel)sel.value='';iso('');"
+        "if(window.Plotly)Plotly.relayout(id,{'yaxis.autorange':true,"
+        "'xaxis.autorange':true});};"
+        "function at(){var g=gd();if(!g||!g.on){setTimeout(at,300);return;}"
+        "g.on('plotly_click',function(ev){if(!ev||!ev.points||!ev.points.length)"
+        "return;var p=ev.points[0],g2=gd(),d=g2.data||[],tr=d[p.curveNumber];"
+        "if(!tr)return;"
+        "if(tr._role==='isolated'){if(sel)sel.value='';iso('');return;}"
+        "if(tr._role!=='graysim')return;"
+        "var e=p.customdata;if(e==null)return;"
+        "if(sel)sel.value=String(e);iso(String(e));});}at();"
+        "})();</script>")
+    controls = ("<div style='margin:.1rem 0 .3rem;display:flex;"
+                "align-items:center;gap:.5rem;flex-wrap:wrap;'>"
+                + zoom_btn + dropdown + all_btn + "</div>" + script)
+    return yaxis, controls
+
+
 def _generate_timeseries_charts(matched_data, output_dir,
                                 hostmodel: str = "mizuroute",
-                                simulated_data=None, of_species=None) -> str:
+                                simulated_data=None, of_species=None,
+                                all_sim=None) -> str:
     """Interactive (Plotly) observed-vs-simulated time series + obs-vs-sim
     scatter, one block per calibrated species.  Each reach/HRU is a legend
     entry the user can toggle; the mode-bar provides SVG export.
@@ -2624,16 +2761,21 @@ def _generate_timeseries_charts(matched_data, output_dir,
             obs = [None if v != v else float(v) for v in rd['observed']]
             sim = [None if v != v else float(v) for v in rd['simulated']]
             label = f'{feat_label} {rid}' if rid is not None else 'all'
+            # Short legend labels when there's a single reach (the reach id is
+            # redundant then) so the horizontal top legend fits on one row.
+            _sfx = f" · {label}" if n_reaches > 1 else ""
             ts_traces.append({
                 "type": "scatter", "mode": "markers", "x": x, "y": obs,
-                "name": f"obs · {label}", "legendgroup": label,
-                "marker": {"size": 6, "symbol": "circle-open"},
+                "name": f"observed{_sfx}", "legendgroup": f"obs-{label}",
+                "marker": {"size": 7, "symbol": "circle", "color": "#ef4444",
+                           "line": {"width": 0.6, "color": "#7f1d1d"}},
                 "hovertemplate": "%{x|%Y-%m-%d}<br>obs %{y:.4g}<extra></extra>"})
             ts_traces.append({
                 "type": "scatter", "mode": "lines", "x": x, "y": sim,
-                "name": f"sim · {label}", "legendgroup": label,
-                "line": {"width": 1.5},
-                "hovertemplate": "%{x|%Y-%m-%d}<br>sim %{y:.4g}<extra></extra>"})
+                "name": f"best fit{_sfx}", "legendgroup": f"best-{label}",
+                "line": {"width": 2, "color": "#10b981"},
+                "hovertemplate":
+                    "%{x|%Y-%m-%d}<br>best %{y:.4g}<extra></extra>"})
             sc_traces.append({
                 "type": "scatter", "mode": "markers", "x": obs, "y": sim,
                 "name": label, "marker": {"size": 7, "opacity": 0.6},
@@ -2652,19 +2794,35 @@ def _generate_timeseries_charts(matched_data, output_dir,
                 "line": {"dash": "dash", "color": "#9aa5b1", "width": 1},
                 "name": "1:1 line", "hoverinfo": "skip"})
 
+        # Light-gray overlay: ONE combined trace (hover shows the sim number),
+        # behind the obs/best lines; an empty 'isolated' trace sits on top for
+        # the isolate dropdown / click-to-isolate.
+        _gray, _evals = _gray_overlay(all_sim, species, pd)
+        ts_id = _plot_id("ts")
+        if _gray is not None:
+            ts_traces = [_gray] + ts_traces + [_isolated_trace()]
+            _yaxis, _zoom_btn = _sim_controls(ts_id, all_v, _evals)
+        else:
+            _yaxis, _zoom_btn = {"title": "Concentration"}, ""
+
         _leg = n_reaches <= 25
         _outlet = " · outlet obs" if _is_summa else ""
         ts_layout = {
             "title": {"text": f"{species} — time series "
                               f"({n_reaches} {feat_label_plural}{_outlet})"},
-            "xaxis": {"title": "Date"}, "yaxis": {"title": "Concentration"},
-            "hovermode": "closest", "showlegend": _leg}
+            "xaxis": {"title": "Date"}, "yaxis": _yaxis,
+            "hovermode": "closest", "showlegend": True,
+            "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02,
+                       "xanchor": "left", "x": 0},
+            "margin": {"l": 64, "r": 24, "t": 92, "b": 52}}
         sc_layout = {
             "title": {"text": f"{species} — observed vs simulated"},
             "xaxis": {"title": "Observed"}, "yaxis": {"title": "Simulated"},
-            "hovermode": "closest", "showlegend": _leg}
-        c1 = _plotly_chart(_plot_id("ts"), ts_traces, ts_layout,
-                           height=440, card=False)
+            "hovermode": "closest", "showlegend": _leg,
+            "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02,
+                       "xanchor": "left", "x": 0},
+            "margin": {"l": 64, "r": 24, "t": 92, "b": 52}}
+        c1 = _plotly_chart(ts_id, ts_traces, ts_layout, height=440, card=False)
         c2 = _plotly_chart(_plot_id("sc"), sc_traces, sc_layout,
                            height=440, card=False)
         blocks.append(
@@ -2672,6 +2830,7 @@ def _generate_timeseries_charts(matched_data, output_dir,
             f'<h3 style="margin:.2rem 0 .7rem;">{html_lib.escape(str(species))} '
             f'&mdash; {n_reaches} '
             f'{feat_label if n_reaches == 1 else feat_label_plural}</h3>'
+            f'{_zoom_btn}'
             f'<div style="display:flex;flex-wrap:wrap;gap:1rem;">'
             f'<div style="flex:1 1 520px;min-width:300px;">{c1}</div>'
             f'<div style="flex:1 1 360px;min-width:280px;">{c2}</div>'
@@ -2694,6 +2853,7 @@ def _generate_timeseries_charts(matched_data, output_dir,
             else:
                 reach_ids = [None]
             ts_traces = []
+            sim_v = []
             for rid in reach_ids:
                 rd = sp if rid is None else sp[sp['reach_id'] == rid]
                 if rd.empty:
@@ -2704,21 +2864,35 @@ def _generate_timeseries_charts(matched_data, output_dir,
                 else:
                     x = list(range(len(rd)))
                 sim = [None if v != v else float(v) for v in rd['simulated']]
+                sim_v += [v for v in sim if v is not None]
                 label = f'{feat_label} {rid}' if rid is not None else 'all'
                 ts_traces.append({
                     "type": "scatter", "mode": "lines", "x": x, "y": sim,
-                    "name": f"sim · {label}", "line": {"width": 1.5},
+                    "name": f"best fit · {label}",
+                    "line": {"width": 2, "color": "#10b981"},
                     "hovertemplate":
-                        "%{x|%Y-%m-%d}<br>sim %{y:.4g}<extra></extra>"})
+                        "%{x|%Y-%m-%d}<br>best %{y:.4g}<extra></extra>"})
             if not ts_traces:
                 continue
+            # Same treatment as the obs species: combined gray overlay (hover
+            # shows sim number) + isolate dropdown/click + show-all/zoom.
+            _gray, _evals = _gray_overlay(all_sim, species, pd)
             _reach_txt = ", ".join(str(r) for r in reach_ids if r is not None)
+            ts_id = _plot_id("tsonly")
+            if _gray is not None:
+                ts_traces = [_gray] + ts_traces + [_isolated_trace()]
+                _yaxis, _zoom_btn = _sim_controls(ts_id, sim_v, _evals)
+            else:
+                _yaxis, _zoom_btn = {"title": "Concentration"}, ""
             ts_layout = {
                 "title": {"text": f"{species} — simulated (no observations)"},
                 "xaxis": {"title": "Date"},
-                "yaxis": {"title": "Concentration"},
-                "hovermode": "closest", "showlegend": len(reach_ids) <= 25}
-            c1 = _plotly_chart(_plot_id("tsonly"), ts_traces, ts_layout,
+                "yaxis": _yaxis,
+                "hovermode": "closest", "showlegend": True,
+                "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02,
+                           "xanchor": "left", "x": 0},
+                "margin": {"l": 64, "r": 24, "t": 92, "b": 52}}
+            c1 = _plotly_chart(ts_id, ts_traces, ts_layout,
                                height=440, card=False)
             note = (
                 f'<div style="margin:.2rem 0 .7rem;padding:.55rem .75rem;'
@@ -2736,7 +2910,7 @@ def _generate_timeseries_charts(matched_data, output_dir,
                 f'<div class="card">'
                 f'<h3 style="margin:.2rem 0 .7rem;">'
                 f'{html_lib.escape(str(species))} &mdash; simulated only</h3>'
-                f'{note}<div>{c1}</div></div>')
+                f'{note}{_zoom_btn}<div>{c1}</div></div>')
 
     return "\n".join(blocks)
 
