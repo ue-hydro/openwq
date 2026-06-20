@@ -1352,6 +1352,17 @@ class FloodViewer3D {
         // Concentration data (optional)
         if (m.has_concentration) {
             document.getElementById('btn-conc').style.display = '';
+            // Default view: CONCENTRATION active, water deactivated (whenever
+            // concentration data exists).  The user can re-enable water with
+            // its button.  The concentration overlay renders on the terrain
+            // mesh, so it shows fine without the water surface.
+            this.showConcentration = true;
+            this.showWater = false;
+            document.getElementById('btn-conc').classList.add('active');
+            var _bwater = document.getElementById('btn-water');
+            if (_bwater) _bwater.classList.remove('active');
+            var _ccbw = document.getElementById('conc-colorbar-wrap');
+            if (_ccbw) _ccbw.style.display = '';
             // Handle conc_max as object (per species) or single value
             const concMaxVal = (typeof m.conc_max === 'object' && m.chemical_species)
                 ? m.conc_max[m.chemical_species[0]]
