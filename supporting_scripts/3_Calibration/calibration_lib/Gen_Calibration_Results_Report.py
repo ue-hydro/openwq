@@ -200,7 +200,11 @@ def generate_results_report(
             # The time-series section is always rendered for a calibration run
             # (when no obs-sim pairs exist it shows a placeholder explaining
             # why), so always provide its nav link.
-            nav_items.append({"id": "timeseries", "label": "Time Series"})
+            nav_items.append({"id": "timeseries",
+                               "label": "Observed vs Simulated: calibration"})
+            nav_items.append({"id": "valid-ts",
+                               "label": "Observed vs Simulated: Best Sim "
+                                        "(Calibration &amp; Validation)"})
             nav_items.append({"id": "next-steps", "label": "Next Steps"})
             # "Run Best Params" snippet lives at the very bottom of the report.
             nav_items.append({"id": "run-best", "label": "Run Best Params"})
@@ -438,6 +442,14 @@ def generate_results_report(
                 _ts_section = ""
             if _ts_section:
                 H.append(_ts_section)
+            # Combined calibration + validation best-fit (best params re-run
+            # over the validation period; produced automatically when a run
+            # completes).  Shows a placeholder until that data exists.
+            try:
+                H.append(_build_validation_section(
+                    output_dir, calibration_settings, model_config))
+            except Exception as _e:
+                logger.warning(f"Validation section skipped: {_e}")
         elif in_progress and _mode in ("both", "calibration"):
             H.append(_build_not_run_notice(
                 "best-params", "Calibration",
@@ -1222,7 +1234,7 @@ def _build_calibrated_timeseries_section(
                      else "in this run")
         return f"""
 <div class="section" id="timeseries">
-    <h2>Observed vs Simulated &mdash; calibrated time series</h2>
+    <h2>Observed vs Simulated: calibration</h2>
     <div class="card" style="border-left:4px solid #ff6b35;">
         <p style="margin:.2rem 0;color:var(--text2);font-size:.92rem;line-height:1.6;">
             &#9888;&#65039; <strong>No observed-vs-simulated pairs are available,
@@ -1263,7 +1275,7 @@ def _build_calibrated_timeseries_section(
 
     return f"""
 <div class="section" id="timeseries">
-    <h2>Observed vs Simulated &mdash; calibrated time series</h2>
+    <h2>Observed vs Simulated: calibration</h2>
     <div class="card" style="border-left:4px solid var(--secondary);">
         <p style="margin:.2rem 0;color:var(--text2);font-size:.92rem;line-height:1.6;">
             Time series of <strong>observed</strong> vs <strong>simulated</strong>
@@ -1278,6 +1290,139 @@ def _build_calibrated_timeseries_section(
     {plots_html}
 </div>
 """
+
+
+def _build_validation_section(output_dir, settings, model_config):
+    """Combined calibration + validation best-fit time series.
+
+    Reads ``results/validation_matched_data.csv`` (period-tagged obs/sim pairs
+    produced when a calibration run completes by re-running the best parameters
+    over the validation window).  Renders the full record per species with the
+    calibration window shaded green on the left, the validation window shaded
+    orange on the right, a dashed boundary line, and the objective metric for
+    each period.  Shows a placeholder until that data exists."""
+    import os
+    _head = ('Observed vs Simulated: Best Sim '
+             '(Calibration &amp; Validation)')
+    vpath = os.path.join(str(output_dir), "results",
+                         "validation_matched_data.csv")
+    vd = None
+    have = os.path.isfile(vpath)
+    if have:
+        try:
+            import pandas as pd
+            vd = pd.read_csv(vpath)
+            have = (not vd.empty and "period" in vd.columns
+                    and {"observed", "simulated", "species", "datetime"}
+                    <= set(vd.columns))
+        except Exception:
+            have = False
+    if not have:
+        return (
+            '\n<div class="section" id="valid-ts">\n'
+            f'    <h2>{_head}</h2>\n'
+            '    <div class="card"><p style="color:var(--text2);'
+            'font-size:.92rem;line-height:1.6;">This section is produced '
+            'automatically when a calibration run <strong>completes</strong>: '
+            'the best parameters are re-run over the <strong>validation</strong> '
+            'period (held-out data), and the full record is shown here &mdash; '
+            'calibration on the left, validation on the right &mdash; with the '
+            'objective metric for each period.</p></div>\n</div>\n')
+    if not (HAS_MATPLOTLIB and HAS_NUMPY):
+        return ""
+    import pandas as pd
+    import numpy as np
+    from .objective_functions import ObjectiveFunction as _OF
+    metric = str((settings or {}).get("objective_function", "KGE")).upper()
+    _mfn = {"KGE": _OF.kge, "NSE": _OF.nse, "RMSE": _OF.rmse,
+            "PBIAS": _OF.pbias}.get(metric, _OF.kge)
+
+    def _metric(sub):
+        if sub is None or sub.empty:
+            return None
+        o = pd.to_numeric(sub["observed"], errors="coerce").to_numpy(float)
+        s = pd.to_numeric(sub["simulated"], errors="coerce").to_numpy(float)
+        m = ~(np.isnan(o) | np.isnan(s))
+        if int(m.sum()) < 2:
+            return None
+        try:
+            return float(_mfn(o[m], s[m]))
+        except Exception:
+            return None
+
+    def _fmt(v):
+        return "n/a" if v is None else f"{v:.3f}"
+
+    blocks = []
+    for sp in list(vd["species"].unique()):
+        sd = vd[vd["species"] == sp].copy()
+        sd["_dt"] = pd.to_datetime(sd["datetime"], errors="coerce")
+        sd = sd.dropna(subset=["_dt"]).sort_values("_dt")
+        if sd.empty:
+            continue
+        cal = sd[sd["period"] == "calibration"]
+        val = sd[sd["period"] == "validation"]
+        bnd = (str(val["_dt"].min()) if not val.empty
+               else (str(cal["_dt"].max()) if not cal.empty else None))
+        x = [str(v) for v in sd["_dt"]]
+        obs = [None if v != v else float(v)
+               for v in pd.to_numeric(sd["observed"], errors="coerce")]
+        sim = [None if v != v else float(v)
+               for v in pd.to_numeric(sd["simulated"], errors="coerce")]
+        traces = [
+            {"type": "scatter", "mode": "markers", "x": x, "y": obs,
+             "name": "observed",
+             "marker": {"size": 6, "symbol": "circle", "color": "#ef4444",
+                        "line": {"width": 0.5, "color": "#7f1d1d"}},
+             "hovertemplate": "%{x|%Y-%m-%d}<br>obs %{y:.4g}<extra></extra>"},
+            {"type": "scatter", "mode": "lines", "x": x, "y": sim,
+             "name": "best fit", "line": {"width": 2, "color": "#10b981"},
+             "hovertemplate": "%{x|%Y-%m-%d}<br>best %{y:.4g}<extra></extra>"},
+        ]
+        shapes, annos = [], []
+        if bnd:
+            shapes.append({"type": "rect", "xref": "x", "x0": x[0], "x1": bnd,
+                           "yref": "paper", "y0": 0, "y1": 1,
+                           "fillcolor": "rgba(16,185,129,.06)",
+                           "line": {"width": 0}, "layer": "below"})
+            shapes.append({"type": "rect", "xref": "x", "x0": bnd, "x1": x[-1],
+                           "yref": "paper", "y0": 0, "y1": 1,
+                           "fillcolor": "rgba(251,146,60,.08)",
+                           "line": {"width": 0}, "layer": "below"})
+            shapes.append({"type": "line", "xref": "x", "x0": bnd, "x1": bnd,
+                           "yref": "paper", "y0": 0, "y1": 1,
+                           "line": {"color": "#888", "width": 1.2,
+                                    "dash": "dash"}})
+        annos.append({"xref": "paper", "x": 0.01, "yref": "paper", "y": 1.0,
+                      "yanchor": "bottom", "showarrow": False, "align": "left",
+                      "font": {"size": 12, "color": "#0e9f6e"},
+                      "text": f"<b>Calibration</b>  {metric}={_fmt(_metric(cal))}"})
+        annos.append({"xref": "paper", "x": 0.99, "yref": "paper", "y": 1.0,
+                      "yanchor": "bottom", "xanchor": "right", "showarrow": False,
+                      "align": "right", "font": {"size": 12, "color": "#d97706"},
+                      "text": f"<b>Validation</b>  {metric}={_fmt(_metric(val))}"})
+        layout = {
+            "title": {"text": f"{sp} — best fit: calibration + validation"},
+            "xaxis": {"title": "Date"}, "yaxis": {"title": "Concentration"},
+            "hovermode": "closest", "showlegend": True,
+            "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.06,
+                       "xanchor": "left", "x": 0},
+            "margin": {"l": 64, "r": 24, "t": 100, "b": 52},
+            "shapes": shapes, "annotations": annos}
+        c = _plotly_chart(_plot_id("valts"), traces, layout, height=470,
+                          card=False, log_axes='y')
+        blocks.append(
+            f'<div class="card"><h3 style="margin:.2rem 0 .6rem;">'
+            f'{html_lib.escape(str(sp))}</h3>{c}</div>')
+    if not blocks:
+        return ""
+    intro = ('<p style="color:var(--text2);margin-bottom:1rem;">Best-fit '
+             'parameters re-run over the <strong>validation</strong> period. '
+             'Green = calibration window, orange = validation (held-out); the '
+             'objective metric is shown for each.</p>')
+    return ('\n<div class="section" id="valid-ts">\n'
+            f'    <h2>{_head}</h2>\n    {intro}\n    '
+            + "\n    ".join(blocks) + '\n</div>\n')
 
 
 def _build_performance_section(
