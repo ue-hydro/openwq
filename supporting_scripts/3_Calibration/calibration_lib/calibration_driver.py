@@ -433,6 +433,17 @@ def run_calibration(
     if not calibration_targets or "species" not in calibration_targets:
         raise ValueError("calibration_targets must include 'species'")
 
+    # Opt-in: spatially-variable Copernicus SS scaling.  Replace each global
+    # per-species SS scale with one parameter per reach/HRU that carries a
+    # load, so multi-reach/HRU objective functions can tune each unit's load
+    # independently.  Default OFF — global single-scale behaviour is unchanged.
+    if kwargs.get("ss_spatial_scaling"):
+        _before = len(calibration_parameters)
+        calibration_parameters = _expand_spatial_ss_params(
+            calibration_parameters, model_config or {})
+        logger.info("Spatial SS scaling ON: expanded %d -> %d parameters.",
+                    _before, len(calibration_parameters))
+
     # Initialize components
     logger.info("Initializing components...")
 
@@ -1513,6 +1524,49 @@ def _n_valid_evals(history):
         if isinstance(o, (int, float)) and o == o and o < _REPORT_PENALTY:
             n += 1
     return n
+
+
+def _expand_spatial_ss_params(calibration_parameters, model_config):
+    """Expand each global Copernicus SS scale parameter (``file_type ==
+    'ss_csv_scale'`` for a specific species, with no ``reach_id``) into one
+    parameter PER reach/HRU that carries a load for that species — so the
+    optimiser can scale each spatial unit's source/sink load independently.
+
+    Opt-in (driven by the ``ss_spatial_scaling`` flag).  Reaches are read from
+    the generated SS JSON via ``config_integration.get_ss_reaches_with_loads``.
+    Non-SS parameters and ``species == 'all'`` globals are left untouched; a
+    species with no reaches found keeps its single global parameter."""
+    from . import config_integration as _cint
+    reaches_by_species = _cint.get_ss_reaches_with_loads(model_config or {})
+    if not reaches_by_species:
+        logger.warning("Spatial SS scaling requested, but no per-reach SS "
+                       "loads were found in the SS JSON; keeping the global "
+                       "scale parameter(s).")
+        return calibration_parameters
+    expanded = []
+    for p in calibration_parameters:
+        path = p.get("path")
+        if (p.get("file_type") == "ss_csv_scale" and isinstance(path, dict)
+                and path.get("species", "all") != "all"
+                and "reach_id" not in path):
+            sp = path["species"]
+            reaches = reaches_by_species.get(sp, [])
+            if not reaches:
+                expanded.append(p)
+                continue
+            sp_clean = sp.replace("-", "_").replace(" ", "_")
+            for rid in reaches:
+                q = dict(p)
+                q["name"] = f"SS_COP_scale_{sp_clean}_{rid}"
+                q["path"] = {"species": sp, "reach_id": str(rid)}
+                q["description"] = (f"Load scaling factor for {sp} at "
+                                    f"reach/HRU {rid}")
+                expanded.append(q)
+            logger.info("Spatial SS scaling: '%s' -> %d per-reach params "
+                        "for %s.", p["name"], len(reaches), sp)
+        else:
+            expanded.append(p)
+    return expanded
 
 
 def _best_eval_dir(work_dir):

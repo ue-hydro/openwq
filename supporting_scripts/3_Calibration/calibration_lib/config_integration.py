@@ -1833,6 +1833,74 @@ def get_ss_species_with_loads(model_config: Dict[str, Any]) -> set:
     return species
 
 
+def get_ss_reaches_with_loads(model_config: Dict[str, Any]) -> Dict[str, list]:
+    """Read the generated SS JSON and return, per species, the list of spatial
+    units (reach IDs for mizuRoute; HRU IDs for HRU-loaded host models) that
+    carry a source/sink load.
+
+    The SS ``DATA`` rows hold the spatial id at index 6 and the load at index 9
+    (``[yyyy, mm, ..., id, 'all', 'all', load, ...]``).  This is used by the
+    opt-in spatial SS scaling to create one scale parameter per reach/HRU per
+    species.
+
+    Returns
+    -------
+    dict
+        ``{chemical_name: [unit_id, ...]}`` with ids as strings (``'all'``
+        excluded), sorted for deterministic parameter ordering.  Empty when the
+        SS JSON is missing or carries no spatial ids.
+    """
+    import json as _json
+
+    output_dir = model_config.get("dir2save_input_files", "")
+    ss_method = model_config.get("ss_method", "none")
+    if not output_dir or ss_method in ("none", "", None):
+        return {}
+
+    ss_json_path = os.path.join(
+        output_dir, "openwq_in", f"openWQ_SS_{ss_method}.json"
+    )
+    if not os.path.isfile(ss_json_path):
+        logger.debug(f"SS JSON not found for reach enumeration: {ss_json_path}")
+        return {}
+
+    try:
+        content = open(ss_json_path, 'r').read()
+        json_start = content.find('{')
+        if json_start < 0:
+            return {}
+        data = _json.loads(content[json_start:])
+    except Exception as e:
+        logger.warning(f"Could not parse SS JSON for reaches: {e}")
+        return {}
+
+    reaches: Dict[str, list] = {}
+    for key, entry in data.items():
+        if key == "METADATA" or not isinstance(entry, dict):
+            continue
+        chem = entry.get("CHEMICAL_NAME", "")
+        if not chem:
+            continue
+        rows = entry.get("DATA", {})
+        if isinstance(rows, dict):
+            rows = rows.values()
+        elif not isinstance(rows, list):
+            rows = []
+        bucket = reaches.setdefault(chem, [])
+        seen = set(bucket)
+        for row in rows:
+            if isinstance(row, list) and len(row) > 6:
+                rid = str(row[6])
+                if rid and rid != "all" and rid not in seen:
+                    seen.add(rid)
+                    bucket.append(rid)
+    for chem in reaches:
+        reaches[chem] = sorted(reaches[chem])
+    logger.info("SS reaches with loads: "
+                + ", ".join(f"{k}={len(v)}" for k, v in reaches.items()))
+    return reaches
+
+
 def get_species_observation_availability(
     model_config: Dict[str, Any],
 ) -> Dict[str, Dict[str, Any]]:

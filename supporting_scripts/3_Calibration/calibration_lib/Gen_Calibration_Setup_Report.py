@@ -2159,6 +2159,24 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
         </div>
     </div>
 
+    <!-- Theme: spatially-variable source/sink load scaling -->
+    <div class="card">
+        <h3>Source/sink load calibration</h3>
+        <div class="form-row">
+            {rh.build_form_checkbox(
+                "ss_spatial_scaling",
+                "Spatially-variable SS scaling (one scale per reach/HRU)",
+                checked=False,
+                hint="Copernicus loads only. OFF (default): one global load "
+                     "scale per calibrated species. ON: each per-species scale "
+                     "is expanded into one scale per reach/HRU that carries a "
+                     "load, so an objective spanning multiple reaches/HRUs can "
+                     "tune each unit's load independently. The parameter count "
+                     "grows with the number of reaches/HRUs (read from the SS "
+                     "JSON at run time), so expect to raise max evaluations.")}
+        </div>
+    </div>
+
     <div class="card" id="calibPeriodCard">
         <h3>Calibration / validation period</h3>
         <p class="hint" style="margin-top:0;">
@@ -3949,6 +3967,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // fields may not exist on older / customised reports so guard them).
     var _upoEl = document.getElementById('use_primary_only');
     s.use_primary_only = _upoEl ? !!_upoEl.checked : true;
+    var _sssEl = document.getElementById('ss_spatial_scaling');
+    s.ss_spatial_scaling = _sssEl ? !!_sssEl.checked : false;
     var _sifEl = document.getElementById('apptainer_sif_path');
     s.apptainer_sif_path = _sifEl ? (_sifEl.value.trim() || null) : null;
     var _bindEl = document.getElementById('apptainer_bind_path');
@@ -4142,6 +4162,15 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       lines.push('validation_period = None');
     }
     lines.push('');
+    lines.push('# Spatially-variable source/sink scaling (Copernicus loads).');
+    lines.push('# False (default): one global SS_COP_scale per calibrated species.');
+    lines.push('# True: expand into one scale per reach/HRU that carries a load,');
+    lines.push('#       per species, so multi-reach/HRU objective functions can');
+    lines.push('#       tune each unit independently. The number of parameters');
+    lines.push('#       grows with the number of reaches/HRUs (read from the SS');
+    lines.push('#       JSON at run time).');
+    lines.push('ss_spatial_scaling = ' + pyRepr(!!s.ss_spatial_scaling));
+    lines.push('');
     lines.push('# Spatial-matching: when True the objective uses only the');
     lines.push('# pouring-point observation per HRU (SUMMA case). For');
     lines.push('# mizuRoute every matched station is already primary so this');
@@ -4328,6 +4357,12 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        # report adds an Observed vs Simulated (Calibration &');
     lines.push('        # Validation) section.');
     lines.push('        validation_period=validation_period,');
+    lines.push('        # Spatially-variable Copernicus SS scaling: when True,');
+    lines.push('        # each global per-species SS_COP_scale is expanded into');
+    lines.push('        # one scale per reach/HRU that carries a load, so a');
+    lines.push('        # multi-reach/HRU objective can tune each unit\\'s load');
+    lines.push('        # independently (parameter count grows accordingly).');
+    lines.push('        ss_spatial_scaling=ss_spatial_scaling,');
     lines.push('        temporal_resolution=temporal_resolution,');
     lines.push('        aggregation_method=aggregation_method,');
     // Runtime chosen in the setup report (docker / apptainer), overriding
