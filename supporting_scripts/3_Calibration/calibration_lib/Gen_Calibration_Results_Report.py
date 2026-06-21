@@ -1210,6 +1210,12 @@ def _build_calibrated_timeseries_section(
     except Exception:
         _sim_all = None
 
+    # NOTE: the authoritative "best fit" is rebuilt upstream in
+    # regenerate_results_report()/the driver from the global-best eval folder
+    # (ground truth across all runs/resumes) and handed in via matched_data /
+    # simulated_data.csv — so here we simply TRUST matched_data + _sim_all and
+    # do not re-derive a (possibly worse) best from the sampled all_simulated.
+
     if not _has_pairs and not _simonly:
         _n = n_evals if isinstance(n_evals, int) and n_evals > 0 else 0
         _eval_txt = (f"across the {_n} evaluation(s)" if _n
@@ -1970,6 +1976,16 @@ function _owqWireFigTools(){
     if(btn.__owqWired) return; btn.__owqWired=true;
     btn.addEventListener('click', function(){ var plot=document.getElementById(btn.getAttribute('data-target')); if(plot) _owqDownloadPDF(plot, btn); });
   });
+  document.querySelectorAll('.log-scale').forEach(function(cb){
+    if(cb.__owqWired) return; cb.__owqWired=true;
+    var plot=document.getElementById(cb.getAttribute('data-target')); if(!plot) return;
+    cb.addEventListener('change', function(){
+      var ax=cb.getAttribute('data-logaxes')||'y', t=cb.checked?'log':'linear', up={};
+      if(ax.indexOf('y')>=0) up['yaxis.type']=t;
+      if(ax.indexOf('x')>=0) up['xaxis.type']=t;
+      if(window.Plotly) try{ Plotly.relayout(plot, up); }catch(e){}
+    });
+  });
 }
 // Charts are newPlot'd inline as the body parses; wire after a short tick so
 // each plot's layout exists before we lock the axes.
@@ -1980,16 +1996,24 @@ else setTimeout(_owqWireFigTools,250);
 
 
 def _plotly_chart(div_id: str, traces: list, layout_extra: dict = None,
-                  height: int = 440, card: bool = True) -> str:
+                  height: int = 440, card: bool = True, log_axes: str = None) -> str:
     """Emit a chart container + the Plotly.newPlot call (theme-aware), with a
     per-figure toolbar carrying a "Lock zoom" toggle and a branded "PDF"
-    export button (same controls/aesthetics as the FLUXOS results report)."""
+    export button (same controls/aesthetics as the FLUXOS results report).
+
+    ``log_axes`` (``'y'``, ``'x'`` or ``'xy'``) adds a "Log scale" checkbox that
+    switches those axes between linear and logarithmic."""
     payload_t = json.dumps(traces)
     payload_l = json.dumps(layout_extra or {})
+    _log_cb = (
+        f'<label title="Toggle logarithmic axis">'
+        f'<input type="checkbox" class="log-scale" data-target="{div_id}" '
+        f'data-logaxes="{log_axes}"> Log scale</label>' if log_axes else '')
     toolbar = (
         '<div class="plot-controls">'
         '<span class="hint">Uncheck to scroll / drag-zoom &middot; double-click resets</span>'
-        f'<label title="Disable / enable scroll &amp; box zoom">'
+        + _log_cb
+        + f'<label title="Disable / enable scroll &amp; box zoom">'
         f'<input type="checkbox" class="lock-zoom" data-target="{div_id}" checked> '
         'Lock zoom</label>'
         f'<button type="button" class="pdf-btn" data-target="{div_id}" '
@@ -2088,7 +2112,8 @@ def _generate_convergence_plot(
               "yaxis": {"title": f"Objective ({obj_fn})"},
               "showlegend": True,
               "hovermode": "closest"}
-    return _plotly_chart(_plot_id("conv"), traces, layout, height=430)
+    return _plotly_chart(_plot_id("conv"), traces, layout, height=430,
+                         log_axes='y')
 
 
 def _generate_param_evolution_plots(
@@ -2201,7 +2226,7 @@ def _generate_param_evolution_plots(
         "hovermode": "closest",
     }
     pid = _plot_id("evo")
-    chart = _plotly_chart(pid, traces, layout, height=470)
+    chart = _plotly_chart(pid, traces, layout, height=470, log_axes='y')
 
     # Native (scrollable) parameter picker wired to Plotly.restyle/relayout.
     opts = "\n".join(
@@ -2822,9 +2847,10 @@ def _generate_timeseries_charts(matched_data, output_dir,
             "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02,
                        "xanchor": "left", "x": 0},
             "margin": {"l": 64, "r": 24, "t": 92, "b": 52}}
-        c1 = _plotly_chart(ts_id, ts_traces, ts_layout, height=440, card=False)
+        c1 = _plotly_chart(ts_id, ts_traces, ts_layout, height=440, card=False,
+                           log_axes='y')
         c2 = _plotly_chart(_plot_id("sc"), sc_traces, sc_layout,
-                           height=440, card=False)
+                           height=440, card=False, log_axes='xy')
         blocks.append(
             f'<div class="card">'
             f'<h3 style="margin:.2rem 0 .7rem;">{html_lib.escape(str(species))} '
@@ -2893,7 +2919,7 @@ def _generate_timeseries_charts(matched_data, output_dir,
                            "xanchor": "left", "x": 0},
                 "margin": {"l": 64, "r": 24, "t": 92, "b": 52}}
             c1 = _plotly_chart(ts_id, ts_traces, ts_layout,
-                               height=440, card=False)
+                               height=440, card=False, log_axes='y')
             note = (
                 f'<div style="margin:.2rem 0 .7rem;padding:.55rem .75rem;'
                 f'border-radius:8px;background:rgba(245,158,11,.12);'

@@ -1486,6 +1486,94 @@ def _n_valid_evals(history):
     return n
 
 
+def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
+    """Find the GLOBAL-best evaluation by scanning every ``evaluations/eval_*``
+    folder (the ground truth — they accumulate across the original run AND
+    every ``--resume``, since eval numbering continues), then recompute that
+    eval's matched + simulated series via the ObjectiveFunction.
+
+    This makes the report's "best fit" independent of the (churning, possibly
+    fragmented or stale) ``results/*.csv`` caches: no matter how many times a
+    calibration is interrupted and resumed, the report always reflects the true
+    best simulation for ANY basin.  Returns ``(matched_df, sim_df, best_label)``
+    or ``(None, None, None)`` when nothing usable is found.
+    """
+    import glob as _glob
+    import re as _re
+    work_dir = Path(work_dir)
+    evdir = work_dir / "evaluations"
+    if not evdir.is_dir():
+        return None, None, None
+    # Scan objective.txt across ALL eval folders (fast text reads); keep the
+    # successful, finite, lowest-objective eval that still has HDF5 output.
+    best = None
+    for d in _glob.glob(str(evdir / "eval_*")):
+        f = os.path.join(d, "objective.txt")
+        if not os.path.isfile(f):
+            continue
+        try:
+            t = open(f).read()
+        except Exception:
+            continue
+        if "success: True" not in t:
+            continue
+        m = _re.search(r"objective:\s*([-0-9eE.+]+)", t)
+        if not m:
+            continue
+        try:
+            o = float(m.group(1))
+        except ValueError:
+            continue
+        if o >= _REPORT_PENALTY:
+            continue
+        if not _glob.glob(os.path.join(d, "openwq_out", "HDF5", "*.h5")):
+            continue
+        if best is None or o < best[1]:
+            best = (d, o)
+    if best is None:
+        return None, None, None
+
+    cs = calibration_settings or {}
+    tg = cs.get("calibration_targets") or {}
+    species = tg.get("species") or []
+    if not species:
+        return None, None, None
+    # Observation file lives in the calibration work dir.
+    obs_path = work_dir / "calibration_observations.csv"
+    if not obs_path.is_file():
+        return None, None, None
+    # h5 reader path (parent of the hdf5_support_lib package).
+    _this = Path(__file__).resolve().parent
+    h5_reader_path = str(_this.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
+    hostmodel, mapkey = "mizuroute", None
+    try:
+        from . import config_integration as _cint
+        _sm = (_cint.get_spatial_mapping(model_config) if model_config else {})
+        hostmodel = _sm.get("hostmodel", "mizuroute")
+        mapkey = _sm.get("h5_mapping_key")
+    except Exception:
+        pass
+    try:
+        _of = ObjectiveFunction(
+            observation_path=str(obs_path),
+            target_species=species,
+            target_reaches=tg.get("reach_ids", "all"),
+            compartments=tg.get("compartments") or ["RIVER_NETWORK_REACHES"],
+            metric=cs.get("objective_function", "KGE"),
+            weights=cs.get("objective_weights"),
+            h5_reader_path=h5_reader_path,
+            temporal_resolution=cs.get("temporal_resolution", "native"),
+            aggregation_method=cs.get("aggregation_method", "mean"),
+            hostmodel=hostmodel, h5_mapping_key=mapkey,
+            use_primary_only=cs.get("use_primary_only", True))
+        _of.compute(Path(best[0]) / "openwq_out")
+        return (_of.get_matched_data(), _of.get_simulated_data(),
+                os.path.basename(best[0]))
+    except Exception as _e:
+        logger.debug(f"best-fit rebuild from eval folders failed: {_e}")
+        return None, None, None
+
+
 def regenerate_results_report(*, calibration_work_dir, model_config,
                               calibration_parameters, calibration_settings,
                               report_stem):
@@ -1638,6 +1726,26 @@ def regenerate_results_report(*, calibration_work_dir, model_config,
             md = _pd.read_csv(md_path)
         except Exception:
             md = None
+
+    # Bulletproof best fit: rebuild matched + simulated from the GLOBAL-best
+    # eval folder (ground truth across all runs/resumes), overriding the
+    # possibly-stale/last-eval CSV.  This guarantees the report's best fit is
+    # the true best for any basin, however many times it was interrupted.
+    try:
+        _bmd, _bsd, _beid = _rebuild_best_fit_from_evals(
+            work_dir, cs, model_config)
+        if _bmd is not None and not _bmd.empty:
+            md = _bmd
+            try:
+                md.to_csv(md_path, index=False)            # refresh cache
+                if _bsd is not None and not _bsd.empty:
+                    _bsd.to_csv(results_dir / "simulated_data.csv", index=False)
+            except Exception:
+                pass
+            logger.info("Report best fit taken from %s (global best across all "
+                        "eval folders).", _beid)
+    except Exception as _e:
+        logger.debug(f"best-fit rebuild skipped: {_e}")
 
     # ── Performance metrics (same best-effort path as the driver) ──
     perf = None
