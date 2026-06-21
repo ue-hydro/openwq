@@ -1218,6 +1218,35 @@ def run_calibration(
         except Exception as _e:
             logger.debug(f"Could not persist simulated_data.csv: {_e}")
 
+        # Auto-validation: re-run the best parameters over the validation
+        # period (held-out data) and write the combined calibration+validation
+        # dataset for the report's "Best Sim (Calibration & Validation)"
+        # section.  Idempotent: skipped if no validation_period is given OR the
+        # validation data already exists — so a --resume run produces it only if
+        # a prior (interrupted) run never got to it, and never redundantly.
+        _vp = kwargs.get("validation_period")
+        if _vp:
+            _vfile = results_dir / "validation_matched_data.csv"
+            if _vfile.exists() and _vfile.stat().st_size > 0:
+                logger.info("Validation data already present (%s) — skipping "
+                            "the validation re-run.", _vfile.name)
+            else:
+                try:
+                    logger.info("Re-running best parameters over the validation "
+                                "period %s for the calibration+validation "
+                                "report (runs the model once; may take a "
+                                "while)...", tuple(_vp))
+                    _run_validation_and_combine(
+                        work_dir=work_dir, results_dir=results_dir,
+                        validation_period=_vp,
+                        best_params_real=best_params_real,
+                        param_names=param_names,
+                        calibration_parameters=calibration_parameters,
+                        param_handler=param_handler, model_runner=model_runner,
+                        obj_func=obj_func)
+                except Exception as _e:
+                    logger.warning(f"Validation re-run skipped: {_e}")
+
         # Generate comprehensive HTML report
         logger.info("Generating HTML calibration report...")
 
@@ -1486,26 +1515,16 @@ def _n_valid_evals(history):
     return n
 
 
-def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
-    """Find the GLOBAL-best evaluation by scanning every ``evaluations/eval_*``
-    folder (the ground truth — they accumulate across the original run AND
-    every ``--resume``, since eval numbering continues), then recompute that
-    eval's matched + simulated series via the ObjectiveFunction.
-
-    This makes the report's "best fit" independent of the (churning, possibly
-    fragmented or stale) ``results/*.csv`` caches: no matter how many times a
-    calibration is interrupted and resumed, the report always reflects the true
-    best simulation for ANY basin.  Returns ``(matched_df, sim_df, best_label)``
-    or ``(None, None, None)`` when nothing usable is found.
-    """
+def _best_eval_dir(work_dir):
+    """Path to the GLOBAL-best evaluation folder — the lowest successful,
+    finite objective with HDF5 output — scanned across every
+    ``evaluations/eval_*`` folder (they accumulate across the original run and
+    every ``--resume``).  Returns the folder path (str) or ``None``."""
     import glob as _glob
     import re as _re
-    work_dir = Path(work_dir)
-    evdir = work_dir / "evaluations"
+    evdir = Path(work_dir) / "evaluations"
     if not evdir.is_dir():
-        return None, None, None
-    # Scan objective.txt across ALL eval folders (fast text reads); keep the
-    # successful, finite, lowest-objective eval that still has HDF5 output.
+        return None
     best = None
     for d in _glob.glob(str(evdir / "eval_*")):
         f = os.path.join(d, "objective.txt")
@@ -1530,7 +1549,144 @@ def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
             continue
         if best is None or o < best[1]:
             best = (d, o)
-    if best is None:
+    return best[0] if best else None
+
+
+def _best_params_from_eval_dir(eval_dir, param_names):
+    """Read the best eval's ``parameters.json`` (real-space values keyed by
+    name) and return them as an array in ``param_names`` order, or ``None``."""
+    import json as _json
+    if not eval_dir:
+        return None
+    pj = os.path.join(eval_dir, "parameters.json")
+    if not os.path.isfile(pj):
+        return None
+    try:
+        d = _json.load(open(pj))
+        return np.array([float(d[n]) for n in param_names])
+    except Exception:
+        return None
+
+
+def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
+                                best_params_real, param_names,
+                                calibration_parameters, param_handler,
+                                model_runner, obj_func):
+    """Re-run the best parameters over the VALIDATION period, then write
+    ``results/validation_matched_data.csv`` = calibration-best + validation
+    obs/sim pairs, period-tagged, for the report's combined cal/val section.
+
+    Heavy (one model run over the validation window) — called once when a
+    calibration completes.  Best-effort: any failure just leaves the section's
+    placeholder in place.  The validation eval folder gets a distinct id and no
+    ``objective.txt``, so it never affects the best-eval scan."""
+    import pandas as pd
+    _VAL_ID = 999999
+
+    def _mk_of():
+        # Fresh ObjectiveFunction cloned from obj_func's config.  Using a fresh
+        # instance per period (one compute each) keeps get_matched_data() bound
+        # to THAT period's pairs (no cross-period best-tracking).  The h5 reader
+        # path is already on sys.path from obj_func's init.
+        return ObjectiveFunction(
+            observation_path=obj_func.observation_path,
+            target_species=obj_func.target_species,
+            target_reaches=obj_func.target_reaches,
+            compartments=obj_func.compartments,
+            metric=obj_func.metric, weights=obj_func.weights,
+            temporal_resolution=obj_func.temporal_resolution,
+            aggregation_method=obj_func.aggregation_method,
+            hostmodel=obj_func.hostmodel,
+            h5_mapping_key=obj_func.h5_mapping_key,
+            use_primary_only=getattr(obj_func, "use_primary_only", True))
+
+    # Calibration half + best parameters from the GLOBAL-best eval folder
+    # (ground truth across all runs/resumes) — independent of obj_func's
+    # in-memory state, so this is correct even on a resume that adds no evals.
+    best_dir = _best_eval_dir(work_dir)
+    cal_md, bp_arr = None, None
+    if best_dir:
+        try:
+            _cof = _mk_of()
+            _cof.compute(Path(best_dir) / "openwq_out")
+            cal_md = _cof.get_matched_data()
+        except Exception as _e:
+            logger.debug(f"Validation: cal half from {best_dir} failed: {_e}")
+        bp_arr = _best_params_from_eval_dir(best_dir, param_names)
+    if cal_md is None or cal_md.empty:
+        try:
+            cal_md = obj_func.get_matched_data()
+        except Exception:
+            cal_md = None
+    if bp_arr is None:
+        try:
+            bp_arr = np.array([best_params_real[n] for n in param_names])
+        except Exception:
+            logger.warning("Validation: could not resolve best parameters; "
+                           "skipping validation re-run.")
+            return
+
+    # Run the best parameters over the VALIDATION window.
+    eval_dir = param_handler.setup_working_directory(
+        _VAL_ID, calibration_parameters, bp_arr)
+    param_handler.apply_parameters(
+        eval_dir, calibration_parameters, bp_arr)
+    master_json = str(Path(eval_dir) / "openWQ_master.json")
+    # Temporarily point the runner's window at the validation period.
+    _saved = model_runner.calibration_period
+    model_runner.calibration_period = tuple(validation_period)
+    try:
+        ok, _rt, err = model_runner.run_single_evaluation(
+            eval_dir, master_json, _VAL_ID)
+    finally:
+        model_runner.calibration_period = _saved
+    if not ok:
+        logger.warning(f"Validation re-run did not complete: {err}")
+        return
+    val_md = None
+    try:
+        _vof = _mk_of()
+        _vof.compute(Path(eval_dir) / "openwq_out")
+        val_md = _vof.get_matched_data()
+    except Exception as _e:
+        logger.warning(f"Validation: matching the validation run failed: {_e}")
+    parts = []
+    if cal_md is not None and not cal_md.empty:
+        cal_md = cal_md.copy()
+        cal_md["period"] = "calibration"
+        parts.append(cal_md)
+    if val_md is not None and not val_md.empty:
+        val_md = val_md.copy()
+        val_md["period"] = "validation"
+        parts.append(val_md)
+    if not parts:
+        logger.warning("Validation: no matched obs/sim pairs in either period.")
+        return
+    combined = pd.concat(parts, ignore_index=True)
+    results_dir = Path(results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    combined.to_csv(results_dir / "validation_matched_data.csv", index=False)
+    logger.info("Wrote validation_matched_data.csv "
+                "(best fit over calibration + validation).")
+
+
+def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
+    """Find the GLOBAL-best evaluation by scanning every ``evaluations/eval_*``
+    folder (the ground truth — they accumulate across the original run AND
+    every ``--resume``, since eval numbering continues), then recompute that
+    eval's matched + simulated series via the ObjectiveFunction.
+
+    This makes the report's "best fit" independent of the (churning, possibly
+    fragmented or stale) ``results/*.csv`` caches: no matter how many times a
+    calibration is interrupted and resumed, the report always reflects the true
+    best simulation for ANY basin.  Returns ``(matched_df, sim_df, best_label)``
+    or ``(None, None, None)`` when nothing usable is found.
+    """
+    work_dir = Path(work_dir)
+    # Lowest successful, finite objective with HDF5 output across ALL eval
+    # folders (handles original run + every --resume).
+    best_dir = _best_eval_dir(work_dir)
+    if not best_dir:
         return None, None, None
 
     cs = calibration_settings or {}
@@ -1566,9 +1722,9 @@ def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
             aggregation_method=cs.get("aggregation_method", "mean"),
             hostmodel=hostmodel, h5_mapping_key=mapkey,
             use_primary_only=cs.get("use_primary_only", True))
-        _of.compute(Path(best[0]) / "openwq_out")
+        _of.compute(Path(best_dir) / "openwq_out")
         return (_of.get_matched_data(), _of.get_simulated_data(),
-                os.path.basename(best[0]))
+                os.path.basename(best_dir))
     except Exception as _e:
         logger.debug(f"best-fit rebuild from eval folders failed: {_e}")
         return None, None, None

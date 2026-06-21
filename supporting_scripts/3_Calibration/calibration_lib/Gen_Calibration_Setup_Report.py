@@ -4323,6 +4323,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        run_mode_debug=run_mode_debug,');
     lines.push('        # Per-eval calibration window (None = full model period).');
     lines.push('        calibration_period=calibration_period,');
+    lines.push('        # Validation window: when set, the best parameters are');
+    lines.push('        # re-run over it once the calibration completes, and the');
+    lines.push('        # report adds an Observed vs Simulated (Calibration &');
+    lines.push('        # Validation) section.');
+    lines.push('        validation_period=validation_period,');
     lines.push('        temporal_resolution=temporal_resolution,');
     lines.push('        aggregation_method=aggregation_method,');
     // Runtime chosen in the setup report (docker / apptainer), overriding
