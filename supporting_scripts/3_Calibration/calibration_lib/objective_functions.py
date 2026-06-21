@@ -438,6 +438,15 @@ class ObjectiveFunction:
         ) / total_weight
 
         logger.debug(f"Objective: {weighted_obj:.6f} (species objectives: {objectives})")
+
+        # Track the BEST evaluation's matched + simulated series so the report
+        # shows the actual best fit — not merely the most recent evaluation
+        # (which is what _last_* hold).  Lower objective = better.
+        if (not hasattr(self, "_best_obj") or self._best_obj is None
+                or weighted_obj < self._best_obj):
+            self._best_obj = weighted_obj
+            self._best_matched_data = self._last_matched_data
+            self._best_simulated = getattr(self, "_last_simulated", None)
         return weighted_obj
 
     @staticmethod
@@ -953,15 +962,23 @@ class ObjectiveFunction:
             DataFrame with datetime, reach_id, species, observed, simulated columns
             (already aggregated to the specified temporal resolution)
         """
+        # Prefer the BEST evaluation's matched data (so the report's "best fit"
+        # is the actual best), falling back to the most recent one.
+        _b = getattr(self, '_best_matched_data', None)
+        if _b is not None:
+            return _b.copy()
         if hasattr(self, '_last_matched_data'):
             return self._last_matched_data.copy()
         return pd.DataFrame()
 
     def get_simulated_data(self) -> pd.DataFrame:
-        """Return the full simulated series from the most recent ``compute``
-        (all target species at the target reaches, including species that have
-        NO observations).  Lets the report draw a simulated-only time series
-        for objective species that lack observations at the target reach(es)."""
+        """Return the full simulated series (all target species at the target
+        reaches, incl. species with NO observations) for the BEST evaluation —
+        falling back to the most recent.  Lets the report draw the best-fit
+        simulated-only series for objective species lacking observations."""
+        _b = getattr(self, '_best_simulated', None)
+        if _b is not None:
+            return _b.copy()
         if hasattr(self, '_last_simulated') and self._last_simulated is not None:
             return self._last_simulated.copy()
         return pd.DataFrame()
