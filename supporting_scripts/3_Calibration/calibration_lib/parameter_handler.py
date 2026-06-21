@@ -378,6 +378,12 @@ class ParameterHandler:
         values : np.ndarray
             Parameter values to apply (in real scale, after transform)
         """
+        # SS load scales are collected and applied in ONE pass at the end:
+        # with spatial (per-reach) scaling there can be hundreds of them, and
+        # applying each individually would re-read/rewrite the whole SS JSON
+        # every time.  Each spec is {species, reach_id|None, factor}.
+        ss_scale_specs = []
+
         for i, param in enumerate(parameters):
             value = values[i]
             file_type = param["file_type"]
@@ -404,7 +410,11 @@ class ParameterHandler:
             elif file_type == "lateral_exchange_json":
                 self._apply_lateral_exchange_param(eval_dir, path, value)
             elif file_type == "ss_csv_scale":
-                self._apply_ss_csv_scale(eval_dir, path, value)
+                ss_scale_specs.append({
+                    "species": (path or {}).get("species", "all"),
+                    "reach_id": (path or {}).get("reach_id"),
+                    "factor": float(value),
+                })
             elif file_type in ("ss_copernicus_static", "ss_copernicus_dynamic"):
                 initial = param.get("initial", None)
                 self._apply_ss_copernicus_coeff(eval_dir, path, value, initial_value=initial)
@@ -421,6 +431,10 @@ class ParameterHandler:
                     f"generation time; skipping post-hoc edit.")
             else:
                 logger.warning(f"Unknown file_type: {file_type} for parameter {param['name']}")
+
+        # Apply ALL source/sink load scales in a single pass over the SS JSON.
+        if ss_scale_specs:
+            self._apply_ss_scales_batch(eval_dir, ss_scale_specs)
 
     # =========================================================================
     # BGC JSON (NATIVE_BGC_FLEX)
@@ -785,6 +799,82 @@ class ParameterHandler:
     # =========================================================================
     # Source/Sink: CSV Scaling
     # =========================================================================
+
+    def _apply_ss_scales_batch(self, eval_dir: Path, specs: list) -> None:
+        """Apply all source/sink load scale factors in a SINGLE pass.
+
+        ``specs`` is a list of ``{"species", "reach_id", "factor"}`` dicts.
+        ``reach_id is None`` means a GLOBAL (whole-species) scale — backward
+        compatible with the single-scale behaviour.  A ``reach_id`` string
+        means the factor applies ONLY to that reach/HRU's rows (the spatial
+        per-reach scaling).  When both kinds are present for a species, the
+        per-reach factor takes precedence for matching rows and the global
+        factor applies to the rest.
+
+        Covers both load formats: inline-JSON Copernicus loads (reach id at
+        index 6, load at index 9) and external ASCII CSV loads (whole-file,
+        which carry no reach filter here, so only global factors apply).
+        """
+        ss_files = list((eval_dir / "openwq_in").glob("openWQ_SS_*.json"))
+        if not ss_files:
+            logger.warning("No SS JSON file found")
+            return
+        ss_file = ss_files[0]
+        data, header = self._read_json_with_header(ss_file)
+
+        json_modified = False
+        csv_done = set()
+        for key, entry in data.items():
+            if key == "METADATA" or not isinstance(entry, dict):
+                continue
+            chem_name = entry.get("CHEMICAL_NAME", "")
+            data_format = entry.get("DATA_FORMAT", "")
+            # Specs that apply to this species ("all" matches every species).
+            chem_specs = [s for s in specs
+                          if s["species"] == "all" or s["species"] == chem_name]
+            if not chem_specs:
+                continue
+            # Combined global factor (product of any reach_id-less specs) and
+            # the per-reach factor lookup.
+            global_factor = 1.0
+            per_reach = {}
+            for s in chem_specs:
+                if s["reach_id"] is None:
+                    global_factor *= float(s["factor"])
+                else:
+                    rid = str(s["reach_id"])
+                    per_reach[rid] = per_reach.get(rid, 1.0) * float(s["factor"])
+
+            if data_format == "ASCII":
+                # External CSV — no per-row reach filter here; only the global
+                # factor is meaningful.  Each file scaled at most once.
+                filepath = entry.get("DATA", {}).get("FILEPATH", "")
+                if filepath and global_factor != 1.0 and filepath not in csv_done:
+                    self._scale_csv_loads(eval_dir, filepath, global_factor)
+                    csv_done.add(filepath)
+            elif data_format == "JSON":
+                json_data = entry.get("DATA", {})
+                if isinstance(json_data, dict):
+                    rows = json_data.values()
+                elif isinstance(json_data, list):
+                    rows = json_data
+                else:
+                    rows = []
+                for row in rows:
+                    if not (isinstance(row, list) and len(row) > 9):
+                        continue
+                    rid = str(row[6])
+                    factor = per_reach.get(rid, global_factor)
+                    if factor == 1.0:
+                        continue
+                    try:
+                        row[9] = float(row[9]) * factor
+                        json_modified = True
+                    except (ValueError, TypeError):
+                        continue
+
+        if json_modified:
+            self._write_json_with_header(ss_file, data, header)
 
     def _apply_ss_csv_scale(self,
                             eval_dir: Path,
