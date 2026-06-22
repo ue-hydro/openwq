@@ -1196,6 +1196,41 @@ def _collapse_subunit_dups(df, settings=None, value_col="simulated",
         return df
 
 
+def _best_eval_number(output_dir):
+    """Integer simulation number of the GLOBAL-best evaluation — the lowest
+    successful, finite objective with HDF5 output across all ``eval_*`` folders
+    — or ``None``.  Mirrors the driver's ``_best_eval_dir`` so the "best fit"
+    legend can name the simulation it corresponds to, and that number matches
+    the gray-overlay "sim N" labels."""
+    import os as _os, re as _re, glob as _glob
+    best_n, best_o = None, None
+    for d in _glob.glob(_os.path.join(str(output_dir), "evaluations", "eval_*")):
+        f = _os.path.join(d, "objective.txt")
+        if not _os.path.isfile(f):
+            continue
+        try:
+            t = open(f).read()
+        except Exception:
+            continue
+        if "success: True" not in t:
+            continue
+        m = _re.search(r"objective:\s*([-0-9eE.+]+)", t)
+        if not m:
+            continue
+        try:
+            o = float(m.group(1))
+        except ValueError:
+            continue
+        if o >= 1e10:                       # _REPORT_PENALTY → failed eval
+            continue
+        if not _glob.glob(_os.path.join(d, "openwq_out", "HDF5", "*.h5")):
+            continue
+        mn = _re.search(r"eval_(\d+)", _os.path.basename(d))
+        if mn and (best_o is None or o < best_o):
+            best_o, best_n = o, int(mn.group(1))
+    return best_n
+
+
 def _build_calibrated_timeseries_section(
     matched_data: Optional[Any],
     settings: Dict[str, Any],
@@ -1298,7 +1333,8 @@ def _build_calibrated_timeseries_section(
     # a simulated-only series for objective species with no obs at the reach.
     plots_html = _generate_timeseries_charts(
         matched_data, output_dir, hostmodel=hostmodel,
-        simulated_data=_sim_all, of_species=_of_species, all_sim=_all_sim)
+        simulated_data=_sim_all, of_species=_of_species, all_sim=_all_sim,
+        best_eval=_best_eval_number(output_dir))
     if not plots_html:
         return ""
 
@@ -2937,7 +2973,7 @@ def _sim_controls(chart_id, y_values, eval_ids):
 def _generate_timeseries_charts(matched_data, output_dir,
                                 hostmodel: str = "mizuroute",
                                 simulated_data=None, of_species=None,
-                                all_sim=None) -> str:
+                                all_sim=None, best_eval=None) -> str:
     """Interactive (Plotly) observed-vs-simulated time series + obs-vs-sim
     scatter, one block per calibrated species.  Each reach/HRU is a legend
     entry the user can toggle; the mode-bar provides SVG export.
@@ -2964,6 +3000,10 @@ def _generate_timeseries_charts(matched_data, output_dir,
                     if _has_matched and 'species' in matched_data.columns
                     else [])
     matched_species = {str(s) for s in species_list}
+    # "best fit" legend label, named with its simulation number when known so
+    # it ties to the gray-overlay "sim N" lines.
+    _best_lbl = (f"best fit (sim {int(best_eval)})"
+                 if best_eval is not None else "best fit")
     blocks = []
 
     for species in species_list:
@@ -3023,7 +3063,7 @@ def _generate_timeseries_charts(matched_data, output_dir,
                 "hovertemplate": "%{x|%Y-%m-%d}<br>obs %{y:.4g}<extra></extra>"})
             ts_traces.append({
                 "type": "scatter", "mode": "lines", "x": x_line, "y": sim_line,
-                "name": f"best fit{_sfx}", "legendgroup": f"best-{label}",
+                "name": f"{_best_lbl}{_sfx}", "legendgroup": f"best-{label}",
                 "line": {"width": 2, "color": "#10b981"},
                 "hovertemplate":
                     "%{x|%Y-%m-%d}<br>best %{y:.4g}<extra></extra>"})
@@ -3120,7 +3160,7 @@ def _generate_timeseries_charts(matched_data, output_dir,
                 label = f'{feat_label} {rid}' if rid is not None else 'all'
                 ts_traces.append({
                     "type": "scatter", "mode": "lines", "x": x, "y": sim,
-                    "name": f"best fit · {label}",
+                    "name": f"{_best_lbl} · {label}",
                     "line": {"width": 2, "color": "#10b981"},
                     "hovertemplate":
                         "%{x|%Y-%m-%d}<br>best %{y:.4g}<extra></extra>"})
