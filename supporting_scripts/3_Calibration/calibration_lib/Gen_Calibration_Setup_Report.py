@@ -1159,7 +1159,8 @@ def generate_interactive_setup(
         H.append(_build_workflow_mode_section())
         H.append(_build_interactive_sensitivity_section())
         H.append(_build_interactive_settings_section(
-            container_config.get("container_runtime", "docker")))
+            container_config.get("container_runtime", "docker"),
+            hostmodel=model_config.get("hostmodel", "")))
         H.append('</div>')
 
         # ── Tab: Targets ──
@@ -2077,8 +2078,61 @@ def _build_interactive_summary(
 """
 
 
-def _build_interactive_settings_section(container_runtime_default: str = "docker") -> str:
+def _build_interactive_settings_section(container_runtime_default: str = "docker",
+                                        hostmodel: str = "") -> str:
     """Calibration settings with interactive form elements."""
+    _is_summa = str(hostmodel or "").lower() == "summa"
+    _ix_label = "HRU id" if _is_summa else "Reach id"
+    # openWQ addresses every cell as (ix, iy, iz).  ix is the host feature
+    # (reach for mizuRoute, HRU for SUMMA) chosen in the Targets tab; iy is
+    # always a single lane here; iz is a single layer for mizuRoute but the
+    # SUMMA vertical zone / soil layer, which the user may pick.
+    _disabled_one = ('<input class="form-input" type="text" value="1" disabled '
+                     'style="opacity:.55;cursor:not-allowed;"/>')
+    _iy_group = (
+        '<div class="form-group">'
+        '<label>iy</label>' + _disabled_one +
+        '<div class="hint" style="opacity:.7;">Only one &mdash; this host '
+        'model has a single lane in y.</div></div>')
+    if _is_summa:
+        _iz_group = rh.build_form_input(
+            "zone_select", "iz — vertical zone / soil layer",
+            default="", placeholder="blank = average all layers",
+            hint="SUMMA writes one value per vertical zone / soil layer "
+                 "(z1, z2, ...). Leave blank to AVERAGE all layers (default), "
+                 "or enter a layer index (1, 2, ...) to drive the objective and "
+                 "report from ONLY that layer.")
+    else:
+        _iz_group = (
+            '<div class="form-group">'
+            '<label>iz</label>' + _disabled_one +
+            '<div class="hint" style="opacity:.7;">Only one &mdash; mizuRoute '
+            'reaches have a single layer in z.</div></div>')
+    _spatial_cell_card = f"""
+    <!-- Theme: openWQ spatial cell (ix, iy, iz) addressing -->
+    <div class="card">
+        <h3>openWQ spatial cell (ix, iy, iz)</h3>
+        <p class="hint" style="margin-top:0;">openWQ addresses every cell by
+            <strong>(ix,&nbsp;iy,&nbsp;iz)</strong>. Here <strong>ix</strong> is
+            the <strong>{_ix_label}</strong> set by your objective targets (see
+            the <em>Targets</em> tab); <strong>iy</strong> and
+            <strong>iz</strong> are below.</p>
+        <div class="form-row">
+            <div class="form-group">
+                <label>ix &mdash; {_ix_label}</label>
+                <input class="form-input" type="text"
+                       value="set in the Targets tab" disabled
+                       style="opacity:.55;cursor:not-allowed;"/>
+                <div class="hint" style="opacity:.7;">The reach/HRU(s) chosen as
+                    objective targets.</div>
+            </div>
+            {_iy_group}
+        </div>
+        <div class="form-row">
+            {_iz_group}
+        </div>
+    </div>
+"""
     return f"""
 <div class="section" id="settings">
     <h2>Calibration Settings</h2>
@@ -2158,6 +2212,7 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                      "is already primary, so this has no effect on the metric.")}
         </div>
     </div>
+    {_spatial_cell_card}
 
     <div class="card" id="calibPeriodCard">
         <h3>Calibration / validation period</h3>
@@ -3193,12 +3248,34 @@ def _build_interactive_targets_section(
             '<script>window.__ridData = '
             + json.dumps(_rid_data).replace("</", "<\\/")
             + ';</script>')
+        # openWQ addresses every cell as (ix, iy, iz).  Spell that out right
+        # where the target features are picked, host-aware.
+        _ix_pill = ('<span style="font-weight:600;font-size:.68rem;'
+                    'color:var(--primary);margin-left:.45rem;border:1px solid '
+                    'var(--primary);border-radius:10px;padding:.05rem .45rem;'
+                    'vertical-align:middle;">= ix</span>')
+        if (hostmodel or "").lower() == "summa":
+            _iz_nut = ("<strong>iz</strong> = the vertical zone / soil layer "
+                       "(z1, z2, &hellip;) &mdash; pick one under "
+                       "<em>Settings &rarr; openWQ spatial cell</em>, or leave "
+                       "it blank to average all layers")
+        else:
+            _iz_nut = ("<strong>iz</strong>&nbsp;=&nbsp;1 (mizuRoute reaches "
+                       "have a single layer in z)")
+        _cell_nut = (
+            '<div class="hint" style="margin:.15rem 0 .55rem;line-height:1.55;">'
+            '<strong>openWQ cells in a nutshell:</strong> every cell is '
+            'addressed by <strong>(ix,&nbsp;iy,&nbsp;iz)</strong>. The '
+            f'{feat_lower}(s) you tick below are <strong>ix</strong>; '
+            '<strong>iy</strong>&nbsp;=&nbsp;1 (a single lane in y); '
+            + _iz_nut + '.</div>')
         reach_field_html = (
-            f'<label for="rid-checklist">Target {feature_label} IDs'
+            f'<label for="rid-checklist">Target {feature_label} IDs{_ix_pill}'
             f'<span style="font-weight:500;font-size:.68rem;color:var(--text3);'
             f'margin-left:.45rem;background:var(--bg);border:1px solid var(--border);'
             f'border-radius:10px;padding:.05rem .45rem;vertical-align:middle;">'
             f'{_avail_badge}</span></label>'
+            f'{_cell_nut}'
             # Hidden source-of-truth select (read by the run-command builder
             # and the map sync); the checkboxes below drive it.
             f'<select id="reach_ids" multiple style="display:none;">'
@@ -3949,6 +4026,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // fields may not exist on older / customised reports so guard them).
     var _upoEl = document.getElementById('use_primary_only');
     s.use_primary_only = _upoEl ? !!_upoEl.checked : true;
+    var _zsEl = document.getElementById('zone_select');
+    s.zone_select = (_zsEl && _zsEl.value && _zsEl.value.trim())
+        ? _zsEl.value.trim() : null;
     var _sifEl = document.getElementById('apptainer_sif_path');
     s.apptainer_sif_path = _sifEl ? (_sifEl.value.trim() || null) : null;
     var _bindEl = document.getElementById('apptainer_bind_path');
@@ -4149,6 +4229,15 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('# primary/secondary visualisation in the results-report map.');
     lines.push('use_primary_only = ' + pyRepr(s.use_primary_only !== false));
     lines.push('');
+    lines.push('# SUMMA vertical zone / soil layer to calibrate.  SUMMA writes');
+    lines.push('# one value per zone per HRU (z1, z2, ...).  None = average all');
+    lines.push('# zones (default); an integer (1, 2, ...) drives the objective +');
+    lines.push('# report from ONLY that layer.  No effect for mizuRoute.');
+    (function(){
+      var _z = (s.zone_select != null) ? parseInt(s.zone_select, 10) : NaN;
+      lines.push('zone_select = ' + (isNaN(_z) ? 'None' : String(_z)));
+    })();
+    lines.push('');
     lines.push('# HPC defaults (used by the results-report Apptainer / SLURM');
     lines.push('# snippets and forwarded to ModelRunner when running on HPC).');
     lines.push('# Leave as None to fall back to "openwq.sif" + a bind path');
@@ -4346,6 +4435,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        # point observations (SUMMA case).  For mizuRoute every');
     lines.push('        # matched station is already primary so it has no effect.');
     lines.push('        use_primary_only=use_primary_only,');
+    lines.push('        # SUMMA vertical zone / soil layer for the objective');
+    lines.push('        # (None = average all zones).');
+    lines.push('        zone_select=zone_select,');
     lines.push('        # HPC paths (forwarded to ModelRunner + surfaced in the');
     lines.push('        # results report\'s Apptainer / SLURM snippets).  Defaults');
     lines.push('        # are None — set them in the setup-report HTML form.');

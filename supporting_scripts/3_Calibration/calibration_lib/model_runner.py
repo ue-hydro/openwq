@@ -448,7 +448,8 @@ class ModelRunner:
                     _fin = time.strftime(
                         '%Y-%m-%d %H:%M', time.localtime(time.time() + _eta))
                     sys.stdout.write(
-                        f"\033[1;93m  ✔ Cumulative elapsed time is {_cum:.0f} sec"
+                        f"\033[1;93m  ✔ Cumulative elapsed time is "
+                        f"{_cum / 3600:.2f} hours"
                         f"  ({self._calib_done}/{self._calib_total} evals)"
                         f"\033[0m\n")
                     sys.stdout.write(

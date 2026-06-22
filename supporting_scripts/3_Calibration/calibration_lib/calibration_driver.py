@@ -503,6 +503,7 @@ def run_calibration(
         hostmodel=_spatial.get("hostmodel", "mizuroute"),
         h5_mapping_key=_spatial.get("h5_mapping_key"),
         use_primary_only=kwargs.get("use_primary_only", True),
+        zone_select=kwargs.get("zone_select"),
     )
 
     checkpoint_mgr = CheckpointManager(work_dir / "checkpoints")
@@ -736,6 +737,7 @@ def run_calibration(
                 "random_seed": random_seed,
                 "calibration_mode": calibration_mode,
                 "use_primary_only": kwargs.get("use_primary_only", True),
+                "zone_select": kwargs.get("zone_select"),
             }
             try:
                 _md = obj_func.get_matched_data()
@@ -1422,6 +1424,7 @@ def run_calibration(
         "random_seed": random_seed,
         "calibration_mode": calibration_mode,
         "use_primary_only": kwargs.get("use_primary_only", True),
+        "zone_select": kwargs.get("zone_select"),
     }
     _write_live_snapshot(results_dir, _snap_cr, _snap_cs, in_progress=False)
 
@@ -1598,7 +1601,8 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
             aggregation_method=obj_func.aggregation_method,
             hostmodel=obj_func.hostmodel,
             h5_mapping_key=obj_func.h5_mapping_key,
-            use_primary_only=getattr(obj_func, "use_primary_only", True))
+            use_primary_only=getattr(obj_func, "use_primary_only", True),
+            zone_select=getattr(obj_func, "zone_select", None))
 
     # Calibration half + best parameters from the GLOBAL-best eval folder
     # (ground truth across all runs/resumes) — independent of obj_func's
@@ -1721,7 +1725,8 @@ def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
             temporal_resolution=cs.get("temporal_resolution", "native"),
             aggregation_method=cs.get("aggregation_method", "mean"),
             hostmodel=hostmodel, h5_mapping_key=mapkey,
-            use_primary_only=cs.get("use_primary_only", True))
+            use_primary_only=cs.get("use_primary_only", True),
+            zone_select=cs.get("zone_select"))
         _of.compute(Path(best_dir) / "openwq_out")
         return (_of.get_matched_data(), _of.get_simulated_data(),
                 os.path.basename(best_dir))

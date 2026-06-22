@@ -1164,6 +1164,38 @@ def _build_sensitivity_section(
 """
 
 
+def _collapse_subunit_dups(df, settings=None, value_col="simulated",
+                           extra_keys=()):
+    """Collapse multiple simulated values that share the same timestamp / reach
+    / species into one.
+
+    SUMMA writes several zoned HRU columns (``hruId_1_z1``, ``_z2`` ...) that
+    all normalise to the same feature id, so a raw simulated series carries
+    several values per timestamp for one reach/HRU.  Plotting them as one line
+    makes it zig-zag between zones (looks "unstable").  The objective function
+    averages those sub-units before scoring, so we do the same here — one value
+    per timestamp, matching what the metric actually sees.  No-op when there
+    are no duplicates (e.g. mizuRoute, one cell per reach)."""
+    if df is None or getattr(df, "empty", True):
+        return df
+    keys = [k for k in (["datetime", "reach_id", "species"] + list(extra_keys))
+            if k in getattr(df, "columns", [])]
+    if value_col not in getattr(df, "columns", []) or not keys:
+        return df
+    try:
+        if not df.duplicated(subset=keys).any():
+            return df
+        how = "median" if str((settings or {}).get(
+            "aggregation_method", "mean")).lower() == "median" else "mean"
+        agg = {value_col: how}
+        for c in df.columns:
+            if c not in keys and c != value_col:
+                agg[c] = "first"
+        return df.groupby(keys, as_index=False, sort=False).agg(agg)
+    except Exception:
+        return df
+
+
 def _build_calibrated_timeseries_section(
     matched_data: Optional[Any],
     settings: Dict[str, Any],
@@ -1211,6 +1243,12 @@ def _build_calibrated_timeseries_section(
                                     "all_simulated.csv")
         if _os.path.isfile(_allsim_csv):
             _all_sim = _pd.read_csv(_allsim_csv)
+        # Collapse multi-zone HRU duplicates (SUMMA) so the simulated lines
+        # don't zig-zag between sub-units at each timestamp; matches how the
+        # objective averages sub-units.  No-op for one-cell-per-reach data.
+        _sim_all = _collapse_subunit_dups(_sim_all, settings)
+        _all_sim = _collapse_subunit_dups(
+            _all_sim, settings, extra_keys=["eval_id", "chain"])
         _matched_sp = set()
         if _has_pairs and "species" in matched_data.columns:
             _matched_sp = {str(s) for s in matched_data["species"].unique()}
@@ -1333,6 +1371,9 @@ def _build_validation_section(output_dir, settings, model_config):
     import pandas as pd
     import numpy as np
     from .objective_functions import ObjectiveFunction as _OF
+    # Collapse any multi-zone HRU duplicates per period so the line is smooth
+    # (defensive — validation pairs come from the aggregated matcher already).
+    vd = _collapse_subunit_dups(vd, settings, extra_keys=["period"])
     metric = str((settings or {}).get("objective_function", "KGE")).upper()
     _mfn = {"KGE": _OF.kge, "NSE": _OF.nse, "RMSE": _OF.rmse,
             "PBIAS": _OF.pbias}.get(metric, _OF.kge)
@@ -2830,6 +2871,12 @@ def _sim_controls(chart_id, y_values, eval_ids):
         zoom_btn = ("<button type='button' style='" + bs + "' onclick='"
                     "if(window.Plotly)Plotly.relayout(" + idj + "," + zr
                     + ")'>&#128269; Zoom to best fit</button>")
+    # "Zoom to active simulations": fit the y-axis to whatever traces are
+    # CURRENTLY visible (best fit, an isolated run, all of them, obs — whatever
+    # the user has toggled on), so the view tracks the live state of the graph.
+    act_id = chart_id + "-zact"
+    active_btn = ("<button id='" + act_id + "' type='button' style='" + bs
+                  + "'>&#128269; Zoom to active simulations</button>")
     sel_id = chart_id + "-iso"
     all_id = chart_id + "-all"
     opts = "<option value=''>— all simulations —</option>" + "".join(
@@ -2860,6 +2907,18 @@ def _sim_controls(chart_id, y_values, eval_ids):
         "if(ab)ab.onclick=function(){if(sel)sel.value='';iso('');"
         "if(window.Plotly)Plotly.relayout(id,{'yaxis.autorange':true,"
         "'xaxis.autorange':true});};"
+        # Zoom to active sims: union y-extent of every currently-visible trace.
+        "var azb=document.getElementById(" + json.dumps(act_id) + ");"
+        "if(azb)azb.onclick=function(){var g=gd();if(!window.Plotly||!g)return;"
+        "var d=g.data||[],lo=Infinity,hi=-Infinity;"
+        "for(var i=0;i<d.length;i++){var t=d[i];"
+        "if(t.visible===false||t.visible==='legendonly')continue;"
+        "var ys=t.y||[];for(var j=0;j<ys.length;j++){var v=ys[j];"
+        "if(v==null||v!==v)continue;if(v<lo)lo=v;if(v>hi)hi=v;}}"
+        "if(lo===Infinity)return;"
+        "var pad=(hi>lo)?(hi-lo)*0.08:(Math.abs(hi)*0.08||0.1);"
+        "Plotly.relayout(id,{'yaxis.range':[lo-pad,hi+pad],"
+        "'xaxis.autorange':true});};"
         "function at(){var g=gd();if(!g||!g.on){setTimeout(at,300);return;}"
         "g.on('plotly_click',function(ev){if(!ev||!ev.points||!ev.points.length)"
         "return;var p=ev.points[0],g2=gd(),d=g2.data||[],tr=d[p.curveNumber];"
@@ -2871,7 +2930,7 @@ def _sim_controls(chart_id, y_values, eval_ids):
         "})();</script>")
     controls = ("<div style='margin:.1rem 0 .3rem;display:flex;"
                 "align-items:center;gap:.5rem;flex-wrap:wrap;'>"
-                + zoom_btn + dropdown + all_btn + "</div>" + script)
+                + zoom_btn + active_btn + dropdown + all_btn + "</div>" + script)
     return yaxis, controls
 
 

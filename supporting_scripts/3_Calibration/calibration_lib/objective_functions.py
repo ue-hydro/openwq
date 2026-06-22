@@ -55,7 +55,8 @@ class ObjectiveFunction:
                  aggregation_method: str = "mean",
                  hostmodel: str = "mizuroute",
                  h5_mapping_key: Optional[str] = None,
-                 use_primary_only: bool = True):
+                 use_primary_only: bool = True,
+                 zone_select=None):
         """
         Initialize objective function calculator.
 
@@ -113,6 +114,16 @@ class ObjectiveFunction:
         # map but they're excluded from the metric so the calibration
         # doesn't average over multiple obs per basin.
         self.use_primary_only = bool(use_primary_only)
+        # SUMMA writes one column per vertical zone / soil layer per HRU
+        # (``hruId_1_z1``, ``_z2`` ...).  By default every zone of an HRU is
+        # averaged into the HRU value.  Set ``zone_select`` to a layer index
+        # (e.g. 1) to use ONLY that layer's output in the objective AND the
+        # report; ``None``/``'mean'``/``'all'`` keeps the average.  No effect
+        # on hosts without zoned columns (mizuRoute).
+        self.zone_select = self._parse_zone(zone_select)
+        if self.zone_select is not None:
+            logger.info(f"Zone selection: using only soil layer / zone "
+                        f"z{self.zone_select} for the objective.")
 
         # Validate temporal resolution
         valid_resolutions = ["native", "daily", "weekly", "monthly", "yearly"]
@@ -450,6 +461,32 @@ class ObjectiveFunction:
         return weighted_obj
 
     @staticmethod
+    def _parse_zone(z):
+        """Normalise a user zone selection to an int layer index or None.
+
+        Accepts ``None``/``''``/``'all'``/``'mean'``/``'average'`` (→ None,
+        meaning average all zones) or anything containing a number such as
+        ``2``, ``'z2'``, ``'layer 2'`` (→ ``2``)."""
+        if z is None:
+            return None
+        s = str(z).strip().lower()
+        if s in ("", "none", "all", "mean", "average", "avg"):
+            return None
+        import re
+        m = re.search(r"(\d+)", s)
+        return int(m.group(1)) if m else None
+
+    @staticmethod
+    def _zone_of(raw):
+        """Return the vertical-zone / soil-layer index of an openWQ column
+        (``hruId_1_z2`` → ``2``), or ``None`` when the column carries no zone
+        tag (e.g. mizuRoute ``reachID_123``)."""
+        import re
+        s = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
+        m = re.search(r"_z(\d+)$", s.strip(), re.IGNORECASE)
+        return int(m.group(1)) if m else None
+
+    @staticmethod
     def _normalize_feature_id(raw):
         """Normalise an openWQ feature/column ID so it matches the integer
         observation ``reach_id``.
@@ -543,6 +580,12 @@ class ObjectiveFunction:
                             # SUMMA writes zoned HRU ids like 'hruId_1_z1';
                             # normalise to the base feature id (int 1) so it
                             # matches the integer observation 'reach_id'.
+                            # When a specific zone is selected, keep only that
+                            # layer (columns with no zone tag always pass).
+                            if self.zone_select is not None:
+                                _zc = self._zone_of(col)
+                                if _zc is not None and _zc != self.zone_select:
+                                    continue
                             reach_id = self._normalize_feature_id(col)
                             if _target_set is not None and reach_id not in _target_set:
                                 continue
@@ -625,6 +668,7 @@ class ObjectiveFunction:
                             conc[conc == self.no_data_flag] = np.nan
                             norm_ids = [self._normalize_feature_id(r)
                                         for r in reach_ids]
+                            zone_ids = [self._zone_of(r) for r in reach_ids]
                             for ti in range(conc.shape[0]):
                                 ts = ts_raw[ti]
                                 ts = (ts.decode()
@@ -642,6 +686,10 @@ class ObjectiveFunction:
                                 for i, rid in enumerate(norm_ids):
                                     if (_target_set is not None
                                             and rid not in _target_set):
+                                        continue
+                                    if (self.zone_select is not None
+                                            and zone_ids[i] is not None
+                                            and zone_ids[i] != self.zone_select):
                                         continue
                                     val = (row[i] if i < row.shape[0]
                                            else np.nan)
@@ -680,6 +728,10 @@ class ObjectiveFunction:
                                 if (_target_set is not None
                                         and rid not in _target_set):
                                     continue
+                                if self.zone_select is not None:
+                                    _zc = self._zone_of(reach_id)
+                                    if _zc is not None and _zc != self.zone_select:
+                                        continue
 
                                 val = data[i] if i < len(data) else np.nan
                                 if val == self.no_data_flag:
