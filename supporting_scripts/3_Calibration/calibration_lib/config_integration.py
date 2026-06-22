@@ -200,11 +200,23 @@ def load_model_config(model_config_path: str) -> Dict[str, Any]:
     # without it having to be passed through every helper signature.
     config['_model_config_path'] = os.path.abspath(model_config_path)
 
-    # Derive dir2save_input_files (where config files are generated)
-    if 'executable_path' in config and 'dir2save_input_files' not in config:
-        config['dir2save_input_files'] = os.path.dirname(
-            os.path.abspath(config['executable_path'])
-        )
+    # Resolve dir2save_input_files (where config files are generated + results
+    # written).  Honour an explicit user path; otherwise — absent OR left as
+    # None/"" in the template — default to the executable's own directory.
+    if not config.get('dir2save_input_files'):
+        if 'executable_path' in config:
+            config['dir2save_input_files'] = os.path.dirname(
+                os.path.abspath(config['executable_path'])
+            )
+    else:
+        config['dir2save_input_files'] = os.path.abspath(
+            os.path.expanduser(str(config['dir2save_input_files'])))
+    # Create the output / working folder if it does not exist yet.
+    if config.get('dir2save_input_files'):
+        try:
+            os.makedirs(config['dir2save_input_files'], exist_ok=True)
+        except Exception:
+            pass
 
     # Overlay the baseline manifest if Gen_Report.generate_simulation_report
     # wrote one.  We attach the parsed dict under _baseline_manifest so

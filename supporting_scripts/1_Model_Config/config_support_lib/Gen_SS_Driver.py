@@ -1819,9 +1819,17 @@ def _calculate_temporal_load_distribution(
         return temporal_entries
 
     elif method == "seasonal":
-        # Preferred: use climate data (precip + temperature) when available
-        if climate_data and year in climate_data:
-            year_data = climate_data[year]
+        # Preferred: use climate data (precip + temperature) when available.
+        # Resolve this year's monthly cycle from an explicit per-year entry, a
+        # string-keyed year, OR a single convenience entry under "all" (same
+        # monthly cycle applied to every simulation year).
+        year_data = None
+        if isinstance(climate_data, dict) and climate_data:
+            year_data = (climate_data.get(year)
+                         or climate_data.get(str(year))
+                         or climate_data.get("all")
+                         or climate_data.get("ALL"))
+        if year_data:
             if ('precip_mm' in year_data and 'temp_c' in year_data
                     and len(year_data['precip_mm']) == 12
                     and len(year_data['temp_c']) == 12):
@@ -2413,6 +2421,50 @@ def _apply_climate_adjustment_periodic(
              annual_load_kg * weights[i] / tot) for i in range(n)]
 
 
+def _expand_climate_data_all(climate_data, period):
+    """Expand a climate-data dict that uses the convenience key ``"all"`` into
+    explicit per-year entries spanning the simulation ``period``
+    (``[year_start, year_end]``).
+
+    Lets the user write::
+
+        ss_climate_data = {"all": {"precip_mm": [...12...],
+                                   "temp_c":    [...12...]}}
+
+    instead of repeating the same monthly cycle for every year &mdash; the same
+    coefficients are then applied to ALL simulation years.  Any explicit
+    per-year entries already present win; every remaining year in the period
+    falls back to the ``"all"`` cycle.  Returns a dict keyed by ``int`` year
+    (the ``"all"`` key is removed) so downstream code that sorts / casts the
+    keys keeps working.  A dict without an ``"all"`` key is returned unchanged.
+    """
+    if not isinstance(climate_data, dict) or not climate_data:
+        return climate_data
+    all_key = next((k for k in climate_data
+                    if isinstance(k, str) and k.strip().lower() == "all"), None)
+    if all_key is None:
+        return climate_data
+    all_cycle = climate_data[all_key]
+    expanded = {}
+    for k, v in climate_data.items():
+        if k == all_key:
+            continue
+        try:
+            expanded[int(k)] = v
+        except (ValueError, TypeError):
+            expanded[k] = v
+    try:
+        y0, y1 = int(period[0]), int(period[1])
+    except (TypeError, ValueError, IndexError):
+        y0 = y1 = None
+    if y0 is not None and y1 is not None:
+        for yr in range(min(y0, y1), max(y0, y1) + 1):
+            expanded.setdefault(yr, all_cycle)
+    print(f"  ss_climate_data: 'all' cycle applied to "
+          f"{sorted(k for k in expanded if isinstance(k, int))}")
+    return expanded
+
+
 def set_ss_climate_adjusted_export_coefficients(
         ss_config_filepath: str,
         json_header_comment: List[str],
@@ -2512,7 +2564,13 @@ def set_ss_climate_adjusted_export_coefficients(
     print(f"Precipitation scaling power (alpha): {precip_scaling_power}")
     print(f"Temperature Q10: {temp_q10}")
     print(f"Reference temperature: {temp_reference_c} deg C")
-    print(f"Climate data years available: {sorted(climate_data.keys())}")
+    # Allow ss_climate_data = {"all": {...}} as shorthand for "apply this one
+    # monthly cycle to every simulation year"; expand it to explicit per-year
+    # entries so the rest of the pipeline (and the per-year lookup) is unchanged.
+    climate_data = _expand_climate_data_all(
+        climate_data, ss_method_copernicus_period)
+    print(f"Climate data years available: "
+          f"{sorted((climate_data or {}).keys(), key=str)}")
 
     # Step 1: Calculate LULC areas (reuses existing Copernicus pipeline)
     results, summaries, rasters = set_ss_from_copernicus_lulc(
@@ -2835,6 +2893,11 @@ def create_openwq_ss_json_from_loads(
 
     """
 
+    # Expand ss_climate_data = {"all": {...}} (and mixed int/"all" keys) into
+    # explicit per-year entries up front, so the prints + per-year lookups below
+    # never sort/compare a str key ("all") against int years.
+    climate_data = _expand_climate_data_all(climate_data, simulation_period)
+
     print("\n" + "=" * 60)
     print("GENERATING OPENWQ SOURCE/SINK JSON")
     print("=" * 60)
@@ -2854,7 +2917,7 @@ def create_openwq_ss_json_from_loads(
     elif ss_method_copernicus_annual_to_seasonal_loads_method == "seasonal":
         if climate_data:
             print("  → Annual loads climate-weighted (precipitation + temperature)")
-            print(f"  → Climate data provided for years: {sorted(climate_data.keys())}")
+            print(f"  → Climate data provided for years: {sorted(climate_data.keys(), key=str)}")
             print(f"  → Parameters: alpha={precip_scaling_power}, Q10={temp_q10}, Tref={temp_reference_c}°C")
         else:
             print("  → Annual loads follow seasonal pattern (sine-curve fallback)")

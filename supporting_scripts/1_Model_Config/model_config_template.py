@@ -75,11 +75,20 @@ hostmodel = "mizuroute"
 
 # Full path to the compiled executable (on the HOST machine).
 # All OpenWQ config files (openwq_in/, openWQ_master.json) and outputs
-# (openwq_out/) are generated in the same directory as the executable.
+# (openwq_out/) are written to `dir2save_input_files` (below) — by default
+# the executable's own directory, but you can point it anywhere.
 executable_path = (
     "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/"
     "route/build/openwq/openwq/bin/mizuroute_lakes_openwq_Release"
 )
+
+# Folder where OpenWQ generates its input files (openwq_in/, openWQ_master.json)
+# AND writes its results (openwq_out/).
+#   None  -> use the executable's own directory (default; keeps old behaviour).
+#   path  -> generate + export everything in that folder instead, e.g.
+#            dir2save_input_files = "/Users/me/Documents/my_openwq_run"
+#   (the folder is created automatically if it does not exist.)
+dir2save_input_files = None
 
 # Full path to the mizuRoute/SUMMA control file (on the HOST machine).
 file_manager_path = (
@@ -459,8 +468,25 @@ ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform'
 ss_climate_data_type = "fixed_parameters"   # "fixed_parameters" or "time_series"
 
 # STEP 1a — fill this ONLY if ss_climate_data_type = "fixed_parameters" (else ignored).
-#   One entry per simulation year; 12 monthly values, Jan→Dec, for each variable.
-#   (Any year without an entry falls back to a generic seasonal sine curve.)
+#   Give 12 monthly values (Jan→Dec) of precipitation and temperature.
+#
+#   OPTION A — one entry PER YEAR (lets the climate differ year to year):
+#       ss_climate_data = {
+#           1993: {'precip_mm': [80, 70, 90, 100, 110, 120, 80, 60, 70, 90, 100, 85],
+#                  'temp_c':    [2,  3,  7,  12,  17,  22,  25, 24, 19, 13,  7,  3]},
+#           1994: {'precip_mm': [85, 75, 95, 105, 115, 125, 85, 65, 75, 95, 105, 90],
+#                  'temp_c':    [1,  4,  8,  13,  18,  23,  26, 25, 20, 14,  8,  2]},
+#       }
+#
+#   OPTION B — one entry under "all" reuses the SAME monthly cycle for EVERY
+#   simulation year (no need to repeat it):
+#       ss_climate_data = {
+#           "all": {'precip_mm': [80, 70, 90, 100, 110, 120, 80, 60, 70, 90, 100, 85],
+#                   'temp_c':    [2,  3,  7,  12,  17,  22,  25, 24, 19, 13,  7,  3]},
+#       }
+#
+#   You can mix them: explicit years win; any year not listed uses "all"; and a
+#   year with neither falls back to a generic seasonal sine curve.
 ss_climate_data = {
     1993: {
         'precip_mm': [80, 70, 90, 100, 110, 120, 80, 60, 70, 90, 100, 85],  # Jan→Dec
@@ -718,8 +744,14 @@ observation_compartments = ["RIVER_NETWORK_REACHES"]
 import webbrowser
 from Gen_Report import generate_report as _generate_report
 
-# Derive output directory from executable path (files go where the executable lives)
-dir2save_input_files = os.path.dirname(os.path.abspath(executable_path))
+# Output / working directory: honour the user's dir2save_input_files
+# (Section 1) when set; otherwise default to the executable's directory.
+if not dir2save_input_files:
+    dir2save_input_files = os.path.dirname(os.path.abspath(executable_path))
+else:
+    dir2save_input_files = os.path.abspath(os.path.expanduser(str(dir2save_input_files)))
+# Create the output / working folder if it does not exist yet.
+os.makedirs(dir2save_input_files, exist_ok=True)
 # Resolve chemical_species = "all" before passing to driver and report
 if (isinstance(chemical_species, str) and chemical_species.lower() == "all") or \
    (isinstance(chemical_species, list) and len(chemical_species) == 1
