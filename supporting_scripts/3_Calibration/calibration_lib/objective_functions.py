@@ -400,6 +400,21 @@ class ObjectiveFunction:
         # Extract simulated values
         simulated = self._extract_simulated(output_dir, units)
 
+        # Collapse sub-units that share the same (datetime, reach_id, species)
+        # — e.g. SUMMA vertical zones/soil layers — into ONE value.  With
+        # zone_select set, extraction already kept a single layer; with
+        # zone_select=None this AVERAGES the layers so "average all layers"
+        # truly averages.  Without this the matcher (`_match_obs_sim`) would
+        # silently keep only the FIRST sub-unit (z1), not the mean.
+        if (simulated is not None and not simulated.empty
+                and {'datetime', 'reach_id', 'species', 'simulated'}
+                <= set(simulated.columns)
+                and simulated.duplicated(
+                    subset=['datetime', 'reach_id', 'species']).any()):
+            simulated = (simulated
+                         .groupby(['datetime', 'reach_id', 'species'],
+                                  as_index=False)['simulated'].mean())
+
         # Keep the full simulated series (all target species at the target
         # reaches, including species that have NO observations) so the results
         # report can still plot a simulated-only time series for them.
@@ -1092,6 +1107,15 @@ class ObjectiveFunction:
         if hasattr(self, '_last_simulated') and self._last_simulated is not None:
             return self._last_simulated.copy()
         return pd.DataFrame()
+
+    def get_last_simulated(self) -> pd.DataFrame:
+        """Return the MOST RECENT evaluation's full simulated series (NOT the
+        best).  Used to log each evaluation's OWN series to the
+        'all simulations' overlay — ``get_simulated_data()`` returns the BEST
+        evaluation, which would make every eval in the overlay show the
+        running-best instead of its own simulation."""
+        _l = getattr(self, '_last_simulated', None)
+        return _l.copy() if _l is not None else pd.DataFrame()
 
     def get_temporal_resolution_info(self) -> Dict:
         """

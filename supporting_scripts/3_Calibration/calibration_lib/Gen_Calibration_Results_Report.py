@@ -2989,6 +2989,28 @@ def _generate_timeseries_charts(matched_data, output_dir,
                 x = list(range(len(rd)))
             obs = [None if v != v else float(v) for v in rd['observed']]
             sim = [None if v != v else float(v) for v in rd['simulated']]
+            # Best-fit LINE: draw the best eval's FULL simulated series (the
+            # same representation as the gray overlay) so the highlighted best
+            # is directly comparable to the gray runs — NOT a sparse zig-zag
+            # through observation dates only (which always looks worse than a
+            # full hydrograph).  Observations stay as markers and the scatter
+            # still uses the matched obs-date pairs.  Falls back to the matched
+            # simulated values when the full series isn't available.
+            x_line, sim_line = x, sim
+            if _has_sim:
+                _sdr = simulated_data[
+                    simulated_data['species'].astype(str) == str(species)]
+                if rid is not None and 'reach_id' in _sdr.columns:
+                    _sdr = _sdr[_sdr['reach_id'].astype(str) == str(rid)]
+                if not _sdr.empty and 'datetime' in _sdr.columns:
+                    _sdr = _sdr.sort_values('datetime')
+                    _xl = [str(v) for v in pd.to_datetime(_sdr['datetime'])]
+                    _yl = [None if v != v else float(v)
+                           for v in _sdr['simulated']]
+                    if len(_xl) > 4000:                  # thin a long line
+                        _st = len(_xl) // 4000 + 1
+                        _xl, _yl = _xl[::_st], _yl[::_st]
+                    x_line, sim_line = _xl, _yl
             label = f'{feat_label} {rid}' if rid is not None else 'all'
             # Short legend labels when there's a single reach (the reach id is
             # redundant then) so the horizontal top legend fits on one row.
@@ -3000,7 +3022,7 @@ def _generate_timeseries_charts(matched_data, output_dir,
                            "line": {"width": 0.6, "color": "#7f1d1d"}},
                 "hovertemplate": "%{x|%Y-%m-%d}<br>obs %{y:.4g}<extra></extra>"})
             ts_traces.append({
-                "type": "scatter", "mode": "lines", "x": x, "y": sim,
+                "type": "scatter", "mode": "lines", "x": x_line, "y": sim_line,
                 "name": f"best fit{_sfx}", "legendgroup": f"best-{label}",
                 "line": {"width": 2, "color": "#10b981"},
                 "hovertemplate":
@@ -3010,7 +3032,7 @@ def _generate_timeseries_charts(matched_data, output_dir,
                 "name": label, "marker": {"size": 7, "opacity": 0.6},
                 "hovertemplate": "obs %{x:.4g}<br>sim %{y:.4g}<extra></extra>"})
             all_v += [v for v in obs if v is not None]
-            all_v += [v for v in sim if v is not None]
+            all_v += [v for v in sim_line if v is not None]
 
         if not ts_traces:
             continue

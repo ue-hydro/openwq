@@ -884,7 +884,10 @@ def run_calibration(
         gray 'all simulations' overlay behind the best-fit time series.
         Best-effort — never breaks an evaluation."""
         try:
-            _sim = obj_func.get_simulated_data()
+            # Each eval's OWN series — get_simulated_data() returns the BEST
+            # eval, which would stamp the running-best onto every eval_id and
+            # make the overlay show identical lines for all evals after a best.
+            _sim = obj_func.get_last_simulated()
             if _sim is None or _sim.empty:
                 return
             _sim = _sim.copy()
