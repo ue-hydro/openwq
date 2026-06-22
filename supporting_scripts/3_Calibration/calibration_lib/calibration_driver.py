@@ -436,13 +436,30 @@ def run_calibration(
     # Initialize components
     logger.info("Initializing components...")
 
+    # Effective per-eval SIMULATION window.  With a spin-up configured, each
+    # eval simulates from the spin-up start through the calibration end so the
+    # model state (soil pools, in-stream conc.) equilibrates; the OBJECTIVE
+    # still only scores the calibration window (its observations live there),
+    # so the spin-up span is simulated but NOT scored.
+    _cal_window = kwargs.get("calibration_period")
+    _spinup = kwargs.get("spinup_period")
+    _eval_sim_window = _cal_window
+    if _spinup and _cal_window:
+        try:
+            _eval_sim_window = (_spinup[0], _cal_window[1])
+            logger.info("Spin-up enabled: each eval simulates from %s; the "
+                        "scored calibration window starts %s.",
+                        _spinup[0], _cal_window[0])
+        except Exception:
+            _eval_sim_window = _cal_window
+
     param_handler = ParameterHandler(
         calibration_work_dir=calibration_work_dir,
         model_config=model_config,
         base_model_config_dir=base_model_config_dir,
         test_case_dir=test_case_dir,
         running_on_docker=(container_runtime == "docker"),
-        calibration_period=kwargs.get("calibration_period"),
+        calibration_period=_eval_sim_window,
     )
 
     model_runner = ModelRunner(
@@ -458,10 +475,11 @@ def run_calibration(
         command_template=command_template,
         hostmodel=(model_config.get("hostmodel", "") if model_config else ""),
         calibration_work_dir=calibration_work_dir,
-        # Per-eval calibration window (start, end) | None.  When set, each
+        # Per-eval SIMULATION window (start, end) | None.  When set, each
         # eval's control file is rewritten to simulate only this window —
-        # keeps runtime + memory low and avoids OOM kills.
-        calibration_period=kwargs.get("calibration_period"),
+        # keeps runtime + memory low and avoids OOM kills.  Includes the
+        # spin-up span when one is configured (scored window is narrower).
+        calibration_period=_eval_sim_window,
         # Total planned evaluations — drives the cumulative-elapsed + ETA
         # progress lines printed after each eval's spinner finishes.
         total_evaluations=max_evaluations,
@@ -504,6 +522,7 @@ def run_calibration(
         h5_mapping_key=_spatial.get("h5_mapping_key"),
         use_primary_only=kwargs.get("use_primary_only", True),
         zone_select=kwargs.get("zone_select"),
+        metric_focus=kwargs.get("metric_focus", "both"),
     )
 
     checkpoint_mgr = CheckpointManager(work_dir / "checkpoints")
@@ -738,6 +757,7 @@ def run_calibration(
                 "calibration_mode": calibration_mode,
                 "use_primary_only": kwargs.get("use_primary_only", True),
                 "zone_select": kwargs.get("zone_select"),
+                "metric_focus": kwargs.get("metric_focus", "both"),
             }
             try:
                 _md = obj_func.get_matched_data()
@@ -1425,6 +1445,7 @@ def run_calibration(
         "calibration_mode": calibration_mode,
         "use_primary_only": kwargs.get("use_primary_only", True),
         "zone_select": kwargs.get("zone_select"),
+        "metric_focus": kwargs.get("metric_focus", "both"),
     }
     _write_live_snapshot(results_dir, _snap_cr, _snap_cs, in_progress=False)
 
@@ -1602,7 +1623,8 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
             hostmodel=obj_func.hostmodel,
             h5_mapping_key=obj_func.h5_mapping_key,
             use_primary_only=getattr(obj_func, "use_primary_only", True),
-            zone_select=getattr(obj_func, "zone_select", None))
+            zone_select=getattr(obj_func, "zone_select", None),
+            metric_focus=getattr(obj_func, "metric_focus", "both"))
 
     # Calibration half + best parameters from the GLOBAL-best eval folder
     # (ground truth across all runs/resumes) — independent of obj_func's
@@ -1726,7 +1748,8 @@ def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
             aggregation_method=cs.get("aggregation_method", "mean"),
             hostmodel=hostmodel, h5_mapping_key=mapkey,
             use_primary_only=cs.get("use_primary_only", True),
-            zone_select=cs.get("zone_select"))
+            zone_select=cs.get("zone_select"),
+            metric_focus=cs.get("metric_focus", "both"))
         _of.compute(Path(best_dir) / "openwq_out")
         return (_of.get_matched_data(), _of.get_simulated_data(),
                 os.path.basename(best_dir))

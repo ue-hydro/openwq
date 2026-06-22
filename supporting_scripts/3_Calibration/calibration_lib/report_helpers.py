@@ -1519,6 +1519,7 @@ def get_interactive_layout_css() -> str:
     .calib-calib { background: linear-gradient(135deg, #2563eb, #3b82f6); }
     .calib-valid { background: linear-gradient(135deg, #059669, #10b981); }
     .calib-excl  { background: linear-gradient(135deg, #94a3b8, #cbd5e1); }
+    .calib-spinup { background: linear-gradient(135deg, #d97706, #f59e0b); }
     .calib-seg-label {
         color: #fff;
         font-size: .72rem;
@@ -1566,6 +1567,7 @@ def get_interactive_layout_css() -> str:
     }
     .calib-sw-c { background: #3b82f6; }
     .calib-sw-v { background: #10b981; }
+    .calib-sw-s { background: #f59e0b; }
 
     /* Container-runtime two-button toggle (single-select) */
     .rt-btn {

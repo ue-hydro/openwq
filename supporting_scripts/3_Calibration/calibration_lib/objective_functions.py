@@ -56,7 +56,8 @@ class ObjectiveFunction:
                  hostmodel: str = "mizuroute",
                  h5_mapping_key: Optional[str] = None,
                  use_primary_only: bool = True,
-                 zone_select=None):
+                 zone_select=None,
+                 metric_focus: str = "both"):
         """
         Initialize objective function calculator.
 
@@ -124,6 +125,23 @@ class ObjectiveFunction:
         if self.zone_select is not None:
             logger.info(f"Zone selection: using only soil layer / zone "
                         f"z{self.zone_select} for the objective.")
+        # Objective focus — which error components matter most.  Works with ANY
+        # base metric:
+        #   "both"      → use the chosen metric as-is (KGE/NSE/RMSE/PBIAS)
+        #   "phase"     → reward TIMING/SHAPE (correlation) — avoids the
+        #                 "off-phase but right-magnitude wins" pathology
+        #   "magnitude" → reward level + variability (bias + spread), not timing
+        # "phase"/"magnitude" use the universal correlation vs (variability+bias)
+        # decomposition (Gupta 2009 scaled KGE), because RMSE/PBIAS/NSE don't
+        # separate timing from level/spread on their own.
+        self.metric_focus = str(metric_focus or "both").strip().lower()
+        if self.metric_focus not in self._FOCUS_WEIGHTS:
+            self.metric_focus = "both"
+        if self.metric_focus != "both":
+            logger.info(f"Objective focus: '{self.metric_focus}' — using the "
+                        f"correlation/variability/bias decomposition with "
+                        f"weights {self._FOCUS_WEIGHTS[self.metric_focus]} "
+                        f"(overrides the '{self.metric}' base metric).")
 
         # Validate temporal resolution
         valid_resolutions = ["native", "daily", "weekly", "monthly", "yearly"]
@@ -427,12 +445,24 @@ class ObjectiveFunction:
             if len(obs_vals) < 2:
                 continue
 
-            if self.metric == "RMSE":
+            if self.metric_focus in ("phase", "magnitude"):
+                # PHASE / MAGNITUDE focus is defined via the universal KGE
+                # decomposition (correlation r vs variability+bias) and so
+                # applies to ANY base metric: RMSE conflates timing+level,
+                # PBIAS is pure bias, and NSE doesn't split into a weightable
+                # sum — only the r/alpha/beta decomposition cleanly isolates
+                # "phase" from "magnitude".  ('both' keeps the chosen metric.)
+                _sr, _sa, _sb = self._FOCUS_WEIGHTS[self.metric_focus]
+                obj = 1.0 - self.kge_scaled(obs_vals, sim_vals, _sr, _sa, _sb)
+            elif self.metric == "RMSE":
                 obj = self.rmse(obs_vals, sim_vals)
             elif self.metric == "NSE":
                 obj = self.nse_minimization(obs_vals, sim_vals)
             elif self.metric == "KGE":
                 obj = self.kge_minimization(obs_vals, sim_vals)
+            elif self.metric == "PBIAS":
+                # Perfect bias = 0; minimise its absolute value.
+                obj = abs(self.pbias(obs_vals, sim_vals))
             else:
                 obj = self.rmse(obs_vals, sim_vals)
 
@@ -954,6 +984,34 @@ class ObjectiveFunction:
     # =========================================================================
     # Objective Function Metrics
     # =========================================================================
+
+    # Per-component KGE scaling for the objective "focus" (Gupta et al. 2009):
+    # (s_r, s_alpha, s_beta) on (correlation, variability, bias).
+    _FOCUS_WEIGHTS = {
+        "both":      (1.0, 1.0, 1.0),    # standard KGE
+        "phase":     (1.0, 0.25, 0.25),  # reward timing/shape (correlation)
+        "magnitude": (0.25, 1.0, 1.0),   # reward level + spread, not timing
+    }
+
+    @staticmethod
+    def kge_scaled(obs: np.ndarray, sim: np.ndarray,
+                   sr: float = 1.0, sa: float = 1.0, sb: float = 1.0) -> float:
+        """KGE with per-component scaling factors so the objective can favour
+        PHASE (correlation r) or MAGNITUDE (variability alpha + bias beta).
+        With sr=sa=sb=1 this is the standard KGE."""
+        mask = ~(np.isnan(obs) | np.isnan(sim))
+        o, s = obs[mask], sim[mask]
+        if len(o) < 2:
+            return -np.inf
+        if np.nanstd(o) == 0 or np.nanstd(s) == 0:
+            r = 0.0
+        else:
+            r = np.corrcoef(o, s)[0, 1]
+        alpha = np.nanstd(s) / np.nanstd(o) if np.nanstd(o) != 0 else 0.0
+        beta = np.nanmean(s) / np.nanmean(o) if np.nanmean(o) != 0 else 0.0
+        return 1.0 - np.sqrt((sr * (r - 1)) ** 2
+                             + (sa * (alpha - 1)) ** 2
+                             + (sb * (beta - 1)) ** 2)
 
     @staticmethod
     def rmse(obs: np.ndarray, sim: np.ndarray) -> float:

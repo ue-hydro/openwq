@@ -3356,6 +3356,25 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    pass'
         )
 
+        # Caveat when the overlaid observations come from MANY stations: a
+        # single basin can have dozens of gauges (here mapped to one reach/HRU)
+        # whose concentrations differ widely.  Plotting them all as one cloud
+        # makes the model look like a good fit when it merely falls inside the
+        # spread — but calibration scores only the pour-point/outlet gauge.  Be
+        # explicit so the visual isn't read as the calibration fit.
+        _n_stn = int((obs_stats or {}).get('n_stations', 0) or 0)
+        if _n_stn > 1:
+            H.append(
+                '<div style="margin:1rem 0 .2rem;padding:.7rem .9rem;border-left:4px solid '
+                '#d97706;background:rgba(217,119,6,.08);border-radius:4px;font-size:.86rem;'
+                'line-height:1.55;">&#9888; <strong>The overlaid observations are from '
+                f'{_n_stn} monitoring stations</strong> within the basin (all mapped to the '
+                'same reach/HRU), and their concentrations vary widely. A simulated line that '
+                'passes <em>through this cloud</em> is <strong>not</strong> a good fit at any '
+                'one location &mdash; calibration scores only the <strong>pour-point / outlet '
+                'gauge</strong>, not the full spread shown here. Judge model performance against '
+                'that single gauge (in the calibration report), not this multi-station cloud.</div>')
+
         # Two-column layout: 4a (left) and 4b (right) side by side
         H.append('<div style="display:flex;gap:1.5rem;margin-top:1rem;align-items:flex-start">')
         H.append('<div style="flex:1;min-width:0">')

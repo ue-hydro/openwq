@@ -1158,9 +1158,20 @@ def generate_interactive_setup(
         H.append('<div class="tab-panel" data-tab="settings">')
         H.append(_build_workflow_mode_section())
         H.append(_build_interactive_sensitivity_section())
+        # Discover the coupled model's actual (nx, ny, nz) cell structure from
+        # its openWQ output so the (ix, iy, iz) selectors size themselves to it
+        # (works for any host model; None when the model hasn't been run yet).
+        try:
+            _cell_dims = _discover_cell_dims(
+                model_config.get("dir2save_input_files", ""),
+                species_list=(model_config.get("chemical_species") or None))
+        except Exception as _e:
+            logger.warning(f"Could not discover cell dimensions: {_e}")
+            _cell_dims = None
         H.append(_build_interactive_settings_section(
             container_config.get("container_runtime", "docker"),
-            hostmodel=model_config.get("hostmodel", "")))
+            hostmodel=model_config.get("hostmodel", ""),
+            cell_dims=_cell_dims))
         H.append('</div>')
 
         # ── Tab: Targets ──
@@ -2078,53 +2089,135 @@ def _build_interactive_summary(
 """
 
 
+def _zone_select_options(nz):
+    """(value,label) options for the iz/zone dropdown: 'average all' + z1..zN."""
+    opts = [("", "average all layers (default)")]
+    for k in range(1, int(nz) + 1):
+        opts.append((str(k), f"z{k} (layer {k})"))
+    return opts
+
+
+def _discover_cell_dims(output_dir, species_list=None):
+    """Discover the coupled model's ACTUAL spatial structure from the openWQ
+    output, generically (works for any host model).
+
+    openWQ stores ``xyz_elements`` (shape ``(3, n_cells)``: rows = ix, iy, iz
+    per cell) in every output HDF5.  We return ``(nx, ny, nz)`` = the largest
+    number of distinct indices found in each dimension across the output
+    compartments, so the (ix, iy, iz) selectors can size themselves to the real
+    grid.  Returns ``None`` when no output exists yet (e.g. the model hasn't
+    been run once) — the caller then falls back to host defaults."""
+    import glob
+    import os as _os
+    try:
+        import h5py
+        import numpy as _np
+    except Exception:
+        return None
+    h5dir = _os.path.join(output_dir or "", "openwq_out", "HDF5")
+    files = (glob.glob(_os.path.join(h5dir, "*-main.h5"))
+             or glob.glob(_os.path.join(h5dir, "*.h5")))
+    if species_list:
+        _sp = [str(s) for s in species_list]
+        _pref = [f for f in files
+                 if any(("@" + s) in _os.path.basename(f) for s in _sp)]
+        files = _pref or files
+    if not files:
+        return None
+    nx = ny = nz = 1
+    for f in files[:40]:
+        try:
+            with h5py.File(f, "r") as hf:
+                if "xyz_elements" not in hf:
+                    continue
+                xyz = _np.asarray(hf["xyz_elements"][:])
+        except Exception:
+            continue
+        if xyz.ndim != 2 or xyz.shape[0] < 3:
+            continue
+        nx = max(nx, len({int(round(v)) for v in xyz[0]}))
+        ny = max(ny, len({int(round(v)) for v in xyz[1]}))
+        nz = max(nz, len({int(round(v)) for v in xyz[2]}))
+    return (nx, ny, nz)
+
+
 def _build_interactive_settings_section(container_runtime_default: str = "docker",
-                                        hostmodel: str = "") -> str:
-    """Calibration settings with interactive form elements."""
+                                        hostmodel: str = "",
+                                        cell_dims=None) -> str:
+    """Calibration settings with interactive form elements.
+
+    ``cell_dims`` = ``(nx, ny, nz)`` discovered from the coupled model's openWQ
+    output (or ``None``).  The (ix, iy, iz) selectors size themselves to it, so
+    a model with several iy / iz cells gets the corresponding drop-downs; ``ix``
+    is always the reach/HRU chosen in the Targets tab."""
     _is_summa = str(hostmodel or "").lower() == "summa"
     _ix_label = "HRU id" if _is_summa else "Reach id"
-    # openWQ addresses every cell as (ix, iy, iz).  ix is the host feature
-    # (reach for mizuRoute, HRU for SUMMA) chosen in the Targets tab; iy is
-    # always a single lane here; iz is a single layer for mizuRoute but the
-    # SUMMA vertical zone / soil layer, which the user may pick.
-    _disabled_one = ('<input class="form-input" type="text" value="1" disabled '
-                     'style="opacity:.55;cursor:not-allowed;"/>')
-    _iy_group = (
-        '<div class="form-group">'
-        '<label>iy</label>' + _disabled_one +
-        '<div class="hint" style="opacity:.7;">Only one &mdash; this host '
-        'model has a single lane in y.</div></div>')
-    if _is_summa:
-        _iz_group = rh.build_form_input(
-            "zone_select", "iz — vertical zone / soil layer",
-            default="", placeholder="blank = average all layers",
-            hint="SUMMA writes one value per vertical zone / soil layer "
-                 "(z1, z2, ...). Leave blank to AVERAGE all layers (default), "
-                 "or enter a layer index (1, 2, ...) to drive the objective and "
-                 "report from ONLY that layer.")
+    _nx, _ny, _nz = (cell_dims if (isinstance(cell_dims, (tuple, list))
+                                   and len(cell_dims) == 3) else (None, None, None))
+
+    def _disabled(val, note):
+        return ('<input class="form-input" type="text" value="' + str(val)
+                + '" disabled style="opacity:.55;cursor:not-allowed;"/>'
+                '<div class="hint" style="opacity:.7;">' + note + '</div>')
+
+    # iy — a drop-down only if the model actually has several y-cells.
+    if _ny and _ny > 1:
+        _iy_inner = _disabled(_ny, f"{_ny} cells in y &mdash; currently "
+                              "averaged (per-iy selection not yet a calibration "
+                              "target).")
     else:
-        _iz_group = (
-            '<div class="form-group">'
-            '<label>iz</label>' + _disabled_one +
-            '<div class="hint" style="opacity:.7;">Only one &mdash; mizuRoute '
-            'reaches have a single layer in z.</div></div>')
+        _iy_inner = _disabled(1, "Only one &mdash; a single lane in y.")
+    _iy_group = '<div class="form-group"><label>iy</label>' + _iy_inner + '</div>'
+
+    # iz — data-driven drop-down sized to the model's real layer count.
+    if _nz and _nz > 1:
+        _iz_group = rh.build_form_select(
+            "zone_select", "iz — vertical zone / layer",
+            _zone_select_options(_nz), "",
+            f"This model writes {_nz} layers/zones in z. 'average all' uses the "
+            "layer mean (default); pick a specific layer to drive the objective "
+            "and report from ONLY that layer.")
+    elif _nz == 1:
+        _iz_group = ('<div class="form-group"><label>iz</label>'
+                     + _disabled(1, "Only one &mdash; this model has a single "
+                                 "layer in z.") + '</div>')
+    elif _is_summa:
+        # No output discovered yet (model not run); SUMMA usually has vertical
+        # soil layers — offer a generous default the run will trim to the real
+        # count.
+        _iz_group = rh.build_form_select(
+            "zone_select", "iz — vertical zone / soil layer",
+            _zone_select_options(8), "",
+            "SUMMA writes one value per vertical zone / soil layer. 'average "
+            "all' uses the layer mean (default); pick a layer to use ONLY that "
+            "layer. Run the model once so this list matches your exact layer "
+            "count (extra layers score as no data).")
+    else:
+        _iz_group = ('<div class="form-group"><label>iz</label>'
+                     + _disabled(1, "Only one &mdash; reaches have a single "
+                                 "layer in z.") + '</div>')
+
+    _ix_note = ("The reach/HRU(s) chosen as objective targets."
+                if not (_nx and _nx > 1) else
+                f"This model has {_nx} cells in x; pick the reach/HRU(s) to "
+                "calibrate in the Targets tab.")
     _spatial_cell_card = f"""
     <!-- Theme: openWQ spatial cell (ix, iy, iz) addressing -->
     <div class="card">
         <h3>openWQ spatial cell (ix, iy, iz)</h3>
         <p class="hint" style="margin-top:0;">openWQ addresses every cell by
-            <strong>(ix,&nbsp;iy,&nbsp;iz)</strong>. Here <strong>ix</strong> is
-            the <strong>{_ix_label}</strong> set by your objective targets (see
-            the <em>Targets</em> tab); <strong>iy</strong> and
-            <strong>iz</strong> are below.</p>
+            <strong>(ix,&nbsp;iy,&nbsp;iz)</strong>; these selectors size
+            themselves to the coupled model's actual grid. Here
+            <strong>ix</strong> is the <strong>{_ix_label}</strong> set by your
+            objective targets (see the <em>Targets</em> tab);
+            <strong>iy</strong> and <strong>iz</strong> are below.</p>
         <div class="form-row">
             <div class="form-group">
                 <label>ix &mdash; {_ix_label}</label>
                 <input class="form-input" type="text"
                        value="set in the Targets tab" disabled
                        style="opacity:.55;cursor:not-allowed;"/>
-                <div class="hint" style="opacity:.7;">The reach/HRU(s) chosen as
-                    objective targets.</div>
+                <div class="hint" style="opacity:.7;">{_ix_note}</div>
             </div>
             {_iy_group}
         </div>
@@ -2202,6 +2295,18 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                 ["mean", "median"], "mean")}
         </div>
         <div class="form-row">
+            {rh.build_form_select("metric_focus", "Objective focus",
+                ["both", "phase", "magnitude"], "both",
+                "What the objective rewards (works with any metric above). "
+                "both = use the chosen metric as-is. phase = reward timing/shape "
+                "(correlation) — use when the model captures the seasonal "
+                "pattern but the magnitude is off, so the fit doesn't go "
+                "off-phase chasing magnitude. magnitude = reward level + spread, "
+                "not timing. phase/magnitude use the correlation vs "
+                "(variability+bias) decomposition, since RMSE/PBIAS/NSE can't "
+                "separate timing from magnitude on their own.")}
+        </div>
+        <div class="form-row">
             {rh.build_form_checkbox(
                 "use_primary_only",
                 "Use only pouring-point (primary) observations in the metric",
@@ -2215,19 +2320,20 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
     {_spatial_cell_card}
 
     <div class="card" id="calibPeriodCard">
-        <h3>Calibration / validation period</h3>
+        <h3>Spin-up / calibration / validation period</h3>
         <p class="hint" style="margin-top:0;">
-            Each evaluation simulates <strong>only the calibration window</strong>
-            instead of the model's full period &mdash; this keeps runtime and
-            memory low (a full multi-year run can exhaust container RAM and be
-            OOM-killed). By default the <strong>first third</strong> of your
-            observation period is used to <strong>calibrate</strong> and the
-            remaining <strong>two thirds</strong> are reserved to
-            <strong>validate</strong> later. Drag the <strong>two handles</strong>
-            to set the calibration window's <strong>start</strong> (left handle) and
-            the calibration&nbsp;/&nbsp;validation <strong>split</strong> (right
-            handle); any data before the start handle is <strong>excluded</strong>.
-            The greyed span has no observations.
+            Each evaluation simulates <strong>only this window</strong> instead of
+            the model's full period &mdash; this keeps runtime and memory low (a
+            full multi-year run can exhaust container RAM and be OOM-killed).
+            Drag the <strong>three handles</strong> to set:
+            (1)&nbsp;the <strong>spin-up</strong> start &mdash; warm-up that runs
+            but is <em>not scored</em>, so the model state equilibrates instead of
+            starting cold from the initial condition;
+            (2)&nbsp;the <strong>calibration</strong> start (= end of spin-up); and
+            (3)&nbsp;the calibration&nbsp;/&nbsp;<strong>validation</strong> split.
+            By default spin-up uses all available warm-up (back to the simulation
+            start), calibration is the first third of the observations and
+            validation the rest. The greyed spans have no observations.
         </p>
         <div class="calib-slider-wrap" id="calibSliderWrap">
             <!-- Per-species observation coverage, ABOVE the slider on the same
@@ -2238,15 +2344,17 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
             <div id="calibForcingLane" style="margin-bottom:.6rem;"></div>
             <div class="calib-track" id="calibTrack">
                 <div class="calib-seg calib-gray"  id="segGrayLeft"></div>
-                <div class="calib-seg calib-excl"  id="segExclLeft">
-                    <span class="calib-seg-label">Excluded</span></div>
+                <div class="calib-seg calib-spinup" id="segSpinup">
+                    <span class="calib-seg-label">Spin-up</span></div>
                 <div class="calib-seg calib-calib" id="segCalib">
                     <span class="calib-seg-label">Calibration</span></div>
                 <div class="calib-seg calib-valid" id="segValid">
                     <span class="calib-seg-label">Validation</span></div>
                 <div class="calib-seg calib-gray"  id="segGrayRight"></div>
+                <div class="calib-handle" id="calibHandleSpinup"
+                     title="Drag to move the SPIN-UP start (model warm-up that runs but is NOT scored)"></div>
                 <div class="calib-handle" id="calibHandleStart"
-                     title="Drag to move the calibration window START"></div>
+                     title="Drag to move the calibration window START (= end of spin-up)"></div>
                 <div class="calib-handle" id="calibHandle"
                      title="Drag to move the calibration / validation split"></div>
             </div>
@@ -2255,6 +2363,10 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                 <span id="calibAxisEnd"></span>
             </div>
             <div class="form-row" style="margin-top:.6rem;">
+                <div class="form-group">
+                    <label>Spin-up window <span class="calib-swatch calib-sw-s"></span></label>
+                    <div class="calib-window-text" id="spinupWindowText">&mdash;</div>
+                </div>
                 <div class="form-group">
                     <label>Calibration window <span class="calib-swatch calib-sw-c"></span></label>
                     <div class="calib-window-text" id="calibWindowText">&mdash;</div>
@@ -2284,6 +2396,7 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
             readable control file (fileManager / mizuRoute control).
         </p>
         <!-- Hidden fields populated by the slider JS, read by collectFormState. -->
+        <input type="hidden" id="spinup_period_start" value="">
         <input type="hidden" id="calibration_period_start" value="">
         <input type="hidden" id="calibration_period_end" value="">
         <input type="hidden" id="validation_period_start" value="">
@@ -3994,6 +4107,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.algorithm = document.getElementById('algorithm').value;
     s.max_evaluations = parseInt(document.getElementById('max_evaluations').value) || 500;
     s.objective_function = document.getElementById('objective_function').value;
+    var _mfEl = document.getElementById('metric_focus');
+    s.metric_focus = _mfEl ? _mfEl.value : 'both';
     s.temporal_resolution = document.getElementById('temporal_resolution').value;
     s.aggregation_method = document.getElementById('aggregation_method').value;
     s.random_seed = parseInt(document.getElementById('random_seed').value) || 42;
@@ -4014,10 +4129,12 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // inputs are populated by the slider JS in 'YYYY-MM-DD HH:MM' format.
     var _ucpEl = document.getElementById('use_calibration_period');
     s.use_calibration_period = _ucpEl ? !!_ucpEl.checked : false;
+    var _sups = document.getElementById('spinup_period_start');
     var _cps = document.getElementById('calibration_period_start');
     var _cpe = document.getElementById('calibration_period_end');
     var _vps = document.getElementById('validation_period_start');
     var _vpe = document.getElementById('validation_period_end');
+    s.spinup_period_start      = (_sups && _sups.value) ? _sups.value : null;
     s.calibration_period_start = (_cps && _cps.value) ? _cps.value : null;
     s.calibration_period_end   = (_cpe && _cpe.value) ? _cpe.value : null;
     s.validation_period_start  = (_vps && _vps.value) ? _vps.value : null;
@@ -4173,6 +4290,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('algorithm = ' + pyRepr(s.algorithm));
     lines.push('max_evaluations = ' + pyRepr(s.max_evaluations));
     lines.push('objective_function = ' + pyRepr(s.objective_function));
+    lines.push('# Objective focus (works with any metric above): "both" = use');
+    lines.push('# the chosen metric as-is | "phase" = reward timing/correlation |');
+    lines.push('# "magnitude" = reward level+spread. phase/magnitude use the');
+    lines.push('# correlation vs (variability+bias) decomposition.');
+    lines.push('metric_focus = ' + pyRepr(s.metric_focus || 'both'));
     lines.push('temporal_resolution = ' + pyRepr(s.temporal_resolution));
     lines.push('aggregation_method = ' + pyRepr(s.aggregation_method));
     lines.push('random_seed = ' + pyRepr(s.random_seed));
@@ -4220,6 +4342,19 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     } else {
       lines.push('calibration_period = None');
       lines.push('validation_period = None');
+    }
+    lines.push('');
+    lines.push('# Spin-up window: each evaluation SIMULATES from spinup_start');
+    lines.push('# through the calibration window, but the warm-up span is NOT');
+    lines.push('# scored — it lets soil/in-stream state equilibrate so a cold');
+    lines.push('# start from the initial condition does not ruin the early fit.');
+    lines.push('#   (spinup_start, calibration_start) -> eval runs from spinup_start');
+    lines.push('#   None                              -> no spin-up (cold start)');
+    if (s.use_calibration_period && s.spinup_period_start && s.calibration_period_start) {
+      lines.push('spinup_period = (' + pyRepr(s.spinup_period_start) +
+                 ', ' + pyRepr(s.calibration_period_start) + ')');
+    } else {
+      lines.push('spinup_period = None');
     }
     lines.push('');
     lines.push('# Spatial-matching: when True the objective uses only the');
@@ -4392,6 +4527,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        max_evaluations=max_evaluations,');
     lines.push('        n_parallel=n_parallel,');
     lines.push('        objective_function=objective_function,');
+    lines.push('        # KGE focus: "both" | "phase" | "magnitude".');
+    lines.push('        metric_focus=metric_focus,');
     lines.push('        objective_weights=objective_weights,');
     lines.push('        calibration_targets=calibration_targets,');
     lines.push('        random_seed=random_seed,');
@@ -4417,6 +4554,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        # report adds an Observed vs Simulated (Calibration &');
     lines.push('        # Validation) section.');
     lines.push('        validation_period=validation_period,');
+    lines.push('        # Spin-up: each eval simulates from spinup_period[0] but');
+    lines.push('        # only the calibration window is scored.');
+    lines.push('        spinup_period=spinup_period,');
     lines.push('        temporal_resolution=temporal_resolution,');
     lines.push('        aggregation_method=aggregation_method,');
     // Runtime chosen in the setup report (docker / apptainer), overriding
@@ -5550,6 +5690,17 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // validation = remaining two-thirds
     var splitF = calStartF + (aEndF - calStartF) / 3;
 
+    // Spin-up START (new left handle): each evaluation SIMULATES from here
+    // through the calibration window, but this warm-up span is NOT scored — it
+    // just lets the model state (soil pools, in-stream conc.) equilibrate so a
+    // cold start from the initial condition doesn't ruin the early fit.
+    // Default = the simulation start (track left), i.e. the full available
+    // warm-up — matching a full forward run. Drag the handle right to shorten
+    // it, or all the way to the calibration start for no spin-up.
+    var spinupF = 0;
+    if (spinupF > calStartF) spinupF = calStartF;
+    var handleSpinup = document.getElementById('calibHandleSpinup');
+
     // Observation timestamps (epoch ms) per species → live in-window count.
     // Counts only the SELECTED target species when any are ticked, else all
     // species present in the obs data.  (Optimistic: spatial / primary-only
@@ -5582,20 +5733,23 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     function render() {
       var pct = function(f) { return (f * 100) + '%'; };
       var gl = document.getElementById('segGrayLeft');
-      var ex = document.getElementById('segExclLeft');
+      var sp = document.getElementById('segSpinup');
       var sc = document.getElementById('segCalib');
       var sv = document.getElementById('segValid');
       var gr = document.getElementById('segGrayRight');
-      gl.style.left = '0%';            gl.style.width = pct(aStartF);
-      ex.style.left = pct(aStartF);    ex.style.width = pct(calStartF - aStartF);
+      gl.style.left = '0%';            gl.style.width = pct(spinupF);
+      sp.style.left = pct(spinupF);    sp.style.width = pct(calStartF - spinupF);
       sc.style.left = pct(calStartF);  sc.style.width = pct(splitF - calStartF);
       sv.style.left = pct(splitF);     sv.style.width = pct(aEndF - splitF);
       gr.style.left = pct(aEndF);      gr.style.width = pct(1 - aEndF);
       handle.style.left = pct(splitF);
       if (handleStart) handleStart.style.left = pct(calStartF);
+      if (handleSpinup) handleSpinup.style.left = pct(spinupF);
 
+      var suStart = dateAtFrac(spinupF);
       var cStart = dateAtFrac(calStartF);
       var cEnd = dateAtFrac(splitF);
+      var hasSpinup = (calStartF - spinupF) > 1e-6;
       var cN = countObs(cStart.getTime(), cEnd.getTime());
       var vN = countObs(cEnd.getTime(), aEnd.getTime());
       var cSuf = (cN === null) ? '' : ('  ·  ' + cN + ' obs');
@@ -5605,21 +5759,29 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       // Flag an empty calibration window (no eligible obs) in red.
       cEl.style.color = (cN === 0) ? 'var(--danger, #dc2626)' : '';
       cEl.style.fontWeight = (cN === 0) ? '700' : '';
+      var suEl = document.getElementById('spinupWindowText');
+      if (suEl) suEl.textContent = hasSpinup
+          ? (fmt(suStart) + '  →  ' + fmt(cStart) + '  ·  not scored') : 'none';
       document.getElementById('valWindowText').textContent   = fmt(cEnd)   + '  →  ' + fmt(aEnd) + vSuf;
       document.getElementById('calibAxisStart').textContent  = fmt(lo);
       document.getElementById('calibAxisEnd').textContent    = fmt(hi);
+      var suHid = document.getElementById('spinup_period_start');
+      if (suHid) suHid.value = hasSpinup ? fmt(suStart) : '';
       document.getElementById('calibration_period_start').value = fmt(cStart);
       document.getElementById('calibration_period_end').value   = fmt(cEnd);
       document.getElementById('validation_period_start').value  = fmt(cEnd);
       document.getElementById('validation_period_end').value    = fmt(aEnd);
     }
 
-    var active = 'split';   // which handle is being dragged: 'start' | 'split'
+    var active = 'split';   // dragged handle: 'spinup' | 'start' | 'split'
     function setFromClientX(clientX) {
       var rect = track.getBoundingClientRect();
       var f = (clientX - rect.left) / rect.width;
-      if (active === 'start') {
+      if (active === 'spinup') {
+        spinupF = Math.max(0, Math.min(calStartF, f));        // [sim start, cal start]
+      } else if (active === 'start') {
         calStartF = Math.max(aStartF, Math.min(splitF, f));   // can't pass the split
+        if (spinupF > calStartF) spinupF = calStartF;         // keep spin-up ≤ cal start
       } else {
         splitF = Math.max(calStartF, Math.min(aEndF, f));     // can't pass the start
       }
@@ -5636,11 +5798,19 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       e.preventDefault(); active = 'start'; dragging = true;
       document.body.style.userSelect = 'none';
     });
+    if (handleSpinup) handleSpinup.addEventListener('mousedown', function(e) {
+      e.preventDefault(); active = 'spinup'; dragging = true;
+      document.body.style.userSelect = 'none';
+    });
     track.addEventListener('mousedown', function(e) {
-      // Clicking the track grabs whichever handle is nearer the click point.
+      // Clicking the track grabs whichever of the 3 handles is nearest.
       var rect = track.getBoundingClientRect();
       var f = (e.clientX - rect.left) / rect.width;
-      active = (Math.abs(f - calStartF) < Math.abs(f - splitF)) ? 'start' : 'split';
+      var dSpin = Math.abs(f - spinupF);
+      var dStart = Math.abs(f - calStartF);
+      var dSplit = Math.abs(f - splitF);
+      active = (dSpin <= dStart && dSpin <= dSplit) ? 'spinup'
+             : (dStart <= dSplit) ? 'start' : 'split';
       dragging = true; document.body.style.userSelect = 'none';
       setFromClientX(e.clientX);
     });
