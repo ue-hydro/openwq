@@ -1190,6 +1190,8 @@ def WebGL_h5_driver(shpfile_info=None,
                     n_particles=65536,
                     river_width_cells=3,
                     step=1,
+                    period_start=0.0,
+                    period_end=1.0,
                     satellite_resolution=1,
                     fluxos_viewer_path=None):
     """
@@ -1461,6 +1463,21 @@ def WebGL_h5_driver(shpfile_info=None,
         indices = list(range(0, total_timeframes, step))
     else:
         indices = list(range(total_timeframes))
+
+    # Restrict to a user-selected sub-period (fraction of the run) so the viewer
+    # need not load the whole simulation.  Keep ORIGINAL frame positions (just
+    # drop those outside the window) so per-frame flow/conc lookups stay valid.
+    if (period_start, period_end) != (0.0, 1.0):
+        _lo = max(0, int(period_start * total_timeframes))
+        _hi = min(total_timeframes, int(round(period_end * total_timeframes)))
+        _win = [i for i in indices if _lo <= i < _hi]
+        if _win:
+            indices = _win
+            print(f"  Sub-period [{period_start:.3f}, {period_end:.3f}]: "
+                  f"{len(indices)} of {total_timeframes} timesteps")
+        else:
+            print(f"  WARNING: sub-period [{period_start}, {period_end}] matched "
+                  f"no timesteps; using full period.")
 
     if timeframes is not None and timeframes < len(indices):
         indices = [indices[i] for i in

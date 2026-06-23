@@ -1292,6 +1292,30 @@ def _compute_spatial_stats(results):
     return stats
 
 
+def _sim_period_datetimes(file_manager_path, hostmodel):
+    """Full simulation start/end datetime strings (e.g. '1981-10-01 01:00')
+    from the host-model control file, or ``(None, None)``.  Unlike
+    ``parse_sim_period_from_control_file`` (which returns only years), this
+    keeps the full date + hour so the viewer's period slider can label exact
+    times."""
+    import os as _os, re as _re
+    if not file_manager_path or not _os.path.isfile(file_manager_path):
+        return None, None
+    try:
+        with open(file_manager_path) as _f:
+            _c = _f.read()
+    except Exception:
+        return None, None
+    _dt = r'(\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?)'
+    if (hostmodel or '').strip().lower() == 'summa':
+        _ms = _re.search(r"simStartTime\s+'\s*" + _dt, _c)
+        _me = _re.search(r"simEndTime\s+'\s*" + _dt, _c)
+    else:
+        _ms = _re.search(r'<sim_start>\s+' + _dt, _c)
+        _me = _re.search(r'<sim_end>\s+' + _dt, _c)
+    return (_ms.group(1) if _ms else None, _me.group(1) if _me else None)
+
+
 def _parse_hostmodel_output_info(file_manager_path, hostmodel, host_exe_dir):
     """Parse the host-model control file to find the output directory and file prefix.
 
@@ -2601,19 +2625,26 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                       'border:none;border-radius:4px;padding:2px 8px;font-size:.7rem;cursor:pointer')
         _copy_id_counter = [0]
 
-        def _code_block(code_text, max_h=None):
+        def _code_block(code_text, max_h=None, fill=False):
             """Return HTML for a <pre> block with a copy-to-clipboard button.
 
             When ``max_h`` is given (e.g. '20rem') the <pre> is height-capped and
             gets a vertical scrollbar on its right edge, keeping tall snippets
-            compact.
+            compact.  When ``fill=True`` the block grows to fill its
+            flex-column parent instead (used to stretch a side-by-side snippet
+            down to the next section).
             """
             import html as _html
             safe = _html.escape(code_text)
             cid = f'_cb{_copy_id_counter[0]}'
             _copy_id_counter[0] += 1
-            _scroll = f'max-height:{max_h};overflow-y:auto;' if max_h else ''
-            return (f'<div style="position:relative">'
+            if fill:
+                _wrap_style = 'position:relative;flex:1 1 0;min-height:0;'
+                _scroll = 'height:100%;overflow-y:auto;box-sizing:border-box;'
+            else:
+                _wrap_style = 'position:relative;'
+                _scroll = f'max-height:{max_h};overflow-y:auto;' if max_h else ''
+            return (f'<div style="{_wrap_style}">'
                     f'<pre id="{cid}" style="{_pre_style};{_scroll}">{safe}</pre>'
                     f'<button style="{_btn_style}" '
                     f'onclick="var t=document.getElementById(\'{cid}\').textContent;'
@@ -3210,6 +3241,8 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    hydromodel_var2print=_flow_var,\n'
             f'    output_dir="{_webgl_out_dir_safe}",\n'
             f'    timeframes=50,\n'
+            f'    period_start=0.0,\n'
+            f'    period_end=1.0,\n'
             f'    n_particles=65536,\n'
             f'    river_width_cells=3,\n'
             f'    grid_resolution=None,\n'
@@ -3376,17 +3409,164 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 'that single gauge (in the calibration report), not this multi-station cloud.</div>')
 
         # Two-column layout: 4a (left) and 4b (right) side by side
-        H.append('<div style="display:flex;gap:1.5rem;margin-top:1rem;align-items:flex-start">')
+        H.append('<div style="display:flex;gap:1.5rem;margin-top:1rem;align-items:stretch">')
         H.append('<div style="flex:1;min-width:0">')
         H.append(f'<p style="font-weight:600">{_viewer_title_html}</p>')
         _cb_id_4a = f'_cb{_copy_id_counter[0]}'  # ID before _code_block increments
+        # timeframes control: a number field (default 50) + an "all" toggle that
+        # grays the field and switches the snippet to timeframes=None (every
+        # timestep). Edits the rendered code in place so Copy grabs the choice.
+        _tf_num_id = f'tfnum{_cb_id_4a}'
+        _tf_all_id = f'tfall{_cb_id_4a}'
+        H.append(
+            f'<div style="display:flex;align-items:center;gap:.5rem;margin:.2rem 0 .45rem;'
+            f'flex-wrap:wrap;font-size:.84rem;">'
+            f'<label for="{_tf_num_id}" style="font-weight:600;">timeframes</label>'
+            f'<input type="number" id="{_tf_num_id}" min="1" step="1" value="50" '
+            f'style="width:84px;padding:3px 6px;font-family:monospace;font-size:.85rem;'
+            f'border:1px solid #cbd5e1;border-radius:4px;">'
+            f'<button type="button" id="{_tf_all_id}" '
+            f'style="padding:3px 11px;font-size:.82rem;border:1px solid #cbd5e1;'
+            f'border-radius:4px;background:#fff;color:#0f172a;cursor:pointer;">&#9744; all</button>'
+            f'<span style="color:#64748b;">animation frames to export &mdash; tick '
+            f'<strong>all</strong> for every timestep (smoothest, but heavier)</span>'
+            f'</div>'
+        )
+        _tf_warn_id = f'tfwarn{_cb_id_4a}'
+        H.append(
+            f'<div id="{_tf_warn_id}" style="margin:.1rem 0 .5rem;padding:.5rem .7rem;'
+            f'border-left:4px solid #d97706;background:rgba(217,119,6,.10);'
+            f'border-radius:4px;font-size:.8rem;line-height:1.5;color:#92400e;"></div>'
+        )
+        # Period (sub-window) selector: a dual-range slider that injects
+        # period_start / period_end (fractions of the run) into the snippet, so
+        # the generated viewer loads only that window — letting the user zoom
+        # into a short period in detail without loading the whole simulation.
+        _ps_id = f'pst{_cb_id_4a}'
+        _pe_id = f'pen{_cb_id_4a}'
+        _pl_id = f'plbl{_cb_id_4a}'    # selected START date-hour (live)
+        _pel_id = f'penlbl{_cb_id_4a}'  # selected END date-hour (live)
+        _fill_id = f'pfill{_cb_id_4a}'
+        _sim_t0, _sim_t1 = _sim_period_datetimes(file_manager_path, hostmodel)
+        _sim_t0 = _sim_t0 or ''
+        _sim_t1 = _sim_t1 or ''
+        _t0_disp = _html_mod.escape(_sim_t0) if _sim_t0 else 'start'
+        _t1_disp = _html_mod.escape(_sim_t1) if _sim_t1 else 'end'
+        # ONE slider, two handles: two range inputs overlaid on a single track
+        # (CSS), so the user drags both the start and end of the window.  The
+        # simulation's actual start/end dates anchor the ends.
+        H.append(
+            f'<style>'
+            f'#{_ps_id},#{_pe_id}{{-webkit-appearance:none;appearance:none;position:absolute;'
+            f'top:0;left:0;width:100%;height:22px;margin:0;background:transparent;pointer-events:none;}}'
+            f'#{_ps_id}::-webkit-slider-thumb,#{_pe_id}::-webkit-slider-thumb{{-webkit-appearance:none;'
+            f'appearance:none;pointer-events:auto;width:15px;height:15px;border-radius:50%;'
+            f'background:#2d7d46;border:2px solid #fff;box-shadow:0 0 0 1px #2d7d46;cursor:pointer;}}'
+            f'#{_ps_id}::-moz-range-thumb,#{_pe_id}::-moz-range-thumb{{pointer-events:auto;width:15px;'
+            f'height:15px;border:2px solid #fff;border-radius:50%;background:#2d7d46;cursor:pointer;}}'
+            f'#{_ps_id}::-webkit-slider-runnable-track,#{_pe_id}::-webkit-slider-runnable-track'
+            f'{{background:transparent;border:none;}}'
+            f'#{_ps_id}::-moz-range-track,#{_pe_id}::-moz-range-track{{background:transparent;}}'
+            f'</style>'
+            f'<div style="display:flex;align-items:center;gap:.6rem;margin:.3rem 0 .15rem;font-size:.84rem;">'
+            f'<label style="font-weight:600;" title="Restrict the viewer to a sub-period '
+            f'so it does not load the whole simulation">period</label>'
+            f'<div style="flex:1;min-width:160px;position:relative;height:22px;">'
+            f'<div style="position:absolute;top:9px;left:0;right:0;height:4px;'
+            f'background:#cbd5e1;border-radius:2px;"></div>'
+            f'<div id="{_fill_id}" style="position:absolute;top:9px;height:4px;'
+            f'background:#2d7d46;border-radius:2px;left:0%;width:100%;"></div>'
+            f'<input type="range" id="{_ps_id}" min="0" max="1000" value="0" '
+            f'style="z-index:3;" title="Window start">'
+            f'<input type="range" id="{_pe_id}" min="0" max="1000" value="1000" '
+            f'style="z-index:4;" title="Window end">'
+            f'</div></div>'
+            f'<div style="display:flex;justify-content:space-between;gap:.5rem;'
+            f'font-size:.78rem;color:#334155;margin:0 0 .5rem;">'
+            f'<span>from <code id="{_pl_id}" style="color:#15803d;font-weight:600;">'
+            f'{_t0_disp}</code></span>'
+            f'<span>to <code id="{_pel_id}" style="color:#15803d;font-weight:600;">'
+            f'{_t1_disp}</code></span>'
+            f'</div>'
+        )
         H.append(_code_block(_terminal_snippet(_webgl_body), max_h='20rem'))
+        H.append(
+            f'<script>(function(){{'
+            f'var pre=document.getElementById("{_cb_id_4a}");'
+            f'var num=document.getElementById("{_tf_num_id}");'
+            f'var allbtn=document.getElementById("{_tf_all_id}");'
+            f'if(!pre||!num||!allbtn)return;'
+            f'var allOn=false;'
+            f'var warn=document.getElementById("{_tf_warn_id}");'
+            f'function apply(){{'
+            f'var n=Math.max(1,parseInt(num.value,10)||50);'
+            f'var val=allOn?"None":String(n);'
+            f'pre.textContent=pre.textContent.replace(/timeframes=[^,\\n]*/,"timeframes="+val);'
+            f'if(warn){{'
+            f'var heavy=allOn||n>500;'
+            f'warn.style.borderLeftColor=heavy?"#b45309":"#d97706";'
+            f'warn.style.background=heavy?"rgba(217,119,6,.18)":"rgba(217,119,6,.10)";'
+            f'warn.innerHTML=heavy'
+            f'?"&#9888; <strong>"+(allOn?"&ldquo;all&rdquo; exports every model output step":(n+" frames"))'
+            f'+" \\u2014 likely too heavy for the browser to open.</strong> The viewer loads one frame per '
+            f'timeframe and ~<strong>500</strong> is the practical maximum; reduce timeframes to about 500 '
+            f'or below for reliable playback."'
+            f':"&#9888; The viewer loads one frame per timeframe. About <strong>500</strong> frames is the '
+            f'browser maximum &mdash; above that (or &ldquo;all&rdquo;, which exports every model output '
+            f'step) the animation may be too heavy to open.";'
+            f'}}'
+            f'}}'
+            f'function paint(){{'
+            f'num.disabled=allOn;'
+            f'num.style.opacity=allOn?"0.45":"1";'
+            f'num.style.background=allOn?"#e2e8f0":"#fff";'
+            f'allbtn.innerHTML=(allOn?"&#9745;":"&#9744;")+" all";'
+            f'allbtn.style.background=allOn?"#2d7d46":"#fff";'
+            f'allbtn.style.color=allOn?"#fff":"#0f172a";'
+            f'allbtn.style.borderColor=allOn?"#2d7d46":"#cbd5e1";'
+            f'}}'
+            f'num.addEventListener("input",apply);'
+            f'allbtn.addEventListener("click",function(){{allOn=!allOn;paint();apply();}});'
+            f'paint();apply();'
+            f'}})();</script>'
+        )
+        H.append(
+            f'<script>(function(){{'
+            f'var pre=document.getElementById("{_cb_id_4a}");'
+            f'var ps=document.getElementById("{_ps_id}");'
+            f'var pe=document.getElementById("{_pe_id}");'
+            f'var lbl=document.getElementById("{_pl_id}");'
+            f'var lbl2=document.getElementById("{_pel_id}");'
+            f'var fill=document.getElementById("{_fill_id}");'
+            f'if(!pre||!ps||!pe)return;'
+            f'var T0=Date.parse("{_sim_t0}".replace(" ","T"));'
+            f'var T1=Date.parse("{_sim_t1}".replace(" ","T"));'
+            f'var haveDates=!isNaN(T0)&&!isNaN(T1)&&T1>T0;'
+            f'function p2(n){{return(n<10?"0":"")+n;}}'
+            f'function fmt(ms){{var d=new Date(ms);return d.getFullYear()+"-"+p2(d.getMonth()+1)'
+            f'+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes());}}'
+            f'function setLine(name,val){{pre.textContent=pre.textContent.replace('
+            f'new RegExp(name+"=[^,]*"),name+"="+val);}}'
+            f'function apply(){{'
+            f'var a=Math.min(+ps.value,+pe.value),b=Math.max(+ps.value,+pe.value);'
+            f'var full=(a===0&&b===1000);'
+            f'if(fill){{fill.style.left=(a/10)+"%";fill.style.width=((b-a)/10)+"%";}}'
+            f'setLine("period_start",full?"0.0":(a/1000).toFixed(3));'
+            f'setLine("period_end",full?"1.0":(b/1000).toFixed(3));'
+            f'var ta=haveDates?fmt(T0+(a/1000)*(T1-T0)):(Math.round(a/10)+"%");'
+            f'var tb=haveDates?fmt(T0+(b/1000)*(T1-T0)):(Math.round(b/10)+"%");'
+            f'if(lbl)lbl.textContent=ta;'
+            f'if(lbl2)lbl2.textContent=tb;'
+            f'}}'
+            f'ps.addEventListener("input",apply);pe.addEventListener("input",apply);apply();'
+            f'}})();</script>'
+        )
         H.append('</div>')
-        H.append('<div style="flex:1;min-width:0">')
+        H.append('<div style="flex:1;min-width:0;display:flex;flex-direction:column">')
         H.append('<p style="font-weight:600">Plot interactive '
                  'time series (all species):</p>')
         _cb_id_4b = f'_cb{_copy_id_counter[0]}'  # ID before _code_block increments
-        H.append(_code_block(_terminal_snippet(_plot_all_body), max_h='20rem'))
+        H.append(_code_block(_terminal_snippet(_plot_all_body), fill=True))
         H.append('</div>')
         H.append('</div>')
 
