@@ -93,8 +93,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
     </div>
     <div class="ctrl-row">
         <label>Speed</label>
-        <input type="range" id="sl-speed" min="5" max="2000" value="80">
-        <span class="val" id="v-speed">0.8x</span>
+        <input type="range" id="sl-speed" min="5" max="2000" value="90">
+        <span class="val" id="v-speed">0.9x</span>
     </div>
     <div class="ctrl-row" style="display:none;">
         <label>Particles</label>
@@ -150,6 +150,21 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
 <div id="conc-colorbar-wrap" style="display:none;">
     <div class="cb-title">Concentration (mg/L)</div>
     <canvas id="conc-colorbar" width="240" height="20"></canvas>
+    <div style="display:flex; gap:6px; margin-top:7px; align-items:stretch;">
+        <select id="conc-cmap" title="Colour map"
+                style="flex:2; font-family:monospace; font-size:12px; padding:3px 4px;
+                       background:rgba(20,30,55,0.85); color:#cfe3ec;
+                       border:1px solid rgba(80,120,180,0.5); border-radius:4px;">
+            <option value="1">Cool-hot</option>
+            <option value="2">Magma</option>
+            <option value="0">Classic</option>
+        </select>
+        <button id="conc-logtoggle"
+                title="Toggle linear / logarithmic colour scaling (log spreads several orders of magnitude; when min=0 it floors at max/10000)"
+                style="flex:1; font-family:monospace; font-size:12px; padding:4px 4px; cursor:pointer;
+                       color:#06121f; background:#37d0be;
+                       border:1px solid #37d0be; border-radius:4px;">log</button>
+    </div>
     <div class="cb-labels" style="align-items:flex-end; gap:10px; margin-top:5px;">
         <label style="display:flex; flex-direction:column; align-items:flex-start; gap:2px;">
             <span style="font-size:11px; opacity:.7;">min</span>
@@ -706,25 +721,76 @@ varying float v_is_polygon;
 uniform float u_concDataMax;
 uniform float u_concUserMin;
 uniform float u_concUserMax;
+uniform float u_colormap;    // 0 = classic, 1 = cool-hot, 2 = magma
+uniform float u_logscale;    // 0 = linear, 1 = log10
 
-// Cool-to-warm heat ramp: blue -> violet -> magenta -> red
-vec3 concColor(float t) {
-    // Avoids green/yellow, which blend with the satellite basemap behind.
-    vec3 c0 = vec3(0.20, 0.25, 0.85);   // blue (low)
-    vec3 c1 = vec3(0.50, 0.15, 0.80);   // violet
-    vec3 c2 = vec3(0.85, 0.12, 0.50);   // magenta
-    vec3 c3 = vec3(0.92, 0.10, 0.12);   // red (high)
+// Classic cool-to-warm: blue -> violet -> magenta -> red (constant lightness).
+vec3 cmClassic(float t) {
+    vec3 c0 = vec3(0.20, 0.25, 0.85);
+    vec3 c1 = vec3(0.50, 0.15, 0.80);
+    vec3 c2 = vec3(0.85, 0.12, 0.50);
+    vec3 c3 = vec3(0.92, 0.10, 0.12);
     if (t < 0.333) return mix(c0, c1, t * 3.0);
     if (t < 0.666) return mix(c1, c2, (t - 0.333) * 3.0);
     return mix(c2, c3, (t - 0.666) * 3.0);
 }
+// Cool-hot: navy -> blue -> purple -> magenta -> hot-pink -> white.  No
+// green/yellow (won't blend with green/brown basemaps); dark->bright
+// lightness sweep makes fine gradations readable. Ends at hot pink (no white
+// peak, which washed out against bright basemap patches).
+vec3 cmCoolHot(float t) {
+    vec3 c0 = vec3(0.00, 0.12, 0.42);
+    vec3 c1 = vec3(0.17, 0.36, 0.84);
+    vec3 c2 = vec3(0.48, 0.18, 0.78);
+    vec3 c3 = vec3(0.78, 0.12, 0.61);
+    vec3 c4 = vec3(1.00, 0.23, 0.55);
+    float s = clamp(t, 0.0, 1.0) * 4.0;
+    if (s < 1.0) return mix(c0, c1, s);
+    if (s < 2.0) return mix(c1, c2, s - 1.0);
+    if (s < 3.0) return mix(c2, c3, s - 2.0);
+    return mix(c3, c4, s - 3.0);
+}
+// Magma (matplotlib, 6 anchors), REVERSED: bright cream = low, dark = high.
+vec3 cmMagma(float t) {
+    t = 1.0 - clamp(t, 0.0, 1.0);   // reversed ramp
+    vec3 c0 = vec3(0.001, 0.000, 0.014);
+    vec3 c1 = vec3(0.231, 0.059, 0.439);
+    vec3 c2 = vec3(0.549, 0.161, 0.506);
+    vec3 c3 = vec3(0.871, 0.288, 0.408);
+    vec3 c4 = vec3(0.996, 0.624, 0.427);
+    vec3 c5 = vec3(0.987, 0.991, 0.749);
+    float s = t * 5.0;
+    if (s < 1.0) return mix(c0, c1, s);
+    if (s < 2.0) return mix(c1, c2, s - 1.0);
+    if (s < 3.0) return mix(c2, c3, s - 2.0);
+    if (s < 4.0) return mix(c3, c4, s - 3.0);
+    return mix(c4, c5, s - 4.0);
+}
+vec3 concColor(float t) {
+    if (u_colormap < 0.5) return cmClassic(t);
+    if (u_colormap < 1.5) return cmCoolHot(t);
+    return cmMagma(t);
+}
 
 void main() {
     if (v_conc_present < 0.5) discard;  // skip only cells with no data (keeps faint reaches)
-    // Remap the baked-normalized value into the user-selected data range.
-    float raw   = v_conc_t * u_concDataMax;
-    float denom = max(u_concUserMax - u_concUserMin, 1e-6);
-    float t = clamp((raw - u_concUserMin) / denom, 0.0, 1.0);
+    // Remap the baked-normalized value into the user-selected data range,
+    // either linearly or on a log10 scale (log spreads several orders of
+    // magnitude evenly so small low-end variation is visible).
+    float raw = v_conc_t * u_concDataMax;
+    float t;
+    if (u_logscale > 0.5) {
+        float hi = max(u_concUserMax, 1e-9);
+        // log needs a positive floor; if the user min is 0 fall back to four
+        // decades below the max.
+        float lo = (u_concUserMin > 0.0) ? min(u_concUserMin, hi * 0.5)
+                                         : hi * 1e-4;
+        t = clamp((log(max(raw, lo)) - log(lo))
+                  / max(log(hi) - log(lo), 1e-6), 0.0, 1.0);
+    } else {
+        float denom = max(u_concUserMax - u_concUserMin, 1e-6);
+        t = clamp((raw - u_concUserMin) / denom, 0.0, 1.0);
+    }
     vec3 col = concColor(t);
     // Branch on the polygon flag baked into the G channel of the
     // concentration texture:
@@ -1175,7 +1241,7 @@ class FloodViewer3D {
         this.currentFrame = 0;
         this.timeFrac = 0;
         this.playing = true;
-        this.speed = 0.8;
+        this.speed = 0.9;
         this.fadeOpacity = 0.97;
         this.dropRate = 0.003;
         this.dropRateBump = 0.01;
@@ -1187,6 +1253,11 @@ class FloodViewer3D {
         this.frameCache = new Map();
         this.frameCacheMax = 12;
         this.speedFactor = 0.5;
+        // Concentration colour scale: colormap (0=classic,1=cool-hot,2=magma)
+        // and linear/log mapping. Default = magma + linear; toggle to log
+        // for data spanning several orders of magnitude.
+        this.colormap = 2;
+        this.logScale = false;
         this._lastT = 0;
         this._fpsFrames = 0;
         this._fpsTime = 0;
@@ -1398,6 +1469,7 @@ class FloodViewer3D {
                     var pb = document.getElementById('btn-play');
                     if (pb) { pb.innerHTML = '&#9646;&#9646; Pause'; pb.classList.add('active'); }
                 }
+                self._concRestart = restart;   // reused by colormap/log controls
                 // Live preview: recolour immediately as the range is edited.
                 cMin.addEventListener('input', applyRange);
                 cMax.addEventListener('input', applyRange);
@@ -1416,30 +1488,55 @@ class FloodViewer3D {
                     restart();
                 });
             })(this);
-            // Draw concentration colorbar
+            // Draw concentration colorbar (colormap-aware; matches concColor()
+            // in the fragment shader — keep these stops in lock-step with it).
             const ccb = document.getElementById('conc-colorbar');
             const cctx = ccb.getContext('2d');
-            // Blue -> violet -> magenta -> red (matches the shader's concColor;
-            // avoids green/yellow which blend with the satellite basemap).
-            const _cstops = [
-                [0.20, 0.25, 0.85],
-                [0.50, 0.15, 0.80],
-                [0.85, 0.12, 0.50],
-                [0.92, 0.10, 0.12]
-            ];
-            for (let x = 0; x < ccb.width; x++) {
-                const t = x / ccb.width;
-                let seg, f;
-                if (t < 0.333)      { seg = 0; f = t * 3.0; }
-                else if (t < 0.666) { seg = 1; f = (t - 0.333) * 3.0; }
-                else                { seg = 2; f = (t - 0.666) * 3.0; }
-                const a = _cstops[seg], b = _cstops[seg + 1];
-                const r2 = Math.round((a[0] + (b[0] - a[0]) * f) * 255);
-                const g2 = Math.round((a[1] + (b[1] - a[1]) * f) * 255);
-                const b2 = Math.round((a[2] + (b[2] - a[2]) * f) * 255);
-                cctx.fillStyle = `rgb(${r2},${g2},${b2})`;
-                cctx.fillRect(x, 0, 1, ccb.height);
-            }
+            const CMAP_STOPS = {
+                0: [[0.20,0.25,0.85],[0.50,0.15,0.80],[0.85,0.12,0.50],[0.92,0.10,0.12]],
+                1: [[0.00,0.12,0.42],[0.17,0.36,0.84],[0.48,0.18,0.78],[0.78,0.12,0.61],[1.00,0.23,0.55]],
+                2: [[0.987,0.991,0.749],[0.996,0.624,0.427],[0.871,0.288,0.408],[0.549,0.161,0.506],[0.231,0.059,0.439],[0.001,0.000,0.014]]
+            };
+            (function(self){
+                self.drawConcColorbar = function(){
+                    var stops = CMAP_STOPS[self.colormap] || CMAP_STOPS[1];
+                    var n = stops.length - 1;
+                    for (var x = 0; x < ccb.width; x++) {
+                        var t = x / ccb.width;
+                        var s = t * n, seg = Math.min(Math.floor(s), n - 1), f = s - seg;
+                        var a = stops[seg], b = stops[seg + 1];
+                        var r2 = Math.round((a[0] + (b[0] - a[0]) * f) * 255);
+                        var g2 = Math.round((a[1] + (b[1] - a[1]) * f) * 255);
+                        var b3 = Math.round((a[2] + (b[2] - a[2]) * f) * 255);
+                        cctx.fillStyle = 'rgb(' + r2 + ',' + g2 + ',' + b3 + ')';
+                        cctx.fillRect(x, 0, 1, ccb.height);
+                    }
+                };
+                self.drawConcColorbar();
+                var sel = document.getElementById('conc-cmap');
+                if (sel) {
+                    sel.value = String(self.colormap);
+                    sel.addEventListener('change', function(){
+                        self.colormap = parseInt(this.value, 10) || 0;
+                        self.drawConcColorbar();
+                        if (self._concRestart) self._concRestart();
+                    });
+                }
+                var lg = document.getElementById('conc-logtoggle');
+                function paintLog(){
+                    if (!lg) return;
+                    lg.textContent = self.logScale ? 'log' : 'linear';
+                    lg.style.background  = self.logScale ? '#37d0be' : 'rgba(40,60,100,0.6)';
+                    lg.style.color       = self.logScale ? '#06121f' : '#cfe3ec';
+                    lg.style.borderColor = self.logScale ? '#37d0be' : 'rgba(80,120,180,0.5)';
+                }
+                paintLog();
+                if (lg) lg.addEventListener('click', function(){
+                    self.logScale = !self.logScale;
+                    paintLog();
+                    if (self._concRestart) self._concRestart();
+                });
+            })(this);
             console.log('Concentration data available, conc_max=' + concMaxVal);
             // Auto-enable concentration display for steady-state single-frame views
             if (m.n_timesteps <= 1) {
@@ -1561,10 +1658,11 @@ class FloodViewer3D {
         this.camera.phi = Math.PI / 12;      // low angle (~15°)
         this.camera.theta = -Math.PI / 4;    // looking from southwest (-45°)
 
-        // Set playback speed to 4x
-        this.speed = 4.0;
-        document.getElementById('sl-speed').value = 400;
-        document.getElementById('v-speed').textContent = '4.0x';
+        // Default playback speed 0.9x — slow enough to follow contaminant
+        // transport through the network (user can raise it via the slider).
+        this.speed = 0.9;
+        document.getElementById('sl-speed').value = 90;
+        document.getElementById('v-speed').textContent = '0.9x';
 
         // Update time slider to match start frame
         document.getElementById('sl-time').value = startFrame;
@@ -2154,6 +2252,10 @@ class FloodViewer3D {
                 gl.uniform1f(gl.getUniformLocation(cp, 'u_concDataMax'), _cDataMax);
                 gl.uniform1f(gl.getUniformLocation(cp, 'u_concUserMin'), _cMin);
                 gl.uniform1f(gl.getUniformLocation(cp, 'u_concUserMax'), _cMax);
+                gl.uniform1f(gl.getUniformLocation(cp, 'u_colormap'),
+                    (this.colormap != null) ? this.colormap : 1.0);
+                gl.uniform1f(gl.getUniformLocation(cp, 'u_logscale'),
+                    this.logScale ? 1.0 : 0.0);
 
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.terrainIBO);
                 gl.drawElements(gl.TRIANGLES, this.terrainMesh.nIndices, indexType, 0);
