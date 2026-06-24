@@ -342,26 +342,27 @@ si_species_params = None
 #  Defines how nutrient/pollutant loads enter or leave the system.
 #
 #  METHOD OPTIONS:
-#  ┌──────────────────────────────────────────┬──────────────────────────────┐
-#  │ Method                                   │ When to use                  │
-#  ├──────────────────────────────────────────┼──────────────────────────────┤
-#  │ "load_from_csv"                          │ You have measured load data  │
-#  │ "using_copernicus_lulc_with_static_coeff"│ Estimate from land use maps  │
-#  │ "using_copernicus_lulc_with_dynamic_coeff"│ Land use + climate effects  │
-#  │ "ml_model"                               │ Train from monitoring data   │
-#  │ "none"                                   │ No external loads            │
-#  └──────────────────────────────────────────┴──────────────────────────────┘
+#  ┌─────────────────┬───────────────────────────────────────────────────────────────────┐
+#  │ Method          │ When to use                                                       │
+#  ├─────────────────┼───────────────────────────────────────────────────────────────────┤
+#  │ "load_from_csv" │ You have measured load data                                       │
+#  │ "based_on_lulc" │ Estimate from land-cover maps                                     │
+#  │ "ml_model"      │ Train from monitoring data (not available yet; under development) │
+#  │ "none"          │ No external loads                                                 │
+#  └─────────────────┴───────────────────────────────────────────────────────────────────┘
 #
+#  Each method has its own settings section below; only the section for the
+#  selected method is read (the others are ignored).
 #  ⚠  When using PHREEQC, set "none" unless CSV species match PHREEQC components.
 
-ss_method = "using_copernicus_lulc_with_static_coeff"
+ss_method = "based_on_lulc"
 
 # Metadata (recorded in the generated JSON for documentation purposes).
 ss_metadata_source = "Just for demonstration"
 ss_metadata_comment = "Leave any comments needed for future reference"
 
 
-# ── METHOD 1: Load from CSV ──────────────────────────────────────────────────
+# ── METHOD 1: Load from CSV (ss_method = "load_from_csv") ────────────────────
 # ⚠ Only used if ss_method = "load_from_csv"; ignored otherwise.
 #  Provide one entry per species × compartment combination.
 #  Each CSV file has columns: datetime, cell_id_1, cell_id_2, ...
@@ -391,16 +392,68 @@ ss_method_csv_config = [
 ]
 
 
-# ── METHOD 2 & 3: Copernicus LULC ────────────────────────────────────────────
-# ⚠ Only used if ss_method = "using_copernicus_lulc_with_*"; ignored otherwise.
-#  Estimates loads from ESA CCI Land Cover maps × export coefficients.
+# ── METHOD 2: based_on_lulc (ss_method = "based_on_lulc") ────────────────────
+# ⚠ Only used if ss_method = "based_on_lulc"; ignored otherwise.
+#  Estimates loads from land-cover maps × export coefficients.
 #  Requires: basin shapefile + (optionally) OpenWQ HDF5 output for cell mapping.
 
+# Land-cover dataset to use. Only "copernicus" (ESA CCI Land Cover) for now.
+lulc_source = "copernicus"
+
+# How the loads behave over time:
+#   "static"  → one constant annual export coefficient per LULC class.
+#   "dynamic" → the load varies within the year (set the shape + climate below).
+lulc_loads = "static"
+
+# if lulc_loads="dynamic" -------
+# (dynamic only) Within-year SHAPE of the load. The non-uniform shapes are
+# CALIBRATED from a flat base, so the optimizer can shift the in-stream PHASE —
+# a single constant scale can only change magnitude.
+#   "uniform"  — flat 1/12 each month (no within-year shape; just a scale)
+#   "harmonic" — calibrated scale + amplitude + phase (3 params):
+#                factor(month) = S0 * (1 + A * cos(2*pi*(month - phi)/12))
+#   "monthly"  — calibrated, one free multiplier per calendar month (12 params)
+# (harmonic/monthly need a calibration run to fit their params; defend any
+#  seasonal fit on the validation period.)
+lulc_loads_dynamic_shape = "uniform"
+
+# (dynamic only) Multiply the within-year shape by the climate signal?
+#   False → the shape is used as-is.
+#   True  → the load is additionally scaled by precip/temperature (see the
+#           "Climate data" section below). A "uniform" shape with
+#           climate_dependency = True reproduces a purely climate-weighted
+#           ("seasonal") distribution.
+climate_dependency = False
+
+# Calibration knobs: one shared set for ALL species, or one set per species?
+#   False → a single set of knobs tunes every species together.
+#   True  → that number of knobs × number of species (per-species calibration).
+species_dependency = True
+
 # Basin shapefile — defines the spatial extent and sub-catchment boundaries.
-ss_method_copernicus_basin_info = {
+#  ⚠ mapping_key is the SPATIAL ID that links everything together. openWQ uses it
+#    to map the water-quality results onto the host model's spatial discretization,
+#    so you can line up hydrology and water quality on the SAME id. It must:
+#      • be a column in THIS shapefile (one id per sub-catchment / HRU),
+#      • match the ids openWQ writes to its HDF5 output (mizuRoute: reachID = segId;
+#        SUMMA: the HRU/GRU id), and
+#      • also exist as a column in the river-network shapefile below
+#        (river_network_shapefile) so the report's interactive map can join the two.
+#    A mismatch silently drops loads → all-zero / unmapped output.
+ss_method_copernicus_basins_hrus = {
     'path_to_shp': '/Users/diogocosta/Documents/openwq_code/6_mizuroute_cslm_openwq/test_case/mizuroute_in/shapefiles/finalcat_info_v1-0.shp',
     'mapping_key': 'SubId'    # Column in shapefile that identifies each sub-catchment
 }
+
+# River network shapefile — used by the REPORT / interactive (WebGL) map ONLY,
+# NOT by the model run or SS-load generation (those map loads to reaches via the
+# basin shapefile above). It provides the reach geometry plus the reach-ID column
+# (river_network_mapping_key, default "SegId") that joins simulated per-reach
+# results and observation gauges onto the map.
+#  ⚠ It must contain the SAME mapping_key column as the basin shapefile above.
+# Set to None to skip the map, or provide a path to .shp or .gpkg.
+# Basin polygons are automatically loaded from ss_method_copernicus_basins_hrus above.
+river_network_shapefile = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/mizuSegId.shp"   # e.g., "/path/to/river_network.shp"
 
 # Which compartment receives the loads.
 # Available compartment names (must match compartments_and_cells keys):
@@ -444,16 +497,13 @@ ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class = {
     130: {'TN': 5.0,  'TP': 0.15, 'NH4': 0.5}      # Grassland
 }
 
-# How to distribute annual loads across months.
-#   "uniform"  — equal 1/12 each month
-#   "seasonal" — climate-weighted (requires ss_climate_data below)
-ss_method_copernicus_annual_to_seasonal_loads_method = 'uniform'
+# (The within-year load distribution is set above by lulc_loads /
+#  lulc_loads_dynamic_shape — there is no separate distribution flag here.)
 
 
-# ══ Climate data — drives the SEASONAL / DYNAMIC source-sink loads ════════════
-# Needed when either is set above:
-#   • ss_method_copernicus_annual_to_seasonal_loads_method = "seasonal", and/or
-#   • ss_method = "using_copernicus_lulc_with_dynamic_coeff"
+# ══ Climate data — drives climate-dependent source-sink loads ════════════════
+# Needed when:
+#   • lulc_loads = "dynamic" and climate_dependency = True
 # Each month's load is scaled by:  precip_mm^precip_power × Q10^((temp_c − T_ref)/10)
 #
 # Set it up in 2 steps:
@@ -536,7 +586,7 @@ ss_climate_temp_q10             = 2.0    # Q10: load rate doubles per +10 °C
 ss_climate_temp_reference_c     = 15.0   # reference temperature [°C]
 
 
-# ── METHOD 4: Machine Learning model ─────────────────────────────────────────
+# ── METHOD 4: Machine Learning model (ss_method = "ml_model") ────────────────
 # ⚠ Only used if ss_method = "ml_model"; ignored otherwise.
 #  Train a model from monitoring station data to predict loads.
 #  Requires: pip install scikit-learn xgboost
@@ -639,11 +689,6 @@ mpi_np = 2
 
 generate_report = True
 open_report = True   # Automatically open the report in your browser when done.
-
-# River network shapefile — used for the interactive map in the report.
-# Set to None to skip the map, or provide a path to .shp or .gpkg.
-# Basin polygons are automatically loaded from ss_method_copernicus_basin_info above.
-river_network_shapefile = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/bin/mizuroute_in/shapefiles/mizuSegId.shp"   # e.g., "/path/to/river_network.shp"
 
 # OPTIONAL: column in the river-network shapefile whose values match the reach
 # IDs that OpenWQ writes to its HDF5 outputs. Set this when the auto-detect
@@ -787,17 +832,34 @@ if generate_report:
     _basin_shp = None
     _h5_mapping_key = None
     try:
-        _basin_shp = ss_method_copernicus_basin_info.get('path_to_shp')
+        _basin_shp = ss_method_copernicus_basins_hrus.get('path_to_shp')
     except (NameError, AttributeError):
         pass
     try:
-        _h5_mapping_key = ss_method_copernicus_basin_info.get('mapping_key')
+        _h5_mapping_key = ss_method_copernicus_basins_hrus.get('mapping_key')
     except (NameError, AttributeError):
         pass
 
+    # Within-year load shape for the report: the calibrated shape when loads are
+    # dynamic, otherwise the constant (uniform) base.
     _seasonal_method = None
     try:
-        _seasonal_method = ss_method_copernicus_annual_to_seasonal_loads_method
+        _seasonal_method = (str(lulc_loads_dynamic_shape).lower()
+                            if str(lulc_loads).lower() == "dynamic" else "uniform")
+    except NameError:
+        pass
+
+    # Full based_on_lulc detail for the config report's Source/Sink card.
+    _ss_lulc_detail = None
+    try:
+        if str(ss_method).lower() == "based_on_lulc":
+            _ss_lulc_detail = {
+                "source": lulc_source,
+                "loads": lulc_loads,
+                "shape": lulc_loads_dynamic_shape,
+                "climate_dependency": climate_dependency,
+                "species_dependency": species_dependency,
+            }
     except NameError:
         pass
 
@@ -840,6 +902,7 @@ if generate_report:
             bgc_template_path=locals().get('path2selected_NATIVE_BGC_FLEX_framework'),
             openwq_h5_mapping_key=_h5_mapping_key,
             seasonal_loads_method=_seasonal_method,
+            ss_lulc_detail=_ss_lulc_detail,
         )
     except Exception as _e:
         _has_errors = True

@@ -330,6 +330,25 @@ class ModelRunner:
 
         elapsed = time.time() - start_time
 
+        # Establish/refresh the % progress reference from this eval's output
+        # (SEQUENTIAL path).  Without this a fresh sequential run never shows
+        # ~NN% because the denominator (_ref_output_bytes) stays unset — only the
+        # parallel path was updating it.  First successful eval of THIS run
+        # authoritatively (re)sets it; afterwards only grow it (largest wins).
+        if success:
+            try:
+                _ob = self._openwq_out_bytes(eval_dir)
+                if _ob > 0:
+                    if not self._ref_calibrated_this_run:
+                        self._ref_output_bytes = _ob
+                        self._ref_calibrated_this_run = True
+                        self._save_reference(_ob)
+                    elif _ob > (self._ref_output_bytes or 0):
+                        self._ref_output_bytes = _ob
+                        self._save_reference(_ob)
+            except Exception:
+                pass
+
         # Save runtime info
         runtime_file = eval_dir / "runtime.txt"
         with open(runtime_file, 'w') as f:

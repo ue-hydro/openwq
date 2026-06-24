@@ -508,7 +508,7 @@ def get_observation_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     # Basin shapefile
-    basin_info = model_config.get("ss_method_copernicus_basin_info", {})
+    basin_info = model_config.get("ss_method_copernicus_basins_hrus", {})
     if isinstance(basin_info, dict):
         obs_config["basin_shapefile"] = basin_info.get("path_to_shp", None)
         obs_config["basin_mapping_key"] = basin_info.get("mapping_key", None)
@@ -1083,7 +1083,7 @@ def get_lulc_cache_status(model_config: Dict[str, Any],
     import pandas as pd
     _log = log or (lambda *a, **k: None)
     ss_method = (model_config.get('ss_method') or '').lower()
-    if 'copernicus' not in ss_method:
+    if ss_method != 'based_on_lulc':
         return None
 
     exe = model_config.get('executable_path', '')
@@ -1184,7 +1184,7 @@ def regenerate_lulc_cache(model_config: Dict[str, Any],
         except OSError:
             pass
 
-    basin_info = model_config.get('ss_method_copernicus_basin_info', {})
+    basin_info = model_config.get('ss_method_copernicus_basins_hrus', {})
     nc_dir = model_config.get('ss_method_copernicus_nc_lc_dir')
     y0, y1 = min(available), max(available)
     # Only the PARENT of ss_config_filepath matters (→ <openwq_in>/ss_copernicus_files).
@@ -1194,7 +1194,7 @@ def regenerate_lulc_cache(model_config: Dict[str, Any],
     try:
         _ssd.calc_copernicus_lulc(
             ss_config_filepath=ss_config_filepath,
-            ss_method_copernicus_basin_info=basin_info,
+            ss_method_copernicus_basins_hrus=basin_info,
             ss_method_copernicus_nc_lc_dir=nc_dir,
             ss_method_copernicus_period=[y0, y1],
             recursive=False,
@@ -1229,7 +1229,7 @@ def validate_ss_reach_mapping(model_config: Dict[str, Any], log=None) -> Optiona
         ss_method = (model_config.get('ss_method') or '').lower()
         if 'mizuroute' not in hostmodel or 'copernicus' not in ss_method:
             return None
-        binfo = model_config.get('ss_method_copernicus_basin_info') or {}
+        binfo = model_config.get('ss_method_copernicus_basins_hrus') or {}
         shp = binfo.get('path_to_shp')
         key = binfo.get('mapping_key')
         fm = (model_config.get('file_manager_path')
@@ -1280,7 +1280,7 @@ def validate_ss_reach_mapping(model_config: Dict[str, Any], log=None) -> Optiona
             f"    basin shapefile : {shp}\n"
             f"    basin '{key}'    : {sorted(basin_ids)[:5]}{' ...' if len(basin_ids) > 5 else ''}\n"
             f"    reach segIds     : {sorted(reach_ids)[:5]}{' ...' if len(reach_ids) > 5 else ''}\n"
-            "  Fix: point ss_method_copernicus_basin_info at the DELINEATED "
+            "  Fix: point ss_method_copernicus_basins_hrus at the DELINEATED "
             "per-reach catchment whose mapping_key == segId (not the lumped "
             "HRUs_GRUs catchment).")
     except Exception as exc:
@@ -1334,8 +1334,8 @@ def get_spatial_mapping(model_config: Dict[str, Any]) -> Dict[str, Any]:
               or model_config.get('river_network_mapping_key')
               or default_shp_key)
 
-    # basin_mapping_key: manifest > model config (via ss_method_copernicus_basin_info)
-    basin_info = model_config.get('ss_method_copernicus_basin_info', {})
+    # basin_mapping_key: manifest > model config (via ss_method_copernicus_basins_hrus)
+    basin_info = model_config.get('ss_method_copernicus_basins_hrus', {})
     basin_user_key = (basin_info.get('mapping_key')
                       if isinstance(basin_info, dict) else None)
     basin_key = (manifest.get('basin_mapping_key')

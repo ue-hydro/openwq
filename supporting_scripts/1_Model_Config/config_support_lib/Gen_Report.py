@@ -861,7 +861,29 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
     # To force a fresh extraction, delete that folder before re-running.
     _clipped_csv = os.path.join(output_dir, 'openwq_in', 'grqa_clipped_data',
                                 'grqa_clipped_observations.csv')
-    if os.path.isfile(_clipped_csv):
+    _reuse_grqa = os.path.isfile(_clipped_csv)
+    # Interactive standalone template runs: ask whether to reuse the cached GRQA
+    # extraction or regenerate it from the raw archive (needed after changing the
+    # EXPORTED species or the search buffer — the cache only holds what the prior
+    # run extracted).  Suppressed during calibration / non-interactive reruns
+    # (OPENWQ_SUPPRESS_PROMPTS=1, set by Gen_Input_Driver when force_regenerate=
+    # True) so it is NOT asked once per evaluation.
+    if _reuse_grqa and os.environ.get('OPENWQ_SUPPRESS_PROMPTS') != '1':
+        import sys as _sys
+        if _sys.stdin and _sys.stdin.isatty():
+            try:
+                _ans = input(
+                    f"\n  Pre-extracted GRQA observations already exist in "
+                    f"{os.path.dirname(_clipped_csv)}.\n"
+                    f"  Reuse them, or regenerate from the raw GRQA archive "
+                    f"(needed after changing exported species / buffer)? "
+                    f"[Reuse/regenerate] (R/g): ").strip().lower()
+                if _ans in ('g', 'regen', 'regenerate'):
+                    _reuse_grqa = False
+                    print("  ↳ Regenerating GRQA observations from the raw archive…")
+            except (EOFError, KeyboardInterrupt):
+                pass
+    if _reuse_grqa:
         print("  Reusing pre-extracted GRQA from grqa_clipped_data/ "
               "(skipping the slow raw-archive extraction).")
         try:
@@ -1442,6 +1464,7 @@ def generate_simulation_report(
         bgc_template_path=None,
         openwq_h5_mapping_key=None,
         seasonal_loads_method=None,
+        ss_lulc_detail=None,
         plot_separator=' | ',
         # Output settings surfaced in the "Output Configuration" section.
         output_format="HDF5",
@@ -1463,7 +1486,7 @@ def generate_simulation_report(
     Parameters:
         river_network_shapefile: path to river network shapefile (.shp/.gpkg)
         basin_shapefile: path to basin/catchment shapefile (auto-loaded from
-            ss_method_copernicus_basin_info if available)
+            ss_method_copernicus_basins_hrus if available)
         observation_data_source: "grqa", "user_csv", or "skip"
         grqa_local_data_path: "auto" or None to download from Zenodo,
             a path to pre-downloaded GRQA folder.
@@ -2470,7 +2493,21 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                 H.append('<tr><th>Property</th><th>Value</th></tr>')
                 H.append(f'<tr><td>Method</td><td><span class="badge badge-secondary">'
                          f'{ss_method}</span></td></tr>')
-                if seasonal_loads_method:
+                if ss_lulc_detail:
+                    _d = ss_lulc_detail
+                    _loads = str(_d.get('loads', 'static')).lower()
+                    H.append(f'<tr><td>LULC Source</td><td><span class="badge badge-secondary">'
+                             f'{_d.get("source", "copernicus")}</span></td></tr>')
+                    H.append(f'<tr><td>LULC Loads</td><td><span class="badge badge-secondary">'
+                             f'{_loads}</span></td></tr>')
+                    if _loads == 'dynamic':
+                        H.append(f'<tr><td>Within-Year Shape</td><td><span class="badge badge-secondary">'
+                                 f'{str(_d.get("shape", "uniform")).lower()}</span></td></tr>')
+                        H.append(f'<tr><td>Climate Dependency</td><td><span class="badge badge-secondary">'
+                                 f'{"yes" if _d.get("climate_dependency") else "no"}</span></td></tr>')
+                    H.append(f'<tr><td>Species Dependency</td><td><span class="badge badge-secondary">'
+                             f'{"per species" if _d.get("species_dependency", True) else "shared (all species)"}</span></td></tr>')
+                elif seasonal_loads_method:
                     H.append(f'<tr><td>Seasonal Distribution</td><td>'
                              f'<span class="badge badge-secondary">'
                              f'{seasonal_loads_method}</span></td></tr>')
@@ -3913,6 +3950,20 @@ function _owqRelayoutAll(){
     # halves of the workflow.  Anything that's currently auto-detected in
     # Gen_Report (the basin/river shapefile column, the OpenWQ-side H5
     # mapping_key) is FROZEN here so downstream consumers don't redetect.
+    #
+    # The spatial-mapping vars below are assigned inside the map-building block,
+    # which is SKIPPED when neither a river-network nor a basin shapefile is
+    # provided.  Default them at function scope so the manifest never fails with
+    # "local variable '_h5_mapping_key' referenced before assignment".
+    if '_h5_mapping_key' not in locals():
+        _h5_mapping_key = openwq_h5_mapping_key or (
+            'hruId' if str(hostmodel).lower() == 'summa' else 'reachID')
+    if '_shp_key' not in locals():
+        _shp_key = river_network_mapping_key or ''
+    if '_basin_mapping_key' not in locals():
+        _basin_mapping_key = ''
+    if '_feature_label' not in locals():
+        _feature_label = openwq_h5_mapping_key or ''
     try:
         import json as _json
         manifest = {
@@ -4001,6 +4052,7 @@ def generate_report(
         bgc_template_path=None,
         openwq_h5_mapping_key=None,
         seasonal_loads_method=None,
+        ss_lulc_detail=None,
         plot_separator=' | ',
         # Output settings surfaced in the "Output Configuration" section.
         output_format="HDF5",
@@ -4072,6 +4124,7 @@ def generate_report(
             bgc_template_path=bgc_template_path,
             openwq_h5_mapping_key=openwq_h5_mapping_key,
             seasonal_loads_method=seasonal_loads_method,
+            ss_lulc_detail=ss_lulc_detail,
             plot_separator=plot_separator,
             output_format=output_format,
             no_water_conc_flag=no_water_conc_flag,
