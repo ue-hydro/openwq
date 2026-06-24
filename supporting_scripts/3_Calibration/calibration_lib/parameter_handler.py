@@ -378,6 +378,10 @@ class ParameterHandler:
         values : np.ndarray
             Parameter values to apply (in real scale, after transform)
         """
+        ss_items = []   # source/sink load params, applied together after the
+                        # loop (seasonal modes group sibling params by species)
+        _SS_LOAD_TYPES = ("ss_csv_scale", "ss_seasonal_amp",
+                          "ss_seasonal_phase", "ss_seasonal_month")
         for i, param in enumerate(parameters):
             value = values[i]
             file_type = param["file_type"]
@@ -389,6 +393,10 @@ class ParameterHandler:
                 value = int(round(value))
 
             logger.debug(f"Applying {param['name']} = {value} (type={file_type})")
+
+            if file_type in _SS_LOAD_TYPES:
+                ss_items.append((param, value))
+                continue
 
             # Route to appropriate handler
             if file_type == "bgc_json":
@@ -403,8 +411,6 @@ class ParameterHandler:
                 self._apply_transport_param(eval_dir, path, value)
             elif file_type == "lateral_exchange_json":
                 self._apply_lateral_exchange_param(eval_dir, path, value)
-            elif file_type == "ss_csv_scale":
-                self._apply_ss_csv_scale(eval_dir, path, value)
             elif file_type in ("ss_copernicus_static", "ss_copernicus_dynamic"):
                 initial = param.get("initial", None)
                 self._apply_ss_copernicus_coeff(eval_dir, path, value, initial_value=initial)
@@ -421,6 +427,11 @@ class ParameterHandler:
                     f"generation time; skipping post-hoc edit.")
             else:
                 logger.warning(f"Unknown file_type: {file_type} for parameter {param['name']}")
+
+        # Apply all source/sink load params together (grouped by species) so
+        # seasonal modes build a per-month factor from sibling params.
+        if ss_items:
+            self._apply_ss_loads(eval_dir, ss_items)
 
     # =========================================================================
     # BGC JSON (NATIVE_BGC_FLEX)
@@ -837,19 +848,27 @@ class ParameterHandler:
             if species_filter != "all" and chem_name != species_filter:
                 continue
 
+            # ``scale_factor`` is either a constant multiplier OR a callable
+            # month(1-12) -> multiplier (seasonal calibration). For JSON loads
+            # the month is row[1]; for ASCII we apply the annual-mean factor
+            # (seasonal scaling targets the Copernicus inline-JSON loads).
+            _is_seasonal = callable(scale_factor)
             if data_format == "ASCII":
                 # External CSV loads — scale the LOAD column in the file.
                 filepath = entry.get("DATA", {}).get("FILEPATH", "")
                 if filepath:
-                    self._scale_csv_loads(eval_dir, filepath, scale_factor)
+                    _sf = ((sum(scale_factor(m) for m in range(1, 13)) / 12.0)
+                           if _is_seasonal else scale_factor)
+                    self._scale_csv_loads(eval_dir, filepath, _sf)
             elif data_format == "JSON":
                 # Inline JSON loads (e.g. Copernicus LULC source/sink entries,
                 # both static- and dynamic-coefficient, and uniform or seasonal
                 # monthly distributions).  DATA is a dict (or list) of rows;
                 # each row is a list of the form
                 #   [yyyy, mm, ..., load, "continuous"/"discrete", ...]
-                # with the load/rate value at index 9.  Scale it in place so
-                # the SS_COP_scale_<species> multiplier actually takes effect.
+                # load value at index 9, month (MM) at index 1.  Scale in place
+                # so the SS_COP_scale_<species> multiplier (constant or seasonal
+                # per-month) actually takes effect.
                 json_data = entry.get("DATA", {})
                 if isinstance(json_data, dict):
                     rows = json_data.values()
@@ -861,7 +880,15 @@ class ParameterHandler:
                 for row in rows:
                     if isinstance(row, list) and len(row) > 9:
                         try:
-                            row[9] = float(row[9]) * scale_factor
+                            if _is_seasonal:
+                                try:
+                                    _m = int(float(row[1]))
+                                except (ValueError, TypeError, IndexError):
+                                    _m = 1
+                                _f = scale_factor(_m)
+                            else:
+                                _f = scale_factor
+                            row[9] = float(row[9]) * _f
                             n_scaled += 1
                         except (ValueError, TypeError):
                             continue
@@ -869,12 +896,64 @@ class ParameterHandler:
                     json_modified = True
                     logger.debug(
                         f"Scaled {n_scaled} inline-JSON SS load rows for "
-                        f"'{chem_name}' by factor {scale_factor}")
+                        f"'{chem_name}' ({'seasonal' if _is_seasonal else scale_factor})")
 
         # Persist inline-JSON edits back to the SS file.  (ASCII edits are
         # written to their own CSV files by _scale_csv_loads directly.)
         if json_modified:
             self._write_json_with_header(ss_file, data, header)
+
+    def _apply_ss_loads(self, eval_dir: Path, ss_items: list) -> None:
+        """Apply ALL source/sink load-scaling parameters together.
+
+        Groups the params by species and builds one month(1-12)->multiplier
+        function per species (constant / harmonic / per-month), then scales the
+        loads. Grouping is required because the harmonic mode needs three
+        sibling params (S0, amplitude, phase) combined, and per-month mode needs
+        all twelve. Seasonal modes reshape the within-year load distribution, so
+        they can shift PHASE - which a single constant scale never can."""
+        by_sp = {}
+        for param, value in ss_items:
+            sp = (param.get("path") or {}).get("species", "all")
+            by_sp.setdefault(sp, []).append((param, value))
+        for sp, items in by_sp.items():
+            factor = self._build_month_factor(items)
+            self._apply_ss_csv_scale(eval_dir, {"species": sp}, factor)
+
+    @staticmethod
+    def _build_month_factor(items: list):
+        """month(1-12) -> load multiplier for one species' SS params.
+
+        Per-month params -> each month its own multiplier; else a harmonic
+        S0*(1+A*cos(2pi*(m-phi)/12)) when amplitude+phase are present; else the
+        constant S0 (returned as a plain float so the scalar fast-path is used
+        and behaviour is unchanged when no seasonal params exist)."""
+        import math
+        S0 = 1.0
+        amp = phase = None
+        monthly = {}
+        for param, value in items:
+            try:
+                v = float(value)
+            except (TypeError, ValueError):
+                continue
+            ft = param.get("file_type")
+            if ft == "ss_csv_scale":
+                S0 = v
+            elif ft == "ss_seasonal_amp":
+                amp = v
+            elif ft == "ss_seasonal_phase":
+                phase = v
+            elif ft == "ss_seasonal_month":
+                mo = (param.get("path") or {}).get("month")
+                if mo is not None:
+                    monthly[int(mo)] = v
+        if monthly:
+            return lambda m: monthly.get(int(m), 1.0)
+        if amp is not None and phase is not None:
+            return lambda m: S0 * (1.0 + amp * math.cos(
+                2.0 * math.pi * (m - phase) / 12.0))
+        return S0   # constant -> scalar path (unchanged)
 
     def _scale_csv_loads(self, eval_dir: Path, csv_path: str, scale_factor: float) -> None:
         """Scale load values in a CSV file."""

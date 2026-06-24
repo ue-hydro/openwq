@@ -610,7 +610,7 @@ def Gen_Input_Driver(
         ss_metadata_source: str = "",
         ss_metadata_comment: str = "",
         ss_method_csv_config: List[Dict[str, Union[str, int]]] = None,
-        ss_method_copernicus_basin_info: Dict[str, str] = None,
+        ss_method_copernicus_basins_hrus: Dict[str, str] = None,
         ss_method_copernicus_compartment_name_for_load: str = "",
         ss_method_copernicus_nc_lc_dir = None,
         ss_method_copernicus_period: List[Union[int, float]] = None,
@@ -636,7 +636,7 @@ def Gen_Input_Driver(
         timestep: List[Union[int, str]] = None,
 
         # Climate-adjusted export coefficient parameters
-        # (used when ss_method = "using_copernicus_lulc_with_dynamic_coeff")
+        # (used for based_on_lulc dynamic loads with climate_dependency=True)
         # How the monthly climate is sourced:
         #   "fixed_parameters" → use the hand-entered ss_climate_data dict below
         #   "time_series"      → read precip + temperature from a NetCDF/CSV file
@@ -691,6 +691,12 @@ def Gen_Input_Driver(
     print(f"Project: {project_name}")
     print(f"Authors: {authors}")
 
+    # Calibration / non-interactive reruns pass force_regenerate=True.  Use that
+    # to suppress interactive "reuse vs rebuild?" prompts (LULC cache in
+    # Gen_SS_Driver, GRQA cache in Gen_Report) so they are NOT asked once per
+    # evaluation — only a standalone template run (force_regenerate=False) prompts.
+    os.environ['OPENWQ_SUPPRESS_PROMPTS'] = '1' if force_regenerate else '0'
+
     # ── Guard: don't silently overwrite existing input files ────────────────
     # Regenerating re-runs the (slow) GRQA / Copernicus / BGC processing and
     # overwrites the openWQ inputs in dir2save_input_files.  If they already
@@ -742,7 +748,7 @@ def Gen_Input_Driver(
         # for file I/O during config generation (the script reads/copies these files):
         #   - path2selected_NATIVE_BGC_FLEX_framework (read by Load_BGQmodule_file.py)
         #   - phreeqc_input_filepath / phreeqc_database_filepath (copied by Gen_PHREEQCmodule_file.py)
-        #   - ss_method_copernicus_basin_info (shapefile read by Gen_SS_Driver.py)
+        #   - ss_method_copernicus_basins_hrus (shapefile read by Gen_SS_Driver.py)
         #   - ss_method_copernicus_nc_lc_dir (NetCDF files read by Gen_SS_Driver.py)
         #
         # Only CSV source/sink Filepath entries are purely embedded in JSON (the CSV files
@@ -1048,9 +1054,18 @@ def Gen_Input_Driver(
     # Call gen_ss_driver
     ###############
 
+    # based_on_lulc sub-schema (passed from the template via kwargs):
+    #   lulc_loads          'static' | 'dynamic'
+    #   climate_dependency  True/False — multiply the loads by the climate signal
+    # climate weighting is active only for dynamic loads with climate_dependency
+    # on; when its source is a time series it uses the sub-annual generation path.
+    _lulc_loads = str(kwargs.get("lulc_loads", "static")).lower()
+    _climate_dep = bool(kwargs.get("climate_dependency", False))
+    _clim_active = (_lulc_loads == "dynamic" and _climate_dep)
+    _clim_timeseries = _clim_active and str(ss_climate_data_type).lower() == "time_series"
+
     # ── Auto-detect Copernicus period from host-model control file ─────
-    if ss_method in ("using_copernicus_lulc_with_static_coeff",
-                     "using_copernicus_lulc_with_dynamic_coeff"):
+    if ss_method == "based_on_lulc":
 
         if ss_method_copernicus_period is None:
             # Auto-detect from the host-model control file
@@ -1161,20 +1176,20 @@ def Gen_Input_Driver(
             bgc_engine_label=_bgc_engine_label,
             chemical_species_list=_chem_species_list,
         )
-    elif (ss_method == "using_copernicus_lulc_with_static_coeff"):
+    elif ss_method == "based_on_lulc" and not _clim_timeseries:
 
         ssJSON_lib.set_ss_from_copernicus_lulc_with_loads(
             ss_config_filepath=ss_config_filepath,
             json_header_comment=json_header_comment,
             ss_metadata_source=ss_metadata_source,
             ss_metadata_comment=ss_metadata_comment,
-            ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+            ss_method_copernicus_basins_hrus=ss_method_copernicus_basins_hrus,
             ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
             ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
-            ss_method_copernicus_annual_to_seasonal_loads_method=ss_method_copernicus_annual_to_seasonal_loads_method,
+            ss_method_copernicus_annual_to_seasonal_loads_method=("seasonal" if _clim_active else "uniform"),
             simulation_period=[req_start, req_end],
             bgc_engine_label=_bgc_engine_label,
             chemical_species_list=_chem_species_list,
@@ -1183,7 +1198,7 @@ def Gen_Input_Driver(
             temp_q10=ss_climate_temp_q10 if ss_climate_data else 2.0,
             temp_reference_c=ss_climate_temp_reference_c if ss_climate_data else 15.0,
         )
-    elif (ss_method == "using_copernicus_lulc_with_dynamic_coeff"):
+    elif ss_method == "based_on_lulc" and _clim_timeseries:
 
         # Resolve the monthly climate (precip + temperature) per the selected
         # source: a hand-entered fixed dict, or a NetCDF/CSV time series read
@@ -1221,7 +1236,7 @@ def Gen_Input_Driver(
             _res = _ss_resolution_size_guard(
                 resolution=ss_climate_data_source_adjusting_resolution,
                 n_years=_guard_years,
-                n_units=_count_basin_spatial_units(ss_method_copernicus_basin_info),
+                n_units=_count_basin_spatial_units(ss_method_copernicus_basins_hrus),
                 n_species=len(_chem_species_list or []) or 1,
                 climate_source=ss_climate_data_source,
                 scope_label=_scope)
@@ -1250,7 +1265,7 @@ def Gen_Input_Driver(
         else:
             if ss_climate_data is None:
                 raise ValueError(
-                    "ss_method='using_copernicus_lulc_with_dynamic_coeff' with "
+                    "based_on_lulc dynamic loads with climate_dependency=True and "
                     "ss_climate_data_type='fixed_parameters' requires ss_climate_data.\n"
                     "Provide {year: {'precip_mm': [12], 'temp_c': [12]}}, or set "
                     "ss_climate_data_type='time_series' + ss_climate_data_source."
@@ -1260,7 +1275,7 @@ def Gen_Input_Driver(
         ssJSON_lib.set_ss_climate_adjusted_export_coefficients(
             ss_config_filepath=ss_config_filepath,
             json_header_comment=json_header_comment,
-            ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+            ss_method_copernicus_basins_hrus=ss_method_copernicus_basins_hrus,
             ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
@@ -1310,8 +1325,7 @@ def Gen_Input_Driver(
     else:
         print(
             f"WARNING: The SS method '{ss_method}' is unknown or not available for automatic generation. "
-            f"Available methods: 'load_from_csv', 'using_copernicus_lulc_with_static_coeff', "
-            f"'using_copernicus_lulc_with_dynamic_coeff', 'ml_model', 'none'")
+            f"Available methods: 'load_from_csv', 'based_on_lulc', 'ml_model', 'none'")
 
     ###############
     # Call gen_ewf_driver

@@ -513,13 +513,20 @@ def _build_model_config_section(
     # NetCDF/CSV time series (adjusted at every time step).  All openWQ-level, so
     # this is host-model-independent.  Defensive .get() means older configs that
     # lack these keys simply omit the extra rows.
-    if "copernicus" in str(ss).lower():
-        _seasonal = model_config.get(
-            "ss_method_copernicus_annual_to_seasonal_loads_method")
-        if _seasonal:
-            rows.append(("&#8627; Seasonal distribution", _module_badge(_seasonal)))
-        _uses_climate = ("dynamic_coeff" in str(ss).lower()
-                         or str(_seasonal).lower() == "seasonal")
+    if str(ss).lower() == "based_on_lulc":
+        _lulc_loads = str(model_config.get("lulc_loads", "static")).lower()
+        _shape = str(model_config.get("lulc_loads_dynamic_shape", "uniform")).lower()
+        _climate_dep = bool(model_config.get("climate_dependency", False))
+        rows.append(("&#8627; LULC source",
+                     _module_badge(model_config.get("lulc_source", "copernicus"))))
+        rows.append(("&#8627; LULC loads", _module_badge(_lulc_loads)))
+        if _lulc_loads == "dynamic":
+            rows.append(("&#8627; Within-year shape", _module_badge(_shape)))
+        rows.append(("&#8627; Species dependency",
+                     _module_badge("per species"
+                                   if model_config.get("species_dependency", True)
+                                   else "shared (all species)")))
+        _uses_climate = _climate_dep
         if _uses_climate:
             _cdt = model_config.get("ss_climate_data_type", "fixed_parameters")
             _cdt_label = ("time series &mdash; adjusted every time step"

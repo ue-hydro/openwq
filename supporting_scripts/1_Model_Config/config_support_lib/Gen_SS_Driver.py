@@ -377,15 +377,44 @@ class OptimizedLULCAnalyzer:
         # Get coordinates
         print(f"  → Extracting coordinates...", end='', flush=True)
         if 'lat' in ds.dims and 'lon' in ds.dims:
+            _latd, _lond = 'lat', 'lon'
             lats = ds.lat.values
             lons = ds.lon.values
         elif 'latitude' in ds.dims and 'longitude' in ds.dims:
+            _latd, _lond = 'latitude', 'longitude'
             lats = ds.latitude.values
             lons = ds.longitude.values
         else:
             print(" ✗")
             raise ValueError(f"Could not find lat/lon. Available dims: {list(ds.dims.keys())}")
         print(" ✓")
+
+        # ── Window to the basin bounding box (+ margin) ──────────────────────
+        # ESA-CCI global rasters are ~64800×129600 ≈ 8.4e9 cells; materializing
+        # one (the lc_data.values write below) needs ~8 GB RAM and a multi-GB
+        # temp write — slow and failure-prone (e.g. the lulc_<year>_temp.tif
+        # errors).  Read ONLY the cells around the basin instead.  On ANY problem
+        # fall back to the full extent so behaviour is never worse than before.
+        try:
+            import numpy as _np
+            _full_lat, _full_lon = len(lats), len(lons)
+            _gdf_ll = self.gdf if getattr(self.gdf, 'crs', None) is None \
+                else self.gdf.to_crs(4326)
+            _minx, _miny, _maxx, _maxy = [float(v) for v in _gdf_ll.total_bounds]
+            _m = 0.05  # ~5 km margin so edge HRUs keep full coverage
+            _lat_in = _np.where((lats >= _miny - _m) & (lats <= _maxy + _m))[0]
+            _lon_in = _np.where((lons >= _minx - _m) & (lons <= _maxx + _m))[0]
+            if _lat_in.size and _lon_in.size:
+                _l0, _l1 = int(_lat_in.min()), int(_lat_in.max()) + 1
+                _o0, _o1 = int(_lon_in.min()), int(_lon_in.max()) + 1
+                lc_data = lc_data.isel({_latd: slice(_l0, _l1),
+                                        _lond: slice(_o0, _o1)})
+                lats = lats[_l0:_l1]
+                lons = lons[_o0:_o1]
+                print(f"  → Windowed to basin bbox: {tuple(lc_data.shape)} "
+                      f"(from full {_full_lat}×{_full_lon} globe)")
+        except Exception as _we:
+            print(f"  → (bbox windowing skipped: {_we}; using full extent)")
 
         # Calculate transform
         print(f"  → Calculating geotransform...", end='', flush=True)
@@ -1088,7 +1117,7 @@ def _download_copernicus_lc_from_cds(
 
 def calc_copernicus_lulc(
         ss_config_filepath: str,
-        ss_method_copernicus_basin_info: Dict[str, str],
+        ss_method_copernicus_basins_hrus: Dict[str, str],
         ss_method_copernicus_nc_lc_dir: Optional[str],
         ss_method_copernicus_period: List[Union[int, float]],
         recursive: bool = False,
@@ -1102,7 +1131,7 @@ def calc_copernicus_lulc(
     -----------
     ss_config_filepath : str
         Path where outputs will be saved (directory will be extracted from this)
-    ss_method_copernicus_basin_info : dict
+    ss_method_copernicus_basins_hrus : dict
         Dictionary containing:
         - 'path_to_shp': Path to the shapefile containing HRU/basin polygons
         - 'mapping_key': Column name in shapefile for HRU ID (e.g., 'HRU_ID', 'ID', 'FID')
@@ -1147,6 +1176,38 @@ def calc_copernicus_lulc(
     # climate-adjustment steps re-run — so dynamic coefficients still affect the
     # loading, just without the slow re-clip.  Delete the CSV to force a re-clip.
     _areas_csv = ss_output_dir / 'lulc_areas_all.csv'
+
+    # Offer a clean rebuild when LULC outputs already exist: ask whether to
+    # delete everything and start from scratch (otherwise the cache is
+    # reused/validated below).  Interactive only — a non-interactive run
+    # (calibration / HPC) keeps the existing reuse behaviour.
+    _has_lulc = _areas_csv.is_file() or any(clipped_rasters_dir.glob('*.tif'))
+    # Skip the prompt during calibration / non-interactive reruns (Gen_Input_Driver
+    # sets this when force_regenerate=True) so it is asked at most once per run,
+    # not once per evaluation.
+    _suppress_prompt = os.environ.get('OPENWQ_SUPPRESS_PROMPTS') == '1'
+    if _has_lulc and not _suppress_prompt:
+        import sys as _sys
+        _wipe = False
+        if _sys.stdin and _sys.stdin.isatty():
+            try:
+                _ans = input(
+                    f"\n  LULC outputs already exist in {ss_output_dir}.\n"
+                    f"  Delete ALL of them and rebuild from scratch? [y/N]: "
+                ).strip().lower()
+                _wipe = _ans in ('y', 'yes')
+            except (EOFError, KeyboardInterrupt):
+                _wipe = False
+        if _wipe:
+            import shutil as _shutil
+            for _p in ss_output_dir.iterdir():
+                try:
+                    _shutil.rmtree(_p) if _p.is_dir() else _p.unlink()
+                except Exception:
+                    pass
+            clipped_rasters_dir.mkdir(exist_ok=True)
+            print("  ↳ Cleared LULC outputs — rebuilding from scratch.")
+
     if _areas_csv.is_file():
         # Before reusing the cache, VERIFY it was built for the CURRENT basin:
         # compare the cached GRU_IDs against the basin shapefile's mapping_key
@@ -1158,7 +1219,7 @@ def calc_copernicus_lulc(
         _msg = (f"  Reusing cached LULC areas ({_areas_csv.name}) — "
                 "skipping the slow ESA-CCI re-clip.")
         try:
-            _bi = ss_method_copernicus_basin_info or {}
+            _bi = ss_method_copernicus_basins_hrus or {}
             _shp = _bi.get('path_to_shp')
             _mk = _bi.get('mapping_key', 'GRU_ID')
 
@@ -1176,22 +1237,34 @@ def calc_copernicus_lulc(
                 _bg = _gpd.read_file(_shp)
                 if _mk in _bg.columns:
                     _cur_ids = {_norm_id(v) for v in _bg[_mk].tolist()}
-            _cached = pd.read_csv(_areas_csv, usecols=['GRU_ID'])
-            _cache_ids = {_norm_id(v) for v in _cached['GRU_ID'].unique()}
-            if _cur_ids and _cache_ids:
-                if _cur_ids == _cache_ids:
-                    _msg = (f"  ✓ Cached LULC areas match the current basin "
-                            f"({len(_cache_ids)} unit(s) in {_shp_name}) — "
-                            "reusing them, skipping the ESA-CCI re-clip.")
-                else:
-                    _reuse_cache = False
-                    _msg = (f"  ↻ Cached LULC areas were built for a DIFFERENT "
-                            f"basin ({len(_cache_ids)} cached unit(s) vs "
-                            f"{len(_cur_ids)} in {_shp_name}) — reprocessing the "
-                            "LULC for the current basin.")
+            # The cache's id column is named after the mapping_key used when it
+            # was BUILT.  If the CURRENT mapping_key column isn't present, the
+            # cache was built for a different basin/key (e.g. lumped 'SubId' →
+            # delineated 'GRU_ID') — reprocess instead of reusing, which would
+            # otherwise KeyError downstream on the missing column.
+            _cache_cols = list(pd.read_csv(_areas_csv, nrows=0).columns)
+            if _mk not in _cache_cols:
+                _reuse_cache = False
+                _msg = (f"  ↻ Cached LULC areas lack the current mapping_key "
+                        f"column '{_mk}' (cache has {_cache_cols}) — built for a "
+                        f"different basin/key; reprocessing for {_shp_name}.")
             else:
-                _msg = (f"  Reusing cached LULC areas ({_areas_csv.name}) — could "
-                        "not verify against the basin shapefile; assuming a match.")
+                _cached = pd.read_csv(_areas_csv, usecols=[_mk])
+                _cache_ids = {_norm_id(v) for v in _cached[_mk].unique()}
+                if _cur_ids and _cache_ids:
+                    if _cur_ids == _cache_ids:
+                        _msg = (f"  ✓ Cached LULC areas match the current basin "
+                                f"({len(_cache_ids)} unit(s) in {_shp_name}) — "
+                                "reusing them, skipping the ESA-CCI re-clip.")
+                    else:
+                        _reuse_cache = False
+                        _msg = (f"  ↻ Cached LULC areas were built for a DIFFERENT "
+                                f"basin ({len(_cache_ids)} cached unit(s) vs "
+                                f"{len(_cur_ids)} in {_shp_name}) — reprocessing the "
+                                "LULC for the current basin.")
+                else:
+                    _msg = (f"  Reusing cached LULC areas ({_areas_csv.name}) — could "
+                            "not verify against the basin shapefile; assuming a match.")
         except Exception:
             _reuse_cache = True  # verification failed → keep the safe reuse default
 
@@ -1232,7 +1305,7 @@ def calc_copernicus_lulc(
             summaries = {}
             try:
                 _an = OptimizedLULCAnalyzer(
-                    ss_method_copernicus_basin_info, output_dir=str(ss_output_dir))
+                    ss_method_copernicus_basins_hrus, output_dir=str(ss_output_dir))
                 summaries = _an.create_summary_statistics(results_df)
             except Exception:
                 summaries = {}
@@ -1255,7 +1328,7 @@ def calc_copernicus_lulc(
         print(f"  Years needed: {years_needed}")
         print(f"  Cache directory: {cache_dir}")
         ss_method_copernicus_nc_lc_dir = _download_copernicus_lc_from_cds(
-            basin_shapefile_path=ss_method_copernicus_basin_info['path_to_shp'],
+            basin_shapefile_path=ss_method_copernicus_basins_hrus['path_to_shp'],
             years=years_needed,
             cache_dir=cache_dir,
         )
@@ -1407,12 +1480,12 @@ def calc_copernicus_lulc(
     print(f"\n{'=' * 60}")
     print(f"Initializing analyzer")
     print(f"{'=' * 60}")
-    print(f"Shapefile: {ss_method_copernicus_basin_info['path_to_shp']}")
-    print(f"HRU ID column (mapping_key): {ss_method_copernicus_basin_info['mapping_key']}")
+    print(f"Shapefile: {ss_method_copernicus_basins_hrus['path_to_shp']}")
+    print(f"HRU ID column (mapping_key): {ss_method_copernicus_basins_hrus['mapping_key']}")
     print(f"Output directory: {ss_output_dir}")
 
     analyzer = OptimizedLULCAnalyzer(
-        ss_method_copernicus_basin_info,
+        ss_method_copernicus_basins_hrus,
         output_dir=str(ss_output_dir)
     )
 
@@ -1588,7 +1661,7 @@ def list_available_files(
 # Main wrapper function
 def set_ss_from_copernicus_lulc(
         ss_config_filepath: str,
-        ss_method_copernicus_basin_info: Dict[str, str],
+        ss_method_copernicus_basins_hrus: Dict[str, str],
         ss_method_copernicus_nc_lc_dir: Optional[str],
         ss_method_copernicus_period: List[Union[int, float]],
         recursive: bool = False,
@@ -1601,7 +1674,7 @@ def set_ss_from_copernicus_lulc(
     -----------
     ss_config_filepath : str
         Path where configuration and outputs will be saved
-    ss_method_copernicus_basin_info : dict
+    ss_method_copernicus_basins_hrus : dict
         Dictionary containing:
         - 'path_to_shp': Path to the shapefile containing HRU/basin polygons
         - 'mapping_key': Column name in shapefile for HRU ID (e.g., 'HRU_ID', 'ID', 'FID')
@@ -1621,7 +1694,7 @@ def set_ss_from_copernicus_lulc(
     # Calculate lulc areas using copernicus global data
     results, summaries, rasters = calc_copernicus_lulc(
         ss_config_filepath=ss_config_filepath,
-        ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+        ss_method_copernicus_basins_hrus=ss_method_copernicus_basins_hrus,
         ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
         ss_method_copernicus_period=ss_method_copernicus_period,
         recursive=recursive,
@@ -1807,7 +1880,9 @@ def _calculate_temporal_load_distribution(
     """
     import math
 
-    if method == "uniform":
+    # "harmonic"/"monthly" use a FLAT base (equal 1/12 each month); the seasonal
+    # shape is imposed downstream by the calibration's per-month multipliers.
+    if method in ("uniform", "harmonic", "monthly"):
         # Distribute load uniformly across 12 months (1st of each month at 1:00 AM)
         monthly_load = annual_load_kg / 12.0
 
@@ -1866,7 +1941,7 @@ def _calculate_temporal_load_distribution(
     else:
         raise ValueError(
             f"Unknown temporal distribution method: '{method}'. "
-            f"Valid options are 'uniform' or 'seasonal'."
+            f"Valid options are 'uniform', 'seasonal', 'harmonic', or 'monthly'."
         )
 
 
@@ -2468,7 +2543,7 @@ def _expand_climate_data_all(climate_data, period):
 def set_ss_climate_adjusted_export_coefficients(
         ss_config_filepath: str,
         json_header_comment: List[str],
-        ss_method_copernicus_basin_info: Dict[str, str],
+        ss_method_copernicus_basins_hrus: Dict[str, str],
         ss_method_copernicus_nc_lc_dir: Optional[str],
         ss_method_copernicus_period: List[Union[int, float]],
         ss_method_copernicus_default_loads_bool: bool,
@@ -2519,7 +2594,7 @@ def set_ss_climate_adjusted_export_coefficients(
         Path where JSON configuration will be saved
     json_header_comment : List[str]
         Comment lines for JSON header
-    ss_method_copernicus_basin_info : dict
+    ss_method_copernicus_basins_hrus : dict
         Shapefile info: {'path_to_shp': ..., 'mapping_key': ...}
     ss_method_copernicus_nc_lc_dir : str
         Directory with Copernicus LULC NetCDF files
@@ -2575,7 +2650,7 @@ def set_ss_climate_adjusted_export_coefficients(
     # Step 1: Calculate LULC areas (reuses existing Copernicus pipeline)
     results, summaries, rasters = set_ss_from_copernicus_lulc(
         ss_config_filepath=ss_config_filepath,
-        ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+        ss_method_copernicus_basins_hrus=ss_method_copernicus_basins_hrus,
         ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
         ss_method_copernicus_period=ss_method_copernicus_period,
         recursive=recursive,
@@ -2596,7 +2671,7 @@ def set_ss_climate_adjusted_export_coefficients(
 
     # Step 3: Calculate annual loads per HRU
     output_dir = Path(ss_config_filepath).parent / 'ss_copernicus_files'
-    shp_hru_id_column = ss_method_copernicus_basin_info.get('mapping_key', 'HRU_ID')
+    shp_hru_id_column = ss_method_copernicus_basins_hrus.get('mapping_key', 'HRU_ID')
 
     loads_df, pivot_loads_df = calculate_nutrient_loads(
         results_df=results,
@@ -2902,8 +2977,11 @@ def create_openwq_ss_json_from_loads(
     print("GENERATING OPENWQ SOURCE/SINK JSON")
     print("=" * 60)
 
-    # Validate temporal distribution method
-    valid_methods = ["uniform", "seasonal"]
+    # Validate temporal distribution method. "harmonic"/"monthly" generate a
+    # FLAT (uniform) monthly base here; their seasonal shape is imposed later by
+    # the calibration (per-month load multipliers), so generation treats them as
+    # uniform.
+    valid_methods = ["uniform", "seasonal", "harmonic", "monthly"]
     if ss_method_copernicus_annual_to_seasonal_loads_method not in valid_methods:
         raise ValueError(
             f"Invalid temporal distribution method: '{ss_method_copernicus_annual_to_seasonal_loads_method}'. "
@@ -2914,6 +2992,9 @@ def create_openwq_ss_json_from_loads(
     print("  → Load type: continuous (kg/day rate per month)")
     if ss_method_copernicus_annual_to_seasonal_loads_method == "uniform":
         print("  → Annual loads distributed uniformly across 12 months")
+    elif ss_method_copernicus_annual_to_seasonal_loads_method in ("harmonic", "monthly"):
+        print("  → Flat monthly base; seasonal shape set by calibration "
+              f"({ss_method_copernicus_annual_to_seasonal_loads_method})")
     elif ss_method_copernicus_annual_to_seasonal_loads_method == "seasonal":
         if climate_data:
             print("  → Annual loads climate-weighted (precipitation + temperature)")
@@ -3178,7 +3259,7 @@ def get_default_copernicus_load_coefficients() -> Dict[int, Dict[str, float]]:
 def set_ss_from_copernicus_lulc_with_loads(
         ss_config_filepath: str,
         json_header_comment: List[str],
-        ss_method_copernicus_basin_info: Dict[str, str],
+        ss_method_copernicus_basins_hrus: Dict[str, str],
         ss_method_copernicus_nc_lc_dir: Optional[str],
         ss_method_copernicus_period: List[Union[int, float]],
         ss_method_copernicus_default_loads_bool: bool,
@@ -3211,7 +3292,7 @@ def set_ss_from_copernicus_lulc_with_loads(
     -----------
     ss_config_filepath : str
         Path where JSON configuration will be saved
-    ss_method_copernicus_basin_info : dict
+    ss_method_copernicus_basins_hrus : dict
         Dictionary containing:
         - 'path_to_shp': Path to the shapefile
         - 'mapping_key': Column name for HRU ID (must match HDF5 variable)
@@ -3260,7 +3341,7 @@ def set_ss_from_copernicus_lulc_with_loads(
     # Calculate LULC areas
     results, summaries, rasters = set_ss_from_copernicus_lulc(
         ss_config_filepath=ss_config_filepath,
-        ss_method_copernicus_basin_info=ss_method_copernicus_basin_info,
+        ss_method_copernicus_basins_hrus=ss_method_copernicus_basins_hrus,
         ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
         ss_method_copernicus_period=ss_method_copernicus_period,
         recursive=recursive,
@@ -3285,7 +3366,7 @@ def set_ss_from_copernicus_lulc_with_loads(
     output_dir = Path(ss_config_filepath).parent / 'ss_copernicus_files'
 
     # Get HRU ID column name
-    shp_hru_id_column = ss_method_copernicus_basin_info.get('mapping_key', 'HRU_ID')
+    shp_hru_id_column = ss_method_copernicus_basins_hrus.get('mapping_key', 'HRU_ID')
 
     # Calculate nutrient loads
     loads_df, pivot_loads_df = calculate_nutrient_loads(

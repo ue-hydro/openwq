@@ -460,6 +460,37 @@ def make_ss_csv_scale_param(
     }
 
 
+def make_ss_seasonal_param(
+    name: str,
+    species: str,
+    file_type: str,
+    initial: float,
+    bounds: Tuple[float, float],
+    month: int = None,
+    description: str = ""
+) -> Dict:
+    """Build a seasonal source/sink scaling parameter.
+
+    ``file_type`` is one of ``ss_seasonal_amp`` / ``ss_seasonal_phase``
+    (harmonic mode) or ``ss_seasonal_month`` (per-month mode). The month-mode
+    parameters carry their month (1-12) in ``path`` so the handler can scale
+    only that month's load rows."""
+    path = {"species": species}
+    if month is not None:
+        path["month"] = int(month)
+    return {
+        "name": name,
+        "file_type": file_type,
+        "path": path,
+        "initial": initial,
+        "bounds": bounds,
+        "transform": "linear",
+        "units": "multiplier" if file_type != "ss_seasonal_phase" else "months",
+        "description": description,
+        "source": "user-defined",
+    }
+
+
 def make_ss_copernicus_param(
     name: str,
     lulc_class: int,
@@ -718,26 +749,62 @@ def extract_all_module_parameters(
             p["source"] = "auto-extracted"
         groups["source_sink"] = ss_params
 
-    elif ss_method in ("using_copernicus_lulc_with_static_coeff",
-                       "using_copernicus_lulc_with_dynamic_coeff"):
+    elif ss_method == "based_on_lulc":
         # ss_load_species contains the actual model species that have
         # loads (already resolved by the config template, including
-        # stoichiometric conversions).  Generate a scaling factor param
-        # per SS load species.
+        # stoichiometric conversions).
+        #
+        # Calibration knobs depend on the based_on_lulc sub-schema:
+        #   lulc_loads='static'  (or 'dynamic'+shape='uniform') -> one constant
+        #       SS_COP_scale (no within-year shape)
+        #   lulc_loads='dynamic', lulc_loads_dynamic_shape='harmonic' ->
+        #       SS_COP_scale (S0) + SS_COP_seasamp + SS_COP_seasphase
+        #       factor(m)=S0*(1+A*cos(2pi(m-phi)/12))  [flat base]
+        #   lulc_loads='dynamic', lulc_loads_dynamic_shape='monthly' ->
+        #       12 free multipliers SS_COP_scale_mNN  [flat base]
+        #   climate_dependency=True -> also calibrate the climate response
+        #       coefficients (precip power, Q10, T_ref)
+        #   species_dependency=False -> ONE shared knob set for all species
+        #       (species='all' broadcasts); True -> a set per species.
+        _lulc_loads = str(model_config.get("lulc_loads", "static")).lower()
+        _shape = str(model_config.get("lulc_loads_dynamic_shape", "uniform")).lower()
+        _climate_dep = bool(model_config.get("climate_dependency", False))
+        _per_species = bool(model_config.get("species_dependency", True))
+        _seas = _shape if _lulc_loads == "dynamic" else "uniform"
+
+        def _ss_params_for(sp):
+            sp_clean = sp.replace("-", "_").replace(" ", "_")
+            if _seas == "monthly":
+                return [make_ss_seasonal_param(
+                    f"SS_COP_scale_m{m:02d}_{sp_clean}", sp, "ss_seasonal_month",
+                    initial=1.0, bounds=(0.1, 10.0), month=m,
+                    description=f"Month-{m:02d} load multiplier for {sp}")
+                    for m in range(1, 13)]
+            # Multiplier range kept physically plausible: a very large multiplier
+            # both runs the model far slower (huge in-stream loads stiffen the
+            # solver) and scores poorly, so it only wastes long evaluations.
+            out = [make_ss_csv_scale_param(
+                f"SS_COP_scale_{sp_clean}", species=sp, initial=1.0,
+                bounds=(0.1, 10.0), description=f"Load scaling factor for {sp}")]
+            if _seas == "harmonic":
+                out.append(make_ss_seasonal_param(
+                    f"SS_COP_seasamp_{sp_clean}", sp, "ss_seasonal_amp",
+                    initial=0.0, bounds=(0.0, 0.95),
+                    description=f"Seasonal amplitude (0=flat) for {sp}"))
+                out.append(make_ss_seasonal_param(
+                    f"SS_COP_seasphase_{sp_clean}", sp, "ss_seasonal_phase",
+                    initial=0.0, bounds=(0.0, 12.0),
+                    description=f"Seasonal phase offset (months) for {sp}"))
+            return out
+
         ss_params = []
-        if ss_load_species:
+        if not _per_species:
+            # species_dependency=False -> one shared set of knobs for ALL
+            # species (species='all' broadcasts across every SS load row).
+            ss_params.extend(_ss_params_for("all"))
+        elif ss_load_species:
             for sp in sorted(ss_load_species):
-                sp_clean = sp.replace("-", "_").replace(" ", "_")
-                ss_params.append(make_ss_csv_scale_param(
-                    f"SS_COP_scale_{sp_clean}",
-                    species=sp,
-                    initial=1.0,
-                    # Load multiplier range kept physically plausible: a very
-                    # large multiplier (e.g. 45-100x) both runs the model far
-                    # slower (huge in-stream loads stiffen the solver) and
-                    # scores poorly, so it only wastes long evaluations.
-                    bounds=(0.1, 10.0),
-                    description=f"Load scaling factor for {sp}"))
+                ss_params.extend(_ss_params_for(sp))
         else:
             # Fallback: use custom coefficient species if ss_load_species
             # was not provided (SS JSON not generated yet)
@@ -751,16 +818,10 @@ def extract_all_module_parameters(
                         for sp in sp_loads:
                             if sp not in seen_species:
                                 seen_species.add(sp)
-                                sp_clean = sp.replace("-", "_").replace(" ", "_")
-                                ss_params.append(make_ss_csv_scale_param(
-                                    f"SS_COP_scale_{sp_clean}",
-                                    species=sp,
-                                    initial=1.0,
-                                    bounds=(0.1, 10.0),
-                                    description=f"Load scaling factor for {sp}"))
+                                ss_params.extend(_ss_params_for(sp))
 
-        # Climate response params (dynamic SS only)
-        is_dynamic = (ss_method == "using_copernicus_lulc_with_dynamic_coeff")
+        # Climate response params (only when climate_dependency=True)
+        is_dynamic = _climate_dep
         if is_dynamic:
             psp = float(model_config.get("ss_climate_precip_scaling_power", 1.0))
             q10 = float(model_config.get("ss_climate_temp_q10", 2.0))

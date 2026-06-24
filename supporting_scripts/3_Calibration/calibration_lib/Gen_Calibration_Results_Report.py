@@ -1770,8 +1770,8 @@ def _build_visualization_snippet(model_config: Dict[str, Any],
     feature_label = spatial.get("feature_label") or spatial.get(
         "river_network_mapping_key") or "SegId"
     river_shp = model_config.get("river_network_shapefile") or ""
-    # Resolve basin shapefile (lives in ss_method_copernicus_basin_info)
-    basin_info = model_config.get("ss_method_copernicus_basin_info") or {}
+    # Resolve basin shapefile (lives in ss_method_copernicus_basins_hrus)
+    basin_info = model_config.get("ss_method_copernicus_basins_hrus") or {}
     basin_shp = basin_info.get("path_to_shp") if isinstance(basin_info, dict) else ""
     species = model_config.get("chemical_species") or []
     # User's openwq_out directory — derived from executable_path
