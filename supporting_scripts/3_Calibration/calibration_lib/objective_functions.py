@@ -1142,3 +1142,103 @@ class ObjectiveFunction:
             "yearly": "Yearly aggregated values"
         }
         return descriptions.get(self.temporal_resolution, "Unknown")
+
+
+def compute_all_metrics(matched_data, species=None):
+    """Per (species, reach/HRU) performance metrics from matched obs vs sim.
+
+    Used by the calibration driver and by the ``--report`` regeneration path to
+    populate the report's *Model Performance* section.  Groups the matched
+    observation/simulation pairs by species and (when present) by ``reach_id``
+    and computes KGE, NSE, RMSE, PBIAS and R² for each group.
+
+    Parameters
+    ----------
+    matched_data : pandas.DataFrame
+        Must have ``observed`` and ``simulated`` columns; ``species`` and
+        ``reach_id`` are used for grouping when present.
+    species : list of str, optional
+        Restrict to these species.  Ignored when it does not intersect the
+        species actually present, so a config/observation naming mismatch can
+        never silently blank the whole section.
+
+    Returns
+    -------
+    list of dict
+        One dict per (species, reach) with keys ``species``, ``reach_id``
+        (when a reach column is present), ``KGE``, ``NSE``, ``RMSE``,
+        ``PBIAS``, ``R2``, ``obs_mean``, ``sim_mean`` and ``n_obs``.  Empty
+        list when nothing can be scored.
+    """
+    import numpy as _np
+    import pandas as _pd
+
+    if not isinstance(matched_data, _pd.DataFrame) or matched_data.empty:
+        return []
+    if ("observed" not in matched_data.columns
+            or "simulated" not in matched_data.columns):
+        return []
+
+    has_species = "species" in matched_data.columns
+    has_reach = ("reach_id" in matched_data.columns
+                 and matched_data["reach_id"].notna().any())
+
+    want = None
+    if species and has_species:
+        present = {str(s) for s in matched_data["species"].dropna().unique()}
+        want = {str(s) for s in species}
+        if not (want & present):
+            want = None   # mismatch → do not filter everything away
+
+    def _scores(sub):
+        o = _pd.to_numeric(sub["observed"], errors="coerce").to_numpy(float)
+        s = _pd.to_numeric(sub["simulated"], errors="coerce").to_numpy(float)
+        m = ~(_np.isnan(o) | _np.isnan(s))
+        o, s = o[m], s[m]
+        if o.size < 2:
+            return None
+        if _np.std(o) == 0 or _np.std(s) == 0:
+            r2 = float("nan")
+        else:
+            r = _np.corrcoef(o, s)[0, 1]
+            r2 = float(r * r)
+        return {
+            "KGE":   float(ObjectiveFunction.kge(o, s)),
+            "NSE":   float(ObjectiveFunction.nse(o, s)),
+            "RMSE":  float(ObjectiveFunction.rmse(o, s)),
+            "PBIAS": float(ObjectiveFunction.pbias(o, s)),
+            "R2":    r2,
+            "obs_mean": float(_np.mean(o)),
+            "sim_mean": float(_np.mean(s)),
+            "n_obs": int(o.size),
+        }
+
+    out = []
+    sp_values = (list(matched_data["species"].dropna().unique())
+                 if has_species else [None])
+    for sp in sp_values:
+        if want is not None and str(sp) not in want:
+            continue
+        sp_data = (matched_data[matched_data["species"] == sp]
+                   if has_species else matched_data)
+        if sp_data.empty:
+            continue
+        if has_reach:
+            for rid, rsub in sp_data.groupby("reach_id"):
+                sc = _scores(rsub)
+                if sc is None:
+                    continue
+                if isinstance(rid, float) and rid.is_integer():
+                    rid = int(rid)
+                entry = {"species": sp if has_species else "all",
+                         "reach_id": rid}
+                entry.update(sc)
+                out.append(entry)
+        else:
+            sc = _scores(sp_data)
+            if sc is None:
+                continue
+            entry = {"species": sp if has_species else "all"}
+            entry.update(sc)
+            out.append(entry)
+    return out
