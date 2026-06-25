@@ -18,7 +18,9 @@
             "10": "FECAL_COLIFORM",
             "11": "SED_CBOD",
             "12": "SED_N",
-            "13": "SED_P"
+            "13": "SED_P",
+            "14": "NH4-N_sorbed",
+            "15": "DISS_P_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -32,6 +34,34 @@
             "ALGAE",
             "FECAL_COLIFORM"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "NH4-N": {
+                "into": "NH4-N_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 200,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 1.2,
+                    "Nfr": 0.8,
+                    "Kadsdes_1/s": 0.001
+                }
+            },
+            "DISS_P": {
+                "into": "DISS_P_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 500,
+                    "KL_L/mg": 0.03,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 50,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "DO": "Dissolved oxygen",
             "CBOD": "Carbonaceous biochemical oxygen demand",
@@ -45,7 +75,9 @@
             "FECAL_COLIFORM": "Fecal coliform bacteria",
             "SED_CBOD": "Settled CBOD (sediment sink)",
             "SED_N": "Settled N (sediment sink)",
-            "SED_P": "Settled P (sediment sink)"
+            "SED_P": "Settled P (sediment sink)",
+            "NH4-N_sorbed": "Particle-sorbed NH4-N (adsorbed phase; transported with sediment, not water)",
+            "DISS_P_sorbed": "Particle-sorbed DISS_P (adsorbed phase; transported with sediment, not water)"
         }
     },
     "CYCLING_FRAMEWORKS": {

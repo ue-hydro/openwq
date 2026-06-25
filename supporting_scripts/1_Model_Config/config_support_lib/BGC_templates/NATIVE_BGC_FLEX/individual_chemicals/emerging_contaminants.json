@@ -35,7 +35,10 @@
             "14": "EDC_estrogen",
             "15": "EDC_bisphenol",
             "16": "METAB_generic",
-            "17": "CO2"
+            "17": "CO2",
+            "18": "PFAS_PFOA_sorbed",
+            "19": "PFAS_PFOS_sorbed",
+            "20": "PFAS_GenX_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PHARMA_antibiotic",
@@ -55,6 +58,47 @@
             "EDC_bisphenol",
             "METAB_generic"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "PFAS_PFOA": {
+                "into": "PFAS_PFOA_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 200,
+                    "KL_L/mg": 0.02,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 10,
+                    "Nfr": 0.95,
+                    "Kadsdes_1/s": 0.001
+                }
+            },
+            "PFAS_PFOS": {
+                "into": "PFAS_PFOS_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 500,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.003
+                },
+                "freundlich": {
+                    "Kfr": 50,
+                    "Nfr": 0.9,
+                    "Kadsdes_1/s": 0.002
+                }
+            },
+            "PFAS_GenX": {
+                "into": "PFAS_GenX_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 100,
+                    "KL_L/mg": 0.01,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 5,
+                    "Nfr": 1.0,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "PHARMA_antibiotic": "Pharmaceutical antibiotic compound",
             "PHARMA_analgesic": "Pharmaceutical analgesic compound",
@@ -72,7 +116,10 @@
             "EDC_estrogen": "Endocrine disruptor (estrogen)",
             "EDC_bisphenol": "Endocrine disruptor (bisphenol)",
             "METAB_generic": "Generic metabolite / degradation product",
-            "CO2": "Dissolved carbon dioxide"
+            "CO2": "Dissolved carbon dioxide",
+            "PFAS_PFOA_sorbed": "Particle-sorbed PFAS_PFOA (adsorbed phase; transported with sediment, not water)",
+            "PFAS_PFOS_sorbed": "Particle-sorbed PFAS_PFOS (adsorbed phase; transported with sediment, not water)",
+            "PFAS_GenX_sorbed": "Particle-sorbed PFAS_GenX (adsorbed phase; transported with sediment, not water)"
         }
     },
     "CYCLING_FRAMEWORKS": {

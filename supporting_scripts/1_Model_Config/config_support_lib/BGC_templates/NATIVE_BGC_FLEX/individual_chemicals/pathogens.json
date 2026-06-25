@@ -25,6 +25,7 @@
             "Giardia",
             "Virus_part"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {},
         "_LIST_DESCRIPTIONS": {
             "E_coli": "Escherichia coli",
             "Fecal_coliform": "Fecal coliform bacteria",

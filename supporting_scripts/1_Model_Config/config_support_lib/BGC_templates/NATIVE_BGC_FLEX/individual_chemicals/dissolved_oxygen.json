@@ -15,7 +15,7 @@
         "DO saturation depends on temperature, salinity, and altitude",
         "Reaeration depends on hydraulic characteristics (depth, velocity, slope)",
         "Critical DO typically > 5 mg/L for healthy aquatic ecosystems",
-        "Hypoxia defined as DO < 2 mg/L, anoxia as DO \u2248 0"
+        "Hypoxia defined as DO < 2 mg/L, anoxia as DO ≈ 0"
     ],
     "MODULE_NAME": "NATIVE_BGC_FLEX",
     "CHEMICAL_SPECIES": {
@@ -26,7 +26,8 @@
             "4": "NH4-N",
             "5": "NO3-N",
             "6": "PHYTO",
-            "7": "COD"
+            "7": "COD",
+            "8": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -36,6 +37,21 @@
             "NO3-N",
             "COD"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "NH4-N": {
+                "into": "NH4-N_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 200,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 1.2,
+                    "Nfr": 0.8,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "DO": "Dissolved oxygen",
             "BOD_fast": "Fast-reacting biochemical oxygen demand",
@@ -43,7 +59,8 @@
             "NH4-N": "Ammonium nitrogen",
             "NO3-N": "Nitrate nitrogen",
             "PHYTO": "Phytoplankton biomass",
-            "COD": "Chemical oxygen demand"
+            "COD": "Chemical oxygen demand",
+            "NH4-N_sorbed": "Particle-sorbed NH4-N (adsorbed phase; transported with sediment, not water)"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -62,8 +79,8 @@
             },
             "_DO_SATURATION": {
                 "DESCRIPTION": "Temperature-dependent DO saturation (Benson & Krause 1984)",
-                "FORMULA": "DOsat = exp(-139.34 + 1.576e5/T - 6.642e7/T\u00b2 + 1.244e10/T\u00b3 - 8.622e11/T\u2074)",
-                "SIMPLIFIED": "DOsat \u2248 14.652 - 0.41022*T + 0.007991*T\u00b2 - 0.000078*T\u00b3 (T in \u00b0C)",
+                "FORMULA": "DOsat = exp(-139.34 + 1.576e5/T - 6.642e7/T² + 1.244e10/T³ - 8.622e11/T⁴)",
+                "SIMPLIFIED": "DOsat ≈ 14.652 - 0.41022*T + 0.007991*T² - 0.000078*T³ (T in °C)",
                 "VALUES": {
                     "0C": 14.6,
                     "10C": 11.3,
@@ -80,7 +97,7 @@
                 "TSIVOGLOU_1972": "ka = 31.6 * S * v (small streams, S=slope)",
                 "NOTES": [
                     "v = velocity (m/s), H = depth (m), S = slope (m/m)",
-                    "ka units: 1/day at 20\u00b0C",
+                    "ka units: 1/day at 20°C",
                     "Temperature correction: ka(T) = ka(20) * 1.024^(T-20)"
                 ]
             },
@@ -113,7 +130,7 @@
                     "DOsat_20": {
                         "value": 9.1,
                         "units": "mg/L",
-                        "source": "At 20\u00b0C, sea level"
+                        "source": "At 20°C, sea level"
                     }
                 },
                 "_notes": [

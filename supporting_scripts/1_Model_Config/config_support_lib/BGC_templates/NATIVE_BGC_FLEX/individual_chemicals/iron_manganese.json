@@ -29,6 +29,21 @@
             "PO4-P",
             "Fe_P"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "PO4-P": {
+                "into": "Fe_P",
+                "langmuir": {
+                    "qmax_mg/kg": 500,
+                    "KL_L/mg": 0.03,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 50,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "Fe_II": "Ferrous iron (reduced, soluble)",
             "Fe_III": "Ferric iron (oxidized, precipitates)",

@@ -17,6 +17,7 @@
             "DIATOM",
             "CO2"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {},
         "_LIST_DESCRIPTIONS": {
             "DSi": "Dissolved silica (silicic acid)",
             "BSi": "Biogenic silica (diatom frustules)",

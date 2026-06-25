@@ -24,6 +24,21 @@
             "DOC",
             "TSS"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "PEST_diss": {
+                "into": "PEST_part",
+                "langmuir": {
+                    "qmax_mg/kg": 100,
+                    "KL_L/mg": 0.02,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 10,
+                    "Nfr": 0.85,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "PEST_diss": "Dissolved pesticide in water",
             "PEST_part": "Pesticide sorbed to particles",

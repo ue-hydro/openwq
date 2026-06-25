@@ -15,6 +15,7 @@
             "NO3-N",
             "DOC"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {},
         "_LIST_DESCRIPTIONS": {
             "NO3-N": "Nitrate nitrogen",
             "DOC": "Dissolved organic carbon",
@@ -35,7 +36,7 @@
                 "DELTA_G_ATP": "~45-50 kJ/mol (minimum energy for ATP synthesis)",
                 "CHI": "2 (average stoichiometric number)",
                 "F_T_FORMULA": "1 - exp(-(deltaG_available - deltaG_ATP) / (chi * R * T))",
-                "F_T_SIMPLIFIED": "At standard conditions with excess reactants, F_T \u2248 1",
+                "F_T_SIMPLIFIED": "At standard conditions with excess reactants, F_T ≈ 1",
                 "F_T_NOTE": "F_T approaches 0 when deltaG_available approaches deltaG_ATP (reaction stalls)"
             },
             "1": {
@@ -61,7 +62,7 @@
                     "k_max": "Maximum specific denitrification rate (1/day) - literature: 5-25",
                     "Km_NO3-N": "Half-saturation for NO3-N (mg-N/L) - literature: 0.1-2.0",
                     "Km_DOC": "Half-saturation for DOC (mg-C/L) - literature: 1-5",
-                    "F_T_term": "(1 - exp(-67.6/(2*0.008314*T_K))) \u2248 0.99 at 20C - thermodynamics not limiting under standard conditions"
+                    "F_T_term": "(1 - exp(-67.6/(2*0.008314*T_K))) ≈ 0.99 at 20C - thermodynamics not limiting under standard conditions"
                 }
             },
             "2": {
@@ -121,17 +122,17 @@
             "Pure kinetic models: reaction proceeds as long as substrates exist",
             "Thermodynamic models: reaction slows/stops as products accumulate",
             "This captures the 'redox ladder' - reactions proceed in order of energy yield",
-            "Denitrification (\u0394G\u00b0=-113) outcompetes sulfate reduction (\u0394G\u00b0=-25)"
+            "Denitrification (ΔG°=-113) outcompetes sulfate reduction (ΔG°=-25)"
         ],
         "WHEN_F_T_IS_IMPORTANT": [
-            "Low substrate concentrations (\u0394G approaches \u0394G_min)",
+            "Low substrate concentrations (ΔG approaches ΔG_min)",
             "High product concentrations (reaction quotient Q increases)",
             "Competition between electron acceptors (O2 vs NO3-N vs SO4-S)",
             "Sediments and anoxic zones where redox gradients matter"
         ],
         "WHEN_F_T_CAN_BE_IGNORED": [
             "Well-mixed surface waters with excess substrates",
-            "Reactions with very negative \u0394G\u00b0 (aerobic respiration)",
+            "Reactions with very negative ΔG° (aerobic respiration)",
             "When simplified first-order kinetics are sufficient"
         ]
     }
