@@ -76,81 +76,103 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_langmuir(
             true);
 
     // ############################
-    // Read per-species parameters
+    // Read per-species parameters from the BGC template's
+    //   CHEMICAL_SPECIES > BGC_GENERAL_SORBABLE_SPECIES
+    // (NOT the SI JSON — that only carries SOIL_PROPERTIES + the compartment).
+    // Each entry:  "<dissolved>": { "INTO": "<particulate>",
+    //    "LANGMUIR": { "QMAX_MG/KG", "KL_L/MG", "KADSDES_1/S" },
+    //    "FREUNDLICH": { ... } }
     // ############################
-    json speciesBlock = OpenWQ_utils.RequestJsonKeyVal_json(
-        OpenWQ_wqconfig, OpenWQ_output,
-        si_json, "SPECIES",
-        errorMsgIdentifier,
-        true);
+    errorMsgIdentifier = "BGC module > CHEMICAL_SPECIES > BGC_GENERAL_SORBABLE_SPECIES";
 
-    // Get the chemical species list for name-to-index resolution
+    json chemSpeciesBlock = OpenWQ_utils.RequestJsonKeyVal_json(
+        OpenWQ_wqconfig, OpenWQ_output,
+        OpenWQ_json.BGC_module, "CHEMICAL_SPECIES",
+        "BGC module", false);
+
+    json sorbBlock = OpenWQ_utils.RequestJsonKeyVal_json(
+        OpenWQ_wqconfig, OpenWQ_output,
+        chemSpeciesBlock, "BGC_GENERAL_SORBABLE_SPECIES",
+        errorMsgIdentifier, false);
+
+    // Chemical species list for name-to-index resolution
     const unsigned int num_chem = OpenWQ_wqconfig.cached_num_chem;
     const std::vector<std::string>& chem_list = *OpenWQ_wqconfig.cached_chem_species_list_ptr;
 
-    // Iterate over each species entry in the JSON
+    auto resolve_idx = [&](const std::string& nm) -> int {
+        for (unsigned int c = 0; c < num_chem; c++)
+            if (chem_list[c] == nm) return static_cast<int>(c);
+        return -1;
+    };
+
+    // Iterate over each sorbable species entry
     unsigned int si_species_count = 0;
-    for (auto it = speciesBlock.begin(); it != speciesBlock.end(); ++it) {
+    for (auto it = sorbBlock.begin(); it != sorbBlock.end(); ++it) {
 
-        std::string species_name_upper = it.key();  // Already uppercased by ConvertJSONtext_2upperCase
+        std::string species_name_upper = it.key();  // dissolved species (uppercased)
+        json specObj = it.value();
 
-        // Find matching global species index
-        int species_idx = -1;
-        for (unsigned int c = 0; c < num_chem; c++) {
-            if (chem_list[c] == species_name_upper) {
-                species_idx = static_cast<int>(c);
-                break;
-            }
-        }
+        // Only configure species that declare a LANGMUIR parameter block
+        if (!specObj.contains("LANGMUIR")) continue;
 
+        int species_idx = resolve_idx(species_name_upper);
         if (species_idx < 0) {
             msg_string =
-                "<OpenWQ> WARNING (Langmuir SI): Species '"
+                "<OpenWQ> WARNING (Langmuir SI): sorbable species '"
                 + species_name_upper
-                + "' not found in chemical species list. Skipping.";
-            OpenWQ_output.ConsoleLog(
-                OpenWQ_wqconfig, msg_string, true, true);
+                + "' not found in CHEMICAL_SPECIES LIST. Skipping.";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
             continue;
         }
 
-        // Get this species' parameter block
-        json specParams = it.value();
-        std::string specErrId = errorMsgIdentifier + " > SPECIES > " + species_name_upper;
+        std::string specErrId = errorMsgIdentifier + " > " + species_name_upper;
+
+        // Particulate ("INTO") phase that receives the sorbed mass
+        std::string into_name = OpenWQ_utils.RequestJsonKeyVal_json(
+            OpenWQ_wqconfig, OpenWQ_output, specObj, "INTO", specErrId, true);
+        int into_idx = resolve_idx(into_name);
+        if (into_idx < 0) {
+            msg_string =
+                "<OpenWQ> WARNING (Langmuir SI): 'INTO' particulate species '"
+                + into_name + "' (for '" + species_name_upper
+                + "') not found in CHEMICAL_SPECIES LIST. Skipping.";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+            continue;
+        }
+
+        // Langmuir parameter block
+        json langParams = OpenWQ_utils.RequestJsonKeyVal_json(
+            OpenWQ_wqconfig, OpenWQ_output, specObj, "LANGMUIR", specErrId, true);
+        std::string pErr = specErrId + " > LANGMUIR";
 
         double qmax_val = OpenWQ_utils.RequestJsonKeyVal_double(
-            OpenWQ_wqconfig, OpenWQ_output,
-            specParams, "QMAX_MG/KG",
-            specErrId, true);
-
+            OpenWQ_wqconfig, OpenWQ_output, langParams, "QMAX_MG/KG", pErr, true);
         double KL_val = OpenWQ_utils.RequestJsonKeyVal_double(
-            OpenWQ_wqconfig, OpenWQ_output,
-            specParams, "KL_L/MG",
-            specErrId, true);
-
+            OpenWQ_wqconfig, OpenWQ_output, langParams, "KL_L/MG", pErr, true);
         double Kadsdes_val = OpenWQ_utils.RequestJsonKeyVal_double(
-            OpenWQ_wqconfig, OpenWQ_output,
-            specParams, "KADSDES_1/S",
-            specErrId, true);
+            OpenWQ_wqconfig, OpenWQ_output, langParams, "KADSDES_1/S", pErr, true);
 
         // Store in the LANGMUIR data structure
         OpenWQ_wqconfig.SI_model->LANGMUIR->species_index.push_back(
             static_cast<unsigned int>(species_idx));
         OpenWQ_wqconfig.SI_model->LANGMUIR->species_name.push_back(species_name_upper);
+        OpenWQ_wqconfig.SI_model->LANGMUIR->into_index.push_back(
+            static_cast<unsigned int>(into_idx));
+        OpenWQ_wqconfig.SI_model->LANGMUIR->into_name.push_back(into_name);
         OpenWQ_wqconfig.SI_model->LANGMUIR->qmax.push_back(qmax_val);
         OpenWQ_wqconfig.SI_model->LANGMUIR->KL.push_back(KL_val);
         OpenWQ_wqconfig.SI_model->LANGMUIR->Kadsdes.push_back(Kadsdes_val);
 
         si_species_count++;
 
-        // Log
         msg_string =
-            "<OpenWQ> SI (Langmuir): Species='" + species_name_upper
-            + "' (idx=" + std::to_string(species_idx)
+            "<OpenWQ> SI (Langmuir): '" + species_name_upper
+            + "' -> '" + into_name + "' (idx " + std::to_string(species_idx)
+            + "->" + std::to_string(into_idx)
             + "), qmax=" + std::to_string(qmax_val)
             + " mg/kg, KL=" + std::to_string(KL_val)
             + " L/mg, Kadsdes=" + std::to_string(Kadsdes_val) + " 1/s";
-        OpenWQ_output.ConsoleLog(
-            OpenWQ_wqconfig, msg_string, true, true);
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
     }
 
     OpenWQ_wqconfig.SI_model->LANGMUIR->num_species = si_species_count;

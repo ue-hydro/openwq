@@ -321,19 +321,10 @@ si_sediment_compartment = "RIVER_NETWORK_REACHES"
 si_bulk_density_kg_m3 = 1500.0    # Sediment bulk density [kg/m³]
 si_layer_thickness_m = 1.0        # Active sediment layer thickness [m]
 
-# Per-species sorption parameters. Set None when si_module_name = "NONE".
-#
-# FREUNDLICH example:
-#   si_species_params = {
-#       "NH4-N": {"Kfr": 0.5, "Nfr": 0.8, "Kadsdes_1_per_s": 1e-6}
-#   }
-#
-# LANGMUIR example:
-#   si_species_params = {
-#       "PO4-P": {"qmax_mg_per_kg": 200.0, "KL_L_per_mg": 0.01,
-#                  "Kadsdes_1_per_s": 1e-6}
-#   }
-si_species_params = None
+# Per-species sorption parameters (Langmuir qmax/KL/Kadsdes, Freundlich
+# Kfr/Nfr/Kadsdes) and the dissolved -> particulate ("into") mapping now live
+# in the BGC template under CHEMICAL_SPECIES > BGC_GENERAL_SORBABLE_SPECIES,
+# so they are no longer set here.
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -1019,8 +1019,7 @@ def Gen_Input_Driver(
             json_header_comment=json_header_comment,
             si_module_name=si_module_name,
             si_bulk_density_kg_m3=si_bulk_density_kg_m3,
-            si_layer_thickness_m=si_layer_thickness_m,
-            si_species_params=si_species_params
+            si_layer_thickness_m=si_layer_thickness_m
         )
 
     ###############

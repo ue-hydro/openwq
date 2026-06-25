@@ -35,12 +35,7 @@ def create_si_module_json(
 
         # Soil properties (shared by both isotherms)
         si_bulk_density_kg_m3: float = 1500.0,
-        si_layer_thickness_m: float = 1.0,
-
-        # Per-species isotherm parameters
-        # For Freundlich: dict of species_name -> {"Kfr": float, "Nfr": float, "Kadsdes_1_per_s": float}
-        # For Langmuir:   dict of species_name -> {"qmax_mg_per_kg": float, "KL_L_per_mg": float, "Kadsdes_1_per_s": float}
-        si_species_params: Optional[Dict[str, Dict[str, float]]] = None
+        si_layer_thickness_m: float = 1.0
 
 ) -> None:
     """
@@ -52,48 +47,33 @@ def create_si_module_json(
         si_module_name: "FREUNDLICH", "LANGMUIR", or "NONE"
         si_bulk_density_kg_m3: Bulk density of the soil/medium [kg/m3]
         si_layer_thickness_m: Representative layer thickness [m]
-        si_species_params: Per-species isotherm parameters (see format above)
+
+    Per-species isotherm parameters and the dissolved->particulate ("into")
+    mapping are NOT written here — they live in the BGC template under
+    CHEMICAL_SPECIES > BGC_GENERAL_SORBABLE_SPECIES and are read by model_SI.
+    The sediment compartment is set in the master config
+    (MODULES > SORPTION_ISOTHERM > SEDIMENT_COMPARTMENT).
     """
 
     if si_module_name == "NONE":
         return
 
     if si_module_name == "FREUNDLICH":
-        species_block = {}
-        if si_species_params:
-            for species_name, params in si_species_params.items():
-                species_block[species_name] = {
-                    "Kfr": params.get("Kfr", 0.5),
-                    "Nfr": params.get("Nfr", 0.7),
-                    "Kadsdes_1/s": params.get("Kadsdes_1_per_s", 0.001)
-                }
-
         config = {
             "MODULE_NAME": "FREUNDLICH",
             "SOIL_PROPERTIES": {
                 "bulk_density_kg/m3": si_bulk_density_kg_m3,
                 "layer_thickness_m": si_layer_thickness_m
-            },
-            "SPECIES": species_block
+            }
         }
 
     elif si_module_name == "LANGMUIR":
-        species_block = {}
-        if si_species_params:
-            for species_name, params in si_species_params.items():
-                species_block[species_name] = {
-                    "qmax_mg/kg": params.get("qmax_mg_per_kg", 100.0),
-                    "KL_L/mg": params.get("KL_L_per_mg", 0.01),
-                    "Kadsdes_1/s": params.get("Kadsdes_1_per_s", 0.001)
-                }
-
         config = {
             "MODULE_NAME": "LANGMUIR",
             "SOIL_PROPERTIES": {
                 "bulk_density_kg/m3": si_bulk_density_kg_m3,
                 "layer_thickness_m": si_layer_thickness_m
-            },
-            "SPECIES": species_block
+            }
         }
     else:
         print(f"WARNING: Unknown SI module name '{si_module_name}'. "
