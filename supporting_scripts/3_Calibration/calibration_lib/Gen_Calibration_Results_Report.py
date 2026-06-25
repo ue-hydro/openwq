@@ -172,31 +172,33 @@ def generate_results_report(
             else "sensitivity" if _did_sens else "calibration")
 
         # ── Sidebar (Part 1: influential params, Part 2: calibration) ──
-        nav_items = [
-            {"id": "model-config", "label": "Model Setup"},
-            {"id": "summary", "label": "Summary"},
-        ]
-        # Performance sits right after the Summary (matches the body order).
+        try:
+            _bgc_path = _ci.get_bgc_template_path(model_config)
+        except Exception:
+            _bgc_path = None
+        _has_bgc = bool(_bgc_path) and os.path.isfile(_bgc_path)
+        nav_items = [{"id": "model-config", "label": "Model Setup"}]
+        # Observation Map then BGC Reaction Network sit between Model Setup and
+        # the rest (body order: Model Config → Obs Map → BGC → Output Config).
+        if _did_calib and _has_observation_map_inputs(model_config):
+            nav_items.append({"id": "obs-map", "label": "Observation Map"})
+        if _has_bgc:
+            nav_items.append({"id": "bgc-network", "label": "BGC Network"})
+        nav_items.append({"id": "summary", "label": "Summary"})
+        # Performance + Convergence sit right after the Summary (body order).
         if performance_metrics:
             nav_items.append({"id": "performance", "label": "Performance"})
+        if _did_calib:
+            nav_items.append({"id": "convergence", "label": "Convergence"})
         nav_items.append({"id": "sensitivity", "label": "Influential params"})
         if _did_calib:
-            if _has_observation_map_inputs(model_config):
-                nav_items.append({"id": "obs-map", "label": "Observation Map"})
             nav_items.extend([
                 {"id": "best-params", "label": "Best Parameters"},
-                {"id": "convergence", "label": "Convergence"},
                 {"id": "param-evolution", "label": "Parameter Evolution"},
                 {"id": "param-correlations", "label": "Correlations"},
             ])
         else:
             nav_items.append({"id": "best-params", "label": "Calibration"})
-        try:
-            _bgc_path = _ci.get_bgc_template_path(model_config)
-        except Exception:
-            _bgc_path = None
-        if _bgc_path and os.path.isfile(_bgc_path):
-            nav_items.append({"id": "bgc-network", "label": "BGC Network"})
         if _did_calib:
             # The time-series section is always rendered for a calibration run
             # (when no obs-sim pairs exist it shows a placeholder explaining
@@ -359,6 +361,33 @@ def generate_results_report(
                 model_config,
                 config_template_path=(model_config.get("_model_config_path")
                                       if isinstance(model_config, dict) else None)))
+            # ── Observation Map (between Model Configuration and BGC) ──
+            if _did_calib:
+                try:
+                    _map_section = _build_observation_map_section(
+                        model_config, calibration_settings,
+                        performance_metrics=performance_metrics,
+                        matched_data=matched_data,
+                    )
+                except Exception as _e:
+                    logger.warning(f"Observation map skipped: {_e}")
+                    _map_section = ""
+                if _map_section:
+                    H.append(_map_section)
+            # ── BGC Reaction Network (between Model & Output configuration) ──
+            if _bgc_path and os.path.isfile(_bgc_path):
+                try:
+                    _diag_html = rh.generate_bgc_reaction_diagram(
+                        bgc_template_path=_bgc_path,
+                        module_name=model_config.get("bgc_module_name", ""),
+                    )
+                    if _diag_html:
+                        H.append('<div class="section" id="bgc-network">')
+                        H.append('<h2>BGC Reaction Network</h2>')
+                        H.append(_diag_html)
+                        H.append('</div>')
+                except Exception:
+                    pass
             H.append(_build_output_config_section(model_config))
         except Exception as _e:
             logger.warning(f"Model configuration summary skipped: {_e}")
@@ -376,6 +405,11 @@ def generate_results_report(
                 calibration_settings, output_dir,
                 hostmodel=(model_config.get("hostmodel") or "mizuroute"),
             ))
+
+        # ── Section: Convergence (placed right after Model Performance) ──
+        if _did_calib:
+            H.append(_build_convergence_section(
+                calibration_results, calibration_settings, output_dir))
 
         # ═══════════════════════════════════════════════════════════════
         # PART 1 — Influential parameters (sensitivity screening)
@@ -410,24 +444,8 @@ def generate_results_report(
             "Part 2 &mdash; Calibration",
             "Optimised parameters, convergence, and model performance."))
         if _did_calib:
-            # Observation map (performance-coloured stations) belongs with
-            # the calibration results.
-            try:
-                _map_section = _build_observation_map_section(
-                    model_config, calibration_settings,
-                    performance_metrics=performance_metrics,
-                    matched_data=matched_data,
-                )
-            except Exception as _e:
-                logger.warning(f"Observation map skipped: {_e}")
-                _map_section = ""
-            if _map_section:
-                H.append(_map_section)
-
             H.append(_build_best_params_section(
                 calibration_parameters, calibration_results))
-            H.append(_build_convergence_section(
-                calibration_results, calibration_settings, output_dir))
             H.append(_build_param_evolution_section(
                 calibration_results, calibration_parameters, output_dir))
             H.append(_build_correlations_section(
@@ -466,21 +484,6 @@ def generate_results_report(
                 f"(mode = &lsquo;{_mode}&rsquo; &mdash; influential parameters only). "
                 "Set the workflow slider to &lsquo;Calibration&rsquo; or "
                 "&lsquo;Both&rsquo; to calibrate."))
-
-        # ── Section: BGC Reaction Network (if template available) ──
-        if _bgc_path and os.path.isfile(_bgc_path):
-            try:
-                _diag_html = rh.generate_bgc_reaction_diagram(
-                    bgc_template_path=_bgc_path,
-                    module_name=model_config.get("bgc_module_name", ""),
-                )
-                if _diag_html:
-                    H.append('<div class="section" id="bgc-network">')
-                    H.append('<h2>BGC Reaction Network</h2>')
-                    H.append(_diag_html)
-                    H.append('</div>')
-            except Exception:
-                pass
 
         # ── Section: Run with Best Parameters (kept LAST in the report, per
         # request — it's the actionable "what to run next" snippet) ──
@@ -873,7 +876,10 @@ def _build_best_params_section(
         {improved} parameters changed significantly (&gt;1%),
         {unchanged} remained near initial values.
     </p>
-    {table_html}
+    <details class="module-details">
+        <summary>Show / hide the full parameter table</summary>
+        {table_html}
+    </details>
 </div>
 """
 
@@ -887,6 +893,14 @@ def _build_convergence_section(
 
     history = results.get("history", [])
     obj_fn = settings.get("objective_function", "KGE")
+    # KGE/NSE are reported as (1 - minimised objective); error metrics pass
+    # through.  Match the Summary so the stats + plot show the actual metric.
+    _maximise = str(obj_fn).upper() in ("KGE", "NSE")
+
+    def _obj_to_metric(o):
+        if not isinstance(o, (int, float)) or o != o or o >= _FAIL_PENALTY * 0.9:
+            return None
+        return (1.0 - o) if _maximise else o
 
     if not history:
         return """
@@ -904,36 +918,39 @@ def _build_convergence_section(
     # Also build an evaluation history summary table
     n_evals = len(history)
     if n_evals > 0:
-        # Get objectives
-        objectives = [h.get("objective", h.get("best_objective", 0))
-                      for h in history]
+        # Convert each minimised objective back to the reported metric so
+        # Best/Mean/Worst are on the SAME scale as the Summary KPIs and the
+        # convergence plot (e.g. KGE = 1 - objective).  Failed evaluations
+        # (penalty) become None and are excluded from the statistics.
+        _metrics = [_obj_to_metric(h.get("objective", h.get("best_objective", 0)))
+                    for h in history]
+        _valid = [m for m in _metrics if m is not None]
+        if _valid:
+            best_m = max(_valid) if _maximise else min(_valid)
+            worst_m = min(_valid) if _maximise else max(_valid)
+            mean_m = sum(_valid) / len(_valid)
+        else:
+            best_m = worst_m = mean_m = None
 
-        best_obj = min(objectives) if objectives else 0
-        worst_obj = max(objectives) if objectives else 0
-        mean_obj = sum(objectives) / len(objectives) if objectives else 0
+        def _fmt_m(v):
+            return (f"{v:.4f}" if isinstance(v, (int, float)) and v == v
+                    else "n/a")
 
-        # Failed evaluations carry the penalty objective (1e10).  Show "n/a"
-        # for any statistic that is still the penalty, so a fully-failed run
-        # reads "Best/Mean/Worst = n/a" instead of "10000000000.0000".
-        def _fmt_obj(v):
-            if not isinstance(v, (int, float)) or v != v or v >= _FAIL_PENALTY * 0.9:
-                return "n/a"
-            return f"{v:.4f}"
-
+        _dir = "higher is better" if _maximise else "lower is better"
         stats_html = f"""
     <div class="card">
-        <h3>Objective Function Statistics <span style="font-weight:400;font-size:.8rem;color:var(--text3);">(minimised objective; lower is better)</span></h3>
+        <h3>{html_lib.escape(obj_fn)} statistics <span style="font-weight:400;font-size:.8rem;color:var(--text3);">({html_lib.escape(obj_fn)}; {_dir})</span></h3>
         <div class="perf-card" style="grid-template-columns: repeat(4, 1fr);">
             <div class="perf-metric">
-                <div class="perf-value result-good">{_fmt_obj(best_obj)}</div>
+                <div class="perf-value result-good">{_fmt_m(best_m)}</div>
                 <div class="perf-label">Best</div>
             </div>
             <div class="perf-metric">
-                <div class="perf-value">{_fmt_obj(mean_obj)}</div>
+                <div class="perf-value">{_fmt_m(mean_m)}</div>
                 <div class="perf-label">Mean</div>
             </div>
             <div class="perf-metric">
-                <div class="perf-value result-poor">{_fmt_obj(worst_obj)}</div>
+                <div class="perf-value result-poor">{_fmt_m(worst_m)}</div>
                 <div class="perf-label">Worst</div>
             </div>
             <div class="perf-metric">
@@ -946,42 +963,10 @@ def _build_convergence_section(
     else:
         stats_html = ""
 
-    explain_html = f"""
-    <div class="card" style="border-left:4px solid var(--primary);">
-        <h3 style="margin-top:0;">How to read this</h3>
-        <ul style="margin:.3rem 0 .2rem;padding-left:1.2rem;line-height:1.7;
-                   color:var(--text2);font-size:.9rem;">
-            <li>Each <span style="color:#4d9ee8;font-weight:600;">light-blue
-                dot</span> is one model evaluation &mdash; the objective value
-                for the parameter set tried at that step.</li>
-            <li>The <span style="color:#10b981;font-weight:600;">green line</span>
-                is the <strong>best value found so far</strong>; the
-                <span style="color:#fb923c;font-weight:600;">orange star</span>
-                marks the overall best.</li>
-            <li>The optimiser <strong>minimises</strong> this objective, so
-                <strong>lower is better</strong>. For goodness-of-fit metrics
-                ({obj_fn} / NSE / R&sup2;) the plotted value is transformed so a
-                smaller number means a closer match to the observations
-                (&asymp;&nbsp;0 is near-perfect); for error metrics (RMSE,
-                |PBIAS|) it is the error itself.</li>
-            <li>A curve that <strong>drops then flattens</strong> means the
-                search has converged. If the green line is <strong>still
-                descending at the right edge</strong>, raising
-                <code>max_evaluations</code> would likely improve the fit
-                further.</li>
-            <li>Dots sitting well above the green line are <em>exploratory</em>
-                trials that didn't beat the best &mdash; expected for DDS, which
-                deliberately probes the whole parameter space before
-                fine-tuning.</li>
-        </ul>
-    </div>
-"""
-
     return f"""
 <div class="section" id="convergence">
     <h2>Convergence</h2>
     {plot_html}
-    {explain_html}
     {stats_html}
 </div>
 """
@@ -2264,34 +2249,58 @@ def _generate_convergence_plot(
     obj_fn: str,
     output_dir: str
 ) -> str:
-    """Interactive convergence chart: all-evaluation scatter + running-best
-    line + the best point."""
-    evals, objectives, best_so_far = [], [], []
-    current_best = float('inf')
+    """Interactive convergence chart on the SAME scale the Summary reports.
+
+    The optimiser minimises an internal objective; for KGE/NSE that is
+    ``1 - metric``.  Plotting that raw objective made the chart's best read
+    e.g. ``1.1489`` while the Summary reported the actual ``KGE = -0.1489``.
+    Here we convert back (``metric = 1 - objective`` for KGE/NSE; error metrics
+    pass through), so the plotted best matches the headline and "higher is
+    better" for skill metrics, "lower is better" for error metrics."""
+    _maximise = str(obj_fn).upper() in ("KGE", "NSE")
+
+    def _to_metric(o):
+        if not isinstance(o, (int, float)) or o != o or o >= _FAIL_PENALTY * 0.9:
+            return None
+        return (1.0 - o) if _maximise else o
+
+    evals, raw_objs = [], []
     for h in history:
         eval_id = h.get("eval_id", len(evals))
-        obj = h.get("objective", h.get("best_objective", 0))
         evals.append(eval_id)
-        objectives.append(obj)
-        if obj < current_best:
-            current_best = obj
-        best_so_far.append(current_best)
+        raw_objs.append(h.get("objective", h.get("best_objective", 0)))
 
     if not evals:
         return '<div class="card"><p>No evaluation history available.</p></div>'
 
     # If every evaluation hit the failure penalty there is nothing meaningful
-    # to plot (a flat line at 1e10), so show a short note instead of a chart
-    # full of "10000000000" values.
+    # to plot, so show a short note instead of a chart full of penalty values.
     if all((not isinstance(o, (int, float))) or o != o or o >= _FAIL_PENALTY * 0.9
-           for o in objectives):
+           for o in raw_objs):
         return ('<div class="card"><p>&#9888;&#65039; Convergence plot omitted '
                 '&mdash; every evaluation returned the failure penalty, so there '
                 'is no successful model run to plot. See the diagnostic in the '
                 '<a href="#summary" style="color:var(--primary);font-weight:600;">'
                 'Results&nbsp;Summary</a>.</p></div>')
 
-    best_idx = objectives.index(min(objectives))
+    metric_vals = [_to_metric(o) for o in raw_objs]
+
+    # Overall best = the minimised-objective winner, expressed as the metric.
+    _valid = [(i, o) for i, o in enumerate(raw_objs)
+              if isinstance(o, (int, float)) and o == o and o < _FAIL_PENALTY * 0.9]
+    best_idx = min(_valid, key=lambda t: t[1])[0]
+    metric_best = _to_metric(raw_objs[best_idx])
+
+    def _running_best(seq):
+        """Running best of a metric sequence (None carries the previous best
+        forward), honouring the maximise/minimise direction."""
+        out, cur = [], None
+        for v in seq:
+            if v is not None:
+                cur = v if cur is None else (max(cur, v) if _maximise
+                                             else min(cur, v))
+            out.append(cur)
+        return out
 
     # Parallel-chain runs: one running-best line PER chain (so you can see each
     # chain converge and which one won), over a faint cloud of all evaluations.
@@ -2300,23 +2309,20 @@ def _generate_convergence_plot(
     has_chains = len(chain_ids) > 1
     _PAL = ["#4d9ee8", "#fb923c", "#10b981", "#a78bfa", "#ef4444", "#14b8a6",
             "#f59e0b", "#ec4899", "#6366f1", "#84cc16", "#06b6d4", "#f43f5e"]
+    _hov = f"eval %{{x}}<br>{obj_fn} %{{y:.4f}}<extra></extra>"
 
     if has_chains:
         traces = [{
-            "type": "scatter", "mode": "markers", "x": evals, "y": objectives,
+            "type": "scatter", "mode": "markers", "x": evals, "y": metric_vals,
             "name": "All evaluations", "showlegend": False,
             "marker": {"size": 5, "color": "#9aa5b1", "opacity": 0.30},
-            "hovertemplate": "eval %{x}<br>objective %{y:.4f}<extra></extra>"}]
+            "hovertemplate": _hov}]
         for ci, cid in enumerate(chain_ids):
             pts = sorted((h.get("eval_id", 0),
-                          h.get("objective", h.get("best_objective", 0)))
+                          _to_metric(h.get("objective", h.get("best_objective", 0))))
                          for h in history if h.get("chain") == cid)
-            cb, xs, ys = float("inf"), [], []
-            for e, o in pts:
-                if o < cb:
-                    cb = o
-                xs.append(e)
-                ys.append(cb)
+            xs = [e for e, _ in pts]
+            ys = _running_best([m for _, m in pts])
             traces.append({
                 "type": "scatter", "mode": "lines", "x": xs, "y": ys,
                 "name": f"Chain {cid + 1}",
@@ -2325,25 +2331,30 @@ def _generate_convergence_plot(
                                   f"best %{{y:.4f}}<extra></extra>")})
     else:
         traces = [
-            {"type": "scatter", "mode": "markers", "x": evals, "y": objectives,
+            {"type": "scatter", "mode": "markers", "x": evals, "y": metric_vals,
              "name": "All evaluations",
              "marker": {"size": 6, "color": "#4d9ee8", "opacity": 0.55},
-             "hovertemplate": "eval %{x}<br>objective %{y:.4f}<extra></extra>"},
-            {"type": "scatter", "mode": "lines", "x": evals, "y": best_so_far,
+             "hovertemplate": _hov},
+            {"type": "scatter", "mode": "lines", "x": evals,
+             "y": _running_best(metric_vals),
              "name": "Best so far", "line": {"color": "#10b981", "width": 2.5}},
         ]
     # Global best star (both modes).
     traces.append({
         "type": "scatter", "mode": "markers", "x": [evals[best_idx]],
-        "y": [objectives[best_idx]],
-        "name": f"Best: {objectives[best_idx]:.4f}",
+        "y": [metric_best],
+        "name": f"Best: {metric_best:.4f}",
         "marker": {"size": 16, "color": "#fb923c", "symbol": "star",
                    "line": {"color": "#fff", "width": 1}}})
+
+    _better = "higher is better" if _maximise else "lower is better"
     layout = {"title": {"text": "Calibration Convergence"},
               "xaxis": {"title": "Evaluation Number"},
-              "yaxis": {"title": f"Objective ({obj_fn})"},
+              "yaxis": {"title": f"{obj_fn} ({_better})"},
               "showlegend": True,
               "hovermode": "closest"}
+    # Always offer the log-scale toggle (default linear, so negative KGE/NSE
+    # values still render; switching to log just drops non-positive points).
     return _plotly_chart(_plot_id("conv"), traces, layout, height=430,
                          log_axes='y')
 
