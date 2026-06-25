@@ -175,8 +175,11 @@ def generate_results_report(
         nav_items = [
             {"id": "model-config", "label": "Model Setup"},
             {"id": "summary", "label": "Summary"},
-            {"id": "sensitivity", "label": "Influential params"},
         ]
+        # Performance sits right after the Summary (matches the body order).
+        if performance_metrics:
+            nav_items.append({"id": "performance", "label": "Performance"})
+        nav_items.append({"id": "sensitivity", "label": "Influential params"})
         if _did_calib:
             if _has_observation_map_inputs(model_config):
                 nav_items.append({"id": "obs-map", "label": "Observation Map"})
@@ -194,8 +197,6 @@ def generate_results_report(
             _bgc_path = None
         if _bgc_path and os.path.isfile(_bgc_path):
             nav_items.append({"id": "bgc-network", "label": "BGC Network"})
-        if performance_metrics and _did_calib:
-            nav_items.append({"id": "performance", "label": "Performance"})
         if _did_calib:
             # The time-series section is always rendered for a calibration run
             # (when no obs-sim pairs exist it shows a placeholder explaining
@@ -368,6 +369,14 @@ def generate_results_report(
             performance_metrics=performance_metrics,
         ))
 
+        # ── Section: Model Performance (placed right after the Summary) ──
+        if performance_metrics:
+            H.append(_build_performance_section(
+                performance_metrics, matched_data,
+                calibration_settings, output_dir,
+                hostmodel=(model_config.get("hostmodel") or "mizuroute"),
+            ))
+
         # ═══════════════════════════════════════════════════════════════
         # PART 1 — Influential parameters (sensitivity screening)
         # ═══════════════════════════════════════════════════════════════
@@ -423,12 +432,6 @@ def generate_results_report(
                 calibration_results, calibration_parameters, output_dir))
             H.append(_build_correlations_section(
                 calibration_results, calibration_parameters, output_dir))
-            if performance_metrics:
-                H.append(_build_performance_section(
-                    performance_metrics, matched_data,
-                    calibration_settings, output_dir,
-                    hostmodel=(model_config.get("hostmodel") or "mizuroute"),
-                ))
             # Observed vs simulated time series at the best parameters, per
             # calibrated species (driven by matched_data; independent of the
             # numeric performance-metrics table above).  The "Run with Best
@@ -1532,6 +1535,12 @@ def _build_performance_section(
     # Build per-species performance cards
     species_cards = _build_species_perf_cards(perf_metrics)
 
+    # Cumulative / non-cumulative distribution of the metrics across the
+    # reaches/HRUs that carry observations (needs >= 2 stations; otherwise a
+    # note explains why the plots are not shown).
+    dist_html = _generate_perf_distribution_plots(perf_metrics,
+                                                  hostmodel=hostmodel)
+
     # The observed-vs-simulated time-series / scatter plots now live in their
     # own "Observed vs Simulated — calibrated time series" section (placed
     # after "Run with Best Parameters"), so they aren't duplicated here.  This
@@ -1580,6 +1589,7 @@ def _build_performance_section(
     {host_note}
     {species_cards}
     {metrics_html}
+    {dist_html}
     {_ts_pointer}
 </div>
 """
@@ -3587,6 +3597,168 @@ def _build_species_perf_cards(perf_metrics: List[Dict]) -> str:
         """)
 
     return "\n".join(cards)
+
+
+def _generate_perf_distribution_plots(
+    perf_metrics: List[Dict],
+    hostmodel: str = "mizuroute",
+) -> str:
+    """Cumulative + non-cumulative distribution of each metric across the
+    reaches/HRUs that carry observations.
+
+    For every performance metric (KGE, NSE, R2, RMSE, PBIAS) we draw a
+    two-panel figure:
+
+      * left  — **non-cumulative** distribution (histogram: how many
+        reaches/HRUs fall in each value band; dashed line marks the median);
+      * right — **cumulative** distribution (empirical CDF: the fraction of
+        reaches/HRUs at or below a given value).
+
+    Multiple calibrated species are overlaid (one colour each).  Drawing a
+    distribution needs at least **two** stations (reaches/HRUs) with
+    observations — with a single station the section is kept but replaced by a
+    short note explaining that two or more are required.
+    """
+    import math
+
+    _is_summa = (hostmodel or "").lower() == "summa"
+    feat_singular = "HRU" if _is_summa else "reach"
+    feat_plural = "HRUs" if _is_summa else "reaches"
+
+    heading = (
+        '<h3 style="margin-top:1.5rem;">Spatial distribution of performance '
+        f'metrics across {feat_plural}</h3>'
+    )
+
+    if not perf_metrics:
+        return ""
+
+    # Number of distinct stations (reaches/HRUs) with observations.  When no
+    # ``reach_id`` is present the setup is a single aggregated station.
+    has_reach = any(m.get("reach_id") is not None for m in perf_metrics)
+    if has_reach:
+        n_stations = len({m.get("reach_id") for m in perf_metrics
+                          if m.get("reach_id") is not None})
+    else:
+        n_stations = 1
+
+    # A distribution is only meaningful with >= 2 stations.
+    if n_stations < 2 or not (HAS_MATPLOTLIB and HAS_NUMPY):
+        if n_stations < 2:
+            msg = (
+                'These <strong>cumulative</strong> and '
+                '<strong>non-cumulative</strong> distribution plots summarise '
+                f'how each metric varies across the {feat_plural} that have '
+                'observations. <strong>At least two '
+                f'{feat_plural} with observations are required</strong> to draw '
+                f'them &mdash; this calibration uses a single {feat_singular}, so '
+                'the distributions are not shown. Add observations at one or more '
+                f'additional {feat_plural} to enable this view.'
+            )
+        else:
+            msg = ('Plotting libraries (matplotlib / numpy) are unavailable, so '
+                   'the distribution plots were skipped.')
+        return heading + (
+            f'<div class="highlight-box info" style="margin-top:.5rem;">{msg}</div>'
+        )
+
+    from collections import defaultdict
+    import matplotlib.cm as _cm
+
+    by_species: Dict[str, List[Dict]] = defaultdict(list)
+    for m in perf_metrics:
+        by_species[m.get("species", "unknown")].append(m)
+
+    species_list = list(by_species.keys())
+    cmap = _cm.get_cmap("tab10", max(len(species_list), 1))
+    sp_colour = {sp: cmap(i) for i, sp in enumerate(species_list)}
+
+    # (dict key, axis label, interpretation hint)
+    metric_meta = [
+        ("KGE", "KGE", "higher is better"),
+        ("NSE", "NSE", "higher is better"),
+        ("R2", "R²", "higher is better"),
+        ("RMSE", "RMSE", "lower is better"),
+        ("PBIAS", "PBIAS (%)", "0 is best"),
+    ]
+
+    def _clean(vals):
+        out = []
+        for v in vals:
+            if isinstance(v, (int, float)) and not (
+                    isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
+                out.append(float(v))
+        return out
+
+    _setup_plot_style()
+    figs_html = []
+    for key, label, hint in metric_meta:
+        # One value per reach/HRU for this species; need >= 2 to draw.
+        series = []
+        for sp in species_list:
+            vals = _clean([mm.get(key) for mm in by_species[sp]])
+            if len(vals) >= 2:
+                series.append((sp, np.asarray(sorted(vals), dtype=float)))
+        if not series:
+            continue
+
+        fig, (axL, axR) = plt.subplots(1, 2, figsize=(12, 4))
+        for sp, arr in series:
+            c = sp_colour.get(sp)
+            n = int(arr.size)
+            nbins = int(min(12, max(4, np.ceil(np.sqrt(n)))))
+            axL.hist(arr, bins=nbins, histtype="stepfilled", alpha=0.45,
+                     color=c, edgecolor=c, linewidth=1.3,
+                     label=f"{sp} (n={n})")
+            axL.axvline(float(np.median(arr)), color=c, ls="--", lw=1.0,
+                        alpha=0.7)
+            ecdf_y = np.arange(1, n + 1) / float(n)
+            axR.step(arr, ecdf_y, where="post", color=c, linewidth=1.8,
+                     label=f"{sp} (n={n})")
+            axR.plot(arr, ecdf_y, "o", color=c, ms=3.5, alpha=0.75)
+
+        axL.set_title(f"{label} — non-cumulative (histogram)", fontsize=11)
+        axL.set_xlabel(f"{label}  ({hint})")
+        axL.set_ylabel(f"number of {feat_plural}")
+        axL.grid(True, alpha=0.4)
+
+        axR.set_title(f"{label} — cumulative (CDF)", fontsize=11)
+        axR.set_xlabel(f"{label}  ({hint})")
+        axR.set_ylabel(f"fraction of {feat_plural} ≤ value")
+        axR.set_ylim(0.0, 1.02)
+        axR.grid(True, alpha=0.4)
+
+        if len(series) > 1:
+            axL.legend(fontsize=8)
+            axR.legend(fontsize=8, loc="lower right")
+
+        fig.tight_layout()
+        img = _fig_to_base64(fig)
+        figs_html.append(
+            '<div class="card" style="margin-top:1rem;">'
+            f'<img src="{img}" alt="{label} distribution across {feat_plural}" '
+            'style="width:100%;height:auto;display:block;"/></div>'
+        )
+
+    if not figs_html:
+        return heading + (
+            '<div class="highlight-box info" style="margin-top:.5rem;">'
+            f'Not enough valid metric values across {feat_plural} to draw '
+            'distributions.</div>'
+        )
+
+    intro = (
+        '<p style="color:var(--text2);margin:.4rem 0 .2rem;">'
+        f'Each metric is summarised across the <strong>{n_stations}</strong> '
+        f'{feat_plural} with observations, two complementary ways: a '
+        f'<strong>non-cumulative</strong> histogram (how many {feat_plural} fall '
+        'in each value band; dashed line = median) and a '
+        f'<strong>cumulative</strong> distribution (the fraction of {feat_plural} '
+        'at or below a given value). A tight distribution means performance is '
+        f'consistent across the network; a wide one flags {feat_plural} that lag '
+        'behind.</p>'
+    )
+    return heading + intro + "\n".join(figs_html)
 
 
 # =========================================================================
