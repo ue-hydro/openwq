@@ -62,6 +62,12 @@ void OpenWQ_SI_model::langmuir(
     // Water volume minimum limit
     const double watervol_minlim = OpenWQ_hostModelconfig.get_watervol_minlim();
 
+    // Restrict sorption to the configured sediment compartment
+    const int sed_icmp_signed = OpenWQ_wqconfig.SI_model->sediment_compartment_index;
+    if (sed_icmp_signed < 0 || static_cast<unsigned int>(sed_icmp_signed) >= num_comps)
+        return;
+    const unsigned int icmp = static_cast<unsigned int>(sed_icmp_signed);
+
     // Loop over each SI species
     for (unsigned int si = 0; si < num_si_species; si++) {
 
@@ -76,9 +82,8 @@ void OpenWQ_SI_model::langmuir(
         // Pre-compute kinetic factor: (1 - exp(-Kadsdes * dt))
         const double kinetic_factor = 1.0 - std::exp(-Kadsdes * dt);
 
-        // Loop over all compartments and cells
-        for (unsigned int icmp = 0; icmp < num_comps; icmp++) {
-
+        // Process only the configured sediment compartment (icmp set above)
+        {
             const unsigned int nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
             const unsigned int ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
             const unsigned int nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);

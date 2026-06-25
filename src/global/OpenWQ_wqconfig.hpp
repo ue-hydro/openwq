@@ -435,6 +435,11 @@ class OpenWQ_wqconfig::SI_model_{
     public:
     std::string SI_module;
 
+    // Sediment compartment the sorption is restricted to (set from the SI
+    // JSON's "SI_SEDIMENT_COMPARTMENT"); resolved to a host-model index.
+    std::string sediment_compartment_name;
+    int sediment_compartment_index = -1;
+
     // constructor/destructor
     SI_model_(); 
     ~SI_model_();
@@ -719,8 +724,10 @@ class OpenWQ_wqconfig::SI_model_::LANGMUIR_{
     unsigned int num_species = 0;
 
     // Per-species parameters (vectors indexed by local species index)
-    std::vector<unsigned int> species_index;     // Global chemical species index
+    std::vector<unsigned int> species_index;     // Global chemical species index (dissolved)
     std::vector<std::string> species_name;       // Species name (for logging)
+    std::vector<unsigned int> into_index;        // Global index of particulate ("into") phase
+    std::vector<std::string> into_name;          // Particulate ("into") species name
     std::vector<double> qmax;                    // Maximum adsorption capacity [mg/kg_soil]
     std::vector<double> KL;                      // Langmuir equilibrium constant [L/mg]
     std::vector<double> Kadsdes;                 // Kinetic adsorption/desorption rate [1/s]
@@ -743,8 +750,10 @@ class OpenWQ_wqconfig::SI_model_::FREUNDLICH_{
     unsigned int num_species = 0;
 
     // Per-species parameters (vectors indexed by local species index)
-    std::vector<unsigned int> species_index;     // Global chemical species index
+    std::vector<unsigned int> species_index;     // Global chemical species index (dissolved)
     std::vector<std::string> species_name;       // Species name (for logging)
+    std::vector<unsigned int> into_index;        // Global index of particulate ("into") phase
+    std::vector<std::string> into_name;          // Particulate ("into") species name
     std::vector<double> Kfr;                     // Freundlich coefficient [mg/kg / (mg/L)^(1/Nfr)]
     std::vector<double> Nfr;                     // Freundlich exponent [-]
     std::vector<double> Kadsdes;                 // Kinetic adsorption/desorption rate [1/s]

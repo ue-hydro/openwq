@@ -91,6 +91,24 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
             false,
             "",
             input_filepath);
+
+        // ############################
+        // Sediment compartment: sorption is restricted to this single host
+        // compartment.  Read it from the master SORPTION_ISOTHERM block (same
+        // place as MODULE_NAME) and resolve to a host-model compartment index
+        // (get_HydroComp_index aborts if the name does not exist).
+        // ############################
+        std::string sed_comp_name = OpenWQ_utils.RequestJsonKeyVal_json(
+            OpenWQ_wqconfig, OpenWQ_output,
+            jsonMaster_SubStruct["SORPTION_ISOTHERM"], "SEDIMENT_COMPARTMENT",
+            errorMsgIdentifier, true);
+
+        OpenWQ_wqconfig.SI_model->sediment_compartment_name = sed_comp_name;
+        OpenWQ_wqconfig.SI_model->sediment_compartment_index =
+            OpenWQ_hostModelconfig.get_HydroComp_index(
+                sed_comp_name,
+                "SORPTION_ISOTHERM > SEDIMENT_COMPARTMENT",
+                true);   // abort if not found
     }
 
     // Load information fo the TS_model model selected
