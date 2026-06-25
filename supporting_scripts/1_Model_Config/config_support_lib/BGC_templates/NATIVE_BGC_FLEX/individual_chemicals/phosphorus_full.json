@@ -20,6 +20,21 @@
             "ALGAE_P",
             "DO"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "PO4-P": {
+                "into": "PIP",
+                "langmuir": {
+                    "qmax_mg/kg": 500,
+                    "KL_L/mg": 0.03,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 50,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
             "DOP": "Dissolved organic phosphorus",

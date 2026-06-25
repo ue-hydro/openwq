@@ -32,6 +32,7 @@
             "CH4",
             "CO2"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {},
         "_LIST_DESCRIPTIONS": {
             "DO": "Dissolved oxygen",
             "NO3-N": "Nitrate nitrogen",
@@ -201,7 +202,7 @@
                     "Ki_O2": 0.02,
                     "Ki_NO3N": 0.01
                 },
-                "_notes": "F_T \u2248 0.64 at standard conditions - moderately thermodynamically limited"
+                "_notes": "F_T ≈ 0.64 at standard conditions - moderately thermodynamically limited"
             },
             "6": {
                 "_name": "sulfate_reduction",

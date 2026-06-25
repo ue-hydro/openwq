@@ -18,6 +18,7 @@
             "H2S",
             "DOC"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {},
         "_LIST_DESCRIPTIONS": {
             "SO4-S": "Sulfate sulfur",
             "H2S": "Dissolved hydrogen sulfide",
@@ -42,10 +43,10 @@
                 "chi": 2,
                 "R_kJ": 0.008314,
                 "NOTES": [
-                    "Low \u0394G\u00b0 means F_T is very sensitive to conditions",
+                    "Low ΔG° means F_T is very sensitive to conditions",
                     "At standard conditions: F_T = 1 - exp(-(25-45)/(2*0.008314*293))",
-                    "= 1 - exp(20/4.87) = 1 - exp(4.1) < 0 \u2192 F_T = 0",
-                    "Reaction only proceeds when \u0394G is made more negative by:",
+                    "= 1 - exp(20/4.87) = 1 - exp(4.1) < 0 → F_T = 0",
+                    "Reaction only proceeds when ΔG is made more negative by:",
                     "- High DOC (electron donor)",
                     "- Low H2S (product removal)",
                     "- Absence of competing electron acceptors (O2, NO3-N)"
@@ -75,7 +76,7 @@
                     "Ki_NO3N": 0.2
                 },
                 "_notes": [
-                    "log10 term approximates concentration-dependent \u0394G correction",
+                    "log10 term approximates concentration-dependent ΔG correction",
                     "Ki terms for O2 and NO3-N inhibition (competitive exclusion)",
                     "max(0,...) ensures F_T doesn't go negative"
                 ]

@@ -23,7 +23,9 @@
             "4": "PO4-P",
             "5": "ZOO",
             "6": "DOC",
-            "7": "Chla"
+            "7": "Chla",
+            "8": "NH4-N_sorbed",
+            "9": "PO4-P_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PHYTO",
@@ -33,6 +35,34 @@
             "DOC",
             "Chla"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "NH4-N": {
+                "into": "NH4-N_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 200,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 1.2,
+                    "Nfr": 0.8,
+                    "Kadsdes_1/s": 0.001
+                }
+            },
+            "PO4-P": {
+                "into": "PO4-P_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 500,
+                    "KL_L/mg": 0.03,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 50,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "PHYTO": "Phytoplankton biomass",
             "NO3-N": "Nitrate nitrogen",
@@ -40,7 +70,9 @@
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
             "ZOO": "Zooplankton biomass",
             "DOC": "Dissolved organic carbon",
-            "Chla": "Chlorophyll-a concentration"
+            "Chla": "Chlorophyll-a concentration",
+            "NH4-N_sorbed": "Particle-sorbed NH4-N (adsorbed phase; transported with sediment, not water)",
+            "PO4-P_sorbed": "Particle-sorbed PO4-P (adsorbed phase; transported with sediment, not water)"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -64,7 +96,7 @@
                 "SIMPLIFIED": "For depth-averaged: f_light = (Io/Iopt) * exp(1 - Io/Iopt) * (1 - exp(-Ke*H)) / (Ke*H)",
                 "NOTES": [
                     "Io = surface PAR (typically 40-50% of total solar radiation)",
-                    "Iopt = optimal light intensity for growth (typically 200-400 \u00b5E/m\u00b2/s)",
+                    "Iopt = optimal light intensity for growth (typically 200-400 µE/m²/s)",
                     "Ke = light extinction coefficient (0.1-3.0 /m depending on turbidity)",
                     "H = water depth (m)"
                 ]
@@ -278,7 +310,7 @@
                     "lambda_g": 0.5,
                     "theta_zoo": 1.08
                 },
-                "_notes": "Ivlev: G = Gmax * (1 - exp(-\u03bb*P)); alternative: Holling Type II or III"
+                "_notes": "Ivlev: G = Gmax * (1 - exp(-λ*P)); alternative: Holling Type II or III"
             },
             "8": {
                 "_name": "zoo_respiration",
@@ -342,7 +374,7 @@
                     "ratio_chla_C": 20.0,
                     "theta_growth": 1.068
                 },
-                "_notes": "ratio_Chla_C = Chla:C in \u00b5g Chla / mg C (typically 10-50, varies with light)"
+                "_notes": "ratio_Chla_C = Chla:C in µg Chla / mg C (typically 10-50, varies with light)"
             },
             "11": {
                 "_name": "chla_loss",

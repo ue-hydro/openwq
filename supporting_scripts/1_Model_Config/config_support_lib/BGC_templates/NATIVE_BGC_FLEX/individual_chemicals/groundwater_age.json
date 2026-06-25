@@ -12,7 +12,7 @@
     },
     "_NOTES": [
         "Groundwater age helps understand flow paths and vulnerability",
-        "Mean age \u2260 point-source age due to mixing",
+        "Mean age ≠ point-source age due to mixing",
         "CFCs and SF6 best for water recharged after 1950s",
         "Tritium useful for bomb-peak (1960s) water",
         "14C for old groundwater (100-40,000 years)",
@@ -46,6 +46,7 @@
             "TRACER_conservative",
             "TRACER_reactive"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {},
         "_LIST_DESCRIPTIONS": {
             "AGE_mean": "Mean groundwater age",
             "AGE_young": "Young water fraction",
@@ -149,7 +150,7 @@
                     "age_threshold": {
                         "value": 18250,
                         "units": "days",
-                        "source": "50 years \u00d7 365 days"
+                        "source": "50 years × 365 days"
                     }
                 }
             },

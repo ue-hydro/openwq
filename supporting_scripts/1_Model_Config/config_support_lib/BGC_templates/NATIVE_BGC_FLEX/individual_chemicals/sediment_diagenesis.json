@@ -34,7 +34,8 @@
             "13": "CH4",
             "14": "CO2",
             "15": "PO4-P",
-            "16": "Fe_P"
+            "16": "Fe_P",
+            "17": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -48,6 +49,34 @@
             "CO2",
             "PO4-P"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "PO4-P": {
+                "into": "Fe_P",
+                "langmuir": {
+                    "qmax_mg/kg": 500,
+                    "KL_L/mg": 0.03,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 50,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.001
+                }
+            },
+            "NH4-N": {
+                "into": "NH4-N_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 200,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 1.2,
+                    "Nfr": 0.8,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "OM_labile": "Labile organic matter",
             "OM_semilabile": "Semi-labile organic matter",
@@ -64,7 +93,8 @@
             "CH4": "Dissolved methane",
             "CO2": "Dissolved carbon dioxide",
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
-            "Fe_P": "Iron-bound phosphorus"
+            "Fe_P": "Iron-bound phosphorus",
+            "NH4-N_sorbed": "Particle-sorbed NH4-N (adsorbed phase; transported with sediment, not water)"
         }
     },
     "CYCLING_FRAMEWORKS": {

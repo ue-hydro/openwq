@@ -39,6 +39,73 @@
             "TSS",
             "DOC"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "Cu_diss": {
+                "into": "Cu_part",
+                "langmuir": {
+                    "qmax_mg/kg": 13000,
+                    "KL_L/mg": 0.1,
+                    "Kadsdes_1/s": 0.004
+                },
+                "freundlich": {
+                    "Kfr": 1500,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.002
+                }
+            },
+            "Zn_diss": {
+                "into": "Zn_part",
+                "langmuir": {
+                    "qmax_mg/kg": 6000,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.003
+                },
+                "freundlich": {
+                    "Kfr": 600,
+                    "Nfr": 0.7,
+                    "Kadsdes_1/s": 0.002
+                }
+            },
+            "Pb_diss": {
+                "into": "Pb_part",
+                "langmuir": {
+                    "qmax_mg/kg": 16000,
+                    "KL_L/mg": 0.2,
+                    "Kadsdes_1/s": 0.005
+                },
+                "freundlich": {
+                    "Kfr": 2000,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.002
+                }
+            },
+            "Cd_diss": {
+                "into": "Cd_part",
+                "langmuir": {
+                    "qmax_mg/kg": 5000,
+                    "KL_L/mg": 0.04,
+                    "Kadsdes_1/s": 0.003
+                },
+                "freundlich": {
+                    "Kfr": 500,
+                    "Nfr": 0.7,
+                    "Kadsdes_1/s": 0.002
+                }
+            },
+            "Hg_diss": {
+                "into": "Hg_part",
+                "langmuir": {
+                    "qmax_mg/kg": 10000,
+                    "KL_L/mg": 0.5,
+                    "Kadsdes_1/s": 0.005
+                },
+                "freundlich": {
+                    "Kfr": 3000,
+                    "Nfr": 0.7,
+                    "Kadsdes_1/s": 0.003
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "Cu_diss": "Dissolved copper",
             "Cu_part": "Particulate copper",

@@ -35,6 +35,21 @@
             "PartP",
             "SS"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "SP": {
+                "into": "PartP",
+                "langmuir": {
+                    "qmax_mg/kg": 500,
+                    "KL_L/mg": 0.03,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 50,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "IN": "Inorganic nitrogen (NO3 + NH4)",
             "ON": "Organic nitrogen",

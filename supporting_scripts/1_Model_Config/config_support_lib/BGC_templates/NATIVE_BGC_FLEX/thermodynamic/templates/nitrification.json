@@ -2,8 +2,8 @@
     "_DESCRIPTION": "Nitrification with Thermodynamic Control",
     "_REFERENCE": "Jin & Bethke (2007); Blackburne et al. (2007)",
     "_PATHWAYS": {
-        "AMMONIA_OXIDATION": "NH4-N+ + 1.5 O2 -> NO2-N- + 2 H+ + H2O (\u0394G\u00b0 = -275 kJ/mol)",
-        "NITRITE_OXIDATION": "NO2-N- + 0.5 O2 -> NO3-N- (\u0394G\u00b0 = -74 kJ/mol)"
+        "AMMONIA_OXIDATION": "NH4-N+ + 1.5 O2 -> NO2-N- + 2 H+ + H2O (ΔG° = -275 kJ/mol)",
+        "NITRITE_OXIDATION": "NO2-N- + 0.5 O2 -> NO3-N- (ΔG° = -74 kJ/mol)"
     },
     "_DELTA_G0": "Highly exergonic, but requires O2 as electron acceptor",
     "MODULE_NAME": "NATIVE_BGC_FLEX",
@@ -14,7 +14,8 @@
             "3": "NO3-N",
             "4": "DO",
             "5": "X_aob",
-            "6": "X_nob"
+            "6": "X_nob",
+            "7": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NH4-N",
@@ -22,13 +23,29 @@
             "NO3-N",
             "DO"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "NH4-N": {
+                "into": "NH4-N_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 200,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 1.2,
+                    "Nfr": 0.8,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "NH4-N": "Ammonium nitrogen",
             "NO2-N": "Nitrite nitrogen",
             "NO3-N": "Nitrate nitrogen",
             "DO": "Dissolved oxygen",
             "X_aob": "Ammonia-oxidizing bacteria biomass",
-            "X_nob": "Nitrite-oxidizing bacteria biomass"
+            "X_nob": "Nitrite-oxidizing bacteria biomass",
+            "NH4-N_sorbed": "Particle-sorbed NH4-N (adsorbed phase; transported with sediment, not water)"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -49,7 +66,7 @@
                 "R_kJ": 0.008314,
                 "NOTES": [
                     "Nitrification is highly exergonic",
-                    "F_T \u2248 1.0 for both steps under normal conditions",
+                    "F_T ≈ 1.0 for both steps under normal conditions",
                     "O2 is required - strict aerobic process",
                     "Two-step process: AOB and NOB communities"
                 ]
@@ -74,7 +91,7 @@
                     "Km_NH4N": 0.5,
                     "Km_O2_aob": 0.3
                 },
-                "_notes": "F_T \u2248 1.0, process is O2 limited, not thermodynamically limited"
+                "_notes": "F_T ≈ 1.0, process is O2 limited, not thermodynamically limited"
             },
             "2": {
                 "_name": "nitrite_oxidation",
@@ -97,7 +114,7 @@
                     "Km_O2_nob": 0.5
                 },
                 "_notes": [
-                    "F_T = 1 - exp(-29/(2*0.008314*293)) = 1 - exp(-5.96) \u2248 1.0",
+                    "F_T = 1 - exp(-29/(2*0.008314*293)) = 1 - exp(-5.96) ≈ 1.0",
                     "Less exergonic than ammonia oxidation",
                     "NOB are sensitive to low O2 and free ammonia"
                 ]

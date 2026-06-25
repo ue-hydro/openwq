@@ -13,7 +13,8 @@
             "7": "DO",
             "8": "N2O_atm_loss",
             "9": "N2_loss",
-            "10": "NH3_loss"
+            "10": "NH3_loss",
+            "11": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NH4-N",
@@ -24,6 +25,21 @@
             "N2O",
             "DO"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "NH4-N": {
+                "into": "NH4-N_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 200,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 1.2,
+                    "Nfr": 0.8,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "NH4-N": "Ammonium nitrogen",
             "NO3-N": "Nitrate nitrogen",
@@ -34,7 +50,8 @@
             "DO": "Dissolved oxygen (required for O2-limited reactions)",
             "N2O_atm_loss": "N2O loss to atmosphere/sediment",
             "N2_loss": "N2 loss to atmosphere/sediment",
-            "NH3_loss": "NH3 loss to atmosphere/sediment"
+            "NH3_loss": "NH3 loss to atmosphere/sediment",
+            "NH4-N_sorbed": "Particle-sorbed NH4-N (adsorbed phase; transported with sediment, not water)"
         }
     },
     "CYCLING_FRAMEWORKS": {

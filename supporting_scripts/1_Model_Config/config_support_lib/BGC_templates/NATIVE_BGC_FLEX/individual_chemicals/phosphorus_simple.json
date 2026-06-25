@@ -14,6 +14,21 @@
             "ORG_P",
             "PART_P"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "PO4-P": {
+                "into": "PART_P",
+                "langmuir": {
+                    "qmax_mg/kg": 500,
+                    "KL_L/mg": 0.03,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 50,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
             "ORG_P": "Organic phosphorus (dissolved + particulate)",

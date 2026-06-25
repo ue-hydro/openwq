@@ -26,6 +26,7 @@
             "DO",
             "ALGAE_C"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {},
         "_LIST_DESCRIPTIONS": {
             "DOC_labile": "Labile dissolved organic carbon",
             "DOC_refrac": "Refractory dissolved organic carbon",

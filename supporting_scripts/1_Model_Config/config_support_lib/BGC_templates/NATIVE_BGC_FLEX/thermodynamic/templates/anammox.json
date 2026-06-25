@@ -11,18 +11,35 @@
             "2": "NO2-N",
             "3": "N2_loss",
             "4": "DO",
-            "5": "X_anammox"
+            "5": "X_anammox",
+            "6": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NH4-N",
             "NO2-N"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "NH4-N": {
+                "into": "NH4-N_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 200,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 1.2,
+                    "Nfr": 0.8,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "NH4-N": "Ammonium nitrogen",
             "NO2-N": "Nitrite nitrogen",
             "N2_loss": "Dinitrogen gas loss (denitrification product)",
             "DO": "Dissolved oxygen",
-            "X_anammox": "Anammox bacteria biomass"
+            "X_anammox": "Anammox bacteria biomass",
+            "NH4-N_sorbed": "Particle-sorbed NH4-N (adsorbed phase; transported with sediment, not water)"
         }
     },
     "CYCLING_FRAMEWORKS": {
@@ -38,8 +55,8 @@
                 "chi": 2,
                 "R_kJ": 0.008314,
                 "NOTES": [
-                    "Anammox is highly exergonic (\u0394G\u00b0 = -357 kJ/mol)",
-                    "F_T \u2248 1.0 under all conditions",
+                    "Anammox is highly exergonic (ΔG° = -357 kJ/mol)",
+                    "F_T ≈ 1.0 under all conditions",
                     "Strict anaerobes - completely inhibited by O2",
                     "Very slow growing organisms (doubling time ~11 days)",
                     "Important in oxygen minimum zones (OMZ) and sediments"

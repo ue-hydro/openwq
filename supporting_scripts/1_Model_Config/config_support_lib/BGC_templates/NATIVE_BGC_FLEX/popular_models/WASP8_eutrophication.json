@@ -25,7 +25,8 @@
             "17": "SED_PON1",
             "18": "SED_PON2",
             "19": "SED_NH4",
-            "20": "N2_loss"
+            "20": "N2_loss",
+            "21": "PO4_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -48,6 +49,34 @@
             "SED_PON2",
             "SED_NH4"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {
+            "NH4": {
+                "into": "SED_NH4",
+                "langmuir": {
+                    "qmax_mg/kg": 200,
+                    "KL_L/mg": 0.05,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 1.2,
+                    "Nfr": 0.8,
+                    "Kadsdes_1/s": 0.001
+                }
+            },
+            "PO4": {
+                "into": "PO4_sorbed",
+                "langmuir": {
+                    "qmax_mg/kg": 500,
+                    "KL_L/mg": 0.03,
+                    "Kadsdes_1/s": 0.002
+                },
+                "freundlich": {
+                    "Kfr": 50,
+                    "Nfr": 0.6,
+                    "Kadsdes_1/s": 0.001
+                }
+            }
+        },
         "_LIST_DESCRIPTIONS": {
             "DO": "Dissolved oxygen",
             "CBOD_fast": "Fast-reacting CBOD (labile)",
@@ -68,7 +97,8 @@
             "SED_PON1": "Sediment labile PON (layer 1)",
             "SED_PON2": "Sediment refractory PON (layer 2)",
             "SED_NH4": "Sediment porewater NH4",
-            "N2_loss": "N2 loss to atmosphere/sediment"
+            "N2_loss": "N2 loss to atmosphere/sediment",
+            "PO4_sorbed": "Particle-sorbed PO4 (adsorbed phase; transported with sediment, not water)"
         }
     },
     "CYCLING_FRAMEWORKS": {

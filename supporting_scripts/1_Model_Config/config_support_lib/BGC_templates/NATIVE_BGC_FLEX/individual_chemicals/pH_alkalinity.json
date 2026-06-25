@@ -39,6 +39,7 @@
             "ACID_strong",
             "DOC_acid"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {},
         "_LIST_DESCRIPTIONS": {
             "ALK": "Alkalinity",
             "DIC": "Dissolved inorganic carbon",

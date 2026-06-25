@@ -2,8 +2,8 @@
     "_DESCRIPTION": "Methanogenesis with Thermodynamic Control",
     "_REFERENCE": "Jin & Bethke (2007); Conrad (1999)",
     "_PATHWAYS": {
-        "ACETOCLASTIC": "CH3COOH -> CH4 + CO2 (\u0394G\u00b0 = -31 kJ/mol)",
-        "HYDROGENOTROPHIC": "4 H2 + CO2 -> CH4 + 2 H2O (\u0394G\u00b0 = -131 kJ/mol at standard, but H2 is limiting)"
+        "ACETOCLASTIC": "CH3COOH -> CH4 + CO2 (ΔG° = -31 kJ/mol)",
+        "HYDROGENOTROPHIC": "4 H2 + CO2 -> CH4 + 2 H2O (ΔG° = -131 kJ/mol at standard, but H2 is limiting)"
     },
     "_DELTA_G0": "-20 kJ/mol e- (lowest in redox ladder - most thermodynamically constrained)",
     "MODULE_NAME": "NATIVE_BGC_FLEX",
@@ -22,6 +22,7 @@
             "CH4",
             "CO2"
         ],
+        "BGC_GENERAL_SORBABLE_SPECIES": {},
         "_LIST_DESCRIPTIONS": {
             "DOC": "Dissolved organic carbon",
             "CH4": "Dissolved methane",
@@ -48,10 +49,10 @@
                 "chi": 2,
                 "R_kJ": 0.008314,
                 "NOTES": [
-                    "Methanogenesis has the lowest \u0394G\u00b0 in the redox ladder",
+                    "Methanogenesis has the lowest ΔG° in the redox ladder",
                     "Only proceeds when all other electron acceptors depleted",
                     "Very sensitive to H2S accumulation (sulfate reducers compete)",
-                    "\u0394G_min for methanogens is lower (~10-15 kJ/mol) than other microbes"
+                    "ΔG_min for methanogens is lower (~10-15 kJ/mol) than other microbes"
                 ]
             },
             "1": {
@@ -80,7 +81,7 @@
                 },
                 "_notes": [
                     "Triple inhibition: O2, NO3-N, and SO4-S all suppress methanogenesis",
-                    "Lower \u0394G_min (11 kJ/mol) reflects methanogen physiology",
+                    "Lower ΔG_min (11 kJ/mol) reflects methanogen physiology",
                     "Slow rate constant reflects slow growth of methanogens"
                 ]
             },
