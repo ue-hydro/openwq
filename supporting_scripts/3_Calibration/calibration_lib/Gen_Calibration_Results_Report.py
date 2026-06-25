@@ -2353,10 +2353,15 @@ def _generate_convergence_plot(
               "yaxis": {"title": f"{obj_fn} ({_better})"},
               "showlegend": True,
               "hovermode": "closest"}
-    # Always offer the log-scale toggle (default linear, so negative KGE/NSE
-    # values still render; switching to log just drops non-positive points).
+    # A log axis can only show strictly-positive values.  KGE/NSE routinely go
+    # negative (poor exploratory evaluations), and on a log scale those points
+    # silently vanish — making the chart look empty.  So only offer the
+    # log-scale toggle when every plotted value is > 0 (e.g. RMSE / |PBIAS|, or
+    # an all-positive skill run); otherwise omit it so it can't blank the plot.
+    _vm = [v for v in metric_vals if v is not None]
+    _use_log = bool(_vm) and all(v > 0 for v in _vm)
     return _plotly_chart(_plot_id("conv"), traces, layout, height=430,
-                         log_axes='y')
+                         log_axes=('y' if _use_log else None))
 
 
 def _generate_param_evolution_plots(
