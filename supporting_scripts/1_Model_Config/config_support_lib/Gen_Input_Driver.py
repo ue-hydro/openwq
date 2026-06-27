@@ -603,7 +603,9 @@ def Gen_Input_Driver(
         si_sediment_compartment: str = "RIVER_NETWORK_REACHES",
         si_bulk_density_kg_m3: float = 1500.0,
         si_layer_thickness_m: float = 1.0,
-        si_species_params: Optional[Dict[str, Dict[str, float]]] = None,
+        # "" -> use the shipped SI_model_parameters/SI_param_database.json;
+        # or point to a custom database with the same structure.
+        si_param_database_filepath: str = "",
 
         # Sink and Source settings
         ss_method: str = "load_from_csv",
@@ -1014,13 +1016,17 @@ def Gen_Input_Driver(
     ###############
 
     if si_module_name != "NONE":
+        # Default to the shipped sorption-parameter database when none provided
+        if not si_param_database_filepath:
+            si_param_database_filepath = os.path.join(
+                script_dir, "SI_model_parameters", "SI_param_database.json")
         simJSON_lib.create_si_module_json(
             si_config_filepath=si_config_filepath,
             json_header_comment=json_header_comment,
             si_module_name=si_module_name,
             si_bulk_density_kg_m3=si_bulk_density_kg_m3,
             si_layer_thickness_m=si_layer_thickness_m,
-            si_species_params=si_species_params
+            si_param_database_filepath=si_param_database_filepath
         )
 
     ###############

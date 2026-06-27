@@ -321,19 +321,17 @@ si_sediment_compartment = "RIVER_NETWORK_REACHES"
 si_bulk_density_kg_m3 = 1500.0    # Sediment bulk density [kg/m³]
 si_layer_thickness_m = 1.0        # Active sediment layer thickness [m]
 
-# Per-species sorption parameters. Set None when si_module_name = "NONE".
-#
-# FREUNDLICH example:
-#   si_species_params = {
-#       "NH4-N": {"Kfr": 0.5, "Nfr": 0.8, "Kadsdes_1_per_s": 1e-6}
-#   }
-#
-# LANGMUIR example:
-#   si_species_params = {
-#       "PO4-P": {"qmax_mg_per_kg": 200.0, "KL_L_per_mg": 0.01,
-#                  "Kadsdes_1_per_s": 1e-6}
-#   }
-si_species_params = None
+# Sorption-parameter database (per-species Langmuir/Freundlich parameters).
+# model_SI is independent of the BGC/model_CH templates: the parameters live in
+# a standalone database, NOT in the BGC template.
+#   ""  -> use the shipped database:
+#          config_support_lib/SI_model_parameters/SI_param_database.json
+#   or  -> set a path to a custom database with the same structure.
+# The database lists SORBABLE_SPECIES (names must match the BGC/CH species) and,
+# per species, a LANGMUIR and a FREUNDLICH parameter block. A copy is placed in
+# the run's openwq_in/ folder, where it can be edited per run. Species listed
+# but absent from the active chemical-species list are skipped automatically.
+si_param_database_filepath = ""
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -19,23 +19,31 @@
 #include "readjson/headerfile_RJSON.hpp"
 
 
-// Parse Freundlich isotherm configuration from JSON
-// JSON format:
+// Parse Freundlich isotherm configuration.
+// Soil properties come from the SI module JSON; the per-species isotherm
+// parameters come from a separate, user-editable database file (independent
+// of the BGC/model_CH templates) pointed to by SI_PARAMETER_DATABASE_FILEPATH.
+//
+// SI module JSON format:
 // {
 //     "MODULE_NAME": "FREUNDLICH",
 //     "SOIL_PROPERTIES": {
 //         "BULK_DENSITY_KG/M3": 1500.0,
 //         "LAYER_THICKNESS_M": 1.0
 //     },
-//     "SPECIES": {
-//         "species_name_1": {
-//             "KFR": 0.5,
-//             "NFR": 0.7,
-//             "KADSDES_1/S": 0.001
-//         },
-//         "species_name_2": { ... }
-//     }
+//     "SI_PARAMETER_DATABASE_FILEPATH": "openwq_in/SI_param_database.json"
 // }
+//
+// Parameter database format (SI_param_database.json):
+// {
+//     "SORBABLE_SPECIES": ["species_name_1", "species_name_2"],
+//     "species_name_1": {
+//         "LANGMUIR":   { ... },
+//         "FREUNDLICH": {"KFR": 0.5, "NFR": 0.7, "KADSDES_1/S": 0.001}
+//     },
+//     "species_name_2": { ... }
+// }
+// Species listed but absent from the active chemical-species list are skipped.
 void OpenWQ_readjson::SetConfigInfo_SIModule_freundlich(
     OpenWQ_json &OpenWQ_json,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
@@ -76,23 +84,50 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_freundlich(
             true);
 
     // ############################
-    // Read per-species parameters
+    // Locate the external sorption-parameter database
+    // model_SI is independent of the BGC/model_CH templates: the per-species
+    // isotherm parameters live in a separate, user-editable database file
+    // pointed to by SI_PARAMETER_DATABASE_FILEPATH in the SI module JSON.
+    // (The key name contains "FILEPATH"/"DATABASE", so its value is NOT
+    //  upper-cased on load and the case-sensitive path is preserved.)
     // ############################
-    json speciesBlock = OpenWQ_utils.RequestJsonKeyVal_json(
+    std::string db_filepath = OpenWQ_utils.RequestJsonKeyVal_json(
         OpenWQ_wqconfig, OpenWQ_output,
-        si_json, "SPECIES",
+        si_json, "SI_PARAMETER_DATABASE_FILEPATH",
         errorMsgIdentifier,
+        true);
+
+    // Load the parameter database (keys/values upper-cased on load)
+    json db_json;
+    OpenWQ_readjson::read_JSON_2class(
+        OpenWQ_wqconfig,
+        OpenWQ_output,
+        OpenWQ_utils,
+        db_json,
+        false,
+        "",
+        db_filepath);
+
+    std::string dbErrId = "SI parameter database '" + db_filepath + "'";
+
+    // List of sorbable species (names match the BGC/CH species names)
+    json sorbable_list = OpenWQ_utils.RequestJsonKeyVal_json(
+        OpenWQ_wqconfig, OpenWQ_output,
+        db_json, "SORBABLE_SPECIES",
+        dbErrId,
         true);
 
     // Get the chemical species list for name-to-index resolution
     const unsigned int num_chem = OpenWQ_wqconfig.cached_num_chem;
     const std::vector<std::string>& chem_list = *OpenWQ_wqconfig.cached_chem_species_list_ptr;
 
-    // Iterate over each species entry in the JSON
+    // ############################
+    // Read per-species Freundlich parameters from the database
+    // ############################
     unsigned int si_species_count = 0;
-    for (auto it = speciesBlock.begin(); it != speciesBlock.end(); ++it) {
+    for (auto it = sorbable_list.begin(); it != sorbable_list.end(); ++it) {
 
-        std::string species_name_upper = it.key();  // Already uppercased by ConvertJSONtext_2upperCase
+        std::string species_name_upper = it->get<std::string>();  // upper-cased on load
 
         // Find matching global species index
         int species_idx = -1;
@@ -103,19 +138,39 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_freundlich(
             }
         }
 
+        // Species not active in this run's chemical list: skip (not an error)
         if (species_idx < 0) {
             msg_string =
-                "<OpenWQ> WARNING (Freundlich SI): Species '"
+                "<OpenWQ> SI (Freundlich): Sorbable species '"
                 + species_name_upper
-                + "' not found in chemical species list. Skipping.";
+                + "' not in the active chemical species list. Skipping.";
             OpenWQ_output.ConsoleLog(
                 OpenWQ_wqconfig, msg_string, true, true);
             continue;
         }
 
-        // Get this species' parameter block
-        json specParams = it.value();
-        std::string specErrId = errorMsgIdentifier + " > SPECIES > " + species_name_upper;
+        // Get this species' database entry
+        if (db_json.find(species_name_upper) == db_json.end()) {
+            msg_string =
+                "<OpenWQ> WARNING (Freundlich SI): No parameter block for species '"
+                + species_name_upper + "' in the database. Skipping.";
+            OpenWQ_output.ConsoleLog(
+                OpenWQ_wqconfig, msg_string, true, true);
+            continue;
+        }
+        json speciesEntry = db_json[species_name_upper];
+
+        // The FREUNDLICH sub-block is required for this isotherm
+        if (speciesEntry.find("FREUNDLICH") == speciesEntry.end()) {
+            msg_string =
+                "<OpenWQ> WARNING (Freundlich SI): Species '" + species_name_upper
+                + "' has no FREUNDLICH block in the database. Skipping.";
+            OpenWQ_output.ConsoleLog(
+                OpenWQ_wqconfig, msg_string, true, true);
+            continue;
+        }
+        json specParams = speciesEntry["FREUNDLICH"];
+        std::string specErrId = dbErrId + " > " + species_name_upper + " > FREUNDLICH";
 
         double Kfr_val = OpenWQ_utils.RequestJsonKeyVal_double(
             OpenWQ_wqconfig, OpenWQ_output,
