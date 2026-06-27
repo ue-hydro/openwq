@@ -108,6 +108,32 @@ def point_in_polygon(lon: float, lat: float,
     return inside
 
 
+def point_to_ring_distance_km(lon: float, lat: float,
+                              ring: List[List[float]]) -> float:
+    """Minimum distance (km) from a ``(lon, lat)`` point to a polygon ring's
+    edges, via a local equirectangular projection — accurate at the sub-100 km
+    scale relevant for matching a gauge to its basin boundary."""
+    if len(ring) < 2:
+        return float('inf')
+    klat = 111.32                                  # km per degree latitude
+    klon = 111.32 * math.cos(math.radians(lat))    # km per degree longitude
+    px, py = lon * klon, lat * klat
+    best = float('inf')
+    for i in range(len(ring) - 1):
+        ax, ay = ring[i][0] * klon, ring[i][1] * klat
+        bx, by = ring[i + 1][0] * klon, ring[i + 1][1] * klat
+        dx, dy = bx - ax, by - ay
+        seg2 = dx * dx + dy * dy
+        if seg2 == 0.0:
+            d = math.hypot(px - ax, py - ay)
+        else:
+            t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / seg2))
+            d = math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+        if d < best:
+            best = d
+    return best
+
+
 def polygon_centroid(rings: List[List[List[float]]]
                      ) -> Optional[Tuple[float, float]]:
     """Area-weighted centroid of a ``(Multi)Polygon`` outer rings.
@@ -304,7 +330,7 @@ def match_stations_to_basins(
         mapping_key: str,
         river_geojson: Optional[dict] = None,
         log: Optional[callable] = None,
-        max_distance_km: Optional[float] = 5.0,
+        max_distance_km: Optional[float] = 1.0,
 ) -> Tuple[Dict[str, str], Set[str]]:
     """Match each station to a basin and designate the pouring-point obs.
 
@@ -376,21 +402,25 @@ def match_stations_to_basins(
     _log(f"  [match] {_n_pip}/{len(station_locations)} stations matched "
          f"via point-in-polygon")
 
-    # 2) Nearest-basin-centroid fallback — BOUNDED by max_distance_km.
-    # Stations beyond the threshold stay unmatched (gray on the map),
-    # which is the right behaviour for gauges that happen to be in the
-    # bounding box but actually sit outside the modelled domain.  When
-    # the caller passes ``max_distance_km=None`` we revert to the
-    # legacy unbounded behaviour for backward compatibility.
-    if _n_pip < len(station_locations) and centroids:
+    # 2) Nearest-basin-BOUNDARY fallback — BOUNDED by max_distance_km.
+    # Distance is measured to the polygon EDGE (not the centroid): an outlet
+    # gauge a few hundred metres outside a *large* basin sits far from the
+    # centroid but right on the boundary, and must still match.  Stations
+    # beyond the threshold stay unmatched (gray on the map) — the right
+    # behaviour for gauges that sit well outside the modelled domain.  The
+    # GRQA clip already filters to within the config buffer of the boundary,
+    # so the default cap is small (1 km); ``max_distance_km=None`` reverts to
+    # unbounded matching.
+    if _n_pip < len(station_locations) and rings_by_fid:
         _n_within = 0
         _n_out = 0
         for sid, (slat, slon) in station_locations.items():
             if sid in station_to_basin:
                 continue
             best_fid, best_dist = None, float('inf')
-            for fid, (clon, clat) in centroids.items():
-                d = haversine(slat, slon, clat, clon)
+            for fid, rings in rings_by_fid.items():
+                d = min((point_to_ring_distance_km(slon, slat, ring)
+                         for ring in rings), default=float('inf'))
                 if d < best_dist:
                     best_dist = d
                     best_fid = fid
@@ -402,9 +432,9 @@ def match_stations_to_basins(
             else:
                 _n_out += 1
         _msg = (f"  [match] {_n_within} stations matched via nearest-basin "
-                f"fallback")
+                f"BOUNDARY fallback")
         if max_distance_km is not None:
-            _msg += f" (within {max_distance_km:.1f} km)"
+            _msg += f" (within {max_distance_km:.1f} km of the boundary)"
         if _n_out:
             _msg += f"; {_n_out} stations beyond threshold left unmatched"
         _log(_msg)
