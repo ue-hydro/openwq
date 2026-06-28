@@ -1927,58 +1927,12 @@ def generate_interactive_setup(
   </div>
 
   <div style="{_subhdr_css}margin-top:1.1rem;">&#128421;&nbsp;On HPC (Apptainer / Singularity)</div>
-  <p style="margin:.1rem 0 .3rem;">The command below <strong>rebuilds the results report
-  on the cluster</strong> from the latest on-disk state (it reads <code>results/</code>;
-  it does <em>not</em> run the model), then pulls <strong>just the self-contained
-  report</strong> back to your laptop. It works <strong>even while the job is still
-  running</strong> &mdash; just like a local <code>--report</code> &mdash; so you don't
-  have to wait for the run to finish. Open it locally.</p>
-  <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
-       background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
-       border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
-    <strong style="color:#1d4ed8;">&#8505; Run anytime &mdash; even while the job is still running.</strong>
-    Rebuilds the report on the cluster, then copies <strong>only the self-contained results report</strong> (model-vs-obs time
-    series + metrics, every plot embedded). It <strong>does not pull the
-    <code>results/</code> folder</strong>, so it can never overwrite a local run's
-    data, and it <strong>asks before overwriting</strong> an existing report of the
-    same name. A failed run? An optional one-liner in the snippet pulls the logs
-    (<code>calibration.log</code> + SLURM <code>.out</code>) into a separate
-    <code>hpc_diagnostics/</code> folder. Set where to save it below (defaults to your
-    local calibration folder); the command updates as you edit it.
-  </div>
-  <div style="margin:.15rem 0 .45rem;font-size:.74rem;">
-    <label for="fetch_dest" style="display:block;margin-bottom:.2rem;color:var(--text2);">
-      Save results to (local folder):</label>
-    <input class="form-input" type="text" id="fetch_dest" name="fetch_dest"
-      value="{html_lib.escape(_save_dir)}"
-      style="width:100%;box-sizing:border-box;font-size:.72rem;font-family:'JetBrains Mono',monospace;"/>
-  </div>
-  <div style="position:relative;margin:.2rem 0 .3rem;">
-    <button onclick="copyHpcRun(this,'hpcRunFetch')"
-      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
-      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
-      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
-    <pre id="hpcRunFetch" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
-      border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
-      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
-  </div>
+  <p style="margin:.1rem 0 .35rem;font-size:.74rem;color:var(--text2);line-height:1.5;">After you submit
+  the job (step&nbsp;3), run these from your laptop to monitor it and fetch results &mdash; most work
+  <strong>even while the job is still running</strong>.</p>
 
-  <div style="margin:.6rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
-    <strong>Open the report you just pulled</strong> (locally).</div>
-  <div style="position:relative;margin:.2rem 0 .3rem;">
-    <button onclick="copyHpcRun(this,'hpcRunOpen')"
-      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
-      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
-      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
-    <pre id="hpcRunOpen" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
-      border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
-      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
-  </div>
-
-  <div style="margin:.6rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
-    <strong>Check job status</strong> &mdash; lists your jobs (queued / running); note the JOBID.</div>
+  <div style="margin:.5rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>1) Check job status</strong> &mdash; lists your jobs (queued / running); note the JOBID.</div>
   <div style="position:relative;margin:.2rem 0 .3rem;">
     <button onclick="copyHpcRun(this,'hpcRunStatus')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -1998,7 +1952,7 @@ def generate_interactive_setup(
       style="width:100%;box-sizing:border-box;font-size:.72rem;font-family:'JetBrains Mono',monospace;"/>
   </div>
   <div style="margin:.15rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
-    <strong>Open the SLURM output</strong> (<code>.out</code>) for that job &mdash; pulls it locally and opens it.</div>
+    <strong>2) Open the SLURM output</strong> (<code>.out</code>) for that job &mdash; pulls it locally and opens it.</div>
   <div style="position:relative;margin:.2rem 0 .3rem;">
     <button onclick="copyHpcRun(this,'hpcRunSlurmOut')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -2011,7 +1965,7 @@ def generate_interactive_setup(
   </div>
 
   <div style="margin:.6rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
-    <strong>Cancel the job</strong> on the cluster (uses the SLURM job ID above).</div>
+    <strong>3) Cancel the job</strong> on the cluster (uses the SLURM job ID above).</div>
   <div style="position:relative;margin:.2rem 0 .3rem;">
     <button onclick="copyHpcRun(this,'hpcRunCancel')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -2023,8 +1977,48 @@ def generate_interactive_setup(
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
-  <div style="margin:.6rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
-    <strong>Open a shell in this basin folder</strong> on the cluster (browse <code>results/</code>, etc.).</div>
+  <div style="margin:.7rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>4) Rebuild + pull the results report.</strong> Rebuilds it on the cluster from the latest
+    <code>results/</code> (does <em>not</em> run the model), then pulls the self-contained report to
+    your laptop &mdash; works even mid-run, like a local <code>--report</code>.</div>
+  <div style="margin:.1rem 0 .35rem;padding:.4rem .6rem;font-size:.72rem;
+       background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
+       border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
+    <strong style="color:#1d4ed8;">&#8505; Run anytime, even mid-run.</strong>
+    Pulls only the self-contained report (every plot embedded), never the <code>results/</code>
+    folder, and asks before overwriting. Set the local save folder below.</div>
+  <div style="margin:.15rem 0 .45rem;font-size:.74rem;">
+    <label for="fetch_dest" style="display:block;margin-bottom:.2rem;color:var(--text2);">
+      Save results to (local folder):</label>
+    <input class="form-input" type="text" id="fetch_dest" name="fetch_dest"
+      value="{html_lib.escape(_save_dir)}"
+      style="width:100%;box-sizing:border-box;font-size:.72rem;font-family:'JetBrains Mono',monospace;"/>
+  </div>
+  <div style="position:relative;margin:.2rem 0 .3rem;">
+    <button onclick="copyHpcRun(this,'hpcRunFetch')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunFetch" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+  <div style="margin:.45rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>Open the pulled report</strong> locally.</div>
+  <div style="position:relative;margin:.2rem 0 .3rem;">
+    <button onclick="copyHpcRun(this,'hpcRunOpen')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunOpen" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <div style="margin:.7rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>5) Open a shell in this basin folder</strong> on the cluster (browse <code>results/</code>, etc.).</div>
   <div style="position:relative;margin:.2rem 0 .3rem;">
     <button onclick="copyHpcRun(this,'hpcRunOpenFolder')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -2037,7 +2031,7 @@ def generate_interactive_setup(
   </div>
 
   <details style="margin:.7rem 0 .15rem;">
-  <summary style="cursor:pointer;font-size:.74rem;color:var(--text2);font-weight:600;line-height:1.5;">Optional &mdash; pull the full <code>results/</code> folder</summary>
+  <summary style="cursor:pointer;font-size:.74rem;color:var(--text2);font-weight:600;line-height:1.5;">6) Optional &mdash; pull the full <code>results/</code> folder</summary>
   <div style="margin:.3rem 0 .15rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
     Raw best parameters, matched data, convergence &amp; correlation plots, history JSONs.
     It writes into <code>&lt;folder&gt;/results</code> and <strong>asks before
