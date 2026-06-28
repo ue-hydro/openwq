@@ -1927,15 +1927,17 @@ def generate_interactive_setup(
   </div>
 
   <div style="{_subhdr_css}margin-top:1.1rem;">&#128421;&nbsp;On HPC (Apptainer / Singularity)</div>
-  <p style="margin:.1rem 0 .3rem;">The SLURM job (step&nbsp;3) writes the results report
-  <em>on the cluster</em> when the calibration completes. <strong>After the job
-  finishes</strong>, pull <strong>just the self-contained report</strong> back to your
-  laptop with the command below, then open it locally.</p>
+  <p style="margin:.1rem 0 .3rem;">The command below <strong>rebuilds the results report
+  on the cluster</strong> from the latest on-disk state (it reads <code>results/</code>;
+  it does <em>not</em> run the model), then pulls <strong>just the self-contained
+  report</strong> back to your laptop. It works <strong>even while the job is still
+  running</strong> &mdash; just like a local <code>--report</code> &mdash; so you don't
+  have to wait for the run to finish. Open it locally.</p>
   <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
        background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
        border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
-    <strong style="color:#1d4ed8;">&#8505; Run when the job completes.</strong>
-    Copies <strong>only the self-contained results report</strong> (model-vs-obs time
+    <strong style="color:#1d4ed8;">&#8505; Run anytime &mdash; even while the job is still running.</strong>
+    Rebuilds the report on the cluster, then copies <strong>only the self-contained results report</strong> (model-vs-obs time
     series + metrics, every plot embedded). It <strong>does not pull the
     <code>results/</code> folder</strong>, so it can never overwrite a local run's
     data, and it <strong>asks before overwriting</strong> an existing report of the
@@ -1962,9 +1964,82 @@ def generate_interactive_setup(
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
-  <div style="margin:.7rem 0 .15rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
-    <strong>Optional &mdash; pull the full <code>results/</code> folder</strong> (raw
-    best parameters, matched data, convergence &amp; correlation plots, history JSONs).
+  <div style="margin:.6rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>Open the report you just pulled</strong> (locally).</div>
+  <div style="position:relative;margin:.2rem 0 .3rem;">
+    <button onclick="copyHpcRun(this,'hpcRunOpen')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunOpen" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <div style="margin:.6rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>Check job status</strong> &mdash; lists your jobs (queued / running); note the JOBID.</div>
+  <div style="position:relative;margin:.2rem 0 .3rem;">
+    <button onclick="copyHpcRun(this,'hpcRunStatus')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunStatus" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <div style="margin:.6rem 0 .12rem;font-size:.74rem;">
+    <label for="slurm_jobid" style="display:block;margin-bottom:.2rem;color:var(--text2);">
+      SLURM job ID (from <code>squeue --me</code>):</label>
+    <input class="form-input" type="text" id="slurm_jobid" name="slurm_jobid"
+      value="" placeholder="e.g. 12345678"
+      style="width:100%;box-sizing:border-box;font-size:.72rem;font-family:'JetBrains Mono',monospace;"/>
+  </div>
+  <div style="margin:.15rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>Open the SLURM output</strong> (<code>.out</code>) for that job &mdash; pulls it locally and opens it.</div>
+  <div style="position:relative;margin:.2rem 0 .3rem;">
+    <button onclick="copyHpcRun(this,'hpcRunSlurmOut')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunSlurmOut" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <div style="margin:.6rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>Cancel the job</strong> on the cluster (uses the SLURM job ID above).</div>
+  <div style="position:relative;margin:.2rem 0 .3rem;">
+    <button onclick="copyHpcRun(this,'hpcRunCancel')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunCancel" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <div style="margin:.6rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    <strong>Open a shell in this basin folder</strong> on the cluster (browse <code>results/</code>, etc.).</div>
+  <div style="position:relative;margin:.2rem 0 .3rem;">
+    <button onclick="copyHpcRun(this,'hpcRunOpenFolder')"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.25);color:#e2e8f0;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
+    <pre id="hpcRunOpenFolder" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <details style="margin:.7rem 0 .15rem;">
+  <summary style="cursor:pointer;font-size:.74rem;color:var(--text2);font-weight:600;line-height:1.5;">Optional &mdash; pull the full <code>results/</code> folder</summary>
+  <div style="margin:.3rem 0 .15rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
+    Raw best parameters, matched data, convergence &amp; correlation plots, history JSONs.
     It writes into <code>&lt;folder&gt;/results</code> and <strong>asks before
     overwriting</strong> if that folder is not empty &mdash; so it won't silently
     clobber a local run's results.</div>
@@ -1978,6 +2053,7 @@ def generate_interactive_setup(
       border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
+  </details>
 </div>
 </div>
 """)
@@ -4186,6 +4262,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.hpc_openwq_dir = _gv('hpc_openwq_dir', '');
     s.hpc_exe = _gv('hpc_exe', '');
     s.fetch_dest = _gv('fetch_dest', '');   // local folder to save the fetched results report (step 4, HPC)
+    s.slurm_jobid = _gv('slurm_jobid', '');  // SLURM job id (user types it from `squeue --me`) for the .out snippet
 
     var speciesCbs = document.querySelectorAll('.species-cb');
     var species = [];
@@ -5307,10 +5384,38 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var _job = (s && s.slurm_job_name && String(s.slurm_job_name).trim())
                ? String(s.slurm_job_name).trim() : 'openwq_calib';
     var _report = _stem + '_results_report.html';
-    L.push('# Copy ONLY the self-contained calibration RESULTS report (interactive HTML with');
-    L.push('# every plot embedded) from the HPC to your laptop.  It deliberately does NOT pull');
-    L.push('# the results/ folder, so it can never clobber a LOCAL run\'s results/ in this folder.');
-    L.push('# Run this AFTER the job finishes.');
+    var _run = _stem + '_run.py';
+    var _owqDir = (s.hpc_openwq_dir || '').replace(/\/+$/, '') || '/path/to/openwq';
+    // Step 1: rebuild the report ON the cluster from the latest on-disk state.
+    // It reads results/ and rebuilds the HTML; it does NOT run the model, so it
+    // works even while the job is still RUNNING (like a local `--report`).
+    L.push('# 1) Rebuild the results report ON the cluster from the latest on-disk state.');
+    L.push('#    Works even while the job is still RUNNING (reads results/, does NOT run the');
+    L.push('#    model) - just like a local "' + _run + ' --report" in a second terminal.');
+    L.push('OWQ_REPO="' + _owqDir + '"' + (s.hpc_openwq_dir ? '' : '   # <-- EDIT: your cloned openWQ'));
+    L.push('ssh "$HPC_USER@$HPC_HOST" "HPC_BASE=\'$HPC_BASE\' OWQ_REPO=\'$OWQ_REPO\' bash -l -s" <<\'EOF\'');
+    L.push('set -euo pipefail');
+    if (s.slurm_modules) {
+      L.push('# Same python your job uses (Execution-tab "Modules to load"):');
+      L.push(s.slurm_modules);
+    } else {
+      L.push('# <-- EDIT: load the SAME python your job uses, e.g.');
+      L.push('# module load python && source "$HPC_BASE/calib_venv/bin/activate"');
+    }
+    L.push('# Locate calibration_lib in your HPC openWQ clone (run-script uses it from there).');
+    L.push('for _c in "$OWQ_REPO/supporting_scripts/3_Calibration" "$OWQ_REPO/openwq/supporting_scripts/3_Calibration"; do');
+    L.push('  [ -d "$_c/calibration_lib" ] && export OWQ_CALIB_LIB_DIR="$_c" && break');
+    L.push('done');
+    L.push(': "${OWQ_CALIB_LIB_DIR:?calibration_lib not found under $OWQ_REPO - check the openWQ clone path}"');
+    L.push('cd "$HPC_BASE' + _rel + '"');
+    L.push('PY="$(command -v python3 || command -v python)"');
+    L.push(': "${PY:?no python3/python on PATH - load a Python module / activate a venv above}"');
+    L.push('"$PY" "' + _run + '" --report');
+    L.push('EOF');
+    L.push('');
+    L.push('# 2) Copy the freshly-rebuilt self-contained RESULTS report (interactive HTML, every');
+    L.push('# plot embedded) from the HPC to your laptop.  It deliberately does NOT pull the');
+    L.push('# results/ folder, so it can never clobber a LOCAL run\'s results/ in this folder.');
     L.push('DEST="' + _local + '"');
     L.push('REPORT="' + _report + '"');
     L.push('SRC="$HPC_USER@$HPC_HOST:$HPC_BASE' + _rel + '/$REPORT"');
@@ -5380,6 +5485,57 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('esac');
     return L.join('\n');
   }
+  function buildHpcOpenLocal(s) {
+    var _stem = (typeof REPORT_STEM !== 'undefined' && REPORT_STEM) ? REPORT_STEM : 'calibration';
+    var _local = ((s && s.fetch_dest && s.fetch_dest.trim())
+                  || (HPC && HPC.work_dir) || '<your calibration work dir>').replace(/\/+$/, '');
+    var _report = _stem + '_results_report.html';
+    return '# Open the report you just pulled (macOS first, else Linux).\n'
+         + 'open "' + _local + '/' + _report + '" 2>/dev/null || xdg-open "' + _local + '/' + _report + '"';
+  }
+  function buildHpcStatus(s) {
+    var L = _hpcVars(s);
+    L.push('');
+    L.push('# Your jobs on the cluster (queued / running).  Find this run JOBID here, then');
+    L.push('# paste it into the "SLURM job ID" field below to fetch its .out.');
+    L.push('ssh "$HPC_USER@$HPC_HOST" "squeue --me"');
+    return L.join('\n');
+  }
+  function buildHpcSlurmOut(s) {
+    var L = _hpcVars(s);
+    L.push('');
+    var _job = (s && s.slurm_job_name && String(s.slurm_job_name).trim())
+               ? String(s.slurm_job_name).trim() : 'openwq_calib';
+    var _jid = (s && s.slurm_jobid && String(s.slurm_jobid).trim())
+               ? String(s.slurm_jobid).trim() : '<JOBID-from-squeue>';
+    var _local = ((s && s.fetch_dest && s.fetch_dest.trim())
+                  || (HPC && HPC.work_dir) || '<your calibration work dir>').replace(/\/+$/, '');
+    L.push('# Pull this job SLURM .out (model crashes / python tracebacks) to your laptop + open it.');
+    L.push('# Get the JOBID from "squeue --me" above and enter it in the "SLURM job ID" field.');
+    L.push('DEST="' + _local + '"');
+    L.push('OUT="' + _job + '_' + _jid + '.out"');
+    L.push('rsync -avz "$HPC_USER@$HPC_HOST:$HPC_BASE/$OUT" "$DEST/" \\');
+    L.push('  && { open "$DEST/$OUT" 2>/dev/null || xdg-open "$DEST/$OUT" 2>/dev/null || ${PAGER:-less} "$DEST/$OUT"; }');
+    return L.join('\n');
+  }
+  function buildHpcCancel(s) {
+    var L = _hpcVars(s);
+    L.push('');
+    var _jid = (s && s.slurm_jobid && String(s.slurm_jobid).trim())
+               ? String(s.slurm_jobid).trim() : '<JOBID-from-squeue>';
+    L.push('# Cancel this job on the cluster (JOBID from "squeue --me" / the field above).');
+    L.push('ssh "$HPC_USER@$HPC_HOST" "scancel ' + _jid + '"');
+    return L.join('\n');
+  }
+  function buildHpcOpenFolder(s) {
+    var L = _hpcVars(s);
+    L.push('');
+    var _rel = (HPC && HPC.work_dir) ? _owqRelToRoot(HPC.work_dir) : '';
+    L.push('# SSH in and drop into this basin calibration folder (ls / cat results/, tail the .out, ...).');
+    L.push('# You land in a live shell already in the folder; type  exit  to come back.');
+    L.push('ssh -t "$HPC_USER@$HPC_HOST" "cd $HPC_BASE' + _rel + ' && exec bash -l"');
+    return L.join('\n');
+  }
   function updateHpcRun(state) {
     var s = state || collectFormState();
     var e = document.getElementById('hpcRunEnv');    if (e) e.textContent = buildHpcEnv(s);
@@ -5388,6 +5544,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var b = document.getElementById('hpcRunSubmit'); if (b) b.textContent = buildHpcSubmit(s);
     var fch = document.getElementById('hpcRunFetch'); if (fch) fch.textContent = buildHpcFetch(s);
     var frs = document.getElementById('hpcRunFetchResults'); if (frs) frs.textContent = buildHpcFetchResults(s);
+    var hop = document.getElementById('hpcRunOpen');       if (hop) hop.textContent = buildHpcOpenLocal(s);
+    var hst = document.getElementById('hpcRunStatus');     if (hst) hst.textContent = buildHpcStatus(s);
+    var hso = document.getElementById('hpcRunSlurmOut');   if (hso) hso.textContent = buildHpcSlurmOut(s);
+    var hcn = document.getElementById('hpcRunCancel');     if (hcn) hcn.textContent = buildHpcCancel(s);
+    var hof = document.getElementById('hpcRunOpenFolder'); if (hof) hof.textContent = buildHpcOpenFolder(s);
     // Keep the "expected .sif location" warning in sync with the HPC sif field.
     var sp = document.getElementById('sifExpectedPath');
     if (sp) sp.textContent = (s.sif_hpc && String(s.sif_hpc).trim())
