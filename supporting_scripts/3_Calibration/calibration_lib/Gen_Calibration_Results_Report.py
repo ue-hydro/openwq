@@ -91,6 +91,7 @@ def generate_results_report(
     matched_data: Optional[Any] = None,
     report_stem: Optional[str] = None,
     in_progress: bool = False,
+    defer_heavy_plots: bool = False,
 ) -> Optional[str]:
     """
     Generate the calibration results HTML report.
@@ -454,23 +455,39 @@ def generate_results_report(
             # calibrated species (driven by matched_data; independent of the
             # numeric performance-metrics table above).  The "Run with Best
             # Parameters" snippet is appended at the very END of the report.
-            try:
-                _ts_section = _build_calibrated_timeseries_section(
-                    matched_data, calibration_settings, model_config,
-                    output_dir, n_evals=n_evals)
-            except Exception as _e:
-                logger.warning(f"Time-series section skipped: {_e}")
-                _ts_section = ""
-            if _ts_section:
-                H.append(_ts_section)
-            # Combined calibration + validation best-fit (best params re-run
-            # over the validation period; produced automatically when a run
-            # completes).  Shows a placeholder until that data exists.
-            try:
-                H.append(_build_validation_section(
-                    output_dir, calibration_settings, model_config))
-            except Exception as _e:
-                logger.warning(f"Validation section skipped: {_e}")
+            if defer_heavy_plots:
+                # Light / interim mode (per-evaluation refresh during a long
+                # calibration).  The observed-vs-simulated section reads and
+                # processes the FULL per-reach simulated series (the report's
+                # heaviest work, and it grows with stations x evaluations), so we
+                # skip it here and point the user at the on-demand `--report`
+                # (or the automatic end-of-run report), which builds it once.
+                H.append(_build_not_run_notice(
+                    "best-params", "Observed vs simulated",
+                    "Full observed-vs-simulated time series, scatter and "
+                    "validation plots are generated on demand to keep the "
+                    "calibration fast &mdash; run the calibration script with "
+                    "<code>--report</code>, or wait for the automatic "
+                    "end-of-run report, to see them.",
+                    status="&#9889; Deferred for speed.", colour="#3b82f6"))
+            else:
+                try:
+                    _ts_section = _build_calibrated_timeseries_section(
+                        matched_data, calibration_settings, model_config,
+                        output_dir, n_evals=n_evals)
+                except Exception as _e:
+                    logger.warning(f"Time-series section skipped: {_e}")
+                    _ts_section = ""
+                if _ts_section:
+                    H.append(_ts_section)
+                # Combined calibration + validation best-fit (best params re-run
+                # over the validation period; produced automatically when a run
+                # completes).  Shows a placeholder until that data exists.
+                try:
+                    H.append(_build_validation_section(
+                        output_dir, calibration_settings, model_config))
+                except Exception as _e:
+                    logger.warning(f"Validation section skipped: {_e}")
         elif in_progress and _mode in ("both", "calibration"):
             H.append(_build_not_run_notice(
                 "best-params", "Calibration",
@@ -2858,8 +2875,18 @@ def _gray_overlay(all_sim, species, pd, max_g=300, max_pts=200):
     if not (isinstance(all_sim, pd.DataFrame) and not all_sim.empty
             and 'eval_id' in all_sim.columns):
         return None, []
-    asp = all_sim[all_sim['species'].astype(str) == str(species)]
-    if asp.empty:
+    # Split all_sim by species ONCE per frame (it can be 10M+ rows) and cache it
+    # on the frame's id: re-running `.astype(str) == species` on every species
+    # call was a second multi-minute cost (each full pass is ~30s under Rosetta).
+    _cache = _gray_overlay.__dict__.setdefault('_by_sp', {})
+    _by_sp = _cache.get(id(all_sim))
+    if _by_sp is None:
+        _by_sp = {str(k): g for k, g in
+                  all_sim.groupby(all_sim['species'].astype(str), sort=False)}
+        _cache.clear()                 # keep only the most recent frame's split
+        _cache[id(all_sim)] = _by_sp
+    asp = _by_sp.get(str(species))
+    if asp is None or asp.empty:
         return None, []
     eids = sorted(asp['eval_id'].unique())
     if len(eids) > max_g:                           # sample to keep it light
@@ -3030,6 +3057,15 @@ def _generate_timeseries_charts(matched_data, output_dir,
     # it ties to the gray-overlay "sim N" lines.
     _best_lbl = (f"best fit (sim {int(best_eval)})"
                  if best_eval is not None else "best fit")
+    # Per-station/reach colour palette.  When more than one reach/HRU is shown,
+    # each station gets its own colour, used for BOTH its observations and its
+    # best-fit line on the left time-series AND its markers on the right
+    # obs-vs-sim scatter, so a station is the same colour across both panels.
+    _STN_PAL = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
+                "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
+                "#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD",
+                "#8C564B", "#E377C2", "#BCBD22", "#17BECF", "#393B79",
+                "#637939", "#8C6D31", "#843C39", "#7B4173"]
     blocks = []
 
     for species in species_list:
@@ -3044,10 +3080,29 @@ def _generate_timeseries_charts(matched_data, output_dir,
         n_reaches = len(reach_ids)
 
         ts_traces, sc_traces, all_v = [], [], []
-        for rid in reach_ids:
+        _multi = n_reaches > 1
+        # Pre-slice the (potentially 10M+ row) simulated frame to THIS species
+        # ONCE and group it by reach ONCE.  The old code re-filtered the FULL
+        # frame with `.astype(str) == species` (and again per reach) INSIDE the
+        # reach loop -> O(reaches x rows) string conversions, the report's main
+        # cost (minutes under Rosetta on long multi-reach runs).
+        _sp_groups, _sp_sim_all = {}, None
+        if _has_sim and simulated_data is not None and not simulated_data.empty:
+            _sp_sim_all = simulated_data[
+                simulated_data['species'].astype(str) == str(species)]
+            if 'reach_id' in _sp_sim_all.columns:
+                _sp_groups = {str(k): g for k, g in _sp_sim_all.groupby(
+                    _sp_sim_all['reach_id'].astype(str), sort=False)}
+        for _i, rid in enumerate(reach_ids):
             rd = sp if rid is None else sp[sp['reach_id'] == rid]
             if rd.empty:
                 continue
+            # One colour per station/reach (only when several are shown).
+            # A single reach keeps the clear observed=red / best-fit=green scheme.
+            _c = _STN_PAL[_i % len(_STN_PAL)]
+            _obs_c = _c if _multi else "#ef4444"
+            _sim_c = _c if _multi else "#10b981"
+            _obs_edge = "rgba(0,0,0,.45)" if _multi else "#7f1d1d"
             if 'datetime' in rd.columns:
                 rd = rd.sort_values('datetime')
                 x = [str(v) for v in pd.to_datetime(rd['datetime'])]
@@ -3063,12 +3118,10 @@ def _generate_timeseries_charts(matched_data, output_dir,
             # still uses the matched obs-date pairs.  Falls back to the matched
             # simulated values when the full series isn't available.
             x_line, sim_line = x, sim
-            if _has_sim:
-                _sdr = simulated_data[
-                    simulated_data['species'].astype(str) == str(species)]
-                if rid is not None and 'reach_id' in _sdr.columns:
-                    _sdr = _sdr[_sdr['reach_id'].astype(str) == str(rid)]
-                if not _sdr.empty and 'datetime' in _sdr.columns:
+            if _has_sim and _sp_sim_all is not None:
+                _sdr = (_sp_groups.get(str(rid)) if rid is not None
+                        else _sp_sim_all)
+                if _sdr is not None and not _sdr.empty and 'datetime' in _sdr.columns:
                     _sdr = _sdr.sort_values('datetime')
                     _xl = [str(v) for v in pd.to_datetime(_sdr['datetime'])]
                     _yl = [None if v != v else float(v)
@@ -3084,18 +3137,19 @@ def _generate_timeseries_charts(matched_data, output_dir,
             ts_traces.append({
                 "type": "scatter", "mode": "markers", "x": x, "y": obs,
                 "name": f"observed{_sfx}", "legendgroup": f"obs-{label}",
-                "marker": {"size": 7, "symbol": "circle", "color": "#ef4444",
-                           "line": {"width": 0.6, "color": "#7f1d1d"}},
+                "marker": {"size": 7, "symbol": "circle", "color": _obs_c,
+                           "line": {"width": 0.6, "color": _obs_edge}},
                 "hovertemplate": "%{x|%Y-%m-%d}<br>obs %{y:.4g}<extra></extra>"})
             ts_traces.append({
                 "type": "scatter", "mode": "lines", "x": x_line, "y": sim_line,
                 "name": f"{_best_lbl}{_sfx}", "legendgroup": f"best-{label}",
-                "line": {"width": 2, "color": "#10b981"},
+                "line": {"width": 2, "color": _sim_c},
                 "hovertemplate":
                     "%{x|%Y-%m-%d}<br>best %{y:.4g}<extra></extra>"})
             sc_traces.append({
                 "type": "scatter", "mode": "markers", "x": obs, "y": sim,
-                "name": label, "marker": {"size": 7, "opacity": 0.6},
+                "name": label,
+                "marker": {"size": 7, "opacity": 0.6, "color": _c},
                 "hovertemplate": "obs %{x:.4g}<br>sim %{y:.4g}<extra></extra>"})
             all_v += [v for v in obs if v is not None]
             all_v += [v for v in sim_line if v is not None]
@@ -3658,36 +3712,36 @@ def _generate_perf_distribution_plots(
     else:
         n_stations = 1
 
-    # A distribution is only meaningful with >= 2 stations.
-    if n_stations < 2 or not (HAS_MATPLOTLIB and HAS_NUMPY):
-        if n_stations < 2:
-            msg = (
-                'These <strong>cumulative</strong> and '
-                '<strong>non-cumulative</strong> distribution plots summarise '
-                f'how each metric varies across the {feat_plural} that have '
-                'observations. <strong>At least two '
-                f'{feat_plural} with observations are required</strong> to draw '
-                f'them &mdash; this calibration uses a single {feat_singular}, so '
-                'the distributions are not shown. Add observations at one or more '
-                f'additional {feat_plural} to enable this view.'
-            )
-        else:
-            msg = ('Plotting libraries (matplotlib / numpy) are unavailable, so '
-                   'the distribution plots were skipped.')
+    # A distribution is only meaningful with >= 2 stations.  The charts are drawn
+    # client-side with Plotly (interactive, like the rest of the report), so no
+    # server-side plotting library is needed.
+    if n_stations < 2:
+        msg = (
+            'These <strong>cumulative</strong> and '
+            '<strong>non-cumulative</strong> distribution plots summarise '
+            f'how each metric varies across the {feat_plural} that have '
+            'observations. <strong>At least two '
+            f'{feat_plural} with observations are required</strong> to draw '
+            f'them &mdash; this calibration uses a single {feat_singular}, so '
+            'the distributions are not shown. Add observations at one or more '
+            f'additional {feat_plural} to enable this view.'
+        )
         return heading + (
             f'<div class="highlight-box info" style="margin-top:.5rem;">{msg}</div>'
         )
 
     from collections import defaultdict
-    import matplotlib.cm as _cm
 
     by_species: Dict[str, List[Dict]] = defaultdict(list)
     for m in perf_metrics:
         by_species[m.get("species", "unknown")].append(m)
 
     species_list = list(by_species.keys())
-    cmap = _cm.get_cmap("tab10", max(len(species_list), 1))
-    sp_colour = {sp: cmap(i) for i, sp in enumerate(species_list)}
+    # D3 "category10" — one stable colour per species, overlaid in both panels.
+    _SP_PAL = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+               "#8c564b", "#e377c2", "#17becf", "#bcbd22", "#7f7f7f"]
+    sp_colour = {sp: _SP_PAL[i % len(_SP_PAL)]
+                 for i, sp in enumerate(species_list)}
 
     # (dict key, axis label, interpretation hint)
     metric_meta = [
@@ -3706,7 +3760,15 @@ def _generate_perf_distribution_plots(
                 out.append(float(v))
         return out
 
-    _setup_plot_style()
+    def _median(xs):
+        s = sorted(xs)
+        k = len(s)
+        return s[k // 2] if k % 2 else 0.5 * (s[k // 2 - 1] + s[k // 2])
+
+    # Shared chart furniture (matches the obs/sim time-series charts above).
+    _leg = {"orientation": "h", "yanchor": "bottom", "y": 1.02,
+            "xanchor": "left", "x": 0}
+    _mgn = {"l": 60, "r": 20, "t": 86, "b": 52}
     figs_html = []
     for key, label, hint in metric_meta:
         # One value per reach/HRU for this species; need >= 2 to draw.
@@ -3714,47 +3776,64 @@ def _generate_perf_distribution_plots(
         for sp in species_list:
             vals = _clean([mm.get(key) for mm in by_species[sp]])
             if len(vals) >= 2:
-                series.append((sp, np.asarray(sorted(vals), dtype=float)))
+                series.append((sp, sorted(vals)))
         if not series:
             continue
 
-        fig, (axL, axR) = plt.subplots(1, 2, figsize=(12, 4))
+        _multi_sp = len(series) > 1
+        hist_traces, cdf_traces, med_shapes = [], [], []
         for sp, arr in series:
-            c = sp_colour.get(sp)
-            n = int(arr.size)
-            nbins = int(min(12, max(4, np.ceil(np.sqrt(n)))))
-            axL.hist(arr, bins=nbins, histtype="stepfilled", alpha=0.45,
-                     color=c, edgecolor=c, linewidth=1.3,
-                     label=f"{sp} (n={n})")
-            axL.axvline(float(np.median(arr)), color=c, ls="--", lw=1.0,
-                        alpha=0.7)
-            ecdf_y = np.arange(1, n + 1) / float(n)
-            axR.step(arr, ecdf_y, where="post", color=c, linewidth=1.8,
-                     label=f"{sp} (n={n})")
-            axR.plot(arr, ecdf_y, "o", color=c, ms=3.5, alpha=0.75)
+            c = sp_colour.get(sp, "#1f77b4")
+            n = len(arr)
+            nbins = int(min(12, max(4, math.ceil(math.sqrt(n)))))
+            _nm = f"{sp} (n={n})"
+            # Left panel: overlaid histogram (non-cumulative).
+            hist_traces.append({
+                "type": "histogram", "x": arr, "name": _nm,
+                "legendgroup": sp, "opacity": 0.55, "nbinsx": nbins,
+                "marker": {"color": c, "line": {"color": c, "width": 1.3}},
+                "hovertemplate": (f"{label} %{{x}}<br>%{{y}} "
+                                  f"{feat_plural}<extra>{_nm}</extra>")})
+            # Median marker as a dashed vertical line spanning the plot.
+            med = _median(arr)
+            med_shapes.append({
+                "type": "line", "x0": med, "x1": med, "xref": "x",
+                "yref": "paper", "y0": 0, "y1": 1,
+                "line": {"color": c, "dash": "dash", "width": 1.2}})
+            # Right panel: empirical CDF (step, post) + markers.
+            ecdf_y = [(i + 1) / float(n) for i in range(n)]
+            cdf_traces.append({
+                "type": "scatter", "mode": "lines+markers",
+                "x": arr, "y": ecdf_y, "name": _nm, "legendgroup": sp,
+                "line": {"color": c, "width": 2, "shape": "hv"},
+                "marker": {"color": c, "size": 5},
+                "hovertemplate": (f"{label} %{{x}}<br>fraction ≤ %{{y:.2f}}"
+                                  f"<extra>{_nm}</extra>")})
 
-        axL.set_title(f"{label} — non-cumulative (histogram)", fontsize=11)
-        axL.set_xlabel(f"{label}  ({hint})")
-        axL.set_ylabel(f"number of {feat_plural}")
-        axL.grid(True, alpha=0.4)
-
-        axR.set_title(f"{label} — cumulative (CDF)", fontsize=11)
-        axR.set_xlabel(f"{label}  ({hint})")
-        axR.set_ylabel(f"fraction of {feat_plural} ≤ value")
-        axR.set_ylim(0.0, 1.02)
-        axR.grid(True, alpha=0.4)
-
-        if len(series) > 1:
-            axL.legend(fontsize=8)
-            axR.legend(fontsize=8, loc="lower right")
-
-        fig.tight_layout()
-        img = _fig_to_base64(fig)
+        hist_layout = {
+            "title": {"text": f"{label} — non-cumulative (histogram)"},
+            "xaxis": {"title": f"{label}  ({hint})"},
+            "yaxis": {"title": f"number of {feat_plural}"},
+            "barmode": "overlay", "shapes": med_shapes,
+            "showlegend": _multi_sp, "legend": _leg,
+            "hovermode": "closest", "margin": _mgn}
+        cdf_layout = {
+            "title": {"text": f"{label} — cumulative (CDF)"},
+            "xaxis": {"title": f"{label}  ({hint})"},
+            "yaxis": {"title": f"fraction of {feat_plural} ≤ value",
+                      "range": [0, 1.02]},
+            "showlegend": _multi_sp, "legend": _leg,
+            "hovermode": "closest", "margin": _mgn}
+        cL = _plotly_chart(_plot_id("dist-h"), hist_traces, hist_layout,
+                           height=380, card=False)
+        cR = _plotly_chart(_plot_id("dist-c"), cdf_traces, cdf_layout,
+                           height=380, card=False)
         figs_html.append(
             '<div class="card" style="margin-top:1rem;">'
-            f'<img src="{img}" alt="{label} distribution across {feat_plural}" '
-            'style="width:100%;height:auto;display:block;"/></div>'
-        )
+            '<div style="display:flex;flex-wrap:wrap;gap:1rem;">'
+            f'<div style="flex:1 1 420px;min-width:300px;">{cL}</div>'
+            f'<div style="flex:1 1 420px;min-width:300px;">{cR}</div>'
+            '</div></div>')
 
     if not figs_html:
         return heading + (

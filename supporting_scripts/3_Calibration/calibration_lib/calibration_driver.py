@@ -774,23 +774,34 @@ def run_calibration(
                 pass
             # Persist the FULL simulated series (all objective species at the
             # target reaches, incl. species with no obs) so the report can plot
-            # a simulated-only time series for them.
-            try:
-                _sd = obj_func.get_simulated_data()
-                if _sd is not None and not _sd.empty:
-                    _results_dir.mkdir(parents=True, exist_ok=True)
-                    _sd.to_csv(_results_dir / "simulated_data.csv", index=False)
-            except Exception:
-                pass
+            # a simulated-only time series for them.  Skipped on interim
+            # (in-progress) refreshes: it rewrites the entire multi-million-row
+            # series every evaluation, which dominates a long calibration.  The
+            # full series is written once at end-of-run and rebuilt on demand by
+            # `--report` (from the best eval folder), so nothing is lost.
+            if not in_progress:
+                try:
+                    _sd = obj_func.get_simulated_data()
+                    if _sd is not None and not _sd.empty:
+                        _results_dir.mkdir(parents=True, exist_ok=True)
+                        _sd.to_csv(_results_dir / "simulated_data.csv",
+                                   index=False)
+                except Exception:
+                    pass
             # Persist the machine-readable snapshot (authoritative state for
             # on-demand regeneration via the run-script's --report flag).
             _write_live_snapshot(_results_dir, _cr, _cs, in_progress)
+            # Interim refreshes defer the heavy observed-vs-simulated section
+            # (the report's costliest part, growing with stations x evals) so a
+            # 100-eval run stays fast; the full report is built at end-of-run and
+            # on demand via `--report`.
             _GRR.generate_results_report(
                 output_dir=str(work_dir), model_config=model_config,
                 calibration_parameters=calibration_parameters,
                 calibration_settings=_cs, calibration_results=_cr,
                 sensitivity_results=_sr, matched_data=_md,
-                report_stem=report_stem, in_progress=in_progress)
+                report_stem=report_stem, in_progress=in_progress,
+                defer_heavy_plots=in_progress)
         except Exception as _e:
             logger.debug(f"Interim report skipped: {_e}")
 
@@ -882,7 +893,15 @@ def run_calibration(
         """Append this eval's simulated series (target reach(es), objective
         species) to results/all_simulated.csv so the report can draw a light-
         gray 'all simulations' overlay behind the best-fit time series.
+
+        The series is THINNED per (reach, species) to <= _OVERLAY_MAX_PTS points
+        (uniform stride, datetime order kept) before appending.  The overlay only
+        ever DISPLAYS ~200 pts per line, so this is visually lossless, yet it
+        stops all_simulated.csv from exploding to tens of GB over a 100-eval run
+        (full hourly is ~350 MB/eval).  The best-fit line keeps full hourly
+        resolution (simulated_data.csv, written once at end-of-run).
         Best-effort — never breaks an evaluation."""
+        _OVERLAY_MAX_PTS = 2000
         try:
             # Each eval's OWN series — get_simulated_data() returns the BEST
             # eval, which would stamp the running-best onto every eval_id and
@@ -891,6 +910,27 @@ def run_calibration(
             if _sim is None or _sim.empty:
                 return
             _sim = _sim.copy()
+            # Downsample each per-(reach, species) series so the overlay file
+            # scales with eval count instead of exploding.
+            try:
+                import pandas as _pd
+                _gc = [c for c in ("reach_id", "species") if c in _sim.columns]
+                if "datetime" in _sim.columns:
+                    _sim = _sim.sort_values(
+                        (_gc + ["datetime"]) if _gc else "datetime")
+                if _gc:
+                    _parts = []
+                    for _, _g in _sim.groupby(_gc, sort=False):
+                        _n = len(_g)
+                        _parts.append(
+                            _g.iloc[:: (_n // _OVERLAY_MAX_PTS + 1)]
+                            if _n > _OVERLAY_MAX_PTS else _g)
+                    if _parts:
+                        _sim = _pd.concat(_parts, ignore_index=True)
+                elif len(_sim) > _OVERLAY_MAX_PTS:
+                    _sim = _sim.iloc[:: (len(_sim) // _OVERLAY_MAX_PTS + 1)]
+            except Exception:
+                pass  # thinning is best-effort; fall back to the full series
             _sim["eval_id"] = int(eval_id)
             _asd = work_dir / "results" / "all_simulated.csv"
             _asd.parent.mkdir(parents=True, exist_ok=True)
@@ -1451,6 +1491,20 @@ def run_calibration(
         "metric_focus": kwargs.get("metric_focus", "both"),
     }
     _write_live_snapshot(results_dir, _snap_cr, _snap_cs, in_progress=False)
+
+    # End-of-run: build the FULL report ONCE (heavy observed-vs-simulated plots,
+    # with the best-fit rebuilt from the global-best eval folder).  Interim
+    # per-eval reports defer those plots for speed, so this is where the complete
+    # report is produced automatically; `--report` reproduces it on demand.
+    try:
+        regenerate_results_report(
+            calibration_work_dir=str(work_dir),
+            model_config=model_config,
+            calibration_parameters=calibration_parameters,
+            calibration_settings=_snap_cs,
+            report_stem=report_stem)
+    except Exception as _e:
+        logger.debug(f"End-of-run full report skipped: {_e}")
 
     return calibration_results
 

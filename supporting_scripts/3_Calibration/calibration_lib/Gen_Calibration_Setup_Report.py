@@ -1605,8 +1605,15 @@ def generate_interactive_setup(
         _supp_dir = os.path.dirname(cal_script_dir)  # supporting_scripts (1_/2_/3_)
         _exe = (container_config.get("executable_path", "")
                 or model_config.get("executable_path", ""))
-        _model_run_dir = (os.path.dirname(os.path.abspath(_exe)) if _exe
-                          else model_config.get("dir2save_input_files", "") or "")
+        # The basin's openWQ run dir (e.g. 0_SUMMA_OPENWQ / 0_MIZUROUTE_OPENWQ) —
+        # where the master + openwq_in live.  Prefer dir2save_input_files over the
+        # EXECUTABLE's dir: the compiled binary sits in a SEPARATE openWQ clone
+        # (and is rebuilt on the HPC anyway), so using its path makes the domain
+        # commonpath collapse to the whole openwq_code root -> the copy then rsyncs
+        # every clone / basin / backup (tens of thousands of files).
+        _model_run_dir = (model_config.get("dir2save_input_files", "")
+                          or (os.path.dirname(os.path.abspath(_exe)) if _exe else "")
+                          or "")
         _river_shp = observation_config.get("river_network_shapefile") or ""
         _basin_shp = observation_config.get("basin_shapefile") or ""
         _shp_dirs = [os.path.dirname(p) for p in (_river_shp, _basin_shp) if p]
@@ -2279,7 +2286,7 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
                 "wall-clock (recommended when you have spare cores). RANDOM "
                 "parallel is a fast but low-efficiency baseline.")}
             {rh.build_form_number("max_evaluations", "Max Evaluations",
-                500, min_val=1, step=1,
+                100, min_val=1, step=1,
                 hint="Total number of model evaluations")}
         </div>
         <div class="form-row">
@@ -3889,17 +3896,17 @@ def _build_workflow_mode_section() -> str:
                     <span class="mode-seg-sub">Screening only &mdash; no calibration</span>
                 </button>
                 <button type="button" class="mode-seg-btn" data-m="1"
-                        role="radio" aria-checked="true">
+                        role="radio" aria-checked="false">
                     <span class="mode-seg-title">Both</span>
                     <span class="mode-seg-sub">Screening first, then calibrate</span>
                 </button>
                 <button type="button" class="mode-seg-btn" data-m="2"
-                        role="radio" aria-checked="false">
+                        role="radio" aria-checked="true">
                     <span class="mode-seg-title">Calibration</span>
                     <span class="mode-seg-sub">Calibration only</span>
                 </button>
             </div>
-            <input type="hidden" id="calibration_mode" value="1"/>
+            <input type="hidden" id="calibration_mode" value="2"/>
             <div class="mode-desc" id="modeDesc"></div>
         </div>
     </div>
