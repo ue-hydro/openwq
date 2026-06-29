@@ -592,7 +592,7 @@ class ModelRunner:
                 oom = self._oom_message(result.returncode, result.stderr)
                 if oom:
                     return False, oom
-                return False, f"Exit code {result.returncode}: {result.stderr[-500:]}"
+                return False, f"Exit code {result.returncode}: {((result.stderr or '') + (result.stdout or '')).strip()[-900:] or '(no output captured)'}"
 
             # Check if output files were created
             output_dir = eval_dir / "openwq_out" / "HDF5"
@@ -736,7 +736,7 @@ class ModelRunner:
                 oom = self._oom_message(result.returncode, result.stderr)
                 if oom:
                     return False, oom
-                return False, f"Exit code {result.returncode}: {result.stderr[-500:]}"
+                return False, f"Exit code {result.returncode}: {((result.stderr or '') + (result.stdout or '')).strip()[-900:] or '(no output captured)'}"
 
             # Check if output files were created
             output_dir = eval_dir / "openwq_out" / "HDF5"

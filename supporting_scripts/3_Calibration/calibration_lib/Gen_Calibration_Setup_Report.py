@@ -1794,6 +1794,13 @@ def generate_interactive_setup(
             "common_root": _common_root,
             "run_local": _run_local,
             "mc_path": model_config_path or "",
+            "local_owq_clone": os.path.dirname(_supp_dir),
+            # Hermetic deploy: ship the EXACT calibration_lib + config_support_lib that
+            # generated these configs so the HPC run is version-locked to them (not to
+            # the git state of a separately-cloned openWQ on the cluster).
+            "calib_lib_src": _calib_lib_src,
+            "config_support_lib_src": os.path.join(_supp_dir, "1_Model_Config", "config_support_lib"),
+            "h5_support_lib_src": os.path.join(_supp_dir, "2_Read_Outputs", "hdf5_support_lib"),
             "sbatch_local": _sbatch_local,
             "sbatch_name": _sbatch_name,
             "work_dir": calibration_work_dir or "",
@@ -1942,7 +1949,7 @@ def generate_interactive_setup(
 {_step_header(4, "View the results", collapsible=True, body_id="step4body")}
 <div style="padding:0 1.2rem .6rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
 
-  <style>summary.owq-sum::before{{content:"▸";font-size:.8em;}}details[open]>summary.owq-sum::before{{content:"▾";}}</style>
+  <style>summary.owq-sum::after{{content:"▸";font-size:1.2em;}}details[open]>summary.owq-sum::after{{content:"▾";}}</style>
   <details><summary class="owq-sum" style="{_subhdr_css}cursor:pointer;">&#128187;&nbsp;Local (Docker)</summary>
   <p style="margin:.1rem 0 .35rem;">When you run locally (step&nbsp;2) the script
   auto-generates the interactive results report and opens it when the run finishes. To
@@ -2003,8 +2010,8 @@ def generate_interactive_setup(
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
-  <div style="margin:.6rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
-    <strong>3) Cancel the job</strong> on the cluster (uses the SLURM job ID above).</div>
+  <details style="margin:.6rem 0 .3rem;"><summary style="font-size:.74rem;color:var(--text2);line-height:1.5;cursor:pointer;">
+    <strong>3) Cancel the job</strong> on the cluster (uses the SLURM job ID above).</summary>
   <div style="position:relative;margin:.2rem 0 .3rem;">
     <button onclick="copyHpcRun(this,'hpcRunCancel')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -2015,9 +2022,10 @@ def generate_interactive_setup(
       border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
+  </details>
 
   <div style="margin:.7rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
-    <strong>4) Rebuild + pull the results report.</strong> Rebuilds it on the cluster from the latest
+    <strong>4) Build Calibration Results report and pull results.</strong> Rebuilds it on the cluster from the latest
     <code>results/</code> (does <em>not</em> run the model), then pulls the self-contained report to
     your laptop &mdash; works even mid-run, like a local <code>--report</code>.</div>
   <div style="margin:.1rem 0 .35rem;padding:.4rem .6rem;font-size:.72rem;
@@ -2028,7 +2036,7 @@ def generate_interactive_setup(
     folder, and asks before overwriting. Set the local save folder below.</div>
   <div style="margin:.15rem 0 .45rem;font-size:.74rem;">
     <label for="fetch_dest" style="display:block;margin-bottom:.2rem;color:var(--text2);">
-      Save results to (local folder):</label>
+      Save the report to (local folder):</label>
     <input class="form-input" type="text" id="fetch_dest" name="fetch_dest"
       value="{html_lib.escape(_save_dir)}"
       style="width:100%;box-sizing:border-box;font-size:.72rem;font-family:'JetBrains Mono',monospace;"/>
@@ -5054,15 +5062,39 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('#                                              # calibration deps (numpy, scipy, ...)');
     }
     L.push('');
-    L.push('# calibration_lib is used from your cloned openWQ on the HPC (not copied).');
+    L.push('# calibration_lib + config_support_lib: PREFER the copies shipped with this run');
+    L.push('# (step a -> $HPC_BASE/_owq_calib_code), so the Python is version-locked to the');
+    L.push('# configs.  Fall back to a cloned openWQ only if the bundle is absent.');
+    L.push('OWQ_BUNDLE="$HPC_BASE/_owq_calib_code"');
     var owqDir = (s.hpc_openwq_dir || '').replace(/\/+$/, '') || '/path/to/openwq';
-    L.push('# OWQ_REPO = your cloned openWQ (the folder that contains supporting_scripts/).');
+    L.push('# OWQ_REPO = your cloned openWQ (fallback for the libs + source of the venv).');
     L.push('OWQ_REPO="' + owqDir + '"' + (s.hpc_openwq_dir ? '' : '   # <-- EDIT: your cloned openWQ'));
-    L.push('# Locate calibration_lib (accepts the openWQ repo folder OR its parent).');
-    L.push('for _c in "$OWQ_REPO/supporting_scripts/3_Calibration" "$OWQ_REPO/openwq/supporting_scripts/3_Calibration"; do');
-    L.push('  [ -d "$_c/calibration_lib" ] && export OWQ_CALIB_LIB_DIR="$_c" && break');
-    L.push('done');
-    L.push(': "${OWQ_CALIB_LIB_DIR:?No supporting_scripts/3_Calibration/calibration_lib under $OWQ_REPO - check the openWQ clone path}"');
+    L.push('if [ -d "$OWQ_BUNDLE/calibration_lib" ]; then');
+    L.push('  export OWQ_CALIB_LIB_DIR="$OWQ_BUNDLE"   # shipped, version-locked to the configs');
+    L.push('else');
+    L.push('  for _c in "$OWQ_REPO/supporting_scripts/3_Calibration" "$OWQ_REPO/openwq/supporting_scripts/3_Calibration"; do');
+    L.push('    [ -d "$_c/calibration_lib" ] && export OWQ_CALIB_LIB_DIR="$_c" && break');
+    L.push('  done');
+    L.push('fi');
+    L.push(': "${OWQ_CALIB_LIB_DIR:?calibration_lib not found in $OWQ_BUNDLE or under $OWQ_REPO - run step a (copy), or check the openWQ clone path}"');
+    L.push('# config_support_lib (Gen_Input_Driver) for the model-config templates.');
+    L.push('if [ -d "$OWQ_BUNDLE/config_support_lib" ]; then');
+    L.push('  export PYTHONPATH="$OWQ_BUNDLE/config_support_lib${PYTHONPATH:+:$PYTHONPATH}"');
+    L.push('else');
+    L.push('  for _m in "$OWQ_REPO/supporting_scripts/1_Model_Config/config_support_lib" "$OWQ_REPO/openwq/supporting_scripts/1_Model_Config/config_support_lib"; do');
+    L.push('    [ -d "$_m" ] && export PYTHONPATH="$_m${PYTHONPATH:+:$PYTHONPATH}" && break');
+    L.push('  done');
+    L.push('fi');
+    L.push('# hdf5_support_lib = spatial_matching (obs<->reach matching at pre-flight) + the');
+    L.push('# H5 reader the objective metric uses.  calibration_driver + the obs-prep both');
+    L.push('# honor OPENWQ_H5_SUPPORT_LIB, so this makes obs matching + scoring hermetic.');
+    L.push('if [ -d "$OWQ_BUNDLE/hdf5_support_lib" ]; then');
+    L.push('  export OPENWQ_H5_SUPPORT_LIB="$OWQ_BUNDLE/hdf5_support_lib"');
+    L.push('else');
+    L.push('  for _h in "$OWQ_REPO/supporting_scripts/2_Read_Outputs/hdf5_support_lib" "$OWQ_REPO/openwq/supporting_scripts/2_Read_Outputs/hdf5_support_lib"; do');
+    L.push('    [ -d "$_h" ] && export OPENWQ_H5_SUPPORT_LIB="$_h" && break');
+    L.push('  done');
+    L.push('fi');
     L.push('');
     L.push('# Model binary you compiled ON the HPC (the .sif is dependency-only).');
     var _exe = (s.hpc_exe || '').trim();
@@ -5230,9 +5262,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('#   apptainer build "$SIF_HPC" <openwq>/containers/openwq_apptainer.def');
     L.push('#   # on clusters that ship Singularity instead: swap "apptainer" -> "singularity"');
     L.push('');
-    L.push('# Copy your model config + inputs to the HPC.  The calibration_lib CODE');
-    L.push('# is NOT copied - it runs from your cloned openWQ on the HPC (keep it current');
-    L.push('# with: git pull); see the OWQ_CALIB_LIB_DIR export in the .sbatch.');
+    L.push('# Copy your model config + inputs to the HPC, plus a version-locked copy of');
+    L.push('# the calibration_lib + config_support_lib that BUILT these configs (shipped to');
+    L.push('# $HPC_BASE/_owq_calib_code below), so the run never depends on the git state of');
+    L.push('# a separately-cloned openWQ; see the OWQ_BUNDLE/OWQ_CALIB_LIB_DIR in the .sbatch.');
     L.push('# Each tree is dropped straight into $HPC_BASE/<project>/... : only the');
     L.push('# path BELOW your project root is kept, never the local machine prefix.');
     L.push('# -L dereferences any input symlinks to real files.  eval_*/results +');
@@ -5319,6 +5352,36 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       roots.forEach(function(r){ L.push('  "' + r + '" \\'); });
       L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/"');
     }
+    // Version-lock: ship the EXACT calibration_lib + config_support_lib that BUILT
+    // these configs into $HPC_BASE/_owq_calib_code, so the run uses Python matching
+    // the configs - not whatever openWQ happens to be cloned on the cluster.
+    // __pycache__/.pyc are excluded so no stale bytecode shadows the fresh source.
+    var _calibSrc = (HPC && HPC.calib_lib_src) || '';
+    var _cfgSrc   = (HPC && HPC.config_support_lib_src) || '';
+    var _h5Src    = (HPC && HPC.h5_support_lib_src) || '';
+    if (_calibSrc || _cfgSrc || _h5Src) {
+      L.push('# Version-lock the Python: ship the calibration_lib + config_support_lib that');
+      L.push('# built these configs into $HPC_BASE/_owq_calib_code (the .sbatch points');
+      L.push('# OWQ_CALIB_LIB_DIR + PYTHONPATH here first, so the model uses code matching');
+      L.push('# the configs - not a possibly-stale clone).  __pycache__/.pyc excluded.');
+      L.push('ssh "$HPC_USER@$HPC_HOST" "mkdir -p $HPC_BASE/_owq_calib_code"');
+      if (_calibSrc) {
+        L.push('rsync -avzL --exclude __pycache__ --exclude "*.pyc" --exclude .DS_Store --exclude .git \\');
+        L.push('  "' + _calibSrc + '" \\');
+        L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/_owq_calib_code/"');
+      }
+      if (_cfgSrc) {
+        L.push('rsync -avzL --exclude __pycache__ --exclude "*.pyc" --exclude .DS_Store --exclude .git \\');
+        L.push('  "' + _cfgSrc + '" \\');
+        L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/_owq_calib_code/"');
+      }
+      if (_h5Src) {
+        L.push('# hdf5_support_lib: spatial_matching (obs<->reach) + the H5 reader the metric uses.');
+        L.push('rsync -avzL --exclude __pycache__ --exclude "*.pyc" --exclude .DS_Store --exclude .git \\');
+        L.push('  "' + _h5Src + '" \\');
+        L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/_owq_calib_code/"');
+      }
+    }
     L.push('}');
     L.push('owq_copy');
     return L.join('\n');
@@ -5360,6 +5423,32 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('  echo "Re-pointed absolute paths to $HPC_BASE."');
       L.push('else');
       L.push('  echo "Already re-pointed - no $ROOT paths remain."');
+      L.push('fi');
+      L.push('# Point the model config at the SHIPPED config_support_lib (step a copied it to');
+      L.push('# $HPC_BASE/_owq_calib_code), so Gen_Input_Driver + the BGC/SI templates match');
+      L.push('# the configs regardless of any cloned openWQ.  This ONE rewrite covers BOTH the');
+      L.push('# sys.path import AND the template paths (all live under config_support_lib).');
+      L.push('CFG_SRC="' + (HPC.config_support_lib_src || '') + '"');
+      L.push('CFG_DST="$HPC_BASE/_owq_calib_code/config_support_lib"');
+      L.push('if [ -n "$CFG_SRC" ] && [ -d "$CFG_DST" ] && grep -qF "$CFG_SRC" "$MC" "$RUN" 2>/dev/null; then');
+      L.push('  sed -i "s#$CFG_SRC#$CFG_DST#g" "$MC" "$RUN"');
+      L.push('  echo "Pointed model config at the shipped config_support_lib ($CFG_DST)."');
+      L.push('fi');
+      L.push('# Fallback (only if the bundle was NOT shipped): re-point the baked openWQ-clone');
+      L.push('# paths to a clone on the HPC instead.  Must run AFTER the CFG_SRC rewrite above');
+      L.push('# so it never turns the config_support_lib path back into a (stale) clone path.');
+      L.push('LOCAL_OWQ="' + (HPC.local_owq_clone || '') + '"');
+      L.push('OWQ_REPO="' + (s.hpc_openwq_dir || '') + '"');
+      L.push('HPC_OWQ=""');
+      L.push('for _c in "$OWQ_REPO" "$OWQ_REPO/openwq"; do');
+      L.push('  [ -d "$_c/supporting_scripts/1_Model_Config/config_support_lib" ] && HPC_OWQ="$_c" && break');
+      L.push('done');
+      L.push('if [ -n "$LOCAL_OWQ" ] && [ -n "$HPC_OWQ" ] && grep -qF "$LOCAL_OWQ" "$MC" "$RUN" 2>/dev/null; then');
+      L.push('  sed -i "s#$LOCAL_OWQ#$HPC_OWQ#g" "$MC" "$RUN"');
+      L.push('  echo "Re-pointed residual openWQ-clone paths to $HPC_OWQ (bundle not used)."');
+      L.push('fi');
+      L.push('if [ ! -d "$CFG_DST" ] && [ -z "$HPC_OWQ" ]; then');
+      L.push('  echo "WARN: neither the shipped bundle ($CFG_DST) nor a clone config_support_lib was found - the model config still points at local paths.  Re-run step a (copy), or set the openWQ clone path."');
       L.push('fi');
       L.push('EOF');
     } else {
@@ -5436,11 +5525,31 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('# <-- EDIT: load the SAME python your job uses, e.g.');
       L.push('# module load python && source "$HPC_BASE/calib_venv/bin/activate"');
     }
-    L.push('# Locate calibration_lib in your HPC openWQ clone (run-script uses it from there).');
-    L.push('for _c in "$OWQ_REPO/supporting_scripts/3_Calibration" "$OWQ_REPO/openwq/supporting_scripts/3_Calibration"; do');
-    L.push('  [ -d "$_c/calibration_lib" ] && export OWQ_CALIB_LIB_DIR="$_c" && break');
-    L.push('done');
-    L.push(': "${OWQ_CALIB_LIB_DIR:?calibration_lib not found under $OWQ_REPO - check the openWQ clone path}"');
+    L.push('# Use the calibration_lib + config_support_lib SHIPPED with the run (version-');
+    L.push('# locked), falling back to your HPC openWQ clone only if the bundle is absent.');
+    L.push('OWQ_BUNDLE="$HPC_BASE/_owq_calib_code"');
+    L.push('if [ -d "$OWQ_BUNDLE/calibration_lib" ]; then');
+    L.push('  export OWQ_CALIB_LIB_DIR="$OWQ_BUNDLE"');
+    L.push('else');
+    L.push('  for _c in "$OWQ_REPO/supporting_scripts/3_Calibration" "$OWQ_REPO/openwq/supporting_scripts/3_Calibration"; do');
+    L.push('    [ -d "$_c/calibration_lib" ] && export OWQ_CALIB_LIB_DIR="$_c" && break');
+    L.push('  done');
+    L.push('fi');
+    L.push(': "${OWQ_CALIB_LIB_DIR:?calibration_lib not found in $OWQ_BUNDLE or under $OWQ_REPO - check the openWQ clone path}"');
+    L.push('if [ -d "$OWQ_BUNDLE/config_support_lib" ]; then');
+    L.push('  export PYTHONPATH="$OWQ_BUNDLE/config_support_lib${PYTHONPATH:+:$PYTHONPATH}"');
+    L.push('else');
+    L.push('  for _m in "$OWQ_REPO/supporting_scripts/1_Model_Config/config_support_lib" "$OWQ_REPO/openwq/supporting_scripts/1_Model_Config/config_support_lib"; do');
+    L.push('    [ -d "$_m" ] && export PYTHONPATH="$_m${PYTHONPATH:+:$PYTHONPATH}" && break');
+    L.push('  done');
+    L.push('fi');
+    L.push('if [ -d "$OWQ_BUNDLE/hdf5_support_lib" ]; then');
+    L.push('  export OPENWQ_H5_SUPPORT_LIB="$OWQ_BUNDLE/hdf5_support_lib"');
+    L.push('else');
+    L.push('  for _h in "$OWQ_REPO/supporting_scripts/2_Read_Outputs/hdf5_support_lib" "$OWQ_REPO/openwq/supporting_scripts/2_Read_Outputs/hdf5_support_lib"; do');
+    L.push('    [ -d "$_h" ] && export OPENWQ_H5_SUPPORT_LIB="$_h" && break');
+    L.push('  done');
+    L.push('fi');
     L.push('cd "$HPC_BASE' + _rel + '"');
     L.push('PY="$(command -v python3 || command -v python)"');
     L.push(': "${PY:?no python3/python on PATH - load a Python module / activate a venv above}"');
@@ -5543,22 +5652,22 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var _job = (s && s.slurm_job_name && String(s.slurm_job_name).trim())
                ? String(s.slurm_job_name).trim() : 'openwq_calib';
     var _jid = (s && s.slurm_jobid && String(s.slurm_jobid).trim())
-               ? String(s.slurm_jobid).trim() : '<JOBID-from-the-list>';
+               ? String(s.slurm_jobid).trim() : 'YOUR_JOBID';
     var _local = ((s && s.fetch_dest && s.fetch_dest.trim())
                   || (HPC && HPC.work_dir) || '<your calibration work dir>').replace(/\/+$/, '');
-    L.push('# Pull this job SLURM .out (model crashes / python tracebacks) to your laptop + open it.');
+    L.push('# Pull this job SLURM .out (model crashes / python tracebacks) to your laptop + print it.');
     L.push('# Get the JOBID from the job list above and enter it in the "SLURM job ID" field.');
     L.push('DEST="' + _local + '"');
     L.push('OUT="' + _job + '_' + _jid + '.out"');
     L.push('rsync -avz "$HPC_USER@$HPC_HOST:$HPC_BASE/$OUT" "$DEST/" \\');
-    L.push('  && { open "$DEST/$OUT" 2>/dev/null || xdg-open "$DEST/$OUT" 2>/dev/null || ${PAGER:-less} "$DEST/$OUT"; }');
+    L.push('  && { echo "####### START #######"; cat "$DEST/$OUT"; echo "######## END #######"; }');
     return L.join('\n');
   }
   function buildHpcCancel(s) {
     var L = _hpcVars(s);
     L.push('');
     var _jid = (s && s.slurm_jobid && String(s.slurm_jobid).trim())
-               ? String(s.slurm_jobid).trim() : '<JOBID-from-the-list>';
+               ? String(s.slurm_jobid).trim() : 'YOUR_JOBID';
     L.push('# Cancel this job on the cluster (JOBID from the job list / the field above).');
     L.push('ssh "$HPC_USER@$HPC_HOST" "scancel ' + _jid + '"');
     return L.join('\n');

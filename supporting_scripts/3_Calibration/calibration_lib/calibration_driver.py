@@ -485,13 +485,16 @@ def run_calibration(
         total_evaluations=max_evaluations,
     )
 
-    # H5 reader path for objective function
-    if base_model_config_dir:
-        h5_reader_path = str(Path(base_model_config_dir).parent / "2_Read_Outputs" / "hdf5_support_lib")
-    else:
-        # Derive from this file's location
-        _this_dir = Path(__file__).resolve().parent
-        h5_reader_path = str(_this_dir.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
+    # H5 reader path for objective function.  Prefer OPENWQ_H5_SUPPORT_LIB (set by the
+    # HPC sbatch to the shipped hermetic bundle) so it never depends on a cloned openWQ.
+    h5_reader_path = os.environ.get("OPENWQ_H5_SUPPORT_LIB")
+    if not h5_reader_path:
+        if base_model_config_dir:
+            h5_reader_path = str(Path(base_model_config_dir).parent / "2_Read_Outputs" / "hdf5_support_lib")
+        else:
+            # Derive from this file's location
+            _this_dir = Path(__file__).resolve().parent
+            h5_reader_path = str(_this_dir.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
 
     # Get temporal resolution settings from kwargs
     temporal_resolution = kwargs.get("temporal_resolution", "native")
@@ -1781,9 +1784,10 @@ def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
     obs_path = work_dir / "calibration_observations.csv"
     if not obs_path.is_file():
         return None, None, None
-    # h5 reader path (parent of the hdf5_support_lib package).
+    # h5 reader path (parent of the hdf5_support_lib package).  Prefer the env var
+    # (HPC bundle) so it works without a cloned openWQ on the cluster.
     _this = Path(__file__).resolve().parent
-    h5_reader_path = str(_this.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
+    h5_reader_path = os.environ.get("OPENWQ_H5_SUPPORT_LIB") or str(_this.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
     hostmodel, mapkey = "mizuroute", None
     try:
         from . import config_integration as _cint
@@ -2163,11 +2167,13 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         calibration_period=kwargs.get("calibration_period"),
     )
 
-    if kwargs.get('base_model_config_dir'):
-        h5_reader_path = str(Path(kwargs['base_model_config_dir']).parent / "2_Read_Outputs" / "hdf5_support_lib")
-    else:
-        _this_dir = Path(__file__).resolve().parent
-        h5_reader_path = str(_this_dir.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
+    h5_reader_path = os.environ.get("OPENWQ_H5_SUPPORT_LIB")
+    if not h5_reader_path:
+        if kwargs.get('base_model_config_dir'):
+            h5_reader_path = str(Path(kwargs['base_model_config_dir']).parent / "2_Read_Outputs" / "hdf5_support_lib")
+        else:
+            _this_dir = Path(__file__).resolve().parent
+            h5_reader_path = str(_this_dir.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
 
     # Get temporal resolution settings
     temporal_resolution = kwargs.get("temporal_resolution", "native")
