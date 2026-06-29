@@ -1558,6 +1558,16 @@ def generate_interactive_setup(
             "border:1px solid var(--border);border-radius:999px;"
         )
 
+        # Container name + model executable basename for the "manage running
+        # simulations" snippets below — model-agnostic: SUMMA resolves to
+        # summa_openwq_Release, mizuRoute to its own binary, etc.
+        _docker_name = (container_config.get("docker_container_name")
+                        or "docker_openwq")
+        _exe_base = (os.path.basename(
+            (container_config.get("executable_path", "")
+             or model_config.get("executable_path", "")).rstrip("/"))
+            or "summa_openwq_Release")
+
         H.append(f"""
 {_step_header(2, "Run it locally (Docker)", collapsible=True, body_id="step2body")}
 <div style="padding:0 1.2rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
@@ -1591,6 +1601,32 @@ def generate_interactive_setup(
     <code id="cmdDryrun" style="{snippet_code_css}">{dryrun_cmd}</code>
     <button style="{copy_btn_css}"
       onclick="navigator.clipboard.writeText(document.getElementById('cmdDryrun').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+  </div>
+  <div style="border-top:1px solid var(--border);margin:.8rem 0 .15rem;"></div>
+  <p style="margin:.45rem 0 .2rem;"><strong>Manage running calibrations.</strong>
+  List every calibration run currently going on this machine &mdash; any model
+  (SUMMA, mizuRoute, &hellip;), including duplicates of the same basin. Each line is
+  one run, showing its <strong>PGID</strong> (the kill handle), its
+  <strong>start time</strong> (YYYY-MM-DD&nbsp;HH:MM:SS) so you can spot old /
+  stalled runs, and the command:</p>
+  <div style="{snippet_css}">
+    <code id="cmdPsCalib" style="{snippet_code_css}">LC_ALL=C ps -eo pgid,lstart,args | grep "_run.py" | grep -v grep | awk 'BEGIN{{split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",M," ");for(i=1;i&lt;=12;i++)mon[M[i]]=sprintf("%02d",i)}} !s[$1]++{{printf "%-8s %s-%s-%02d %s  ",$1,$6,mon[$3],$4,$5;for(i=7;i&lt;=NF;i++)printf "%s ",$i;print ""}}'</code>
+    <button style="{copy_btn_css}"
+      onclick="navigator.clipboard.writeText(document.getElementById('cmdPsCalib').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+  </div>
+  <p style="margin:.5rem 0 .2rem;">Stop one calibration by its <strong>PGID</strong>
+  (first column above). The leading <code>-</code> targets the whole process group,
+  so the driver and all its workers go together:</p>
+  <div style="margin:.1rem 0 .35rem;">
+    <label for="calibKillPgid" style="display:block;margin-bottom:.2rem;font-size:.78rem;color:var(--text2);">Calibration PGID to kill:</label>
+    <input type="text" id="calibKillPgid" name="calibKillPgid" value="" placeholder="e.g. 58344"
+      oninput="document.getElementById('cmdKillCalib').textContent='kill -9 -'+((this.value||'').trim()||'&lt;pgid&gt;');"
+      style="width:100%;box-sizing:border-box;font-size:.78rem;font-family:'JetBrains Mono',monospace;padding:.35rem .5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg,#fff);color:var(--text);"/>
+  </div>
+  <div style="{snippet_css}">
+    <code id="cmdKillCalib" style="{snippet_code_css}">kill -9 -&lt;pgid&gt;</code>
+    <button style="{copy_btn_css}"
+      onclick="navigator.clipboard.writeText(document.getElementById('cmdKillCalib').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
   </div>
 </div>
 """)
@@ -1906,7 +1942,7 @@ def generate_interactive_setup(
 {_step_header(4, "View the results", collapsible=True, body_id="step4body")}
 <div style="padding:0 1.2rem .6rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
 
-  <div style="{_subhdr_css}">&#128187;&nbsp;Local (Docker)</div>
+  <details><summary style="{_subhdr_css}cursor:pointer;">&#128187;&nbsp;Local (Docker)</summary>
   <p style="margin:.1rem 0 .35rem;">When you run locally (step&nbsp;2) the script
   auto-generates the interactive results report and opens it when the run finishes. To
   watch progress <strong>while it's still running</strong> (e.g. during the long
@@ -1926,7 +1962,9 @@ def generate_interactive_setup(
       onclick="navigator.clipboard.writeText(document.getElementById('cmdResults').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
   </div>
 
-  <div style="{_subhdr_css}margin-top:1.1rem;">&#128421;&nbsp;On HPC (Apptainer / Singularity)</div>
+  </details>
+
+  <details style="margin-top:1.1rem;"><summary style="{_subhdr_css}cursor:pointer;">&#128421;&nbsp;On HPC (Apptainer / Singularity)</summary>
   <p style="margin:.1rem 0 .35rem;font-size:.74rem;color:var(--text2);line-height:1.5;">After you submit
   the job (step&nbsp;3), run these from your laptop to monitor it and fetch results &mdash; most work
   <strong>even while the job is still running</strong>.</p>
@@ -2047,6 +2085,7 @@ def generate_interactive_setup(
       border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
+  </details>
   </details>
 </div>
 </div>

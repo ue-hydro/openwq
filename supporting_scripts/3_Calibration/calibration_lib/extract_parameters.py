@@ -775,17 +775,24 @@ def extract_all_module_parameters(
         def _ss_params_for(sp):
             sp_clean = sp.replace("-", "_").replace(" ", "_")
             if _seas == "monthly":
-                return [make_ss_seasonal_param(
+                _mp = [make_ss_seasonal_param(
                     f"SS_COP_scale_m{m:02d}_{sp_clean}", sp, "ss_seasonal_month",
-                    initial=1.0, bounds=(0.0, 10.0), month=m,
+                    initial=1.0, bounds=(0.001, 10.0), month=m,
                     description=f"Month-{m:02d} load multiplier for {sp}")
                     for m in range(1, 13)]
+                # Log transform: multiplicative steps resolve near-zero loads.
+                for _p in _mp:
+                    _p["transform"] = "log"
+                return _mp
             # Multiplier range kept physically plausible: a very large multiplier
             # both runs the model far slower (huge in-stream loads stiffen the
             # solver) and scores poorly, so it only wastes long evaluations.
             out = [make_ss_csv_scale_param(
                 f"SS_COP_scale_{sp_clean}", species=sp, initial=1.0,
-                bounds=(0.0, 10.0), description=f"Load scaling factor for {sp}")]
+                bounds=(0.001, 10.0), description=f"Load scaling factor for {sp}")]
+            # Log transform: multiplicative DDS steps so it can resolve loads
+            # right down toward zero (linear steps over [0,10] are too coarse near 0).
+            out[0]["transform"] = "log"
             if _seas == "harmonic":
                 out.append(make_ss_seasonal_param(
                     f"SS_COP_seasamp_{sp_clean}", sp, "ss_seasonal_amp",
