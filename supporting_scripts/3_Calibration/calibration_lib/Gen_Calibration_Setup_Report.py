@@ -1942,7 +1942,8 @@ def generate_interactive_setup(
 {_step_header(4, "View the results", collapsible=True, body_id="step4body")}
 <div style="padding:0 1.2rem .6rem;font-size:.82rem;color:var(--text2);line-height:1.6;">
 
-  <details><summary style="{_subhdr_css}cursor:pointer;">&#128187;&nbsp;Local (Docker)</summary>
+  <style>summary.owq-sum::before{{content:"▸";font-size:.8em;}}details[open]>summary.owq-sum::before{{content:"▾";}}</style>
+  <details><summary class="owq-sum" style="{_subhdr_css}cursor:pointer;">&#128187;&nbsp;Local (Docker)</summary>
   <p style="margin:.1rem 0 .35rem;">When you run locally (step&nbsp;2) the script
   auto-generates the interactive results report and opens it when the run finishes. To
   watch progress <strong>while it's still running</strong> (e.g. during the long
@@ -1964,13 +1965,13 @@ def generate_interactive_setup(
 
   </details>
 
-  <details style="margin-top:1.1rem;"><summary style="{_subhdr_css}cursor:pointer;">&#128421;&nbsp;On HPC (Apptainer / Singularity)</summary>
+  <details style="margin-top:1.1rem;"><summary class="owq-sum" style="{_subhdr_css}cursor:pointer;">&#128421;&nbsp;On HPC (Apptainer / Singularity)</summary>
   <p style="margin:.1rem 0 .35rem;font-size:.74rem;color:var(--text2);line-height:1.5;">After you submit
   the job (step&nbsp;3), run these from your laptop to monitor it and fetch results &mdash; most work
   <strong>even while the job is still running</strong>.</p>
 
   <div style="margin:.5rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
-    <strong>1) Check job status</strong> &mdash; lists your jobs (queued / running); note the JOBID.</div>
+    <strong>1) Check job status</strong> &mdash; every job you have run, oldest&nbsp;&rarr;&nbsp;newest, with its status (PENDING / RUNNING / COMPLETED / FAILED&hellip;); first column is the JOBID.</div>
   <div style="position:relative;margin:.2rem 0 .3rem;">
     <button onclick="copyHpcRun(this,'hpcRunStatus')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -1984,7 +1985,7 @@ def generate_interactive_setup(
 
   <div style="margin:.6rem 0 .12rem;font-size:.74rem;">
     <label for="slurm_jobid" style="display:block;margin-bottom:.2rem;color:var(--text2);">
-      SLURM job ID (from <code>squeue --me</code>):</label>
+      SLURM job ID (from the job list above):</label>
     <input class="form-input" type="text" id="slurm_jobid" name="slurm_jobid"
       value="" placeholder="e.g. 12345678"
       style="width:100%;box-sizing:border-box;font-size:.72rem;font-family:'JetBrains Mono',monospace;"/>
@@ -4295,7 +4296,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.hpc_openwq_dir = _gv('hpc_openwq_dir', '');
     s.hpc_exe = _gv('hpc_exe', '');
     s.fetch_dest = _gv('fetch_dest', '');   // local folder to save the fetched results report (step 4, HPC)
-    s.slurm_jobid = _gv('slurm_jobid', '');  // SLURM job id (user types it from `squeue --me`) for the .out snippet
+    s.slurm_jobid = _gv('slurm_jobid', '');  // SLURM job id (user types it from the sacct job list) for the .out snippet
 
     var speciesCbs = document.querySelectorAll('.species-cb');
     var species = [];
@@ -5529,9 +5530,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   function buildHpcStatus(s) {
     var L = _hpcVars(s);
     L.push('');
-    L.push('# Your jobs on the cluster (queued / running).  Find this run JOBID here, then');
-    L.push('# paste it into the "SLURM job ID" field below to fetch its .out.');
-    L.push('ssh "$HPC_USER@$HPC_HOST" "squeue --me"');
+    L.push('# Every job you have run on the cluster, oldest -> newest, with its status');
+    L.push('# (PENDING / RUNNING / COMPLETED / FAILED / CANCELLED ...).  First column = JOBID;');
+    L.push('# paste it into the "SLURM job ID" field below to fetch that job .out.');
+    L.push('# (sacct orders by JobID = submission order; widen --starttime to look back further.)');
+    L.push('ssh "$HPC_USER@$HPC_HOST" "sacct -u $HPC_USER -X --starttime=now-30days --format=JobID%13,JobName%26,Submit,State%15,Elapsed,End"');
     return L.join('\n');
   }
   function buildHpcSlurmOut(s) {
@@ -5540,11 +5543,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var _job = (s && s.slurm_job_name && String(s.slurm_job_name).trim())
                ? String(s.slurm_job_name).trim() : 'openwq_calib';
     var _jid = (s && s.slurm_jobid && String(s.slurm_jobid).trim())
-               ? String(s.slurm_jobid).trim() : '<JOBID-from-squeue>';
+               ? String(s.slurm_jobid).trim() : '<JOBID-from-the-list>';
     var _local = ((s && s.fetch_dest && s.fetch_dest.trim())
                   || (HPC && HPC.work_dir) || '<your calibration work dir>').replace(/\/+$/, '');
     L.push('# Pull this job SLURM .out (model crashes / python tracebacks) to your laptop + open it.');
-    L.push('# Get the JOBID from "squeue --me" above and enter it in the "SLURM job ID" field.');
+    L.push('# Get the JOBID from the job list above and enter it in the "SLURM job ID" field.');
     L.push('DEST="' + _local + '"');
     L.push('OUT="' + _job + '_' + _jid + '.out"');
     L.push('rsync -avz "$HPC_USER@$HPC_HOST:$HPC_BASE/$OUT" "$DEST/" \\');
@@ -5555,8 +5558,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var L = _hpcVars(s);
     L.push('');
     var _jid = (s && s.slurm_jobid && String(s.slurm_jobid).trim())
-               ? String(s.slurm_jobid).trim() : '<JOBID-from-squeue>';
-    L.push('# Cancel this job on the cluster (JOBID from "squeue --me" / the field above).');
+               ? String(s.slurm_jobid).trim() : '<JOBID-from-the-list>';
+    L.push('# Cancel this job on the cluster (JOBID from the job list / the field above).');
     L.push('ssh "$HPC_USER@$HPC_HOST" "scancel ' + _jid + '"');
     return L.join('\n');
   }
