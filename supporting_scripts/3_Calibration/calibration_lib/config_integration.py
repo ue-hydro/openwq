@@ -270,6 +270,14 @@ def get_gen_input_driver_module(model_config: Dict[str, Any]):
     this_dir = os.path.dirname(os.path.abspath(__file__))
     clone_csl = os.path.normpath(
         os.path.join(this_dir, '..', '..', '1_Model_Config', 'config_support_lib'))
+    if not os.path.isfile(os.path.join(clone_csl, 'Gen_Input_Driver.py')):
+        # Hermetic HPC bundle ships config_support_lib FLAT next to calibration_lib
+        # (.../_owq_calib_code/{calibration_lib, config_support_lib}) - accept that too,
+        # so the engine still loads when the repo's supporting_scripts/<N>_*/ layout is
+        # collapsed for the version-locked deploy.
+        _flat_csl = os.path.normpath(os.path.join(this_dir, '..', 'config_support_lib'))
+        if os.path.isfile(os.path.join(_flat_csl, 'Gen_Input_Driver.py')):
+            clone_csl = _flat_csl
     if os.path.isfile(os.path.join(clone_csl, 'Gen_Input_Driver.py')):
         # Evict any config_support_lib modules already imported from a PROJECT
         # copy (e.g. cached when the model config was exec-loaded), so the
@@ -378,9 +386,20 @@ def generate_config_for_eval(
     # raster clipping is skipped.
     try:
         import shutil as _shutil
+        # Locate the baseline openwq_in that holds the pre-computed cache.  Prefer
+        # dir2save_input_files (the basin's model-run dir): on HPC the binary
+        # (executable_path) lives in a SEPARATE build/bin tree, so deriving the
+        # baseline from os.path.dirname(executable_path) misses the cache and forces
+        # a multi-GB ESA-CCI re-clip.  Fall back to the binary dir for local setups.
+        _base_roots = []
+        _d2s = model_config.get('dir2save_input_files', '')
+        if _d2s:
+            _base_roots.append(_d2s)
         _exe = model_config.get('executable_path', '')
         if _exe:
-            _base_areas = os.path.join(os.path.dirname(_exe), 'openwq_in',
+            _base_roots.append(os.path.dirname(_exe))
+        for _br in _base_roots:
+            _base_areas = os.path.join(_br, 'openwq_in',
                                        'ss_copernicus_files', 'lulc_areas_all.csv')
             if os.path.isfile(_base_areas):
                 _eval_ss = os.path.join(str(eval_dir), 'openwq_in', 'ss_copernicus_files')
@@ -388,6 +407,7 @@ def generate_config_for_eval(
                 _dst = os.path.join(_eval_ss, 'lulc_areas_all.csv')
                 if not os.path.isfile(_dst):
                     _shutil.copy2(_base_areas, _dst)
+                break
     except Exception:
         pass  # fall back to full regeneration if seeding fails
 

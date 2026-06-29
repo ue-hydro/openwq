@@ -5072,6 +5072,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('if [ -d "$OWQ_BUNDLE/calibration_lib" ]; then');
     L.push('  export OWQ_CALIB_LIB_DIR="$OWQ_BUNDLE"   # shipped, version-locked to the configs');
     L.push('else');
+    L.push('  echo "WARNING: $OWQ_BUNDLE/calibration_lib is MISSING - falling back to the cloned openWQ, which may be STALE.  Re-run the copy step so the version-locked bundle ships (all 3 libs)." >&2');
     L.push('  for _c in "$OWQ_REPO/supporting_scripts/3_Calibration" "$OWQ_REPO/openwq/supporting_scripts/3_Calibration"; do');
     L.push('    [ -d "$_c/calibration_lib" ] && export OWQ_CALIB_LIB_DIR="$_c" && break');
     L.push('  done');
@@ -5359,28 +5360,18 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var _calibSrc = (HPC && HPC.calib_lib_src) || '';
     var _cfgSrc   = (HPC && HPC.config_support_lib_src) || '';
     var _h5Src    = (HPC && HPC.h5_support_lib_src) || '';
-    if (_calibSrc || _cfgSrc || _h5Src) {
-      L.push('# Version-lock the Python: ship the calibration_lib + config_support_lib that');
-      L.push('# built these configs into $HPC_BASE/_owq_calib_code (the .sbatch points');
-      L.push('# OWQ_CALIB_LIB_DIR + PYTHONPATH here first, so the model uses code matching');
-      L.push('# the configs - not a possibly-stale clone).  __pycache__/.pyc excluded.');
+    var _bundleSrcs = [_calibSrc, _cfgSrc, _h5Src].filter(function(_x){ return _x; });
+    if (_bundleSrcs.length) {
+      L.push('# Version-lock the Python: ship calibration_lib + config_support_lib +');
+      L.push('# hdf5_support_lib into $HPC_BASE/_owq_calib_code in ONE rsync - so a single');
+      L.push('# mistyped passphrase can never leave a PARTIAL bundle (which the .sbatch would');
+      L.push('# otherwise silently fall back to a stale clone for).  __pycache__/.pyc excluded.');
       L.push('ssh "$HPC_USER@$HPC_HOST" "mkdir -p $HPC_BASE/_owq_calib_code"');
-      if (_calibSrc) {
-        L.push('rsync -avzL --exclude __pycache__ --exclude "*.pyc" --exclude .DS_Store --exclude .git \\');
-        L.push('  "' + _calibSrc + '" \\');
-        L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/_owq_calib_code/"');
-      }
-      if (_cfgSrc) {
-        L.push('rsync -avzL --exclude __pycache__ --exclude "*.pyc" --exclude .DS_Store --exclude .git \\');
-        L.push('  "' + _cfgSrc + '" \\');
-        L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/_owq_calib_code/"');
-      }
-      if (_h5Src) {
-        L.push('# hdf5_support_lib: spatial_matching (obs<->reach) + the H5 reader the metric uses.');
-        L.push('rsync -avzL --exclude __pycache__ --exclude "*.pyc" --exclude .DS_Store --exclude .git \\');
-        L.push('  "' + _h5Src + '" \\');
-        L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/_owq_calib_code/"');
-      }
+      L.push('rsync -avzL --exclude __pycache__ --exclude "*.pyc" --exclude .DS_Store --exclude .git \\');
+      _bundleSrcs.forEach(function(_bs){ L.push('  "' + _bs + '" \\'); });
+      L.push('  "$HPC_USER@$HPC_HOST:$HPC_BASE/_owq_calib_code/"');
+      L.push('# Confirm the bundle is COMPLETE (must list all 3: calibration_lib config_support_lib hdf5_support_lib):');
+      L.push('ssh "$HPC_USER@$HPC_HOST" "ls -1 $HPC_BASE/_owq_calib_code"');
     }
     L.push('}');
     L.push('owq_copy');
