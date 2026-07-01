@@ -886,6 +886,152 @@ def run_calibration(
             initial_opt = state['best_params_array']
             logger.info(f"Resuming from evaluation {start_eval}")
 
+    # -------------------------------------------------------------------------
+    # --resume repair: VALIDATE the existing evaluations and RE-RUN any that
+    # produced no usable model output before finalising.
+    #
+    # A prior run can leave eval_<id>/ folders that LOOK complete (folder +
+    # objective.txt exist) but whose model was effectively skipped — e.g. Docker
+    # overloaded and the container returned without writing a fresh H5.  The old
+    # resume trusted the checkpoint's eval COUNT (or folder existence) and never
+    # re-checked, so those bad evals were silently accepted with a bogus score.
+    # Here we re-run each invalid eval IN PLACE from its own saved inputs,
+    # recompute the objective, then rebuild the report from the now-valid
+    # folders.  Repair-only: it does NOT launch new DDS evaluations.
+    # -------------------------------------------------------------------------
+    if resume:
+        import re as _re_r
+        _evd = work_dir / "evaluations"
+        _existing = ([d for d in sorted(_evd.glob("eval_*"))
+                      if _re_r.search(r"eval_\d+", d.name)
+                      and "999999" not in d.name]
+                     if _evd.is_dir() else [])
+        if _existing:
+            logger.info("=" * 60)
+            logger.info("RESUME — validating %d existing evaluation(s); "
+                        "re-running any with no usable output", len(_existing))
+            logger.info("=" * 60)
+            # The re-runs on this path (repairs + the validation re-run) are NOT
+            # part of the DDS eval budget, so silence the per-eval
+            # "N/max evals + ETA" projection — otherwise a single validation run
+            # is mislabelled "1/100" and extrapolated into a bogus multi-hour
+            # calibration ETA.  (_calib_total only gates that banner; resume
+            # returns before any real optimisation loop.)
+            try:
+                model_runner._calib_total = 0
+            except Exception:
+                pass
+            _ns, _nr, _nb = _repair_invalid_evaluations(
+                work_dir, model_runner, obj_func)
+            logger.info("Resume repair: %d scanned, %d re-run OK, %d still "
+                        "failing.", _ns, _nr, _nb)
+            if len(_existing) < max_evaluations:
+                logger.warning("Only %d of %d target evaluations are present; "
+                               "resume is repair-only and will NOT add the "
+                               "remaining %d.", len(_existing), max_evaluations,
+                               max_evaluations - len(_existing))
+            _hist = _reconstruct_history_from_evals(work_dir)
+            _valid = [h for h in _hist if h["objective"] < 1e10]
+            _best = (min(_valid, key=lambda h: h["objective"])
+                     if _valid else None)
+            _cs_repair = {
+                "calibration_mode": calibration_mode,
+                "algorithm": algorithm,
+                "max_evaluations": max_evaluations,
+                "objective_function": objective_function,
+                "objective_weights": objective_weights,
+                "temporal_resolution": kwargs.get("temporal_resolution",
+                                                  "daily"),
+                "aggregation_method": kwargs.get("aggregation_method", "mean"),
+                "calibration_targets": calibration_targets or {},
+                "use_primary_only": kwargs.get("use_primary_only", True),
+                "zone_select": kwargs.get("zone_select"),
+                "metric_focus": kwargs.get("metric_focus", "both"),
+                "random_seed": random_seed,
+            }
+            calibration_results = {
+                "calibration_mode": calibration_mode,
+                "calibration_ran": True,
+                "best_params": (_best["parameters"] if _best else {}),
+                "best_objective": (_best["objective"] if _best
+                                   else float("nan")),
+                "n_evaluations": len(_hist),
+                "history": _hist,
+                "converged": False,
+                "convergence_reason": "resumed (repair-only)",
+            }
+            # Best-fit obs/sim pairs for the report's Calibration charts.  run.py
+            # renders the FINAL report via
+            # generate_results_report(matched_data=results.get("matched_data"))
+            # AFTER we return, so without this the Calibration section shows
+            # "no data" (while the Cal & Validation section, read from
+            # validation_matched_data.csv on disk, still plots).  Rebuild the
+            # pairs from the global-best eval folder (same source the report's
+            # own rebuild uses).
+            try:
+                _md_df, _sim_df, _best_label = _rebuild_best_fit_from_evals(
+                    work_dir, _cs_repair, model_config)
+                if _md_df is not None and not _md_df.empty:
+                    calibration_results["matched_data"] = _md_df
+                    from .objective_functions import compute_all_metrics
+                    calibration_results["performance_metrics"] = \
+                        compute_all_metrics(
+                            _md_df,
+                            (calibration_targets or {}).get("species", []))
+            except Exception as _e:
+                logger.debug("Resume: matched-data rebuild failed: %s", _e)
+            # Refresh the "Calibration & Validation" graph: re-run the current
+            # best over the validation period so validation_matched_data.csv is
+            # consistent with the (possibly repaired) best eval.  Runs the model
+            # once, so only when needed — a repair changed the best, or the file
+            # is missing/empty; otherwise the existing file already reflects the
+            # global-best eval, so reuse it.
+            _vp = kwargs.get("validation_period")
+            if _vp:
+                _vfile = work_dir / "results" / "validation_matched_data.csv"
+                _need = ((_nr > 0) or (not _vfile.exists())
+                         or _vfile.stat().st_size == 0)
+                if _need:
+                    try:
+                        logger.info("Re-running best parameters over the "
+                                    "validation period %s to refresh the "
+                                    "calibration+validation graph (runs the "
+                                    "model once)...", tuple(_vp))
+                        _run_validation_and_combine(
+                            work_dir=work_dir,
+                            results_dir=work_dir / "results",
+                            validation_period=_vp,
+                            best_params_real=(
+                                calibration_results.get("best_params") or {}),
+                            param_names=param_names,
+                            calibration_parameters=calibration_parameters,
+                            param_handler=param_handler,
+                            model_runner=model_runner, obj_func=obj_func)
+                    except Exception as _e:
+                        logger.warning("Validation re-run on resume "
+                                       "skipped: %s", _e)
+                else:
+                    logger.info("Validation data already reflects the best eval "
+                                "(no repairs this resume) — reusing "
+                                "validation_matched_data.csv.")
+            try:
+                regenerate_results_report(
+                    calibration_work_dir=str(work_dir),
+                    model_config=model_config,
+                    calibration_parameters=calibration_parameters,
+                    calibration_settings=_cs_repair,
+                    report_stem=report_stem)
+            except Exception as _e:
+                logger.warning("Post-repair report rebuild failed: %s", _e)
+            logger.info("Resume repair complete — best %s = %s over %d "
+                        "evaluation(s).", objective_function,
+                        calibration_results["best_objective"],
+                        calibration_results["n_evaluations"])
+            return calibration_results
+        else:
+            logger.info("--resume requested but no existing evaluations were "
+                        "found — starting a fresh calibration run.")
+
     # =========================================================================
     # Create objective wrapper
     # =========================================================================
@@ -1568,6 +1714,100 @@ def _reconstruct_history_from_evals(work_dir):
     return out
 
 
+def _eval_has_valid_h5(eval_dir) -> bool:
+    """True iff this eval's ``openwq_out/`` holds at least one openable,
+    NON-empty ``*.h5`` the objective could score.
+
+    A folder existing — or even an exit-0 container that wrote nothing / left a
+    stale H5 behind (the classic Docker-overload symptom) — is NOT proof the
+    model ran.  Only a readable H5 is.  This is the ground-truth "did this
+    evaluation actually run?" test used by ``--resume`` repair."""
+    out = Path(eval_dir) / "openwq_out"
+    if not out.is_dir():
+        return False
+    # openWQ writes its HDF5 output under openwq_out/HDF5/ (not the top level),
+    # so search recursively for the scored ``*-main.h5`` files.
+    h5s = [p for p in out.rglob("*.h5") if p.is_file() and p.stat().st_size > 0]
+    if not h5s:
+        return False
+    try:
+        import h5py
+    except Exception:
+        return True  # can't verify openability; a non-empty .h5 is our best signal
+    for p in h5s:
+        try:
+            with h5py.File(p, "r") as hf:
+                if len(hf.keys()) > 0:
+                    return True
+        except Exception:
+            continue
+    return False
+
+
+def _repair_invalid_evaluations(work_dir, model_runner, obj_func):
+    """Re-run, IN PLACE, every calibration evaluation whose folder exists but
+    produced no usable model output (fails ``_eval_has_valid_h5``).
+
+    Re-uses the eval's OWN already-generated inputs (``openWQ_master.json`` +
+    ``openwq_in/`` configs), so the exact parameter set is reproduced without
+    the optimizer — then recomputes the objective and rewrites ``objective.txt``
+    (``objective:``/``success:``) so the downstream best-fit scan and report
+    reflect the real result.  Stale/partial ``openwq_out/`` is cleared first so
+    the post-run validity check is honest.  Skips the validation re-run folder
+    (``eval_999999``).  Returns ``(n_scanned, n_reran_ok, n_still_failing)``."""
+    import re as _re, shutil as _sh
+    evdir = Path(work_dir) / "evaluations"
+    if not evdir.is_dir():
+        return (0, 0, 0)
+    n_scan = n_ok = n_bad = 0
+    for d in sorted(evdir.glob("eval_*")):
+        m = _re.search(r"eval_(\d+)", d.name)
+        if not m or "999999" in d.name:
+            continue
+        n_scan += 1
+        if _eval_has_valid_h5(d):
+            continue                      # already ran properly — leave it
+        eval_id = int(m.group(1))
+        master = d / "openWQ_master.json"
+        if not master.is_file():
+            logger.warning(f"  eval_{eval_id:04d}: no openWQ_master.json — "
+                           f"cannot re-run; leaving as-is.")
+            n_bad += 1
+            continue
+        logger.info(f"  eval_{eval_id:04d}: no usable model output — re-running…")
+        out = d / "openwq_out"
+        if out.is_dir():
+            try:
+                _sh.rmtree(out)           # drop stale/partial output
+            except OSError:
+                pass
+        try:
+            success, _rt, error = model_runner.run_single_evaluation(
+                d, str(master), eval_id)
+        except Exception as _e:
+            success, error = False, str(_e)
+        ok = bool(success) and _eval_has_valid_h5(d)
+        if ok:
+            try:
+                obj_val = obj_func.compute(out)
+            except Exception as _e:
+                logger.warning(f"  eval_{eval_id:04d}: could not score ({_e})")
+                obj_val, ok = 1e10, False
+        else:
+            obj_val = 1e10
+        with open(d / "objective.txt", "w") as f:
+            f.write(f"objective: {obj_val}\n")
+            f.write(f"success: {ok}\n")
+        if ok:
+            n_ok += 1
+            logger.info(f"  eval_{eval_id:04d}: re-run OK, obj = {obj_val:.6f}")
+        else:
+            n_bad += 1
+            logger.warning(f"  eval_{eval_id:04d}: STILL failing after re-run "
+                           f"({error or 'no usable output'})")
+    return (n_scan, n_ok, n_bad)
+
+
 def _load_checkpoint_best(work_dir):
     """Return ``(best_objective, best_params, current_eval)`` from the optimizer
     checkpoint (``checkpoints/calibration_state.json``), which is updated every
@@ -1660,10 +1900,15 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
     ``results/validation_matched_data.csv`` = calibration-best + validation
     obs/sim pairs, period-tagged, for the report's combined cal/val section.
 
-    Heavy (one model run over the validation window) — called once when a
-    calibration completes.  Best-effort: any failure just leaves the section's
-    placeholder in place.  The validation eval folder gets a distinct id and no
-    ``objective.txt``, so it never affects the best-eval scan."""
+    Heavy (one model run over the FULL span: spin-up start → validation end, so
+    the validation period is reached with correct initial conditions) — called
+    once when a calibration completes.  The calibration half is taken from the
+    global-best eval (so it is IDENTICAL to the standalone calibration chart);
+    the validation half is this run's pairs RESTRICTED to the validation window
+    (proper train/test metric separation).  Best-effort: any failure just leaves
+    the section's placeholder in place.  The validation eval folder gets a
+    distinct id and no ``objective.txt``, so it never affects the best-eval
+    scan."""
     import pandas as pd
     _VAL_ID = 999999
 
@@ -1712,15 +1957,21 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
                            "skipping validation re-run.")
             return
 
-    # Run the best parameters over the VALIDATION window.
+    # Run the best parameters over the FULL sim window (spin-up start → the
+    # validation end) so the model reaches the validation period with correct
+    # initial conditions.  A cold start at the validation boundary gives wrong
+    # states and, when the trimmed SS/forcing has no entries in a bare
+    # validation window, makes openWQ STOP.  The runner's window already starts
+    # at the spin-up (its [0]) for the calibration evals; keep that start and
+    # extend the END to the validation end.
     eval_dir = param_handler.setup_working_directory(
         _VAL_ID, calibration_parameters, bp_arr)
     param_handler.apply_parameters(
         eval_dir, calibration_parameters, bp_arr)
     master_json = str(Path(eval_dir) / "openWQ_master.json")
-    # Temporarily point the runner's window at the validation period.
     _saved = model_runner.calibration_period
-    model_runner.calibration_period = tuple(validation_period)
+    _full_start = (_saved[0] if _saved else validation_period[0])
+    model_runner.calibration_period = (_full_start, validation_period[1])
     try:
         ok, _rt, err = model_runner.run_single_evaluation(
             eval_dir, master_json, _VAL_ID)
@@ -1734,6 +1985,15 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
         _vof = _mk_of()
         _vof.compute(Path(eval_dir) / "openwq_out")
         val_md = _vof.get_matched_data()
+        # The run spans the whole record for correct initial conditions, but the
+        # validation SECTION's pairs + metric must reflect the validation PERIOD
+        # ONLY (train/test separation) — keep pairs inside [val_start, val_end].
+        if (val_md is not None and not val_md.empty
+                and "datetime" in val_md.columns):
+            _vdt = pd.to_datetime(val_md["datetime"], errors="coerce")
+            _vs = pd.to_datetime(validation_period[0])
+            _ve = pd.to_datetime(validation_period[1])
+            val_md = val_md[(_vdt >= _vs) & (_vdt <= _ve)].copy()
     except Exception as _e:
         logger.warning(f"Validation: matching the validation run failed: {_e}")
     parts = []

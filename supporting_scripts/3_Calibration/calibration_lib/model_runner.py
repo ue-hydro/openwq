@@ -376,6 +376,11 @@ class ModelRunner:
         (HPC/batch logs) or when another eval already owns the spinner line
         (parallel sensitivity stage)."""
         label = Path(eval_dir).name  # e.g. "eval_0001"
+        # The validation re-run uses the sentinel id 999999 (not a numbered DDS
+        # eval) — show a human-readable label so the terminal says plainly what
+        # is running instead of the cryptic "eval_999999".
+        if "999999" in label:
+            label = "the VALIDATION run — best fit over the full period"
         try:
             is_tty = sys.stdout.isatty()
         except Exception:
@@ -683,6 +688,18 @@ class ModelRunner:
         # %environment block in the .sif can all otherwise strip/reset a plain
         # `export`).  Override from the sbatch: `export OMP_NUM_THREADS=N`.
         _omp_threads = os.environ.get("OMP_NUM_THREADS", "1")
+        # `--env` above is best-effort: singularity/apptainer can still ignore it
+        # (a `%environment` block in the .sif, `--cleanenv`, or a restricted
+        # apptainer.conf).  The runtime's NATIVE injection - host vars prefixed
+        # SINGULARITYENV_/APPTAINERENV_ - is higher-precedence and reliable, so
+        # set them too.  Without this, OMP_NUM_THREADS can fail to reach the model
+        # on a many-core node (e.g. Deucalion's 128-core x86 partition) and
+        # openWQ's BGC OpenMP path makes an out-of-range arma::Cube access that,
+        # under a -DARMA_NO_DEBUG Release build, surfaces as a SIGSEGV (signal 11)
+        # on every eval ~5 s in instead of a clean abort.  Single-threaded is the
+        # right choice for an HRU-scale BGC loop anyway (evals already parallelise).
+        os.environ["SINGULARITYENV_OMP_NUM_THREADS"] = _omp_threads
+        os.environ["APPTAINERENV_OMP_NUM_THREADS"] = _omp_threads
 
         # MPI launcher, INSIDE the container.  mizuRoute (ESCOMP) is
         # MPI-domain-decomposed and REQUIRES >=2 ranks: with a single rank the
