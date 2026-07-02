@@ -1985,6 +1985,22 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
         _vof = _mk_of()
         _vof.compute(Path(eval_dir) / "openwq_out")
         val_md = _vof.get_matched_data()
+        # Persist the validation run's FULL simulated series (spans the whole
+        # calibration+validation record at native resolution) so the report can
+        # draw a continuous best-fit line across BOTH periods — exactly like the
+        # calibration chart — instead of a line through only the sparse
+        # obs-matched points.
+        try:
+            _vsd = _vof.get_simulated_data()
+            if _vsd is not None and not _vsd.empty:
+                Path(results_dir).mkdir(parents=True, exist_ok=True)
+                _vsd.to_csv(Path(results_dir) / "validation_simulated_data.csv",
+                            index=False)
+                logger.info("Wrote validation_simulated_data.csv "
+                            "(full cal+val best-fit series).")
+        except Exception as _e2:
+            logger.debug(
+                f"Could not persist validation_simulated_data.csv: {_e2}")
         # The run spans the whole record for correct initial conditions, but the
         # validation SECTION's pairs + metric must reflect the validation PERIOD
         # ONLY (train/test separation) — keep pairs inside [val_start, val_end].
