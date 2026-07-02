@@ -177,10 +177,25 @@ IF("${COMPILE_MODE}" STREQUAL "Debug")
     SET(CMAKE_CXX_FLAGS "-g -Wall -pedantic")
 ELSEIF("${COMPILE_MODE}" STREQUAL "Release")
     FIND_PACKAGE(OpenMP)
-    # OPTIMIZED #15: Added -march=native (use native SIMD: AVX2/AVX-512),
+    # Architecture flag.  DEFAULT = -march=native, which is best (and safe) when
+    # the build machine and the run machine are the SAME CPU — e.g. local Docker.
+    # On clusters, if the BUILD node's CPU is newer than the COMPUTE nodes,
+    # -march=native bakes in instructions the compute node lacks and every run
+    # crashes (SIGILL/SIGSEGV).  For those HPC builds, configure with
+    #     -DOWQ_PORTABLE_ARCH=ON
+    # to emit a portable x86-64-v2 baseline that runs on any modern x86 node.
+    # Left OFF (the default) this is byte-identical to the previous
+    # -march=native behaviour, so LOCAL/Docker builds are UNAFFECTED.
+    OPTION(OWQ_PORTABLE_ARCH "Portable x86-64 baseline instead of -march=native (for HPC where build CPU != run CPU)" OFF)
+    IF(OWQ_PORTABLE_ARCH)
+        SET(OWQ_ARCH_FLAG "-march=x86-64-v2")
+    ELSE()
+        SET(OWQ_ARCH_FLAG "-march=native")
+    ENDIF()
+    # OPTIMIZED #15: native SIMD (AVX2/AVX-512) via the arch flag above,
     # -DARMA_NO_DEBUG (disable Armadillo bounds checking),
     # -DNDEBUG (disable asserts), -funroll-loops
-    SET(CMAKE_CXX_FLAGS "-O3 -march=native -DARMA_NO_DEBUG -DNDEBUG -funroll-loops -Wall -pedantic ${OpenMP_CXX_FLAGS}")
+    SET(CMAKE_CXX_FLAGS "-O3 ${OWQ_ARCH_FLAG} -DARMA_NO_DEBUG -DNDEBUG -funroll-loops -Wall -pedantic ${OpenMP_CXX_FLAGS}")
 ENDIF()
 
 # ..................

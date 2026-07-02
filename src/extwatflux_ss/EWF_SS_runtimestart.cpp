@@ -100,6 +100,20 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
     // Get number of rows in FORC
     const unsigned int num_rowdata = (*array_FORC).n_rows;
 
+    // SAFETY (fixes a silent heap out-of-bounds): the apply loop below writes
+    // nextTimeCache[ri] for every ri < num_rowdata via an unchecked
+    // std::vector::operator[].  The cache is only (re)sized on tstep1, so if its
+    // length ever differs from num_rowdata those writes run PAST THE END of the
+    // vector and corrupt the heap — which crashes only under some allocators
+    // (e.g. HPC/singularity) while looking fine locally (Docker).  Resize
+    // defensively so every write is in-bounds.  The "!=" guard makes this a
+    // NO-OP in the normal, already-synced case (behaviour and performance are
+    // unchanged); seeding with time_t::min() forces a correct full recompute on
+    // the rare timestep where a resize was actually needed.
+    if (nextTimeCache.size() != num_rowdata)
+        nextTimeCache.assign(num_rowdata,
+                             std::numeric_limits<time_t>::min());
+
     // OPTIMIZED: use cached flag instead of string comparison
     const unsigned int num_chem = OpenWQ_wqconfig.is_native_bgc_flex
         ? OpenWQ_wqconfig.CH_model->NativeFlex->num_chem
