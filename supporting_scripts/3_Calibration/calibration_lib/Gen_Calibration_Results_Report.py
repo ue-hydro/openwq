@@ -1415,6 +1415,20 @@ def _build_validation_section(output_dir, settings, model_config):
     # Collapse any multi-zone HRU duplicates per period so the line is smooth
     # (defensive — validation pairs come from the aggregated matcher already).
     vd = _collapse_subunit_dups(vd, settings, extra_keys=["period"])
+    # Full validation-run simulated series (spans the ENTIRE cal+val record at
+    # native resolution) — drives a CONTINUOUS best-fit line like the
+    # calibration chart, instead of a line through only the sparse obs-matched
+    # points.  Falls back to the sparse pairs when this file is absent (so
+    # already-generated reports without it don't break).
+    vsim = None
+    try:
+        _vspath = os.path.join(str(output_dir), "results",
+                               "validation_simulated_data.csv")
+        if os.path.isfile(_vspath):
+            vsim = pd.read_csv(_vspath)
+            vsim = _collapse_subunit_dups(vsim, settings)
+    except Exception:
+        vsim = None
     metric = str((settings or {}).get("objective_function", "KGE")).upper()
     _mfn = {"KGE": _OF.kge, "NSE": _OF.nse, "RMSE": _OF.rmse,
             "PBIAS": _OF.pbias}.get(metric, _OF.kge)
@@ -1435,39 +1449,83 @@ def _build_validation_section(output_dir, settings, model_config):
     def _fmt(v):
         return "n/a" if v is None else f"{v:.3f}"
 
+    # One consistent calibration->validation boundary for ALL species charts:
+    # the first validation observation (else the last calibration observation).
+    # A single global boundary keeps the NO3 and NH4 charts aligned even when
+    # their sparse obs happen to fall in different periods.
+    _global_bnd = None
+    try:
+        _valr = vd[vd["period"] == "validation"]
+        _calr = vd[vd["period"] == "calibration"]
+        if not _valr.empty:
+            _global_bnd = str(
+                pd.to_datetime(_valr["datetime"], errors="coerce").min())
+        elif not _calr.empty:
+            _global_bnd = str(
+                pd.to_datetime(_calr["datetime"], errors="coerce").max())
+    except Exception:
+        _global_bnd = None
+
+    # Render every species with obs pairs PLUS any that only have a full
+    # simulated series (so an objective species with no obs still gets a line).
+    _species = list(vd["species"].unique())
+    if vsim is not None and "species" in vsim.columns:
+        for _s in vsim["species"].unique():
+            if _s not in _species:
+                _species.append(_s)
+
     blocks = []
-    for sp in list(vd["species"].unique()):
+    for sp in _species:
         sd = vd[vd["species"] == sp].copy()
         sd["_dt"] = pd.to_datetime(sd["datetime"], errors="coerce")
         sd = sd.dropna(subset=["_dt"]).sort_values("_dt")
-        if sd.empty:
-            continue
         cal = sd[sd["period"] == "calibration"]
         val = sd[sd["period"] == "validation"]
-        bnd = (str(val["_dt"].min()) if not val.empty
-               else (str(cal["_dt"].max()) if not cal.empty else None))
-        x = [str(v) for v in sd["_dt"]]
+        bnd = _global_bnd
+        # Observed markers (sparse, at observation times only)
+        x_obs = [str(v) for v in sd["_dt"]]
         obs = [None if v != v else float(v)
                for v in pd.to_numeric(sd["observed"], errors="coerce")]
-        sim = [None if v != v else float(v)
-               for v in pd.to_numeric(sd["simulated"], errors="coerce")]
+        # Best-fit LINE: prefer this species' FULL validation series (continuous,
+        # native resolution, thinned like the calibration chart); fall back to
+        # the sparse matched sim when the full series is unavailable.
+        sim_x = x_obs
+        sim_y = [None if v != v else float(v)
+                 for v in pd.to_numeric(sd["simulated"], errors="coerce")]
+        if vsim is not None and "species" in vsim.columns:
+            fs = vsim[vsim["species"].astype(str) == str(sp)].copy()
+            if not fs.empty:
+                fs["_dt"] = pd.to_datetime(fs["datetime"], errors="coerce")
+                fs = fs.dropna(subset=["_dt"]).sort_values("_dt")
+                _xl = [str(v) for v in fs["_dt"]]
+                _yl = [None if v != v else float(v)
+                       for v in pd.to_numeric(fs["simulated"], errors="coerce")]
+                if len(_xl) > 4000:                  # thin a long line
+                    _step = (len(_xl) // 4000) + 1
+                    _xl, _yl = _xl[::_step], _yl[::_step]
+                sim_x, sim_y = _xl, _yl
+        if not any(v is not None for v in obs) and \
+           not any(v is not None for v in sim_y):
+            continue
         traces = [
-            {"type": "scatter", "mode": "markers", "x": x, "y": obs,
+            {"type": "scatter", "mode": "markers", "x": x_obs, "y": obs,
              "name": "observed",
              "marker": {"size": 6, "symbol": "circle", "color": "#ef4444",
                         "line": {"width": 0.5, "color": "#7f1d1d"}},
              "hovertemplate": "%{x|%Y-%m-%d}<br>obs %{y:.4g}<extra></extra>"},
-            {"type": "scatter", "mode": "lines", "x": x, "y": sim,
-             "name": "best fit", "line": {"width": 2, "color": "#10b981"},
+            {"type": "scatter", "mode": "lines", "x": sim_x, "y": sim_y,
+             "name": "best fit", "line": {"width": 1.5, "color": "#10b981"},
              "hovertemplate": "%{x|%Y-%m-%d}<br>best %{y:.4g}<extra></extra>"},
         ]
         shapes, annos = [], []
-        if bnd:
-            shapes.append({"type": "rect", "xref": "x", "x0": x[0], "x1": bnd,
+        _x0 = sim_x[0] if sim_x else (x_obs[0] if x_obs else None)
+        _x1 = sim_x[-1] if sim_x else (x_obs[-1] if x_obs else None)
+        if bnd and _x0 is not None and _x1 is not None:
+            shapes.append({"type": "rect", "xref": "x", "x0": _x0, "x1": bnd,
                            "yref": "paper", "y0": 0, "y1": 1,
                            "fillcolor": "rgba(16,185,129,.06)",
                            "line": {"width": 0}, "layer": "below"})
-            shapes.append({"type": "rect", "xref": "x", "x0": bnd, "x1": x[-1],
+            shapes.append({"type": "rect", "xref": "x", "x0": bnd, "x1": _x1,
                            "yref": "paper", "y0": 0, "y1": 1,
                            "fillcolor": "rgba(251,146,60,.08)",
                            "line": {"width": 0}, "layer": "below"})
