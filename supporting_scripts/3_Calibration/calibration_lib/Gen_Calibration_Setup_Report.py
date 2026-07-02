@@ -5997,6 +5997,23 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       var _fsf = frac(_forcStart);
       if (_fsf > calStartF && _fsf < aEndF) calStartF = _fsf;
     }
+    // Always reserve a spin-up band so it is visible and usable on EVERY basin.
+    // The spin-up floor = the simulation start, or the forcing start when
+    // forcing begins later (the model can't warm up before forcing exists).
+    var ONE_YEAR_MS = 365.25 * 24 * 3600 * 1000;
+    var oneYearF = ONE_YEAR_MS / span;
+    var spinupFloorF = 0;
+    if (_forcStart) {
+      var _ff0 = frac(_forcStart);
+      if (_ff0 > 0 && _ff0 < aEndF) spinupFloorF = _ff0;
+    }
+    // If the default calibration start sits within a year of the spin-up floor
+    // (e.g. observations begin at/before the model start, leaving no natural
+    // pre-calibration gap), push it inward so a full year of warm-up fits before
+    // scoring — capped so it never eats more than half the remaining record.
+    var minCalStartF = Math.min(spinupFloorF + oneYearF,
+                                spinupFloorF + (aEndF - spinupFloorF) * 0.5);
+    if (calStartF < minCalStartF) calStartF = minCalStartF;
     // default: calibration = first 1/3 of the window (start handle → end),
     // validation = remaining two-thirds
     var splitF = calStartF + (aEndF - calStartF) / 3;
@@ -6005,10 +6022,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // through the calibration window, but this warm-up span is NOT scored — it
     // just lets the model state (soil pools, in-stream conc.) equilibrate so a
     // cold start from the initial condition doesn't ruin the early fit.
-    // Default = the simulation start (track left), i.e. the full available
-    // warm-up — matching a full forward run. Drag the handle right to shorten
-    // it, or all the way to the calibration start for no spin-up.
-    var spinupF = 0;
+    // Default = 1 year of warm-up ending at the calibration start, so the
+    // spin-up band is ALWAYS visible.  Drag the handle LEFT (to the sim/forcing
+    // start) for the full available warm-up, or RIGHT to the calibration start
+    // for no spin-up.
+    var spinupF = Math.max(spinupFloorF, calStartF - oneYearF);
     if (spinupF > calStartF) spinupF = calStartF;
     var handleSpinup = document.getElementById('calibHandleSpinup');
 
@@ -6089,7 +6107,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       var rect = track.getBoundingClientRect();
       var f = (clientX - rect.left) / rect.width;
       if (active === 'spinup') {
-        spinupF = Math.max(0, Math.min(calStartF, f));        // [sim start, cal start]
+        spinupF = Math.max(spinupFloorF, Math.min(calStartF, f)); // [floor, cal start]
       } else if (active === 'start') {
         calStartF = Math.max(aStartF, Math.min(splitF, f));   // can't pass the split
         if (spinupF > calStartF) spinupF = calStartF;         // keep spin-up ≤ cal start
