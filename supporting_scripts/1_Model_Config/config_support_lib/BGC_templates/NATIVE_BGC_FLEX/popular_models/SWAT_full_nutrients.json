@@ -797,15 +797,78 @@
             }
         },
         "SWAT_SEDIMENT_TRANSPORT": {
-            "_DESCRIPTION": "Nutrient transport with sediment",
-            "LIST_TRANSFORMATIONS": {},
-            "_SED_BOUND_N_INFO": {
-                "FORMULA": "conc_sed_N = (ORG_N_active + ORG_N_stable) * enrich_ratio",
-                "NOTES": "Enrichment ratio typically 1.5-3.0"
+            "_DESCRIPTION": "Sediment-bound nutrient transport: first-order settling/erosion loss of organic N and P from the active pools into the sediment sink species (SED_N, SED_P). NOTE: a first-order approximation (k_sed*enrich_ratio*pool) is used because the physical erosion/sediment-yield flux is not yet exposed to BGC as a dependency variable; tune k_sed (and/or promote it to a calibration parameter) accordingly.",
+            "LIST_TRANSFORMATIONS": {
+                "1": "SEDIMENT_BOUND_N",
+                "2": "SEDIMENT_BOUND_P"
             },
-            "_SED_BOUND_P_INFO": {
-                "FORMULA": "conc_sed_P = (PO4-P_active + PO4-P_stable + ORG_P_humus) * enrich_ratio",
-                "NOTES": "Enrichment ratio typically 1.5-3.0"
+            "1": {
+                "_NAME": "SEDIMENT_BOUND_N",
+                "CONSUMED": "ORG_N_active",
+                "PRODUCED": "SED_N",
+                "KINETICS": [
+                    "k_sed * enrich_ratio * ORG_N_active",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_sed",
+                    "enrich_ratio"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_sed": 0.001,
+                    "enrich_ratio": 2.0
+                },
+                "_PARAMETERS_INFO": {
+                    "k_sed": {
+                        "VALUE": 0.001,
+                        "UNITS": "1/day",
+                        "RANGE": [0.0001, 0.01],
+                        "DESCRIPTION": "First-order settling/erosion loss rate of sediment-bound organic N"
+                    },
+                    "enrich_ratio": {
+                        "VALUE": 2.0,
+                        "RANGE": [1.5, 3.0],
+                        "DESCRIPTION": "SWAT sediment enrichment ratio (dimensionless, typically 1.5-3.0)"
+                    }
+                },
+                "_SED_BOUND_N_INFO": {
+                    "FORMULA": "conc_sed_N = (ORG_N_active + ORG_N_stable) * enrich_ratio",
+                    "NOTES": "Original SWAT diagnostic, kept for provenance"
+                }
+            },
+            "2": {
+                "_NAME": "SEDIMENT_BOUND_P",
+                "CONSUMED": "ORG_P_humus",
+                "PRODUCED": "SED_P",
+                "KINETICS": [
+                    "k_sed * enrich_ratio * ORG_P_humus",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_sed",
+                    "enrich_ratio"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_sed": 0.001,
+                    "enrich_ratio": 2.0
+                },
+                "_PARAMETERS_INFO": {
+                    "k_sed": {
+                        "VALUE": 0.001,
+                        "UNITS": "1/day",
+                        "RANGE": [0.0001, 0.01],
+                        "DESCRIPTION": "First-order settling/erosion loss rate of sediment-bound organic P"
+                    },
+                    "enrich_ratio": {
+                        "VALUE": 2.0,
+                        "RANGE": [1.5, 3.0],
+                        "DESCRIPTION": "SWAT sediment enrichment ratio (dimensionless, typically 1.5-3.0)"
+                    }
+                },
+                "_SED_BOUND_P_INFO": {
+                    "FORMULA": "conc_sed_P = (PO4-P_active + PO4-P_stable + ORG_P_humus) * enrich_ratio",
+                    "NOTES": "Original SWAT diagnostic, kept for provenance"
+                }
             }
         }
     },
