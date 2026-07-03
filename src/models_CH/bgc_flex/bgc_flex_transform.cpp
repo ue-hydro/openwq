@@ -16,6 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "models_CH/headerfile_CH.hpp"
+#include <cstdlib>   // exit(), EXIT_FAILURE (fatal-stop on empty/unknown BGC framework)
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -75,15 +76,25 @@ void OpenWQ_CH_model::bgc_flex_transform(
             const auto it = OpenWQ_wqconfig.bgc_cycle_to_transf_indices.find(BGCcycles_name_icmp);
 
             if (it == OpenWQ_wqconfig.bgc_cycle_to_transf_indices.end() || it->second.empty()){
-                if (OpenWQ_wqconfig.invalid_bgc_entry_errmsg){
-                    msg_string = "<OpenWQ> Unkown CYCLING_FRAMEWORK with name '"
-                        + BGCcycles_name_icmp
-                        + "' defined for compartment: "
-                        + CompName_icmp;
-                    OpenWQ_output.ConsoleLog(
-                        OpenWQ_wqconfig, msg_string, true, true);
-                }
-                continue;
+                // FATAL (hardening): a CYCLING_FRAMEWORK is assigned to this
+                // compartment but resolves to ZERO transformations — either the
+                // name is misspelled, or its LIST_TRANSFORMATIONS is empty (a
+                // scaffolded-but-unimplemented framework).  This used to be
+                // skipped silently ("continue"), but the leftover BGC state
+                // corrupts memory downstream: a latent out-of-bounds that only
+                // some allocators trip (fine under Docker, SIGSEGV on HPC).
+                // Fail fast here with an actionable message instead of crashing
+                // later with an unreadable trace.
+                msg_string = "<OpenWQ> FATAL: CYCLING_FRAMEWORK '"
+                    + BGCcycles_name_icmp
+                    + "' is assigned to compartment '" + CompName_icmp
+                    + "' but defines no transformations (empty or unknown). "
+                    + "Give it CONSUMED/PRODUCED/KINETICS entries in the BGC "
+                    + "config, or remove it from that compartment's "
+                    + "CYCLING_FRAMEWORK list.";
+                OpenWQ_output.ConsoleLog(
+                    OpenWQ_wqconfig, msg_string, true, true);
+                exit(EXIT_FAILURE);
             }
 
             const std::vector<unsigned int>& transf_index = it->second;
