@@ -3194,17 +3194,76 @@ def Plot_h5_driver(what2map=None,
     # SUMMA HDF5 stores sequential IDs (1, 2, 3...) but the shapefile
     # has the real GRU_IDs (740457190, ...).  Build a lookup from the
     # basin shapefile feature order and rewrite trace names/hovertemplates.
+    #
+    # GUARD: this position-based remap is ONLY valid when the traces really
+    # are in that sequential id-space.  When the model already writes the REAL
+    # basin ids (hruId_16_z1, ... i.e. they match the shapefile), remapping by
+    # position is destructive: any id that happens to fall inside 1..N is
+    # rewritten to a DIFFERENT basin, several ids collide onto the same target
+    # and overwrite each other in the fid→series dict, and those features
+    # disappear from the report (their polygons then render in the '#888' gray
+    # fallback).  So only remap when the trace ids do NOT already match the
+    # shapefile ids.
     if _basin_geojson and _basin_geojson.get('features'):
+        # Real ids carried by the basin shapefile
+        _real_ids = set()
+        for feat in _basin_geojson['features']:
+            _rid = str(feat['properties'].get(_basin_mapping_key, ''))
+            if _rid.endswith('.0'):
+                _rid = _rid[:-2]
+            if _rid:
+                _real_ids.add(_rid)
+
+        # Ids actually present in the traces (strip label prefix + " (z<n>)")
+        _fl_probe = feature_label or ''
+        _trace_ids = set()
+        for _p_probe in plots:
+            for _t_probe in _p_probe.get('traces', []):
+                _nm = _t_probe.get('name', '')
+                if _fl_probe and _nm.startswith(_fl_probe + ' '):
+                    _nm = _nm[len(_fl_probe) + 1:]
+                _m_probe = re.match(r'^(.+?) \((z\d+)\)$', _nm)
+                _trace_ids.add(_m_probe.group(1) if _m_probe else _nm)
+
+        # Decide whether the traces are in the sequential id-space at all.
+        # NOTE: "do any trace ids overlap the real ids?" is NOT a safe test —
+        # a shapefile whose real ids merely *include* small numbers would then
+        # wrongly suppress a remap that IS needed.  The remap is only meaningful
+        # when every trace id could be a position index (1..N), so test that.
+        _seq_expected = {str(i + 1) for i in range(len(_basin_geojson['features']))}
+        _is_sequential = bool(_trace_ids) and _trace_ids <= _seq_expected
+
         # Build mapping: "1" → first feature's GRU_ID, "2" → second, etc.
         _id_remap = {}
-        for i, feat in enumerate(_basin_geojson['features']):
-            seq_id = str(i + 1)
-            real_id = str(feat['properties'].get(_basin_mapping_key, seq_id))
-            # Strip trailing ".0" from float-converted ints
-            if real_id.endswith('.0'):
-                real_id = real_id[:-2]
-            if seq_id != real_id:
-                _id_remap[seq_id] = real_id
+        if not _is_sequential:
+            print(f"  ID remapping skipped — trace ids are not sequential "
+                  f"1..{len(_seq_expected)} (they are already the real "
+                  f"shapefile ids); a position-based remap here would drop "
+                  f"features.")
+        else:
+            for i, feat in enumerate(_basin_geojson['features']):
+                seq_id = str(i + 1)
+                real_id = str(feat['properties'].get(_basin_mapping_key, seq_id))
+                # Strip trailing ".0" from float-converted ints
+                if real_id.endswith('.0'):
+                    real_id = real_id[:-2]
+                if seq_id != real_id:
+                    _id_remap[seq_id] = real_id
+
+            # SAFETY NET (project/size agnostic): a remap must be a bijection on
+            # the ids actually present.  If two trace ids would land on the same
+            # target they overwrite each other in the fid→series dict and those
+            # features vanish from the report.  Detect that directly — whatever
+            # the cause — and refuse to apply a lossy remap rather than silently
+            # dropping basins.
+            _mapped = {_id_remap.get(t, t) for t in _trace_ids}
+            if len(_mapped) < len(_trace_ids):
+                print(f"  WARNING: ID remapping would collapse "
+                      f"{len(_trace_ids)} feature ids onto {len(_mapped)} "
+                      f"targets — refusing to apply it so no features are "
+                      f"lost. Check that the basin shapefile matches the "
+                      f"model output ids.")
+                _id_remap = {}
 
         if _id_remap:
             print(f"  ID remapping ({len(_id_remap)} entries): "
