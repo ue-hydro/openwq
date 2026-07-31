@@ -2655,30 +2655,31 @@ def Plot_h5_driver(what2map=None,
             fd, miss = {}, []
             _layers_found = set()
 
-            if mkv == ["all"] or mkv == "all":
-                for col in ttdata.columns:
-                    fid, layer = _parse_col(col)
-                    if layer:
-                        _layers_found.add(layer)
-                        display_id = f'{fid} ({layer})'
-                    else:
-                        display_id = fid
-                    fd[display_id] = ttdata[col]
-            else:
-                for target_fid in mkv:
-                    found_any = False
-                    for col in ttdata.columns:
-                        fid, layer = _parse_col(col)
-                        if str(fid) == str(target_fid):
-                            if layer:
-                                _layers_found.add(layer)
-                                display_id = f'{fid} ({layer})'
-                            else:
-                                display_id = str(fid)
-                            fd[display_id] = ttdata[col]
-                            found_any = True
-                    if not found_any:
-                        miss.append(target_fid)
+            want_all = (mkv == ["all"] or mkv == "all")
+            targets = None if want_all else set(str(t) for t in mkv)
+            seen = set()
+            # Iterate by POSITION (iloc), not by column label.  When the model
+            # writes non-unique cell ids (e.g. several HRUs per GRU, or an
+            # uninitialised id), multiple columns share a label and ``ttdata[col]``
+            # returns a DataFrame instead of a Series — which crashed plotting.
+            # Positional access always yields a Series; colliding display ids get
+            # a positional suffix so every cell is still shown rather than lost.
+            for i, col in enumerate(ttdata.columns):
+                fid, layer = _parse_col(col)
+                if targets is not None:
+                    if str(fid) not in targets:
+                        continue
+                    seen.add(str(fid))
+                if layer:
+                    _layers_found.add(layer)
+                    display_id = f'{fid} ({layer})'
+                else:
+                    display_id = str(fid)
+                if display_id in fd:
+                    display_id = f'{display_id}#{i}'
+                fd[display_id] = ttdata.iloc[:, i]
+            if targets is not None:
+                miss = [t for t in mkv if str(t) not in seen]
             return fd, miss, _layers_found
 
         # ── Discover compartments from openwq_results keys ──────────
