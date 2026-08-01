@@ -1,0 +1,80 @@
+# ================================================================
+# PHREEQC template — DECOUPLED NITROGEN SPECIES
+# Track ammonium and nitrate as SEPARATE openWQ species (not total N).
+#
+# WHY THIS EXISTS
+#   openWQ maps PHREEQC *components* (FindComponents / GetConcentrations).
+#   In phreeqc.dat, nitrogen's redox states (NO3 / NO2 / N2 / NH4) are
+#   redox-COUPLED into a single component "N", so openWQ only ever sees
+#   TOTAL N — nitrate and ammonium collapse together and dC/dt chem is ~0.
+#
+#   Here we DECOUPLE ammonium as its own master species "Amm". Then
+#   FindComponents returns them SEPARATELY:
+#       N    = nitrate + nitrite (oxidised N)
+#       Amm  = ammonium (reduced N)          <-- tracked on its own!
+#       Ntg  = dinitrogen gas (already decoupled in phreeqc.dat)
+#   In the model_config template set:
+#       phreeqc_mobile_species = ["N", "Amm", "C"]
+#   and openWQ will transport & report nitrate-N and ammonium-N separately.
+#
+#   The first-order nitrification KINETIC below (Amm -> N, oxidising with O2)
+#   interconverts the two, so dC/dt chem is DYNAMIC: ammonium falls, nitrate
+#   rises — exactly the behaviour you get with NATIVE_BGC_FLEX, but here from
+#   PHREEQC because the species are now decoupled components.
+#
+#   NOTE: decoupling asserts NO3-/NH4+ are NOT in instantaneous redox
+#   equilibrium (physically reasonable — that equilibration is kinetically
+#   slow). Do NOT add a "DATABASE ..." line: openWQ loads the database.
+# ================================================================
+TITLE Decoupled nitrogen: nitrate (N) + ammonium (Amm) + nitrification
+
+# ---- Define ammonium as a decoupled master species "Amm" ----
+SOLUTION_MASTER_SPECIES
+    Amm       AmmH+          0.0     N        14.0067
+
+SOLUTION_SPECIES
+    AmmH+ = AmmH+
+        log_k      0.0
+        -gamma     2.5    0.0
+    AmmH+ = Amm + H+
+        log_k     -9.252
+        delta_h    12.48  kcal
+
+SOLUTION 1  Soil water (oxic)
+    temp    12.0
+    pH      7.2
+    pe      8.0
+    units   mg/L
+    N(5)    2.0          # nitrate  -> component "N"   (as mg/L N)
+    Amm     1.5          # ammonium -> component "Amm" (as mg/L N)
+    Ca      30.0
+    Mg      6.0
+    Na      10.0
+    K       2.0
+    Cl      12.0
+    C(4)    60.0  as HCO3
+    S(6)    14.0  as SO4
+    O(0)    8.0          # dissolved O2 (electron acceptor for nitrification)
+END
+
+# ---- Nitrification: Amm -> N (first order in ammonium) ----
+KINETICS 1
+nitrification
+    -formula   AmmH+  -1   NO3-  1
+    -m0        0.0
+    -parms     2.3e-6       # rate constant k [1/s]  (~0.2 per day)
+    -tol       1e-8
+
+RATES
+nitrification
+-start
+10   amm = TOT("Amm")
+20   if amm <= 0 then goto 100
+30   rate = PARM(1) * amm       # mol/L/s, first order in ammonium
+40   moles = rate * TIME
+50   if moles > amm then moles = amm
+60   SAVE moles
+100  END
+-end
+
+END

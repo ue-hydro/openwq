@@ -3,7 +3,6 @@
 # Reference: PHREEQC Version 3 Manual (Parkhurst & Appelo, 2013)
 # ================================================================
 
-DATABASE phreeqc.dat  # Or wateq4f.dat for more complete thermodynamic data
 
 TITLE Major Ion Chemistry and Mineral Equilibria
 

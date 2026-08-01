@@ -81,8 +81,16 @@ void OpenWQ_readjson::SetConfigInfo_output_what2print(
         bool found = false;
         for (unsigned int chemlisti = 0; chemlisti < num_chem_total; chemlisti++){
             chem_namelist = chem_list[chemlisti];
-            // Check if species name matches internal species list
-            if (chem_namelist.compare(chem_name2print) == 0){
+            // Case-insensitive match: the internal species list can hold
+            // mixed-case names (e.g. PHREEQC components "Amm", "Ca", "Charge")
+            // while the requested output name is upper-cased by the JSON loader,
+            // so a case-sensitive compare would silently drop them.
+            bool namematch = (chem_namelist.size() == chem_name2print.size());
+            for (size_t _ci = 0; namematch && _ci < chem_namelist.size(); ++_ci){
+                namematch = (std::tolower((unsigned char)chem_namelist[_ci])
+                          == std::tolower((unsigned char)chem_name2print[_ci]));
+            }
+            if (namematch){
                 OpenWQ_wqconfig.chem2print.push_back(chemlisti);
                 found = true;
                 break;

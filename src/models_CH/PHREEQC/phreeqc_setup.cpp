@@ -153,10 +153,25 @@ void OpenWQ_CH_model::phreeqc_setup(
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
     // ########################################################
-    // Skip GFW retrieval for now - GFW is not needed if we work in mol/kgw
-    // directly without unit conversion
+    // Retrieve gram-formula weights (GFW) for every component. These are
+    // needed to convert between OpenWQ mass [g] and PHREEQC molality
+    // [mol/kgw]. Without them phreeqc_run falls back to GFW=1.0, silently
+    // corrupting the unit conversion (concentrations off by the molar mass).
     // ########################################################
-    msg_string = "<OpenWQ> PHREEQC: Skipping GFW setup (not needed for equilibrium-only mode)";
+    OpenWQ_wqconfig.CH_model->PHREEQC->gfw =
+        OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetGfw();
+    if (OpenWQ_wqconfig.CH_model->PHREEQC->gfw.size()
+            != (size_t)OpenWQ_wqconfig.CH_model->PHREEQC->num_chem) {
+        msg_string = "<OpenWQ> WARNING: PHREEQC GFW count ("
+            + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->gfw.size())
+            + ") != component count ("
+            + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->num_chem)
+            + "); unit conversion may fall back to GFW=1.0.";
+    } else {
+        msg_string = "<OpenWQ> PHREEQC: GFW retrieved for "
+            + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->gfw.size())
+            + " components";
+    }
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
     // DEBUG: Confirm phreeqc_setup completed successfully

@@ -3,7 +3,6 @@
 # Reference: PHREEQC Manual, Stumm & Morgan (1996)
 # ================================================================
 
-DATABASE wateq4f.dat   # Better P mineral data
 
 TITLE Phosphorus Speciation and Mineral Equilibria
 

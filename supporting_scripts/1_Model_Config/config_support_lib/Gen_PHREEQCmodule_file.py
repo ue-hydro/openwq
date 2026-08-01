@@ -390,7 +390,22 @@ def create_phreeqc_module_json(
     dat_dest = dest_dir / dat_source.name
 
     if pqi_source.resolve() != pqi_dest.resolve():
-        shutil.copy2(phreeqc_input_filepath, pqi_dest)
+        # Copy the .pqi, stripping any "DATABASE ..." line. openWQ loads the
+        # database itself (via the module JSON "DATABASE" field); a DATABASE
+        # keyword inside the .pqi makes PHREEQC re-load a bare relative database
+        # from the run CWD, which fails or conflicts with the loaded one.
+        import re as _re
+        _src_lines = pqi_source.read_text().splitlines(keepends=True)
+        _kept, _stripped = [], 0
+        for _ln in _src_lines:
+            if _re.match(r"\s*DATABASE\b", _ln, _re.IGNORECASE):
+                _stripped += 1
+                continue
+            _kept.append(_ln)
+        pqi_dest.write_text("".join(_kept))
+        if _stripped:
+            print(f"  NOTE: stripped {_stripped} 'DATABASE' line(s) from {pqi_source.name} "
+                  f"(openWQ loads the database via the module JSON).")
         print(f"  Copied PHREEQC input file to: {pqi_dest}")
 
     if dat_source.resolve() != dat_dest.resolve():

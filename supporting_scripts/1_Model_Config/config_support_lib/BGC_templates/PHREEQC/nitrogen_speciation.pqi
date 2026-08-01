@@ -3,7 +3,6 @@
 # Reference: PHREEQC Manual, Appelo & Postma (2005) Geochemistry
 # ================================================================
 
-DATABASE phreeqc.dat
 
 TITLE Nitrogen Species and Redox Transformations
 

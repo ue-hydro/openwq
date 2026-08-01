@@ -61,6 +61,14 @@ void OpenWQ_CH_model::phreeqc_run(
 
     // Use nc (actual PhreeqcRM component count) for sizing
     c.resize(nxyz * nc);
+
+    // Pre-load the CURRENT PHREEQC concentrations for ALL components before we
+    // overwrite the mobile species below. Without this, every NON-mobile
+    // component (H, Charge, and any ion openWQ does not transport) would be
+    // pushed to PHREEQC as 0 by SetConcentrations, destroying the water and
+    // charge balance and guaranteeing the geochemical solve fails to converge.
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetConcentrations(c);
+
     volumes.resize(nxyz);
     temperatures.resize(nxyz);
     pressures.resize(nxyz);
@@ -192,7 +200,11 @@ void OpenWQ_CH_model::phreeqc_run(
                     for (int iz=0; iz<nz; iz++) {
                         // OpenWQ: chemass is in grams, volume in liters
                         // conc_g_L = chemass_g / volume_L
-                        double conc_g_L = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz) / volumes[indx];
+                        // Index chemass by the PHREEQC component index (phreeqc_idx),
+                        // NOT the mobile ordinal (chemi) — this matches how transport
+                        // (native_adv/advdisp), IC and output index chemass. Using chemi
+                        // here read the wrong slot, feeding ~0 to PHREEQC.
+                        double conc_g_L = (*OpenWQ_vars.chemass)(icmp)(phreeqc_idx)(ix,iy,iz) / volumes[indx];
 
                         // Convert g/L to mol/kgw (mol/L for dilute solutions)
                         // mol/L = g/L / GFW(g/mol)
@@ -265,11 +277,23 @@ void OpenWQ_CH_model::phreeqc_run(
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTimeStep(OpenWQ_hostModelconfig.get_time_step());
+    // Capture the RunCells return code (IRM_OK == 0). Previously the return was
+    // ignored and "RunCells succeeded" was logged unconditionally, hiding
+    // non-convergence failures (which then propagated as garbage/zeros).
+    int phreeqc_runcells_status = 0;
     if (OpenWQ_hostModelconfig.get_time_step() != 0) {
-        OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->RunCells();
+        phreeqc_runcells_status = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->RunCells();
     }
-    msg_string = "<OpenWQ> PHREEQC: RunCells succeeded";
-    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    if (phreeqc_runcells_status != 0) {
+        msg_string = "<OpenWQ> ERROR: PHREEQC RunCells did NOT converge (IRM_RESULT="
+            + std::to_string(phreeqc_runcells_status)
+            + "). Geochemistry this step is unreliable - check the .pqi solution, the "
+            "mobile-species mapping and unit conversion (GFW).";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    } else {
+        msg_string = "<OpenWQ> PHREEQC: RunCells succeeded";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
 
     // Get updated concentrations from PHREEQC (in mol/kgw)
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetConcentrations(c);
@@ -333,11 +357,11 @@ void OpenWQ_CH_model::phreeqc_run(
                         // Convert to mass: mass_g = conc_g_L * volume_L
                         double new_mass_g = conc_g_L * volumes[indx];
 
-                        // Current mass in OpenWQ
-                        double old_mass_g = (*OpenWQ_vars.chemass)(icmp)(chemi)(ix,iy,iz);
+                        // Current mass in OpenWQ (index by PHREEQC component index)
+                        double old_mass_g = (*OpenWQ_vars.chemass)(icmp)(phreeqc_idx)(ix,iy,iz);
 
-                        // Delta mass for the chemistry derivative
-                        (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi)(ix,iy,iz) = new_mass_g - old_mass_g;
+                        // Delta mass for the chemistry derivative (same slot as transport)
+                        (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(phreeqc_idx)(ix,iy,iz) = new_mass_g - old_mass_g;
 
                         indx++;
                     }

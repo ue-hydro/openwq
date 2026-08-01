@@ -3,7 +3,6 @@
 # Reference: PHREEQC Manual, Stumm & Morgan (1996)
 # ================================================================
 
-DATABASE wateq4f.dat   # Comprehensive trace metal data
 
 TITLE Trace Metal Speciation and Toxicity Assessment
 

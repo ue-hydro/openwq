@@ -1,0 +1,29 @@
+# ================================================================
+# PHREEQC example input for openWQ — simple river water
+# Nitrogen speciation (nitrate / ammonium) + major-ion equilibrium.
+#
+# NOTE: do NOT add a "DATABASE ..." line here. openWQ loads the
+# thermodynamic database itself (via the module JSON "DATABASE" field).
+# A DATABASE line inside the .pqi makes PHREEQC re-load a bare relative
+# database from the run CWD, which fails or conflicts.
+#
+# Equilibrium-only (no KINETICS) to keep the example simple and robust.
+# ================================================================
+TITLE Simple river water - nitrogen speciation
+
+SOLUTION 1  River water (oxic)
+    temp   15.0
+    pH     7.6
+    pe     10.0
+    units  mg/L
+    N(5)   3.0        # nitrate, as mg/L N
+    N(-3)  0.1        # ammonium, as mg/L N
+    Ca     35.0
+    Mg     8.0
+    Na     12.0
+    K      2.0
+    Cl     15.0
+    C(4)   80.0 as HCO3
+    S(6)   18.0 as SO4
+    O(0)   9.0        # dissolved O2, as mg/L O
+END

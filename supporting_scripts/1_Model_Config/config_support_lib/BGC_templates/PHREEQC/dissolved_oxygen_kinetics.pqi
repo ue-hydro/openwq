@@ -3,7 +3,6 @@
 # Reference: Chapra (2008) Surface Water Quality Modeling; Streeter-Phelps (1925)
 # ================================================================
 
-DATABASE phreeqc.dat
 
 TITLE Dissolved Oxygen Balance - Stream/River Water Quality
 

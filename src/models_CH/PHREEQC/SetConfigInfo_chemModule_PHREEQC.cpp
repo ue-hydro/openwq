@@ -136,6 +136,23 @@ void OpenWQ_readjson::SetConfigInfo_CHModule_PHREEQC(
     for (unsigned int chemi = 0; chemi < BGCjson_mobileSpecies.size(); chemi++){
 
         std::string mobile_name = BGCjson_mobileSpecies.at(chemi).get<std::string>();
+
+        // Guard: H, O, H2O and Charge are structural to PHREEQC's water and
+        // charge-balance system. They must be managed by PHREEQC, never
+        // overwritten by transport - doing so destroys the water/charge balance
+        // and the geochemical solve fails to converge. Skip them with a warning;
+        // only solute species (e.g. N, C, Ca, Cl) should be mobile.
+        if (iequals(mobile_name, "H")  || iequals(mobile_name, "O")
+         || iequals(mobile_name, "H2O") || iequals(mobile_name, "CHARGE")) {
+            msg_string =
+                "<OpenWQ> WARNING: PHREEQC mobile species '" + mobile_name
+                + "' is a structural water/charge component and CANNOT be transported "
+                  "(it would break PHREEQC's water and charge balance). Skipping it - "
+                  "make only solute species (N, C, Ca, Cl, ...) mobile.";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+            continue;
+        }
+
         bool found = false;
 
         for (unsigned int si = 0; si < OpenWQ_wqconfig.CH_model->PHREEQC->chem_species_list.size(); si++){

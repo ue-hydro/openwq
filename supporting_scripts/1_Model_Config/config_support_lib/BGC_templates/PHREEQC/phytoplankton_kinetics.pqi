@@ -10,7 +10,6 @@
 #
 # ================================================================
 
-DATABASE phreeqc.dat
 
 TITLE Phytoplankton Kinetics - Nutrient-Limited Growth
 
