@@ -216,6 +216,17 @@ void OpenWQ_initiate::setIC_phreeqc(
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
     }
 
+    // Apply the same fixed density/saturation the per-timestep run uses, BEFORE
+    // this initial RunCells, so PhreeqcRM does not invoke its internal
+    // calc_dens() (which can crash/fail on the first solve when density is unset).
+    {
+        std::vector<double> density_ic(nxyz, 1.0);
+        std::vector<double> saturation_ic(nxyz, 1.0);
+        OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetDensityUser(density_ic);
+        OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetSaturationUser(saturation_ic);
+        OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->UseSolutionDensityVolume(false);
+    }
+
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTime(0.0);
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetTimeStep(0.0);
 
@@ -267,6 +278,13 @@ void OpenWQ_initiate::setIC_phreeqc(
             for (unsigned int chemi = 0; chemi < num_mobile; chemi++){
                 // Get the PHREEQC component index for this OpenWQ chemical
                 unsigned int phreeqc_idx = OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species[chemi];
+                // GFW for this component: PHREEQC returns mol/kgw, but chemass is
+                // stored in grams, so IC mass = conc[mol/kgw] * GFW[g/mol] * volume[L].
+                // (Without the GFW factor chemass held mol, inconsistent with the
+                //  per-step run's g->mol->g conversion, causing convergence failures.)
+                const std::vector<double>& gfw_all = OpenWQ_wqconfig.CH_model->PHREEQC->gfw;
+                const double gfw_k = (phreeqc_idx < gfw_all.size() && gfw_all[phreeqc_idx] > 0.0)
+                                     ? gfw_all[phreeqc_idx] : 1.0;
                 int local_indx = 0;
 
                 for (int ix = 0; ix < nx; ix++){
@@ -275,9 +293,11 @@ void OpenWQ_initiate::setIC_phreeqc(
                             const double den = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
                             const double volume = (den == 0) ? 1.0 : den;
 
-                            // Use PHREEQC component index for concentration array access
-                            (*OpenWQ_vars.d_chemass_ic)(icmp)(chemi)(ix, iy, iz) =
-                                c[phreeqc_idx * nxyz + comp_start_idx + local_indx] * volume;
+                            // Write the IC into the chemass slot indexed by the PHREEQC
+                            // component index (phreeqc_idx), NOT the mobile ordinal (chemi),
+                            // so IC, transport and chemistry all use the same slot per species.
+                            (*OpenWQ_vars.d_chemass_ic)(icmp)(phreeqc_idx)(ix, iy, iz) =
+                                c[phreeqc_idx * nxyz + comp_start_idx + local_indx] * gfw_k * volume;
 
                             local_indx++;
                         }
