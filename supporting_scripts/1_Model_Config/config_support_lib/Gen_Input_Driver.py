@@ -1070,6 +1070,23 @@ def Gen_Input_Driver(
     _clim_active = (_lulc_loads == "dynamic" and _climate_dep)
     _clim_timeseries = _clim_active and str(ss_climate_data_type).lower() == "time_series"
 
+    # ── LULC source selection (multi-source, priority chain) ────────────
+    # Accept the new plural `lulc_sources` (list) or the legacy singular
+    # `lulc_source` (string). None/"copernicus" → legacy local ESA-CCI path;
+    # any GEE dataset → server-side area-per-HRU via Gen_LULC_Sources.
+    _lulc_sources = kwargs.get("lulc_sources", kwargs.get("lulc_source", "copernicus"))
+    try:
+        import Gen_LULC_Sources as _lulc_lib
+        _lulc_sources = _lulc_lib.normalize_selection(_lulc_sources)
+        if _lulc_lib.is_gee_selection(_lulc_sources):
+            print(f"  LULC source(s) (priority order): "
+                  f"{_lulc_lib.gee_sources(_lulc_sources)} — via Google Earth "
+                  "Engine (area-per-HRU computed server-side).")
+    except Exception as _exc:
+        print(f"  WARNING: could not normalize lulc_sources ({_exc}); "
+              "using legacy ESA-CCI path.")
+        _lulc_sources = ["copernicus"]
+
     # ── Auto-detect Copernicus period from host-model control file ─────
     if ss_method == "based_on_lulc":
 
@@ -1203,6 +1220,7 @@ def Gen_Input_Driver(
             precip_scaling_power=ss_climate_precip_scaling_power if ss_climate_data else 1.0,
             temp_q10=ss_climate_temp_q10 if ss_climate_data else 2.0,
             temp_reference_c=ss_climate_temp_reference_c if ss_climate_data else 15.0,
+            lulc_sources=_lulc_sources,
         )
     elif ss_method == "based_on_lulc" and _clim_timeseries:
 
@@ -1299,6 +1317,7 @@ def Gen_Input_Driver(
             daily_climate_data=_daily_climate,
             subannual_climate_data=_subannual_climate,
             subannual_unit=_subannual_unit,
+            lulc_sources=_lulc_sources,
         )
 
     elif (ss_method == "ml_model"):

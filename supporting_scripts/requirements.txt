@@ -29,6 +29,24 @@ tqdm>=4.60.0
 # Web requests (for GRQA download)
 requests>=2.25.0
 
+# Land cover for the based_on_lulc source/sink method (optional — only needed
+# when ss_method = "based_on_lulc").
+#   * earthengine-api : GEE-based LULC sources (modis, nlcd, usda_cdl, aafc_aci,
+#       worldcover, corine, nalcms, ...). Computes area-per-HRU server-side.
+#       One-time auth required:  earthengine authenticate
+#       (set EARTHENGINE_PROJECT to your Google Cloud project id if prompted).
+#   * cdsapi : the legacy "copernicus" (ESA CCI) LULC source, auto-downloaded
+#       from the Copernicus Climate Data Store (needs a ~/.cdsapirc API key).
+# Neither is needed for the other ss_method options (load_from_csv, ml_model).
+#
+# NOTE: earthengine-api >= 1.0 requires Python >= 3.10 (its CLI uses `str | None`
+# syntax). On Python 3.9 (e.g. the anaconda base env) pin to the last 0.1.x line
+# — the LULC APIs used here (pixelArea/reduceRegions/Reducer.group/…) are stable
+# across both. The markers below pick the right one automatically.
+earthengine-api>=1.0.0; python_version >= "3.10"
+earthengine-api>=0.1.380,<1.0.0; python_version < "3.10"
+cdsapi>=0.6.1
+
 # Machine learning (for ML-based source/sink)
 scikit-learn>=1.0.0
 xgboost>=1.5.0

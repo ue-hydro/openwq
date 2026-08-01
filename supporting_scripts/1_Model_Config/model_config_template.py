@@ -395,8 +395,51 @@ ss_method_csv_config = [
 #  Estimates loads from land-cover maps × export coefficients.
 #  Requires: basin shapefile + (optionally) OpenWQ HDF5 output for cell mapping.
 
-# Land-cover dataset to use. Only "copernicus" (ESA CCI Land Cover) for now.
-lulc_source = "copernicus"
+# Land-cover dataset(s) used to estimate SS loading. Provide a Python LIST (a
+# bare string still works for back-compatibility). LULC maps are ALTERNATIVES,
+# so the list is a PRIORITY CHAIN: for each basin the FIRST listed source that
+# covers it (and the requested years) is used; the rest are fallbacks.
+#
+# "copernicus" uses the original LOCAL ESA-CCI path (CDS download; only needs
+# `pip install cdsapi`). EVERY OTHER source is fetched via Google Earth Engine,
+# which computes the area-per-HRU-per-class SERVER-SIDE (no multi-GB downloads)
+# but needs a one-time setup:
+#     pip install earthengine-api  &&  earthengine authenticate
+#     (set EARTHENGINE_PROJECT to your Google Cloud project id if prompted)
+#
+# GLOBAL, annual (drop-in ESA-CCI alternatives):
+#   "copernicus"    ESA CCI 300 m, 1992-2022, 22 classes     [LOCAL/CDS, no GEE]
+#   "modis"         MODIS MCD12Q1 500 m, 2001+, IGBP 17-class
+#   "glc_fcs30d"    GLC_FCS30D 30 m, 1985-2022, 35 classes (fine, long history)
+#   "cgls_lc100"    Copernicus CGLS-LC100 100 m, 2015-2019, 23 classes
+# GLOBAL, high-res, recent:
+#   "worldcover"    ESA WorldCover 10 m, 2020 & 2021, 11 classes
+#   "dynamic_world" Google Dynamic World 10 m, 2015+, 9 classes
+#   "esri_lulc"     ESRI/Impact Obs. 10 m annual, 2017+, 9 classes
+# REGIONAL, high-detail:
+#   "nlcd"          NLCD — US (CONUS) 30 m, 2001-2021, 16 classes
+#   "nalcms"        NALCMS — North America 30 m, 2005/10/15/20, 19 classes
+#   "corine"        CORINE — Europe 100 m, 1990-2018, 44 classes
+# CROP-SPECIFIC (best crop-resolved N/P loading):
+#   "usda_cdl"      USDA Cropland Data Layer — US 30 m, annual 2008+, 100+ crops
+#   "aafc_aci"      AAFC Annual Crop Inventory — Canada 30 m, annual 2009+
+#
+# Each source keeps its NATIVE classes with its own export-coefficient table
+# (crop-resolved where available). Override any class via the custom-coefficient
+# dict below (keys = native class codes for a single-source run).
+#
+# ⚡ FULLY AUTOMATED — just edit the list. On the FIRST run with a GEE source the
+#   script sets Earth Engine up FOR you, prompting in THIS terminal (alongside
+#   the other prompts):
+#     1. if `earthengine-api` is missing → offers to pip-install it;
+#     2. runs the one-time Google sign-in (a browser opens; paste the token
+#        back if asked) — credentials are cached, so it only happens once;
+#     3. asks for your Google Cloud project id if Earth Engine needs one
+#        (set env EARTHENGINE_PROJECT to skip that prompt).
+#   Nothing else to do — areas-per-HRU and loads are then computed automatically.
+#   Headless/HPC runs can't open a browser, so authenticate once beforehand:
+#   `earthengine authenticate`. The "copernicus" source needs none of this.
+lulc_sources = ["copernicus"]
 
 # How the loads behave over time:
 #   "static"  → one constant annual export coefficient per LULC class.
@@ -461,6 +504,8 @@ river_network_shapefile = "/Users/diogocosta/Documents/openwq_code/diogo_test/mi
 ss_method_copernicus_compartment_name_for_load = "RIVER_NETWORK_REACHES"
 
 # Path to Copernicus ESA CCI Land Cover data.
+#   ⚠ Only used by the LOCAL "copernicus" source. The GEE sources above ignore
+#     this (they read land cover server-side from Earth Engine).
 #   None → auto-download from CDS (requires: pip install cdsapi + ~/.cdsapirc)
 #          Downloads the global file (~2.2 GB), clips to basin bbox, deletes global.
 #          API setup: https://cds.climate.copernicus.eu/how-to-api
@@ -893,7 +938,9 @@ if generate_report:
     try:
         if str(ss_method).lower() == "based_on_lulc":
             _ss_lulc_detail = {
-                "source": lulc_source,
+                "source": (", ".join(lulc_sources)
+                           if isinstance(lulc_sources, (list, tuple))
+                           else lulc_sources),
                 "loads": lulc_loads,
                 "shape": lulc_loads_dynamic_shape,
                 "climate_dependency": climate_dependency,
