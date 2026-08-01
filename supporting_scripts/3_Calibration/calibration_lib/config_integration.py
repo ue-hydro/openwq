@@ -512,8 +512,24 @@ def get_observation_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
         - basin_mapping_key: mapping key in basin shapefile
         - river_network_shapefile: path to river network shapefile
     """
+    # Multi-source selection (list) with legacy singular back-compat.
+    _plural = model_config.get("observation_data_sources")
+    if _plural is None:
+        _single = model_config.get("observation_data_source")
+        _plural = [_single] if _single else []
+    if isinstance(_plural, str):
+        _plural = [_plural]
+    _sources = [str(s).strip().lower() for s in _plural if str(s).strip()]
+
     obs_config = {
-        "source": model_config.get("observation_data_source", "skip"),
+        # legacy singular key: the old value, else the first selected source
+        "source": (model_config.get("observation_data_source")
+                   or (_sources[0] if _sources else "skip")),
+        "sources": _sources,
+        "observation_source_manual_paths":
+            model_config.get("observation_source_manual_paths", {}) or {},
+        "observation_dedup_overlaps":
+            model_config.get("observation_dedup_overlaps", "ask"),
     }
 
     # GRQA settings
@@ -1393,12 +1409,97 @@ def prepare_calibration_observations_csv(model_config: Dict[str, Any],
     to ``<output_dir>/calibration_observations.csv`` or ``None`` when nothing
     is configured / preparable.
     """
-    src = (model_config.get('observation_data_source') or 'skip').strip().lower()
+    # Prefer the merged MULTI-SOURCE observations the model-config setup wrote
+    # (openwq_in/obs_clipped_data/observations_all_sources.csv) — already
+    # harmonized, BGC-species-named and basin-clipped across every selected
+    # source. Falls through to the single-source preparers for legacy configs.
+    merged = prepare_multisource_calibration_csv(model_config, output_dir, log)
+    if merged:
+        return merged
+
+    _plural = model_config.get('observation_data_sources') or []
+    if isinstance(_plural, str):
+        _plural = [_plural]
+    _first = next((str(s).strip().lower() for s in _plural if str(s).strip()), None)
+    src = (model_config.get('observation_data_source') or _first or 'skip').strip().lower()
     if src == 'grqa':
         return prepare_grqa_calibration_csv(model_config, output_dir, log)
     if src == 'user_csv':
         return prepare_user_csv_calibration_csv(model_config, output_dir, log)
     return None
+
+
+def prepare_multisource_calibration_csv(model_config: Dict[str, Any],
+                                        output_dir: str,
+                                        log=None) -> Optional[str]:
+    """Reshape the merged multi-source observations that the model-config setup
+    (``Gen_Observation_Sources``) wrote to
+    ``<dir2save>/openwq_in/obs_clipped_data/observations_all_sources.csv`` into
+    the objective-function CSV via :func:`_match_and_write_obs`.
+
+    The merged file is already harmonized (``station_id, lat, lon, parameter,
+    year, month, day, minute, value, units, source``) with ``parameter`` set to
+    the BGC/model species names. Returns the prepared CSV path, or ``None`` when
+    the merged file is absent (legacy single-source configs fall through).
+    """
+    import pandas as pd
+    _log = log or (lambda *a, **k: None)
+
+    dir2save = model_config.get('dir2save_input_files')
+    if not dir2save:
+        exe = model_config.get('executable_path', '')
+        dir2save = os.path.dirname(os.path.abspath(exe)) if exe else None
+    if not dir2save:
+        return None
+
+    merged_csv = os.path.join(dir2save, 'openwq_in', 'obs_clipped_data',
+                              'observations_all_sources.csv')
+    if not os.path.isfile(merged_csv):
+        return None
+
+    df = pd.read_csv(merged_csv)
+    if df.empty:
+        _log("Merged multi-source observations CSV is empty.")
+        return None
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    need = {'station_id', 'lat', 'lon', 'parameter', 'value'}
+    if not need.issubset(df.columns):
+        _log(f"Merged observations CSV missing {need - set(df.columns)}; "
+             "falling back to single-source.")
+        return None
+
+    station_locations: Dict[str, tuple] = {}
+    for sid, grp in df.groupby('station_id'):
+        r = grp.iloc[0]
+        try:
+            station_locations[str(sid)] = (float(r['lat']), float(r['lon']))
+        except (TypeError, ValueError):
+            pass
+
+    def _dt(r):
+        try:
+            y = int(r.get('year', 0)) or 1900
+            mo = int(r.get('month', 0)) or 1
+            d = int(r.get('day', 0)) or 1
+            mn = int(r.get('minute', 0) or 0)
+            return f"{y:04d}-{mo:02d}-{d:02d} {mn // 60:02d}:{mn % 60:02d}:00"
+        except Exception:
+            return None
+
+    records = [{
+        'site_id': str(r.get('station_id', '')),
+        'datetime': _dt(r),
+        'species': r.get('parameter'),
+        'value': r.get('value'),
+        'units': r.get('units', ''),
+        'source_label': str(r.get('source', 'obs')),
+    } for _, r in df.iterrows()]
+
+    _log(f"Preparing calibration observations from {len(records)} merged "
+         f"multi-source records ({df['source'].nunique() if 'source' in df else 1} "
+         "source(s)).")
+    return _match_and_write_obs(model_config, station_locations, records,
+                                output_dir, 'multi', _log)
 
 
 def _match_and_write_obs(model_config: Dict[str, Any],
@@ -1466,7 +1567,9 @@ def _match_and_write_obs(model_config: Dict[str, Any],
             'species': rec.get('species'),
             'value': rec.get('value'),
             'units': rec.get('units', ''),
-            'source': f'{source_prefix}:{sid}',
+            # keep per-record provenance (dataset name) for multi-source; falls
+            # back to the caller's prefix for single-source preparers
+            'source': f"{rec.get('source_label', source_prefix)}:{sid}",
             'is_primary': sid in primary,
         })
     if not rows:

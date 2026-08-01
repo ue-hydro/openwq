@@ -700,20 +700,61 @@ open_report = True   # Automatically open the report in your browser when done.
 #   "reachID"  - already-tagged reach IDs
 river_network_mapping_key = None
 
-# ── Observation data source ──
-# Choose between GRQA (Global River Water Quality Archive) or a user-provided
-# CSV file with custom observation data.
+# ── Observation data source(s) ──
+# Select ONE OR MORE water-quality observation datasets to overlay on the map
+# and summarise in the data-availability report. Provide a Python LIST (a bare
+# string still works for back-compatibility).
 #
-# Options:
-#   "grqa"  → use the GRQA database (see grqa_local_data_path below)
-#   "user_csv" → use a user-provided CSV file (see user_observation_csv below)
-#   "skip"  → skip observation data entirely (no station overlay, no data report)
-observation_data_source = "grqa"
+# AUTO — downloaded automatically:
+#   "grqa"        Global River Water Quality Archive — aggregated GLOBAL archive,
+#                 17M+ obs, 43 params (nutrients, carbon, oxygen, sediment, ions).
+#                 NOTE: already combines WQP + GEMStat + GLORICH + Waterbase + CESI.
+#   "wqp"         Water Quality Portal (USGS/EPA) — US, open API; the most current
+#                 US nutrients/ions/metals/sediment/DO/pH.            [inside GRQA]
+#   "waterbase"   EEA Waterbase — EUROPE rivers/lakes: nutrients/ions/oxygen/C.
+#                 Site coords from EEA Discodata; first run downloads a
+#                 ~733 MB archive (cached thereafter).                [inside GRQA]
+#   "camels_chem" CAMELS-Chem — 516 US headwater catchments: NO3/TN/DOC/DO/pH/
+#                 ions; gauge lat/lon resolved from the USGS site svc.[overlaps WQP]
+#   "gemstat"     GEMStat open (CC-BY) subset — GLOBAL nutrients/ions/oxygen/carbon.
+#                                                                     [inside GRQA]
+#   "gloria"      GLORIA — GLOBAL optical (remote-sensing): chlorophyll-a, TSS,
+#                 CDOM, Secchi depth.
+#   "aquasat"     AquaSat — US remote-sensing matchups: TSS, chl-a, DOC, CDOM,
+#                 Secchi.                                             [overlaps WQP]
+#
+# MANUAL — online but gated; download once, then set the path in
+# observation_source_manual_paths below:
+#   "gemstat_full" Full GEMStat database (global data by email request to
+#                  gwdc@bafg.de).
+#   "grdc"         Global Runoff Data Centre — river DISCHARGE (for load-based
+#                  calibration); portal form + Terms of Use, no API.
+#
+#   "user_csv"    also fold in your own CSV (see user_observation_csv below)
+#   "skip"        no observation data at all
+#
+# Sources tagged [inside GRQA]/[overlaps WQP] duplicate data already in a broader
+# source. When you select overlapping sources, the overlap is FLAGGED at run time
+# and you are ASKED in the terminal whether to remove the duplicate observations.
+observation_data_sources = ["grqa"]
+
+# Local paths to manually-downloaded gated datasets (only needed if you selected
+# "gemstat_full" or "grdc" above). Leave "" if unused.
+observation_source_manual_paths = {
+    "gemstat_full": "",   # e.g. "/path/to/gemstat_export.csv"
+    "grdc": "",           # e.g. "/path/to/grdc_discharge.csv"
+}
+
+# When overlapping sources are selected, remove duplicate observations?
+#   "ask"   → prompt in the terminal (default; auto-removes if non-interactive)
+#   "true"  → always remove exact-duplicate rows across sources
+#   "false" → keep all rows (may duplicate)
+observation_dedup_overlaps = "ask"
 
 # GRQA observation data (Global River Water Quality Archive).
 # Used to overlay real monitoring station locations on the map and
 # generate a data availability report for your species.
-# Only used when observation_data_source = "grqa".
+# Only used when "grqa" is in observation_data_sources.
 #
 # Options:
 #   "auto" → auto-download from Zenodo (one-time ~1.2 GB download, cached locally).
@@ -728,7 +769,7 @@ grqa_local_data_path = "/Users/diogocosta/Documents/GRQA_data_v1.3"
 grqa_buffer_km = 100
 
 # User-provided observation CSV file.
-# Only used when observation_data_source = "user_csv".
+# Only used when "user_csv" is in observation_data_sources.
 #
 # The CSV header MUST contain exactly these 10 column names (case-insensitive).
 # Columns may appear in any order, but every name must be present:
@@ -888,7 +929,9 @@ if generate_report:
             river_network_shapefile=river_network_shapefile,
             river_network_mapping_key=river_network_mapping_key,
             basin_shapefile=_basin_shp,
-            observation_data_source=observation_data_source,
+            observation_data_sources=observation_data_sources,
+            observation_source_manual_paths=observation_source_manual_paths,
+            observation_dedup_overlaps=observation_dedup_overlaps,
             grqa_local_data_path=grqa_local_data_path,
             grqa_buffer_km=grqa_buffer_km,
             user_observation_csv=user_observation_csv,
