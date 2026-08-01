@@ -395,17 +395,14 @@ ss_method_csv_config = [
 #  Estimates loads from land-cover maps × export coefficients.
 #  Requires: basin shapefile + (optionally) OpenWQ HDF5 output for cell mapping.
 
-# Land-cover dataset(s) used to estimate SS loading. Provide a Python LIST (a
-# bare string still works for back-compatibility). LULC maps are ALTERNATIVES,
-# so the list is a PRIORITY CHAIN: for each basin the FIRST listed source that
-# covers it (and the requested years) is used; the rest are fallbacks.
+# Land-cover dataset used to estimate SS loading — pick ONE. Land-cover maps are
+# ALTERNATIVES (one map per basin), so unlike the observation sources they are
+# NOT combined; choose the single best source for your basin and period.
 #
-# "copernicus" uses the original LOCAL ESA-CCI path (CDS download; only needs
-# `pip install cdsapi`). EVERY OTHER source is fetched via Google Earth Engine,
-# which computes the area-per-HRU-per-class SERVER-SIDE (no multi-GB downloads)
-# but needs a one-time setup:
-#     pip install earthengine-api  &&  earthengine authenticate
-#     (set EARTHENGINE_PROJECT to your Google Cloud project id if prompted)
+# Almost all options are RASTER datasets fetched via Google Earth Engine, which
+# computes the area-per-HRU-per-class SERVER-SIDE (no multi-GB downloads). Two
+# options need no Earth Engine: "copernicus" (local ESA-CCI via CDS — only needs
+# `pip install cdsapi`) and "corine_vector" (see VECTOR below).
 #
 # GLOBAL, annual (drop-in ESA-CCI alternatives):
 #   "copernicus"    ESA CCI 300 m, 1992-2022, 22 classes     [LOCAL/CDS, no GEE]
@@ -419,16 +416,22 @@ ss_method_csv_config = [
 # REGIONAL, high-detail:
 #   "nlcd"          NLCD — US (CONUS) 30 m, 2001-2021, 16 classes
 #   "nalcms"        NALCMS — North America 30 m, 2005/10/15/20, 19 classes
-#   "corine"        CORINE — Europe 100 m, 1990-2018, 44 classes
+#   "corine"        CORINE — Europe 100 m (rasterised), 1990-2018, 44 classes
 # CROP-SPECIFIC (best crop-resolved N/P loading):
 #   "usda_cdl"      USDA Cropland Data Layer — US 30 m, annual 2008+, 100+ crops
 #   "aafc_aci"      AAFC Annual Crop Inventory — Canada 30 m, annual 2009+
+# VECTOR — EXACT polygon areas, NO Earth Engine and NO login:
+#   "corine_vector" CORINE 2018 VECTOR (Europe, 44 classes) via the EEA public
+#                   ArcGIS REST service. Area-per-HRU is the EXACT polygon
+#                   overlap (no pixelation — best for small HRUs); the 2018 epoch
+#                   is applied across the whole simulation period. Needs only
+#                   geopandas (already required) — no GEE, no CLMS account.
 #
-# Each source keeps its NATIVE classes with its own export-coefficient table
-# (crop-resolved where available). Override any class via the custom-coefficient
-# dict below (keys = native class codes for a single-source run).
+# The chosen source keeps its NATIVE classes with its own export-coefficient
+# table (crop-resolved where available). Override any class via the custom-
+# coefficient dict below (keys = that source's native class codes).
 #
-# ⚡ FULLY AUTOMATED — just edit the list. On the FIRST run with a GEE source the
+# ⚡ FULLY AUTOMATED — just set the name. On the FIRST run with a GEE source the
 #   script sets Earth Engine up FOR you, prompting in THIS terminal (alongside
 #   the other prompts):
 #     1. if `earthengine-api` is missing → offers to pip-install it;
@@ -438,8 +441,9 @@ ss_method_csv_config = [
 #        (set env EARTHENGINE_PROJECT to skip that prompt).
 #   Nothing else to do — areas-per-HRU and loads are then computed automatically.
 #   Headless/HPC runs can't open a browser, so authenticate once beforehand:
-#   `earthengine authenticate`. The "copernicus" source needs none of this.
-lulc_sources = ["copernicus"]
+#   `earthengine authenticate`. The "copernicus" and "corine_vector" sources use
+#   no Earth Engine at all, so they need none of this setup.
+lulc_source = "copernicus"
 
 # How the loads behave over time:
 #   "static"  → one constant annual export coefficient per LULC class.
@@ -938,9 +942,7 @@ if generate_report:
     try:
         if str(ss_method).lower() == "based_on_lulc":
             _ss_lulc_detail = {
-                "source": (", ".join(lulc_sources)
-                           if isinstance(lulc_sources, (list, tuple))
-                           else lulc_sources),
+                "source": lulc_source,
                 "loads": lulc_loads,
                 "shape": lulc_loads_dynamic_shape,
                 "climate_dependency": climate_dependency,

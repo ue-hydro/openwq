@@ -517,12 +517,12 @@ def _build_model_config_section(
         _lulc_loads = str(model_config.get("lulc_loads", "static")).lower()
         _shape = str(model_config.get("lulc_loads_dynamic_shape", "uniform")).lower()
         _climate_dep = bool(model_config.get("climate_dependency", False))
-        # Multi-source: prefer the plural `lulc_sources` list; fall back to the
-        # legacy singular `lulc_source` string.
-        _lulc_src = model_config.get("lulc_sources",
-                                     model_config.get("lulc_source", "copernicus"))
+        # Single source: prefer the singular `lulc_source`; tolerate a legacy
+        # `lulc_sources` list (show its first entry).
+        _lulc_src = model_config.get("lulc_source",
+                                     model_config.get("lulc_sources", "copernicus"))
         if isinstance(_lulc_src, (list, tuple)):
-            _lulc_src = ", ".join(str(s) for s in _lulc_src) or "copernicus"
+            _lulc_src = (str(_lulc_src[0]) if _lulc_src else "copernicus")
         rows.append(("&#8627; LULC source", _module_badge(_lulc_src)))
         rows.append(("&#8627; LULC loads", _module_badge(_lulc_loads)))
         if _lulc_loads == "dynamic":

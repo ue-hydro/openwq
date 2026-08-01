@@ -1227,6 +1227,11 @@ def regenerate_lulc_cache(model_config: Dict[str, Any],
     ss_config_filepath = os.path.join(openwq_in, 'ss_regen.json')
     _log(f"Recomputing LULC areas for {y0}-{y1} from {nc_dir} "
          "(re-clipping source rasters; this can take a few minutes)…")
+    # Honour the selected LULC source(s): a GEE selection recomputes the areas
+    # via Earth Engine (server-side), not the local ESA-CCI rasters. calc_
+    # copernicus_lulc dispatches on lulc_sources (None/"copernicus" = legacy).
+    _lulc_sources = model_config.get("lulc_source",
+                                     model_config.get("lulc_sources"))
     try:
         _ssd.calc_copernicus_lulc(
             ss_config_filepath=ss_config_filepath,
@@ -1235,6 +1240,7 @@ def regenerate_lulc_cache(model_config: Dict[str, Any],
             ss_method_copernicus_period=[y0, y1],
             recursive=False,
             file_pattern='ESACCI-LC-*.nc',
+            lulc_sources=_lulc_sources,
         )
     except Exception as exc:
         _log(f"LULC recompute failed: {exc}")

@@ -2504,8 +2504,13 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                             _xy = _by_src[_src]
                             _col = _src_colors.get(_src, _palette[_si % len(_palette)])
                             _traces.append({
+                                # SVG scatter, NOT scattergl: WebGL charts fail on
+                                # date axes and hit the browser's ~16 live-context
+                                # limit (a report with many charts then shows blank
+                                # obs plots + a console error). Obs series are tiny,
+                                # so SVG is both reliable and plenty fast.
                                 'x': _xy.get('x', []), 'y': _xy.get('y', []),
-                                'mode': 'markers', 'type': 'scattergl',
+                                'mode': 'markers', 'type': 'scatter',
                                 'name': _src,
                                 'marker': {'color': _col, 'size': 6, 'opacity': 0.7},
                             })
