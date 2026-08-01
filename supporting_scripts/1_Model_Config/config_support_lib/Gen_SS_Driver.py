@@ -1209,6 +1209,39 @@ def calc_copernicus_lulc(
             clipped_rasters_dir.mkdir(exist_ok=True)
             print("  ↳ Cleared LULC outputs — rebuilding from scratch.")
 
+    # ── Source-mismatch check: the cache is source-specific. Switching
+    # lulc_source (e.g. copernicus → corine_vector, or nlcd → usda_cdl) must
+    # invalidate a cache built for a different source, otherwise the old
+    # source's areas/class-codes would be silently reused. The engine writes a
+    # 'Source' column; the legacy ESA-CCI path does not (→ treated as
+    # 'copernicus').
+    if _areas_csv.is_file():
+        try:
+            import Gen_LULC_Sources as _lulc_lib
+            _cur_src = (_lulc_lib.engine_sources(lulc_sources)[0]
+                        if lulc_sources is not None
+                        and _lulc_lib.is_engine_selection(lulc_sources)
+                        else "copernicus")
+        except Exception:
+            _cur_src = "copernicus"
+        try:
+            _hdr = list(pd.read_csv(_areas_csv, nrows=0).columns)
+            if "Source" in _hdr:
+                _cs = pd.read_csv(_areas_csv, usecols=["Source"])["Source"]
+                _cache_src = str(_cs.iloc[0]) if len(_cs) else "copernicus"
+            else:
+                _cache_src = "copernicus"
+            if _cache_src != _cur_src:
+                print(f"\n  ↻ Cached LULC areas were built for source "
+                      f"'{_cache_src}' but the current source is '{_cur_src}' — "
+                      "recomputing for the new source.")
+                try:
+                    _areas_csv.unlink()
+                except OSError:
+                    pass
+        except Exception:
+            pass
+
     if _areas_csv.is_file():
         # Before reusing the cache, VERIFY it was built for the CURRENT basin:
         # compare the cached GRU_IDs against the basin shapefile's mapping_key
@@ -1331,30 +1364,31 @@ def calc_copernicus_lulc(
             _lulc_lib = None
             print(f"  WARNING: Gen_LULC_Sources unavailable ({_exc}); "
                   "falling back to the legacy ESA-CCI path.")
-        if _lulc_lib is not None and _lulc_lib.is_gee_selection(lulc_sources):
+        if _lulc_lib is not None and _lulc_lib.is_engine_selection(lulc_sources):
             _years_needed = list(range(
                 int(year_start) if year_start else 1992,
                 (int(year_end) if year_end else 2022) + 1,
             ))
-            _gee_df = _lulc_lib.compute_areas_per_hru(
+            _eng_df = _lulc_lib.compute_areas_per_hru(
                 lulc_sources,
                 ss_method_copernicus_basins_hrus,
                 years=_years_needed,
                 output_dir=str(ss_output_dir),
                 interactive=not _suppress_prompt,
             )
-            if _gee_df is not None and len(_gee_df) > 0:
+            if _eng_df is not None and len(_eng_df) > 0:
                 _create_nutrient_loads_reference(ss_output_dir)
                 # summaries/rasters are unused downstream (only results feed the
                 # nutrient-loads step) — return light.
-                return _gee_df, {}, []
+                return _eng_df, {}, []
             raise RuntimeError(
-                "GEE LULC acquisition returned no data for the selected "
-                f"source(s) {_lulc_lib.gee_sources(lulc_sources)} in this "
-                "basin.  Check Earth Engine auth (earthengine authenticate), "
-                "the basin location vs each source's coverage, and the "
-                "requested years — or use lulc_sources=['copernicus'] for the "
-                "local ESA-CCI path.")
+                "LULC acquisition returned no data for the selected source "
+                f"{_lulc_lib.engine_sources(lulc_sources)} in this basin. For a "
+                "GEE source check Earth Engine auth (earthengine authenticate); "
+                "for the vector source check network/coverage. Also verify the "
+                "basin location vs the source's coverage and the requested "
+                "years — or use lulc_source='copernicus' for the local ESA-CCI "
+                "path.")
 
     # ── Auto-download from CDS if no local directory provided ──────────
     if ss_method_copernicus_nc_lc_dir is None:
@@ -2702,11 +2736,16 @@ def set_ss_climate_adjusted_export_coefficients(
         lulc_sources=lulc_sources
     )
 
-    # Step 2: Determine export coefficients (per-source for GEE selections)
+    # Step 2: Determine export coefficients (per-source for engine selections;
+    # observed-but-unmapped classes fall back to the source default, not zero).
+    _observed = (set(results['LC_Class'].unique())
+                 if results is not None and 'LC_Class' in getattr(
+                     results, 'columns', []) else None)
     load_coefficients = _resolve_lulc_coefficients(
         lulc_sources=lulc_sources,
         default_loads_bool=ss_method_copernicus_default_loads_bool,
-        optional_load_coefficients=optional_load_coefficients)
+        optional_load_coefficients=optional_load_coefficients,
+        observed_classes=_observed)
 
     # Step 3: Calculate annual loads per HRU
     output_dir = Path(ss_config_filepath).parent / 'ss_copernicus_files'
@@ -3227,14 +3266,16 @@ def create_openwq_ss_json_from_loads(
 
 
 def _resolve_lulc_coefficients(lulc_sources, default_loads_bool,
-                               optional_load_coefficients):
+                               optional_load_coefficients,
+                               observed_classes=None):
     """Pick the export-coefficient table (LC_Class -> {species: kg/ha/yr}) for
     the nutrient-loads step, honouring the selected LULC source(s).
 
-    - GEE multi-source runs (lulc_sources selects a GEE dataset): start from
-      each selected source's per-class category coefficients (source-namespaced
-      via Gen_LULC_Sources so they match that engine's LC_Class codes), then
-      apply any custom per-class overrides from optional_load_coefficients.
+    - GEE/vector engine runs (lulc_sources selects a Gen_LULC_Sources dataset):
+      start from the source's per-class category coefficients (source-namespaced
+      so they match that engine's LC_Class codes), fill any observed-but-unmapped
+      class with the source default (via observed_classes — so nothing is
+      silently zeroed), then apply custom per-class overrides.
     - Legacy ESA-CCI ('copernicus' local) runs: the original behaviour — the
       built-in defaults, or the user's custom dict when default_loads_bool=False.
     """
@@ -3243,14 +3284,15 @@ def _resolve_lulc_coefficients(lulc_sources, default_loads_bool,
     except Exception:
         _lulc_lib = None
     if (_lulc_lib is not None and lulc_sources is not None
-            and _lulc_lib.is_gee_selection(lulc_sources)):
-        _srcs = _lulc_lib.gee_sources(lulc_sources)
+            and _lulc_lib.is_engine_selection(lulc_sources)):
+        _srcs = _lulc_lib.engine_sources(lulc_sources)
         print(f"\nUsing per-source LULC export coefficients for {_srcs} "
               "(native classes, source-namespaced)"
               + ("; applying custom per-class overrides."
                  if optional_load_coefficients else "."))
         return _lulc_lib.build_load_coefficients(
-            lulc_sources, user_overrides=optional_load_coefficients)
+            lulc_sources, user_overrides=optional_load_coefficients,
+            observed_classes=observed_classes)
     # ── Legacy ESA-CCI path (unchanged behaviour) ──
     if default_loads_bool:
         print("\nUsing DEFAULT pre-coded Copernicus land cover nutrient coefficients...")
@@ -3428,11 +3470,16 @@ def set_ss_from_copernicus_lulc_with_loads(
         lulc_sources=lulc_sources
     )
 
-    # Determine which coefficients to use
+    # Determine which coefficients to use (pass the classes actually present so
+    # unmapped ones fall back to the source default rather than zero).
+    _observed = (set(results['LC_Class'].unique())
+                 if results is not None and 'LC_Class' in getattr(
+                     results, 'columns', []) else None)
     load_coefficients = _resolve_lulc_coefficients(
         lulc_sources=lulc_sources,
         default_loads_bool=ss_method_copernicus_default_loads_bool,
-        optional_load_coefficients=optional_load_coefficients)
+        optional_load_coefficients=optional_load_coefficients,
+        observed_classes=_observed)
 
     # Get output directory
     output_dir = Path(ss_config_filepath).parent / 'ss_copernicus_files'

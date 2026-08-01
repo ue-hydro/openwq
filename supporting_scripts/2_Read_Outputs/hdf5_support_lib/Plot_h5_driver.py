@@ -70,17 +70,30 @@ def _load_observation_data(obs_dir=None, obs_csv=None):
     obs_by_species = {}
     station_locations = {}
 
+    # An observation DIR may hold either the GRQA clipped format
+    # (grqa_clipped_observations.csv) OR the MULTI-SOURCE merged file
+    # (observations_all_sources.csv, written by the multi-source obs
+    # orchestrator in the harmonized schema station_id/lat/lon/parameter/
+    # year/month/day/minute/value/units/source). Resolve which one is present.
+    _grqa_obs_path = _grqa_stn_path = None
     if obs_dir and os.path.isdir(obs_dir):
-        obs_csv_path = os.path.join(obs_dir, 'grqa_clipped_observations.csv')
-        stn_csv_path = os.path.join(obs_dir, 'grqa_clipped_stations.csv')
-        if not os.path.isfile(obs_csv_path):
-            print("  No GRQA observations file found in obs dir.")
+        _g = os.path.join(obs_dir, 'grqa_clipped_observations.csv')
+        _m = os.path.join(obs_dir, 'observations_all_sources.csv')
+        if os.path.isfile(_g):
+            _grqa_obs_path = _g
+            _grqa_stn_path = os.path.join(obs_dir, 'grqa_clipped_stations.csv')
+        elif os.path.isfile(_m):
+            obs_csv = _m   # harmonized schema → loaded by the CSV branch below
+        else:
+            print("  No GRQA or multi-source observations file in obs dir.")
             return None, None
+
+    if _grqa_obs_path:
         try:
-            df = pd.read_csv(obs_csv_path)
+            df = pd.read_csv(_grqa_obs_path)
             # Station locations
-            if os.path.isfile(stn_csv_path):
-                stn_df = pd.read_csv(stn_csv_path)
+            if os.path.isfile(_grqa_stn_path):
+                stn_df = pd.read_csv(_grqa_stn_path)
                 for _, row in stn_df.iterrows():
                     sid = str(row.get('site_id', ''))
                     lat = float(row.get('lat_wgs84', 0))
@@ -793,11 +806,18 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 _is_primary = (not pouring_point_stations
                                or _stn_id in pouring_point_stations)
                 if _is_primary:
-                    # Use plot-trace colour when fid is in plot-ID space
-                    # (mizuRoute), else MAP colour for that basin (SUMMA,
-                    # where station_to_feature gives basin IDs that aren't
-                    # in the plot trace name list).
-                    color = (_fid_color.get(fid)
+                    # Colour the observation to match the SIMULATED trace of the
+                    # HRU/reach it belongs to. The sim traces are coloured from
+                    # `_hru_color` (keyed by HRU id); station_to_feature may hand
+                    # back a MAP-space id (SUMMA basins) or a PLOT-space id
+                    # (mizuRoute), so bridge map→plot first, then look up the SAME
+                    # authoritative colour. This guarantees obs = its HRU line in
+                    # every namespace (previously it fell through to _map_fid_color
+                    # which is only aligned by coincidence).
+                    _pf = _map_to_plot.get(fid, fid)
+                    color = (_hru_color.get(_pf)
+                             or _fid_color.get(_pf)
+                             or _hru_color.get(fid)
                              or _map_fid_color.get(fid)
                              or '#888')
                 else:
@@ -1846,7 +1866,13 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   Object.keys(stationData).forEach(function(sid){{
     var ll=stationData[sid];
     var matchedFid=stationToFeature[sid]||null;
-    var isPrimary=!!pouringPointStations[sid];
+    // A station shows its basin/HRU colour when it is the reach's pouring-point
+    // station OR — for host models with NO pouring-point concept (e.g. SUMMA
+    // HRUs) — whenever it is matched to a feature at all. Only UNMATCHED
+    // stations stay gray. This mirrors the time-series colouring so the map and
+    // the plots agree (previously every SUMMA station rendered gray on the map).
+    var _noPourPoints=(Object.keys(pouringPointStations).length===0);
+    var isPrimary=(!!pouringPointStations[sid])||(_noPourPoints && !!matchedFid);
     // Feature colour for primary; gray for everything else (secondary or
     // unmatched).  We resolve the feature colour every time so the marker
     // always exposes its parent basin/reach colour in tooltips/popups.
@@ -2978,23 +3004,27 @@ def Plot_h5_driver(what2map=None,
     # Strategy: find a property whose values overlap with the HRU IDs
     # extracted from the HDF5 data columns.
     _basin_mapping_key = basin_mapping_key or 'HRU_ID'
+
+    # Collect HRU/reach IDs from the plotted traces ONCE — used by BOTH the
+    # basin and the river-network mapping-key auto-detection below. Must be
+    # computed unconditionally: a run may provide only the river-network layer
+    # (no basin GeoJSON), and the river block references _plot_hru_ids.
+    _plot_hru_ids = set()
+    if plots:
+        for p in plots:
+            for t in p.get('traces', []):
+                if t.get('legendgroup', '').startswith('debug_'):
+                    continue
+                tname = t.get('name', '')
+                if feature_label and tname.startswith(feature_label + ' '):
+                    tfid = tname[len(feature_label) + 1:]
+                else:
+                    tfid = tname
+                m = re.match(r'^(.+?) \(z\d+\)$', tfid)
+                _plot_hru_ids.add(m.group(1) if m else tfid)
+
     if _basin_geojson and _basin_geojson.get('features'):
         _props = _basin_geojson['features'][0].get('properties', {})
-
-        # Collect HRU IDs from plot data for matching
-        _plot_hru_ids = set()
-        if plots:
-            for p in plots:
-                for t in p.get('traces', []):
-                    if t.get('legendgroup', '').startswith('debug_'):
-                        continue
-                    tname = t.get('name', '')
-                    if feature_label and tname.startswith(feature_label + ' '):
-                        tfid = tname[len(feature_label) + 1:]
-                    else:
-                        tfid = tname
-                    m = re.match(r'^(.+?) \(z\d+\)$', tfid)
-                    _plot_hru_ids.add(m.group(1) if m else tfid)
 
         # First try the requested key
         _found_match = False

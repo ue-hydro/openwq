@@ -1070,20 +1070,24 @@ def Gen_Input_Driver(
     _clim_active = (_lulc_loads == "dynamic" and _climate_dep)
     _clim_timeseries = _clim_active and str(ss_climate_data_type).lower() == "time_series"
 
-    # ── LULC source selection (multi-source, priority chain) ────────────
-    # Accept the new plural `lulc_sources` (list) or the legacy singular
-    # `lulc_source` (string). None/"copernicus" → legacy local ESA-CCI path;
-    # any GEE dataset → server-side area-per-HRU via Gen_LULC_Sources.
-    _lulc_sources = kwargs.get("lulc_sources", kwargs.get("lulc_source", "copernicus"))
+    # ── LULC source selection (single source) ───────────────────────────
+    # Accept the singular `lulc_source` (string); a legacy plural `lulc_sources`
+    # list is still tolerated (first entry used). None/"copernicus" → legacy
+    # local ESA-CCI path; any GEE dataset → server-side area-per-HRU via
+    # Gen_LULC_Sources. `_lulc_sources` holds the normalized one-item selection.
+    _lulc_sources = kwargs.get("lulc_source", kwargs.get("lulc_sources", "copernicus"))
     try:
         import Gen_LULC_Sources as _lulc_lib
         _lulc_sources = _lulc_lib.normalize_selection(_lulc_sources)
-        if _lulc_lib.is_gee_selection(_lulc_sources):
-            print(f"  LULC source(s) (priority order): "
-                  f"{_lulc_lib.gee_sources(_lulc_sources)} — via Google Earth "
-                  "Engine (area-per-HRU computed server-side).")
+        if _lulc_lib.is_engine_selection(_lulc_sources):
+            _lk = _lulc_lib.engine_sources(_lulc_sources)[0]
+            _acc = _lulc_lib.LULC_SOURCES[_lk].get("access")
+            _how = ("EEA vector service (exact polygon overlay)"
+                    if _acc == "vector"
+                    else "Google Earth Engine (area-per-HRU server-side)")
+            print(f"  LULC source: {_lk} — via {_how}.")
     except Exception as _exc:
-        print(f"  WARNING: could not normalize lulc_sources ({_exc}); "
+        print(f"  WARNING: could not resolve lulc_source ({_exc}); "
               "using legacy ESA-CCI path.")
         _lulc_sources = ["copernicus"]
 
