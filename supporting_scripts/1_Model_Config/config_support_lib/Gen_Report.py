@@ -99,6 +99,17 @@ except ImportError:
     except (ImportError, SystemError):
         _GRQA_AVAILABLE = False
 
+# Multi-source observation orchestrator (GRQA + WQP + bulk sources + dedup)
+try:
+    import Gen_Observation_Sources as _obs_lib
+    _OBS_LIB_AVAILABLE = True
+except ImportError:
+    try:
+        from . import Gen_Observation_Sources as _obs_lib
+        _OBS_LIB_AVAILABLE = True
+    except (ImportError, SystemError):
+        _OBS_LIB_AVAILABLE = False
+
 try:
     from Gen_BGC_Diagram import generate_bgc_reaction_diagram
     _DIAGRAM_AVAILABLE = True
@@ -1042,6 +1053,87 @@ def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
         raise
 
 
+def _extract_observations_for_report(
+        river_network_shapefile, basin_shapefile, chemical_species, output_dir,
+        observation_data_sources=("grqa",), grqa_local_data_path=None,
+        observation_buffer_km=100, observation_source_manual_paths=None,
+        observation_dedup_overlaps="ask", user_observation_csv=None):
+    """Build the shared search area + species targets, then run the multi-source
+    observation orchestrator (Gen_Observation_Sources). Returns
+    (stations_geojson_str, stats) or (None, None) if no search area is available.
+    """
+    if not _OBS_LIB_AVAILABLE:
+        print("  WARNING: Gen_Observation_Sources unavailable; cannot extract observations.")
+        return None, None
+    if not (river_network_shapefile or basin_shapefile):
+        print("  No shapefile available for observation spatial search. Skipping.")
+        return None, None
+
+    # GRQA parameter mapping (GRQA code -> model species) for the GRQA adapter
+    grqa_mapping = {}
+    unmapped_species = []
+    for model_name in chemical_species:
+        code = _MODEL_SPECIES_TO_GRQA.get(model_name)
+        if code and code not in grqa_mapping:
+            grqa_mapping[code] = model_name
+        elif not code:
+            unmapped_species.append(model_name)
+
+    buffer_m = observation_buffer_km * 1000
+
+    # Shared search area: buffered basin, else river network + buffer
+    try:
+        import geopandas as _gpd
+        from shapely.ops import unary_union as _unary_union
+        if basin_shapefile and os.path.isfile(basin_shapefile):
+            print(f"  Search area: basin shapefile + {observation_buffer_km} km buffer.")
+            basin_gdf = _gpd.read_file(basin_shapefile)
+            if basin_gdf.crs and not basin_gdf.crs.is_geographic:
+                basin_gdf = basin_gdf.to_crs(epsg=4326)
+            centroid = basin_gdf.geometry.unary_union.centroid
+            utm_zone = int((centroid.x + 180) / 6) + 1
+            hemi = 'north' if centroid.y >= 0 else 'south'
+            utm_epsg = 32600 + utm_zone if hemi == 'north' else 32700 + utm_zone
+            basin_proj = basin_gdf.to_crs(epsg=utm_epsg)
+            search_geom = _unary_union(basin_proj.geometry).buffer(buffer_m)
+            search_area_gdf = _gpd.GeoDataFrame(
+                geometry=[search_geom], crs=f'EPSG:{utm_epsg}').to_crs(epsg=4326)
+        else:
+            print(f"  Search area: river network + {observation_buffer_km} km buffer.")
+            _tmp = GRQACalibrationExtractor(
+                output_dir=os.path.join(output_dir, 'openwq_in', 'obs_cache'),
+                species_mapper=SpeciesMapper(mapping=grqa_mapping or {"NO3N": "NO3-N"}),
+                buffer_distance_m=buffer_m)
+            river_gdf = _tmp.load_river_network(river_network_shapefile)
+            search_area_gdf = _tmp.create_buffer(river_gdf)
+    except Exception as _e:
+        print(f"  WARNING: could not build observation search area: {_e}")
+        return None, None
+
+    bbox = tuple(float(v) for v in search_area_gdf.total_bounds)  # lonW,latS,lonE,latN
+
+    # Optional pre-loaded user CSV, folded into the merge + dedup
+    extra = []
+    if user_observation_csv and os.path.isfile(str(user_observation_csv)):
+        extra.append(_obs_lib.load_user_csv_harmonized(user_observation_csv))
+
+    _grqa_path = grqa_local_data_path
+    if isinstance(_grqa_path, str) and _grqa_path.strip().lower() in ("auto", ""):
+        _grqa_path = None
+
+    return _obs_lib.extract_observations(
+        observation_data_sources,
+        search_area_gdf=search_area_gdf, bbox=bbox,
+        species=list(chemical_species),
+        grqa_species_mapping=grqa_mapping,
+        output_dir=os.path.join(output_dir, 'openwq_in'),
+        manual_paths=observation_source_manual_paths,
+        extra_frames=extra,
+        dedup_mode=observation_dedup_overlaps,
+        buffer_m=buffer_m, grqa_local_data_path=_grqa_path,
+        buffer_km=observation_buffer_km, unmapped_species=unmapped_species)
+
+
 def _load_clipped_observations_for_report(output_dir, chemical_species):
     """Load pre-extracted observation data from ``openwq_in/grqa_clipped_data/``.
 
@@ -1144,6 +1236,11 @@ def _load_clipped_observations_for_report(output_dir, chemical_species):
             'output_dir': clipped_dir,
             'no_data_species': no_data_species,
             'unmapped_species': [],
+            'plot_data': (_obs_lib.build_plot_data(
+                observations, param_col=species_col,
+                value_col=('obs_value' if 'obs_value' in observations.columns else 'value'),
+                source_col='source', default_source='Observations', date_col=date_col)
+                if _OBS_LIB_AVAILABLE else {}),
         }
 
         print(f"  Loaded {len(observations)} observations from {n_stations} stations.")
@@ -1278,6 +1375,10 @@ def _load_user_observations_for_report(user_observation_csv, chemical_species):
             'no_data_species': no_data_species,
             'unmapped_species': unmapped_csv,
             'searched_species': list(chem_set),
+            'plot_data': (_obs_lib.build_plot_data(
+                df_matched, param_col='parameter', value_col='value',
+                source_col='source', default_source='User CSV')
+                if _OBS_LIB_AVAILABLE else {}),
         }
 
         print(f"  Loaded {n_observations} observations from {n_stations} stations "
@@ -1451,6 +1552,9 @@ def generate_simulation_report(
         # column explicitly (e.g. "LINKNO", "SegId", "COMID").
         river_network_mapping_key=None,
         observation_data_source="grqa",
+        observation_data_sources=None,
+        observation_source_manual_paths=None,
+        observation_dedup_overlaps="ask",
         grqa_local_data_path=None,
         grqa_buffer_km=10,
         user_observation_csv=None,
@@ -1520,58 +1624,65 @@ def generate_simulation_report(
         print(f"  WARNING: Map layers failed: {_e}")
         _section_errors['map'] = str(_e)
 
-    # Observation stations (GRQA or user-provided CSV)
+    # Observation stations — one or more sources (GRQA, WQP, bulk, user CSV)
     obs_geojson_str = None
     obs_stats = None
-    _obs_source = (observation_data_source or "grqa").strip().lower()
-    _valid_obs_sources = {"grqa", "user_csv", "skip"}
-    if _obs_source not in _valid_obs_sources:
-        print(f"  WARNING: Unrecognised observation_data_source = '{observation_data_source}'. "
-              f"Valid options: {', '.join(sorted(_valid_obs_sources))}. Defaulting to 'skip'.")
-        _obs_source = "skip"
-    _obs_label = "GRQA"   # human-readable label for the observation source
+    _obs_label = "GRQA"   # human-readable label for the observation source(s)
 
-    if _obs_source == "skip":
-        print("  Observations: skipped by user (observation_data_source = 'skip').")
-    elif _obs_source == "user_csv":
-        _obs_label = "User CSV"
-        try:
-            print("  Loading user-provided observation CSV...")
-            obs_geojson_str, obs_stats = _load_user_observations_for_report(
-                user_observation_csv, chemical_species)
-        except Exception as _e:
-            print(f"  WARNING: User CSV observation loading failed: {_e}")
-            _section_errors['observations'] = str(_e)
+    # Back-compat: fall back to the legacy single-string arg when the list is unset
+    _sel = observation_data_sources
+    if _sel is None:
+        _sel = observation_data_source
+    _sel_norm = (_obs_lib.normalize_selection(_sel) if _OBS_LIB_AVAILABLE
+                 else [str(observation_data_source or "grqa").strip().lower()])
+
+    # Legacy single label used by downstream report sections (station popups,
+    # Next Steps): 'user_csv' when only a user CSV is selected, else the first
+    # data source (e.g. 'grqa').
+    _dk = [s for s in _sel_norm if s not in ("user_csv", "skip")]
+    _obs_source = ("user_csv" if ("user_csv" in _sel_norm and not _dk)
+                   else (_dk[0] if _dk else "skip"))
+
+    if not _sel_norm or _sel_norm == ["skip"]:
+        print("  Observations: skipped by user.")
     else:
-        # Default: GRQA extraction (or fallback to pre-extracted CSVs)
-        _obs_label = "GRQA"
-        if river_network_shapefile or basin_shapefile:
-            try:
-                print("  Extracting GRQA observation stations...")
-                _grqa_path = None
-                if isinstance(grqa_local_data_path, str) and \
-                        grqa_local_data_path.strip().lower() not in ("auto", ""):
-                    _grqa_path = grqa_local_data_path
-                obs_geojson_str, obs_stats = _extract_grqa_for_report(
+        _data_keys = [s for s in _sel_norm if s not in ("user_csv", "skip")]
+        _has_usercsv = "user_csv" in _sel_norm
+        _only_usercsv = _has_usercsv and not _data_keys
+        try:
+            if _only_usercsv:
+                _obs_label = "User CSV"
+                print("  Loading user-provided observation CSV...")
+                obs_geojson_str, obs_stats = _load_user_observations_for_report(
+                    user_observation_csv, chemical_species)
+            elif river_network_shapefile or basin_shapefile:
+                print(f"  Extracting observations from: {', '.join(_sel_norm)} ...")
+                obs_geojson_str, obs_stats = _extract_observations_for_report(
                     river_network_shapefile, basin_shapefile, chemical_species,
-                    output_dir, _grqa_path, grqa_buffer_km=grqa_buffer_km)
-            except Exception as _e:
-                print(f"  WARNING: GRQA extraction failed: {_e}")
-                print("  Falling back to pre-extracted observation data...")
-                try:
-                    obs_geojson_str, obs_stats = _load_clipped_observations_for_report(
-                        output_dir, chemical_species)
-                except Exception as _e2:
-                    print(f"  WARNING: Fallback also failed: {_e2}")
-                    _section_errors['observations'] = str(_e)
-        else:
-            # No shapefiles — try pre-extracted data
-            try:
-                print("  No shapefile for GRQA search. Looking for pre-extracted data...")
+                    output_dir,
+                    observation_data_sources=_data_keys,
+                    grqa_local_data_path=grqa_local_data_path,
+                    observation_buffer_km=grqa_buffer_km,
+                    observation_source_manual_paths=observation_source_manual_paths,
+                    observation_dedup_overlaps=observation_dedup_overlaps,
+                    user_observation_csv=user_observation_csv if _has_usercsv else None)
+                _att_srcs = obs_stats.get("sources_attempted", []) if obs_stats else []
+                if len(_att_srcs) > 1:
+                    _obs_label = "Multi-Source"   # breakdown box lists each source
+                elif obs_stats and obs_stats.get("sources_used"):
+                    _obs_label = " + ".join(obs_stats["sources_used"])
+            else:
+                print("  No shapefile for observation search. Looking for pre-extracted data...")
                 obs_geojson_str, obs_stats = _load_clipped_observations_for_report(
                     output_dir, chemical_species)
-            except Exception as _e:
-                print(f"  WARNING: Observation data loading failed: {_e}")
+        except Exception as _e:
+            print(f"  WARNING: observation extraction failed: {_e}")
+            print("  Falling back to pre-extracted observation data...")
+            try:
+                obs_geojson_str, obs_stats = _load_clipped_observations_for_report(
+                    output_dir, chemical_species)
+            except Exception as _e2:
+                print(f"  WARNING: Fallback also failed: {_e2}")
                 _section_errors['observations'] = str(_e)
 
     # Build species observation availability dict from obs_stats
@@ -2235,13 +2346,61 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                          f'Loaded from <code>{_csv_name}</code>.</div>')
             else:
                 _buf_km = obs_stats.get('buffer_km', '?')
-                H.append(f'<div class="highlight-box info">'
-                         f'<strong>Global River Water Quality Archive '
-                         f'(GRQA)</strong> — '
-                         f'Monitoring stations within {_buf_km} km of the '
-                         f'basin/river network. '
-                         f'<a href="https://zenodo.org/records/15335450" '
-                         f'target="_blank">GRQA Dataset</a></div>')
+                _attempted = obs_stats.get('sources_attempted', [])
+                _kept = obs_stats.get('per_source_counts', {})
+                _ndup = obs_stats.get('n_deduplicated', 0)
+                if _attempted:
+                    # Multi-source: list EVERY selected source, what it
+                    # contributed, and WHY it contributed nothing (a failed
+                    # download reads differently from "no data here").
+                    _status_msg = {
+                        "download_failed": "could not download — check the source "
+                                           "URL / availability",
+                        "needs_manual_path": "gated dataset — set its path in "
+                                             "observation_source_manual_paths",
+                        "unavailable": "unavailable (adapter/config issue)",
+                        "no_data": "no data in this region",
+                    }
+                    _items = []
+                    for _row in _attempted:
+                        _sname, _extracted = _row[0], int(_row[1])
+                        _status = _row[2] if len(_row) > 2 else (
+                            "ok" if _extracted else "no_data")
+                        _final = int(_kept.get(_sname, 0))
+                        if _extracted and _final:
+                            _extra = (f' <span style="color:var(--text-light)">'
+                                      f'({_extracted - _final:,} cross-source '
+                                      f'duplicate(s) removed)</span>'
+                                      if _final != _extracted else '')
+                            _items.append(f'<li><strong>{_sname}</strong> — '
+                                          f'{_final:,} observations{_extra}</li>')
+                        else:
+                            _msg = _status_msg.get(_status, "no data in this region")
+                            _items.append(f'<li><strong>{_sname}</strong> — '
+                                          f'<em style="color:var(--text-light)">'
+                                          f'{_msg}</em></li>')
+                    _dedup_note = (f' A total of <strong>{_ndup:,}</strong> cross-source '
+                                   f'duplicate observation(s) were removed (the same '
+                                   f'observation reported by more than one source).'
+                                   if _ndup else '')
+                    H.append(
+                        f'<div class="highlight-box info">'
+                        f'<strong>Observation data merged from '
+                        f'{len(_attempted)} source(s)</strong> within {_buf_km} km of '
+                        f'the basin/river network. Each source\'s parameter names are '
+                        f'mapped to your BGC/model species, and overlapping sources are '
+                        f'de-duplicated (a source\'s own rows are always kept, so adding '
+                        f'a source never lowers the count).{_dedup_note}'
+                        f'<ul style="margin:0.5rem 0 0 1.2rem;padding-left:1rem">'
+                        f'{"".join(_items)}</ul></div>')
+                else:
+                    H.append(f'<div class="highlight-box info">'
+                             f'<strong>Global River Water Quality Archive '
+                             f'(GRQA)</strong> — '
+                             f'Monitoring stations within {_buf_km} km of the '
+                             f'basin/river network. '
+                             f'<a href="https://zenodo.org/records/15335450" '
+                             f'target="_blank">GRQA Dataset</a></div>')
 
             _no_data = obs_stats.get('no_data_species', [])
             _unmapped = obs_stats.get('unmapped_species', [])
@@ -2262,12 +2421,14 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                         f'</div>')
                 else:
                     _buf_km = obs_stats.get('buffer_km', '?')
+                    _srcs_tried = ', '.join(n for n, _ in
+                                            obs_stats.get('sources_attempted', [])) or 'the selected sources'
                     H.append(
                         f'<div class="highlight-box" '
                         f'style="border-left-color:var(--accent);">'
-                        f'<strong>No GRQA monitoring stations found</strong> '
-                        f'within {_buf_km} km of the basin/river network for '
-                        f'the following GRQA-supported species: {sp_list}. '
+                        f'<strong>No monitoring stations found</strong> '
+                        f'within {_buf_km} km of the basin/river network from '
+                        f'{_srcs_tried}, for the following model species: {sp_list}. '
                         f'Try increasing <code>grqa_buffer_km</code> to widen '
                         f'the search area.</div>')
                 if _unmapped:
@@ -2316,6 +2477,90 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                             f'<td class="num">{sp["n_observations"]:,}</td>'
                             f'<td>{yr}</td></tr>')
                     H.append('</table></div></div>')
+
+                # Per-species observation time series (conc vs time), one chart
+                # per species, a distinct colour + legend entry per source.
+                _plot_data = obs_stats.get('plot_data') or {}
+                _no_chart_sp = obs_stats.get('no_data_species') or []
+                if _plot_data or _no_chart_sp:
+                    H.append('<h3 style="margin-top:1.5rem">Observation time series '
+                             '<span style="font-weight:400;color:var(--text-light)">'
+                             '— concentration vs time, coloured by source</span></h3>')
+                if _plot_data:
+                    _src_colors = {
+                        'GRQA': '#0066cc', 'WQP': '#00a86b', 'GEMStat': '#ff6b35',
+                        'GLORIA': '#764ba2', 'Waterbase': '#f59e0b',
+                        'CAMELS-Chem': '#e24b4a', 'AquaSat': '#14b8a6',
+                        'GEMStat (full)': '#a3562a', 'User CSV': '#8b5cf6',
+                    }
+                    _palette = ['#0066cc', '#00a86b', '#ff6b35', '#764ba2',
+                                '#f59e0b', '#e24b4a', '#14b8a6', '#8b5cf6']
+                    _specs = []
+                    for _ci, _sp in enumerate(sorted(_plot_data.keys())):
+                        _by_src = _plot_data[_sp]
+                        _div = f'obschart_{_ci}'
+                        _traces = []
+                        for _si, _src in enumerate(sorted(_by_src.keys())):
+                            _xy = _by_src[_src]
+                            _col = _src_colors.get(_src, _palette[_si % len(_palette)])
+                            _traces.append({
+                                'x': _xy.get('x', []), 'y': _xy.get('y', []),
+                                'mode': 'markers', 'type': 'scattergl',
+                                'name': _src,
+                                'marker': {'color': _col, 'size': 6, 'opacity': 0.7},
+                            })
+                        H.append(f'<div id="{_div}" style="height:330px;'
+                                 f'margin:0.4rem 0 1.6rem"></div>')
+                        _specs.append({'id': _div, 'sp': _sp, 'traces': _traces})
+                    # Simulation period (from the host-model control file) — drawn
+                    # on every chart as a shaded band + dotted start/end lines, so
+                    # you can see which observations fall inside the modelled window.
+                    _sim_start, _sim_end = _sim_period_datetimes(
+                        file_manager_path, hostmodel)
+                    # Defer to DOMContentLoaded so _owqLayout/PCFG (defined later
+                    # in the document) are available when these build.
+                    H.append(
+                        '<script>document.addEventListener("DOMContentLoaded",'
+                        'function(){var S=' + json.dumps(_specs) + ';'
+                        'var simStart=' + json.dumps(_sim_start)
+                        + ',simEnd=' + json.dumps(_sim_end) + ';'
+                        'var simShapes=[],simAnn=[];'
+                        'if(simStart&&simEnd){'
+                        'simShapes=[{type:"rect",xref:"x",yref:"paper",x0:simStart,'
+                        'x1:simEnd,y0:0,y1:1,fillcolor:"rgba(100,116,139,0.10)",'
+                        'line:{width:0},layer:"below"},'
+                        '{type:"line",xref:"x",yref:"paper",x0:simStart,x1:simStart,'
+                        'y0:0,y1:1,line:{color:"#64748b",width:1.5,dash:"dot"}},'
+                        '{type:"line",xref:"x",yref:"paper",x0:simEnd,x1:simEnd,'
+                        'y0:0,y1:1,line:{color:"#64748b",width:1.5,dash:"dot"}}];'
+                        '}'
+                        'S.forEach(function(c){try{'
+                        'var xs=[];c.traces.forEach(function(t){xs=xs.concat(t.x);});'
+                        'var xr=null;if(xs.length){xs.sort();var lo=xs[0],hi=xs[xs.length-1];'
+                        'if(simStart&&simEnd){if(simStart<lo)lo=simStart;if(simEnd>hi)hi=simEnd;}'
+                        'xr=[lo,hi];}'
+                        'var traces=c.traces.slice();'
+                        'if(simStart&&simEnd){traces.push({x:[null],y:[null],'
+                        'mode:"markers",type:"scatter",name:"Simulation period ("'
+                        '+simStart.slice(0,4)+"-"+simEnd.slice(0,4)+")",'
+                        'marker:{color:"rgba(100,116,139,0.55)",size:13,symbol:"square"},'
+                        'hoverinfo:"skip",showlegend:true});}'
+                        'Plotly.newPlot(c.id,traces,_owqLayout({'
+                        'title:{text:c.sp+"  (concentration vs time)",font:{size:14}},'
+                        'xaxis:{title:"Date",type:"date",range:xr,autorange:!xr},'
+                        'yaxis:{title:"Concentration (obs units)"},'
+                        'showlegend:true,legend:{orientation:"h",y:-0.22},'
+                        'shapes:simShapes,annotations:simAnn'
+                        '}),PCFG);window._owqPlotIds.push(c.id);}catch(e){}});});'
+                        '</script>')
+                if _no_chart_sp:
+                    _nc = ', '.join(f'<code>{s}</code>' for s in _no_chart_sp)
+                    H.append(
+                        '<div class="highlight-box" '
+                        'style="border-left-color:var(--text-light);">'
+                        f'<strong>No time-series chart</strong> for {_nc} — '
+                        '<em>no observations were available for these species in the '
+                        'selected source(s).</em></div>')
 
                 # Species with no data
                 if _no_data:
@@ -4039,6 +4284,9 @@ def generate_report(
         # column explicitly (e.g. "LINKNO", "SegId", "COMID").
         river_network_mapping_key=None,
         observation_data_source="grqa",
+        observation_data_sources=None,
+        observation_source_manual_paths=None,
+        observation_dedup_overlaps="ask",
         grqa_local_data_path=None,
         grqa_buffer_km=10,
         user_observation_csv=None,
@@ -4111,6 +4359,9 @@ def generate_report(
             basin_shapefile=basin_shapefile,
             river_network_mapping_key=river_network_mapping_key,
             observation_data_source=observation_data_source,
+            observation_data_sources=observation_data_sources,
+            observation_source_manual_paths=observation_source_manual_paths,
+            observation_dedup_overlaps=observation_dedup_overlaps,
             grqa_local_data_path=grqa_local_data_path,
             grqa_buffer_km=grqa_buffer_km,
             user_observation_csv=user_observation_csv,

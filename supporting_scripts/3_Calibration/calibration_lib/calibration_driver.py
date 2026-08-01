@@ -384,7 +384,10 @@ def run_calibration(
         #   straight from the model config; nothing is re-downloaded.
         if not observation_data_path:
             obs_source = _obs.get("source", "skip")
-            if obs_source in ("grqa", "user_csv"):
+            _obs_sources = _obs.get("sources", [])
+            _has_obs = (obs_source not in ("skip", "", None)
+                        or any(s not in ("skip", "") for s in _obs_sources))
+            if _has_obs:
                 _log_adapter = lambda *a, **k: logger.info(
                     " ".join(str(x) for x in a)) if a else None
                 observation_data_path = config_integration.prepare_calibration_observations_csv(
@@ -395,7 +398,8 @@ def run_calibration(
                     observation_data_path = (
                         _obs.get("grqa_local_data_path", "")
                         if obs_source == "grqa"
-                        else _obs.get("user_observation_csv", ""))
+                        else _obs.get("user_observation_csv", "")
+                        if obs_source == "user_csv" else "")
 
         # Make sure we end up with a real CSV (not the raw GRQA directory).
         observation_data_path = _validate_observation_csv(
