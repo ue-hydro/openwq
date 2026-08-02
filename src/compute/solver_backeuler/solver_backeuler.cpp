@@ -153,7 +153,7 @@ void OpenWQ_compute::Solve_with_ForwardEuler_Sediment(
 
     // Pre-fetch array references
     auto& sedmass = *OpenWQ_vars.sedmass;
-    auto& d_sedmass_dt = *OpenWQ_vars.d_sedmass_dt;
+    auto& d_sedmass_transport_dt = *OpenWQ_vars.d_sedmass_transport_dt;
     auto& d_sedmass_mobilized_dt = *OpenWQ_vars.d_sedmass_mobilized_dt;
 
     /* #####################################################
@@ -172,7 +172,7 @@ void OpenWQ_compute::Solve_with_ForwardEuler_Sediment(
             iy = (idx / nz) % ny;
             iz = idx % nz;
 
-            dm_dt = d_sedmass_dt(ix, iy, iz) + d_sedmass_mobilized_dt(ix, iy, iz);
+            dm_dt = d_sedmass_transport_dt(ix, iy, iz) + d_sedmass_mobilized_dt(ix, iy, iz);
 
             // Apply change and ensure non-negativity
             double new_sedmass = sedmass(ix, iy, iz) + dm_dt;

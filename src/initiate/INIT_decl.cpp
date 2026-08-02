@@ -141,7 +141,7 @@ void OpenWQ_initiate::initmemory(
 
             // initiate state variable
             (*OpenWQ_vars.sedmass) = domain_xyz;
-            (*OpenWQ_vars.d_sedmass_dt) = domain_xyz;
+            (*OpenWQ_vars.d_sedmass_transport_dt) = domain_xyz;
         
         }
 

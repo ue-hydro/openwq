@@ -188,7 +188,7 @@ int sedimentFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
 
     // Reset derivatives
     (*user_data.vars.d_sedmass_mobilized_dt).zeros();
-    (*user_data.vars.d_sedmass_dt).zeros();
+    (*user_data.vars.d_sedmass_transport_dt).zeros();
 
     // OPTIMIZED #7: use cached sediment compartment index
     const unsigned int sed_icmp = user_data.sed_icmp;
@@ -214,7 +214,7 @@ int sedimentFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
     }
 
     // OPTIMIZED #10: Copy derivatives to SUNDIALS f vector using raw pointers
-    const double* dt_ptr = user_data.vars.d_sedmass_dt->memptr();
+    const double* dt_ptr = user_data.vars.d_sedmass_transport_dt->memptr();
     const double* mob_ptr = user_data.vars.d_sedmass_mobilized_dt->memptr();
 
     for (unsigned int i = 0; i < sed_size; i++){
