@@ -61,7 +61,7 @@ void OpenWQ_compute::Reset_Deriv(
             #pragma omp single
             {
                 (*OpenWQ_vars.d_sedmass_mobilized_dt).zeros();
-                (*OpenWQ_vars.d_sedmass_dt).zeros();
+                (*OpenWQ_vars.d_sedmass_transport_dt).zeros();
             }
         }
     }

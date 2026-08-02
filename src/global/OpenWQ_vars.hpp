@@ -52,7 +52,7 @@ class OpenWQ_vars
 
         std::unique_ptr<arma::Cube<double>>
             sedmass,                        // sediment mass in flow-transport compartment (e.g, runoff)
-            d_sedmass_dt,                   // derivative of sediments in flow-transport compartment (e.g. runoff)
+            d_sedmass_transport_dt,                   // derivative of sediments in flow-transport compartment (e.g. runoff)
             d_sedmass_mobilized_dt;         // sediments mobilized in sediment comparment (e.g., soil)
 
         // ############################################
