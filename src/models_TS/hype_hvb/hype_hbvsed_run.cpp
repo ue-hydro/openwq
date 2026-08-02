@@ -118,7 +118,9 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
 	  // Mobilization with flow
 	  // Assuming here that, since d_sedmass_mobilized_dt is the mobilized sediment,
 	  // then it will all move with flow regardless of the flow/runoff intensity
-    (*OpenWQ_vars.d_sedmass_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_s, iy_s, iz_s);
+    // [conservation fix] Do NOT fold the mobilized (eroded) sediment into d_sedmass_dt.
+    // d_sedmass_dt carries ONLY transport (below); the solver adds d_sedmass_mobilized_dt
+    // (the erosion source) separately, so the eroded mass is counted exactly once.
 
     // Move sediments with flow: from source to recipient
     // removing from source
