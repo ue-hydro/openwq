@@ -3608,6 +3608,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    mapping_key_values="all",\n'
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
+            f'    sediment_as_well={_sed_flag},\n'
             f'    debugmode=True,\n'
             f'    output_path="{_out_all_html_safe}",\n'
             f'    river_network_shp="{_shp_path_safe}",\n'

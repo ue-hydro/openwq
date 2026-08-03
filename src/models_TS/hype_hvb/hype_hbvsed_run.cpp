@@ -25,7 +25,7 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
     OpenWQ_wqconfig& OpenWQ_wqconfig,
     const int source, const int ix_s, const int iy_s, const int iz_s,
     const int recipient, const int ix_r, const int iy_r, const int iz_r,
-    double wflux_s2r, 
+    double wflux_s2r, double wmass_source,
     std::string TS_type){
 
 
@@ -57,11 +57,16 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
     if (xyz_SedCompt[exchange_direction] != 0)
       return;
 
-    // Return if there is snow
+    // Return if there is snow (erosion inhibited by snow/frost cover).
+    // erodInhibut_icmp == -1 means EROSION_INHIBIT_COMPARTMENT = "NONE": the
+    // inhibition is disabled (e.g. river-routing hosts with no snow compartment).
     // TODO: if (frostdepth<0. .AND. frostdepth>-9999.) then return
-    double snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
-          erodInhibut_icmp,
-          ix_s,iy_s,iz_s);
+    double snow = 0.0;
+    if (erodInhibut_icmp >= 0){
+      snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+            erodInhibut_icmp,
+            ix_s,iy_s,iz_s);
+    }
     if (snow != 0.0)
       return;
 
@@ -90,9 +95,26 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
 
     // Calculate mobilised sediments from erosion index, slope and rainfall
     erosionindex = eroindex / eroindexpar;
+
+    // HYPE's formula expects precipitation as a DEPTH (mm); openWQ passes the
+    // water as a VOLUME (m3). Convert using the cell area, which the host
+    // coupling publishes as a dependency variable named "cellArea_m2". Look it
+    // up BY NAME (not a fixed index) so any host works regardless of how many
+    // dependency variables it registers (SUMMA and mizuRoute differ). If no
+    // host publishes it, fall back to the raw volume so behaviour is unchanged.
+    double cellArea_m2 = 0.0;
+    const int nDep = (int) OpenWQ_hostModelconfig.get_num_HydroDepend();
+    for (int di = 0; di < nDep; di++){
+        if (OpenWQ_hostModelconfig.get_HydroDepend_name_at(di).compare("cellArea_m2") == 0){
+            cellArea_m2 = OpenWQ_hostModelconfig.get_dependVar_at(di, ix_r, iy_r, 0);
+            break;
+        }
+    }
+    double prec_mm = (cellArea_m2 > 0.0) ? (wflux_s2r / cellArea_m2 * 1000.0) : wflux_s2r;
+
     mobilisedsed = pow((slope / 5.),slopepar)
-                  * lusepar * soilpar * erosionindex 
-                  * pow(wflux_s2r,precexppar); // !tonnes/km2 = g/m2
+                  * lusepar * soilpar * erosionindex
+                  * pow(prec_mm,precexppar); // !tonnes/km2 = g/m2
     
     // Eroded sediment calculated from mobilised sediment with a monthly factor
     // From HYPE: erodmonth = 1. + monthpar(m_erodmon, current_time%date%month)
@@ -103,7 +125,12 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
       int current_month = tm_sim.tm_mon; // 0-based (Jan=0, Dec=11)
       erodmonth = 1.0 + OpenWQ_wqconfig.TS_model->HypeHVB->monthpar[current_month];
     }
-    (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_r, iy_r, iz_r) = 1000. * mobilisedsed * erodmonth;  // kg/km2
+    // Convert the areal density (g/m2) to an ABSOLUTE mass (kg) for this cell:
+    //   g/m2 * area_m2 = g ; / 1000 = kg.
+    // If cell area is unavailable, keep the legacy 1000x scaling so results are
+    // unchanged for couplings that do not publish cell area.
+    double abs_scale = (cellArea_m2 > 0.0) ? (cellArea_m2 / 1000.0) : 1000.0;
+    (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_r, iy_r, iz_r) = abs_scale * mobilisedsed * erodmonth;  // kg
   
   // #######################
   // Mobind with runoff if flow exists
@@ -122,12 +149,42 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
     // d_sedmass_transport_dt carries ONLY transport (below); the solver adds d_sedmass_mobilized_dt
     // (the erosion source) separately, so the eroded mass is counted exactly once.
 
-    // Move sediments with flow: from source to recipient
-    // removing from source
-    (*OpenWQ_vars.d_sedmass_transport_dt)(ix_s, iy_s, iz_s) -= (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
+    // Advect sediment with the flow (residence-time-limited): move only the
+    // fraction of this cell's suspended sediment that actually flows out this
+    // step, frac = Qout*dt / (cell water volume). Moving ALL of it regardless of
+    // flow (the previous scheme) left the routed transport undamped and made the
+    // reach sediment oscillate. frac==1 recovers the full flush (e.g. SUMMA
+    // runoff, where wmass_source == wflux_s2r).
+    {
+      double frac = (wmass_source > 0.0) ? (wflux_s2r / wmass_source) : 0.0;
+      if (frac > 1.0) frac = 1.0;
+      if (frac < 0.0) frac = 0.0;
+      double moved = (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s) * frac;
+      // removing from source
+      (*OpenWQ_vars.d_sedmass_transport_dt)(ix_s, iy_s, iz_s) -= moved;
+      // adding to recipient
+      (*OpenWQ_vars.d_sedmass_transport_dt)(ix_r, iy_r, iz_r) += moved;
+    }
 
-    // adding to recipient
-    (*OpenWQ_vars.d_sedmass_transport_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
+  // #######################
+  // Sediment leaving the domain with surface runoff (recipient == -1 = OUT)
+  } else if (TS_type.compare("TS_type_LE") == 0
+      && source == erodFlux_icmp
+      && recipient == -1
+      && wflux_s2r > 0.0
+      && ix_s!=-1
+      && iy_s!=-1
+      && iz_s!=-1){
+
+    // Surface runoff exiting the system carries its suspended sediment out.
+    // Same residence-time-limited fraction as the reach-to-reach advection
+    // above: only the sediment carried by the outflow leaves this step.
+    {
+      double frac = (wmass_source > 0.0) ? (wflux_s2r / wmass_source) : 0.0;
+      if (frac > 1.0) frac = 1.0;
+      if (frac < 0.0) frac = 0.0;
+      (*OpenWQ_vars.d_sedmass_transport_dt)(ix_s, iy_s, iz_s) -= (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s) * frac;
+    }
 
   }
 }
