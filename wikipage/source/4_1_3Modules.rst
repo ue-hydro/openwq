@@ -1116,7 +1116,21 @@ Module Options
 | ``NONE``                         | No sediment transport                                    |
 +----------------------------------+----------------------------------------------------------+
 
-In the :doc:`Master configuration <4_1_1Master>`, the ``TRANSPORT_SEDIMENTS`` block also requires a ``SEDIMENT_COMPARTMENT`` key specifying which compartment the erosion process acts on.
+In the :doc:`Master configuration <4_1_1Master>`, the ``TRANSPORT_SEDIMENTS`` block also requires two compartment keys:
+
+* ``SEDIMENT_COMPARTMENT`` — the compartment that **receives the external water flux (EWF)** driving erosion (i.e. where sediment is *mobilized*). Erosion only fires when a precipitation/runoff EWF is delivered into this compartment. In the SUMMA coupling, precipitation EWFs land in ``SCALARCANOPYWAT`` / ``ILAYERVOLFRACWAT_SNOW`` / ``RUNOFF`` (never the soil layer), so use ``RUNOFF``; in the mizuRoute coupling the lateral-runoff EWF is delivered to ``RIVER_NETWORK_REACHES``.
+* ``TRANSPORT_COMPARTMENT`` — the compartment in which the suspended-sediment state (``sedmass``) lives, is routed between cells, and is written to the output. For SUMMA and mizuRoute this is the same compartment as ``SEDIMENT_COMPARTMENT`` (``RUNOFF`` and ``RIVER_NETWORK_REACHES`` respectively).
+
+.. note::
+
+   **Cell/reach area is required for physically-correct units.** The HYPE erosion
+   formula expects precipitation as a *depth* (mm), while openWQ passes water as a
+   *volume* (m³). The sediment module therefore looks up a dependency variable named
+   ``cellArea_m2`` (published by the host coupling) to convert volume → depth and the
+   resulting areal density (g/m²) → absolute mass (kg). The SUMMA coupling publishes
+   the HRU area and the mizuRoute coupling the reach local-catchment area
+   (``RPARAM``/``basArea``). If a coupling does not publish ``cellArea_m2``, the module
+   falls back to the legacy volume-based scaling (magnitude will not be physical).
 
 
 Common Configuration
@@ -1140,14 +1154,24 @@ CONFIGURATION
 ..............
 
 +--------------------------------------+--------------------------------------------------------------+
-| Key                                  | Description                                                  |
-+======================================+==============================================================+
-| ``direction``                       | Erosion direction: ``"x"``, ``"y"``, or ``"z"``              |
+| ``direction``                        | Erosion direction: ``"x"``, ``"y"``, or ``"z"``              |
 +--------------------------------------+--------------------------------------------------------------+
-| ``EROSION_INHIBIT_COMPARTMENT``     | Compartment that inhibits erosion (e.g., snow cover)         |
+| ``EROSION_INHIBIT_COMPARTMENT``      | Compartment whose stored water (e.g. snow) inhibits erosion  |
+|                                      | when non-zero. Use ``"NONE"`` to disable it (required for    |
+|                                      | river-routing hosts such as mizuRoute).                      |
 +--------------------------------------+--------------------------------------------------------------+
-| ``Data_Format``                     | ``"JSON"`` or ``"ASCII"`` for parameter input                |
+| ``Data_Format``                      | ``"JSON"`` or ``"ASCII"`` for parameter input                |
 +--------------------------------------+--------------------------------------------------------------+
+
+.. note::
+
+   **Sediment routing is flow-proportional.** Suspended sediment (``sedmass``) is
+   advected from a cell to its downstream cell by the fraction of the cell's water
+   that leaves each step — ``frac = Qout·dt / (cell water volume)`` (capped at 1) —
+   i.e. residence-time-limited transport, and it is flushed out of the domain at the
+   outlet (recipient ``-1``). ``frac == 1`` recovers a full per-step flush (e.g. the
+   SUMMA surface-runoff compartment). This replaces the earlier scheme that moved all
+   sediment every step regardless of flow, which left the routed transport undamped.
 
 
 HYPE_MMF
@@ -1249,6 +1273,40 @@ Example (HYPE_HBVSED)
                 "0": ["IX", "IY", "IZ", "VALUE"],
                 "1": [13, 1, 1, 0.094],
                 "2": [19, 1, 1, 0.418]
+            }
+        }
+    }
+
+The example above is for the SUMMA coupling, where erosion is snow-inhibited
+(``EROSION_INHIBIT_COMPARTMENT`` = ``ILAYERVOLFRACWAT_SNOW``) and the sediment
+compartment is ``RUNOFF``. For a **river-routing coupling (mizuRoute)**, set the
+sediment/transport compartment to ``RIVER_NETWORK_REACHES`` (in the master file) and
+disable the snow inhibition with ``"EROSION_INHIBIT_COMPARTMENT": "NONE"``:
+
+.. code-block:: json
+
+    {
+        "MODULE_NAME": "HYPE_HBVSED",
+        "CONFIGURATION": {
+            "direction": "z",
+            "EROSION_INHIBIT_COMPARTMENT": "NONE",
+            "DATA_FORMAT": "JSON"
+        },
+        "PARAMETER_DEFAULTS": {
+            "SLOPE": 0.4,
+            "EROSION_INDEX": 0.4,
+            "SOIL_EROSION_FACTOR_LAND_DEPENDENCE": 0.4,
+            "SOIL_EROSION_FACTOR_SOIL_DEPENDENCE": 0.4,
+            "SLOPE_EROSION_FACTOR_EXPONENT": 1.5,
+            "PRECIP_EROSION_FACTOR_EXPONENT": 1.5,
+            "PARAM_SCALING_EROSION_INDEX": 0.5
+        },
+        "MONTHLY_EROSION_FACTOR": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        "PARAMETERS": {
+            "SLOPE": {
+                "0": ["IX", "IY", "IZ", "VALUE"],
+                "1": ["ALL", 1, 1, 0.4]
             }
         }
     }

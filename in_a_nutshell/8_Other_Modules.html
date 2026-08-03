@@ -889,49 +889,63 @@
                         <pre style="font-size: 0.72rem;">
 {
   <span class="comment">// In openWQ_master.json → MODULES</span>
-  <span class="string">"SEDIMENT_TRANSPORT"</span>: {
+  <span class="string">"TRANSPORT_SEDIMENTS"</span>: {
     <span class="string">"MODULE_NAME"</span>: <span class="string">"HYPE_HBVSED"</span>,
-    <span class="string">"MODULE_CONFIG_FILEPATH"</span>: <span class="string">"sediment_config.json"</span>
+    <span class="string">"SEDIMENT_COMPARTMENT"</span>: <span class="string">"RUNOFF"</span>,    <span class="comment">// erosion source (EWF recipient)</span>
+    <span class="string">"TRANSPORT_COMPARTMENT"</span>: <span class="string">"RUNOFF"</span>,   <span class="comment">// carries + outputs sedmass</span>
+    <span class="string">"MODULE_CONFIG_FILEPATH"</span>: <span class="string">"openWQ_MODULE_HYPE_HBVSED.json"</span>
   }
+  <span class="comment">// mizuRoute: both = "RIVER_NETWORK_REACHES"</span>
 }
 
-<span class="comment">// sediment_config.json - HYPE_HBVSED</span>
+<span class="comment">// openWQ_MODULE_HYPE_HBVSED.json</span>
 {
-  <span class="string">"HBVSED_CONFIGURATION"</span>: {
-    <span class="string">"erosion_index"</span>: <span class="keyword">0.5</span>,
-    <span class="string">"flow_exponent"</span>: <span class="keyword">1.5</span>,
-    <span class="string">"deposition_rate"</span>: <span class="keyword">0.1</span>
-  }
-}
-
-<span class="comment">// sediment_config.json - HYPE_MMF</span>
-{
-  <span class="string">"MMF_CONFIGURATION"</span>: {
-    <span class="string">"soil_erodibility_K"</span>: <span class="keyword">0.3</span>,
-    <span class="string">"cover_factor_C"</span>: <span class="keyword">0.2</span>,
-    <span class="string">"slope_factor"</span>: <span class="keyword">0.05</span>,
-    <span class="string">"cohesion"</span>: <span class="keyword">5.0</span>
+  <span class="string">"MODULE_NAME"</span>: <span class="string">"HYPE_HBVSED"</span>,
+  <span class="string">"CONFIGURATION"</span>: {
+    <span class="string">"direction"</span>: <span class="string">"z"</span>,
+    <span class="string">"EROSION_INHIBIT_COMPARTMENT"</span>: <span class="string">"ILAYERVOLFRACWAT_SNOW"</span>,
+    <span class="comment">//                    ↑ use "NONE" for mizuRoute (no snow)</span>
+    <span class="string">"Data_Format"</span>: <span class="string">"JSON"</span>
+  },
+  <span class="string">"PARAMETER_DEFAULTS"</span>: {
+    <span class="string">"SLOPE"</span>: <span class="keyword">0.4</span>, <span class="string">"EROSION_INDEX"</span>: <span class="keyword">0.4</span>,
+    <span class="string">"SLOPE_EROSION_FACTOR_EXPONENT"</span>: <span class="keyword">1.5</span>,
+    <span class="string">"PRECIP_EROSION_FACTOR_EXPONENT"</span>: <span class="keyword">1.5</span>,
+    <span class="string">"PARAM_SCALING_EROSION_INDEX"</span>: <span class="keyword">0.5</span>
   }
 }
                         </pre>
+                        <div class="highlight-box" style="margin-top: 12px; font-size: 0.78rem;">
+                            <strong>Units &amp; routing:</strong> the host coupling publishes a
+                            <code>cellArea_m2</code> dependency variable (HRU area for SUMMA,
+                            reach catchment area for mizuRoute) so erosion converts water
+                            volume&nbsp;→&nbsp;precip depth (mm) and areal density&nbsp;→&nbsp;absolute
+                            mass (kg). Sediment is advected downstream flow-proportionally
+                            (<code>Q<sub>out</sub>·dt / volume</code>) and flushed at the outlet.
+                        </div>
                     </div>
                     <div class="column">
                         <div class="card accent">
                             <h3>HYPE_HBVSED Parameters</h3>
-                            <table class="param-table" style="font-size: 0.8rem;">
-                                <tr><th>Parameter</th><th>Range</th></tr>
-                                <tr><td>erosion_index</td><td>0.1 - 5.0</td></tr>
-                                <tr><td>flow_exponent</td><td>1.0 - 2.5</td></tr>
-                                <tr><td>deposition_rate</td><td>0.01 - 0.5</td></tr>
+                            <table class="param-table" style="font-size: 0.72rem;">
+                                <tr><th>Parameter</th><th>Typical</th></tr>
+                                <tr><td>SLOPE</td><td>0.0 - 1.0</td></tr>
+                                <tr><td>EROSION_INDEX</td><td>0.1 - 1.0</td></tr>
+                                <tr><td>SLOPE_EROSION_FACTOR_EXPONENT</td><td>1.0 - 2.0</td></tr>
+                                <tr><td>PRECIP_EROSION_FACTOR_EXPONENT</td><td>1.0 - 2.0</td></tr>
+                                <tr><td>PARAM_SCALING_EROSION_INDEX</td><td>0.1 - 1.0</td></tr>
                             </table>
+                            <p style="font-size: 0.72rem; margin-top: 6px;">+ optional <code>MONTHLY_EROSION_FACTOR</code> (12 values)</p>
                         </div>
                         <div class="card primary" style="margin-top: 10px;">
                             <h3>HYPE_MMF Parameters</h3>
                             <table class="param-table" style="font-size: 0.8rem;">
                                 <tr><th>Parameter</th><th>Range</th></tr>
-                                <tr><td>soil_erodibility_K</td><td>0.1 - 0.7</td></tr>
-                                <tr><td>cover_factor_C</td><td>0.0 - 1.0</td></tr>
-                                <tr><td>cohesion</td><td>1 - 20 kPa</td></tr>
+                                <tr><td>COHESION</td><td>1 - 20 kPa</td></tr>
+                                <tr><td>ERODIBILITY</td><td>0.1 - 5.0 g/J</td></tr>
+                                <tr><td>SREROEXP</td><td>1.0 - 2.0</td></tr>
+                                <tr><td>CROPCOVER / GROUNDCOVER</td><td>0 - 1</td></tr>
+                                <tr><td>TRANSPORT_FACTOR_1 / _2</td><td>0 - 1</td></tr>
                             </table>
                         </div>
                     </div>
