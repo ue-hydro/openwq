@@ -43,9 +43,7 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
     // iteractive variables
     std::string icmp_i_name;
     int input_direction_index;
-    // NOTE: the inhibiting-compartment index lookup is not yet implemented;
-    // initialise to a deterministic in-range default so the value passed to
-    // HypeHVB_infoVect() is never indeterminate.
+    // erosion-inhibit compartment index (resolved from its name below)
     int erodingInhibit_cmpt_index = 0;
     // Other local variables
     typedef std::tuple<
@@ -82,7 +80,23 @@ void OpenWQ_readjson::SetConfigInfo_TSModule_HBVsed_hype(
         OpenWQ_wqconfig, OpenWQ_output,
         json_subStruct, jsonKey,
         errorMsgIdentifier,
-        true); 
+        true);
+
+    // Resolve EROSION_INHIBIT_COMPARTMENT name -> compartment index.
+    // (Was previously hardcoded to 0, silently pinning the snow-inhibit guard to
+    // the CANOPY compartment regardless of configuration, which permanently
+    // inhibited erosion because CANOPY holds water during every rain event.)
+    // "NONE" disables the snow/frost inhibition entirely -> sentinel index -1.
+    // This is needed for river-routing hosts (e.g. mizuRoute) whose only
+    // compartment always holds water and which have no snow compartment.
+    if (erodingInhibit_cmpt.compare("NONE") == 0){
+        erodingInhibit_cmpt_index = -1;
+    }else{
+        erodingInhibit_cmpt_index = OpenWQ_hostModelconfig.get_HydroComp_index(
+            erodingInhibit_cmpt,
+            errorMsgIdentifier,
+            true); // abort if not found
+    }
 
     jsonKey = "DATA_FORMAT";
     errorMsgIdentifier = "TS_model file >" + jsonKey;

@@ -546,12 +546,11 @@ int OpenWQ_output::writeHDF5_Sediment(
     if (!printflag || num_cells2print == 0) return EXIT_SUCCESS;
 
     // Cache values
+    // Sediment is exported as a bulk MASS (sedmass) — unlike the chemistry output
+    // it is NOT divided by water volume and NOT no-water-flagged, so the concentration
+    // helpers (is_conc_requested / watervol_minlim / noWaterConc / unit multipliers)
+    // are intentionally not used here.
     const std::string CompName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
-    const bool is_conc_requested = OpenWQ_wqconfig.is_concentration_requested();
-    const double watervol_minlim = OpenWQ_hostModelconfig.get_watervol_minlim();
-    const double noWaterConc = OpenWQ_wqconfig.noWaterConc;
-    const double unit_mult_num = OpenWQ_wqconfig.get_output_units_numerator();
-    const double unit_mult_den = OpenWQ_wqconfig.get_output_units_denominator();
 
     // Build filename
     std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
@@ -681,16 +680,11 @@ int OpenWQ_output::writeHDF5_Sediment(
         const unsigned int iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 1);
         const unsigned int iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 2);
 
-        const double water_vol = is_conc_requested ?
-            OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz) : 1.0;
-
-        if ((is_conc_requested && water_vol > watervol_minlim) || !is_conc_requested){
-            data2print(celli, 0) =
-                (*OpenWQ_var2print)(ix, iy, iz) *
-                unit_mult_num / (water_vol * unit_mult_den);
-        } else {
-            data2print(celli, 0) = noWaterConc;
-        }
+        // Sediment is a bulk MASS (sedmass) — write it directly. Do NOT divide by
+        // water volume or apply the no-water flag (the concentration logic used by
+        // the chemistry output): that would mask sediment to the no-water value
+        // whenever the transport compartment (e.g. RUNOFF) holds no stored water.
+        data2print(celli, 0) = (*OpenWQ_var2print)(ix, iy, iz);
     }
 
     {

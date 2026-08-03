@@ -45,7 +45,7 @@ void OpenWQ_TS_model::TS_driver_run(
             OpenWQ_wqconfig,
             source, ix_s, iy_s, iz_s,
             recipient, ix_r, iy_r, iz_r,
-            wflux_s2r,
+            wflux_s2r, wmass_source,
             TS_type);
 
     // if TD_module != NONE (and any of the others)
