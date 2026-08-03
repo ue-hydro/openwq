@@ -128,9 +128,15 @@ TRANSPORT_SEDIMENTS
 ^^^^^^^^^^^^^^^^^^^^^
 
 +-------------------------------+---------------------------------------------------------------+
-| ``MODULE_NAME``               | ``HYPE_MMF``, ``HYPE_HBVSED``, or ``NONE``                   |
+| ``MODULE_NAME``               | ``HYPE_MMF``, ``HYPE_HBVSED``, or ``NONE``                    |
 +-------------------------------+---------------------------------------------------------------+
-| ``SEDIMENT_COMPARTMENT``      | Compartment name where sediment is modeled                    |
+| ``SEDIMENT_COMPARTMENT``      | Compartment receiving the erosion-driving water flux (where   |
+|                               | sediment is mobilized). SUMMA: ``RUNOFF``; mizuRoute:         |
+|                               | ``RIVER_NETWORK_REACHES``                                     |
++-------------------------------+---------------------------------------------------------------+
+| ``TRANSPORT_COMPARTMENT``     | Compartment carrying and outputting the suspended-sediment    |
+|                               | state (routed downstream, flushed at the outlet). Usually     |
+|                               | same as ``SEDIMENT_COMPARTMENT``                              |
 +-------------------------------+---------------------------------------------------------------+
 | ``MODULE_CONFIG_FILEPATH``    | Path to transport sediments config file                       |
 +-------------------------------+---------------------------------------------------------------+
@@ -234,6 +240,7 @@ Example
             "TRANSPORT_SEDIMENTS": {
                 "MODULE_NAME": "NONE",
                 "SEDIMENT_COMPARTMENT": "RIVER_NETWORK_REACHES",
+                "TRANSPORT_COMPARTMENT": "RIVER_NETWORK_REACHES",
                 "MODULE_CONFIG_FILEPATH": "openwq_in/openWQ_MODULE_TS.json"
             },
             "SORPTION_ISOTHERM": {
