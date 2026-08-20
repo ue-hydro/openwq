@@ -17,6 +17,7 @@
 
 #include "compute/headerfile_compute.hpp"
 
+
 /* #################################################
 // Forward Euler (explicit) solver
 ################################################# */
@@ -47,7 +48,7 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
         // Local variables - thread private
         unsigned int nx, ny, nz;
         unsigned int ix, iy, iz;
-        double dm_dt_chem, dm_dt_trans, dm_ic, dm_ss, dm_ewf;
+        double dm_dt_chem, dm_dt_sorpt, dm_dt_trans, dm_dt_part, dm_ic, dm_ss, dm_ewf;
 
         #pragma omp for schedule(dynamic) collapse(2)
         for (unsigned int icmp = 0; icmp < num_comps; icmp++){
@@ -67,8 +68,12 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
                 auto& d_chemass_ewf_out = (*OpenWQ_vars.d_chemass_ewf_out)(icmp)(chemi);
                 auto& d_chemass_dt_chem = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi);
                 auto& d_chemass_dt_chem_out = (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp)(chemi);
-                auto& d_chemass_dt_transp = (*OpenWQ_vars.d_chemass_dt_transp)(icmp)(chemi);
-                auto& d_chemass_dt_transp_out = (*OpenWQ_vars.d_chemass_dt_transp_out)(icmp)(chemi);
+                auto& d_chemass_dt_sorpt = (*OpenWQ_vars.d_chemass_dt_sorpt)(icmp)(chemi);
+                auto& d_chemass_dt_sorpt_out = (*OpenWQ_vars.d_chemass_dt_sorpt_out)(icmp)(chemi);
+                auto& d_chemass_dt_transp_diss = (*OpenWQ_vars.d_chemass_dt_transp_diss)(icmp)(chemi);
+                auto& d_chemass_dt_transp_diss_out = (*OpenWQ_vars.d_chemass_dt_transp_diss_out)(icmp)(chemi);
+                auto& d_chemass_dt_transp_part = (*OpenWQ_vars.d_chemass_dt_transp_part)(icmp)(chemi);
+                auto& d_chemass_dt_transp_part_out = (*OpenWQ_vars.d_chemass_dt_transp_part_out)(icmp)(chemi);
 
                 // X, Y, Z loops - process entire 3D grid for this compartment-chemical pair
                 for (ix = 0; ix < nx; ix++){
@@ -96,12 +101,19 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
                             dm_dt_chem = d_chemass_dt_chem(ix, iy, iz);
                             d_chemass_dt_chem_out(ix, iy, iz) += dm_dt_chem;
 
-                            dm_dt_trans = d_chemass_dt_transp(ix, iy, iz);
-                            d_chemass_dt_transp_out(ix, iy, iz) += dm_dt_trans;
+                            dm_dt_sorpt = d_chemass_dt_sorpt(ix, iy, iz);
+                            d_chemass_dt_sorpt_out(ix, iy, iz) += dm_dt_sorpt;
+
+                            dm_dt_trans = d_chemass_dt_transp_diss(ix, iy, iz);
+                            d_chemass_dt_transp_diss_out(ix, iy, iz) += dm_dt_trans;
+
+                            dm_dt_part = d_chemass_dt_transp_part(ix, iy, iz);
+                            d_chemass_dt_transp_part_out(ix, iy, iz) += dm_dt_part;
 
                             // ####################################
                             // 5. Apply all changes to state variable
-                            double new_mass = chemass(ix, iy, iz) + dm_ic + dm_ss + dm_ewf + dm_dt_chem + dm_dt_trans;
+                            double new_mass = chemass(ix, iy, iz) + dm_ic + dm_ss + dm_ewf
+                                              + dm_dt_chem + dm_dt_sorpt + dm_dt_trans + dm_dt_part;
 
                             // Ensure non-negativity and track mass lost to clamping
                             if (new_mass > 0.0) {
@@ -123,6 +135,7 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
             }
         }
     }
+
 }
 
 void OpenWQ_compute::Solve_with_ForwardEuler_Sediment(
@@ -155,6 +168,8 @@ void OpenWQ_compute::Solve_with_ForwardEuler_Sediment(
     auto& sedmass = *OpenWQ_vars.sedmass;
     auto& d_sedmass_transport_dt = *OpenWQ_vars.d_sedmass_transport_dt;
     auto& d_sedmass_mobilized_dt = *OpenWQ_vars.d_sedmass_mobilized_dt;
+    auto& d_sedmass_transport_dt_out = *OpenWQ_vars.d_sedmass_transport_dt_out;
+    auto& d_sedmass_mobilized_dt_out = *OpenWQ_vars.d_sedmass_mobilized_dt_out;
 
     /* #####################################################
     // Parallel 3D loop with better granularity
@@ -173,6 +188,10 @@ void OpenWQ_compute::Solve_with_ForwardEuler_Sediment(
             iz = idx % nz;
 
             dm_dt = d_sedmass_transport_dt(ix, iy, iz) + d_sedmass_mobilized_dt(ix, iy, iz);
+
+            // Accumulate for debug outputs
+            d_sedmass_transport_dt_out(ix, iy, iz) += d_sedmass_transport_dt(ix, iy, iz);
+            d_sedmass_mobilized_dt_out(ix, iy, iz) += d_sedmass_mobilized_dt(ix, iy, iz);
 
             // Apply change and ensure non-negativity
             double new_sedmass = sedmass(ix, iy, iz) + dm_dt;

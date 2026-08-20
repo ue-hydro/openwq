@@ -54,7 +54,9 @@ void OpenWQ_compute::Reset_Deriv(
                 (*OpenWQ_vars.d_chemass_ss)(icmp)(chemi).zeros();
                 (*OpenWQ_vars.d_chemass_ewf)(icmp)(chemi).zeros();
                 (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi).zeros();
-                (*OpenWQ_vars.d_chemass_dt_transp)(icmp)(chemi).zeros();
+                (*OpenWQ_vars.d_chemass_dt_sorpt)(icmp)(chemi).zeros();
+                (*OpenWQ_vars.d_chemass_dt_transp_diss)(icmp)(chemi).zeros();
+                (*OpenWQ_vars.d_chemass_dt_transp_part)(icmp)(chemi).zeros();
             }
 
             // Sediment transport variables - executed by single thread
@@ -80,8 +82,14 @@ void OpenWQ_compute::Reset_Deriv(
             (*OpenWQ_vars.d_chemass_ss_out)(icmp)(chemi).zeros();
             (*OpenWQ_vars.d_chemass_ewf_out)(icmp)(chemi).zeros();
             (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp)(chemi).zeros();
-            (*OpenWQ_vars.d_chemass_dt_transp_out)(icmp)(chemi).zeros();
+            (*OpenWQ_vars.d_chemass_dt_sorpt_out)(icmp)(chemi).zeros();
+            (*OpenWQ_vars.d_chemass_dt_transp_diss_out)(icmp)(chemi).zeros();
+            (*OpenWQ_vars.d_chemass_dt_transp_part_out)(icmp)(chemi).zeros();
         }
+
+        // Cumulative sediment derivatives (empty cubes when TS is off - no-op)
+        (*OpenWQ_vars.d_sedmass_transport_dt_out).zeros();
+        (*OpenWQ_vars.d_sedmass_mobilized_dt_out).zeros();
     }
 }
 

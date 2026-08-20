@@ -104,31 +104,37 @@ void OpenWQ_LE_model::native_BoundMix(
             
             //##########################################
             // Chemical exxhange between upper and lower compartments
+            // Cap each donating side at its LIVE balance (state + all claims
+            // already written this step) so concurrent sinks cannot overdraw
+            // the pool (which would create mass via the end-of-step clamp).
             chemass_exchange_upper_comprt = 
                 fmin(
                     input_k_val
                     * wflux_s2r
                     * (*OpenWQ_vars.chemass)(input_upper_compartment_index)(chemi_mob)(ix_s,iy_s,iz_s),
-                    (*OpenWQ_vars.chemass)(input_upper_compartment_index)(chemi_mob)(ix_s,iy_s,iz_s));
+                    std::fmax(OpenWQ_vars.live_mass(
+                        input_upper_compartment_index, chemi_mob, ix_s,iy_s,iz_s), 0.0));
             
             chemass_exchange_lower_comprt = 
                 fmin(
                     input_k_val
                     * wflux_s2r
                     * (*OpenWQ_vars.chemass)(input_lower_compartment_index)(chemi_mob)(xyz_lowerComp[0],xyz_lowerComp[1],xyz_lowerComp[2]),
-                    (*OpenWQ_vars.chemass)(input_lower_compartment_index)(chemi_mob)(xyz_lowerComp[0],xyz_lowerComp[1],xyz_lowerComp[2]));
+                    std::fmax(OpenWQ_vars.live_mass(
+                        input_lower_compartment_index, chemi_mob,
+                        xyz_lowerComp[0],xyz_lowerComp[1],xyz_lowerComp[2]), 0.0));
                 
             //##########################################
             // Set derivative for source and recipient 
             
             // Remove Chemical mass flux from SOURCE 
-            (*OpenWQ_vars.d_chemass_dt_transp)(input_upper_compartment_index)(chemi_mob)(ix_s,iy_s,iz_s) 
+            (*OpenWQ_vars.d_chemass_dt_transp_diss)(input_upper_compartment_index)(chemi_mob)(ix_s,iy_s,iz_s) 
                 += (chemass_exchange_lower_comprt - chemass_exchange_upper_comprt);
 
             // Add Chemical mass flux to RECIPIENT
             // if recipient == -1, then  it's an OUT-flux (loss from system)
             if (recipient == -1) continue;
-            (*OpenWQ_vars.d_chemass_dt_transp)(input_lower_compartment_index)(chemi_mob)(xyz_lowerComp[0],xyz_lowerComp[1],xyz_lowerComp[2]) 
+            (*OpenWQ_vars.d_chemass_dt_transp_diss)(input_lower_compartment_index)(chemi_mob)(xyz_lowerComp[0],xyz_lowerComp[1],xyz_lowerComp[2]) 
                 += (chemass_exchange_upper_comprt - chemass_exchange_lower_comprt);
 
         }
@@ -182,13 +188,13 @@ void OpenWQ_TD_model::IntMob(
         // Set derivative for source and recipient 
         
         // Remove Chemical mass flux from SOURCE 
-        (*OpenWQ_vars.d_chemass_dt_transp)(source)(chemi)(ix_s,iy_s,iz_s) 
+        (*OpenWQ_vars.d_chemass_dt_transp_diss)(source)(chemi)(ix_s,iy_s,iz_s) 
             -= chemass_flux;
 
         // Add Chemical mass flux to RECIPIENT
         // if recipient == -1, then  it's an OUT-flux (loss from system)
         if (recipient == -1) continue;
-        (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(chemi)(ix_r,iy_r,iz_r) 
+        (*OpenWQ_vars.d_chemass_dt_transp_diss)(recipient)(chemi)(ix_r,iy_r,iz_r) 
             += chemass_flux;
     }
 

@@ -3116,8 +3116,10 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _species_list = chemical_species if isinstance(chemical_species, (list, tuple)) \
             else [chemical_species]
         _species_str_all = ', '.join(f'"{s}"' for s in _species_list)
-        # Default snippet shows the first two species (matching default checkbox state)
-        _default_n = min(2, len(_species_list))
+        # Default snippet shows the first three species (matching default checkbox
+        # state) so a sorption pair (e.g. NH4-N / NH4-N_sorbed) fits alongside a
+        # primary species.
+        _default_n = min(3, len(_species_list))
         _species_str = ', '.join(f'"{s}"' for s in _species_list[:_default_n]) \
             if _species_list else _species_str_all
 
@@ -3317,7 +3319,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                  'margin:.5rem 0 1rem;align-items:center">')
         for _i_sp, _sp in enumerate(_species_list):
             _sp_esc = _html_mod.escape(_sp)
-            _chk = " checked" if _i_sp < 2 else ""
+            _chk = " checked" if _i_sp < 3 else ""
             H.append(
                 f'<label style="display:inline-flex;align-items:center;gap:.3rem;'
                 f'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'

@@ -187,7 +187,7 @@ void OpenWQ_readjson::SetConfigInfo_driver(
     // PHREEQC + Sorption Isotherm conflict:
     // PHREEQC natively handles sorption via SURFACE/EXCHANGE keywords.
     // If the SI module (Freundlich/Langmuir) is also active, both will
-    // write sorption fluxes to d_chemass_dt_chem => double-counting.
+    // model sorption (PHREEQC via chemass, SI via d_chemass_dt_sorpt) => double-counting.
     if (!OpenWQ_wqconfig.is_native_bgc_flex
         && OpenWQ_wqconfig.CH_model->BGC_module.compare("NONE") != 0
         && OpenWQ_wqconfig.SI_model->SI_module.compare("NONE") != 0)

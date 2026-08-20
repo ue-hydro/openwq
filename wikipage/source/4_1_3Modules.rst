@@ -1173,6 +1173,21 @@ CONFIGURATION
    SUMMA surface-runoff compartment). This replaces the earlier scheme that moved all
    sediment every step regardless of flow, which left the routed transport undamped.
 
+   **Sorbed species ride the sediment.** When the ``SORPTION_ISOTHERM`` module is
+   active, the sorbed partner species (e.g. ``PP``) are co-advected at the SAME
+   fraction as the sediment, through the dedicated derivative channel
+   ``d_chemass_dt_transp_part`` (debug output ``d_output_dt_transport_part``),
+   while dissolved species keep the water-driven channel
+   ``d_chemass_dt_transp_diss``. Takes are capped at the cell's live mass balance,
+   so concurrent sinks cannot overdraw a pool.
+
+   **Debug outputs.** With ``RUN_MODE_DEBUG: true`` and ``EXPORT_SEDIMENT: true``,
+   the sediment derivative channels are exported alongside the sediment state
+   (HDF5): ``<COMPARTMENT>@Sediment-d_output_sed_mobilized.h5`` (erosion source)
+   and ``<COMPARTMENT>@Sediment-d_output_sed_transport.h5`` (routing), and the
+   results-report scripts plot them automatically as
+   *dM/dt mobilized (erosion)* and *dM/dt transport (routing)*.
+
 
 HYPE_MMF
 ^^^^^^^^^
@@ -1346,7 +1361,9 @@ Example (HYPE_MMF)
 SORPTION_ISOTHERM
 ~~~~~~~~~~~~~~~~~~~~
 
-The Sorption Isotherm module configures equilibrium partitioning between dissolved and sorbed phases. It applies a kinetic approach: the equilibrium sorbed concentration is computed from the isotherm equation, and mass is transferred at a user-defined kinetic rate.
+The Sorption Isotherm module partitions chemical mass between a dissolved and a sorbed phase using a **species-pair scheme**: every sorbable (dissolved) species is paired with an explicit *sorbed partner species* (e.g. ``PO4-P_sol`` |rarrow| ``PP``), and both are regular chemical species of the active biogeochemistry template. The isotherm shifts mass between the two, BGC-style, at a user-defined kinetic rate — so the sorbed phase is stored, output, and mass-balanced like any other species, and it is **transported with the sediment** by the ``TRANSPORT_SEDIMENTS`` module rather than with the water.
+
+.. |rarrow| unicode:: U+2192
 
 .. warning::
 
@@ -1380,10 +1397,40 @@ Both isotherm models require soil/medium properties, specified under the ``SOIL_
 +-----------------------------------+--------------------------------------------------------------+
 
 
-Per-Species Parameters
-"""""""""""""""""""""""
+Parameter Database and Species Pairs
+"""""""""""""""""""""""""""""""""""""
 
-Species are listed under the ``SPECIES`` key. Each species name must match a chemical species defined in the biogeochemistry module. The isotherm is applied independently to each listed species, across all compartments and cells.
+The per-species isotherm parameters live in a standalone, user-editable database file
+(``SI_param_database.json``), pointed to by ``SI_PARAMETER_DATABASE_FILEPATH`` in the SI
+module JSON. The database is independent of the BGC (model_CH) templates and is copied
+into the run's ``openwq_in/`` folder at configuration time. It contains:
+
+* ``SORBABLE_SPECIES`` — the list of dissolved species that can sorb;
+* one block per species with its ``SORBED_SPECIES`` partner name and the parameter
+  sub-blocks for each isotherm (``LANGMUIR`` and ``FREUNDLICH``).
+
+A pair activates only when **both** names exist in the active biogeochemistry template's
+``CHEMICAL_SPECIES`` list; otherwise the pair is skipped with a log message (a
+comprehensive database is therefore safe to ship). The shipped BGC templates are
+pair-complete: they include the sorbed partners (``PP``, ``NH4-N_sorbed``,
+``Cu_part``, …) for every sorbable species they define.
+
+.. important::
+
+   The sorbed partner species is **particle-bound**: it must NOT be listed in
+   ``BGC_GENERAL_MOBILE_SPECIES`` (openWQ warns at startup if it is). It does not
+   advect with water — instead the ``TRANSPORT_SEDIMENTS`` module co-advects it
+   with the suspended sediment at the sediment transport fraction: x% of ``sedmass``
+   moved |rarrow2| x% of the sorbed species moved (per flux, at the source cell).
+
+.. |rarrow2| unicode:: U+21D2
+
+.. note::
+
+   Some templates also model sorption with their own BGC expressions (e.g. HYPE's
+   ``SP``/``PP`` dynamics, or ``SORPTION``/``DESORPTION`` transformations to
+   ``PART_P``). Enabling the SI module on top of such a template runs two sorption
+   formulations at once — disable one of them.
 
 
 FREUNDLICH
@@ -1451,32 +1498,11 @@ Both models use a kinetic adsorption/desorption approach. The mass flux from dis
 
     F_{sorption} = \Delta q \cdot \rho \cdot L
 
-where :math:`q_{eq}` is the equilibrium sorbed concentration from the isotherm, :math:`q_{current}` is the current sorbed concentration, :math:`K_{adsdes}` is the kinetic rate, and :math:`\Delta t` is the timestep. The flux is applied as a sink on the dissolved mass in ``d_chemass_dt_chem``.
+where :math:`q_{eq}` is the equilibrium sorbed concentration from the isotherm, :math:`q_{current}` is the current sorbed concentration **read from the real sorbed-partner pool**, :math:`K_{adsdes}` is the kinetic rate, and :math:`\Delta t` is the timestep. The flux is applied as a paired shift through the dedicated sorption derivative channel ``d_chemass_dt_sorpt`` (dissolved ``-=`` flux, sorbed partner ``+=`` flux), so it is conservative by construction and appears in the per-process debug output ``d_output_dt_sorption``. The solid-phase mass basis uses the host coupling's cell area (``cellArea_m2`` dependency; 1 m² fallback).
 
 
-Example (Freundlich)
-"""""""""""""""""""""
-
-.. code-block:: json
-
-    {
-        "MODULE_NAME": "FREUNDLICH",
-        "SOIL_PROPERTIES": {
-            "bulk_density_kg/m3": 1500.0,
-            "layer_thickness_m": 1.0
-        },
-        "SPECIES": {
-            "NH4-N": {
-                "Kfr": 1.2,
-                "Nfr": 0.8,
-                "Kadsdes_1/s": 0.001
-            }
-        }
-    }
-
-
-Example (Langmuir)
-"""""""""""""""""""
+Example (module file)
+""""""""""""""""""""""
 
 .. code-block:: json
 
@@ -1486,12 +1512,27 @@ Example (Langmuir)
             "bulk_density_kg/m3": 1500.0,
             "layer_thickness_m": 1.0
         },
-        "SPECIES": {
-            "NH4-N": {
-                "qmax_mg/kg": 200.0,
-                "KL_L/mg": 0.05,
-                "Kadsdes_1/s": 0.002
-            }
+        "SI_PARAMETER_DATABASE_FILEPATH": "openwq_in/SI_param_database.json"
+    }
+
+
+Example (parameter database excerpt)
+"""""""""""""""""""""""""""""""""""""
+
+.. code-block:: json
+
+    {
+        "SORBABLE_SPECIES": ["PO4-P_sol", "NH4-N"],
+
+        "PO4-P_sol": {
+            "SORBED_SPECIES": "PP",
+            "LANGMUIR":   {"qmax_mg/kg": 500.0, "KL_L/mg": 0.03, "Kadsdes_1/s": 0.002},
+            "FREUNDLICH": {"Kfr": 50.0, "Nfr": 0.6, "Kadsdes_1/s": 0.001}
+        },
+        "NH4-N": {
+            "SORBED_SPECIES": "NH4-N_sorbed",
+            "LANGMUIR":   {"qmax_mg/kg": 200.0, "KL_L/mg": 0.02, "Kadsdes_1/s": 0.002},
+            "FREUNDLICH": {"Kfr": 8.0, "Nfr": 0.8, "Kadsdes_1/s": 0.001}
         }
     }
 

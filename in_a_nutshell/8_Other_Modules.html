@@ -710,29 +710,27 @@
             <div class="slide-content">
                 <div class="two-column" style="gap: 35px;">
                     <div class="column">
-                        <pre style="font-size: 0.72rem;">
+                        <pre style="font-size: 0.68rem;">
+<span class="comment">// SI module file (openWQ_MODULE_LANGMUIR.json)</span>
 {
-  <span class="comment">// Langmuir configuration</span>
-  <span class="string">"SORPTION_ISOTHERMS"</span>: {
-    <span class="string">"PO4"</span>: {
-      <span class="string">"ISOTHERM_TYPE"</span>: <span class="string">"LANGMUIR"</span>,
-      <span class="string">"COMPARTMENTS"</span>: [<span class="string">"SOIL"</span>, <span class="string">"SEDIMENT"</span>],
-      <span class="string">"PARAMETERS"</span>: {
-        <span class="string">"qmax"</span>: <span class="keyword">500.0</span>,     <span class="comment">// mg/kg</span>
-        <span class="string">"KL"</span>: <span class="keyword">0.5</span>,         <span class="comment">// L/mg</span>
-        <span class="string">"Kadsdes"</span>: <span class="keyword">0.01</span>    <span class="comment">// kinetic rate [1/s]</span>
-      }
-    },
-    <span class="comment">// Freundlich configuration</span>
-    <span class="string">"PESTICIDE_A"</span>: {
-      <span class="string">"ISOTHERM_TYPE"</span>: <span class="string">"FREUNDLICH"</span>,
-      <span class="string">"COMPARTMENTS"</span>: [<span class="string">"SOIL"</span>],
-      <span class="string">"PARAMETERS"</span>: {
-        <span class="string">"KF"</span>: <span class="keyword">25.0</span>,        <span class="comment">// Freundlich K</span>
-        <span class="string">"n"</span>: <span class="keyword">0.8</span>,          <span class="comment">// Freundlich n</span>
-        <span class="string">"Kadsdes"</span>: <span class="keyword">0.001</span>   <span class="comment">// kinetic rate [1/s]</span>
-      }
-    }
+  <span class="string">"MODULE_NAME"</span>: <span class="string">"LANGMUIR"</span>,
+  <span class="string">"SOIL_PROPERTIES"</span>: {
+    <span class="string">"bulk_density_kg/m3"</span>: <span class="keyword">1500.0</span>,
+    <span class="string">"layer_thickness_m"</span>: <span class="keyword">1.0</span>
+  },
+  <span class="string">"SI_PARAMETER_DATABASE_FILEPATH"</span>:
+      <span class="string">"openwq_in/SI_param_database.json"</span>
+}
+
+<span class="comment">// SI_param_database.json (species pairs)</span>
+{
+  <span class="string">"SORBABLE_SPECIES"</span>: [<span class="string">"PO4-P_sol"</span>, <span class="string">"NH4-N"</span>],
+  <span class="string">"PO4-P_sol"</span>: {
+    <span class="string">"SORBED_SPECIES"</span>: <span class="string">"PP"</span>,  <span class="comment">// the pair</span>
+    <span class="string">"LANGMUIR"</span>: { <span class="string">"qmax_mg/kg"</span>: <span class="keyword">500.0</span>,
+      <span class="string">"KL_L/mg"</span>: <span class="keyword">0.03</span>, <span class="string">"Kadsdes_1/s"</span>: <span class="keyword">0.002</span> },
+    <span class="string">"FREUNDLICH"</span>: { <span class="string">"Kfr"</span>: <span class="keyword">50.0</span>,
+      <span class="string">"Nfr"</span>: <span class="keyword">0.6</span>, <span class="string">"Kadsdes_1/s"</span>: <span class="keyword">0.001</span> }
   }
 }
                         </pre>
@@ -751,13 +749,21 @@
                             <h3>Freundlich Parameters</h3>
                             <table class="param-table" style="font-size: 0.8rem;">
                                 <tr><th>Parameter</th><th>Typical Range</th></tr>
-                                <tr><td>KF</td><td>1 - 100</td></tr>
-                                <tr><td>n</td><td>0.3 - 1.0</td></tr>
+                                <tr><td>Kfr</td><td>1 - 100</td></tr>
+                                <tr><td>Nfr</td><td>0.3 - 1.0</td></tr>
                                 <tr><td>Kadsdes</td><td>0.0001 - 0.1 /s</td></tr>
                             </table>
                         </div>
-                        <div class="highlight-box info" style="margin-top: 10px;">
-                            <strong>Kadsdes:</strong> Controls rate of approach to equilibrium
+                        <div class="highlight-box info" style="margin-top: 10px; font-size: 0.78rem;">
+                            <strong>Species-pair scheme:</strong> each sorbable species is paired
+                            with an explicit sorbed partner (e.g. <code>PO4-P_sol</code> &rArr;
+                            <code>PP</code>) — both regular species of the BGC template. The
+                            isotherm shifts mass between the pair (channel
+                            <code>d_chemass_dt_sorpt</code>) at the <code>Kadsdes</code> kinetic
+                            rate. The sorbed partner is NOT water-mobile (keep it out of
+                            <code>BGC_GENERAL_MOBILE_SPECIES</code>): it is co-advected with the
+                            sediment by TRANSPORT_SEDIMENTS. Pairs whose partner is missing from
+                            the template are skipped with a log message.
                         </div>
                     </div>
                 </div>
@@ -922,6 +928,10 @@
                             volume&nbsp;→&nbsp;precip depth (mm) and areal density&nbsp;→&nbsp;absolute
                             mass (kg). Sediment is advected downstream flow-proportionally
                             (<code>Q<sub>out</sub>·dt / volume</code>) and flushed at the outlet.
+                            Sorbed species (SI pairs, e.g. <code>PP</code>) ride the sediment at
+                            the SAME fraction, via <code>d_chemass_dt_transp_part</code> —
+                            dissolved species keep the water channel
+                            <code>d_chemass_dt_transp_diss</code>.
                         </div>
                     </div>
                     <div class="column">

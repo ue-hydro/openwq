@@ -58,7 +58,7 @@ import Read_h5_driver as h5_rlib
 openwq_results = h5_rlib.Read_h5_driver(
             openwq_info= openwq_info,
             output_format='HDF5',   # don't change
-            debugmode=False,         # if True, will read also d_output_dt_chemistry, d_output_dt_transport, d_output_ss, d_output_ewf, d_output_ic
+            debugmode=False,         # if True, will read also d_output_dt_chemistry, d_output_dt_sorption, d_output_dt_transport_diss, d_output_dt_transport_part, d_output_ss, d_output_ewf, d_output_ic
             cmp=['RIVER_NETWORK_REACHES'],
             space_elem='all',       # what cells to read
             chemSpec=["NO3-N","NH4-N","N_ORG_fresh","N_ORG_stable","N_ORG_active"],
@@ -108,7 +108,7 @@ _result = h5_plib.Plot_h5_driver(
     openwq_results=openwq_results,
     chemSpec=["NO3-N","N_ORG_active"],
     sediment_as_well=True,  # also plot sediment transport
-    debugmode=False, # if True, will read also d_output_dt_chemistry, d_output_dt_transport, d_output_ss, d_output_ewf, d_output_ic
+    debugmode=False, # if True, will read also d_output_dt_chemistry, d_output_dt_sorption, d_output_dt_transport_diss, d_output_dt_transport_part, d_output_ss, d_output_ewf, d_output_ic
     # 3) hostmodel info (used if what2map=hostmodel)
     hydromodel_info=hydromodel_info,
     hydromodel_var2print='DWroutedRunoff',

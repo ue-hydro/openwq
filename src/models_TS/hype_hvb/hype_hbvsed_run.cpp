@@ -61,11 +61,13 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
     // erodInhibut_icmp == -1 means EROSION_INHIBIT_COMPARTMENT = "NONE": the
     // inhibition is disabled (e.g. river-routing hosts with no snow compartment).
     // TODO: if (frostdepth<0. .AND. frostdepth>-9999.) then return
+    // The gate reads the RECIPIENT cell's HRU (top layer): EWF calls carry
+    // (0,0,0) as source coordinates, so using ix_s would always test HRU 0.
     double snow = 0.0;
     if (erodInhibut_icmp >= 0){
       snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
             erodInhibut_icmp,
-            ix_s,iy_s,iz_s);
+            ix_r, iy_r, 0);
     }
     if (snow != 0.0)
       return;
@@ -175,9 +177,10 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
         for (unsigned int pi = 0; pi < npairs; pi++){
             const int sorbi = OpenWQ_wqconfig.SI_model->get_sorbed_species_index_at(pi);
             if (sorbi < 0) continue;
-            double smoved = (*OpenWQ_vars.chemass)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) * frac;
-            (*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -= smoved;
-            (*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_r, iy_r, iz_r) += smoved;
+            double smoved = std::fmax(OpenWQ_vars.live_mass(
+                erodFlux_icmp, (unsigned int) sorbi, ix_s, iy_s, iz_s), 0.0) * frac;
+            (*OpenWQ_vars.d_chemass_dt_transp_part)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -= smoved;
+            (*OpenWQ_vars.d_chemass_dt_transp_part)(erodFlux_icmp)(sorbi)(ix_r, iy_r, iz_r) += smoved;
         }
       }
     }
@@ -208,8 +211,9 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
         for (unsigned int pi = 0; pi < npairs; pi++){
             const int sorbi = OpenWQ_wqconfig.SI_model->get_sorbed_species_index_at(pi);
             if (sorbi < 0) continue;
-            (*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -=
-                (*OpenWQ_vars.chemass)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) * frac;
+            (*OpenWQ_vars.d_chemass_dt_transp_part)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -=
+                std::fmax(OpenWQ_vars.live_mass(
+                    erodFlux_icmp, (unsigned int) sorbi, ix_s, iy_s, iz_s), 0.0) * frac;
         }
       }
     }
