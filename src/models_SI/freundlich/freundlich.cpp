@@ -18,19 +18,30 @@
 #include "models_SI/headerfile_SI.hpp"
 
 /* #################################################
-// Freundlich Sorption Isotherm
-// q = Kfr * C^(1/Nfr)
+// Freundlich Sorption Isotherm — SPECIES-PAIR scheme (dissolved => sorbed)
+// q = Kfr * C^Nfr
 //
-// Uses Newton-Raphson to find equilibrium dissolved concentration C_eq
-// given total mass (dissolved + sorbed) conservation:
-//     C_eq * V + Kfr * C_eq^Nfr * rho * L = total_mass
+// Each sorbable species is PAIRED with an explicit sorbed partner species
+// (e.g. PO4-P => PP), both regular chemass state variables. The isotherm
+// shifts mass between the two, BGC-style, via d_chemass_dt_chem:
+//     d_chemass_dt_chem(dissolved) -= flux
+//     d_chemass_dt_chem(sorbed)    += flux
 //
-// Then applies kinetic adsorption/desorption:
-//     adsdes_flux = (q_eq - q_current) * (1 - exp(-Kadsdes * dt)) * rho * L
+// q_current comes from the REAL sorbed pool (the partner species' chemass),
+// making this a true kinetic dissolved<=>sorbed exchange. Equilibrium is the
+// partition of the REAL total (dissolved + sorbed) mass, found with
+// Newton-Raphson on:
+//     C_eq * Vol + Kfr * C_eq^Nfr * Msolid_g = total_mass
+// where Msolid_g = bulk_density * layer_thickness * cellArea / 1000
+// (g of dissolved mass per mg/kg of sorbed conc; cellArea from the host
+//  coupling's "cellArea_m2" dependency, fallback 1 m2 = legacy behaviour).
 //
-// The flux is added to d_chemass_dt_chem (removes from dissolved, adds to sorbed phase).
-// In the current simplified implementation, we track only the dissolved phase
-// (chemass) and the sorption acts as a sink/source on the dissolved concentration.
+// Kinetic adsorption/desorption toward that equilibrium:
+//     flux = (q_eq - q_current) * (1 - exp(-Kadsdes * dt)) * Msolid_g
+//
+// The sorbed partner is particle-bound: excluded from water advection
+// (keep it out of BGC_GENERAL_MOBILE_SPECIES) and co-transported with the
+// sediment by model_TS at the sediment transport fraction.
 ################################################# */
 
 void OpenWQ_SI_model::freundlich(
@@ -65,22 +76,34 @@ void OpenWQ_SI_model::freundlich(
     // Water volume minimum limit (to avoid division by zero)
     const double watervol_minlim = OpenWQ_hostModelconfig.get_watervol_minlim();
 
-    // Loop over each SI species
+    // Locate the host coupling's cell-area dependency ("cellArea_m2") by
+    // name, so the solid-phase mass basis is a real absolute mass. If the
+    // host doesn't publish it, fall back to 1 m2 (legacy behaviour).
+    int cellArea_dep = -1;
+    {
+        const int nDep = (int) OpenWQ_hostModelconfig.get_num_HydroDepend();
+        for (int di = 0; di < nDep; di++){
+            if (OpenWQ_hostModelconfig.get_HydroDepend_name_at(di).compare("cellArea_m2") == 0){
+                cellArea_dep = di;
+                break;
+            }
+        }
+    }
+
+    // Loop over each SI species pair (dissolved => sorbed)
     for (unsigned int si = 0; si < num_si_species; si++) {
 
         const unsigned int chemi = FR->species_index[si];
+        const int sorbi = FR->sorbed_species_index[si];
         const double Kfr = FR->Kfr[si];
         const double Nfr = FR->Nfr[si];
         const double Kadsdes = FR->Kadsdes[si];
 
-        // Skip if parameters are invalid
-        if (Kfr <= 0.0 || Nfr <= 0.0 || Kadsdes <= 0.0) continue;
+        // Skip if parameters are invalid or the pair is unresolved
+        if (Kfr <= 0.0 || Nfr <= 0.0 || Kadsdes <= 0.0 || sorbi < 0) continue;
 
         // Pre-compute kinetic factor: (1 - exp(-Kadsdes * dt))
         const double kinetic_factor = 1.0 - std::exp(-Kadsdes * dt);
-
-        // Coefficient for mass balance: Kfr * rho * L
-        const double coeff = Kfr * rhoL;
 
         // Loop over all compartments and cells
         for (unsigned int icmp = 0; icmp < num_comps; icmp++) {
@@ -89,14 +112,11 @@ void OpenWQ_SI_model::freundlich(
             const unsigned int ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
             const unsigned int nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
 
-            // References to state and derivative cubes
+            // References to state and derivative cubes (the species pair)
             auto& chemass = (*OpenWQ_vars.chemass)(icmp)(chemi);
+            auto& chemass_sorb = (*OpenWQ_vars.chemass)(icmp)(sorbi);
             auto& d_chemass = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi);
-
-            // Reference to sorbed mass (if tracking is enabled)
-            const bool track_sorbed = OpenWQ_vars.sorbed_mass &&
-                (*OpenWQ_vars.sorbed_mass)(icmp).n_elem > chemi &&
-                (*OpenWQ_vars.sorbed_mass)(icmp)(chemi).n_elem > 0;
+            auto& d_chemass_sorb = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(sorbi);
 
             for (unsigned int ix = 0; ix < nx; ix++) {
                 for (unsigned int iy = 0; iy < ny; iy++) {
@@ -109,30 +129,43 @@ void OpenWQ_SI_model::freundlich(
                         // Skip dry cells
                         if (Vol <= watervol_minlim) continue;
 
-                        // Current dissolved mass [g] in this cell
+                        // Current dissolved and sorbed mass [g] in this cell
                         const double mass_dissolved = chemass(ix, iy, iz);
-                        if (mass_dissolved <= 0.0) continue;
+                        const double mass_sorbed = chemass_sorb(ix, iy, iz);
+                        if (mass_dissolved <= 0.0 && mass_sorbed <= 0.0) continue;
 
                         // Current dissolved concentration [g/m3 = mg/L]
-                        const double C_current = mass_dissolved / Vol;
+                        const double C_current = (mass_dissolved > 0.0)
+                            ? (mass_dissolved / Vol) : 0.0;
 
-                        // Current sorbed concentration [mg/kg_soil]
-                        // q_current = Kfr * C_current^Nfr  (assuming at current quasi-equilibrium)
-                        // Note: We don't track sorbed mass separately; we compute
-                        // the equilibrium target and apply kinetic correction
+                        // Solid-phase mass basis for this cell:
+                        // Msolid_g converts q [mg/kg] to an absolute mass [g]:
+                        //   q [mg/kg] * (rhoL [kg/m2] * area [m2]) = mg ; /1000 = g
+                        double cellArea_m2 = 1.0;
+                        if (cellArea_dep >= 0){
+                            const double a = OpenWQ_hostModelconfig.get_dependVar_at(
+                                cellArea_dep, ix, iy, 0);
+                            if (a > 0.0) cellArea_m2 = a;
+                        }
+                        const double Msolid_g = rhoL * cellArea_m2 / 1000.0;
+                        if (Msolid_g <= 0.0) continue;
 
-                        // Total mass in this cell (dissolved + sorbed)
-                        // total_mass = C * Vol + q * rho * L
-                        // where q = Kfr * C^Nfr (current sorbed conc estimate)
-                        const double q_current = Kfr * std::pow(C_current, Nfr);
-                        const double total_mass = C_current * Vol + q_current * rhoL;
+                        // Coefficient for mass balance: Kfr * Msolid_g
+                        const double coeff = Kfr * Msolid_g;
+
+                        // Current sorbed concentration from the REAL pool [mg/kg]
+                        const double q_current = (mass_sorbed > 0.0)
+                            ? (mass_sorbed / Msolid_g) : 0.0;
+
+                        // Total REAL mass in this cell (dissolved + sorbed) [g]
+                        const double total_mass = mass_dissolved + mass_sorbed;
 
                         if (total_mass <= 0.0) continue;
 
                         // ############################
                         // Newton-Raphson to find equilibrium dissolved concentration C_eq
-                        // f(C) = C * Vol + Kfr * C^Nfr * rho * L - total_mass = 0
-                        // f'(C) = Vol + Nfr * Kfr * C^(Nfr-1) * rho * L
+                        // f(C) = C * Vol + Kfr * C^Nfr * Msolid_g - total_mass = 0
+                        // f'(C) = Vol + Nfr * Kfr * C^(Nfr-1) * Msolid_g
                         // ############################
 
                         double C_eq;
@@ -144,7 +177,7 @@ void OpenWQ_SI_model::freundlich(
                         }
 
                         if (std::fabs(nfrloc - 1.0) < 1.0e-10) {
-                            // Linear case: C_eq * Vol + Kfr * C_eq * rho * L = total_mass
+                            // Linear case: C_eq * Vol + Kfr * C_eq * Msolid_g = total_mass
                             C_eq = total_mass / (Vol + coeff);
                         } else {
                             // Newton-Raphson for nonlinear Freundlich
@@ -189,30 +222,22 @@ void OpenWQ_SI_model::freundlich(
                         // ############################
 
                         const double delta_q = (q_eq - q_current) * kinetic_factor;
-                        double flux_mass = delta_q * rhoL;  // [g]
+                        double flux_mass = delta_q * Msolid_g;  // [g]
 
-                        // Safety: flux cannot remove more mass than available
+                        // Safety: adsorption cannot remove more than the dissolved mass
                         if (flux_mass > 0.0 && flux_mass > mass_dissolved) {
                             flux_mass = mass_dissolved;
                         }
 
-                        // Safety: desorption cannot create negative sorbed pool
-                        if (track_sorbed && flux_mass < 0.0) {
-                            double current_sorbed = (*OpenWQ_vars.sorbed_mass)(icmp)(chemi)(ix, iy, iz);
-                            if (-flux_mass > current_sorbed) {
-                                flux_mass = -current_sorbed;
-                            }
+                        // Safety: desorption cannot remove more than the sorbed mass
+                        if (flux_mass < 0.0 && -flux_mass > mass_sorbed) {
+                            flux_mass = -mass_sorbed;
                         }
 
-                        // Apply as a sink on dissolved concentration
-                        // (positive flux_mass = adsorption = decrease dissolved)
+                        // Apply as a BGC-style shift between the species pair
+                        // (positive flux_mass = adsorption: dissolved -> sorbed)
                         d_chemass(ix, iy, iz) -= flux_mass;
-
-                        // Update sorbed mass tracking (if enabled)
-                        // positive flux_mass = adsorption = increase sorbed
-                        if (track_sorbed) {
-                            (*OpenWQ_vars.sorbed_mass)(icmp)(chemi)(ix, iy, iz) += flux_mass;
-                        }
+                        d_chemass_sorb(ix, iy, iz) += flux_mass;
 
                     } // iz
                 } // iy

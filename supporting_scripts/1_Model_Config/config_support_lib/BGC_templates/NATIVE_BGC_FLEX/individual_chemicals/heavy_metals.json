@@ -26,15 +26,10 @@
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "Cu_diss",
-            "Cu_part",
             "Zn_diss",
-            "Zn_part",
             "Pb_diss",
-            "Pb_part",
             "Cd_diss",
-            "Cd_part",
             "Hg_diss",
-            "Hg_part",
             "MeHg",
             "TSS",
             "DOC"

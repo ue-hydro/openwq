@@ -448,6 +448,15 @@ class OpenWQ_wqconfig::SI_model_{
     class FREUNDLICH_;
     FREUNDLICH_* FREUNDLICH;
 
+    // ######################
+    // Species-pair accessors (sorption scheme: dissolved => sorbed partner,
+    // e.g. PO4-P => PP). Used by model_TS to co-transport the sorbed partner
+    // species with the sediment. Defined inline at the end of this header
+    // (after the inner classes are complete).
+    unsigned int get_num_sorption_pairs();
+    int get_sorbed_species_index_at(unsigned int pair_i);    // global chemi; -1 if unresolved
+    int get_dissolved_species_index_at(unsigned int pair_i); // global chemi of the dissolved form
+
 };
 
 // #######################################
@@ -719,8 +728,11 @@ class OpenWQ_wqconfig::SI_model_::LANGMUIR_{
     unsigned int num_species = 0;
 
     // Per-species parameters (vectors indexed by local species index)
-    std::vector<unsigned int> species_index;     // Global chemical species index
+    std::vector<unsigned int> species_index;     // Global chemical species index (dissolved form)
     std::vector<std::string> species_name;       // Species name (for logging)
+    std::vector<int> sorbed_species_index;       // Global index of the SORBED partner species
+                                                 // (species-pair scheme, e.g. PO4-P => PP)
+    std::vector<std::string> sorbed_species_name;// Sorbed partner name (for logging)
     std::vector<double> qmax;                    // Maximum adsorption capacity [mg/kg_soil]
     std::vector<double> KL;                      // Langmuir equilibrium constant [L/mg]
     std::vector<double> Kadsdes;                 // Kinetic adsorption/desorption rate [1/s]
@@ -743,8 +755,11 @@ class OpenWQ_wqconfig::SI_model_::FREUNDLICH_{
     unsigned int num_species = 0;
 
     // Per-species parameters (vectors indexed by local species index)
-    std::vector<unsigned int> species_index;     // Global chemical species index
+    std::vector<unsigned int> species_index;     // Global chemical species index (dissolved form)
     std::vector<std::string> species_name;       // Species name (for logging)
+    std::vector<int> sorbed_species_index;       // Global index of the SORBED partner species
+                                                 // (species-pair scheme, e.g. PO4-P => PP)
+    std::vector<std::string> sorbed_species_name;// Sorbed partner name (for logging)
     std::vector<double> Kfr;                     // Freundlich coefficient [mg/kg / (mg/L)^(1/Nfr)]
     std::vector<double> Nfr;                     // Freundlich exponent [-]
     std::vector<double> Kadsdes;                 // Kinetic adsorption/desorption rate [1/s]
@@ -754,3 +769,37 @@ class OpenWQ_wqconfig::SI_model_::FREUNDLICH_{
     double layer_thickness = 1.0;                // Representative layer thickness [m]
 
 };
+
+// #######################################
+// SI_model_ species-pair accessors (inline; defined here because they need
+// the complete LANGMUIR_/FREUNDLICH_ types). They expose the sorption pairs
+// of whichever isotherm module is active, so callers (e.g. model_TS moving
+// the sorbed partner species with the sediment) don't need to know which
+// isotherm is configured.
+// #######################################
+
+inline unsigned int OpenWQ_wqconfig::SI_model_::get_num_sorption_pairs(){
+    if (SI_module.compare("LANGMUIR") == 0)   return LANGMUIR->num_species;
+    if (SI_module.compare("FREUNDLICH") == 0) return FREUNDLICH->num_species;
+    return 0;
+}
+
+inline int OpenWQ_wqconfig::SI_model_::get_sorbed_species_index_at(unsigned int pair_i){
+    if (SI_module.compare("LANGMUIR") == 0)
+        return (pair_i < LANGMUIR->sorbed_species_index.size())
+            ? LANGMUIR->sorbed_species_index[pair_i] : -1;
+    if (SI_module.compare("FREUNDLICH") == 0)
+        return (pair_i < FREUNDLICH->sorbed_species_index.size())
+            ? FREUNDLICH->sorbed_species_index[pair_i] : -1;
+    return -1;
+}
+
+inline int OpenWQ_wqconfig::SI_model_::get_dissolved_species_index_at(unsigned int pair_i){
+    if (SI_module.compare("LANGMUIR") == 0)
+        return (pair_i < LANGMUIR->species_index.size())
+            ? (int) LANGMUIR->species_index[pair_i] : -1;
+    if (SI_module.compare("FREUNDLICH") == 0)
+        return (pair_i < FREUNDLICH->species_index.size())
+            ? (int) FREUNDLICH->species_index[pair_i] : -1;
+    return -1;
+}

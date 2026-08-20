@@ -17,6 +17,7 @@
 #include "compute/headerfile_compute.hpp"
 #include "models_CH/headerfile_CH.hpp"
 #include "models_TS/headerfile_TS.hpp"
+#include "models_SI/headerfile_SI.hpp"
 #include "utils/headerfile_UTILS.hpp"
 
 #include <cstring> // for std::memcpy (OPTIMIZED #10)
@@ -97,6 +98,17 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
     // Run chemistry model
     user_data.chem.CH_driver_run(user_data.json, user_data.vars, user_data.wqconfig, 
                                   user_data.hostModelconfig, user_data.output);
+
+    // Run sorption model (model_SI, species-pair scheme): shifts mass between
+    // each dissolved species and its sorbed partner via d_chemass_dt_chem,
+    // BGC-style. It must run INSIDE this RHS (after CH) because the reset
+    // above zeroes d_chemass_dt_chem on every CVode evaluation — anything
+    // written outside the RHS would be lost. OpenWQ_SI_model is stateless.
+    {
+        OpenWQ_SI_model si_model;
+        si_model.SI_driver_run(user_data.json, user_data.vars, user_data.wqconfig,
+                               user_data.hostModelconfig, user_data.output);
+    }
 
     // Compute flux derivatives in parallel
     #pragma omp parallel num_threads(user_data.num_threads)

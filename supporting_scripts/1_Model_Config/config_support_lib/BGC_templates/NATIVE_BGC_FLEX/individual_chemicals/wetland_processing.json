@@ -32,7 +32,9 @@
             "11": "PATHOGEN",
             "12": "DOC",
             "13": "PLANT_N",
-            "14": "PLANT_P"
+            "14": "PLANT_P",
+            "15": "NH4-N_sorbed",
+            "16": "PP"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NO3-N",
@@ -60,7 +62,9 @@
             "PATHOGEN": "Pathogen indicator organisms",
             "DOC": "Dissolved organic carbon",
             "PLANT_N": "Plant nitrogen pool",
-            "PLANT_P": "Plant phosphorus pool"
+            "PLANT_P": "Plant phosphorus pool",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS",
+            "PP": "Particulate P - sorbed partner of dissolved P (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

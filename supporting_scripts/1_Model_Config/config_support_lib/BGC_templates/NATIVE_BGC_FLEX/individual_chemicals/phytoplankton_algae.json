@@ -23,7 +23,9 @@
             "4": "PO4-P",
             "5": "ZOO",
             "6": "DOC",
-            "7": "Chla"
+            "7": "Chla",
+            "8": "NH4-N_sorbed",
+            "9": "PP"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PHYTO",
@@ -40,7 +42,9 @@
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
             "ZOO": "Zooplankton biomass",
             "DOC": "Dissolved organic carbon",
-            "Chla": "Chlorophyll-a concentration"
+            "Chla": "Chlorophyll-a concentration",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS",
+            "PP": "Particulate P - sorbed partner of dissolved P (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

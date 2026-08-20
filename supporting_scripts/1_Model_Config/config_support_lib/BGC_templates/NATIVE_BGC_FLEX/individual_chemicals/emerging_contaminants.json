@@ -35,7 +35,12 @@
             "14": "EDC_estrogen",
             "15": "EDC_bisphenol",
             "16": "METAB_generic",
-            "17": "CO2"
+            "17": "CO2",
+            "18": "PFAS_PFOS_sorbed",
+            "19": "PFAS_PFOA_sorbed",
+            "20": "PFAS_GenX_sorbed",
+            "21": "EDC_estrogen_sorbed",
+            "22": "EDC_bisphenol_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PHARMA_antibiotic",
@@ -72,7 +77,12 @@
             "EDC_estrogen": "Endocrine disruptor (estrogen)",
             "EDC_bisphenol": "Endocrine disruptor (bisphenol)",
             "METAB_generic": "Generic metabolite / degradation product",
-            "CO2": "Dissolved carbon dioxide"
+            "CO2": "Dissolved carbon dioxide",
+            "PFAS_PFOS_sorbed": "Sorbed PFOS - sorbed partner of PFAS_PFOS (model_SI species-pair); NOT water-mobile, rides the sediment",
+            "PFAS_PFOA_sorbed": "Sorbed PFOA - sorbed partner of PFAS_PFOA (model_SI species-pair); NOT water-mobile, rides the sediment",
+            "PFAS_GenX_sorbed": "Sorbed GenX - sorbed partner of PFAS_GenX (model_SI species-pair); NOT water-mobile, rides the sediment",
+            "EDC_estrogen_sorbed": "Sorbed estrogen - sorbed partner of EDC_estrogen (model_SI species-pair); NOT water-mobile, rides the sediment",
+            "EDC_bisphenol_sorbed": "Sorbed bisphenol - sorbed partner of EDC_bisphenol (model_SI species-pair); NOT water-mobile, rides the sediment"
         }
     },
     "CYCLING_FRAMEWORKS": {

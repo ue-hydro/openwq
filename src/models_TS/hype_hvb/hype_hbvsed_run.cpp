@@ -164,6 +164,22 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
       (*OpenWQ_vars.d_sedmass_transport_dt)(ix_s, iy_s, iz_s) -= moved;
       // adding to recipient
       (*OpenWQ_vars.d_sedmass_transport_dt)(ix_r, iy_r, iz_r) += moved;
+
+      // Sorbed partner species (species-pair scheme, e.g. PO4-P => PP) are
+      // particle-bound, so they ride the sediment: move the SAME fraction of
+      // their chemass, through the existing transport derivative channel
+      // (integrated by the chemistry solver). x% of sedmass moved => x% of
+      // the sorbed species moved.
+      {
+        const unsigned int npairs = OpenWQ_wqconfig.SI_model->get_num_sorption_pairs();
+        for (unsigned int pi = 0; pi < npairs; pi++){
+            const int sorbi = OpenWQ_wqconfig.SI_model->get_sorbed_species_index_at(pi);
+            if (sorbi < 0) continue;
+            double smoved = (*OpenWQ_vars.chemass)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) * frac;
+            (*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -= smoved;
+            (*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_r, iy_r, iz_r) += smoved;
+        }
+      }
     }
 
   // #######################
@@ -184,6 +200,18 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
       if (frac > 1.0) frac = 1.0;
       if (frac < 0.0) frac = 0.0;
       (*OpenWQ_vars.d_sedmass_transport_dt)(ix_s, iy_s, iz_s) -= (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s) * frac;
+
+      // Sorbed partner species leave the domain with the sediment they are
+      // bound to, at the same fraction (outlet sink; no recipient).
+      {
+        const unsigned int npairs = OpenWQ_wqconfig.SI_model->get_num_sorption_pairs();
+        for (unsigned int pi = 0; pi < npairs; pi++){
+            const int sorbi = OpenWQ_wqconfig.SI_model->get_sorbed_species_index_at(pi);
+            if (sorbi < 0) continue;
+            (*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -=
+                (*OpenWQ_vars.chemass)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) * frac;
+        }
+      }
     }
 
   }

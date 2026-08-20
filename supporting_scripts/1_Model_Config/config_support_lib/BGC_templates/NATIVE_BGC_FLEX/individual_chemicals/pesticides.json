@@ -17,7 +17,6 @@
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PEST_diss",
-            "PEST_part",
             "PEST_DOC",
             "METAB_1",
             "METAB_2",

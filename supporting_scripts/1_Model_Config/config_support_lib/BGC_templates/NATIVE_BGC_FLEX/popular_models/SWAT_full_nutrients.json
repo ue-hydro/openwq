@@ -24,7 +24,9 @@
             "16": "PLANT_P",
             "17": "SED_N",
             "18": "SED_P",
-            "19": "PLANT_N"
+            "19": "PLANT_N",
+            "20": "PP",
+            "21": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NO3-N",
@@ -59,7 +61,9 @@
             "PLANT_P": "Plant uptake of P",
             "SED_N": "Settled N (sediment sink)",
             "SED_P": "Settled P (sediment sink)",
-            "PLANT_N": "Plant uptake of N"
+            "PLANT_N": "Plant uptake of N",
+            "PP": "Particulate P - sorbed partner of dissolved P (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

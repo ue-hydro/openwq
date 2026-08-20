@@ -10,7 +10,8 @@
             "4": "PIP",
             "5": "ALGAE_P",
             "6": "DO",
-            "7": "SED_P_loss"
+            "7": "SED_P_loss",
+            "8": "PP"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "PO4-P",
@@ -27,7 +28,8 @@
             "PIP": "Particulate inorganic P (sorbed to minerals)",
             "ALGAE_P": "Algal phosphorus",
             "DO": "Dissolved oxygen",
-            "SED_P_loss": "SED loss to atmosphere/sediment"
+            "SED_P_loss": "SED loss to atmosphere/sediment",
+            "PP": "Particulate P - sorbed partner of dissolved P (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

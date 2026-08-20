@@ -18,7 +18,8 @@
             "10": "FECAL_COLIFORM",
             "11": "SED_CBOD",
             "12": "SED_N",
-            "13": "SED_P"
+            "13": "SED_P",
+            "14": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -45,7 +46,8 @@
             "FECAL_COLIFORM": "Fecal coliform bacteria",
             "SED_CBOD": "Settled CBOD (sediment sink)",
             "SED_N": "Settled N (sediment sink)",
-            "SED_P": "Settled P (sediment sink)"
+            "SED_P": "Settled P (sediment sink)",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

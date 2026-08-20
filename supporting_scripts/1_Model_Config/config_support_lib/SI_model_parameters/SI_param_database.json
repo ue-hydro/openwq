@@ -7,6 +7,20 @@
 // model_SI no longer share parameters. The sorption isotherm reads its
 // per-species parameters from here.
 //
+// SPECIES-PAIR SCHEME (dissolved => sorbed)
+//   Every sorbable (dissolved) species declares its SORBED partner species
+//   (e.g. "PO4-P" => "PP"). BOTH must exist in the active BGC template's
+//   CHEMICAL_SPECIES list: the isotherm shifts mass between the two chemass
+//   species, BGC-style (d_chemass_dt_chem), so the sorbed phase is stored,
+//   output, and mass-balanced like any other species.
+//   - The sorbed partner is PARTICLE-BOUND: keep it OUT of
+//     BGC_GENERAL_MOBILE_SPECIES (it must not advect with water).
+//     model_TS co-transports it with the sediment at the sediment
+//     transport fraction (x% of sedmass moved => x% of sorbed moved).
+//   - Pairs whose partner (or dissolved species) is absent from the active
+//     BGC template are skipped with a log warning — so this comprehensive
+//     list is safe to ship.
+//
 // HOW IT IS USED
 //   - The openWQ master points to the SI module file (openWQ_MODULE_LANGMUIR.json
 //     or openWQ_MODULE_FREUNDLICH.json). That SI module file holds the soil
@@ -15,15 +29,15 @@
 //   - At config-generation time this database is copied into the run's
 //     openwq_in/ folder so each run has its own editable copy.
 //   - model_SI loads this file, reads SORBABLE_SPECIES, and for every species
-//     also present in the active run's chemical-species list, reads the
-//     parameters for the active isotherm (LANGMUIR or FREUNDLICH).
-//   - Species listed here but ABSENT from the active BGC template are skipped
-//     (with a log warning) — so a comprehensive list is safe to ship.
+//     also present in the active run's chemical-species list (with its
+//     SORBED_SPECIES partner also present), reads the parameters for the
+//     active isotherm (LANGMUIR or FREUNDLICH).
 //
-// NAMES must match the dissolved species names used in the BGC (model_CH)
-// templates (matching is case-insensitive; openWQ uppercases on load).
+// NAMES must match the species names used in the BGC (model_CH) templates
+// (matching is case-insensitive; openWQ uppercases on load).
 //
 // PARAMETERS
+//   SORBED_SPECIES : name of the sorbed (particulate) partner species
 //   LANGMUIR  : qmax_mg/kg  (max sorption capacity, mg chemical / kg solid)
 //               KL_L/mg     (Langmuir affinity constant, L/mg)
 //               Kadsdes_1/s (1st-order ad/desorption kinetic rate, 1/s)
@@ -45,73 +59,90 @@
     ],
 
     // ---- Phosphate (orthophosphate): strong sorption to Fe/Al oxides & clays ----
+    // The dissolved forms pair with the classic particulate-P species "PP"
+    // (only the pair(s) present in the active BGC template are enabled).
     "PO4-P": {
+        "SORBED_SPECIES": "PP",
         "LANGMUIR":   {"qmax_mg/kg": 500.0, "KL_L/mg": 0.03, "Kadsdes_1/s": 0.002},
         "FREUNDLICH": {"Kfr": 50.0, "Nfr": 0.6, "Kadsdes_1/s": 0.001}
     },
     "PO4-P_sol": {
+        "SORBED_SPECIES": "PP",
         "LANGMUIR":   {"qmax_mg/kg": 500.0, "KL_L/mg": 0.03, "Kadsdes_1/s": 0.002},
         "FREUNDLICH": {"Kfr": 50.0, "Nfr": 0.6, "Kadsdes_1/s": 0.001}
     },
     "SP": {
+        "SORBED_SPECIES": "PP",
         "LANGMUIR":   {"qmax_mg/kg": 500.0, "KL_L/mg": 0.03, "Kadsdes_1/s": 0.002},
         "FREUNDLICH": {"Kfr": 50.0, "Nfr": 0.6, "Kadsdes_1/s": 0.001}
     },
 
     // ---- Ammonium: cation exchange, moderate sorption ----
     "NH4-N": {
+        "SORBED_SPECIES": "NH4-N_sorbed",
         "LANGMUIR":   {"qmax_mg/kg": 200.0, "KL_L/mg": 0.02, "Kadsdes_1/s": 0.002},
         "FREUNDLICH": {"Kfr": 8.0, "Nfr": 0.8, "Kadsdes_1/s": 0.001}
     },
 
     // ---- Heavy metals (dissolved phase): strong sorption; Pb > Hg > Cu > Cd > Zn ----
     "Cu_diss": {
+        "SORBED_SPECIES": "Cu_part",
         "LANGMUIR":   {"qmax_mg/kg": 3000.0, "KL_L/mg": 0.20, "Kadsdes_1/s": 0.003},
         "FREUNDLICH": {"Kfr": 800.0, "Nfr": 0.70, "Kadsdes_1/s": 0.0015}
     },
     "Zn_diss": {
+        "SORBED_SPECIES": "Zn_part",
         "LANGMUIR":   {"qmax_mg/kg": 2000.0, "KL_L/mg": 0.10, "Kadsdes_1/s": 0.003},
         "FREUNDLICH": {"Kfr": 400.0, "Nfr": 0.72, "Kadsdes_1/s": 0.0015}
     },
     "Pb_diss": {
+        "SORBED_SPECIES": "Pb_part",
         "LANGMUIR":   {"qmax_mg/kg": 8000.0, "KL_L/mg": 0.30, "Kadsdes_1/s": 0.003},
         "FREUNDLICH": {"Kfr": 2000.0, "Nfr": 0.65, "Kadsdes_1/s": 0.0015}
     },
     "Cd_diss": {
+        "SORBED_SPECIES": "Cd_part",
         "LANGMUIR":   {"qmax_mg/kg": 1000.0, "KL_L/mg": 0.15, "Kadsdes_1/s": 0.003},
         "FREUNDLICH": {"Kfr": 300.0, "Nfr": 0.70, "Kadsdes_1/s": 0.0015}
     },
     "Hg_diss": {
+        "SORBED_SPECIES": "Hg_part",
         "LANGMUIR":   {"qmax_mg/kg": 5000.0, "KL_L/mg": 0.40, "Kadsdes_1/s": 0.003},
         "FREUNDLICH": {"Kfr": 1500.0, "Nfr": 0.60, "Kadsdes_1/s": 0.0015}
     },
 
     // ---- Pesticides (dissolved): generic moderate sorption (calibrate per compound) ----
     "PEST_diss": {
+        "SORBED_SPECIES": "PEST_part",
         "LANGMUIR":   {"qmax_mg/kg": 200.0, "KL_L/mg": 0.05, "Kadsdes_1/s": 0.001},
         "FREUNDLICH": {"Kfr": 30.0, "Nfr": 0.85, "Kadsdes_1/s": 0.0008}
     },
 
     // ---- PFAS: PFOS > PFOA > GenX sorption; Freundlich 1/n ~ 0.8-1.0 ----
     "PFAS_PFOS": {
+        "SORBED_SPECIES": "PFAS_PFOS_sorbed",
         "LANGMUIR":   {"qmax_mg/kg": 300.0, "KL_L/mg": 0.10, "Kadsdes_1/s": 0.001},
         "FREUNDLICH": {"Kfr": 40.0, "Nfr": 0.85, "Kadsdes_1/s": 0.0008}
     },
     "PFAS_PFOA": {
+        "SORBED_SPECIES": "PFAS_PFOA_sorbed",
         "LANGMUIR":   {"qmax_mg/kg": 150.0, "KL_L/mg": 0.05, "Kadsdes_1/s": 0.001},
         "FREUNDLICH": {"Kfr": 20.0, "Nfr": 0.90, "Kadsdes_1/s": 0.0008}
     },
     "PFAS_GenX": {
+        "SORBED_SPECIES": "PFAS_GenX_sorbed",
         "LANGMUIR":   {"qmax_mg/kg": 80.0, "KL_L/mg": 0.03, "Kadsdes_1/s": 0.001},
         "FREUNDLICH": {"Kfr": 10.0, "Nfr": 0.95, "Kadsdes_1/s": 0.0008}
     },
 
     // ---- Endocrine disruptors: sorb to organic matter ----
     "EDC_estrogen": {
+        "SORBED_SPECIES": "EDC_estrogen_sorbed",
         "LANGMUIR":   {"qmax_mg/kg": 200.0, "KL_L/mg": 0.08, "Kadsdes_1/s": 0.001},
         "FREUNDLICH": {"Kfr": 50.0, "Nfr": 0.80, "Kadsdes_1/s": 0.0008}
     },
     "EDC_bisphenol": {
+        "SORBED_SPECIES": "EDC_bisphenol_sorbed",
         "LANGMUIR":   {"qmax_mg/kg": 150.0, "KL_L/mg": 0.06, "Kadsdes_1/s": 0.001},
         "FREUNDLICH": {"Kfr": 35.0, "Nfr": 0.85, "Kadsdes_1/s": 0.0008}
     }

@@ -55,11 +55,10 @@ class OpenWQ_vars
             d_sedmass_transport_dt,                   // derivative of sediments in flow-transport compartment (e.g. runoff)
             d_sedmass_mobilized_dt;         // sediments mobilized in sediment comparment (e.g., soil)
 
-        // ############################################
-        // Sorbed mass for sorption isotherm tracking
-        // ############################################
-        std::unique_ptr<arma::field<arma::field<arma::Cube<double>>>>
-            sorbed_mass;                    // sorbed mass on solid phase [g]
+        // NOTE: the old separate 'sorbed_mass' shadow pool was removed.
+        // Sorption (model_SI) now uses the SPECIES-PAIR scheme: the sorbed
+        // phase is an explicit chemass species (e.g. PO4-P => PP), so it is
+        // stored, transported, output, and mass-balanced like any species.
 
         // ############################################
         // Mass Balance Tracking
@@ -67,8 +66,7 @@ class OpenWQ_vars
         struct MassBalanceData {
             // Per-species totals (summed across all compartments and cells)
             std::vector<double> total_dissolved_mass;   // Current dissolved mass [g]
-            std::vector<double> total_sorbed_mass;      // Current sorbed mass [g]
-            std::vector<double> total_mass;             // Total = dissolved + sorbed [g]
+            std::vector<double> total_mass;             // Total mass [g]
 
             // Cumulative fluxes since simulation start
             std::vector<double> cumulative_sources;     // Total mass added (IC + SS + EWF) [g]
@@ -91,7 +89,6 @@ class OpenWQ_vars
             void initialize(unsigned int n_species) {
                 num_species = n_species;
                 total_dissolved_mass.resize(n_species, 0.0);
-                total_sorbed_mass.resize(n_species, 0.0);
                 total_mass.resize(n_species, 0.0);
                 cumulative_sources.resize(n_species, 0.0);
                 cumulative_sinks.resize(n_species, 0.0);
