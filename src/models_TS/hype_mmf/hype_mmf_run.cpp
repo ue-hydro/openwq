@@ -200,6 +200,24 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	};       
 
 	// ###############################################
+	// HYPE's MMF formulas expect water fluxes as DEPTHS (mm); openWQ passes
+	// VOLUMES (m3). Convert using the cell area published by the host coupling
+	// as the "cellArea_m2" dependency (same convention as HYPE_HBVSED). If no
+	// host publishes it, fall back to the raw volume (legacy behaviour).
+	double cellArea_m2 = 0.0;
+	{
+		const int nDep = (int) OpenWQ_hostModelconfig.get_num_HydroDepend();
+		const int area_ix = (TS_type.compare("TS_type_EWF") == 0) ? ix_r : (int) xyz_SedCmpt_interface[0];
+		const int area_iy = (TS_type.compare("TS_type_EWF") == 0) ? iy_r : (int) xyz_SedCmpt_interface[1];
+		for (int di = 0; di < nDep; di++){
+			if (OpenWQ_hostModelconfig.get_HydroDepend_name_at(di).compare("cellArea_m2") == 0){
+				cellArea_m2 = OpenWQ_hostModelconfig.get_dependVar_at(di, area_ix, area_iy, 0);
+				break;
+			}
+		}
+	}
+	double wflux_mm = (cellArea_m2 > 0.0) ? (wflux_s2r / cellArea_m2 * 1000.0) : wflux_s2r;
+
 	// Calculate particles that are eroded by rain splash detachment and by overland flow (mobilised sediment)
 	// ###############################################
 
@@ -211,10 +229,10 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 		// Here, because OpenWQ can have different timesteps, this threshold is adjusted (simple rule of three)
 		prec_erosion_threshold = 5 / (24 * 60 * 60) * OpenWQ_hostModelconfig.get_time_step();
 		
-		if(wflux_s2r > prec_erosion_threshold){     // shorter timestep, other threshold?, holds for all over the world?, reference?
+		if(wflux_mm > prec_erosion_threshold){     // shorter timestep, other threshold?, holds for all over the world?, reference?
 			
 			rainfall_energy = 8.95 + 8.44 * log10(
-				wflux_s2r * (0.257 + sin(
+				wflux_mm * (0.257 + sin(
 					2 * 3.14 * ((OpenWQ_wqconfig.TS_model->HypeMMF->pdayno - 70.0)/365)) * 0.09) * 2.0);
 
 		}else{
@@ -223,7 +241,7 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 
 		}
 
-		rainfall_energy = wflux_s2r * rainfall_energy;        // J/m2
+		rainfall_energy = wflux_mm * rainfall_energy;        // J/m2
 		mobilisedsed_EWF = rainfall_energy * (1.0 - cropcover) * erodibility;  //g/m2
 
 		// Adding rain mobilization to potential
@@ -242,7 +260,7 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// TODO 
 	// wflux_s2r needs to be in mm
 	// (((surfacerunoff * 365.) ** sreroexp) * (1. - common_groundcover) * (1./(0.5 * cohesion)) * SIN(basin(i)%slope / 100.)) / 365. !g/m2 
-	mobilisedsed_LE = ( pow(wflux_s2r * 365, sreroexp) 
+	mobilisedsed_LE = ( pow(wflux_mm * 365, sreroexp) 
 		* (1.0 - groundcover) * (1.0/(0.5f * cohesion)) * 
 		sin(slope / 100.0)) / 365; // g/m2   
 
@@ -250,7 +268,7 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 
 	// Transport capacity of fast flowing water may limit transport of sediment
 	// transportfactor = MIN(1.,(flow / trans1)**trans2) 
-	transportfactor = std::min(1.0, pow(wflux_s2r / trans1, trans2));
+	transportfactor = std::min(1.0, pow(wflux_mm / trans1, trans2));
 
 	// #####################################
 	// Eroded sediment calculated from mobilised sediment, possibly limited by the transport capacity
@@ -259,10 +277,10 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	mobilisedsed_EWF = OpenWQ_wqconfig.TS_model->HypeMMF->mobilisedsed_rain_potential(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
 
 	(*OpenWQ_vars.d_sedmass_mobilized_dt)(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]) 
-		= 1000.0 * (
+		= ((cellArea_m2 > 0.0) ? (cellArea_m2 / 1000.0) : 1000.0) * (
 			mobilisedsed_EWF    // mobilization by rainfall
 			+ mobilisedsed_LE   // mobilization by runoff/flow
-			) * transportfactor;  // kg/km2
+			) * transportfactor;  // kg (abs mass via cell area; legacy 1000x if no area)
 
 	}
 
@@ -300,6 +318,23 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 		}
 	}
 
+	} else if (TS_type.compare("TS_type_LE") == 0 && recipient == -1
+		&& ix_s != -1 && iy_s != -1 && iz_s != -1){
+
+		// Outlet sink: water leaving the domain carries the suspended pool out
+		// (MMF full-pool scheme), together with the sorbed partner species.
+		(*OpenWQ_vars.d_sedmass_transport_dt)(ix_s, iy_s, iz_s) -= (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
+
+		{
+			const unsigned int npairs = OpenWQ_wqconfig.SI_model->get_num_sorption_pairs();
+			for (unsigned int pi = 0; pi < npairs; pi++){
+				const int sorbi = OpenWQ_wqconfig.SI_model->get_sorbed_species_index_at(pi);
+				if (sorbi < 0) continue;
+				(*OpenWQ_vars.d_chemass_dt_transp_part)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -=
+					std::fmax(OpenWQ_vars.live_mass(
+						erodFlux_icmp, (unsigned int) sorbi, ix_s, iy_s, iz_s), 0.0);
+			}
+		}
 	}
 
 }
