@@ -126,9 +126,17 @@ int OpenWQ_output::writeResults(
                 writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
                         OpenWQ_vars.d_chemass_dt_chem_out, output_label, timestr, icmp);
 
-                output_label = "d_output_dt_transport";
+                output_label = "d_output_dt_sorption";
                 writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
-                        OpenWQ_vars.d_chemass_dt_transp_out, output_label, timestr, icmp);
+                        OpenWQ_vars.d_chemass_dt_sorpt_out, output_label, timestr, icmp);
+
+                output_label = "d_output_dt_transport_diss";
+                writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                        OpenWQ_vars.d_chemass_dt_transp_diss_out, output_label, timestr, icmp);
+
+                output_label = "d_output_dt_transport_part";
+                writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                        OpenWQ_vars.d_chemass_dt_transp_part_out, output_label, timestr, icmp);
 
                 output_label = "d_output_ss";
                 writeCSV(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
@@ -160,6 +168,24 @@ int OpenWQ_output::writeResults(
                     OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)) == 0){
                 writeHDF5_Sediment(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
                                   OpenWQ_vars.sedmass, output_label, timestr, icmp);
+
+                // Sediment derivative channels (debug mode)
+                if (debug_mode){
+                    output_label = "d_output_sed_transport";
+                    writeHDF5_Sediment(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                                      OpenWQ_vars.d_sedmass_transport_dt_out, output_label, timestr, icmp);
+                    output_label = "main";
+                }
+            }
+            // Erosion source channel lives on the SEDIMENT compartment (may
+            // differ from the transport compartment)
+            if (export_sediment && debug_mode &&
+                (OpenWQ_wqconfig.TS_model->SedCmpt).compare(
+                    OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)) == 0){
+                output_label = "d_output_sed_mobilized";
+                writeHDF5_Sediment(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                                  OpenWQ_vars.d_sedmass_mobilized_dt_out, output_label, timestr, icmp);
+                output_label = "main";
             }
 
             // Debug outputs
@@ -169,9 +195,17 @@ int OpenWQ_output::writeResults(
                 writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
                          OpenWQ_vars.d_chemass_dt_chem_out, output_label, timestr, icmp);
 
-                output_label = "d_output_dt_transport";
+                output_label = "d_output_dt_sorption";
                 writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
-                         OpenWQ_vars.d_chemass_dt_transp_out, output_label, timestr, icmp);
+                         OpenWQ_vars.d_chemass_dt_sorpt_out, output_label, timestr, icmp);
+
+                output_label = "d_output_dt_transport_diss";
+                writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                         OpenWQ_vars.d_chemass_dt_transp_diss_out, output_label, timestr, icmp);
+
+                output_label = "d_output_dt_transport_part";
+                writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                         OpenWQ_vars.d_chemass_dt_transp_part_out, output_label, timestr, icmp);
 
                 output_label = "d_output_ss";
                 writeHDF5(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,

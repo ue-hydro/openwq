@@ -47,8 +47,22 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
 
+        // Derivative (sorption pair shift, model_SI)
+        d_chemass_dt_sorpt = std::unique_ptr<
+            arma::field< // Compartments
+            arma::field< // Chemical Species
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
+
         // Derivative (water transport)
-        d_chemass_dt_transp = std::unique_ptr<
+        d_chemass_dt_transp_diss = std::unique_ptr<
+            arma::field< // Compartments
+            arma::field< // Chemical Species
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
+
+        // Derivative (transport of sorbed species with sediment, model_TS)
+        d_chemass_dt_transp_part = std::unique_ptr<
             arma::field< // Compartments
             arma::field< // Chemical Species
             arma::Cube<  // Dimensions: nx, ny, nz
@@ -109,8 +123,22 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
 
+        // Derivative (sorption pair shift) - cumulative for debug output
+        d_chemass_dt_sorpt_out = std::unique_ptr<
+            arma::field< // Compartments
+            arma::field< // Chemical Species
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
+
         // Derivative (water transport)
-        d_chemass_dt_transp_out = std::unique_ptr<
+        d_chemass_dt_transp_diss_out = std::unique_ptr<
+            arma::field< // Compartments
+            arma::field< // Chemical Species
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
+
+        // Derivative (sediment-driven transport) - cumulative for debug output
+        d_chemass_dt_transp_part_out = std::unique_ptr<
             arma::field< // Compartments
             arma::field< // Chemical Species
             arma::Cube<  // Dimensions: nx, ny, nz
@@ -161,6 +189,15 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
             double>>(new arma::cube);
 
         d_sedmass_mobilized_dt = std::unique_ptr<
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>(new arma::cube);
+
+        // Cumulative sediment derivatives (debug outputs)
+        d_sedmass_transport_dt_out = std::unique_ptr<
+            arma::Cube<  // Dimensions: nx, ny, nz
+            double>>(new arma::cube);
+
+        d_sedmass_mobilized_dt_out = std::unique_ptr<
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>(new arma::cube);
 

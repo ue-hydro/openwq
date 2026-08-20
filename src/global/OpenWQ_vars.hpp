@@ -34,14 +34,18 @@ class OpenWQ_vars
 
         std::unique_ptr<arma::field<arma::field<arma::Cube<double>>>> 
             chemass,                    // state-variable (chemistry)
-            d_chemass_dt_chem,          // derivative (chemistry)
-            d_chemass_dt_transp,        // derivative (transport)
+            d_chemass_dt_chem,          // derivative (chemistry: BGC reactions)
+            d_chemass_dt_sorpt,         // derivative (sorption pair shift, model_SI)
+            d_chemass_dt_transp_diss,   // derivative (transport of dissolved: water-driven, model_TD/LE)
+            d_chemass_dt_transp_part,   // derivative (transport of sorbed: sediment-driven, model_TS)
             d_chemass_ss,               // derivative (isolated) SS
             d_chemass_ewf,              // derivative (isolated) EWF
             d_chemass_ic,               // derivative (at start) IC
             d_chemass_ic_conc,          // deferred IC concentration (stored until water arrives)
             d_chemass_dt_chem_out,      // cumulative derivative for output in debug model
-            d_chemass_dt_transp_out,    // cumulative derivative for output in debug model
+            d_chemass_dt_sorpt_out,     // cumulative derivative for output in debug model
+            d_chemass_dt_transp_diss_out, // cumulative derivative for output in debug model
+            d_chemass_dt_transp_part_out, // cumulative derivative for output in debug model
             d_chemass_ss_out,           // cumulative derivative for output in debug model
             d_chemass_ewf_out,          // cumulative derivative for output in debug model
             ewf_conc,
@@ -52,8 +56,10 @@ class OpenWQ_vars
 
         std::unique_ptr<arma::Cube<double>>
             sedmass,                        // sediment mass in flow-transport compartment (e.g, runoff)
-            d_sedmass_transport_dt,                   // derivative of sediments in flow-transport compartment (e.g. runoff)
-            d_sedmass_mobilized_dt;         // sediments mobilized in sediment comparment (e.g., soil)
+            d_sedmass_transport_dt,         // derivative of sediments in flow-transport compartment (e.g. runoff)
+            d_sedmass_mobilized_dt,         // sediments mobilized in sediment comparment (e.g., soil)
+            d_sedmass_transport_dt_out,     // cumulative (debug output d_output_sed_transport)
+            d_sedmass_mobilized_dt_out;     // cumulative (debug output d_output_sed_mobilized)
 
         // NOTE: the old separate 'sorbed_mass' shadow pool was removed.
         // Sorption (model_SI) now uses the SPECIES-PAIR scheme: the sorbed
@@ -110,6 +116,27 @@ class OpenWQ_vars
         };
 
         MassBalanceData mass_balance;
+
+        // ############################################
+        // Live (remaining) mass of a species in a cell: the state PLUS every
+        // derivative claim already written this step. Any process that TAKES
+        // mass from a cell must cap its take against this (not against raw
+        // chemass): concurrent sinks (sorption, water transport, sediment
+        // co-transport, ...) each sized against the same start-of-step pool
+        // overdraw it, and the end-of-step non-negativity clamp then silently
+        // CREATES mass at the recipients. (Under the CVode RHS the state is
+        // the probed solution, which makes this cap conservative - safe.)
+        // ############################################
+        inline double live_mass(unsigned int icmp, unsigned int chemi,
+                                unsigned int ix, unsigned int iy, unsigned int iz) const {
+            return (*chemass)(icmp)(chemi)(ix,iy,iz)
+                 + (*d_chemass_dt_chem)(icmp)(chemi)(ix,iy,iz)
+                 + (*d_chemass_dt_sorpt)(icmp)(chemi)(ix,iy,iz)
+                 + (*d_chemass_dt_transp_diss)(icmp)(chemi)(ix,iy,iz)
+                 + (*d_chemass_dt_transp_part)(icmp)(chemi)(ix,iy,iz)
+                 + (*d_chemass_ss)(icmp)(chemi)(ix,iy,iz)
+                 + (*d_chemass_ewf)(icmp)(chemi)(ix,iy,iz);
+        }
 
         // Constructor
         OpenWQ_vars(size_t num_HydroComp, size_t num_EWF);

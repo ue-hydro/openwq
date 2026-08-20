@@ -99,7 +99,7 @@ void OpenWQ_TD_model::AdvDisp(
 
     // OPTIMIZED: pre-fetch field references to avoid repeated pointer dereferencing
     auto& chemass_source = (*OpenWQ_vars.chemass)(source);
-    auto& d_transp_source = (*OpenWQ_vars.d_chemass_dt_transp)(source);
+    auto& d_transp_source = (*OpenWQ_vars.d_chemass_dt_transp_diss)(source);
 
     // Loop for mobile chemical species
     for (unsigned int chemi=0;chemi<numspec;chemi++){
@@ -172,14 +172,12 @@ void OpenWQ_TD_model::AdvDisp(
         if (chemass_flux_total > 0.0){
             // Net transfer source -> recipient
             const double src_live = std::fmax(
-                chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
-                + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s), 0.0);
+                OpenWQ_vars.live_mass(source, ichem_mob, ix_s, iy_s, iz_s), 0.0);
             chemass_flux_total = std::fmin(chemass_flux_total, src_live);
         } else if (chemass_flux_total < 0.0){
             // Net transfer recipient -> source (only possible with dispersion)
             const double recip_live = has_recipient ? std::fmax(
-                (*OpenWQ_vars.chemass)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
-                + (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r), 0.0)
+                OpenWQ_vars.live_mass(recipient, ichem_mob, ix_r, iy_r, iz_r), 0.0)
                 : 0.0;
             chemass_flux_total = std::fmax(chemass_flux_total, -recip_live);
         }
@@ -198,7 +196,7 @@ void OpenWQ_TD_model::AdvDisp(
             }
             continue;
         }
-        (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
+        (*OpenWQ_vars.d_chemass_dt_transp_diss)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
             += chemass_flux_total;
     }
 

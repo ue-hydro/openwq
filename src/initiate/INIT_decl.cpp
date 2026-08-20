@@ -94,7 +94,9 @@ void OpenWQ_initiate::initmemory(
 
         // Derivatives
         (*OpenWQ_vars.d_chemass_dt_chem)(icmp) = domain_field;
-        (*OpenWQ_vars.d_chemass_dt_transp)(icmp) = domain_field;
+        (*OpenWQ_vars.d_chemass_dt_sorpt)(icmp) = domain_field;
+        (*OpenWQ_vars.d_chemass_dt_transp_diss)(icmp) = domain_field;
+        (*OpenWQ_vars.d_chemass_dt_transp_part)(icmp) = domain_field;
         (*OpenWQ_vars.d_chemass_ic)(icmp) = domain_field;
         (*OpenWQ_vars.d_chemass_ic_conc)(icmp) = domain_field;  // deferred IC concentration
         (*OpenWQ_vars.d_chemass_ss)(icmp) = domain_field;
@@ -111,7 +113,9 @@ void OpenWQ_initiate::initmemory(
 
         // Cumulative Derivatives (for export in debug mode)
         (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp) = domain_field;
-        (*OpenWQ_vars.d_chemass_dt_transp_out)(icmp) = domain_field;
+        (*OpenWQ_vars.d_chemass_dt_sorpt_out)(icmp) = domain_field;
+        (*OpenWQ_vars.d_chemass_dt_transp_diss_out)(icmp) = domain_field;
+        (*OpenWQ_vars.d_chemass_dt_transp_part_out)(icmp) = domain_field;
         (*OpenWQ_vars.d_chemass_ss_out)(icmp) = domain_field;
         (*OpenWQ_vars.d_chemass_ewf_out)(icmp) = domain_field;
         (*OpenWQ_vars.d_chemass)(icmp) = domain_field;
@@ -129,6 +133,7 @@ void OpenWQ_initiate::initmemory(
 
             // initiate state variable
             (*OpenWQ_vars.d_sedmass_mobilized_dt) = domain_xyz;
+            (*OpenWQ_vars.d_sedmass_mobilized_dt_out) = domain_xyz;
 
             // initiate mobilisedsed_rain_potential
             OpenWQ_wqconfig.TS_model->HypeMMF->mobilisedsed_rain_potential = domain_xyz;
@@ -142,6 +147,7 @@ void OpenWQ_initiate::initmemory(
             // initiate state variable
             (*OpenWQ_vars.sedmass) = domain_xyz;
             (*OpenWQ_vars.d_sedmass_transport_dt) = domain_xyz;
+            (*OpenWQ_vars.d_sedmass_transport_dt_out) = domain_xyz;
         
         }
 

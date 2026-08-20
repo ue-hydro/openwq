@@ -75,6 +75,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
             const unsigned int icmp = idx / user_data.num_chem;
             const unsigned int chemi = idx % user_data.num_chem;
             (*user_data.vars.d_chemass_dt_chem)(icmp)(chemi).zeros();
+            (*user_data.vars.d_chemass_dt_sorpt)(icmp)(chemi).zeros();
         }
     }
 
@@ -114,7 +115,7 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
     #pragma omp parallel num_threads(user_data.num_threads)
     {
         unsigned int nx, ny, nz, ix, iy, iz;
-        double dm_dt_chem, dm_dt_trans, dm_ic, dm_ss, dm_ewf;
+        double dm_dt_chem, dm_dt_sorpt, dm_dt_trans, dm_dt_part, dm_ic, dm_ss, dm_ewf;
 
         #pragma omp for schedule(dynamic)
         for (unsigned int icmp = 0; icmp < user_data.num_comps; icmp++){
@@ -129,7 +130,9 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
                 auto& d_chemass_ss = (*user_data.vars.d_chemass_ss)(icmp)(chemi);
                 auto& d_chemass_ewf = (*user_data.vars.d_chemass_ewf)(icmp)(chemi);
                 auto& d_chemass_dt_chem = (*user_data.vars.d_chemass_dt_chem)(icmp)(chemi);
-                auto& d_chemass_dt_transp = (*user_data.vars.d_chemass_dt_transp)(icmp)(chemi);
+                auto& d_chemass_dt_sorpt = (*user_data.vars.d_chemass_dt_sorpt)(icmp)(chemi);
+                auto& d_chemass_dt_transp_diss = (*user_data.vars.d_chemass_dt_transp_diss)(icmp)(chemi);
+                auto& d_chemass_dt_transp_part = (*user_data.vars.d_chemass_dt_transp_part)(icmp)(chemi);
                 // Note: the *_out accumulators are intentionally NOT pre-fetched
                 // here — they are updated once after CVode() returns, not inside
                 // this RHS callback (see note below).
@@ -150,17 +153,20 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
                             // 3. EWF (External Water Fluxes)
                             dm_ewf = d_chemass_ewf(ix, iy, iz);
 
-                            // 4. Chemistry derivatives
+                            // 4. Chemistry + sorption derivatives
                             dm_dt_chem = d_chemass_dt_chem(ix, iy, iz);
+                            dm_dt_sorpt = d_chemass_dt_sorpt(ix, iy, iz);
 
-                            // Transport derivatives
-                            dm_dt_trans = d_chemass_dt_transp(ix, iy, iz);
+                            // Transport derivatives (water-driven + sediment-driven)
+                            dm_dt_trans = d_chemass_dt_transp_diss(ix, iy, iz);
+                            dm_dt_part = d_chemass_dt_transp_part(ix, iy, iz);
 
                             // 5. Total derivative
                             // Note: _out accumulators are NOT updated here because
                             // CVODE calls this RHS function many times per step;
                             // they are updated once after CVode() returns
-                            d_chemass(ix, iy, iz) = dm_ic + dm_ss + dm_ewf + dm_dt_chem + dm_dt_trans;
+                            d_chemass(ix, iy, iz) = dm_ic + dm_ss + dm_ewf
+                                + dm_dt_chem + dm_dt_sorpt + dm_dt_trans + dm_dt_part;
                         }
                     }
                 }
@@ -212,6 +218,15 @@ int sedimentFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
     // OPTIMIZED #10: Copy from SUNDIALS vector to sedmass using memcpy
     std::memcpy(sedmass.memptr(), uvec_data, sed_size * sizeof(double));
 
+    // The TS driver also co-advects the sorbed species (it writes
+    // d_chemass_dt_transp_part). Those writes were already applied ONCE at
+    // the space step; replaying the TS calls here (once per CVode RHS
+    // evaluation) would accumulate them N times. Snapshot the channel for
+    // the transport compartment and restore it after the replay, so only
+    // the sediment derivatives are recomputed.
+    arma::field<arma::Cube<double>> transp_part_saved =
+        (*user_data.vars.d_chemass_dt_transp_part)(sed_icmp);
+
     // Process sediment transport calls
     for (const auto& [source, ix_s, iy_s, iz_s, recipient, ix_r, iy_r, iz_r, wflux_s2r, wmass_source, TS_type] 
          : user_data.sediment_calls) {
@@ -224,6 +239,9 @@ int sedimentFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
                                           recipient, ix_r, iy_r, iz_r,
                                           wflux_s2r, wmass_source, TS_type);
     }
+
+    // Restore the sorbed co-advection channel (see note above)
+    (*user_data.vars.d_chemass_dt_transp_part)(sed_icmp) = transp_part_saved;
 
     // OPTIMIZED #10: Copy derivatives to SUNDIALS f vector using raw pointers
     const double* dt_ptr = user_data.vars.d_sedmass_transport_dt->memptr();
@@ -370,13 +388,19 @@ void OpenWQ_compute::Solve_with_CVode(
                 auto& d_chemass_ewf_out = (*OpenWQ_vars.d_chemass_ewf_out)(icmp)(chemi);
                 auto& d_chemass_dt_chem = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi);
                 auto& d_chemass_dt_chem_out = (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp)(chemi);
-                auto& d_chemass_dt_transp = (*OpenWQ_vars.d_chemass_dt_transp)(icmp)(chemi);
-                auto& d_chemass_dt_transp_out = (*OpenWQ_vars.d_chemass_dt_transp_out)(icmp)(chemi);
+                auto& d_chemass_dt_sorpt = (*OpenWQ_vars.d_chemass_dt_sorpt)(icmp)(chemi);
+                auto& d_chemass_dt_sorpt_out = (*OpenWQ_vars.d_chemass_dt_sorpt_out)(icmp)(chemi);
+                auto& d_chemass_dt_transp_diss = (*OpenWQ_vars.d_chemass_dt_transp_diss)(icmp)(chemi);
+                auto& d_chemass_dt_transp_diss_out = (*OpenWQ_vars.d_chemass_dt_transp_diss_out)(icmp)(chemi);
+                auto& d_chemass_dt_transp_part = (*OpenWQ_vars.d_chemass_dt_transp_part)(icmp)(chemi);
+                auto& d_chemass_dt_transp_part_out = (*OpenWQ_vars.d_chemass_dt_transp_part_out)(icmp)(chemi);
 
                 d_chemass_ss_out += d_chemass_ss;
                 d_chemass_ewf_out += d_chemass_ewf;
                 d_chemass_dt_chem_out += d_chemass_dt_chem;
-                d_chemass_dt_transp_out += d_chemass_dt_transp;
+                d_chemass_dt_sorpt_out += d_chemass_dt_sorpt;
+                d_chemass_dt_transp_diss_out += d_chemass_dt_transp_diss;
+                d_chemass_dt_transp_part_out += d_chemass_dt_transp_part;
             }
         }
     }
@@ -484,6 +508,11 @@ void OpenWQ_compute::Solve_with_CVode_Sediment(
     }
 
     // Extract solution (clamped to non-negative)
+    // Accumulate sediment derivatives for debug outputs (final-RHS values,
+    // same per-step approximation as the chemistry _out channels)
+    (*OpenWQ_vars.d_sedmass_transport_dt_out) += (*OpenWQ_vars.d_sedmass_transport_dt);
+    (*OpenWQ_vars.d_sedmass_mobilized_dt_out) += (*OpenWQ_vars.d_sedmass_mobilized_dt);
+
     double* sed_ptr = OpenWQ_vars.sedmass->memptr();
     for (unsigned int i = 0; i < system_size; i++){
         sed_ptr[i] = std::max(0.0, udata_ptr[i]);

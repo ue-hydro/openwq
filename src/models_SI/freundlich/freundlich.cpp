@@ -23,9 +23,9 @@
 //
 // Each sorbable species is PAIRED with an explicit sorbed partner species
 // (e.g. PO4-P => PP), both regular chemass state variables. The isotherm
-// shifts mass between the two, BGC-style, via d_chemass_dt_chem:
-//     d_chemass_dt_chem(dissolved) -= flux
-//     d_chemass_dt_chem(sorbed)    += flux
+// shifts mass between the two, BGC-style, via its own derivative channel:
+//     d_chemass_dt_sorpt(dissolved) -= flux
+//     d_chemass_dt_sorpt(sorbed)    += flux
 //
 // q_current comes from the REAL sorbed pool (the partner species' chemass),
 // making this a true kinetic dissolved<=>sorbed exchange. Equilibrium is the
@@ -90,6 +90,20 @@ void OpenWQ_SI_model::freundlich(
         }
     }
 
+    // Sediment-transport compartment index (if model_TS is active): there the
+    // solid phase is the ACTUAL suspended sediment (sedmass), so sorption is
+    // sediment-limited - no particles in suspension means nothing to sorb onto.
+    int transp_icmp = -1;
+    if (OpenWQ_wqconfig.is_TS_enabled) {
+        const std::string& transp_name = OpenWQ_wqconfig.TS_model->ErodTranspCmpt;
+        for (unsigned int ic = 0; ic < num_comps; ic++){
+            if (transp_name.compare(OpenWQ_hostModelconfig.get_HydroComp_name_at(ic)) == 0){
+                transp_icmp = (int) ic;
+                break;
+            }
+        }
+    }
+
     // Loop over each SI species pair (dissolved => sorbed)
     for (unsigned int si = 0; si < num_si_species; si++) {
 
@@ -112,11 +126,9 @@ void OpenWQ_SI_model::freundlich(
             const unsigned int ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
             const unsigned int nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
 
-            // References to state and derivative cubes (the species pair)
-            auto& chemass = (*OpenWQ_vars.chemass)(icmp)(chemi);
-            auto& chemass_sorb = (*OpenWQ_vars.chemass)(icmp)(sorbi);
-            auto& d_chemass = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi);
-            auto& d_chemass_sorb = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(sorbi);
+            // References to the sorption derivative cubes (the species pair)
+            auto& d_chemass = (*OpenWQ_vars.d_chemass_dt_sorpt)(icmp)(chemi);
+            auto& d_chemass_sorb = (*OpenWQ_vars.d_chemass_dt_sorpt)(icmp)(sorbi);
 
             for (unsigned int ix = 0; ix < nx; ix++) {
                 for (unsigned int iy = 0; iy < ny; iy++) {
@@ -129,9 +141,14 @@ void OpenWQ_SI_model::freundlich(
                         // Skip dry cells
                         if (Vol <= watervol_minlim) continue;
 
-                        // Current dissolved and sorbed mass [g] in this cell
-                        const double mass_dissolved = chemass(ix, iy, iz);
-                        const double mass_sorbed = chemass_sorb(ix, iy, iz);
+                        // Current dissolved and sorbed mass [g] in this cell,
+                        // from the LIVE balance (state + claims already written
+                        // this step, e.g. BGC reactions) so the sorption flux
+                        // cannot overdraw a pool another process has claimed.
+                        const double mass_dissolved = std::fmax(
+                            OpenWQ_vars.live_mass(icmp, chemi, ix, iy, iz), 0.0);
+                        const double mass_sorbed = std::fmax(
+                            OpenWQ_vars.live_mass(icmp, (unsigned int) sorbi, ix, iy, iz), 0.0);
                         if (mass_dissolved <= 0.0 && mass_sorbed <= 0.0) continue;
 
                         // Current dissolved concentration [g/m3 = mg/L]
@@ -139,16 +156,35 @@ void OpenWQ_SI_model::freundlich(
                             ? (mass_dissolved / Vol) : 0.0;
 
                         // Solid-phase mass basis for this cell:
-                        // Msolid_g converts q [mg/kg] to an absolute mass [g]:
-                        //   q [mg/kg] * (rhoL [kg/m2] * area [m2]) = mg ; /1000 = g
-                        double cellArea_m2 = 1.0;
-                        if (cellArea_dep >= 0){
-                            const double a = OpenWQ_hostModelconfig.get_dependVar_at(
-                                cellArea_dep, ix, iy, 0);
-                            if (a > 0.0) cellArea_m2 = a;
+                        // Msolid_g converts q [mg/kg] to an absolute mass [g].
+                        double Msolid_g;
+                        if ((int) icmp == transp_icmp) {
+                            // Transport compartment: the sorbent is the ACTUAL
+                            // suspended sediment. q [mg/kg] * sedmass [kg] = mg ; /1000 = g
+                            Msolid_g = (*OpenWQ_vars.sedmass)(ix, iy, iz) / 1000.0;
+                            if (Msolid_g <= 0.0) {
+                                // No particles in suspension: nothing to sorb
+                                // onto; sorbed mass present desorbs at the
+                                // kinetic rate (paired, conservative).
+                                if (mass_sorbed > 0.0) {
+                                    const double released = mass_sorbed * kinetic_factor;
+                                    d_chemass(ix, iy, iz) += released;
+                                    d_chemass_sorb(ix, iy, iz) -= released;
+                                }
+                                continue;
+                            }
+                        } else {
+                            // Soil-matrix compartments:
+                            //   q [mg/kg] * (rhoL [kg/m2] * area [m2]) = mg ; /1000 = g
+                            double cellArea_m2 = 1.0;
+                            if (cellArea_dep >= 0){
+                                const double a = OpenWQ_hostModelconfig.get_dependVar_at(
+                                    cellArea_dep, ix, iy, 0);
+                                if (a > 0.0) cellArea_m2 = a;
+                            }
+                            Msolid_g = rhoL * cellArea_m2 / 1000.0;
+                            if (Msolid_g <= 0.0) continue;
                         }
-                        const double Msolid_g = rhoL * cellArea_m2 / 1000.0;
-                        if (Msolid_g <= 0.0) continue;
 
                         // Coefficient for mass balance: Kfr * Msolid_g
                         const double coeff = Kfr * Msolid_g;

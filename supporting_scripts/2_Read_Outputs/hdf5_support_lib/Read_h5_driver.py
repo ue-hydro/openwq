@@ -279,7 +279,9 @@ def Read_h5_driver(openwq_info=None,
     file_extensions = [
         'main',
         'd_output_dt_chemistry',
-        'd_output_dt_transport',
+        'd_output_dt_sorption',
+        'd_output_dt_transport_diss',
+        'd_output_dt_transport_part',
         'd_output_ss',
         'd_output_ewf',
         'd_output_ic'
@@ -344,23 +346,35 @@ def Read_h5_driver(openwq_info=None,
         # Only one file per compartment (no debug derivatives, no units)
         # -----------------------------------------------------------
         if sediment_as_well:
+            # In debug mode the model also exports the sediment derivative
+            # channels: erosion source (d_output_sed_mobilized) and routing
+            # (d_output_sed_transport).
+            sed_extensions = ['main']
+            if debugmode:
+                sed_extensions += ['d_output_sed_mobilized',
+                                   'd_output_sed_transport']
             for comp in cmp:
                 print(f"\n> Extracting sediment results for: {comp}")
 
                 file_name = f"{comp}@Sediment"
                 result_key = f"{comp}@Sediment"
 
-                output_tscollect = Read_h5_save_engine(
-                    openwq_info,
-                    'main',
-                    file_name,
-                    space_elem,
-                    noDataFlag
-                )
+                sed_entries = []
+                for sed_ext in sed_extensions:
+                    try:
+                        output_tscollect = Read_h5_save_engine(
+                            openwq_info,
+                            sed_ext,
+                            file_name,
+                            space_elem,
+                            noDataFlag
+                        )
+                    except Exception:
+                        # Older runs may not have the debug sediment files
+                        continue
+                    sed_entries.append((sed_ext, output_tscollect))
 
-                openwq_results[result_key] = [
-                    ('main', output_tscollect)
-                ]
+                openwq_results[result_key] = sed_entries
 
                 pbar.update(1)
 

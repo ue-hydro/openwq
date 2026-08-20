@@ -51,7 +51,7 @@ void OpenWQ_TD_model::Adv(
 
     // OPTIMIZED: pre-fetch field references to avoid repeated pointer dereferencing
     auto& chemass_source = (*OpenWQ_vars.chemass)(source);
-    auto& d_transp_source = (*OpenWQ_vars.d_chemass_dt_transp)(source);
+    auto& d_transp_source = (*OpenWQ_vars.d_chemass_dt_transp_diss)(source);
 
     // Loop for mobile chemical species
     for (unsigned int chemi=0;chemi<numspec;chemi++){
@@ -80,8 +80,7 @@ void OpenWQ_TD_model::Adv(
         // silently create mass at the recipients.
         double chemass_flux_adv = conc_factor * current_mass;
         const double src_live = std::fmax(
-            chemass_source(ichem_mob)(ix_s,iy_s,iz_s)
-            + d_transp_source(ichem_mob)(ix_s,iy_s,iz_s), 0.0);
+            OpenWQ_vars.live_mass(source, ichem_mob, ix_s, iy_s, iz_s), 0.0);
         chemass_flux_adv = std::fmin(chemass_flux_adv, src_live);
 
         // Remove Chemical mass flux from SOURCE
@@ -97,7 +96,7 @@ void OpenWQ_TD_model::Adv(
             }
             continue;
         }
-        (*OpenWQ_vars.d_chemass_dt_transp)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
+        (*OpenWQ_vars.d_chemass_dt_transp_diss)(recipient)(ichem_mob)(ix_r,iy_r,iz_r)
             += chemass_flux_adv;
     }
 

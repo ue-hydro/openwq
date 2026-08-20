@@ -68,10 +68,22 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
   int erodInhibut_icmp = OpenWQ_wqconfig.TS_model->HypeMMF->get_erosion_inhibit_compartment();
 	int sediment_icmp = OpenWQ_wqconfig.TS_model->HypeMMF->get_sediment_compartment();
 
-	// Return if there is snow
-	double snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
-				erodInhibut_icmp,
-				ix_s,iy_s,iz_s);
+	// Return if there is snow (erosion inhibited by snow cover).
+	// erodInhibut_icmp == -1 means EROSION_INHIBIT_COMPARTMENT disabled.
+	// EWF calls carry (0,0,0) as source coordinates, so the gate reads the
+	// RECIPIENT cell's HRU (top layer) in that case.
+	double snow = 0.0;
+	if (erodInhibut_icmp >= 0){
+		if (TS_type.compare("TS_type_EWF") == 0 && ix_r >= 0){
+			snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+						erodInhibut_icmp,
+						ix_r, iy_r, 0);
+		} else {
+			snow = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+						erodInhibut_icmp,
+						ix_s, iy_s, iz_s);
+		}
+	}
 	if (snow != 0.0)
 		return;
 
@@ -281,9 +293,10 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 		for (unsigned int pi = 0; pi < npairs; pi++){
 			const int sorbi = OpenWQ_wqconfig.SI_model->get_sorbed_species_index_at(pi);
 			if (sorbi < 0) continue;
-			double smoved = (*OpenWQ_vars.chemass)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s);
-			(*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -= smoved;
-			(*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_r, iy_r, iz_r) += smoved;
+			double smoved = std::fmax(OpenWQ_vars.live_mass(
+				erodFlux_icmp, (unsigned int) sorbi, ix_s, iy_s, iz_s), 0.0);
+			(*OpenWQ_vars.d_chemass_dt_transp_part)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -= smoved;
+			(*OpenWQ_vars.d_chemass_dt_transp_part)(erodFlux_icmp)(sorbi)(ix_r, iy_r, iz_r) += smoved;
 		}
 	}
 
