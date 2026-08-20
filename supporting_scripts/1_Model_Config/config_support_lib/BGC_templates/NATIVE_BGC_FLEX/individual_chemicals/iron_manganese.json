@@ -15,7 +15,8 @@
             "9": "PO4-P",
             "10": "Fe_P",
             "11": "SED_Fe",
-            "12": "SED_Mn"
+            "12": "SED_Mn",
+            "13": "PP"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "Fe_II",
@@ -41,7 +42,8 @@
             "PO4-P": "Phosphate (Fe-P coupling)",
             "Fe_P": "Fe P",
             "SED_Fe": "Settled Fe (sediment sink)",
-            "SED_Mn": "Settled Mn (sediment sink)"
+            "SED_Mn": "Settled Mn (sediment sink)",
+            "PP": "Particulate P - sorbed partner of dissolved P (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

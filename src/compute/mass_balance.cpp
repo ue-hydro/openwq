@@ -24,8 +24,8 @@
 // Mass Balance Tracking Implementation
 //
 // This module tracks mass conservation throughout the simulation:
-// - Total dissolved mass (chemass)
-// - Total sorbed mass (sorbed_mass)
+// - Total mass per species (chemass; sorbed phases are explicit species
+//   under the species-pair sorption scheme, so they are included here)
 // - Cumulative sources (IC, SS, EWF)
 // - Cumulative sinks (transport out, negative corrections)
 // - Mass balance error computation
@@ -102,8 +102,6 @@ void OpenWQ_compute::MassBalance_ComputeTotals(
     // Reset totals
     std::fill(OpenWQ_vars.mass_balance.total_dissolved_mass.begin(),
               OpenWQ_vars.mass_balance.total_dissolved_mass.end(), 0.0);
-    std::fill(OpenWQ_vars.mass_balance.total_sorbed_mass.begin(),
-              OpenWQ_vars.mass_balance.total_sorbed_mass.end(), 0.0);
 
     // Sum dissolved mass (chemass)
     for (unsigned int icmp = 0; icmp < num_comps; icmp++) {
@@ -128,42 +126,14 @@ void OpenWQ_compute::MassBalance_ComputeTotals(
         }
     }
 
-    // Sum sorbed mass (if sorbed_mass is allocated and populated)
-    if (OpenWQ_vars.sorbed_mass) {
-        for (unsigned int icmp = 0; icmp < num_comps; icmp++) {
-            // Check if this compartment's sorbed_mass is allocated
-            if ((*OpenWQ_vars.sorbed_mass)(icmp).n_elem == 0) continue;
+    // NOTE: the old separate sorbed pool was removed (species-pair sorption
+    // scheme). The sorbed phase is an explicit chemass species, so it is
+    // already included in the chemass sums above.
 
-            const unsigned int nx = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp);
-            const unsigned int ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp);
-            const unsigned int nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
-
-            for (unsigned int chemi = 0; chemi < num_chem; chemi++) {
-                // Check if this species has sorbed_mass tracking
-                if ((*OpenWQ_vars.sorbed_mass)(icmp).n_elem <= chemi) continue;
-                if ((*OpenWQ_vars.sorbed_mass)(icmp)(chemi).n_elem == 0) continue;
-
-                double species_sum = 0.0;
-                const auto& sorbed_cube = (*OpenWQ_vars.sorbed_mass)(icmp)(chemi);
-
-                for (unsigned int ix = 0; ix < nx; ix++) {
-                    for (unsigned int iy = 0; iy < ny; iy++) {
-                        for (unsigned int iz = 0; iz < nz; iz++) {
-                            species_sum += sorbed_cube(ix, iy, iz);
-                        }
-                    }
-                }
-
-                OpenWQ_vars.mass_balance.total_sorbed_mass[chemi] += species_sum;
-            }
-        }
-    }
-
-    // Compute total mass = dissolved + sorbed
+    // Compute total mass
     for (unsigned int chemi = 0; chemi < num_chem; chemi++) {
         OpenWQ_vars.mass_balance.total_mass[chemi] =
-            OpenWQ_vars.mass_balance.total_dissolved_mass[chemi] +
-            OpenWQ_vars.mass_balance.total_sorbed_mass[chemi];
+            OpenWQ_vars.mass_balance.total_dissolved_mass[chemi];
     }
 }
 
@@ -322,11 +292,6 @@ void OpenWQ_compute::MassBalance_Report(
 
         oss.str(""); oss.clear();
         oss << "<OpenWQ>   Current dissolved: " << OpenWQ_vars.mass_balance.total_dissolved_mass[chemi] << " g";
-        msg_string = oss.str();
-        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-
-        oss.str(""); oss.clear();
-        oss << "<OpenWQ>   Current sorbed:    " << OpenWQ_vars.mass_balance.total_sorbed_mass[chemi] << " g";
         msg_string = oss.str();
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 

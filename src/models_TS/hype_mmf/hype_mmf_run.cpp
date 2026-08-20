@@ -271,7 +271,22 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 
 	// adding to recipient
 	(*OpenWQ_vars.d_sedmass_transport_dt)(ix_r, iy_r, iz_r) += (*OpenWQ_vars.sedmass)(ix_s, iy_s, iz_s);
-	
+
+	// Sorbed partner species (species-pair scheme, e.g. PO4-P => PP) are
+	// particle-bound, so they ride the sediment. MMF moves the full suspended
+	// pool with the flow, so the sorbed species move fully too, through the
+	// existing transport derivative channel (integrated by the chemistry solver).
+	{
+		const unsigned int npairs = OpenWQ_wqconfig.SI_model->get_num_sorption_pairs();
+		for (unsigned int pi = 0; pi < npairs; pi++){
+			const int sorbi = OpenWQ_wqconfig.SI_model->get_sorbed_species_index_at(pi);
+			if (sorbi < 0) continue;
+			double smoved = (*OpenWQ_vars.chemass)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s);
+			(*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_s, iy_s, iz_s) -= smoved;
+			(*OpenWQ_vars.d_chemass_dt_transp)(erodFlux_icmp)(sorbi)(ix_r, iy_r, iz_r) += smoved;
+		}
+	}
+
 	}
 
 }

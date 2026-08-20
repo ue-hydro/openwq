@@ -164,15 +164,8 @@ OpenWQ_vars::OpenWQ_vars(size_t num_HydroComp, size_t num_EWF){
             arma::Cube<  // Dimensions: nx, ny, nz
             double>>(new arma::cube);
 
-        // ############################################
-        // Sorbed mass for sorption isotherm tracking
-        // Units: g (grams), same as chemass
-        // ############################################
-        sorbed_mass = std::unique_ptr<
-            arma::field< // Compartments
-            arma::field< // Chemical Species
-            arma::Cube<  // Dimensions: nx, ny, nz
-            double>>>>(new arma::field<arma::field<arma::cube>>(num_HydroComp));
+        // NOTE: the old 'sorbed_mass' shadow pool was removed (species-pair
+        // sorption scheme: the sorbed phase is an explicit chemass species).
 
     }catch(const std::exception& e){
 

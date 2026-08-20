@@ -26,7 +26,8 @@
             "4": "NH4-N",
             "5": "NO3-N",
             "6": "PHYTO",
-            "7": "COD"
+            "7": "COD",
+            "8": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -43,7 +44,8 @@
             "NH4-N": "Ammonium nitrogen",
             "NO3-N": "Nitrate nitrogen",
             "PHYTO": "Phytoplankton biomass",
-            "COD": "Chemical oxygen demand"
+            "COD": "Chemical oxygen demand",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

@@ -28,7 +28,9 @@
             "7": "PLANT_P",
             "8": "LITTER_C",
             "9": "LITTER_N",
-            "10": "LITTER_P"
+            "10": "LITTER_P",
+            "11": "NH4-N_sorbed",
+            "12": "PP"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NO3-N",
@@ -47,7 +49,9 @@
             "PLANT_P": "Plant phosphorus pool",
             "LITTER_C": "Litter carbon pool",
             "LITTER_N": "Litter nitrogen pool",
-            "LITTER_P": "Litter phosphorus pool"
+            "LITTER_P": "Litter phosphorus pool",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS",
+            "PP": "Particulate P - sorbed partner of dissolved P (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

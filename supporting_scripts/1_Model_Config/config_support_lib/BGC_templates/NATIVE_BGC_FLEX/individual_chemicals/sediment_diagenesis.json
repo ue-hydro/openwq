@@ -34,7 +34,9 @@
             "13": "CH4",
             "14": "CO2",
             "15": "PO4-P",
-            "16": "Fe_P"
+            "16": "Fe_P",
+            "17": "NH4-N_sorbed",
+            "18": "PP"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "DO",
@@ -64,7 +66,9 @@
             "CH4": "Dissolved methane",
             "CO2": "Dissolved carbon dioxide",
             "PO4-P": "Dissolved reactive phosphorus (orthophosphate)",
-            "Fe_P": "Iron-bound phosphorus"
+            "Fe_P": "Iron-bound phosphorus",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS",
+            "PP": "Particulate P - sorbed partner of dissolved P (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

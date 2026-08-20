@@ -7,7 +7,8 @@
             "1": "NH4-N",
             "2": "NO3-N",
             "3": "ORG_N",
-            "4": "N2_loss"
+            "4": "N2_loss",
+            "5": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NH4-N",
@@ -18,7 +19,8 @@
             "NH4-N": "Ammonium nitrogen",
             "NO3-N": "Nitrate nitrogen",
             "ORG_N": "Organic nitrogen (dissolved + particulate)",
-            "N2_loss": "N2 loss to atmosphere/sediment"
+            "N2_loss": "N2 loss to atmosphere/sediment",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {

@@ -13,7 +13,8 @@
             "7": "DO",
             "8": "N2O_atm_loss",
             "9": "N2_loss",
-            "10": "NH3_loss"
+            "10": "NH3_loss",
+            "11": "NH4-N_sorbed"
         },
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NH4-N",
@@ -34,7 +35,8 @@
             "DO": "Dissolved oxygen (required for O2-limited reactions)",
             "N2O_atm_loss": "N2O loss to atmosphere/sediment",
             "N2_loss": "N2 loss to atmosphere/sediment",
-            "NH3_loss": "NH3 loss to atmosphere/sediment"
+            "NH3_loss": "NH3 loss to atmosphere/sediment",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
         }
     },
     "CYCLING_FRAMEWORKS": {
