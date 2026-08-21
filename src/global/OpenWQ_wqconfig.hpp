@@ -253,6 +253,10 @@ class OpenWQ_wqconfig
         std::unique_ptr<                    // EWF compartment id
             std::vector<unsigned int>
             > ExtFlux_FORC_HDF5vec_ewfCompID;
+        std::unique_ptr<                    // per-request: BGC chem id for each
+            std::vector<                    // *dense* h5 chem slot loaded (the
+            std::vector<int>                // mother model may export only a
+            >> ExtFlux_FORC_HDF5vec_chemID; // subset of species, so dense != BGC)
         std::unique_ptr<            
             arma::Cube<double>
             > ExtFlux_FORC_data_tStep;      // External fluxes HDF5 vector (one timestep)
@@ -269,6 +273,11 @@ class OpenWQ_wqconfig
         // chemicals, compartments and cells/elements to export
         std::vector<int> chem2print;
         std::vector<int> compt2print;
+        std::vector<int> fluxconc2print;   // flux-concentration exports selected in OUTPUT
+        // Cells to print per selected flux export (key = flux-export index).
+        // Each mat is (num_cells x 3) of 0-based (ix,iy,iz) in the SOURCE
+        // compartment (the cells the flux leaves from).
+        std::unordered_map<int, arma::mat> fluxconc_cells2print;
         std::vector<bool> cells2print_bool;
         std::vector<arma::mat> cells2print_vec;
         // No water concentration (as a marker/flag)

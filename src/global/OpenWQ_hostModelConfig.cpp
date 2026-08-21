@@ -30,7 +30,13 @@ OpenWQ_hostModelconfig::OpenWQ_hostModelconfig()
     this->waterVol_hydromodel = std::unique_ptr<
         std::vector<                            // compartments
         arma::Cube<                             // ix, iy, iz
-        double>>>(new std::vector<arma::cube>); 
+        double>>>(new std::vector<arma::cube>);
+
+    // Flux through-volumes from hostmodel (for flux-concentration exports)
+    this->fluxVol_hydromodel = std::unique_ptr<
+        std::vector<                            // flux exports
+        arma::Cube<                             // ix, iy, iz
+        double>>>(new std::vector<arma::cube>);
 
     // Dependencies from hostmodel 
     // (to be available for BGC)
@@ -395,6 +401,65 @@ double OpenWQ_hostModelconfig::get_watervol_minlim()
 double OpenWQ_hostModelconfig::get_waterflux_minlim()
 {
     return this->waterflux_minlim;
+}
+
+/*
+* FluxConcExport methods (flux-concentration exports)
+*/
+// Register a host-model flux export (mirrors add_HydroComp; carries the source
+// compartment index so the output can form conc = chemass[src]/waterVol[src]).
+void OpenWQ_hostModelconfig::add_FluxConcExport(int index, std::string name,
+                    int src_comp_index, int num_cells_x, int num_cells_y, int num_cells_z)
+{
+    this->FluxConcExport.push_back(OpenWQ_hostModelconfig::hydroTuple(
+        index, name, num_cells_x, num_cells_y, num_cells_z));
+    this->FluxConcExport_srcComp.push_back(src_comp_index);
+}
+unsigned int OpenWQ_hostModelconfig::get_num_FluxConcExport()
+{
+    return this->FluxConcExport.size();
+}
+std::string OpenWQ_hostModelconfig::get_FluxConcExport_name_at(int index)
+{
+    return std::get<1>(this->FluxConcExport[index]);
+}
+int OpenWQ_hostModelconfig::get_FluxConcExport_srcComp_at(int index)
+{
+    return this->FluxConcExport_srcComp[index];
+}
+std::vector<std::string> OpenWQ_hostModelconfig::get_FluxConcExport_names()
+{
+    std::vector<std::string> names;
+    for (auto &i : this->FluxConcExport)
+    {
+        names.push_back(std::get<1>(i));
+    }
+    return names;
+}
+unsigned int OpenWQ_hostModelconfig::get_FluxConcExport_num_cells_x_at(int index)
+{
+    return std::get<2>(this->FluxConcExport[index]);
+}
+unsigned int OpenWQ_hostModelconfig::get_FluxConcExport_num_cells_y_at(int index)
+{
+    return std::get<3>(this->FluxConcExport[index]);
+}
+unsigned int OpenWQ_hostModelconfig::get_FluxConcExport_num_cells_z_at(int index)
+{
+    return std::get<4>(this->FluxConcExport[index]);
+}
+// fluxVol store (per-export flux through-volume; mirrors waterVol)
+void OpenWQ_hostModelconfig::add_fluxVol_hydromodel(arma::Cube<double> fluxVol)
+{
+    (*this->fluxVol_hydromodel).push_back(fluxVol);
+}
+double OpenWQ_hostModelconfig::get_fluxVol_hydromodel_at(int index, int ix, int iy, int iz)
+{
+    return (*this->fluxVol_hydromodel)[index](ix,iy,iz);
+}
+void OpenWQ_hostModelconfig::set_fluxVol_hydromodel_at(int index, int ix, int iy, int iz, double value)
+{
+    (*this->fluxVol_hydromodel)[index](ix,iy,iz) = value;
 }
 
 /*

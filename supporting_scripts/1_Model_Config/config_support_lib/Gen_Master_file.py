@@ -85,7 +85,11 @@ def create_master_json(
         no_water_conc_flag: int,
         export_sediment: bool,
         compartments_and_cells: Dict[str, Dict[str, List]],
-        timestep: List[Union[int, str]]
+        timestep: List[Union[int, str]],
+        # Optional flux-concentration exports (same structure as
+        # compartments_and_cells: {flux_name: {"1": [id/"all", "all", "all"], ...}}).
+        # Omitted from the master file when empty (backward-compatible).
+        fluxes_conc_to_print: Dict[str, Dict[str, List]] = None
 
 ) -> None:
     """
@@ -159,9 +163,15 @@ def create_master_json(
             "NO_WATER_CONC_FLAG": no_water_conc_flag,
             "EXPORT_SEDIMENT": export_sediment,
             "COMPARTMENTS_AND_CELLS": compartments_and_cells,
+            "FLUXES_CONC_TO_PRINT": fluxes_conc_to_print,
             "TIMESTEP": timestep
         }
     }
+
+    # Flux-concentration exports are optional: drop the key entirely when none
+    # are requested so existing setups produce an identical master file.
+    if not fluxes_conc_to_print:
+        config["OPENWQ_OUTPUT"].pop("FLUXES_CONC_TO_PRINT", None)
 
     # Save to file with lists formatted horizontally
 

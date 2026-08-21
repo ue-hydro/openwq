@@ -628,6 +628,19 @@ def Gen_Input_Driver(
         ewf_method_fixedval_units: str = "",
         ewf_method_fixedval_external_inputflux_name: str = "",
 
+        # External water fluxes — load concentrations from another openWQ model's
+        # HDF5 output (ewf_method = "from_openwq_hdf5"). Canonical use: feed
+        # SUMMA's soil-buffered runoff concentration (RUNOFF_TO_STREAM export)
+        # into mizuRoute's SUMMA_RUNOFF external water flux.
+        ewf_h5_source_folder: str = "",                              # path to the source openwq_out/HDF5 folder (relative to the run CWD, or absolute)
+        ewf_h5_external_compartment_name: str = "RUNOFF_TO_STREAM",  # flux/compartment name in the source h5 filenames
+        ewf_h5_external_inputflux_name: str = "SUMMA_RUNOFF",        # EWF name in THIS model (must match the hydrolink)
+        ewf_h5_interpolation: str = "STEP",                         # STEP | LINEAR | NEAREST
+        ewf_h5_spatial_mode: str = "LUMPED",                        # LUMPED (1 col -> broadcast) | DISTRIBUTED (per-reach + id match)
+        ewf_h5_units: str = "",                                     # units of the source h5 conc (defaults to output `units`)
+        ewf_h5_comment: str = "",
+        ewf_h5_source: str = "",
+
         # Output settings
         output_format: str = "HDF5",
         chemical_species: List[str] = None,
@@ -635,6 +648,9 @@ def Gen_Input_Driver(
         no_water_conc_flag: int = -9999,
         export_sediment: bool = False,
         compartments_and_cells: Dict[str, Dict[str, List]] = None,
+        # Optional flux-concentration exports; same structure as
+        # compartments_and_cells ({flux_name: {"1": [id/"all","all","all"], ...}}).
+        fluxes_conc_to_print: Dict[str, Dict[str, List]] = None,
         timestep: List[Union[int, str]] = None,
 
         # Climate-adjusted export coefficient parameters
@@ -844,7 +860,9 @@ def Gen_Input_Driver(
     ts_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{ts_module_name}.json") if ts_module_name != "NONE" else ""
     si_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_MODULE_{si_module_name}.json") if si_module_name != "NONE" else ""
     ss_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_SS_{ss_method}.json")
-    ewf_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_EWF_fixed_value.json")
+    # EWF config filename tracks the method so different EWF methods don't collide
+    # (openWQ_EWF_fixed_value.json, openWQ_EWF_from_openwq_hdf5.json, ...).
+    ewf_config_filepath = os.path.join(f'{general_json_input_dir}', f"openWQ_EWF_{ewf_method}.json")
     output_file_fullpath = os.path.join(f'{dir2save_input_files}', "openwq_out/")
 
     # =============================================
@@ -862,7 +880,7 @@ def Gen_Input_Driver(
     rel_ts_config   = f"openwq_in/openWQ_MODULE_{ts_module_name}.json" if ts_module_name != "NONE" else ""
     rel_si_config   = f"openwq_in/openWQ_MODULE_{si_module_name}.json" if si_module_name != "NONE" else ""
     rel_ss_config   = f"openwq_in/openWQ_SS_{ss_method}.json"
-    rel_ewf_config  = f"openwq_in/openWQ_EWF_fixed_value.json"
+    rel_ewf_config  = f"openwq_in/openWQ_EWF_{ewf_method}.json"
     rel_output      = "openwq_out/"
 
     ###############
@@ -900,13 +918,19 @@ def Gen_Input_Driver(
         ss_method=ss_method,
         ss_metadata_source=ss_metadata_source,
         ewf_method=ewf_method,
-        ewf_method_fixedval_source=ewf_method_fixedval_source,
+        # EXTERNAL_WATER_FLUXES LABEL: for the HDF5 method use the flux name so
+        # the master's label matches the coupled EWF (e.g. SUMMA_RUNOFF).
+        ewf_method_fixedval_source=(
+            ewf_h5_external_inputflux_name
+            if ewf_method == "from_openwq_hdf5"
+            else ewf_method_fixedval_source),
         output_format=output_format,
         chemical_species=chemical_species,
         units=units,
         no_water_conc_flag=no_water_conc_flag,
         export_sediment=export_sediment,
         compartments_and_cells=compartments_and_cells,
+        fluxes_conc_to_print=fluxes_conc_to_print,
         timestep=timestep
     )
 
@@ -1370,9 +1394,22 @@ def Gen_Input_Driver(
             ewf_method_fixedval_units=ewf_method_fixedval_units,
             ewf_method_fixedval_external_inputflux_name=ewf_method_fixedval_external_inputflux_name
         )
+    elif (ewf_method == "from_openwq_hdf5"):
+        ewfJSON_lib.set_ewf_from_openwq_hdf5(
+            ewf_config_filepath=ewf_config_filepath,
+            json_header_comment=json_header_comment,
+            ewf_h5_comment=ewf_h5_comment,
+            ewf_h5_source=ewf_h5_source,
+            ewf_h5_folderpath=ewf_h5_source_folder,
+            ewf_h5_units=(ewf_h5_units if ewf_h5_units else units),
+            ewf_h5_external_compartment_name=ewf_h5_external_compartment_name,
+            ewf_h5_external_inputflux_name=ewf_h5_external_inputflux_name,
+            ewf_h5_interpolation=ewf_h5_interpolation,
+            ewf_h5_spatial_mode=ewf_h5_spatial_mode,
+        )
     elif (ewf_method == "none"):
         print("  Skipping external water flux generation (ewf_method='none')")
     else:
         print(
             f"WARNING: The EWF method '{ewf_method}' is unknown or not available for automatic generation. "
-            f"Available methods: 'fixed_value', 'none'")
+            f"Available methods: 'fixed_value', 'from_openwq_hdf5', 'none'")

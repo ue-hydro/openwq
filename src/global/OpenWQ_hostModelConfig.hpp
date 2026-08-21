@@ -52,6 +52,21 @@ class OpenWQ_hostModelconfig
         // Stores water fluxes when concentration are requested for outputs
         std::unique_ptr<std::vector<arma::Cube<double>>> waterVol_hydromodel;
 
+        // ########################
+        // Flux-concentration exports (host-registered, openWQ-agnostic).
+        // Named host-model water fluxes whose concentration/mass openWQ can
+        // print, selectable in the master-file OUTPUT block exactly like
+        // compartments.  Each export links to a SOURCE compartment (its chemical
+        // mass + water volume define the flux concentration); the host coupler
+        // fills the per-cell flux through-volume at runtime (fluxVol_hydromodel).
+        // The output value reuses the compartment unit machinery:
+        //   flux_mass = chemass[src] * fluxVol / waterVol[src]
+        //   value     = flux_mass * unit_num / (fluxVol * unit_den)   [conc]
+        //             = flux_mass * unit_num                          [mass]
+        std::vector<hydroTuple> FluxConcExport;         // (index, name, nx, ny, nz)
+        std::vector<int>        FluxConcExport_srcComp;  // source compartment index per export
+        std::unique_ptr<std::vector<arma::Cube<double>>> fluxVol_hydromodel;
+
         // To store all dependency variables 
         // to be available for BGC calculations and expressionss
         std::unique_ptr<std::vector<arma::Cube<double>>> dependVar; // global data
@@ -159,6 +174,26 @@ class OpenWQ_hostModelconfig
         double get_watervol_minlim();
         // waterflux_minlim method
         double get_waterflux_minlim();
+
+        /********************
+         * FluxConcExport methods (flux-concentration exports)
+        *********************/
+        // Register a host-model flux whose concentration/mass can be exported.
+        // src_comp_index: the openWQ compartment the flux drains (mass source).
+        void add_FluxConcExport(int index, std::string name, int src_comp_index,
+                                int num_cells_x, int num_cells_y, int num_cells_z);
+        unsigned int get_num_FluxConcExport();
+        std::string  get_FluxConcExport_name_at(int index);
+        int          get_FluxConcExport_srcComp_at(int index);
+        std::vector<std::string> get_FluxConcExport_names();
+        unsigned int get_FluxConcExport_num_cells_x_at(int index);
+        unsigned int get_FluxConcExport_num_cells_y_at(int index);
+        unsigned int get_FluxConcExport_num_cells_z_at(int index);
+        // fluxVol store (per-export flux through-volume; mirrors waterVol).
+        // Filled at runtime by the host coupler where the flux is computed.
+        void   add_fluxVol_hydromodel(arma::Cube<double> domain_xyz);
+        double get_fluxVol_hydromodel_at(int index, int ix, int iy, int iz);
+        void   set_fluxVol_hydromodel_at(int index, int ix, int iy, int iz, double value);
         
         /*
         * dependVar methods

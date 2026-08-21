@@ -606,7 +606,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 station_to_feature=None,
                 pouring_point_stations=None, separator=' | ',
                 basin_geojson=None, river_line_geojson=None,
-                config_template_path=None):
+                config_template_path=None, flux_names=None):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -1017,17 +1017,41 @@ a{color:var(--primary);text-decoration:none}
     _map_title = 'HRU / Basin Map' if map_geom_type == 'polygon' else 'River Network Map'
     if river_geojson:
         H.append(f'<a href="#rivermap">{_map_title}</a>')
-    _nav_prev_comp = None
-    for p in plots:
-        _nc = p.get('compartment', '')
-        if _nc and _nc != _nav_prev_comp:
-            _cid = f'comp_{re.sub(r"[^a-zA-Z0-9]", "_", _nc)}'
-            H.append(f'<a href="#{_cid}" style="font-weight:700;'
-                     f'margin-top:.5rem;color:var(--text)">{_nc}</a>')
-            _nav_prev_comp = _nc
-        _nav_label = p.get('nav_title', p['title'])
-        H.append(f'<a href="#{p["id"]}" style="padding-left:1.2rem">'
-                 f'{_nav_label}</a>')
+    # Split the nav into a Compartments section and a Fluxes section (the
+    # exported FLUXES_CONC_TO_PRINT). A plot whose compartment name is in
+    # flux_names is an exported flux; each section gets its own group header.
+    _flux_set = set(flux_names or [])
+    _comp_plots = [p for p in plots if p.get('compartment', '') not in _flux_set]
+    _flux_plots = [p for p in plots if p.get('compartment', '') in _flux_set]
+
+    def _emit_nav_section(_section_title, _section_plots):
+        if not _section_plots:
+            return
+        if _section_title:
+            H.append(f'<div style="font-size:.7rem;font-weight:700;letter-spacing:.06em;'
+                     f'text-transform:uppercase;color:var(--muted);'
+                     f'margin:.9rem 0 .15rem;padding-left:.2rem;'
+                     f'border-bottom:1px solid var(--border);padding-bottom:.15rem">'
+                     f'{_section_title}</div>')
+        _prev = None
+        for p in _section_plots:
+            _nc = p.get('compartment', '')
+            if _nc and _nc != _prev:
+                _cid = f'comp_{re.sub(r"[^a-zA-Z0-9]", "_", _nc)}'
+                H.append(f'<a href="#{_cid}" style="font-weight:700;'
+                         f'margin-top:.35rem;color:var(--text)">{_nc}</a>')
+                _prev = _nc
+            _nav_label = p.get('nav_title', p['title'])
+            H.append(f'<a href="#{p["id"]}" style="padding-left:1.2rem">'
+                     f'{_nav_label}</a>')
+
+    # Only show the section headers when BOTH kinds are present, so a
+    # compartments-only (or fluxes-only) report keeps its original flat look.
+    if _comp_plots and _flux_plots:
+        _emit_nav_section('Compartments', _comp_plots)
+        _emit_nav_section('Fluxes', _flux_plots)
+    else:
+        _emit_nav_section(None, plots)
     H.append('</nav>')
     H.append("""<div class="theme-toggle">
 <button class="theme-btn" onclick="toggleTheme()">
@@ -2422,7 +2446,8 @@ def Plot_h5_driver(what2map=None,
                    observation_compartments=None,
                    separator=' | ',
                    config_template_path=None,
-                   static_matrix_dir=None):
+                   static_matrix_dir=None,
+                   flux_names=None):
     """
     Generate interactive HTML time-series plots (Plotly.js).
 
@@ -3375,7 +3400,8 @@ def Plot_h5_driver(what2map=None,
                                separator=separator,
                                basin_geojson=_basin_geojson,
                                river_line_geojson=_river_geojson,
-                               config_template_path=config_template_path)
+                               config_template_path=config_template_path,
+                               flux_names=flux_names)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)

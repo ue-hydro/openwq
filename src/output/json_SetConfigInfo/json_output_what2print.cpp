@@ -17,6 +17,73 @@
 
 #include "readjson/headerfile_RJSON.hpp"
 
+// ###########################################################################
+// Resolve a cell spec -> explicit (ix,iy,iz) cell list, by HOST cell_id.
+// Shared by COMPARTMENTS_AND_CELLS and FLUXES_CONC_TO_PRINT so BOTH select
+// cells the SAME way SS/EWF do: via find_indices_from_cellid (reachID/hruId),
+// NOT by raw array position.
+//   spec = ["all", ...]               -> every cell of the compartment
+//        = ["<id>", ...]              -> that reach/HRU by its host id
+//        = [ ["<id1>","<id2>"], ... ] -> several, by host id
+// (iy/iz come from the resolution; for 1-D reach/HRU compartments they're "all").
+// ###########################################################################
+static arma::mat _resolve_cellspec(
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_output& OpenWQ_output,
+    int comp_index,
+    int nx, int ny, int nz,
+    const nlohmann::json& spec,
+    const std::string& ctx_label)
+{
+    auto _as_id = [](const nlohmann::json& v, std::string& s)->bool{
+        if (v.is_string()){
+            s = v.get<std::string>();
+            std::string u = s; std::transform(u.begin(), u.end(), u.begin(), ::toupper);
+            return u.compare("ALL") != 0;                 // false if "all"
+        }
+        if (v.is_number_integer()){ s = std::to_string(v.get<long long>()); return true; }
+        if (v.is_number()){ s = std::to_string(v.get<double>()); return true; }
+        return false;
+    };
+
+    std::vector<std::string> ids;
+    bool use_all = true;
+    if (spec.is_array() && spec.size() >= 1){
+        const nlohmann::json& slot0 = spec.at(0);
+        if (slot0.is_array()){
+            for (auto& e : slot0){ std::string s; if (_as_id(e, s)) ids.push_back(s); }
+        } else { std::string s; if (_as_id(slot0, s)) ids.push_back(s); }
+    }
+    if (!ids.empty()) use_all = false;
+
+    std::vector<std::array<int,3>> sel;
+    if (use_all){
+        for (int ix=0; ix<nx; ix++)
+        for (int iy=0; iy<ny; iy++)
+        for (int iz=0; iz<nz; iz++)
+            sel.push_back({ix, iy, iz});
+    } else {
+        std::string msg;
+        for (auto& id0 : ids){
+            int rx=-1, ry=-1, rz=-1; bool pm=false;
+            if (OpenWQ_hostModelconfig.find_indices_from_cellid(comp_index, id0, rx, ry, rz, pm)){
+                sel.push_back({rx, ry, rz});
+            } else {
+                msg = "<OpenWQ> WARNING: cell_id '" + id0 + "' (from "
+                    + OpenWQ_hostModelconfig.get_cellid_to_wqlabel() + ") not found for "
+                    + ctx_label + " (entry skipped).";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg, true, true);
+            }
+        }
+    }
+    arma::mat cells((arma::uword)sel.size(), 3);
+    for (arma::uword k=0; k<sel.size(); k++){
+        cells(k,0)=sel[k][0]; cells(k,1)=sel[k][1]; cells(k,2)=sel[k][2];
+    }
+    return cells;
+}
+
 // Set what to print
 void OpenWQ_readjson::SetConfigInfo_output_what2print(
     OpenWQ_json &OpenWQ_json,
@@ -140,7 +207,87 @@ void OpenWQ_readjson::SetConfigInfo_output_what2print(
     }
 
     // ########################################
-    // Cells to print 
+    // Flux-concentration exports to print (OPTIONAL -> backward compatible).
+    // SAME structure as COMPARTMENTS_AND_CELLS: an object keyed by flux name,
+    // each value a numbered set of cell entries (by host cell_id):
+    //   "FLUXES_CONC_TO_PRINT": {
+    //       "RUNOFF_TO_STREAM": { "1": ["all","all","all"] },
+    //       "REACH_OUTFLOW":    { "1": ["78830302","all","all"],
+    //                             "2": ["78830325","all","all"] }
+    //   }
+    // Each entry is resolved by the shared _resolve_cellspec (reachID/hruId).
+    // Also accepts an array shorthand ["RUNOFF_TO_STREAM", ...] = all cells.
+    // Names matched case-insensitively against the host-registered flux exports.
+    if (json_output_subStruct.contains("FLUXES_CONC_TO_PRINT")){
+
+        // Reset first so a re-parse of the config cannot double-populate the
+        // list (the flux write loop iterates this vector directly, unlike the
+        // compartment loop which iterates unique compartments).
+        OpenWQ_wqconfig.fluxconc2print.clear();
+        OpenWQ_wqconfig.fluxconc_cells2print.clear();
+
+        nlohmann::json& _fxnode = json_output_subStruct["FLUXES_CONC_TO_PRINT"];
+
+        auto _process_flux = [&](std::string flux_name2print,
+                                 const nlohmann::json& _entries){
+            std::transform(flux_name2print.begin(), flux_name2print.end(),
+                           flux_name2print.begin(), ::toupper);
+            // Match to a registered flux export CASE-INSENSITIVELY: flux exports
+            // are named after host-model variables, which may be mixed-case
+            // (e.g. "averageRoutedRunoff"), so compare uppercased-vs-uppercased.
+            // The registered (mixed-case) name is still what's used for the h5
+            // filename, so the host variable name is preserved verbatim on disk.
+            int _ifx = -1;
+            for (unsigned int ifx = 0;
+                 ifx < OpenWQ_hostModelconfig.get_num_FluxConcExport(); ifx++){
+                std::string _reg_uc = OpenWQ_hostModelconfig.get_FluxConcExport_name_at(ifx);
+                std::transform(_reg_uc.begin(), _reg_uc.end(), _reg_uc.begin(), ::toupper);
+                if (_reg_uc.compare(flux_name2print) == 0){ _ifx = (int)ifx; break; }
+            }
+            if (_ifx < 0){
+                msg_string = "<OpenWQ> WARNING: FLUXES_CONC_TO_PRINT name '"
+                    + flux_name2print + "' not found in host flux-export list. Skipping.";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                return;
+            }
+            const int _src = OpenWQ_hostModelconfig.get_FluxConcExport_srcComp_at(_ifx);
+            const int _nx = (int)OpenWQ_hostModelconfig.get_FluxConcExport_num_cells_x_at(_ifx);
+            const int _ny = (int)OpenWQ_hostModelconfig.get_FluxConcExport_num_cells_y_at(_ifx);
+            const int _nz = (int)OpenWQ_hostModelconfig.get_FluxConcExport_num_cells_z_at(_ifx);
+            const std::string _ctx = "FLUXES_CONC_TO_PRINT > " + flux_name2print;
+
+            // Accumulate the cells from each numbered entry (via the shared
+            // resolver -- same pattern as COMPARTMENTS_AND_CELLS + SS/EWF).
+            arma::mat _cells;
+            if (_entries.is_object()){
+                for (auto& _ent : _entries.items()){
+                    arma::mat _c = _resolve_cellspec(
+                        OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_output,
+                        _src, _nx, _ny, _nz, _ent.value(), _ctx);
+                    if (!_c.is_empty()) _cells.insert_rows(_cells.n_rows, _c);
+                }
+            } else {
+                // array-shorthand name -> all cells
+                _cells = _resolve_cellspec(
+                    OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_output,
+                    _src, _nx, _ny, _nz, nlohmann::json(nullptr), _ctx);
+            }
+            OpenWQ_wqconfig.fluxconc2print.push_back(_ifx);
+            OpenWQ_wqconfig.fluxconc_cells2print[_ifx] = _cells;
+        };
+
+        if (_fxnode.is_array()){
+            for (auto& fx : _fxnode){
+                try { _process_flux(fx.get<std::string>(), nlohmann::json(nullptr)); }
+                catch (...) {}
+            }
+        } else if (_fxnode.is_object()){
+            for (auto& kv : _fxnode.items()) _process_flux(kv.key(), kv.value());
+        }
+    }
+
+    // ########################################
+    // Cells to print
 
     // Set noValPrintRequest_flag to default false
     // if no valid request are found, then this will remain false and a warning message will be sent
@@ -178,184 +325,19 @@ void OpenWQ_readjson::SetConfigInfo_output_what2print(
         num_cells2print = json_output_subStruct_CmpCells
             [OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)].size();
 
-        // Loop over all cells
+        // Loop over cell entries; resolve each by host cell_id via the shared
+        // resolver (same pattern as FLUXES_CONC_TO_PRINT + SS/EWF).
         for (unsigned int celli = 0; celli < num_cells2print; celli++){
-            
-            // Get ix value (as integer)
-            try{
-                ix_json = json_output_subStruct_CmpCells
-                    [OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)]
-                    [std::to_string(celli + 1)]
-                    .at(0);
-                ix_json --; // remove 1 to match c++ convention to start in zero
-            
-            }catch(...){
-                // if not integer, then check if "all"
-                cells_input = json_output_subStruct_CmpCells
-                    [OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)]
-                    [std::to_string(celli + 1)]
-                    .at(0);
-
-                if (cells_input.compare("ALL")==0){
-                    // then, use "all" flag (=-1)
-                    ix_json = -1;
-
-                }else{
-                    msg_string = 
-                        "<OpenWQ> WARNING: Unkown entry for ix (" 
-                        + cells_input
-                        + ") for OPENWQ_OUTPUT > COMPARTMENTS_AND_CELLS > " 
-                        + OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)
-                        + "(entry skipped)";
-
-                    // Print it (Console and/or Log file)
-                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig,msg_string,true,true);
-
-                    // not a valid entry
-                    continue;
-                    
-                }
-            }
-
-            // Get iy value
-            try{
-                iy_json = json_output_subStruct_CmpCells
-                    [OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)]
-                    [std::to_string(celli + 1)]
-                    .at(1);
-                iy_json--;  // remove 1 to match c++ convention to start in zero
-            
-            }catch(...){
-
-                // if not integer, then check if "all"
-                cells_input = json_output_subStruct_CmpCells
-                    [OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)]
-                    [std::to_string(celli + 1)]
-                    .at(1);
-
-                if (cells_input.compare("ALL")==0){
-                    // then, use "all" flag (=-1)
-                    iy_json = -1;
-
-                }else{
-                    msg_string = 
-                        "<OpenWQ> WARNING: Unkown entry for iy (" 
-                        + cells_input
-                        + ") for OPENWQ_OUTPUT > COMPARTMENTS_AND_CELLS > " 
-                        + OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)
-                        + "(entry skipped)";
-
-                    // Print it (Console and/or Log file)
-                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig,msg_string,true,true);
-
-                    // not a valid entry
-                    continue;
-
-                }
-            }
-
-            // Get iz value
-            try{
-                iz_json = json_output_subStruct_CmpCells
-                    [OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)]
-                    [std::to_string(celli + 1)]
-                    .at(2);
-                iz_json --; // remove 1 to match c++ convention to start in zero
-
-            }catch(...){
-
-                // if not integer, then check if "all"
-                cells_input = json_output_subStruct_CmpCells
-                    [OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)]
-                    [std::to_string(celli + 1)]
-                    .at(2);
-
-                if (cells_input.compare("ALL")==0){
-                    // then, use "all" flag (=-1)
-                    iz_json = -1;
-
-                }else{
-                    msg_string = 
-                        "<OpenWQ> WARNING: Unkown entry for iz (" 
-                        + cells_input
-                        + ") for OPENWQ_OUTPUT > COMPARTMENTS_AND_CELLS > " 
-                        + OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)
-                        + "(entry skipped)";
-
-                    // Print it (Console and/or Log file)
-                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig,msg_string,true,true);
-
-                    // not a valid entry
-                    continue;
-
-                }
-            }
-
-            // Check if cell requested is witin the boundaries of the spatial domain
-            // If yes, add the cell selected to cells2print_vec
-            // Otherwise, write warning message (skip entry)
-            if (ix_json <= nx
-                && iy_json <= ny
-                && iz_json <= nz){
-
-                // ix
-                if(ix_json != -1){spX_min = ix_json; spX_max = ix_json;}
-                else{spX_min = 0; spX_max = nx - 1;}
-                // iy
-                if(iy_json != -1){spY_min = iy_json; spY_max = iy_json;}
-                else{spY_min = 0; spY_max = ny - 1;}
-                // iz
-                if(iz_json != -1){spZ_min = iz_json; spZ_max = iz_json;}
-                else{spZ_min = 0; spZ_max = nz - 1;}
-
-                // Create arma mat to append
-                nRows = (spX_max - spX_min + 1) * (spY_max - spY_min + 1) * (spZ_max - spZ_min + 1);
-                arma::mat cells2print_row(nRows,3,arma::fill::zeros);       // iteractive vector with cell x, y and z indexes
-
-                // Reset dummy variables
-                iRow = 0;
-
-                // add cell requested to list to print for each compartment
-                // first create the vector cells2print_row with x, y and z values
-                // loop is to account for "all" entries
-                for (int ix_j = spX_min; ix_j <= spX_max; ix_j++){
-                    for (int iy_j = spY_min; iy_j <= spY_max; iy_j++){
-                        for (int iz_j = spZ_min; iz_j <= spZ_max; iz_j++){
-                            
-                            cells2print_row(iRow,0) = ix_j;
-                            cells2print_row(iRow,1) = iy_j;
-                            cells2print_row(iRow,2) = iz_j;
-                            iRow++;
-
-                        }
-                    }
-                }
-
-                // add that cells2print_row to cells2print_cmpt
-                cells2print_cmpt.insert_rows(
-                    cells2print_cmpt.n_rows,
-                    cells2print_row);
-
-                // Reset dummy variables
-                cells2print_row.zeros();
-
-            }else{
-                
-                // Create Message (Error - locate problematic cell)
-                msg_string = 
-                    "<OpenWQ> ERROR: Cell entry provided out of domain"
-                    " in OPENWQ_OUTPUT > COMPARTMENTS_AND_CELLS > "
-                    + OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)
-                    + "> '" + std::to_string(celli + 1) + "'";
-
-                // Print it (Console and/or Log file)
-                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig,msg_string,true,true);
-
-                // not a valid entry
-                continue;
-
-            }
-                
+            const nlohmann::json& _entry = json_output_subStruct_CmpCells
+                [OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp)]
+                [std::to_string(celli + 1)];
+            arma::mat _entry_cells = _resolve_cellspec(
+                OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_output,
+                (int)icmp, nx, ny, nz, _entry,
+                "COMPARTMENTS_AND_CELLS > "
+                    + OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp));
+            if (!_entry_cells.is_empty())
+                cells2print_cmpt.insert_rows(cells2print_cmpt.n_rows, _entry_cells);
         }
 
         // Add the complete list of cells to print

@@ -215,6 +215,17 @@ void OpenWQ_initiate::initmemory(
         OpenWQ_hostModelconfig.add_dependVar_scalar(0.0f);
 
     }
-    
+
+    // Flux-concentration exports: one flux through-volume cube per registered
+    // export (host-agnostic). Filled at runtime by the host coupler via
+    // set_fluxVol_hydromodel_at(); sized by the export's own cell dims.
+    for (unsigned int ifx=0; ifx<OpenWQ_hostModelconfig.get_num_FluxConcExport(); ifx++){
+        n_xyz[0] = OpenWQ_hostModelconfig.get_FluxConcExport_num_cells_x_at(ifx);
+        n_xyz[1] = OpenWQ_hostModelconfig.get_FluxConcExport_num_cells_y_at(ifx);
+        n_xyz[2] = OpenWQ_hostModelconfig.get_FluxConcExport_num_cells_z_at(ifx);
+        arma::Cube<double> domain_xyz(n_xyz[0],n_xyz[1],n_xyz[2]);
+        domain_xyz.zeros();
+        OpenWQ_hostModelconfig.add_fluxVol_hydromodel(domain_xyz);
+    }
 
 }
