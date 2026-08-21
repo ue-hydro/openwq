@@ -224,6 +224,20 @@ int OpenWQ_output::writeResults(
         }
     }
 
+    // ########################################
+    // Flux-concentration exports (host-registered; HDF5 only).
+    // Runs while print_oneStep is still true so files self-create on step 1.
+    if (is_hdf5_output){
+        // Guard against any duplicate flux index (defensive: a duplicated entry
+        // would append the same flux twice per step, doubling its timestamps).
+        std::set<int> _flux_written_this_step;
+        for (int iflux : OpenWQ_wqconfig.fluxconc2print){
+            if (!_flux_written_this_step.insert(iflux).second) continue;
+            writeHDF5_flux(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig,
+                           OpenWQ_vars.chemass, timestr, iflux);
+        }
+    }
+
     // Turn off one-step printing
     OpenWQ_wqconfig.print_oneStep = false;
 
@@ -244,6 +258,27 @@ int OpenWQ_output::writeResults(
     ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
     return EXIT_SUCCESS;
+}
+
+/* ########################################
+// Shared mass/volume -> output-units conversion.
+// SINGLE source of truth used by BOTH the compartment writers (mass or
+// concentration) AND the flux-concentration-export writers, so the unit
+// handling (kg, mg/L, or any master-file units, via unit_mult_num/den and
+// is_concentration_requested) is identical everywhere.
+//   value = mass * unit_num / (vol * unit_den)   when a concentration is asked
+//         = mass * unit_num                       when a mass is asked (vol->1)
+//         = noWaterConc                           when conc asked but no water
+######################################## */
+static inline double owq_to_output_units(
+    double mass, double water_vol, bool is_conc_requested,
+    double unit_mult_num, double unit_mult_den,
+    double watervol_minlim, double noWaterConc)
+{
+    const double vol = is_conc_requested ? water_vol : 1.0;
+    if (vol > watervol_minlim)
+        return mass * unit_mult_num / (vol * unit_mult_den);
+    return noWaterConc;
 }
 
 /* ########################################
@@ -315,19 +350,15 @@ int OpenWQ_output::writeCSV(
             filedata(ixyz, 2) = iz + 1;
 
             // Get water volume once per cell
-            const double water_vol = is_conc_requested ?
-                OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz) : 1.0;
+            const double water_vol =
+                OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
 
-            // Process all chemicals for this cell
+            // Process all chemicals for this cell (shared unit conversion)
             for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
-
-                if (water_vol > watervol_minlim){
-                    filedata(ixyz, ichem + 3) =
-                        (*OpenWQ_var2print)(icmp)(OpenWQ_wqconfig.chem2print[ichem])(ix, iy, iz) *
-                        unit_mult_num / (water_vol * unit_mult_den);
-                } else {
-                    filedata(ixyz, ichem + 3) = noWaterConc;
-                }
+                filedata(ixyz, ichem + 3) = owq_to_output_units(
+                    (*OpenWQ_var2print)(icmp)(OpenWQ_wqconfig.chem2print[ichem])(ix, iy, iz),
+                    water_vol, is_conc_requested,
+                    unit_mult_num, unit_mult_den, watervol_minlim, noWaterConc);
             }
         }
     }
@@ -531,16 +562,13 @@ int OpenWQ_output::writeHDF5(
                 const unsigned int iy = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 1);
                 const unsigned int iz = OpenWQ_wqconfig.cells2print_vec[icmp](celli, 2);
 
-                const double water_vol = is_conc_requested ?
-                    OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz) : 1.0;
+                const double water_vol =
+                    OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
 
-                if ((is_conc_requested && water_vol > watervol_minlim) || !is_conc_requested){
-                    data2print(celli, 0) =
-                        (*OpenWQ_var2print)(icmp)(OpenWQ_wqconfig.chem2print[ichem])(ix, iy, iz) *
-                        unit_mult_num / (water_vol * unit_mult_den);
-                } else {
-                    data2print(celli, 0) = noWaterConc;
-                }
+                data2print(celli, 0) = owq_to_output_units(
+                    (*OpenWQ_var2print)(icmp)(OpenWQ_wqconfig.chem2print[ichem])(ix, iy, iz),
+                    water_vol, is_conc_requested,
+                    unit_mult_num, unit_mult_den, watervol_minlim, noWaterConc);
             }
 
             // [FIX] libhdf5_serial (1.10.10) is NOT thread-safe. This loop runs
@@ -557,6 +585,158 @@ int OpenWQ_output::writeHDF5(
                 hid_t _tds = (_tit != OpenWQ_wqconfig.time_dsets.end()) ? _tit->second : -1;
                 appendData_to_HDF5_file(_cds, _tds, data2print, timestr);
             }
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+/* ########################################
+// HDF5 format — flux-concentration exports
+// Mirrors writeHDF5 (same file layout, same create_timeseries_datasets() /
+// appendData_to_HDF5_file() helpers, same owq_to_output_units() converter), but
+// the printed value is the flux concentration/mass of a host-registered flux:
+//   flux_mass = chemass[src] * fluxVol / waterVol[src]
+//   -> conc (mg/L) = flux_mass / fluxVol = source-compartment concentration
+//   -> mass (kg)   = flux_mass          = solute carried by the flux this step
+// Prints ALL cells of the export (the full field a downstream host ingests).
+######################################## */
+int OpenWQ_output::writeHDF5_flux(
+    OpenWQ_json& OpenWQ_json,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    std::unique_ptr<arma::field<arma::field<arma::cube>>>& chemass,
+    std::string timestr,
+    int iflux){
+
+    // Flux export identity + its source compartment (the mass source)
+    const std::string FluxName = OpenWQ_hostModelconfig.get_FluxConcExport_name_at(iflux);
+    const int src = OpenWQ_hostModelconfig.get_FluxConcExport_srcComp_at(iflux);
+
+    // Cells to print for this export (parsed from the master-file OUTPUT block;
+    // defaults to all cells). Each row is a 0-based (ix,iy,iz) in the SOURCE
+    // compartment (the cells the flux leaves from).
+    const unsigned int nx = OpenWQ_hostModelconfig.get_FluxConcExport_num_cells_x_at(iflux);
+    const unsigned int ny = OpenWQ_hostModelconfig.get_FluxConcExport_num_cells_y_at(iflux);
+    const unsigned int nz = OpenWQ_hostModelconfig.get_FluxConcExport_num_cells_z_at(iflux);
+    auto _cellit = OpenWQ_wqconfig.fluxconc_cells2print.find(iflux);
+    if (_cellit == OpenWQ_wqconfig.fluxconc_cells2print.end()) return EXIT_SUCCESS;
+    const arma::mat& cells_xyz = _cellit->second;
+    const unsigned int num_cells2print = cells_xyz.n_rows;
+    if (num_cells2print == 0) return EXIT_SUCCESS;
+
+    const unsigned int num_chem2print = OpenWQ_wqconfig.chem2print.size();
+    const bool is_conc_requested = OpenWQ_wqconfig.is_concentration_requested();
+    const double watervol_minlim = OpenWQ_hostModelconfig.get_watervol_minlim();
+    const double noWaterConc = OpenWQ_wqconfig.noWaterConc;
+    const double unit_mult_num = OpenWQ_wqconfig.get_output_units_numerator();
+    const double unit_mult_den = OpenWQ_wqconfig.get_output_units_denominator();
+
+    // Units string (replace "/" with "|")
+    std::string units_string = OpenWQ_wqconfig.get_output_units();
+    std::size_t slash_pos = units_string.find("/");
+    if (slash_pos != std::string::npos) units_string.replace(slash_pos, 1, "|");
+
+    // Domain size metadata (full compartment extent, for the output file)
+    arma::mat cells_xyz_size(1, 3);
+    cells_xyz_size(0, 0) = nx; cells_xyz_size(0, 1) = ny; cells_xyz_size(0, 2) = nz;
+
+    // First timestep: create files + metadata + extensible datasets (as writeHDF5)
+    if (OpenWQ_wqconfig.print_oneStep){
+
+        arma::mat cells_xyz_1based = cells_xyz;
+        cells_xyz_1based.for_each([](arma::mat::elem_type& val){ val += 1.0; });
+
+        std::vector<std::string> host_ids;
+        host_ids.reserve(num_cells2print);
+        for (unsigned int c = 0; c < num_cells2print; c++){
+            host_ids.push_back(OpenWQ_hostModelconfig.get_cellid_to_wq_at(
+                src, (int)cells_xyz(c, 0), (int)cells_xyz(c, 1), (int)cells_xyz(c, 2)));
+        }
+        const std::string internal_db_name = OpenWQ_hostModelconfig.get_cellid_to_wqlabel();
+        std::vector<const char*> cstrs(host_ids.size());
+        for (size_t i = 0; i < host_ids.size(); ++i) cstrs[i] = host_ids[i].c_str();
+
+        hid_t fcpl = H5Pcreate(H5P_FILE_CREATE);
+        hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
+        H5Pset_file_locking(fapl, 0, 0);
+
+        for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
+            const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
+            std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
+                                   FluxName + "@" + chem_name + "#" +
+                                   units_string + "-main.h5";
+
+            hid_t fh = H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, fcpl, fapl);
+            if (fh < 0){
+                std::string msg = "<OpenWQ> ERROR: Failed to create HDF5 flux file: " + filename;
+                ConsoleLog(OpenWQ_wqconfig, msg, true, true);
+                continue;
+            }
+            {   // xyz_elements
+                hsize_t dims[2] = {cells_xyz_1based.n_cols, cells_xyz_1based.n_rows};
+                hid_t sp = H5Screate_simple(2, dims, NULL);
+                hid_t ds = H5Dcreate(fh, "xyz_elements", H5T_NATIVE_DOUBLE, sp, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (ds >= 0){ H5Dwrite(ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, cells_xyz_1based.memptr()); H5Dclose(ds); }
+                H5Sclose(sp);
+            }
+            {   // xyz_elements_size
+                hsize_t dims[2] = {cells_xyz_size.n_cols, cells_xyz_size.n_rows};
+                hid_t sp = H5Screate_simple(2, dims, NULL);
+                hid_t ds = H5Dcreate(fh, "xyz_elements_size", H5T_NATIVE_DOUBLE, sp, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (ds >= 0){ H5Dwrite(ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, cells_xyz_size.memptr()); H5Dclose(ds); }
+                H5Sclose(sp);
+            }
+            if (!host_ids.empty()){   // host IDs (variable-length strings)
+                hsize_t dims[1] = {host_ids.size()};
+                hid_t space = H5Screate_simple(1, dims, NULL);
+                hid_t dtype = H5Tcopy(H5T_C_S1);
+                H5Tset_size(dtype, H5T_VARIABLE);
+                hid_t dset = H5Dcreate(fh, internal_db_name.c_str(), dtype, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                if (dset >= 0){ H5Dwrite(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, cstrs.data()); H5Dclose(dset); }
+                H5Tclose(dtype); H5Sclose(space);
+            }
+            create_timeseries_datasets(fh, num_cells2print, OpenWQ_wqconfig, filename);
+            OpenWQ_wqconfig.files[filename] = fh;
+            std::string msg_string = "<OpenWQ> Created flux-export output file " + filename;
+            ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        }
+    }
+
+    // Every timestep: compute the flux value per cell and append
+    for (unsigned int ichem = 0; ichem < num_chem2print; ichem++){
+        const std::string chem_name = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[OpenWQ_wqconfig.chem2print[ichem]];
+        std::string filename = OpenWQ_wqconfig.get_output_dir() + "/" +
+                               FluxName + "@" + chem_name + "#" +
+                               units_string + "-main.h5";
+
+        auto it = OpenWQ_wqconfig.files.find(filename);
+        if (it == OpenWQ_wqconfig.files.end() || it->second < 0) continue;
+
+        const unsigned int chemi = OpenWQ_wqconfig.chem2print[ichem];
+        arma::mat data2print(num_cells2print, 1);
+        for (unsigned int c = 0; c < num_cells2print; c++){
+            const int ix = (int)cells_xyz(c, 0);
+            const int iy = (int)cells_xyz(c, 1);
+            const int iz = (int)cells_xyz(c, 2);
+            const double comp_vol = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(src, ix, iy, iz);
+            const double flux_vol = OpenWQ_hostModelconfig.get_fluxVol_hydromodel_at(iflux, ix, iy, iz);
+            // flux_mass = source-compartment concentration * flux water volume
+            const double flux_mass = (comp_vol > watervol_minlim)
+                ? (*chemass)(src)(chemi)(ix, iy, iz) * flux_vol / comp_vol
+                : 0.0;
+            data2print(c, 0) = owq_to_output_units(
+                flux_mass, flux_vol, is_conc_requested,
+                unit_mult_num, unit_mult_den, watervol_minlim, noWaterConc);
+        }
+
+        #pragma omp critical (openwq_hdf5_write)
+        {
+            auto _cit = OpenWQ_wqconfig.conc_dsets.find(filename);
+            auto _tit = OpenWQ_wqconfig.time_dsets.find(filename);
+            hid_t _cds = (_cit != OpenWQ_wqconfig.conc_dsets.end()) ? _cit->second : -1;
+            hid_t _tds = (_tit != OpenWQ_wqconfig.time_dsets.end()) ? _tit->second : -1;
+            appendData_to_HDF5_file(_cds, _tds, data2print, timestr);
         }
     }
 

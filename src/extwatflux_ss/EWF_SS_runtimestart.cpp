@@ -450,8 +450,13 @@ void OpenWQ_extwatflux_ss::CheckApply_EWF_h5(
                                    static_cast<double>(h5EWF_time_after - h5EWF_time_before);
                 }
 
-                // Loop over chemicals
+                // Loop over chemicals (dense storage slots)
                 for (unsigned long long chemi = 0; chemi < num_chems; chemi++){
+
+                    // Map the dense storage slot back to the true BGC species id
+                    // (the mother model may export only a subset of species).
+                    const unsigned int bgc_chemi = (unsigned int)
+                        (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_chemID)[reqi][chemi];
 
                     arma::cube h5Conc_chemi_interp;
 
@@ -488,14 +493,14 @@ void OpenWQ_extwatflux_ss::CheckApply_EWF_h5(
                         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
                     }
 
-                    // Update concentrations
+                    // Update concentrations (apply to the true BGC species id)
                     Update_EWFconc_h5(
                         OpenWQ_vars,
                         OpenWQ_wqconfig,
                         OpenWQ_hostModelconfig,
                         OpenWQ_output,
                         reqi,
-                        chemi,
+                        bgc_chemi,
                         h5Conc_chemi_interp);
                 }
 

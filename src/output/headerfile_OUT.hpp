@@ -74,6 +74,17 @@ class OpenWQ_output{
             std::string& output_file_label,
             std::string timestr,            // time step (in seconds)
             int icmp);
+
+    // Print flux-concentration exports in HDF5 (host-registered fluxes).
+    // Same layout + converter + dataset helpers as writeHDF5, but the value is
+    // the flux concentration/mass (flux_mass = chemass[src]*fluxVol/waterVol[src]).
+        int writeHDF5_flux(
+            OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig& OpenWQ_wqconfig,
+            std::unique_ptr<arma::field<arma::field<arma::cube>>>& chemass,
+            std::string timestr,            // time step (in seconds)
+            int iflux);
     
 
     // append data to HDF5 file 

@@ -712,6 +712,19 @@ compartments_and_cells = {
     }
 }
 
+# Which FLUX concentrations to export (OPTIONAL; leave {} to skip).
+# Same structure as compartments_and_cells; cells are selected by the host
+# cell_id (reachID/hruId) or "all". These write one HDF5 per flux+species
+# (e.g. RUNOFF_TO_STREAM@NO3-N#MG|L-main.h5) that another model can ingest via
+# EWF. Available flux exports:
+#   mizuRoute : REACH_OUTFLOW     (reach -> downstream, src = the reach)
+#   SUMMA     : RUNOFF_TO_STREAM  (runoff leaving to the stream, src = RUNOFF)
+# Example:
+#   fluxes_conc_to_print = {
+#       "RUNOFF_TO_STREAM": { "1": ["all", "all", "all"] }
+#   }
+fluxes_conc_to_print = {}
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  SECTION 8: DOCKER SETTINGS
@@ -969,6 +982,7 @@ if generate_report:
             chemical_species=chemical_species,
             units=units,
             compartments_and_cells=compartments_and_cells,
+            fluxes_conc_to_print=fluxes_conc_to_print,
             timestep=timestep,
             output_format=output_format,
             no_water_conc_flag=no_water_conc_flag,

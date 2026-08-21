@@ -15,6 +15,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "headerfile_EWF_SS.hpp"
+#include <cstdlib>   // std::exit, EXIT_FAILURE (EWF-HDF5 SPATIAL_MODE validation)
+#include <cmath>     // std::llround (DISTRIBUTED reach-id matching)
 
 
 /* #################################################
@@ -1237,10 +1239,17 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
         EWF_SS_json_sub, "EXTERNAL_COMPARTMENT_NAME",
         errorMsgIdentifier,
         true);
-    // Get interface between openwq models
-    interaction_interface_json = OpenWQ_utils.RequestJsonKeyVal_json(
+    // Get spatial coupling mode (LUMPED or DISTRIBUTED)
+    //  - LUMPED:      the EWF h5 carries a single column (one HRU/reach); its
+    //                 concentration is broadcast to every receiving reach.
+    //  - DISTRIBUTED: the EWF h5 carries one column per receiving reach plus a
+    //                 numeric 'cellID' dataset; columns are matched to reaches
+    //                 by id (any mismatch => console error + abort).
+    // (Replaces the former INTERACTION_INTERFACE dimension-matching, which
+    //  assumed the external model shared this model's discretization.)
+    std::string spatial_mode = OpenWQ_utils.RequestJsonKeyVal_str(
         OpenWQ_wqconfig, OpenWQ_output,
-        EWF_SS_json_sub, "INTERACTION_INTERFACE",
+        EWF_SS_json_sub, "SPATIAL_MODE",
         errorMsgIdentifier,
         true);
     // Get external flux name
@@ -1297,6 +1306,10 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
         return;
     }else{
         (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_ewfCompID).push_back(external_waterFluxName_id);
+        // Open a (dense) chem-id list for this request. Each species that is
+        // actually found+loaded below appends its true BGC id here, so the
+        // dense storage index maps back to the correct species at apply time.
+        (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_chemID).push_back(std::vector<int>{});
     }
 
     // Get num of interface elements
@@ -1339,257 +1352,226 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
     } else {
         num_chem = OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
     }
-    for (unsigned int chemi=0;chemi<num_chem;chemi++){
+    // ---------------------------------------------------------------
+    // Recipient compartment index for DISTRIBUTED id-matching.
+    // Reach ids live in the RIVER_NETWORK_REACHES compartment (mizuRoute);
+    // fall back to compartment 0 if that name is not present.
+    // ---------------------------------------------------------------
+    int recipient_comp_index = 0;
+    {
+        std::vector<std::string> _compNames = OpenWQ_hostModelconfig.get_HydroComp_names();
+        for (unsigned int _ci = 0; _ci < _compNames.size(); _ci++){
+            if (_compNames[_ci].compare("RIVER_NETWORK_REACHES") == 0){
+                recipient_comp_index = (int)_ci; break;
+            }
+        }
+    }
+
+    // Number of output timesteps (from the EWF source logFile)
+    const long unsigned int nTsteps_h5 = tSamp_valid.size();
+
+    // Normalize SPATIAL_MODE
+    std::string spatial_mode_uc = spatial_mode;
+    std::transform(spatial_mode_uc.begin(), spatial_mode_uc.end(),
+                   spatial_mode_uc.begin(), ::toupper);
+    const bool mode_lumped      = (spatial_mode_uc.compare("LUMPED") == 0);
+    const bool mode_distributed = (spatial_mode_uc.compare("DISTRIBUTED") == 0);
+    if (!mode_lumped && !mode_distributed){
+        msg_string =
+            "<OpenWQ> ERROR: EWF '" + external_waterFluxName
+            + "' has unknown SPATIAL_MODE='" + spatial_mode
+            + "' (expected 'LUMPED' or 'DISTRIBUTED'). Aborting.";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        std::exit(EXIT_FAILURE);
+    }
+
+    // ################################
+    // Loop over EWF h5 files (one per chemical species)
+    // ################################
+    // Dense storage-slot counter: increments once per species actually loaded.
+    // A species with no source h5 is skipped, so this decouples the storage
+    // index from the BGC species index (mapping recorded in _chemID).
+    int dense_chem_idx = 0;
+    for (unsigned int chemi = 0; chemi < num_chem; chemi++){
 
         // Set new chem flag true
         flag_newChem = true;
 
-        // ############################
-        // Get and process interface H5 data 
-
         // Get chem name
         chemname = (*OpenWQ_wqconfig.cached_chem_species_list_ptr)[chemi];
 
-        // Throw consolde update
-        msg_string = "         " + external_waterFluxName + " => " + chemname + " .";
-        std::string whiteSpacing(msg_string.size()-1,' ');
-        std::cout << msg_string << std::flush;
+        // Console update
+        msg_string = "         " + external_waterFluxName + " => " + chemname
+                     + " [" + spatial_mode_uc + "] ";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, false);
 
-        // Generate full ic filename
+        // Build h5 filename: <folder>/<EXTERNAL_COMPARTMENT_NAME>@<chem>#<units>-main.h5
         ewf_filenamePath = ewf_h5_folderPath;
         ewf_filenamePath.append("/");
-        ewf_filenamePath.append(external_compartName); // compartment
+        ewf_filenamePath.append(external_compartName);
         ewf_filenamePath.append("@");
-        ewf_filenamePath.append(chemname);     // chemical name
+        ewf_filenamePath.append(chemname);
         ewf_filenamePath.append("#");
-        ewf_filenamePath.append(ewf_h5_units_file); // units
-        ewf_filenamePath.append("-main.h5"); 
+        ewf_filenamePath.append(ewf_h5_units_file);
+        ewf_filenamePath.append("-main.h5");
 
-        // Get x,y,z elements in h5 ewf data
-        xyzEWF_h5
-            .load(arma::hdf5_name(
-                ewf_filenamePath,          // file name
-                "xyz_elements"));          // options
+        // ------------------------------------------------------------
+        // Load the consolidated concentration matrix (/concentrations),
+        // written by the openWQ output writer as a 2D dataset [time x cells].
+        // Armadillo may transpose on load, so orientation is resolved below
+        // using the known number of timesteps (nTsteps_h5).
+        // ------------------------------------------------------------
+        arma::mat conc_h5;
+        conc_h5.load(arma::hdf5_name(ewf_filenamePath, "concentrations"));
 
-        // xyzEWF_h5 is empty, 
-        // it means that the h5 file requested was not found
-        // Throw warning and skip
-        if(xyzEWF_h5.is_empty()){
-            msg_string = 
-                "<OpenWQ> WARNNING " + inputType
-                + " h5 file requested=" + ewf_filenamePath
-                + " was not found. Revise the json inputs and "
-                "corresponding h5 files (entry skipped).";
+        if (conc_h5.is_empty()){
+            msg_string =
+                "<OpenWQ> WARNING: EWF h5 file requested=" + ewf_filenamePath
+                + " was not found or has no 'concentrations' dataset "
+                "(entry skipped).";
             OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
             continue;
         }
 
-        // Get entire entire domain nx, ny, nz from the h5 ewf data
-        // This corresponds to the EWF external compartment
-        domain_EWF_h5
-            .load(arma::hdf5_name(
-                ewf_filenamePath,          // file name
-                "xyz_elements_size"));          // options
+        // Species found: record its true BGC id for this dense storage slot.
+        (*OpenWQ_wqconfig.ExtFlux_FORC_HDF5vec_chemID).back().push_back((int)chemi);
 
-        // Check if entries of INTERACTION_INTERFACE are valid
-        // Returns if not a valid interface
-        // Error messages are provided inside Convert2NegativeOneIfAll_inputInt()
-        // "all" entry is converted into -1, "end" is converted into nx, iy o nz provided in domain_EWF_h5
-        // x_interface_h5, y_interface_h5, and z_interface_h5 passed by reference and updated inside function
-        // x
-        index_i = 0;
-        msg_string = "EWF Invalid 'INTERACTION_INTERFACE' array element " 
-                    + std::to_string(index_i) + "for HDF5. It only accepts integers or 'all'";
-        validEntryFlag = OpenWQ_utils.Convert2NegativeOneIfAll_inputInt(
-            OpenWQ_wqconfig, OpenWQ_output, msg_string,
-            interaction_interface_json, 0, x_interface_h5, domain_EWF_h5(0,0));
-        if (!validEntryFlag) return;
-        // y
-        index_i = 1;
-        msg_string = "EWF Invalid 'INTERACTION_INTERFACE' array element " 
-                    + std::to_string(index_i) + "for HDF5. It only accepts integers or 'all'";
-        validEntryFlag = OpenWQ_utils.Convert2NegativeOneIfAll_inputInt(
-            OpenWQ_wqconfig, OpenWQ_output, msg_string,
-            interaction_interface_json, 1, y_interface_h5, domain_EWF_h5(0,1));
-        if (!validEntryFlag) return;
-        // z
-        index_i = 2;
-        msg_string = "EWF Invalid 'INTERACTION_INTERFACE' array element " 
-                    + std::to_string(index_i) + "for HDF5. It only accepts integers or 'all'";
-        validEntryFlag = OpenWQ_utils.Convert2NegativeOneIfAll_inputInt(
-            OpenWQ_wqconfig, OpenWQ_output, msg_string,
-            interaction_interface_json, 2, z_interface_h5, domain_EWF_h5(0,2));
-        if (!validEntryFlag) return;
-
-        // Get the domain of interface external compartment
-        if(x_interface_h5==-1) nx_interface_h5 = domain_EWF_h5(0,0);
-        else nx_interface_h5 = x_interface_h5;
-        if(y_interface_h5==-1) ny_interface_h5 = domain_EWF_h5(0,1);
-        else ny_interface_h5 = y_interface_h5;
-        if(z_interface_h5==-1) nz_interface_h5 = domain_EWF_h5(0,2);
-        else nz_interface_h5 = z_interface_h5;
-
-        // ################################
-        // Check if requested interface elements match
-        // the dimensions of 
-        // ################################
-
-        if(nx_interface_h5!=ewfName_nx 
-          || ny_interface_h5!=ewfName_ny 
-          || nz_interface_h5!=ewfName_nz){
-
-             msg_string = 
-                "<OpenWQ> WARNNING " + inputType
-                + " h5 file requested=" + ewf_filenamePath
-                + " has been found, but the internal dimensions of the interface flux elements ("
-                + std::to_string(ewfName_nx) + "," + std::to_string(ewfName_ny) + ","
-                + std::to_string(ewfName_nz) + ") do not match those requested in 'INTERACTION_INTERFACE': ("
-                + std::to_string(nx_interface_h5) + "," + std::to_string(ny_interface_h5) + ","
-                + std::to_string(nz_interface_h5)
-                + "). Make sure to load an EWF h5 file that has all the"
-                " interface elements and the 'INTERACTION_INTERFACE' specifies all (and only) the interface elements."
-                " This element has been defaulted to zero (entry skipped).";
+        // Resolve orientation: which dimension is time vs cells
+        unsigned int ncells_src;
+        bool time_is_rows;
+        if (conc_h5.n_rows == nTsteps_h5){
+            time_is_rows = true;  ncells_src = conc_h5.n_cols;   // (time x cells)
+        } else if (conc_h5.n_cols == nTsteps_h5){
+            time_is_rows = false; ncells_src = conc_h5.n_rows;   // (cells x time)
+        } else {
+            msg_string =
+                "<OpenWQ> ERROR: EWF '" + external_waterFluxName
+                + "' h5 file=" + ewf_filenamePath
+                + " has a 'concentrations' matrix (" + std::to_string(conc_h5.n_rows)
+                + "x" + std::to_string(conc_h5.n_cols)
+                + ") whose dimensions do not match the number of timesteps ("
+                + std::to_string(nTsteps_h5) + ") in the supporting logFile. Aborting.";
             OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-
-            // Skip entry
-            continue;
-
+            std::exit(EXIT_FAILURE);
         }
 
-        // ################################
-        // Check if necessary external compartment elements exists in EWF h5 file
-        // Check is carried out for the first timestamp
-        // Interface h5 rows saved in: valid_interfaceH5rows
-        // ################################
+        // ------------------------------------------------------------
+        // Map each source column -> receiving-EWF cell index (0-based).
+        //  - LUMPED:      require exactly 1 source column; broadcast to all cells.
+        //  - DISTRIBUTED: require #columns == #EWF cells AND that every source
+        //                 cell_id matches a host reach id; abort otherwise.
+        // ------------------------------------------------------------
+        std::vector<int> col2ewfIx(ncells_src, -1);
 
-        // Get the corresponding data
-        dataEWF_h5
-            .load(arma::hdf5_name(
-                ewf_filenamePath,              // file name
-                tSamp_valid[0]));          // options
-
-        // Loop over domain 
-        // and check if the h5 file contains the interface elements
-        for (int x_intrf=0;x_intrf<nx_interface_h5;x_intrf++){
-            for (int y_intrf=0;y_intrf<ny_interface_h5;y_intrf++){
-                for (int z_intrf=0;z_intrf<nz_interface_h5;z_intrf++){
-                    
-                    h5_entry_found = false;
-                        
-                    // Seach for interface element entry row by row
-                    for (int rowi=0;rowi<(int)xyzEWF_h5.n_rows;rowi++){
-
-                        // Get element x,y,z indexes of external model
-                        // Using convention of external model
-                        // Needs to be converted into local openwq implementation
-                        x_externModel = xyzEWF_h5(rowi, 0);
-                        y_externModel = xyzEWF_h5(rowi, 1);
-                        z_externModel = xyzEWF_h5(rowi, 2);
-
-                        // Save ewf conc data if at the interface
-                        if ((x_externModel == x_intrf + 1)
-                            && (y_externModel == y_intrf + 1)
-                            && (z_externModel == z_intrf + 1)){
-                            
-                            // Save valid row index
-                            valid_interfaceH5rows.push_back(rowi);
-                            h5_entry_found = true;
-                            break;
-                        }
-                    }
-
-                    // Through warning message if the interface element 
-                    // is not available in the ewf h5 file
-                    if (h5_entry_found==false){
-                        msg_string = 
-                            "<OpenWQ> WARNNING " + inputType
-                            + " h5 file requested=" + ewf_filenamePath
-                            + " has been found, but it does not contain the interface element ("
-                            + std::to_string(x_intrf) + "," + std::to_string(y_intrf) + ","
-                            + std::to_string(z_intrf) + "). Make sure to load an EWF h5 file that has all the"
-                            " interface elements. This element has been defaulted to zero (entry skipped).";
-                        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-                    }
+        if (mode_lumped){
+            if (ncells_src != 1){
+                msg_string =
+                    "<OpenWQ> ERROR: EWF '" + external_waterFluxName
+                    + "' SPATIAL_MODE=LUMPED requires exactly one column in "
+                    + ewf_filenamePath + ", but it has " + std::to_string(ncells_src)
+                    + " columns. Provide a lumped (single HRU/reach) source, or set "
+                    "SPATIAL_MODE=DISTRIBUTED. Aborting.";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                std::exit(EXIT_FAILURE);
+            }
+            // broadcast handled in the timestep loop below
+        }
+        else { // mode_distributed
+            if ((int)ncells_src != ewfName_nx){
+                msg_string =
+                    "<OpenWQ> ERROR: EWF '" + external_waterFluxName
+                    + "' SPATIAL_MODE=DISTRIBUTED requires the h5 to have as many "
+                    "columns as receiving reaches (" + std::to_string(ewfName_nx)
+                    + "), but " + ewf_filenamePath + " has " + std::to_string(ncells_src)
+                    + " columns. Provide a distributed source with matching reach ids. "
+                    "Aborting.";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                std::exit(EXIT_FAILURE);
+            }
+            // Read the numeric per-column reach id vector (dataset 'cellID')
+            arma::mat cellID_h5;
+            cellID_h5.load(arma::hdf5_name(ewf_filenamePath, "cellID"));
+            if (cellID_h5.n_elem != ncells_src){
+                msg_string =
+                    "<OpenWQ> ERROR: EWF '" + external_waterFluxName
+                    + "' SPATIAL_MODE=DISTRIBUTED requires a numeric 'cellID' dataset "
+                    "with " + std::to_string(ncells_src) + " reach ids in "
+                    + ewf_filenamePath + " (found " + std::to_string(cellID_h5.n_elem)
+                    + "). Aborting.";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                std::exit(EXIT_FAILURE);
+            }
+            for (unsigned int j = 0; j < ncells_src; j++){
+                long long _idv = (long long) std::llround(cellID_h5(j));
+                std::string _id_str = std::to_string(_idv);
+                int _ix = -1, _iy = -1, _iz = -1; bool _partial = false;
+                bool _found = OpenWQ_hostModelconfig.find_indices_from_cellid(
+                    recipient_comp_index, _id_str, _ix, _iy, _iz, _partial);
+                if (!_found){
+                    msg_string =
+                        "<OpenWQ> ERROR: EWF '" + external_waterFluxName
+                        + "' SPATIAL_MODE=DISTRIBUTED: reach id '" + _id_str
+                        + "' from " + ewf_filenamePath
+                        + " does not match any host reach id. Aborting.";
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    std::exit(EXIT_FAILURE);
                 }
+                col2ewfIx[j] = _ix;
             }
         }
 
-        // ############################
-        // Loop over H5 timeSteps data and save interface cells conc
-        // in ExtFlux_FORC_HDF5vec_data and ExtFlux_FORC_HDF5vec_time
-        // ############################
-        point_print_n = 0;
+        // ------------------------------------------------------------
+        // Fill ExtFlux_FORC_data_tStep per timestep and append to the
+        // runtime store (one cube per timestep, per chem).
+        // ------------------------------------------------------------
+        int point_print_n2 = 0;
+        for (long unsigned int t = 0; t < nTsteps_h5; t++){
 
-        for (long unsigned int tSamp=0;tSamp<tSamp_valid.size();tSamp++){
-
-            // Get the corresponding data
-            dataEWF_h5
-                .load(arma::hdf5_name(
-                    ewf_filenamePath,              // file name
-                    tSamp_valid[tSamp]));          // options
-
-            // Get timestamp sting into time_t
+            // timestamp string -> time_t
             tSamp_valid_i_time_t = OpenWQ_units.convertTime_str2time_t(
-                OpenWQ_wqconfig,
-                tSamp_valid[tSamp]);
+                OpenWQ_wqconfig, tSamp_valid[t]);
 
-            // Reset ExtFlux_FORC_data_tStep to save next timestep
+            // reset scratch cube
             (*OpenWQ_wqconfig.ExtFlux_FORC_data_tStep).zeros();
 
-            // Loop over HDF5 row data referring to the interface
-            // Update ExtFlux_FORC_data_tStep with new time step ewf concentrations
-            for (int rowi=0;rowi<(int)valid_interfaceH5rows.size();rowi++){
-
-                // Get valid row
-                rowi_val = valid_interfaceH5rows[rowi];
-
-                // Get element x,y,z indexes of external model
-                // Using convention of external model
-                // Needs to be converted into local openwq implementation
-                x_externModel = xyzEWF_h5(rowi_val, 0) - 1;
-                y_externModel = xyzEWF_h5(rowi_val, 1) - 1;
-                z_externModel = xyzEWF_h5(rowi_val, 2) - 1;
-
-                // Get concentration
-                conc_h5_rowi = dataEWF_h5(rowi_val);
-
-                // Convert conc to local units
-                OpenWQ_units.Convert_Units(
-                    conc_h5_rowi,               // value passed by reference so that it can be changed
-                    unit_multiplers);           // units
-
-                // Update ExtFlux_FORC_data_tStep
-                (*OpenWQ_wqconfig.ExtFlux_FORC_data_tStep)
-                    (x_externModel,y_externModel,z_externModel) 
-                        = conc_h5_rowi;
-
+            if (mode_lumped){
+                double _c = time_is_rows ? conc_h5(t, 0) : conc_h5(0, t);
+                if (_c < -9990.0) _c = 0.0;          // noWaterConc sentinel -> 0 solute
+                else OpenWQ_units.Convert_Units(_c, unit_multiplers);
+                for (int ix = 0; ix < ewfName_nx; ix++)
+                    (*OpenWQ_wqconfig.ExtFlux_FORC_data_tStep)(ix, 0, 0) = _c;
+            }
+            else { // mode_distributed
+                for (unsigned int j = 0; j < ncells_src; j++){
+                    double _c = time_is_rows ? conc_h5(t, j) : conc_h5(j, t);
+                    if (_c < -9990.0) _c = 0.0;
+                    else OpenWQ_units.Convert_Units(_c, unit_multiplers);
+                    (*OpenWQ_wqconfig.ExtFlux_FORC_data_tStep)(col2ewfIx[j], 0, 0) = _c;
+                }
             }
 
             AppendCube_SS_EWF_FORC_h5(
                 OpenWQ_wqconfig,
                 h5EWF_request_index,
-                chemi,
+                dense_chem_idx,   // dense storage slot (NOT the BGC id — mapped via _chemID)
                 flag_newChem,
                 flag_newJSON_h5Request,
                 tSamp_valid_i_time_t);
 
-            // Reset flags
             flag_newJSON_h5Request = false;
             flag_newChem = false;
 
-            // Throw a point in console to show progress
-            // One point per timeStep
-            point_print_n++;
-            if (point_print_n==80){
-                point_print_n=0; 
-                std::cout << "\n" + whiteSpacing << std::flush;
-            }
+            // progress dots (one line per 80 timesteps)
+            point_print_n2++;
+            if (point_print_n2 == 80){ point_print_n2 = 0; std::cout << "\n         " << std::flush; }
             std::cout << "." << std::flush;
-            
         }
 
-        // Print the number of timesteps in the console
-        std::cout << " => TimeSteps processed: " + std::to_string(tSamp_valid.size()) + "\n" << std::flush;
+        std::cout << " => TimeSteps processed: "
+                  + std::to_string(nTsteps_h5) + "\n" << std::flush;
+
+        // Advance the dense storage slot (this species was loaded successfully)
+        dense_chem_idx++;
     }
 }
 

@@ -548,7 +548,8 @@ def _count_bgc_species(bgc_module_name, bgc_template_path, fallback=0):
         return fallback
 
 
-def _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, units):
+def _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, units,
+                       fluxes_conc_to_print=None):
     """Read HDF5 simulation outputs.
 
     OpenWQ HDF5 format: each file has timestamp-named datasets (e.g.
@@ -573,6 +574,11 @@ def _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, uni
                   'mapping_key', 'coordinates', 'timestamps', 'data', 'concentration'}
 
     compartments = list(compartments_and_cells.keys())
+    fluxes = list((fluxes_conc_to_print or {}).keys())
+    # Compartments and flux exports share the SAME file layout
+    # (NAME@SPECIES#UNITS-main.h5); flux results are keyed distinctly (
+    # "SPECIES [FLUX]") so they don't collide with the compartment species key.
+    output_groups = [(c, False) for c in compartments] + [(fx, True) for fx in fluxes]
     units_clean = units.replace('/', '|')
 
     results = {}
@@ -582,9 +588,9 @@ def _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, uni
 
         for species in chemical_species:
             species_upper = species.upper().replace('-', '_')
-            for cmp in compartments:
-                # Filename pattern: COMPARTMENT@SPECIES#UNITS-main.h5
-                fname = f"{cmp}@{species_upper}#{units_clean}-main.h5"
+            for grp_name, is_flux in output_groups:
+                # Filename pattern: NAME@SPECIES#UNITS-main.h5
+                fname = f"{grp_name}@{species_upper}#{units_clean}-main.h5"
                 fpath = os.path.join(h5_dir, fname)
 
                 if not os.path.isfile(fpath):
@@ -654,7 +660,8 @@ def _read_hdf5_outputs(output_dir, compartments_and_cells, chemical_species, uni
                         df.replace(-9999, np.nan, inplace=True)
                         df.replace(-9999.0, np.nan, inplace=True)
 
-                        results[species] = df
+                        _rk = (f"{species} [{grp_name}]") if is_flux else species
+                        results[_rk] = df
                         print(f"  Loaded: {fname} ({len(df)} timesteps, {len(df.columns)} cells)")
 
                 except Exception as e:
@@ -1539,6 +1546,7 @@ def generate_simulation_report(
         units,
         compartments_and_cells,
         timestep,
+        fluxes_conc_to_print=None,
         # Basename (no extension) of the user's config template; when set,
         # reports are named "<stem>_config_report.html" and
         # "<stem>_results_report.html".  None keeps the legacy
@@ -2707,6 +2715,9 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         H.append(f'<tr><td>Species</td><td>{", ".join(chemical_species)}</td></tr>')
         cmp_names = ", ".join(compartments_and_cells.keys())
         H.append(f'<tr><td>Compartments</td><td>{cmp_names}</td></tr>')
+        _fx = locals().get('fluxes_conc_to_print')
+        if _fx:
+            H.append(f'<tr><td>Flux exports</td><td>{", ".join(_fx.keys())}</td></tr>')
         H.append('</table></div></div>')
 
         # Module parameter details (collapsible)
@@ -3142,7 +3153,18 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _cmp_default = [c for c in _cmp_names if c in _cmp_configured]
         if not _cmp_default:
             _cmp_default = _cmp_names[:1]
-        _cmp_str = ', '.join(f'"{c}"' for c in _cmp_default)
+        # Exported flux concentrations (FLUXES_CONC_TO_PRINT) are read + plotted
+        # in the output report alongside the compartments: a flux export uses the
+        # same NAME@SPECIES#UNITS-main.h5 layout, so Read_h5_driver/Plot_h5_driver
+        # ingest and plot it identically. Enabling this is driven entirely by the
+        # template's fluxes_conc_to_print (no separate report switch needed).
+        _flux_names = list(fluxes_conc_to_print.keys()) \
+            if isinstance(fluxes_conc_to_print, dict) else []
+        _cmp_and_flux = _cmp_default + [f for f in _flux_names if f not in _cmp_default]
+        _cmp_str = ', '.join(f'"{c}"' for c in _cmp_and_flux)
+        # Passed to Plot_h5_driver so the report's left-column nav separates
+        # exported fluxes from compartments under their own group headers.
+        _flux_names_repr = repr(_flux_names)
 
         # Shapefile info for mapping — hostmodel-dependent defaults.
         # NOTE: _shp_key is the column in the RIVER-NETWORK shapefile used by
@@ -3332,16 +3354,19 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                  'Deselect all</a>')
         H.append('</div>')
 
-        # --- Compartment checkboxes ---
-        H.append('<p style="font-weight:600;margin-top:1rem">Select compartments to read:</p>')
+        # --- Compartment (and flux) checkboxes ---
+        H.append('<p style="font-weight:600;margin-top:1rem">Select compartments/fluxes to read:</p>')
         H.append('<p style="font-size:.82rem;color:var(--muted);margin:0 0 .5rem">'
-                 f'Available compartments for <strong>{hostmodel}</strong>. '
-                 'Only checked compartments are included in the code snippets.</p>')
+                 f'Available compartments for <strong>{hostmodel}</strong>'
+                 + (', plus the exported flux(es)' if _flux_names else '') + '. '
+                 'Only checked entries are included in the code snippets.</p>')
         H.append('<div id="cmpCbRow" style="display:flex;flex-wrap:wrap;gap:.5rem .8rem;'
                  'margin:.5rem 0 1rem;align-items:center">')
-        for _cmp in _cmp_names:
+        # Compartments first, then any exported fluxes (checked by default so the
+        # generated read/plot snippet includes them out of the box).
+        for _cmp in (_cmp_names + [f for f in _flux_names if f not in _cmp_names]):
             _cmp_esc = _html_mod.escape(_cmp)
-            _chk = " checked" if _cmp in _cmp_default else ""
+            _chk = " checked" if _cmp in _cmp_and_flux else ""
             H.append(
                 f'<label style="display:inline-flex;align-items:center;gap:.3rem;'
                 f'font-size:.85rem;cursor:pointer;padding:.25rem .5rem;'
@@ -3620,6 +3645,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    feature_label="{_feature_label}",\n'
             f'    separator="{plot_separator}",\n'
             f'    config_template_path={repr(config_template_path or "")},\n'
+            f'    flux_names={_flux_names_repr},\n'
             f'{_obs_plot_param}'
             f')\n'
             f'\n'
@@ -3658,6 +3684,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
             f'    feature_label="{_feature_label}",\n'
             f'    separator="{plot_separator}",\n'
             f'    config_template_path={repr(config_template_path or "")},\n'
+            f'    flux_names={_flux_names_repr},\n'
             f'{_obs_plot_param}'
             f'    static_matrix_dir="{_static_out_dir_safe}",\n'
             f')\n'
@@ -4284,6 +4311,10 @@ def generate_report(
         units,
         compartments_and_cells,
         timestep,
+        # Optional flux-concentration exports (same structure as
+        # compartments_and_cells). Listed in the config report + read/plotted in
+        # the output report alongside the compartments.
+        fluxes_conc_to_print=None,
         river_network_shapefile=None,
         basin_shapefile=None,
         # OPTIONAL: column in the river-network shapefile whose values match
@@ -4362,6 +4393,7 @@ def generate_report(
             chemical_species=chemical_species,
             units=units,
             compartments_and_cells=compartments_and_cells,
+            fluxes_conc_to_print=fluxes_conc_to_print,
             timestep=timestep,
             river_network_shapefile=river_network_shapefile,
             basin_shapefile=basin_shapefile,

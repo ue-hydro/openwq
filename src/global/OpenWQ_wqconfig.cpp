@@ -47,6 +47,13 @@ OpenWQ_wqconfig::OpenWQ_wqconfig() {
         std::unique_ptr<
         std::vector<unsigned int>>
         (new  std::vector<unsigned int>);
+    // Storing BGC chem id for each dense h5 chem slot (per request).
+    // The mother model may export a flux for only a subset of species, so the
+    // dense storage index (0,1,...) is mapped back to the true BGC species id.
+    ExtFlux_FORC_HDF5vec_chemID =
+        std::unique_ptr<
+        std::vector<std::vector<int>>>
+        (new  std::vector<std::vector<int>>);
     // Saving 1 timestep
     ExtFlux_FORC_data_tStep = 
         std::unique_ptr<
