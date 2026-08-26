@@ -2209,6 +2209,19 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                               if report_stem and report_stem != "openwq" else "")
     _tpl_esc = (_tpl_disp.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 if _tpl_disp else "")
+    # "Open" button — tries to open the template in a new tab (file://) and
+    # copies its absolute path to the clipboard (see owqOpenTemplate). Only when
+    # we have a real absolute path (not a bare stem fallback).
+    _open_btn = ""
+    if _tpl_path and os.path.isabs(_tpl_path):
+        _btn_p = _tpl_path.replace("\\", "\\\\").replace("'", "\\'").replace('"', "&quot;")
+        _open_btn = (
+            '<button type="button" onclick="owqOpenTemplate(\'' + _btn_p + '\', this)" '
+            'style="margin-top:.55rem;display:inline-block;cursor:pointer;'
+            'font:700 .72rem/1 ui-monospace,SFMono-Regular,Menlo,monospace;'
+            'letter-spacing:.04em;text-transform:uppercase;padding:.36rem .8rem;'
+            'border-radius:6px;border:1px solid var(--accent,#ff8c42);'
+            'background:var(--accent,#ff8c42);color:#fff;">&#128194; Open</button>')
     # Prominent "Based on config template" callout (critical: the file the whole
     # report is built on) — placed at the top of the Project Information section.
     _tpl_callout = (
@@ -2222,7 +2235,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         '<code style="display:block;font-family:ui-monospace,SFMono-Regular,'
         'Menlo,monospace;font-size:.84rem;font-weight:600;'
         'color:var(--text,#1a1a2e);word-break:break-all;line-height:1.45;">'
-        + _tpl_esc + '</code></div>'
+        + _tpl_esc + '</code>' + _open_btn + '</div>'
     ) if _tpl_disp else ""
     H.append(f"""<div class="header">
 <h1>Open<span>WQ</span> &mdash; Configuration Report</h1>
@@ -2530,6 +2543,13 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                     # you can see which observations fall inside the modelled window.
                     _sim_start, _sim_end = _sim_period_datetimes(
                         file_manager_path, hostmodel)
+                    # Legend-label suffix naming the host model that DEFINES this
+                    # simulation window (read from the SUMMA fileManager /
+                    # mizuRoute control file) — so the reader knows where the band
+                    # comes from, not just its years.
+                    _hm_nm = str(hostmodel).strip().replace('"', "'") if hostmodel else ""
+                    _sim_suffix = (" defined by the host-model (" + _hm_nm + ")"
+                                   if _hm_nm and _hm_nm != "N/A" else "")
                     # Defer to DOMContentLoaded so _owqLayout/PCFG (defined later
                     # in the document) are available when these build.
                     H.append(
@@ -2555,7 +2575,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
                         'var traces=c.traces.slice();'
                         'if(simStart&&simEnd){traces.push({x:[null],y:[null],'
                         'mode:"markers",type:"scatter",name:"Simulation period ("'
-                        '+simStart.slice(0,4)+"-"+simEnd.slice(0,4)+")",'
+                        '+simStart.slice(0,4)+"-"+simEnd.slice(0,4)+")' + _sim_suffix + '",'
                         'marker:{color:"rgba(100,116,139,0.55)",size:13,symbol:"square"},'
                         'hoverinfo:"skip",showlegend:true});}'
                         'Plotly.newPlot(c.id,traces,_owqLayout({'
@@ -3989,6 +4009,27 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
     # =========================================================================
     try:
         H.append('<script>')
+
+        # "Open" a config-template file from its callout. Browsers sandbox local
+        # files, so this tries to open the file in a new tab (file://; works in
+        # Safari/Firefox, Chrome blocks it) and ALWAYS copies the absolute path
+        # to the clipboard as the reliable fallback.
+        H.append("""
+function owqOpenTemplate(p, btn){
+  var copied = false;
+  try { navigator.clipboard.writeText(p); copied = true; } catch (e) {}
+  try {
+    var url = 'file://' + p.split('/').map(function(s){ return encodeURIComponent(s); }).join('/');
+    window.open(url, '_blank');
+  } catch (e) {}
+  if (btn){
+    var prev = btn.getAttribute('data-label');
+    if (prev === null){ prev = btn.innerHTML; btn.setAttribute('data-label', prev); }
+    btn.innerHTML = copied ? '✓ Path copied' : '✓ Opened';
+    setTimeout(function(){ btn.innerHTML = prev; }, 1600);
+  }
+}
+""")
 
         # Theme toggle
         H.append("""

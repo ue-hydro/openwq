@@ -61,8 +61,38 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # ║                                                                       ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
-# Absolute path to your model_config_template.py
-model_config_path = "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/supporting_scripts/1_Model_Config/model_config_template_test.py"
+# ─────────────────────────────────────────────────────────────────────────────
+#  MODEL CHAIN  (single model = list of one; chained models = list of many)
+# ─────────────────────────────────────────────────────────────────────────────
+#  Ordered list of model config templates to run for EVERY calibration
+#  evaluation. THE ORDER IS SEQUENTIAL AND SIGNIFICANT — it is the exact order
+#  in which the models are executed, from most UPSTREAM to most DOWNSTREAM:
+#
+#    • Index 0 runs FIRST  (the most upstream model, e.g. SUMMA-openWQ).
+#    • Each later model runs AFTER the ones before it, and typically INGESTS
+#      the previous model's openWQ flux output via its EWF. That coupling is
+#      declared INSIDE the downstream template itself
+#      (ewf_h5_source_folder = "../<upstream>/openwq_out/HDF5"), NOT here — so
+#      this list only fixes the RUN ORDER (the calibration rewires the EWF to
+#      each evaluation's per-model folders automatically).
+#    • A model must therefore appear AFTER every model it depends on; getting
+#      the order wrong means a downstream model reads a stale/missing flux file.
+#
+#  VALIDATION: the LAST entry is the model scored against observations (its
+#  openWQ output drives the calibration objective). Build the chain up to the
+#  model you want to validate — do not add models beyond it. (There is no
+#  per-model "validate" flag: validating anything but the terminal model after
+#  running the whole chain would be meaningless.)
+#
+#  Backward compatible: a single-model calibration is just a one-element list
+#  (that one model is both the chain and the validation target). A bare string
+#  is also accepted and treated as a one-element chain.
+model_chain = [
+    # 1st — UPSTREAM: SUMMA-openWQ (produces the flux h5 that mizuRoute ingests)
+    "/Users/diogocosta/Documents/openwq_code/diogo_test/mizuRoute-OpenWQ/route/build/openwq/openwq/supporting_scripts/1_Model_Config/model_config_template_test.py",
+    # 2nd — DOWNSTREAM + VALIDATED: mizuRoute-openWQ (scored against observations)
+    # "/path/to/model_config_template_MIZUROUTE_....py",
+]
 
 # Directory where calibration evaluations are stored
 calibration_work_dir = "/Users/diogocosta/Documents/openwq_code/calibration_workflow_test"
@@ -74,6 +104,24 @@ calibration_work_dir = "/Users/diogocosta/Documents/openwq_code/calibration_work
 # your HPC details once, and point this at your copy to reuse it across runs.
 hpc_settings_json = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  "hpc_settings.json")
+
+# ── Normalize the chain + resolve the validated model ────────────────────────
+# A bare string is treated as a one-element chain. The VALIDATED model (scored
+# against observations) is the LAST entry; the setup report and single-model
+# parameter extraction below use it, while the calibration runtime receives the
+# full ordered chain. Backward compatible: a legacy `model_config_path = "..."`
+# still works if `model_chain` is left undefined.
+try:
+    model_chain
+except NameError:
+    model_chain = [model_config_path]  # legacy single-model configs
+if isinstance(model_chain, str):
+    model_chain = [model_chain]
+model_chain = [str(p) for p in model_chain if p and str(p).strip()]
+if not model_chain:
+    raise ValueError("model_chain is empty — set at least one model config template path")
+# The last model in the chain is the validation target (obs/objective + report).
+model_config_path = model_chain[-1]
 
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
@@ -197,6 +245,45 @@ def _main():
         print(f"\n  All checks passed. Ready to generate interactive report.")
         sys.exit(0)
 
+    # ── Chained calibration: extract + tag parameters from EVERY model ──
+    # obs/container/species already come from the VALIDATED (last) model above.
+    # Here we also pull the UPSTREAM models' parameters, tag each with its chain
+    # position (model_index) + prefix its name (m{i}:) for uniqueness, and merge
+    # them into module_parameters so the one report lists all models' params.
+    # For a single-model chain this branch is skipped (byte-for-byte unchanged).
+    _chain_models = None
+    _model_chain_paths = None
+    if len(model_chain) > 1:
+        _model_chain_paths = list(model_chain)
+        _combined = {}
+        _chain_models = []
+        for _mi, _mpath in enumerate(model_chain):
+            _is_last = (_mi == len(model_chain) - 1)
+            if _is_last:
+                _mcfg, _mp = model_cfg, module_parameters   # already extracted above
+            else:
+                _mcfg = config_integration.load_model_config(_mpath)
+                _bgc = config_integration.get_bgc_template_path(_mcfg)
+                _auto = (extract_parameters.extract_calibration_parameters(_bgc)
+                         if _bgc else [])
+                _ssl = config_integration.get_ss_species_with_loads(_mcfg)
+                _mp = extract_parameters.extract_all_module_parameters(
+                    _mcfg, bgc_params=_auto, ss_load_species=_ssl)
+            for _gk, _plist in _mp.items():
+                for _p in _plist:
+                    _p['model_index'] = _mi
+                    _p['model_label'] = _mcfg.get('hostmodel', f'model{_mi}')
+                    _p['name'] = f"m{_mi}:{_p['name']}"
+                _combined.setdefault(_gk, []).extend(_plist)
+            _chain_models.append({
+                'label': f"Model {_mi + 1} — {_mcfg.get('hostmodel', '?')}",
+                'hostmodel': _mcfg.get('hostmodel', ''),
+                'is_target': _is_last})
+        module_parameters = _combined
+        print(f"      Chain: {len(model_chain)} models; "
+              f"{sum(len(v) for v in module_parameters.values())} params total "
+              f"(validating '{model_cfg.get('hostmodel','?')}')")
+
     # ── Step 4: Generate interactive setup report ──
     print(f"\n[4/5] Generating interactive setup report...")
 
@@ -209,12 +296,15 @@ def _main():
         observation_config=obs_config,
         container_config=container_config,
         model_config_path=os.path.abspath(model_config_path),
+        calibration_template_path=os.path.abspath(__file__),
         calibration_work_dir=os.path.abspath(calibration_work_dir),
         module_parameters=module_parameters,
         module_selections=module_selections,
         species_obs_availability=species_obs_availability,
         ss_species_with_loads=ss_load_species,
         hpc_settings_path=hpc_settings_json,
+        model_chain_paths=_model_chain_paths,
+        chain_models=_chain_models,
     )
 
     if report_path:

@@ -375,7 +375,13 @@ class ModelRunner:
         back to a plain run (with one log line) when stdout is not a TTY
         (HPC/batch logs) or when another eval already owns the spinner line
         (parallel sensitivity stage)."""
-        label = Path(eval_dir).name  # e.g. "eval_0001"
+        label = Path(eval_dir).name  # e.g. "eval_0001" (or "m0" for a chain upstream)
+        # Name the host model too, so a chained run reads clearly: the last model
+        # runs in the eval dir itself (label "eval_0001"), upstream models in
+        # "_chain/m{i}" — without the host name the mizuRoute step just showed
+        # the eval-dir name and looked like "no m1".
+        if self.hostmodel:
+            label += f" · {self.hostmodel}-openWQ"
         # The validation re-run uses the sentinel id 999999 (not a numbered DDS
         # eval) — show a human-readable label so the terminal says plainly what
         # is running instead of the cryptic "eval_999999".

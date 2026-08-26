@@ -276,6 +276,12 @@ def run_calibration(
         # Integrated config (preferred — replaces paths + container args)
         model_config: Optional[Dict[str, Any]] = None,
 
+        # Chained models (SUMMA-openWQ -> mizuRoute-openWQ, ...): ORDERED list
+        # of loaded model_config dicts (upstream first, last = validated). When
+        # given with >1 entry, each evaluation runs the whole chain and the LAST
+        # model's output is scored. A 1-element list == single-model (default).
+        model_chain: Optional[List[Dict[str, Any]]] = None,
+
         # Container runtime
         container_runtime: str = None,
         docker_container_name: str = None,
@@ -351,6 +357,16 @@ def run_calibration(
     # run (so a smaller new run doesn't inherit leftover eval_* folders).
     _maybe_clean_work_dir(work_dir, resume=resume,
                           clean=kwargs.get("clean_work_dir"))
+
+    # ── Chained-model calibration ──
+    # The VALIDATED model (scored against observations) is the LAST in the chain;
+    # use it for the observation / container / spatial resolution below. Each
+    # evaluation runs the whole chain (ChainParameterHandler/ChainModelRunner).
+    _is_chain = bool(model_chain) and len(model_chain) > 1
+    if model_chain:
+        model_config = model_chain[-1]
+        logger.info(f"Chained-model calibration: {len(model_chain)} models; "
+                    f"validating '{model_config.get('hostmodel','?')}' (last).")
 
     # ── Resolve settings from model_config (integrated mode) ──
     if model_config is not None:
@@ -457,7 +473,30 @@ def run_calibration(
         except Exception:
             _eval_sim_window = _cal_window
 
-    param_handler = ParameterHandler(
+    if _is_chain:
+        # Build chain-aware param handler + runner (same interface as the
+        # single-model ones, so the DDS/objective/checkpoint code is unchanged).
+        from . import chain_runner
+        param_handler, model_runner = chain_runner.build_chain(
+            chain_configs=model_chain,
+            calibration_work_dir=calibration_work_dir,
+            container_runtime=container_runtime,
+            calibration_period=_eval_sim_window,
+            max_evaluations=max_evaluations,
+            docker_container_name=docker_container_name,
+            docker_compose_path=docker_compose_path,
+            apptainer_sif_path=apptainer_sif_path,
+            apptainer_bind_path=apptainer_bind_path,
+            command_template=command_template,
+            executable_args=executable_args,
+        )
+        logger.info("Chain runner built (%d models)." % len(model_chain))
+        # Skip the single-model construction below.
+        _single_model_build = False
+    else:
+        _single_model_build = True
+
+    param_handler = param_handler if _is_chain else ParameterHandler(
         calibration_work_dir=calibration_work_dir,
         model_config=model_config,
         base_model_config_dir=base_model_config_dir,
@@ -466,7 +505,7 @@ def run_calibration(
         calibration_period=_eval_sim_window,
     )
 
-    model_runner = ModelRunner(
+    model_runner = model_runner if _is_chain else ModelRunner(
         runtime=container_runtime,
         docker_container_name=docker_container_name,
         docker_compose_path=docker_compose_path,

@@ -459,6 +459,73 @@ def _build_settings_section(settings: Dict[str, Any]) -> str:
 """
 
 
+def _tpl_open_button(path: str) -> str:
+    """A small 'Open' button for a config-template callout. On click it tries to
+    open the file in a new tab (file://) and copies the absolute path to the
+    clipboard (see window.owqOpenTemplate). Safe to embed in any callout."""
+    if not path:
+        return ""
+    p = path.replace("\\", "\\\\").replace("'", "\\'").replace('"', "&quot;")
+    return (
+        '<button type="button" onclick="owqOpenTemplate(\'' + p + '\', this)" '
+        'style="margin-top:.55rem;display:inline-block;cursor:pointer;'
+        'font:700 .72rem/1 ui-monospace,SFMono-Regular,Menlo,monospace;'
+        'letter-spacing:.04em;text-transform:uppercase;padding:.36rem .8rem;'
+        'border-radius:6px;border:1px solid var(--accent,#ff8c42);'
+        'background:var(--accent,#ff8c42);color:#fff;">&#128194; Open</button>')
+
+
+def _build_chain_overview_banner(chain_models, model_chain_paths):
+    """Prominent Overview banner that makes the CHAINED (multi-host-model)
+    nature obvious up front: the ordered model flow (e.g. SUMMA -> mizuRoute),
+    each model's role (upstream vs the validated target), and its config
+    template with an Open button. Returns '' for a single-model calibration
+    (chain_models None or of length 1) so single-model reports are unchanged."""
+    if not chain_models or len(chain_models) <= 1:
+        return ""
+    import html as _hl
+    paths = list(model_chain_paths or [])
+    n = len(chain_models)
+    flow = ' &nbsp;&rarr;&nbsp; '.join(
+        '<strong>' + _hl.escape(str(cm.get("hostmodel") or cm.get("label")
+                                    or ("m%d" % i))) + '</strong>'
+        for i, cm in enumerate(chain_models))
+    cards = []
+    for i, cm in enumerate(chain_models):
+        lbl = _hl.escape(str(cm.get('label', 'Model %d' % (i + 1))))
+        is_tgt = cm.get('is_target', i == n - 1)
+        role = (
+            '<span style="background:#0a7d33;color:#fff;border-radius:4px;'
+            'padding:1px 7px;font-size:.72rem;font-weight:700">&#127919; CALIBRATION '
+            'TARGET &mdash; scored vs observations</span>') if is_tgt else (
+            '<span style="color:var(--muted);font-size:.75rem">upstream &mdash; feeds '
+            'the next model via the coupled flux (EWF)</span>')
+        p = paths[i] if i < len(paths) else ''
+        p_row = ('<div style="font-size:.78rem;color:var(--muted);word-break:break-all;'
+                 'margin-top:.25rem">config template: <code>' + _hl.escape(p) +
+                 '</code></div>') if p else ''
+        btn = ('<div style="margin-top:.35rem">' + _tpl_open_button(p) + '</div>') if p else ''
+        arrow = ('<div style="text-align:center;color:var(--primary);font-size:1.3rem;'
+                 'line-height:1;margin:.15rem 0">&darr;</div>') if i < n - 1 else ''
+        cards.append(
+            '<div style="border:1px solid var(--border);border-radius:8px;'
+            'padding:.55rem .8rem;background:var(--surface)">'
+            '<div style="font-weight:700"><code>m' + str(i) + ':</code> ' + lbl +
+            ' &nbsp; ' + role + '</div>' + p_row + btn + '</div>' + arrow)
+    return (
+        '<div style="border:1px solid var(--primary);border-left:5px solid var(--primary);'
+        'border-radius:10px;background:rgba(59,117,175,.06);padding:.9rem 1.1rem;'
+        'margin:.2rem 0 1.1rem">'
+        '<div style="font-weight:800;font-size:.8rem;letter-spacing:.03em;'
+        'text-transform:uppercase;color:var(--primary);margin-bottom:.15rem">'
+        '&#9939; Chained calibration</div>'
+        '<div style="font-size:1.05rem;margin-bottom:.2rem">' + flow + '</div>'
+        '<div style="font-size:.85rem;color:var(--muted);margin-bottom:.7rem">' +
+        str(n) + ' host models run in sequence per evaluation &mdash; each upstream '
+        'model feeds the next through the coupled flux (EWF); only the final model '
+        'is scored against observations.</div>' + ''.join(cards) + '</div>')
+
+
 def _build_model_config_section(
     model_config: Dict[str, Any],
     species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
@@ -1009,11 +1076,22 @@ def generate_interactive_setup(
     container_config: Dict[str, Any],
     model_config_path: str,
     calibration_work_dir: str,
+    calibration_template_path: Optional[str] = None,
     module_parameters: Optional[Dict[str, List[Dict]]] = None,
     module_selections: Optional[Dict[str, Any]] = None,
     species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
     ss_species_with_loads: Optional[set] = None,
     hpc_settings_path: Optional[str] = None,
+    # Chained-model calibration. model_chain_paths = ORDERED list of model
+    # config template paths (upstream first, last = validated); the generated
+    # run script writes model_chain=[...] and calls run_calibration(model_chain).
+    # chain_models = per-model render groups (one per chain entry), each:
+    #   {"label": str, "hostmodel": str, "is_target": bool,
+    #    "module_parameters": {group: [param,...]}, "model_config": dict}
+    # Each param in module_parameters must carry "model_index". When
+    # chain_models is None (or 1 model), the report is byte-for-byte single-model.
+    model_chain_paths: Optional[List[str]] = None,
+    chain_models: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[str]:
     """
     Generate an **interactive** calibration setup HTML report.
@@ -1137,11 +1215,21 @@ def generate_interactive_setup(
             auto_extracted_parameters, model_config, observation_config,
             total_params=total_params,
             module_selections=module_selections,
+            chain_models=chain_models,
         ))
+        # Chained calibration: a prominent Overview banner (ordered model flow +
+        # per-model roles) so a multi-host-model calibration never reads as a
+        # single-model one. Empty for single-model calibrations (unchanged).
+        _is_chain = bool(chain_models and len(chain_models) > 1)
+        _chain_banner = _build_chain_overview_banner(chain_models, model_chain_paths)
+        if _chain_banner:
+            H.append(_chain_banner)
         # Source config template — prominent callout directly under the Summary
-        # (critical: this is the file the whole calibration is built on).
+        # (critical: this is the file the whole calibration is built on). For a
+        # CHAIN the banner above already lists every model template, so this
+        # single-model callout is suppressed (it would misread as single-model).
         _mc_tpl = model_config_path or ""
-        if _mc_tpl:
+        if _mc_tpl and not _is_chain:
             H.append(
                 '<div style="border:1px solid var(--border,#e5e7eb);'
                 'border-left:5px solid var(--accent,#ff8c42);'
@@ -1154,7 +1242,32 @@ def generate_interactive_setup(
                 'Menlo,monospace;font-size:.84rem;font-weight:600;'
                 'color:var(--text,#1a1a2e);word-break:break-all;line-height:1.45;">'
                 + _mc_tpl.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                + '</code></div>')
+                + '</code>' + _tpl_open_button(_mc_tpl) + '</div>')
+        # Calibration config template — the file that generated THIS report
+        # (rendered right after the model-config-template callout above, so the
+        # report records both the model it calibrates and the calibration
+        # config it was built from).
+        _cal_tpl = calibration_template_path or ""
+        if _cal_tpl:
+            H.append(
+                '<div style="border:1px solid var(--border,#e5e7eb);'
+                'border-left:5px solid var(--accent,#ff8c42);'
+                'background:rgba(127,127,127,.06);border-radius:8px;'
+                'padding:.8rem 1rem;margin:.3rem 0 1.1rem;">'
+                '<div style="font-weight:800;font-size:.78rem;letter-spacing:.04em;'
+                'text-transform:uppercase;color:var(--accent,#ff8c42);'
+                'margin-bottom:.35rem;">&#128196; Calibration config template</div>'
+                '<code style="display:block;font-family:ui-monospace,SFMono-Regular,'
+                'Menlo,monospace;font-size:.84rem;font-weight:600;'
+                'color:var(--text,#1a1a2e);word-break:break-all;line-height:1.45;">'
+                + _cal_tpl.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                + '</code>' + _tpl_open_button(_cal_tpl) + '</div>')
+        if _is_chain:
+            H.append('<div style="font-size:.85rem;color:var(--muted);'
+                     'margin:.2rem 0 .4rem">The model configuration below is the '
+                     '<strong>calibration target</strong> (the final, validated model in '
+                     'the chain). Upstream models are configured in their own templates '
+                     '&mdash; see the chain banner above.</div>')
         H.append(_build_model_config_section(
             model_config,
             species_obs_availability=species_obs_availability,
@@ -1316,6 +1429,35 @@ def generate_interactive_setup(
         H.append('<input type="text" class="param-search" id="paramSearch" '
                  'placeholder="Search parameters by name, module, or type..." '
                  'oninput="filterParams(this.value)"/>')
+        # Chained calibration: a banner mapping each model's parameter prefix
+        # (m0:, m1:, …) to its host model, and marking the validated target.
+        # The parameters themselves render in the single combined table below
+        # (their names carry the m{i}: prefix, so each row shows its model).
+        if chain_models and len(chain_models) > 1:
+            import html as _hl
+            _leg = []
+            for _mi, _cm in enumerate(chain_models):
+                _lbl = _hl.escape(str(_cm.get('label', f'Model {_mi + 1}')))
+                _tgt = _cm.get('is_target', _mi == len(chain_models) - 1)
+                _badge = (' <span style="background:#0a7d33;color:#fff;border-radius:4px;'
+                          'padding:1px 6px;font-size:.72rem;font-weight:700">🎯 CALIBRATION '
+                          'TARGET — scored vs observations</span>') if _tgt else \
+                         (' <span style="color:var(--muted);font-size:.72rem">upstream — '
+                          'feeds the target via EWF</span>')
+                _leg.append(f'<li><code>m{_mi}:</code> <strong>{_lbl}</strong>{_badge}</li>')
+            H.append(
+                '<div style="border:1px solid var(--border);border-left:4px solid '
+                'var(--primary);border-radius:8px;background:var(--surface);'
+                'padding:.7rem 1rem;margin:.3rem 0 1rem">'
+                '<div style="font-weight:700;margin-bottom:.3rem">⛓ Chained calibration — '
+                f'{len(chain_models)} models run in sequence per evaluation</div>'
+                '<div style="font-size:.85rem;color:var(--muted);margin-bottom:.4rem">'
+                'Each parameter below is tagged with its model (name prefix '
+                '<code>m{i}:</code>). Only the target model\'s output is compared to '
+                'observations; upstream models feed it through the coupled flux (EWF).</div>'
+                '<ul style="margin:.2rem 0 0 1.1rem;padding:0;font-size:.85rem">'
+                + ''.join(_leg) + '</ul></div>')
+
         if module_parameters:
             # Load BGC network for the calibratability check.  Uses the
             # SAME path resolver as the BGC diagram above so the two
@@ -2159,6 +2301,7 @@ def generate_interactive_setup(
             model_sim_period=_sim_period,
             model_forcing_period=_forcing_period,
             hpc_baked=_hpc_baked,
+            model_chain_paths=model_chain_paths,
         ))
 
         H.append("</body></html>")
@@ -2186,6 +2329,7 @@ def _build_interactive_summary(
     observation_config: Dict[str, Any],
     total_params: int = 0,
     module_selections: Optional[Dict[str, Any]] = None,
+    chain_models: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """Summary KPIs for the interactive report."""
     if not total_params:
@@ -2194,6 +2338,17 @@ def _build_interactive_summary(
         model_config.get("path2selected_NATIVE_BGC_FLEX_framework", "")
     )
     hostmodel = model_config.get("hostmodel", "N/A")
+    hostmodel_label = "Host Model"
+    # Chained calibration: the KPI must list EVERY host model in the chain
+    # (upstream -> target), not just the validated one — otherwise a chain
+    # reads as a single-host-model calibration.
+    if chain_models and len(chain_models) > 1:
+        _hms = [str(cm.get("hostmodel") or cm.get("label") or "").strip()
+                for cm in chain_models]
+        _hms = [h for h in _hms if h]
+        if _hms:
+            hostmodel = " → ".join(_hms)   # e.g. summa -> mizuroute
+            hostmodel_label = "Host Models (chain)"
     obs_source = observation_config.get("source", "skip").upper()
 
     # Count active modules
@@ -2208,7 +2363,7 @@ def _build_interactive_summary(
         {"icon": "\U0001f4ca", "value": str(total_params), "label": "Calibration Params"},
         {"icon": "\U0001f9ea", "value": str(n_modules) if n_modules else "N/A",
          "label": "Active Modules"},
-        {"icon": "\U0001f30a", "value": hostmodel, "label": "Host Model"},
+        {"icon": "\U0001f30a", "value": hostmodel, "label": hostmodel_label},
         {"icon": "\U0001f4c8", "value": obs_source, "label": "Observation Source"},
     ]
 
@@ -3918,40 +4073,52 @@ def _build_interactive_parameters_section_grouped(
             # Transport, LE, sediment → affects all species
             return True
 
+    # Chained calibration: parameters carry a differing ``model_index``
+    # (m0, m1, …).  Order the module groups BY MODEL so each model's
+    # parameters sit in their own block under a clear model header — every
+    # model in the chain is calibrated, not just the validated one.
+    _model_idxs = sorted({int(p.get("model_index", 0))
+                          for plist in module_parameters.values() for p in plist})
+    _is_chain = len(_model_idxs) > 1
+
     # Build flat list and track group boundaries
     all_params = []
-    group_meta = []  # (group_key, label, start_idx, count)
+    group_meta = []  # (group_key, label, start_idx, count, model_index)
 
-    for group_key in _GROUP_ORDER:
-        params = module_parameters.get(group_key, [])
-        if not params:
-            continue
-        # Build label with model name
-        label = _GROUP_LABELS.get(group_key, group_key)
-        mod_key = _GROUP_MODULE_KEY.get(group_key, "")
-        mod_name = module_selections.get(mod_key, "")
-        if mod_name:
-            label += f" &mdash; {html_lib.escape(str(mod_name))}"
+    for _mi in (_model_idxs if _is_chain else [None]):
+        for group_key in _GROUP_ORDER:
+            params = module_parameters.get(group_key, [])
+            if _mi is not None:
+                params = [p for p in params
+                          if int(p.get("model_index", 0)) == _mi]
+            if not params:
+                continue
+            # Build label with model name
+            label = _GROUP_LABELS.get(group_key, group_key)
+            mod_key = _GROUP_MODULE_KEY.get(group_key, "")
+            mod_name = module_selections.get(mod_key, "")
+            if mod_name:
+                label += f" &mdash; {html_lib.escape(str(mod_name))}"
 
-        start_idx = len(all_params)
-        # Annotate each param with calibratability
-        annotated = []
-        for p in params:
-            pp = dict(p)  # shallow copy
-            pp["_calibratable"] = _is_calibratable(p, group_key)
-            # Attach the reaction's consumed/produced species (BGC params only)
-            # so the table can render "A -> B" under the parameter name.
-            if group_key == "bgc":
-                _fw = pp.get("_framework", "")
-                _rnum = str(pp.get("_reaction_num", "") or "")
-                _rname = str(pp.get("_reaction", "") or "")
-                _io = (_rxn_io_lookup.get((_fw, _rnum))
-                       or _rxn_io_lookup.get((_fw, _rname)))
-                if _io and (_io["consumed"] or _io["produced"]):
-                    pp["reaction_io"] = _io
-            annotated.append(pp)
-        all_params.extend(annotated)
-        group_meta.append((group_key, label, start_idx, len(annotated)))
+            start_idx = len(all_params)
+            # Annotate each param with calibratability
+            annotated = []
+            for p in params:
+                pp = dict(p)  # shallow copy
+                pp["_calibratable"] = _is_calibratable(p, group_key)
+                # Attach the reaction's consumed/produced species (BGC params
+                # only) so the table can render "A -> B" under the parameter.
+                if group_key == "bgc":
+                    _fw = pp.get("_framework", "")
+                    _rnum = str(pp.get("_reaction_num", "") or "")
+                    _rname = str(pp.get("_reaction", "") or "")
+                    _io = (_rxn_io_lookup.get((_fw, _rnum))
+                           or _rxn_io_lookup.get((_fw, _rname)))
+                    if _io and (_io["consumed"] or _io["produced"]):
+                        pp["reaction_io"] = _io
+                annotated.append(pp)
+            all_params.extend(annotated)
+            group_meta.append((group_key, label, start_idx, len(annotated), _mi))
 
     total = len(all_params)
 
@@ -3967,15 +4134,63 @@ def _build_interactive_parameters_section_grouped(
 </div>
 """
 
+    _intro = ('Edit bounds and transform below. Uncheck parameters to exclude '
+              'them from calibration. Parameters are grouped by module.')
+    if _is_chain:
+        _intro = ('Edit bounds and transform below. Uncheck a parameter to drop '
+                  'it. This is a <strong>chained calibration</strong>: the '
+                  'optimiser tunes the parameters of <strong>every</strong> model '
+                  'below (both the <code>m0</code> and <code>m1</code> sections) '
+                  'together. The &#127919; badge marks only the model whose output '
+                  'is <em>scored against observations</em> &mdash; it is <strong>not'
+                  '</strong> the only model being calibrated. Each parameter name '
+                  'is prefixed <code>m{i}:</code> with its model.')
     H = [
         f'<div class="section" id="parameters">',
         f'<h2>Calibration Parameters ({total})</h2>',
         '<p style="color:var(--text2);margin-bottom:1rem;font-size:.9rem;">'
-        'Edit bounds and transform below. Uncheck parameters to exclude '
-        'them from calibration. Parameters are grouped by module.</p>',
+        + _intro + '</p>',
     ]
 
-    for group_key, label, start_idx, count in group_meta:
+    _cur_model = "\0"  # sentinel: no real model_index equals this
+    for group_key, label, start_idx, count, _mi in group_meta:
+        if _is_chain and _mi != _cur_model:
+            _cur_model = _mi
+            # Per-model header: host model name + role + parameter count, so it
+            # is unmistakable which model the groups below belong to.
+            _mparams = [p for p in all_params
+                        if int(p.get("model_index", -999)) == _mi]
+            _mlabel = html_lib.escape(str(
+                (_mparams[0].get("model_label") if _mparams else "")
+                or ("model %d" % _mi)))
+            _is_tgt = (_mi == _model_idxs[-1])
+            # Count only the CALIBRATABLE params (grayed-out ones — sub-cycles
+            # with no observations — are excluded by default), so the header
+            # number matches what actually gets calibrated.
+            _mcal = sum(1 for p in _mparams if p.get("_calibratable", True))
+            _mcount_txt = (
+                ('<strong>' + str(_mcal) + '</strong> parameters calibrated')
+                if _mcal == len(_mparams) else
+                ('<strong>' + str(_mcal) + '</strong> of ' + str(len(_mparams))
+                 + ' parameters calibrated'))
+            # Both roles are calibrated; the badge only distinguishes which model
+            # is SCORED against observations vs which feeds it upstream.
+            _role = ('<span style="background:#0a7d33;color:#fff;border-radius:5px;'
+                     'padding:2px 9px;font-size:.72rem;font-weight:700;'
+                     'margin-left:.5rem">&#127919; output scored vs observations</span>'
+                     ) if _is_tgt else (
+                     '<span style="background:var(--surface);border:1px solid '
+                     'var(--border);color:var(--muted);border-radius:5px;'
+                     'padding:2px 9px;font-size:.72rem;margin-left:.5rem">upstream '
+                     '&mdash; output feeds the target via EWF</span>')
+            H.append(
+                '<div style="margin:1.6rem 0 .5rem;padding:.55rem .9rem;'
+                'border-left:5px solid var(--primary);background:rgba(59,117,175,.08);'
+                'border-radius:6px;display:flex;align-items:center;flex-wrap:wrap;'
+                'gap:.35rem"><span style="font-weight:800;font-size:1.02rem">'
+                '<code>m' + str(_mi) + ':</code> ' + _mlabel + '</span>' + _role +
+                '<span style="color:var(--muted);font-size:.8rem;margin-left:auto">'
+                + _mcount_txt + '</span></div>')
         group_params = all_params[start_idx:start_idx + count]
         has_disabled = any(not p.get("_calibratable", True)
                           for p in group_params)
@@ -4145,7 +4360,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                           observation_period=None,
                           model_sim_period=None,
                           model_forcing_period=None,
-                          hpc_baked=None):
+                          hpc_baked=None,
+                          model_chain_paths=None):
     """Build the JavaScript for the interactive setup report."""
     import json as json_mod
     # Absolute path to the openWQ "3_Calibration" folder (the parent of
@@ -4174,6 +4390,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
 
     # Escape paths for JS string embedding
     mcp = json_mod.dumps(model_config_path)
+    # Ordered model chain (defaults to the single validated model). Embedded as
+    # a JS constant so the generated run script writes model_chain=[...].
+    mchain = json_mod.dumps(list(model_chain_paths) if model_chain_paths
+                            else [model_config_path])
     cwd = json_mod.dumps(calibration_work_dir)
     rstem = json_mod.dumps(report_stem or "calibration")
     clibdir = json_mod.dumps(calib_lib_dir)
@@ -4191,6 +4411,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
 
   // Data injected from Python
   var MODEL_CONFIG_PATH = ''' + mcp + r''';
+  var MODEL_CHAIN = ''' + mchain + r''';
   var CALIBRATION_WORK_DIR = ''' + cwd + r''';
   var REPORT_STEM = ''' + rstem + r''';
   var CALIB_LIB_DIR = ''' + clibdir + r''';
@@ -4422,6 +4643,15 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('# ' + '='.repeat(68));
     lines.push('');
     lines.push('model_config_path = ' + pyRepr(s.model_config_path));
+    var _isChain = (typeof MODEL_CHAIN !== 'undefined' && MODEL_CHAIN && MODEL_CHAIN.length > 1);
+    if (_isChain) {
+      lines.push('');
+      lines.push('# Chained models — run SEQUENTIALLY per evaluation (upstream first);');
+      lines.push('# the LAST entry is the model VALIDATED against observations.');
+      lines.push('model_chain = [');
+      MODEL_CHAIN.forEach(function(p){ lines.push('    ' + pyRepr(p) + ','); });
+      lines.push(']');
+    }
     lines.push('calibration_work_dir = ' + pyRepr(s.calibration_work_dir));
     lines.push('report_stem = ' + pyRepr(REPORT_STEM));
     lines.push('');
@@ -4568,6 +4798,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       entries.push('"transform": ' + pyRepr(p.transform));
       if (p.units) entries.push('"units": ' + pyRepr(p.units));
       if (p.description) entries.push('"description": ' + pyRepr(p.description));
+      // Chained calibration: which model (chain index) this parameter belongs to.
+      if (p.model_index != null) entries.push('"model_index": ' + pyRepr(p.model_index));
       lines.push('    {' + entries.join(', ') + '},');
     });
     lines.push(']');
@@ -4607,6 +4839,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('');
     lines.push('    print("\\nLoading model config...")');
     lines.push('    model_cfg = config_integration.load_model_config(model_config_path)');
+    if (_isChain) {
+      lines.push('    # Chained calibration: load the full ordered chain (upstream');
+      lines.push('    # first; the last == model_cfg, the validated model).');
+      lines.push('    model_chain_cfgs = config_integration.load_model_chain(model_chain)');
+    }
     lines.push('');
     lines.push('    # Settings echoed into the results report (shared by the final');
     lines.push('    # report and the --report regeneration below).');
@@ -4660,6 +4897,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('    results = run_calibration(');
     lines.push('        calibration_work_dir=calibration_work_dir,');
     lines.push('        model_config=model_cfg,');
+    if (_isChain) lines.push('        model_chain=model_chain_cfgs,');
     lines.push('        calibration_parameters=calibration_parameters,');
     lines.push('        algorithm=algorithm,');
     lines.push('        max_evaluations=max_evaluations,');
@@ -4961,6 +5199,26 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       if (cmd) cmd.style.display = '';
     }
   }
+
+  // "Open" a template file from a config-template callout.  Browsers sandbox
+  // local files, so this tries to open the file in a new tab via file://
+  // (works in Safari/Firefox; Chrome blocks local-file navigation) and ALWAYS
+  // copies the absolute path to the clipboard as the reliable fallback — paste
+  // it into your editor / terminal.
+  window.owqOpenTemplate = function(p, btn) {
+    var copied = false;
+    try { navigator.clipboard.writeText(p); copied = true; } catch (e) {}
+    try {
+      var url = 'file://' + p.split('/').map(function(s){ return encodeURIComponent(s); }).join('/');
+      window.open(url, '_blank');
+    } catch (e) {}
+    if (btn) {
+      var prev = btn.getAttribute('data-label');
+      if (prev === null) { prev = btn.innerHTML; btn.setAttribute('data-label', prev); }
+      btn.innerHTML = copied ? '✓ Path copied' : '✓ Opened';
+      setTimeout(function(){ btn.innerHTML = prev; }, 1600);
+    }
+  };
 
   // Expand / collapse a numbered run step (steps 2 & 3 start collapsed).
   window.toggleStep = function(id, hdr) {
