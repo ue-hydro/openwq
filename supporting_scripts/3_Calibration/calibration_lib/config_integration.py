@@ -347,6 +347,18 @@ def get_gen_input_driver_module(model_config: Dict[str, Any]):
     )
 
 
+def load_model_chain(model_chain_paths) -> "list":
+    """Load an ordered chain of model config templates.
+
+    Accepts a single path (str) or an ordered list of paths (upstream first,
+    the last entry being the validated/downstream model). Returns the list of
+    loaded model_config dicts in the SAME order.
+    """
+    if isinstance(model_chain_paths, str):
+        model_chain_paths = [model_chain_paths]
+    return [load_model_config(p) for p in model_chain_paths]
+
+
 def generate_config_for_eval(
     model_config: Dict[str, Any],
     eval_dir: str,
