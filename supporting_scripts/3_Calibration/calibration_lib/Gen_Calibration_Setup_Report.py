@@ -1077,6 +1077,8 @@ def generate_interactive_setup(
     model_config_path: str,
     calibration_work_dir: str,
     calibration_template_path: Optional[str] = None,
+    default_calibration_period: Optional[tuple] = None,
+    default_spinup_period: Optional[tuple] = None,
     module_parameters: Optional[Dict[str, List[Dict]]] = None,
     module_selections: Optional[Dict[str, Any]] = None,
     species_obs_availability: Optional[Dict[str, Dict[str, Any]]] = None,
@@ -2302,6 +2304,8 @@ def generate_interactive_setup(
             model_forcing_period=_forcing_period,
             hpc_baked=_hpc_baked,
             model_chain_paths=model_chain_paths,
+            default_calibration_period=default_calibration_period,
+            default_spinup_period=default_spinup_period,
         ))
 
         H.append("</body></html>")
@@ -4361,7 +4365,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                           model_sim_period=None,
                           model_forcing_period=None,
                           hpc_baked=None,
-                          model_chain_paths=None):
+                          model_chain_paths=None,
+                          default_calibration_period=None,
+                          default_spinup_period=None):
     """Build the JavaScript for the interactive setup report."""
     import json as json_mod
     # Absolute path to the openWQ "3_Calibration" folder (the parent of
@@ -4401,6 +4407,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     obs_period_json = json_mod.dumps(_obs_period)
     sim_period_json = json_mod.dumps(_sim_period)
     forcing_period_json = json_mod.dumps(_forcing_period)
+    # Template-locked calibration + spin-up windows (null → slider default).
+    lock_calib_json = json_mod.dumps(list(default_calibration_period)
+                                     if default_calibration_period else None)
+    lock_spinup_json = json_mod.dumps(list(default_spinup_period)
+                                      if default_spinup_period else None)
 
     # Build the JS as a plain string (not f-string) to avoid issues
     # with JS curly braces and Python triple-quote conflicts.
@@ -4420,6 +4431,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   var OBS_PERIOD = ''' + obs_period_json + r''';
   var SIM_PERIOD = ''' + sim_period_json + r''';
   var FORCING_PERIOD = ''' + forcing_period_json + r''';
+  var LOCK_CALIB_PERIOD = ''' + lock_calib_json + r''';
+  var LOCK_SPINUP_PERIOD = ''' + lock_spinup_json + r''';
 
   // Helper: Python repr
   function pyRepr(v, indent) {
@@ -6291,6 +6304,24 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // for no spin-up.
     var spinupF = Math.max(spinupFloorF, calStartF - oneYearF);
     if (spinupF > calStartF) spinupF = calStartF;
+
+    // Template-LOCKED windows (calibration_config: calibration_period /
+    // spinup_period) override the slider defaults so the report opens on the
+    // exact configured window and the downloaded run script bakes it. The user
+    // can still drag afterwards. Clamped into the model timeline [0,1].
+    function _clampF(f){ return Math.max(0, Math.min(1, f)); }
+    if (typeof LOCK_CALIB_PERIOD !== 'undefined' && LOCK_CALIB_PERIOD) {
+      var _lcs = parseDate(LOCK_CALIB_PERIOD[0]);
+      var _lce = parseDate(LOCK_CALIB_PERIOD[1]);
+      if (_lcs) calStartF = _clampF(frac(_lcs));
+      if (_lce) splitF   = _clampF(frac(_lce));
+    }
+    if (typeof LOCK_SPINUP_PERIOD !== 'undefined' && LOCK_SPINUP_PERIOD) {
+      var _lss = parseDate(LOCK_SPINUP_PERIOD[0]);
+      if (_lss) spinupF = _clampF(frac(_lss));
+    }
+    if (spinupF > calStartF) spinupF = calStartF;
+    if (splitF  < calStartF) splitF  = calStartF;
     var handleSpinup = document.getElementById('calibHandleSpinup');
 
     // Observation timestamps (epoch ms) per species → live in-window count.
