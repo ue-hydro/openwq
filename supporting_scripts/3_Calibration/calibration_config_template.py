@@ -97,6 +97,16 @@ model_chain = [
 # Directory where calibration evaluations are stored
 calibration_work_dir = "/Users/diogocosta/Documents/openwq_code/calibration_workflow_test"
 
+# ── Optional: LOCK the calibration + spin-up windows ─────────────────────────
+# By default the report's timeline slider picks these; set them here to
+# reproduce an EXACT calibration setup regardless of the slider default (the
+# report pre-loads them and the downloaded run script bakes them). Dates:
+# "YYYY-MM-DD" or "YYYY-MM-DD HH:MM". None → use the report slider default.
+#   calibration_period = ("1994-01-18", "1996-10-06")  # window that is SCORED
+#   spinup_period      = ("1981-10-01", "1994-01-18")  # warm-up, simulated but NOT scored
+calibration_period = None
+spinup_period = None
+
 # Optional: path to an HPC settings JSON that pre-fills the HPC / Apptainer
 # fields in the interactive report (Execution tab) — HPC username, host,
 # working dir, .sif path, and the SLURM directives.  Defaults to the shipped
@@ -305,6 +315,10 @@ def _main():
         hpc_settings_path=hpc_settings_json,
         model_chain_paths=_model_chain_paths,
         chain_models=_chain_models,
+        default_calibration_period=(tuple(calibration_period)
+                                    if calibration_period else None),
+        default_spinup_period=(tuple(spinup_period)
+                               if spinup_period else None),
     )
 
     if report_path:

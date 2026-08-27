@@ -652,8 +652,13 @@ ss_ml_max_depth = 6                    # Maximum tree depth (higher = more compl
 #  Boundary conditions for water entering from outside the model domain
 #  (e.g., upstream inflow with a fixed concentration).
 #
-#  "fixed_value" — Assign a constant concentration to an external flux
-#  "none"        — No external water flux concentrations
+#  "fixed_value"      — Assign a constant concentration to an external flux
+#  "from_openwq_hdf5" — Read the external-flux concentrations from ANOTHER
+#                       openWQ model's HDF5 output (model COUPLING / CHAINING),
+#                       e.g. SUMMA-openWQ runoff feeding mizuRoute-openWQ. The
+#                       upstream model must EXPORT that flux via
+#                       FLUXES_CONC_TO_PRINT (Section 7). See the settings below.
+#  "none"             — No external water flux concentrations
 #
 #  ⚠  When using PHREEQC, set "none" unless the species name is a valid component.
 
@@ -667,6 +672,23 @@ ewf_method_fixedval_chem_name = "NO3-N"           # Species receiving the concen
 ewf_method_fixedval_value = 2.5                    # Concentration value
 ewf_method_fixedval_units = "mg/l"                 # Concentration units
 ewf_method_fixedval_external_inputflux_name = "SUMMA_RUNOFF"  # Name of the external flux
+
+# ── from_openwq_hdf5 settings (model coupling / chaining) ──
+# ⚠ Only used if ewf_method = "from_openwq_hdf5"; ignored otherwise.
+# Injects, as an external water flux HERE, a flux concentration that an UPSTREAM
+# openWQ model exported to its HDF5 output (the upstream model must list that
+# flux in FLUXES_CONC_TO_PRINT, Section 7). This is how models are CHAINED, e.g.
+# SUMMA-openWQ → mizuRoute-openWQ. In a chained CALIBRATION the source folder is
+# auto-rewired to each evaluation's upstream output, so here you normally just
+# point it at the upstream model's standalone HDF5 folder.
+ewf_h5_source_folder = "../0_UPSTREAM_OPENWQ/openwq_out/HDF5"   # upstream openWQ HDF5 output (relative to THIS model's run CWD)
+ewf_h5_external_compartment_name = "averageRoutedRunoff"       # the exported flux name (matches the source h5 filenames)
+ewf_h5_external_inputflux_name = "SUMMA_RUNOFF"                # EWF name in THIS host model (must match its hydrolink)
+ewf_h5_interpolation = "STEP"                                 # STEP | LINEAR | NEAREST
+ewf_h5_spatial_mode = "LUMPED"                                # LUMPED (1 column broadcast to all cells/reaches) | DISTRIBUTED (1 column per numeric cellID, id-matched; aborts on mismatch)
+ewf_h5_units = "MG/L"                                         # units of the source concentrations
+ewf_h5_comment = "upstream openWQ flux concentration"
+ewf_h5_source = "upstream openWQ model"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
