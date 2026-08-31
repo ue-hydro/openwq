@@ -42,6 +42,38 @@ logger = logging.getLogger(__name__)
 _SPINNER_LOCK = threading.Lock()
 
 
+def _diagnose_model_failure(error_text: str) -> str:
+    """Append an actionable hint to a raw model error when it matches a known,
+    cryptic failure signature — so a misconfiguration surfaces a clear next step
+    instead of an opaque Fortran/C++ abort.
+
+    Currently handles the mizuRoute forcing time-mapping crash
+    (``get_hru_runoff / timeMap_sim_forc / index of idxFront lower than idxEnd``),
+    which almost always means the calibration WINDOW was not applied: the SUMMA
+    runoff nc then spans a different period than mizuRoute's ``<sim_start>`` /
+    ``<sim_end>`` (typically because ``calibration_period`` / ``spinup_period``
+    were left as ``None`` in the run script, so each eval simulated the model's
+    FULL period).
+    """
+    if not error_text:
+        return error_text
+    low = error_text.lower()
+    if ("timemap_sim_forc" in low or "idxfront" in low
+            or ("get_hru_runoff" in low and "idxend" in low)):
+        return error_text + (
+            "\n\n>>> LIKELY CAUSE — the calibration WINDOW was not applied. "
+            "mizuRoute aborted while mapping the simulation time onto its runoff "
+            "forcing (timeMap_sim_forc / idxFront). This happens when the SUMMA "
+            "runoff nc spans a different period than mizuRoute's <sim_start> / "
+            "<sim_end> — usually because `calibration_period` (and "
+            "`spinup_period`) are None in the run script, so each evaluation "
+            "simulated the model's FULL period instead of the calibration window. "
+            "FIX: set `calibration_period` + `spinup_period` in the run script "
+            "(or re-download it from the setup report — its timeline slider bakes "
+            "them in), then re-run with --clean.")
+    return error_text
+
+
 class ModelRunner:
     """
     Handles model execution in containerized environments.
@@ -348,6 +380,12 @@ class ModelRunner:
                         self._save_reference(_ob)
             except Exception:
                 pass
+
+        # Translate known cryptic model crashes (e.g. the mizuRoute forcing
+        # time-mapping abort) into an actionable hint, so a misconfigured window
+        # doesn't just surface an opaque Fortran error.
+        if not success and error:
+            error = _diagnose_model_failure(error)
 
         # Save runtime info
         runtime_file = eval_dir / "runtime.txt"

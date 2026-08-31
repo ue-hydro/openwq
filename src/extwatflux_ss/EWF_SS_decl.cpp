@@ -1464,15 +1464,38 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
         std::vector<int> col2ewfIx(ncells_src, -1);
 
         if (mode_lumped){
-            if (ncells_src != 1){
+            // LUMPED broadcasts a SINGLE source concentration to every reach.
+            // If the source h5 has MORE than one column (e.g. the SUMMA soil
+            // compartment carries one column per soil layer), collapse it to a
+            // single representative series = the per-timestep MEAN across the
+            // source cells (ignoring noWaterConc sentinels). This lets a
+            // multi-cell compartment (soil layers, etc.) be used as a lumped EWF
+            // source without a separate remap step. ncells_src==1 is unchanged.
+            if (ncells_src > 1){
+                arma::mat collapsed;
+                if (time_is_rows){          // [T x C] -> [T x 1]
+                    collapsed.set_size(conc_h5.n_rows, 1);
+                    for (arma::uword r = 0; r < conc_h5.n_rows; r++){
+                        arma::rowvec row = conc_h5.row(r);
+                        arma::uvec ok = arma::find(row > -9990.0);
+                        collapsed(r, 0) = ok.n_elem ? arma::mean(row.elem(ok)) : -9999.0;
+                    }
+                } else {                    // [C x T] -> [1 x T]
+                    collapsed.set_size(1, conc_h5.n_cols);
+                    for (arma::uword c = 0; c < conc_h5.n_cols; c++){
+                        arma::vec col = conc_h5.col(c);
+                        arma::uvec ok = arma::find(col > -9990.0);
+                        collapsed(0, c) = ok.n_elem ? arma::mean(col.elem(ok)) : -9999.0;
+                    }
+                }
                 msg_string =
-                    "<OpenWQ> ERROR: EWF '" + external_waterFluxName
-                    + "' SPATIAL_MODE=LUMPED requires exactly one column in "
-                    + ewf_filenamePath + ", but it has " + std::to_string(ncells_src)
-                    + " columns. Provide a lumped (single HRU/reach) source, or set "
-                    "SPATIAL_MODE=DISTRIBUTED. Aborting.";
-                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
-                std::exit(EXIT_FAILURE);
+                    "<OpenWQ> NOTE: EWF '" + external_waterFluxName
+                    + "' SPATIAL_MODE=LUMPED source " + ewf_filenamePath + " has "
+                    + std::to_string(ncells_src)
+                    + " columns; collapsed to their per-timestep MEAN (broadcast to all reaches).";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, false);
+                conc_h5 = collapsed;
+                ncells_src = 1;
             }
             // broadcast handled in the timestep loop below
         }
