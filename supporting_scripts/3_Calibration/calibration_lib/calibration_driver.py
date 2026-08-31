@@ -473,6 +473,42 @@ def run_calibration(
         except Exception:
             _eval_sim_window = _cal_window
 
+    # Proactive guard: a None per-eval window means every evaluation simulates
+    # the model's FULL period. For a chain that is slow AND typically aborts
+    # mizuRoute with a forcing time-mapping crash (the SUMMA runoff nc then spans
+    # a different period than mizuRoute's sim window). ABORT up front (prompt on a
+    # TTY) instead of letting a long run fail — set OWQ_ALLOW_FULL_PERIOD_CHAIN=1
+    # to run the full period on purpose.
+    if _eval_sim_window is None and _is_chain:
+        logger.warning(
+            "=" * 70 + "\n"
+            "  No calibration_period / spinup_period set — each evaluation would\n"
+            "  simulate the models' FULL period. For a CHAINED calibration this\n"
+            "  is slow and typically aborts mizuRoute with a forcing time-mapping\n"
+            "  error (timeMap_sim_forc / idxFront). Set calibration_period +\n"
+            "  spinup_period in the run script (or the report's timeline slider).\n"
+            + "=" * 70)
+        _force_full = os.environ.get(
+            "OWQ_ALLOW_FULL_PERIOD_CHAIN", "").strip().lower() in ("1", "true", "yes")
+        if not _force_full:
+            _ans = ""
+            if sys.stdin.isatty():
+                try:
+                    _ans = input(
+                        "  Continue and simulate the FULL model period for this "
+                        "chained run anyway? [y/N] ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    _ans = ""
+            if _ans not in ("y", "yes"):
+                raise SystemExit(
+                    "Aborted: a chained calibration with no calibration_period "
+                    "would simulate the model's FULL period per evaluation "
+                    "(slow, and it typically crashes mizuRoute with a forcing "
+                    "time-mapping error). Set calibration_period + spinup_period "
+                    "in the run script (or the report's timeline slider), then "
+                    "re-run. To run the full period on purpose, set "
+                    "OWQ_ALLOW_FULL_PERIOD_CHAIN=1.")
+
     if _is_chain:
         # Build chain-aware param handler + runner (same interface as the
         # single-model ones, so the DDS/objective/checkpoint code is unchanged).
