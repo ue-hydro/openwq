@@ -4023,8 +4023,26 @@ def _build_interactive_parameters_section_grouped(
     # loads in the generated SS JSON AND observation data.
     _ss_calibratable_species = _ss_load_species & _observed_species
 
+    # Chained calibration: parameters carry a differing ``model_index``
+    # (m0, m1, …).  Detect it up front — the calibratability gate treats a
+    # chain specially (every model's parameters are knobs; see below).
+    _model_idxs = sorted({int(p.get("model_index", 0))
+                          for plist in module_parameters.values() for p in plist})
+    _is_chain = len(_model_idxs) > 1
+
     def _is_calibratable(p, group_key):
         """Return True if this parameter belongs to an active sub-cycle."""
+        # Chained calibration: EVERY parameter from EVERY model is a knob.
+        # The obs-reachability / SS-load gating below is a single-model
+        # heuristic computed from the VALIDATED (downstream) model's BGC
+        # network + observations. It cannot see across the model coupling, so
+        # applied to a chain it wrongly disables upstream parameters — e.g.
+        # every SUMMA source/sink load when the downstream mizuRoute model has
+        # ss_method="none" (empty _ss_calibratable_species), and BGC reactions
+        # that are reachable in SUMMA but not in the downstream closure. Only
+        # the final model drives the objective, but all params are calibrated.
+        if _is_chain:
+            return True
         if species_obs_availability is None:
             return True  # no obs info → all calibratable
         if not _observed_species:
@@ -4077,13 +4095,10 @@ def _build_interactive_parameters_section_grouped(
             # Transport, LE, sediment → affects all species
             return True
 
-    # Chained calibration: parameters carry a differing ``model_index``
-    # (m0, m1, …).  Order the module groups BY MODEL so each model's
-    # parameters sit in their own block under a clear model header — every
-    # model in the chain is calibrated, not just the validated one.
-    _model_idxs = sorted({int(p.get("model_index", 0))
-                          for plist in module_parameters.values() for p in plist})
-    _is_chain = len(_model_idxs) > 1
+    # Order the module groups BY MODEL so each model's parameters sit in their
+    # own block under a clear model header — every model in the chain is
+    # calibrated, not just the validated one. (_model_idxs / _is_chain computed
+    # above, before the calibratability gate.)
 
     # Build flat list and track group boundaries
     all_params = []
