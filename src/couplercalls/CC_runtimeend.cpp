@@ -16,6 +16,86 @@
 
 
 #include "headerfile_CC.hpp"
+#include <fstream>
+
+
+namespace {
+// ################################################################
+// Hybrid physics-ML LAYER 2 — write the closure DIAGNOSTICS accumulated by the
+// solver ("how much the ML pulled") to <output_dir>/ml_closure_diagnostics.json.
+// Overwritten on each print step; the final write holds the whole-run totals.
+// Fully self-contained (labels, dials, factor stats, and net/gross mass moved
+// in the model's output mass units) so the calibration results report reads it
+// directly — no Python-side re-derivation. No-op when no closures are active.
+// ################################################################
+static void _write_ml_closure_diagnostics(OpenWQ_wqconfig& OpenWQ_wqconfig){
+
+    if (OpenWQ_wqconfig.ml_closure_stats.empty()) return;
+
+    const std::string path = OpenWQ_wqconfig.get_output_dir()
+                             + "/ml_closure_diagnostics.json";
+    std::ofstream f(path, std::ios::trunc);
+    if (!f.is_open()) return;
+
+    // native mass (g) -> output mass unit; take the mass part of e.g. "mg/l".
+    const double num = OpenWQ_wqconfig.get_output_units_numerator();
+    std::string umass = OpenWQ_wqconfig.get_output_units();
+    { const std::size_t p = umass.find('/');
+      if (p != std::string::npos) umass = umass.substr(0, p); }
+    const std::string solver =
+          OpenWQ_wqconfig.is_solver_sundials      ? "sundials"
+        : OpenWQ_wqconfig.is_solver_forward_euler ? "forward_euler" : "unknown";
+
+    auto jstr = [](const std::string& s){
+        std::string o = "\"";
+        for (char c : s){ if (c=='"' || c=='\\') o += '\\'; o += c; }
+        return o + "\""; };
+
+    f.precision(10);
+    f << "{\n";
+    f << "  \"schema\": \"openwq_ml_closure_diagnostics/1\",\n";
+    f << "  \"solver\": "     << jstr(solver) << ",\n";
+    f << "  \"mass_units\": " << jstr(umass)  << ",\n";
+    f << "  \"note\": \"factor = tendency_ML / tendency_physics; 1.0 = pure "
+         "physics; |factor-1| = the pull. CVode: factor sampled once per step "
+         "at the step's final state.\",\n";
+    f << "  \"closures\": [\n";
+
+    const std::size_t N = OpenWQ_wqconfig.ml_closure_stats.size();
+    for (std::size_t k = 0; k < N; k++){
+        const auto& s = OpenWQ_wqconfig.ml_closure_stats[k];
+        const double nd          = s.n > 0 ? (double)s.n : 1.0;
+        const double factor_mean = s.n > 0 ? s.sum_factor / nd : 1.0;
+        const double pull_mean   = s.n > 0 ? s.sum_absdev / nd : 0.0;
+        const double pull_fw     = s.sum_abs_w > 0.0 ? s.sum_absdev_w / s.sum_abs_w : 0.0;
+        const double net_fc      = s.sum_abs_w > 0.0 ? s.sum_dev_w   / s.sum_abs_w : 0.0;
+        const double clampf      = s.n > 0 ? (double)s.n_clamp / nd : 0.0;
+
+        f << "    {\n";
+        f << "      \"species\": "        << jstr(s.species)     << ",\n";
+        f << "      \"compartment\": "    << jstr(s.compartment) << ",\n";
+        f << "      \"term\": "           << jstr(s.term)        << ",\n";
+        f << "      \"alpha\": "          << s.alpha             << ",\n";
+        f << "      \"max_correction\": " << s.max_correction    << ",\n";
+        f << "      \"n_samples\": "      << s.n                 << ",\n";
+        f << "      \"factor_mean\": "    << factor_mean         << ",\n";
+        f << "      \"factor_min\": "     << (s.n > 0 ? s.min_factor : 1.0) << ",\n";
+        f << "      \"factor_max\": "     << (s.n > 0 ? s.max_factor : 1.0) << ",\n";
+        f << "      \"pull_mean\": "      << pull_mean           << ",\n";
+        f << "      \"pull_max\": "       << s.max_absdev        << ",\n";
+        f << "      \"pull_flux_weighted\": " << pull_fw         << ",\n";
+        f << "      \"net_flux_change\": "    << net_fc          << ",\n";
+        f << "      \"clamp_fraction\": "     << clampf          << ",\n";
+        f << "      \"physics_flux\": "       << s.sum_abs_w   * num << ",\n";
+        f << "      \"net_mass_moved\": "     << s.sum_dev_w   * num << ",\n";
+        f << "      \"gross_mass_moved\": "   << s.sum_absdev_w * num << "\n";
+        f << "    }" << (k + 1 < N ? "," : "") << "\n";
+    }
+
+    f << "  ]\n";
+    f << "}\n";
+}
+} // namespace
 
 
 // ################################################################
@@ -92,6 +172,10 @@ void OpenWQ_couplercalls::RunTimeLoopEnd(
             OpenWQ_wqconfig,
             OpenWQ_compute,
             simtime);  // needs to be in seconds since 00:00 hours, Jan 1, 1970 UTC
+
+        // Hybrid physics-ML LAYER 2: refresh the closure-diagnostics JSON
+        // (cumulative; the last write at run end holds the whole-run totals).
+        _write_ml_closure_diagnostics(OpenWQ_wqconfig);
 
     }
 

@@ -168,6 +168,12 @@ def generate_results_report(
         _did_sens = bool(sensitivity_results)
         _did_calib = (bool(calibration_results.get("calibration_ran", True))
                       and bool(calibration_results.get("history")))
+        # Hybrid physics-ML LAYER 2: closure diagnostics JSON (self-contained,
+        # written by openWQ). Its presence == ML was active on the best fit.
+        try:
+            _ml_diag = _ml_diag_path(output_dir) if _did_calib else None
+        except Exception:
+            _ml_diag = None
         _mode = calibration_settings.get("calibration_mode") or (
             "both" if (_did_sens and _did_calib)
             else "sensitivity" if _did_sens else "calibration")
@@ -193,8 +199,10 @@ def generate_results_report(
             nav_items.append({"id": "convergence", "label": "Convergence"})
         nav_items.append({"id": "sensitivity", "label": "Influential params"})
         if _did_calib:
+            nav_items.append({"id": "best-params", "label": "Best Parameters"})
+            if _ml_diag:
+                nav_items.append({"id": "ml-closures", "label": "ML Closures"})
             nav_items.extend([
-                {"id": "best-params", "label": "Best Parameters"},
                 {"id": "param-evolution", "label": "Parameter Evolution"},
                 {"id": "param-correlations", "label": "Correlations"},
             ])
@@ -456,6 +464,10 @@ def generate_results_report(
         if _did_calib:
             H.append(_build_best_params_section(
                 calibration_parameters, calibration_results))
+            # Hybrid physics-ML LAYER 2 — closure correction ("how much the ML
+            # pulled"), rendered only when openWQ wrote the diagnostics JSON.
+            if _ml_diag:
+                H.append(_build_ml_closure_section(_ml_diag))
             H.append(_build_param_evolution_section(
                 calibration_results, calibration_parameters, output_dir))
             H.append(_build_correlations_section(
@@ -627,6 +639,53 @@ def _get_results_css() -> str:
         font-size: .72rem; color: var(--text2);
         text-transform: uppercase; letter-spacing: .8px;
     }
+
+    /* ── ML closure diagnostics ("how much the ML pulled") ───────── */
+    .mlc-grid { display: grid; gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .mlc-card { border: 1px solid var(--border); border-radius: 12px;
+        padding: 1rem 1.1rem 1.1rem; background: var(--surface); }
+    .mlc-head { display: flex; align-items: baseline; justify-content: space-between;
+        gap: .5rem; margin-bottom: .5rem; }
+    .mlc-title { font-weight: 700; font-size: 1.05rem; }
+    .mlc-badge { font-family: 'JetBrains Mono', monospace; font-size: .68rem;
+        text-transform: uppercase; letter-spacing: .6px; color: var(--text2);
+        border: 1px solid var(--border2); border-radius: 999px; padding: .12rem .55rem;
+        white-space: nowrap; }
+    .mlc-big { font-size: 2rem; font-weight: 800; line-height: 1;
+        font-family: 'JetBrains Mono', monospace; }
+    .mlc-amp  { color: var(--secondary); }
+    .mlc-damp { color: var(--accent); }
+    .mlc-caption { font-size: .82rem; color: var(--text2); margin: .2rem 0 .1rem; }
+    /* correction gauge: track from (1-max) .. (1+max), band = observed range */
+    .mlc-gauge { position: relative; height: 26px; margin: .9rem 0 .25rem;
+        border-radius: 6px; border: 1px solid var(--border);
+        background: linear-gradient(90deg, rgba(255,107,53,.14), rgba(128,128,128,.10) 50%, rgba(0,168,107,.16)); }
+    .mlc-band { position: absolute; top: 3px; bottom: 3px; border-radius: 3px;
+        background: var(--primary); opacity: .30; }
+    .mlc-one  { position: absolute; top: -3px; bottom: -3px; width: 2px;
+        background: var(--text); opacity: .75; }
+    .mlc-mean { position: absolute; top: 50%; width: 12px; height: 12px;
+        border-radius: 50%; background: var(--primary);
+        border: 2px solid var(--surface); transform: translate(-50%, -50%); }
+    .mlc-scale { display: flex; justify-content: space-between; font-size: .66rem;
+        color: var(--text3); font-family: 'JetBrains Mono', monospace; margin-bottom: .45rem; }
+    .mlc-scale .lo { color: var(--accent); } .mlc-scale .hi { color: var(--secondary); }
+    .mlc-legend { display: flex; flex-wrap: wrap; gap: .1rem .9rem; font-size: .68rem;
+        color: var(--text2); margin-bottom: .3rem; align-items: center; }
+    .mlc-legend span.item { display: inline-flex; align-items: center; gap: .3rem; }
+    .mlc-legend .sw-line { width: 2px; height: 12px; background: var(--text); opacity: .75; }
+    .mlc-legend .sw-band { width: 14px; height: 10px; border-radius: 2px;
+        background: var(--primary); opacity: .30; }
+    .mlc-legend .sw-mean { width: 11px; height: 11px; border-radius: 50%;
+        background: var(--primary); border: 2px solid var(--surface); }
+    .mlc-stats { display: grid; grid-template-columns: auto 1fr; gap: .32rem .8rem;
+        font-size: .82rem; align-items: baseline; }
+    .mlc-stats .k { color: var(--text2); }
+    .mlc-stats .v { text-align: right; font-family: 'JetBrains Mono', monospace;
+        font-weight: 600; }
+    .mlc-note { font-size: .82rem; color: var(--text2); line-height: 1.5;
+        margin-top: .8rem; padding-top: .7rem; border-top: 1px dashed var(--border); }
     """
 
 
@@ -927,6 +986,192 @@ def _build_best_params_section(
         <summary>Show / hide the full parameter table</summary>
         {table_html}
     </details>
+</div>
+"""
+
+
+def _ml_diag_path(output_dir):
+    """Path to the Layer-2 closure-diagnostics JSON written by openWQ for the
+    GLOBAL-best evaluation (``<eval>/openwq_out/**/ml_closure_diagnostics.json``),
+    or ``None`` when no closures ran / the engine predates the feature.  The
+    file is fully self-contained, so the report needs nothing from the Python
+    calibration side to render the ML section."""
+    import os as _os, re as _re, glob as _glob
+    n = _best_eval_number(output_dir)
+    evdir = None
+    if n is not None:
+        for d in _glob.glob(_os.path.join(str(output_dir), "evaluations", "eval_*")):
+            m = _re.search(r"eval_(\d+)", _os.path.basename(d))
+            if m and int(m.group(1)) == n:
+                evdir = d
+                break
+    search_roots = ([evdir] if evdir else []) + [
+        d for d in _glob.glob(_os.path.join(str(output_dir), "evaluations", "eval_*"))
+    ]
+    for d in search_roots:
+        hits = _glob.glob(_os.path.join(d, "openwq_out", "*", "ml_closure_diagnostics.json")) \
+             + _glob.glob(_os.path.join(d, "openwq_out", "ml_closure_diagnostics.json"))
+        if hits:
+            return hits[0]
+    return None
+
+
+def _build_ml_closure_section(diag_path):
+    """Hybrid physics-ML LAYER 2 — "how much the ML pulled".  Renders the exact,
+    solver-side closure diagnostics openWQ accumulated during the best-fit run:
+    the multiplicative factor each closure applied to a process tendency
+    (factor = 1 -> pure physics, |factor-1| = the "pull"), the flux-weighted
+    correction, the net vs gross mass it moved, and whether it saturated. Only
+    called when the JSON exists (i.e. ML was actually active)."""
+    import json as _json, os as _os
+    if not diag_path or not _os.path.isfile(diag_path):
+        return ""
+    try:
+        with open(diag_path) as _f:
+            diag = _json.load(_f)
+    except Exception as _e:
+        logger.warning(f"ML closure diagnostics unreadable: {_e}")
+        return ""
+    closures = [c for c in (diag.get("closures") or [])
+                if int(c.get("n_samples", 0) or 0) > 0]
+    if not closures:
+        return ""
+
+    units = diag.get("mass_units", "g") or "g"
+    solver = diag.get("solver", "")
+
+    def _pct(x):
+        try: return f"{float(x) * 100:.1f}%"
+        except Exception: return "n/a"
+
+    def _mass(v):
+        # v is already in the model's output mass unit; auto-scale for legibility
+        try: v = float(v)
+        except Exception: return "n/a"
+        a = abs(v)
+        if a >= 1e6:  return f"{v/1e6:.2f}×10⁶ {units}"
+        if a >= 1e3:  return f"{v/1e3:.2f}×10³ {units}"
+        if a < 1e-3 and a > 0: return f"{v:.2e} {units}"
+        return f"{v:.3g} {units}"
+
+    cards = []
+    tot_gross = 0.0
+    worst_pull = 0.0
+    for c in closures:
+        sp    = str(c.get("species", "?"))
+        term  = str(c.get("term", "?"))
+        comp  = str(c.get("compartment", "?"))
+        alpha = float(c.get("alpha", 0.0) or 0.0)
+        maxc  = float(c.get("max_correction", 0.0) or 0.0)
+        fmean = float(c.get("factor_mean", 1.0) or 1.0)
+        fmin  = float(c.get("factor_min", 1.0) or 1.0)
+        fmax  = float(c.get("factor_max", 1.0) or 1.0)
+        pull_m  = float(c.get("pull_mean", 0.0) or 0.0)
+        pull_x  = float(c.get("pull_max", 0.0) or 0.0)
+        pull_fw = float(c.get("pull_flux_weighted", 0.0) or 0.0)
+        net_fc  = float(c.get("net_flux_change", 0.0) or 0.0)
+        clampf  = float(c.get("clamp_fraction", 0.0) or 0.0)
+        nsamp   = int(c.get("n_samples", 0) or 0)
+        gross   = float(c.get("gross_mass_moved", 0.0) or 0.0)
+        net     = float(c.get("net_mass_moved", 0.0) or 0.0)
+        tot_gross += abs(gross)
+        worst_pull = max(worst_pull, pull_fw)
+
+        amp = fmean >= 1.0
+        dir_word = "amplified" if fmean > 1.0005 else ("damped" if fmean < 0.9995 else "left unchanged")
+        dir_cls = "mlc-amp" if amp else "mlc-damp"
+
+        # gauge geometry: track [1-max .. 1+max]
+        lo = 1.0 - maxc if maxc > 0 else min(0.5, fmin)
+        hi = 1.0 + maxc if maxc > 0 else max(1.5, fmax)
+        span = (hi - lo) or 1.0
+        def _p(x): return max(0.0, min(100.0, (x - lo) / span * 100.0))
+        b_l, b_r = _p(min(fmin, fmax)), _p(max(fmin, fmax))
+        b_w = max(1.5, b_r - b_l)
+
+        conserved = abs(net_fc) < 5e-3
+        net_disp = "≈0 (conserved)" if conserved else _pct(net_fc)
+        netmass_disp = "≈0 (conserved)" if abs(net) < abs(gross) * 1e-3 else _mass(net)
+
+        saturated = (fmax - fmin) < 0.01
+        if saturated:
+            shape = (f"The closure <strong>saturated</strong> — it applied a near-constant "
+                     f"&times;{fmean:.2f} to the {term} tendency (a state-independent "
+                     f"{_pct(pull_m)} rescale, i.e. equivalent to a constant rate multiplier).")
+        else:
+            shape = (f"<strong>State-dependent</strong>: the correction varied from "
+                     f"&times;{fmin:.2f} to &times;{fmax:.2f} with the {sp} state.")
+        cons_txt = ""
+        if conserved and gross > 0:
+            cons_txt = (f" Net mass moved &asymp; 0 &mdash; the closure redistributed mass "
+                        f"<em>within</em> the reaction group without adding or removing any "
+                        f"(mass-conserving); {_mass(gross)} was rescaled gross.")
+
+        clamp_row = (f'<span class="k">Hit &plusmn;max bound</span>'
+                     f'<span class="v">{_pct(clampf)}</span>') if clampf > 1e-9 else (
+                     f'<span class="k">Hit &plusmn;max bound</span><span class="v">never</span>')
+
+        cards.append(f"""
+    <div class="mlc-card">
+      <div class="mlc-head">
+        <span class="mlc-title">{sp}</span>
+        <span class="mlc-badge">{term} &middot; {comp}</span>
+      </div>
+      <div class="mlc-big {dir_cls}">&times;{fmean:.2f}</div>
+      <div class="mlc-caption">mean factor on the {term} tendency &mdash; {dir_word} the physics</div>
+      <div class="mlc-caption" style="margin-top:.7rem;">Correction applied vs pure physics
+        (bounded to &plusmn;{maxc*100:.0f}% by <em>max</em>):</div>
+      <div class="mlc-gauge" title="Left = strongest damping the closure may apply; centre = pure physics (no correction); right = strongest amplification. Shaded bar = range of factors actually applied; dot = average; vertical line = physics.">
+        <div class="mlc-band" style="left:{b_l:.1f}%;width:{b_w:.1f}%;"></div>
+        <div class="mlc-one"  style="left:{_p(1.0):.1f}%;"></div>
+        <div class="mlc-mean" style="left:{_p(fmean):.1f}%;"></div>
+      </div>
+      <div class="mlc-scale">
+        <span class="lo">&times;{lo:.2f}<br>max damping</span>
+        <span>&times;1.00<br>physics</span>
+        <span class="hi" style="text-align:right;">&times;{hi:.2f}<br>max amplifying</span>
+      </div>
+      <div class="mlc-legend">
+        <span class="item"><span class="sw-line"></span>physics (&times;1.00)</span>
+        <span class="item"><span class="sw-band"></span>range applied</span>
+        <span class="item"><span class="sw-mean"></span>average (&times;{fmean:.2f})</span>
+      </div>
+      <div class="mlc-stats">
+        <span class="k">Mean pull |f&minus;1|</span><span class="v">{_pct(pull_m)}</span>
+        <span class="k">Peak pull</span><span class="v">{_pct(pull_x)}</span>
+        <span class="k">Flux-weighted pull</span><span class="v">{_pct(pull_fw)}</span>
+        <span class="k">Net flux change</span><span class="v">{net_disp}</span>
+        {clamp_row}
+        <span class="k">Gross mass moved</span><span class="v">{_mass(gross)}</span>
+        <span class="k">Net mass moved</span><span class="v">{netmass_disp}</span>
+        <span class="k">&alpha; / max</span><span class="v">{alpha:.3g} / {maxc:.3g}</span>
+        <span class="k">Samples (cell&middot;step)</span><span class="v">{nsamp:,}</span>
+      </div>
+      <div class="mlc-note">{shape}{cons_txt}</div>
+    </div>""")
+
+    _solver_note = ("factor sampled once per step at the step's final state"
+                    if solver == "sundials" else
+                    "factor tracked exactly for every cell and step"
+                    if solver == "forward_euler" else "")
+    lead = (f"During the best-fit run the {len(closures)} active closure"
+            f"{'s' if len(closures) != 1 else ''} corrected the physics by up to "
+            f"<strong>{_pct(worst_pull)}</strong> (flux-weighted), moving a gross "
+            f"<strong>{_mass(tot_gross)}</strong> in total.")
+
+    return f"""
+<div class="section" id="ml-closures">
+    <h2>ML Closure Correction &mdash; how much the ML pulled</h2>
+    <p style="color:var(--text2);margin-bottom:.4rem;max-width:70ch;">
+        Each Layer-2 closure multiplies a process tendency by a bounded factor
+        <code>1 + clamp(&alpha;&middot;g(state), &plusmn;max)</code>. A factor of
+        <strong>1.0 is exact physics</strong>, so its departure from 1 &mdash;
+        <code>|factor&minus;1|</code> &mdash; is exactly how hard the ML had to pull
+        to improve the fit. These numbers are measured <em>inside the solver</em>
+        during the best evaluation{(' (' + _solver_note + ')') if _solver_note else ''}.
+    </p>
+    <p style="color:var(--text2);margin-bottom:1rem;max-width:70ch;">{lead}</p>
+    <div class="mlc-grid">{''.join(cards)}</div>
 </div>
 """
 
