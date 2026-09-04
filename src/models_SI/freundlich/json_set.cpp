@@ -17,6 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "readjson/headerfile_RJSON.hpp"
+#include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_param: scalar->GLOBAL / object->SPATIAL
 
 
 // Parse Freundlich isotherm configuration.
@@ -46,6 +47,7 @@
 // Species listed but absent from the active chemical-species list are skipped.
 void OpenWQ_readjson::SetConfigInfo_SIModule_freundlich(
     OpenWQ_json &OpenWQ_json,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output){
@@ -239,20 +241,28 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_freundlich(
             }
         }
 
-        double Kfr_val = OpenWQ_utils.RequestJsonKeyVal_double(
-            OpenWQ_wqconfig, OpenWQ_output,
-            specParams, "KFR",
-            specErrId, true);
+        // Read each parameter's JSON node and build an OpenWQ_param via the
+        // shared loader: a number -> GLOBAL scalar (historical, byte-identical);
+        // an object (e.g. {"UNIFORM":v} or {"DEFAULT":d,"CELLS":[...]}) -> a
+        // per-cell SPATIAL field. RequestJsonKeyVal_json preserves the
+        // required-field validation and returns the raw node (scalar or object).
+        OpenWQ_param Kfr_p = OpenWQ_load_param(
+            OpenWQ_utils.RequestJsonKeyVal_json(
+                OpenWQ_wqconfig, OpenWQ_output, specParams, "KFR", specErrId, true),
+            OpenWQ_hostModelconfig);
+        OpenWQ_param Nfr_p = OpenWQ_load_param(
+            OpenWQ_utils.RequestJsonKeyVal_json(
+                OpenWQ_wqconfig, OpenWQ_output, specParams, "NFR", specErrId, true),
+            OpenWQ_hostModelconfig);
+        OpenWQ_param Kadsdes_p = OpenWQ_load_param(
+            OpenWQ_utils.RequestJsonKeyVal_json(
+                OpenWQ_wqconfig, OpenWQ_output, specParams, "KADSDES_1/S", specErrId, true),
+            OpenWQ_hostModelconfig);
 
-        double Nfr_val = OpenWQ_utils.RequestJsonKeyVal_double(
-            OpenWQ_wqconfig, OpenWQ_output,
-            specParams, "NFR",
-            specErrId, true);
-
-        double Kadsdes_val = OpenWQ_utils.RequestJsonKeyVal_double(
-            OpenWQ_wqconfig, OpenWQ_output,
-            specParams, "KADSDES_1/S",
-            specErrId, true);
+        // for logging: scalar value, or "spatial" when a per-cell field
+        std::string Kfr_val     = Kfr_p.is_spatial()     ? "spatial" : std::to_string(Kfr_p.scalar());
+        std::string Nfr_val     = Nfr_p.is_spatial()     ? "spatial" : std::to_string(Nfr_p.scalar());
+        std::string Kadsdes_val = Kadsdes_p.is_spatial() ? "spatial" : std::to_string(Kadsdes_p.scalar());
 
         // Store in the FREUNDLICH data structure
         OpenWQ_wqconfig.SI_model->FREUNDLICH->species_index.push_back(
@@ -260,9 +270,9 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_freundlich(
         OpenWQ_wqconfig.SI_model->FREUNDLICH->species_name.push_back(species_name_upper);
         OpenWQ_wqconfig.SI_model->FREUNDLICH->sorbed_species_index.push_back(sorbed_idx);
         OpenWQ_wqconfig.SI_model->FREUNDLICH->sorbed_species_name.push_back(sorbed_name_upper);
-        OpenWQ_wqconfig.SI_model->FREUNDLICH->Kfr.push_back(Kfr_val);
-        OpenWQ_wqconfig.SI_model->FREUNDLICH->Nfr.push_back(Nfr_val);
-        OpenWQ_wqconfig.SI_model->FREUNDLICH->Kadsdes.push_back(Kadsdes_val);
+        OpenWQ_wqconfig.SI_model->FREUNDLICH->Kfr.push_back(Kfr_p);
+        OpenWQ_wqconfig.SI_model->FREUNDLICH->Nfr.push_back(Nfr_p);
+        OpenWQ_wqconfig.SI_model->FREUNDLICH->Kadsdes.push_back(Kadsdes_p);
 
         si_species_count++;
 
@@ -272,9 +282,9 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_freundlich(
             + "' => '" + sorbed_name_upper
             + "' (idx=" + std::to_string(species_idx)
             + "=>" + std::to_string(sorbed_idx)
-            + "), Kfr=" + std::to_string(Kfr_val)
-            + ", Nfr=" + std::to_string(Nfr_val)
-            + ", Kadsdes=" + std::to_string(Kadsdes_val);
+            + "), Kfr=" + Kfr_val
+            + ", Nfr=" + Nfr_val
+            + ", Kadsdes=" + Kadsdes_val;
         OpenWQ_output.ConsoleLog(
             OpenWQ_wqconfig, msg_string, true, true);
     }

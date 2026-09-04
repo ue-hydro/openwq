@@ -17,6 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "readjson/headerfile_RJSON.hpp"
+#include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_closure (Layer 2)
 
 
 // Set chemModule = BGC_FLEX

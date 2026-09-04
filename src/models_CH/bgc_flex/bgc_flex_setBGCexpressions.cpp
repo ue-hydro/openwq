@@ -16,6 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "models_CH/headerfile_CH.hpp"
+#include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_param: scalar->GLOBAL / object->SPATIAL
 
 
 /* #################################################
@@ -62,8 +63,16 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
     std::string msg_string;             // error/warning message string
 
 
-    // Number of BCG cycles defined    
+    // Number of BCG cycles defined
     num_BGCcycles = OpenWQ_json.BGC_module["CYCLING_FRAMEWORKS"].size();
+
+    // Reset SPATIAL-parameter storage (exprtk refactor). These stay empty /
+    // max==0 for all-GLOBAL configs, keeping the expression strings and the
+    // symbol tables byte-identical to the historical (literal-substituted) code.
+    OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpr_spatial_params.clear();
+    OpenWQ_wqconfig.CH_model->NativeFlex->BGCparam_InTransfEq.clear();
+    OpenWQ_wqconfig.CH_model->NativeFlex->BGCparam_InTransfEq.reserve(64);
+    OpenWQ_wqconfig.CH_model->NativeFlex->max_BGCparam_size = 0;
 
     // Get all biogeochemical cycling names
     for (auto it: OpenWQ_json.BGC_module["CYCLING_FRAMEWORKS"].items())
@@ -190,30 +199,59 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
                 }
             }
 
-            // Replace parameter name by value in expression
+            // ########################################
+            // Replace parameters in the expression.
+            //   GLOBAL param  -> substitute its literal value (historical path,
+            //                    byte-identical via std::to_string).
+            //   SPATIAL param -> leave it in the expression as element k of the
+            //                    bound openWQ_BGCparam vector, refreshed per cell.
+            // A parameter is SPATIAL when its OpenWQ_param carries a per-cell
+            // field. Today values are JSON scalars (all GLOBAL) until the loader
+            // / ML layer populates a spatial field, so this stays byte-identical.
+            // ########################################
+            std::vector<OpenWQ_param> expr_spatial_params; // this expression's spatial params (index == k)
             for (unsigned int i=0;i<parameter_names.size();i++){
                 index_i = expression_string_modif.find(parameter_names[i]);
-                param_val = OpenWQ_json.BGC_module
+
+                // Read the parameter's JSON entry and build an OpenWQ_param:
+                // a number -> GLOBAL scalar (historical); an object (e.g.
+                // {"UNIFORM":v} or {"DEFAULT":d,"CELLS":[...]}) -> SPATIAL.
+                json param_jval = OpenWQ_json.BGC_module
                     ["CYCLING_FRAMEWORKS"]
                     [BGCcycles_name]
                     [std::to_string(transi+1)]
                     ["PARAMETER_VALUES"]
                     [parameter_names[i]];
-                
+
+                OpenWQ_param param_i = OpenWQ_load_param(
+                    param_jval, OpenWQ_hostModelconfig);
+                param_val = param_i.scalar(); // scalar value (GLOBAL substitution + logging)
+
                 // Try replacing
                 try{
-                    expression_string_modif.replace(
-                        index_i,
-                        parameter_names[i].size(),
-                        std::to_string(param_val));
+                    if (!param_i.is_spatial()){
+                        // GLOBAL: literal substitution (unchanged behaviour)
+                        expression_string_modif.replace(
+                            index_i,
+                            parameter_names[i].size(),
+                            std::to_string(param_val));
+                    } else {
+                        // SPATIAL: reference the bound vector element k
+                        const unsigned int k = expr_spatial_params.size();
+                        expression_string_modif.replace(
+                            index_i,
+                            parameter_names[i].size(),
+                            "openWQ_BGCparam[" + std::to_string(k) + "]");
+                        expr_spatial_params.push_back(param_i);
+                    }
                 }
-                catch(...){ 
-      
+                catch(...){
+
                     // Create Message
-                    msg_string = "<OpenWQ> Parameter ignored in CYCLING_FRAMEWORKS > " 
-                        + BGCcycles_name + " > " 
+                    msg_string = "<OpenWQ> Parameter ignored in CYCLING_FRAMEWORKS > "
+                        + BGCcycles_name + " > "
                         + std::to_string(transi+1)
-                        + ". Parameter " + parameter_names[i] 
+                        + ". Parameter " + parameter_names[i]
                         + " with value " + std::to_string(param_val);
 
                     // Print it (Console and/or Log file)
@@ -236,6 +274,19 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
 
             // Add vectors to table of symbols
             symbol_table.add_vector("openWQ_BGCnative_chemass_InTransfEq",OpenWQ_wqconfig.CH_model->NativeFlex->chemass_InTransfEq);
+
+            // Bind the SPATIAL-parameter vector too (only when this expression
+            // references it). BGCparam_InTransfEq was reserve()d up front, so
+            // growing it to hold this expression's params does not reallocate
+            // and the pointer exprtk stores stays valid. When there are no
+            // spatial params openWQ_BGCparam is never bound - the symbol table
+            // is byte-identical to the historical one.
+            if (!expr_spatial_params.empty()){
+                auto* nf_ = OpenWQ_wqconfig.CH_model->NativeFlex;
+                if (nf_->BGCparam_InTransfEq.size() < expr_spatial_params.size())
+                    nf_->BGCparam_InTransfEq.resize(expr_spatial_params.size(), 0.0);
+                symbol_table.add_vector("openWQ_BGCparam", nf_->BGCparam_InTransfEq);
+            }
 
             // Add variable dependencies to table of symbols (in case they are used)
             for (unsigned int depi=0;depi<OpenWQ_hostModelconfig.get_num_HydroDepend();depi++){
@@ -273,6 +324,16 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
             // in per-thread copies (needed for OpenMP parallelization)
             OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_modif_strings.push_back(
                 expression_string_modif);
+
+            // Store this expression's SPATIAL-parameter list (index-aligned with
+            // BGCexpressions_eq / _modif_strings) and track the max count so the
+            // per-thread param vectors can be sized once at thread-local init.
+            OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpr_spatial_params.push_back(
+                expr_spatial_params);
+            if (expr_spatial_params.size() >
+                    OpenWQ_wqconfig.CH_model->NativeFlex->max_BGCparam_size)
+                OpenWQ_wqconfig.CH_model->NativeFlex->max_BGCparam_size =
+                    expr_spatial_params.size();
 
         }
     }

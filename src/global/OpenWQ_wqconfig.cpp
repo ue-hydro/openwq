@@ -499,6 +499,7 @@ void OpenWQ_wqconfig::build_thread_local_expressions(
     nativeFlex->thread_chemass_InTransfEq.resize(nthreads);
     nativeFlex->thread_dependVar_scalar.resize(nthreads);
     nativeFlex->thread_BGCexpressions_eq.resize(nthreads);
+    nativeFlex->thread_BGCparam_InTransfEq.resize(nthreads);  // spatial BGC params (empty if none)
 
     // For each thread, we need to:
     // 1. Create a local chemass vector (same size as the max needed)
@@ -544,6 +545,8 @@ void OpenWQ_wqconfig::build_thread_local_expressions(
         // Allocate thread-local data vectors
         nativeFlex->thread_chemass_InTransfEq[t].resize(max_chemass_size, 0.0);
         nativeFlex->thread_dependVar_scalar[t].resize(num_depend, 0.0);
+        // Spatial BGC params: sized once to the max across expressions (0 = none)
+        nativeFlex->thread_BGCparam_InTransfEq[t].resize(nativeFlex->max_BGCparam_size, 0.0);
 
         // Compile each expression for this thread
         nativeFlex->thread_BGCexpressions_eq[t].resize(num_expressions);
@@ -557,6 +560,15 @@ void OpenWQ_wqconfig::build_thread_local_expressions(
             sym_table.add_vector(
                 "openWQ_BGCnative_chemass_InTransfEq",
                 nativeFlex->thread_chemass_InTransfEq[t]);
+
+            // Bind the SPATIAL-parameter vector (only when any expression uses
+            // it; mirrors the serial symbol table in setBGCexpressions). When
+            // there are no spatial params this is skipped and the per-thread
+            // expression is byte-identical to the historical one.
+            if (nativeFlex->max_BGCparam_size > 0)
+                sym_table.add_vector(
+                    "openWQ_BGCparam",
+                    nativeFlex->thread_BGCparam_InTransfEq[t]);
 
             // Add dependency variables bound to thread-local scalars
             for (unsigned int depi = 0; depi < num_depend; depi++) {

@@ -331,6 +331,9 @@ def _build_parameters_section(parameters: List[Dict]) -> str:
 
     def fmt_source(v):
         v = str(v)
+        if "regionalize" in v.lower():
+            return ('<span class="badge" style="background:#7c3aed;color:#fff;">'
+                    'regionalized</span>')
         if "auto" in v.lower():
             return '<span class="badge badge-secondary">auto</span>'
         return '<span class="badge badge-primary">user</span>'
@@ -360,12 +363,44 @@ def _build_parameters_section(parameters: List[Dict]) -> str:
         f"{ft}: {count}" for ft, count in sorted(type_counts.items())
     )
 
+    # Regionalization summary (ML Layer 1): group the sub-params by their parent
+    # physical parameter so the report shows WHAT is regionalized and HOW.
+    reg_groups: Dict[str, Dict] = {}
+    for p in parameters:
+        if p.get("file_type") in ("bgc_regionalize", "sorption_regionalize"):
+            g = p.get("regionalize_of") or p.get("regionalize_group", "?")
+            spec = p.get("regionalize_spec", {}) or {}
+            entry = reg_groups.setdefault(g, {
+                "rung": spec.get("rung", "?"),
+                "attr": (spec.get("attribute")
+                         or ", ".join(spec.get("attributes", []) or [])),
+                "keys": []})
+            entry["keys"].append(p.get("subparam_key"))
+    reg_html = ""
+    if reg_groups:
+        items = "".join(
+            f"<li><code>{g}</code> — {d['rung']}"
+            + (f" by <em>{d['attr']}</em>" if d['attr'] else "")
+            + f" ({len(d['keys'])}: {', '.join(map(str, d['keys']))})</li>"
+            for g, d in reg_groups.items())
+        reg_html = (
+            '<div class="card" style="border-left:3px solid #7c3aed;'
+            'margin-bottom:1rem;">'
+            '<p style="margin:0 0 .4rem;">'
+            '<span class="badge" style="background:#7c3aed;color:#fff;">ML</span> '
+            '<strong>Regionalized parameters</strong> — calibrated as a '
+            'low-dimensional attribute&rarr;parameter mapping (expanded to a '
+            'per-cell field each evaluation), so the number of calibrated '
+            'values is independent of the number of cells:</p>'
+            f'<ul style="margin:.2rem 0 0 1.2rem;">{items}</ul></div>')
+
     return f"""
 <div class="section" id="parameters">
     <h2>Calibration Parameters ({len(parameters)})</h2>
     <p style="color:var(--text2);margin-bottom:1rem;">
         Parameter types: {type_summary}
     </p>
+    {reg_html}
     {table_html}
 </div>
 """
@@ -1207,6 +1242,7 @@ def generate_interactive_setup(
     <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">Settings</button>
     <button class="tab-btn" data-tab="targets" onclick="switchTab('targets')">Targets</button>
     <button class="tab-btn" data-tab="parameters" onclick="switchTab('parameters')">Parameters</button>
+    <button class="tab-btn" data-tab="ml" onclick="switchTab('ml')">Machine Learning</button>
     <button class="tab-btn" data-tab="execution" onclick="switchTab('execution')">Execution</button>
 </div>
 """)
@@ -1481,6 +1517,13 @@ def generate_interactive_setup(
             H.append(_build_interactive_parameters_section(
                 auto_extracted_parameters
             ))
+        H.append('</div>')
+
+        # ── Tab: Machine Learning (hybrid physics–ML — all optional, OFF by
+        # default; with no rows the run script is byte-identical pure physics) ──
+        H.append('<div class="tab-panel" data-tab="ml">')
+        H.append(_build_interactive_ml_section(module_parameters,
+                                               module_selections))
         H.append('</div>')
 
         # ── Tab: Execution ──
@@ -2296,6 +2339,7 @@ def generate_interactive_setup(
             calibration_work_dir=calibration_work_dir,
             auto_extracted_parameters=auto_extracted_parameters,
             module_parameters=module_parameters,
+            module_selections=module_selections,
             container_config=container_config,
             calib_lib_dir=_calib_lib_dir,
             report_stem=_calib_stem,
@@ -2306,6 +2350,8 @@ def generate_interactive_setup(
             model_chain_paths=model_chain_paths,
             default_calibration_period=default_calibration_period,
             default_spinup_period=default_spinup_period,
+            chemical_species=(model_config.get("chemical_species", [])
+                              if isinstance(model_config, dict) else []),
         ))
 
         H.append("</body></html>")
@@ -4023,8 +4069,26 @@ def _build_interactive_parameters_section_grouped(
     # loads in the generated SS JSON AND observation data.
     _ss_calibratable_species = _ss_load_species & _observed_species
 
+    # Chained calibration: parameters carry a differing ``model_index``
+    # (m0, m1, …).  Detect it up front — the calibratability gate treats a
+    # chain specially (every model's parameters are knobs; see below).
+    _model_idxs = sorted({int(p.get("model_index", 0))
+                          for plist in module_parameters.values() for p in plist})
+    _is_chain = len(_model_idxs) > 1
+
     def _is_calibratable(p, group_key):
         """Return True if this parameter belongs to an active sub-cycle."""
+        # Chained calibration: EVERY parameter from EVERY model is a knob.
+        # The obs-reachability / SS-load gating below is a single-model
+        # heuristic computed from the VALIDATED (downstream) model's BGC
+        # network + observations. It cannot see across the model coupling, so
+        # applied to a chain it wrongly disables upstream parameters — e.g.
+        # every SUMMA source/sink load when the downstream mizuRoute model has
+        # ss_method="none" (empty _ss_calibratable_species), and BGC reactions
+        # that are reachable in SUMMA but not in the downstream closure. Only
+        # the final model drives the objective, but all params are calibrated.
+        if _is_chain:
+            return True
         if species_obs_availability is None:
             return True  # no obs info → all calibratable
         if not _observed_species:
@@ -4077,13 +4141,10 @@ def _build_interactive_parameters_section_grouped(
             # Transport, LE, sediment → affects all species
             return True
 
-    # Chained calibration: parameters carry a differing ``model_index``
-    # (m0, m1, …).  Order the module groups BY MODEL so each model's
-    # parameters sit in their own block under a clear model header — every
-    # model in the chain is calibrated, not just the validated one.
-    _model_idxs = sorted({int(p.get("model_index", 0))
-                          for plist in module_parameters.values() for p in plist})
-    _is_chain = len(_model_idxs) > 1
+    # Order the module groups BY MODEL so each model's parameters sit in their
+    # own block under a clear model header — every model in the chain is
+    # calibrated, not just the validated one. (_model_idxs / _is_chain computed
+    # above, before the calibratability gate.)
 
     # Build flat list and track group boundaries
     all_params = []
@@ -4214,6 +4275,365 @@ def _build_interactive_parameters_section_grouped(
 
     H.append('</div>')
     return '\n'.join(H)
+
+
+def _ml_option_lists(module_parameters, module_selections=None):
+    """Build the Machine-Learning tab's dropdown options AND the lookup maps the
+    run script needs to locate each target in the openWQ JSON. Returns
+    ``(param_opts, targets, param_info, target_info)`` where:
+      * param_opts  — BGC parameter names (regionalize / runtime dropdowns),
+      * targets     — ``FRAMEWORK:REACTION`` closure targets,
+      * param_info  — name → {path, model_index} (so ML_RUNTIME injects at the
+                      right parameter path),
+      * target_info — target → {framework, rxn_num, model_index} (so ML_CLOSURE
+                      injects at CYCLING_FRAMEWORKS[framework][rxn_num]).
+    Names/targets are model-tagged (``m{i}:``) in a chain, matching the params."""
+    module_parameters = module_parameters or {}
+    bgc = module_parameters.get("bgc", []) or []
+
+    def _tag(nm):
+        head = str(nm).split(":", 1)[0]
+        return head + ":" if (":" in str(nm) and head.startswith("m")
+                              and head[1:].isdigit()) else ""
+
+    param_opts, targets = [], []
+    param_info, target_info = {}, {}
+    for p in bgc:
+        nm = p.get("name")
+        mi = int(p.get("model_index", 0) or 0)
+        # Skip already-expanded regionalization sub-params (they carry a parent).
+        if nm and not p.get("regionalize_of"):
+            param_opts.append(nm)
+            param_info[nm] = {"path": p.get("path"), "model_index": mi}
+        # BGC closures attach per TRANSFORMATION.
+        fw, rx, rn = p.get("_framework"), p.get("_reaction"), p.get("_reaction_num")
+        if fw and rx and rn is not None:
+            tk = f"{_tag(nm)}{fw}:{rx}"
+            targets.append(tk)
+            target_info[tk] = {"kind": "bgc", "framework": fw,
+                               "rxn_num": str(rn), "model_index": mi}
+
+    # SI (sorption) + TS (sediment/erosion) closures attach at the MODULE level
+    # (openWQ reads ONE ML_CLOSURE at the module JSON's top level). Offer a
+    # target for any model whose SI/TS module is active — detected from the
+    # extracted params (per-model, chain-safe) and, for the validated model,
+    # from module_selections (covers an active-but-uncalibrated module).
+    module_selections = module_selections or {}
+    _all_idxs = sorted({int(p.get("model_index", 0) or 0)
+                        for g in module_parameters.values() for p in g}) or [0]
+    _is_chain = len(_all_idxs) > 1
+    _validated = _all_idxs[-1]
+
+    def _mtag(i):
+        return f"m{i}:" if _is_chain else ""
+
+    def _models_with(group):
+        return {int(p.get("model_index", 0) or 0)
+                for p in module_parameters.get(group, [])}
+
+    def _active(sel_key):
+        return str(module_selections.get(sel_key, "NONE")).upper() not in ("", "NONE")
+
+    # Layer-1 regionalizable params exposed per NON-BGC module (BGC params come
+    # from the auto-extraction above; SI uses its own user-declared path). Each
+    # entry: (display param, json path in the module file). TD regionalizes the
+    # effective dispersion D_eff; LE the exchange coefficient k (entry 1); TS its
+    # per-cell erosion factors (table format).
+    _TS_HBVSED = ["SOIL_EROSION_FACTOR_LAND_DEPENDENCE",
+                  "SOIL_EROSION_FACTOR_SOIL_DEPENDENCE",
+                  "SLOPE_EROSION_FACTOR_EXPONENT",
+                  "PRECIP_EROSION_FACTOR_EXPONENT",
+                  "PARAM_SCALING_EROSION_INDEX"]
+    _TS_MMF = ["COHESION", "ERODIBILITY", "SREROEXP", "CROPCOVER",
+               "GROUNDCOVER", "TRANSPORT_FACTOR_1", "TRANSPORT_FACTOR_2"]
+
+    def _module_reg_params(kind, sel_key):
+        if kind == "td":
+            # D_eff exists only in the ADVDISP sub-module (plain ADV has no
+            # dispersion), so only offer it there.
+            if "ADVDISP" in str(module_selections.get(sel_key, "")).upper():
+                return [("D_eff", ["TRANSPORT_CONFIGURATION", "D_EFF_1/S"])]
+            return []
+        if kind == "le":
+            return [("k", ["CONFIGURATION", "1", "K_VAL"])]
+        if kind == "ts":
+            _tsmod = str(module_selections.get(sel_key, "")).upper()
+            names = _TS_MMF if "MMF" in _tsmod else _TS_HBVSED
+            return [(n, ["PARAMETERS", n]) for n in names]
+        return []   # si handled via its user-declared sorption_regionalize path
+
+    for group, sel_key, kind, label in (
+            ("sorption_isotherm", "si_module", "si", "SORPTION_ISOTHERM"),
+            ("sediment_transport", "ts_module", "ts", "TRANSPORT_SEDIMENTS"),
+            ("transport_dissolved", "td_module", "td", "TRANSPORT_DISSOLVED"),
+            ("lateral_exchange", "le_module", "le", "LATERAL_EXCHANGE")):
+        models = set(_models_with(group))
+        if _active(sel_key):
+            models.add(_validated)
+        for i in sorted(models):
+            tk = f"{_mtag(i)}{label}"
+            targets.append(tk)
+            target_info[tk] = {"kind": kind, "model_index": i}
+            # Layer-1 regionalizable params for this module (TD/LE/TS)
+            for pname, ppath in _module_reg_params(kind, sel_key):
+                nm = f"{_mtag(i)}{label}:{pname}"
+                param_opts.append(nm)
+                _pi = {"path": ppath, "model_index": i, "module": kind,
+                       "module_key": label}
+                if kind == "ts":
+                    _pi["ts_param"] = pname
+                param_info[nm] = _pi
+
+    # SS (source/sink loads): a module-level closure on the load flux (Layer 2)
+    # and a per-cell load-scale regionalization (Layer 1). Both live in the
+    # master's OPENWQ_INPUT > SINK_SOURCE_ML section (kind/module "ss"), so no
+    # module file path is needed.
+    _ss_models = set(_models_with("source_sink"))
+    if str(module_selections.get("ss_method", "none")).upper() not in ("", "NONE"):
+        _ss_models.add(_validated)
+    for i in sorted(_ss_models):
+        tk = f"{_mtag(i)}SINK_SOURCE"
+        targets.append(tk)
+        target_info[tk] = {"kind": "ss", "model_index": i}
+        nm = f"{_mtag(i)}SINK_SOURCE:load_scale"
+        param_opts.append(nm)
+        param_info[nm] = {"module": "ss", "model_index": i,
+                          "path": ["SINK_SOURCE_ML", "ML_SCALE"]}
+
+    param_opts = sorted(dict.fromkeys(param_opts))
+    targets = sorted(dict.fromkeys(targets))
+    return param_opts, targets, param_info, target_info
+
+
+def _build_interactive_ml_section(module_parameters, module_selections=None):
+    """The 'Machine Learning (optional)' tab — all three hybrid physics–ML
+    layers, EMPTY (OFF) by default. With no rows added, ``collectFormState``
+    returns empty ML config and the generated run script is byte-identical to a
+    pure-physics calibration (the intended disabling test). Rows are added by
+    the user via JS (``addMlRow``); dropdowns are populated from the extracted
+    parameters / reactions so only valid targets can be chosen."""
+    _param_opts, _targets, _pinfo, _tinfo = _ml_option_lists(
+        module_parameters, module_selections)
+    note = rh.build_highlight_box(
+        "<strong>Everything here is optional and OFF by default.</strong> "
+        "openWQ layers machine learning on top of the physics under your "
+        "control; with no rows added below the calibration is byte-identical to "
+        "pure physics. Only the parameters/reactions already extracted for this "
+        "model appear in the dropdowns. See the readthedocs "
+        "<em>Hybrid Physics–ML</em> page for what each layer does.",
+        "info")
+
+    # In-report step-by-step guide (plain string, not an f-string, so the HTML
+    # braces / JSON examples need no escaping). Rendered above the controls.
+    howto = """
+    <details class="module-group" open>
+      <summary><strong>How to use machine learning &mdash; steps</strong></summary>
+      <div class="module-content" style="font-size:.86rem;line-height:1.5;">
+        <p style="margin-top:0;">ML is <strong>optional and layered on top of the
+        physics you already configured</strong>. Each layer has an <strong>ON/OFF
+        toggle</strong> (a grey block = OFF). With both layers OFF &mdash; or any
+        closure&rsquo;s <em>Alpha</em> = 0 &mdash; the run is <strong>byte-identical
+        pure physics</strong>. The three layers are independent; turn on only what
+        you need.</p>
+
+        <div style="border:1px solid var(--border);border-left:3px solid var(--primary);
+             border-radius:8px;padding:.5rem .85rem;margin:.7rem 0;background:var(--surface);">
+          <div style="font-weight:800;color:var(--primary);margin-bottom:.2rem;">
+            &#9889; Quick start &mdash; a learned per-species closure (no training, no files)</div>
+          <p style="margin:.2rem 0;color:var(--muted);">Best first choice, and the one
+          that needs nothing external. DDS fits the correction during calibration.
+          One closure corrects a species&rsquo; net rate of change for a chosen
+          <b>internal</b> term (<b>Chem</b> and/or <b>Sorp</b>, both
+          mass-conserving). Use only species you have observations for. (Loads
+          are corrected with the parametric SS calibration, not here.)</p>
+          <ol style="margin:.3rem 0 .2rem 1.1rem;padding:0;">
+            <li>Toggle <strong>Layer 2</strong> ON &rarr; click <strong>+ Add a species closure</strong>.</li>
+            <li>Pick the <strong>Target species</strong> (the one you observe, e.g.
+                <em>NO3-N</em>); leave <strong>Compartment</strong> = <code>ALL</code>.</li>
+            <li>Tick the term(s) to correct: <strong>Chem</strong> (reactions)
+                and/or <strong>Sorp</strong> (sorption).</li>
+            <li>Set <strong>Mode = Calibrated (DDS)</strong> and leave the
+                <em>Weights</em> field blank.</li>
+            <li>Set <strong>Alpha</strong> = correction strength (e.g. <code>0.3</code>)
+                and <strong>Max corr.</strong> = the bound (e.g. <code>0.5</code>, so
+                the rate can move &plusmn;50&#37; at most). <em>Alpha&nbsp;=&nbsp;0 is
+                pure physics.</em></li>
+            <li>Check the <strong>ML activation check</strong> below shows
+                <span style="color:#2e7d32;font-weight:700;">&#10003; WILL ACT</span>.</li>
+            <li><strong>Download Script</strong> &rarr; run with <code>--clean</code>.
+                Each ticked term adds two knobs (<code>cw</code>, <code>cb</code>) to
+                DDS &mdash; that is why the parameter count goes up.</li>
+          </ol>
+        </div>
+
+        <div style="border:1px solid var(--border);border-radius:8px;
+             padding:.5rem .85rem;margin:.7rem 0;background:var(--surface);">
+          <div style="font-weight:800;margin-bottom:.2rem;">&#127760; Layer&nbsp;1A
+            &mdash; regionalize a parameter (per-cell learned field)</div>
+          <p style="margin:.2rem 0;color:var(--muted);">Replace one lumped parameter
+          with an attribute&rarr;parameter mapping DDS calibrates. Non-regionalized
+          parameters stay ordinary lumped scalars.</p>
+          <ol style="margin:.3rem 0 .2rem 1.1rem;padding:0;">
+            <li>Toggle <strong>Layer 1</strong> ON &rarr; <strong>+ L1</strong>.</li>
+            <li>Choose the <strong>Parameter</strong>, a <strong>Rung</strong>
+                (<em>per_class</em> or <em>regression</em>) and the
+                <strong>Attribute</strong> (e.g. <code>soil_class</code>).</li>
+            <li>Point <strong>Attribute table</strong> at a CSV
+                (<code>id</code> column + one column per attribute).</li>
+            <li>Leave <strong>Mapping source</strong> blank to auto-use the eval&rsquo;s
+                <code>openwq_out/HDF5/</code>, or give a specific HDF5.</li>
+            <li>Put per-class bounds in <strong>Classes</strong> as JSON,
+                e.g. <code>{"sand":[1e-4,1e-2],"clay":[1e-4,1e-2]}</code>.</li>
+            <li><strong>Download Script</strong> &rarr; run. Needs
+                <strong>&gt;1 mapped cell</strong> to actually vary
+                (a lumped 1-cell domain stays effectively uniform).</li>
+          </ol>
+        </div>
+
+        <div style="border:1px solid var(--border);border-radius:8px;
+             padding:.5rem .85rem;margin:.7rem 0;background:var(--surface);">
+          <div style="font-weight:800;margin-bottom:.2rem;">&#129504; Layer&nbsp;1B
+            &mdash; runtime NN (advanced)</div>
+          <p style="margin:.2rem 0;color:var(--muted);">A pretrained network fills a
+          per-cell parameter field at start-up. Needs a trained <em>weights</em> file
+          and a per-cell <em>attributes</em> file from
+          <code>ml_regionalization.py</code>.</p>
+        </div>
+
+        <p style="margin:.6rem 0 .2rem;"><strong>Two modes for closures:</strong>
+        <em>Calibrated (DDS)</em> = no files, the correction is fit during your
+        calibration (easiest). <em>Pretrained</em> = you supply a trained weights file
+        from <code>ml_closure_train.py</code>.</p>
+        <p style="margin:.2rem 0;color:var(--muted);">Pretrained closures and runtime
+        NNs also require the openWQ binary to be built with the ML C++; calibrated
+        closures reuse the same binary. Leave the ML tab empty (or all toggles OFF)
+        for a pure-physics run.</p>
+      </div>
+    </details>"""
+
+    def _panel(pid, title, blurb, headers, add_label):
+        ths = "".join(f"<th>{h}</th>" for h in headers)
+        return f"""
+    <details class="module-group">
+      <summary>{title}</summary>
+      <div class="module-content">
+        <p class="hint" style="margin-top:0;">{blurb}</p>
+        <table class="ml-table"><thead><tr>{ths}<th></th></tr></thead>
+          <tbody id="{pid}-body"></tbody></table>
+        <button type="button" class="ml-btn" onclick="addMlRow('{pid}')"
+                style="margin-top:.5rem;">+ {add_label}</button>
+      </div>
+    </details>"""
+
+    reg = _panel(
+        "mlreg", "Layer 1A — Parameter regionalization (dPL, DDS-calibrated)",
+        "Replace a physical parameter with a low-dimensional "
+        "attribute&rarr;parameter mapping that DDS calibrates (expanded to a "
+        "per-cell field each evaluation). Per-class bounds go in the Classes "
+        "box as JSON, e.g. <code>{\"sand\":[1e-4,1e-2],\"clay\":[1e-4,1e-2]}</code>. "
+        "Leave <em>Mapping source</em> blank to auto-use the eval's "
+        "<code>openwq_out/HDF5/</code>.",
+        ["Parameter", "Rung", "Attribute", "Default", "Attribute table",
+         "Mapping source (opt.)", "Classes / coeffs (JSON)"],
+        "Regionalize a parameter")
+    clo = _panel(
+        "mlclo", "Layer 2 — Per-species derivative closures (bounded correction)",
+        "A bounded correction to a species' net rate of change "
+        "<code>dC/dt &rarr; dC/dt &middot;(1 + &alpha;&middot;g)</code>; "
+        "<code>&alpha;=0</code> is exact physics. Pick the <b>observed species</b> "
+        "and tick which <b>internal</b> derivative term(s) to correct: <b>Chem</b> "
+        "(reactions) and/or <b>Sorp</b> (sorption) &mdash; both applied "
+        "<b>group-scaled &rarr; mass-conserving</b> (coupled species share the "
+        "factor). <b>Calibrated (DDS)</b> mode fits the correction during "
+        "calibration (no training / no file); <b>Pretrained</b> reads a weights "
+        "file from <code>ml_closure_train.py</code>. Use only species you have "
+        "observations for. <em>Source/sink loads are not corrected here &mdash; "
+        "use the parametric SS load calibration (constant / harmonic / per-month) "
+        "for those.</em>",
+        ["Target species", "Compartment", "Chem", "Sorp",
+         "Mode", "Alpha", "Max corr.", "Weights (pretrained)"],
+        "Add a species closure")
+    rt = _panel(
+        "mlrt", "Layer 1B — Runtime parameter NN (Mode B)",
+        "openWQ evaluates a trained network at start-up to fill a per-cell "
+        "parameter field. Needs trained weights + per-cell attributes files "
+        "from <code>ml_regionalization.py</code>.",
+        ["Parameter", "Weights file", "Attributes file", "Default"],
+        "Add a runtime NN")
+
+    _pending = rh.build_highlight_box(
+        "Layer 2 closures and Layer 1B runtime NNs reference <em>trained</em> "
+        "weight files: the report bakes your choices into the run script, but "
+        "the openWQ binary must be rebuilt with the ML C++ for them (and "
+        "spatial params) to take effect. With both layers OFF the run is "
+        "byte-identical pure physics.",
+        "warning")
+
+    def _toggle(tid, body_id, label):
+        return (f'<label class="ml-switch"><input type="checkbox" id="{tid}" '
+                f'onchange="toggleMlLayer(this,\'{body_id}\')"> '
+                f'<span>{label}</span></label>')
+
+    return f"""
+<div class="section" id="ml">
+    <style>
+      .ml-table{{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:.4rem;}}
+      .ml-table th{{text-align:left;font-weight:600;color:var(--muted);
+        padding:.25rem .4rem;border-bottom:1px solid var(--border);white-space:nowrap;}}
+      .ml-table td{{padding:.25rem .4rem;vertical-align:top;}}
+      .ml-f{{width:100%;box-sizing:border-box;padding:.25rem .35rem;
+        border:1px solid var(--border);border-radius:5px;background:var(--surface);
+        color:inherit;font-size:.8rem;font-family:inherit;}}
+      .ml-btn{{padding:.3rem .7rem;border:1px solid var(--primary);border-radius:6px;
+        background:rgba(0,102,204,.08);color:var(--primary);cursor:pointer;
+        font-size:.8rem;font-weight:600;}}
+      .ml-btn:hover{{background:rgba(0,102,204,.16);}}
+      .ml-layer-hd{{display:flex;align-items:center;justify-content:space-between;
+        gap:.6rem;margin:1rem 0 .2rem;font-weight:800;font-size:1.05rem;}}
+      .ml-switch{{display:inline-flex;align-items:center;gap:.4rem;font-weight:700;
+        font-size:.82rem;color:var(--primary);cursor:pointer;}}
+      .ml-block{{border:1px solid var(--border);border-radius:8px;
+        padding:.2rem .8rem .5rem;background:var(--surface);}}
+      .ml-block.off{{opacity:.45;pointer-events:none;filter:grayscale(.6);}}
+    </style>
+    <h2>Machine Learning <span style="color:var(--muted);font-weight:400;
+        font-size:.8rem;">— hybrid physics–ML (optional)</span></h2>
+    {note}
+    {howto}
+    <details class="module-group" open>
+      <summary>Modules in the ML calibration — choose Layer 1 / Layer 2 per module</summary>
+      <div class="module-content">
+        <p class="hint" style="margin-top:0;">Each active module is a row. Use
+        <em>+ L1</em> to regionalize one of its parameters (per-cell learned
+        field; the non-regionalized ones stay ordinary lumped scalars), or
+        <em>+ L2</em> to add a bounded flux closure — this auto-enables the
+        layer below. Nothing is added until you click; both layers OFF =
+        byte-identical pure physics.</p>
+        <table class="ml-table"><thead><tr><th>Module</th>
+          <th>Layer 1 · parameter learning</th>
+          <th>Layer 2 · flux closure</th></tr></thead>
+          <tbody id="ml-matrix-body"></tbody></table>
+      </div>
+    </details>
+
+    <div class="ml-layer-hd"><span>Layer 1 · parameter learning
+      <span style="color:var(--muted);font-weight:400;font-size:.8rem">
+      (regionalization + runtime NN)</span></span>
+      {_toggle('ml-on-l1', 'ml-l1-body', 'enable Layer 1')}</div>
+    <div class="ml-block off" id="ml-l1-body">
+      {reg}
+      {rt}
+    </div>
+
+    <div class="ml-layer-hd"><span>Layer 2 · flux closures</span>
+      {_toggle('ml-on-l2', 'ml-l2-body', 'enable Layer 2')}</div>
+    <div class="ml-block off" id="ml-l2-body">
+      {clo}
+    </div>
+
+    <div id="ml-check" style="margin-top:14px"></div>
+    {_pending}
+</div>"""
 
 
 def _build_workflow_mode_section() -> str:
@@ -4358,6 +4778,7 @@ def _build_interactive_script_section() -> str:
 def _build_interactive_js(model_config_path, calibration_work_dir,
                           auto_extracted_parameters,
                           module_parameters=None,
+                          module_selections=None,
                           container_config=None,
                           report_stem="calibration",
                           calib_lib_dir="",
@@ -4367,7 +4788,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                           hpc_baked=None,
                           model_chain_paths=None,
                           default_calibration_period=None,
-                          default_spinup_period=None):
+                          default_spinup_period=None,
+                          chemical_species=None):
     """Build the JavaScript for the interactive setup report."""
     import json as json_mod
     # Absolute path to the openWQ "3_Calibration" folder (the parent of
@@ -4385,6 +4807,18 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
         params_json = rh._js(flat_params)
     else:
         params_json = rh._js(auto_extracted_parameters)
+
+    # Machine-Learning tab: dropdown option lists (parameter names + closure
+    # targets) + the location maps the run script uses to inject each block.
+    _ml_param_opts, _ml_targets, _ml_pinfo, _ml_tinfo = \
+        _ml_option_lists(module_parameters, module_selections)
+    ml_param_opts_json = rh._js(_ml_param_opts)
+    ml_targets_json = rh._js(_ml_targets)
+    ml_param_info_json = rh._js(_ml_pinfo)
+    ml_target_info_json = rh._js(_ml_tinfo)
+    # Layer-2 per-species derivative closures target a SPECIES (not a reaction).
+    _ml_species = list(chemical_species or [])
+    ml_species_json = rh._js(_ml_species)
 
     # Observation + model simulation periods → power the calibration /
     # validation split slider in the Settings tab.  Computed by the caller
@@ -4428,6 +4862,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   var CALIB_LIB_DIR = ''' + clibdir + r''';
   var HPC = ''' + hpc_json + r''';
   var PARAMS = ''' + params_json + r''';
+  var ML_PARAM_OPTS = ''' + ml_param_opts_json + r''';
+  var ML_TARGET_OPTS = ''' + ml_targets_json + r''';
+  var ML_PARAM_INFO = ''' + ml_param_info_json + r''';
+  var ML_TARGET_INFO = ''' + ml_target_info_json + r''';
+  var ML_SPECIES_OPTS = ''' + ml_species_json + r''';
   var OBS_PERIOD = ''' + obs_period_json + r''';
   var SIM_PERIOD = ''' + sim_period_json + r''';
   var FORCING_PERIOD = ''' + forcing_period_json + r''';
@@ -4627,6 +5066,69 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     // Excluded frameworks (set by obs-only toggle)
     s.excluded_frameworks = window._excludedFrameworks || [];
 
+    // ── Machine Learning (hybrid physics–ML) ── empty {} unless a LAYER is
+    // toggled ON and rows added → otherwise byte-identical pure physics. The
+    // per-layer ON/OFF switch gates whether its rows are read at all.
+    s.ml_regionalize = {}; s.ml_closures = {}; s.ml_runtime = {};
+    var _l1on = (document.getElementById('ml-on-l1') || {}).checked;
+    var _l2on = (document.getElementById('ml-on-l2') || {}).checked;
+    if (_l1on)
+    document.querySelectorAll('#mlreg-body tr').forEach(function(r){
+      var f = r.querySelectorAll('.ml-f'); var key = (f[0].value||'').trim();
+      if (!key) return;
+      var spec = {rung: f[1].value, attribute: (f[2].value||'').trim(),
+                  default: parseFloat(f[3].value)};
+      if ((f[4].value||'').trim()) spec.attribute_table = f[4].value.trim();
+      if ((f[5].value||'').trim()) spec.mapping_source = f[5].value.trim();
+      var cls = (f[6].value||'').trim();
+      if (cls) { try { spec[(spec.rung==='regression')?'coeffs':'classes'] =
+                         JSON.parse(cls); } catch(e) { spec._classes_raw = cls; } }
+      // Bake the param LOCATION so the run script writes the per-cell map to the
+      // right module file (BGC by default; TD/LE/TS carry path + module + key).
+      var rpinfo = ML_PARAM_INFO[key] || {};
+      if (rpinfo.path) spec.path = rpinfo.path;
+      if (rpinfo.module) spec.module = rpinfo.module;
+      if (rpinfo.module_key) spec.module_key = rpinfo.module_key;
+      if (rpinfo.ts_param) spec.ts_param = rpinfo.ts_param;
+      spec.model_index = rpinfo.model_index != null ? rpinfo.model_index : 0;
+      s.ml_regionalize[key] = spec;
+    });
+    if (_l2on)
+    document.querySelectorAll('#mlclo-body tr').forEach(function(r){
+      var f = r.querySelectorAll('.ml-f');
+      var sp = (f[0].value||'').trim(); if (!sp) return;
+      var comp = (f[1].value||'').trim() || 'ALL';
+      var terms = [];
+      if (f[2].checked) terms.push('CHEM');
+      if (f[3].checked) terms.push('SORPT');
+      // SS is NOT a Layer-2 option: source/sink loads are corrected with the
+      // parametric SS load calibration (constant / harmonic / per-month), which
+      // is the direct, interpretable tool. Layer 2 is for internal flux forms.
+      if (!terms.length) return;
+      var mode = f[4].value || 'calibrated';
+      var alpha = parseFloat(f[5].value)||0;
+      var maxc  = parseFloat(f[6].value)||0;
+      var wf    = (f[7].value||'').trim();
+      // One closure per (species, ticked term). Key = species:TERM.
+      terms.forEach(function(term){
+        s.ml_closures[sp + ':' + term] = {
+          species: sp, term: term, compartment: comp, mode: mode,
+          alpha: alpha, max_correction: maxc, weights_filepath: wf,
+          model_index: 0};
+      });
+    });
+    if (_l1on)
+    document.querySelectorAll('#mlrt-body tr').forEach(function(r){
+      var f = r.querySelectorAll('.ml-f'); var key = (f[0].value||'').trim();
+      if (!key) return;
+      var pinfo = ML_PARAM_INFO[key] || {};
+      s.ml_runtime[key] = {weights_filepath: (f[1].value||'').trim(),
+        attributes_filepath: (f[2].value||'').trim(),
+        default: parseFloat(f[3].value),
+        path: pinfo.path,
+        model_index: pinfo.model_index != null ? pinfo.model_index : 0};
+    });
+
     return s;
   }
 
@@ -4819,6 +5321,39 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('');
     lines.push('');
 
+    // ── Hybrid physics–ML config (chosen in the ML tab). Emitted ONLY when the
+    // user added rows — with the ML tab empty NOTHING below is written, so a
+    // pure-physics run script is byte-identical to a non-ML report. ──
+    var _hasReg = s.ml_regionalize && Object.keys(s.ml_regionalize).length > 0;
+    var _hasClo = s.ml_closures   && Object.keys(s.ml_closures).length > 0;
+    var _hasRt  = s.ml_runtime    && Object.keys(s.ml_runtime).length > 0;
+    if (_hasReg || _hasClo || _hasRt) {
+      lines.push('# ' + '='.repeat(68));
+      lines.push('# Hybrid physics-ML (activated in the report ML tab)');
+      lines.push('# ' + '='.repeat(68));
+      if (_hasReg) lines.push('ml_regionalize = ' + pyRepr(s.ml_regionalize));
+      if (_hasClo) lines.push('ml_closures = ' + pyRepr(s.ml_closures));
+      if (_hasRt)  lines.push('ml_runtime = ' + pyRepr(s.ml_runtime));
+      var _hasCalClo = _hasClo && Object.keys(s.ml_closures).some(function(k){
+        return s.ml_closures[k].mode === 'calibrated'; });
+      if (_hasReg || _hasCalClo)
+        lines.push('from calibration_lib import extract_parameters as _ep');
+      if (_hasReg) {
+        lines.push('# Layer 1A: expand each regionalized parameter into its');
+        lines.push('# low-dimensional DDS sub-parameters (per-class / coeffs).');
+        lines.push('calibration_parameters = _ep.apply_regionalize_to_params(');
+        lines.push('    calibration_parameters, ml_regionalize)');
+      }
+      if (_hasCalClo) {
+        lines.push('# Layer 2 (calibrated): expand each DDS-calibrated closure');
+        lines.push('# into its (cw, cb) knobs — no offline training / weights.');
+        lines.push('calibration_parameters = _ep.apply_calibrated_closures_to_params(');
+        lines.push('    calibration_parameters, ml_closures)');
+      }
+      lines.push('');
+      lines.push('');
+    }
+
     lines.push('# ' + '='.repeat(68));
     lines.push('# Execution');
     lines.push('# ' + '='.repeat(68));
@@ -4912,6 +5447,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        model_config=model_cfg,');
     if (_isChain) lines.push('        model_chain=model_chain_cfgs,');
     lines.push('        calibration_parameters=calibration_parameters,');
+    // Layer 2 / Layer 1B hybrid-ML config (only present when activated in the
+    // ML tab; injection into per-eval configs is applied inside run_calibration).
+    if (_hasClo) lines.push('        ml_closures=ml_closures,');
+    if (_hasRt)  lines.push('        ml_runtime=ml_runtime,');
     lines.push('        algorithm=algorithm,');
     lines.push('        max_evaluations=max_evaluations,');
     lines.push('        n_parallel=n_parallel,');
@@ -5288,6 +5827,61 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     updateSbatch(state);
     updateHpcRun(state);
     updateProgress();
+    renderMlCheck(state);
+  }
+
+  // P5 activation check: for each ML row that is ON, say plainly whether it
+  // WILL act or WON'T (and why), so an inadvertent no-op (pure physics) is
+  // caught in the report instead of after a full calibration run.
+  function renderMlCheck(state) {
+    var el = document.getElementById('ml-check'); if (!el) return;
+    var s = state || collectFormState();
+    var rows = [];
+    function add(ok, label, msg) {
+      rows.push('<div style="display:flex;gap:8px;align-items:flex-start;'
+        + 'padding:4px 0">'
+        + '<span style="font-weight:700;color:' + (ok ? '#2e7d32' : '#c62828')
+        + '">' + (ok ? '✓ WILL ACT' : '✗ WON’T ACT') + '</span>'
+        + '<span><b>' + label + '</b> &mdash; ' + msg + '</span></div>');
+    }
+    Object.keys(s.ml_regionalize || {}).forEach(function(k){
+      var v = s.ml_regionalize[k];
+      var hasCls = v.classes || v.coeffs || v._classes_raw;
+      if (!hasCls) add(false, k + ' (L1A)', 'no classes/coeffs bounds set.');
+      else if (!v.attribute_table)
+        add(false, k + ' (L1A)', 'no attribute table → DEFAULT everywhere.');
+      else add(true, k + ' (L1A)',
+        'regionalized by <code>' + (v.attribute || '') + '</code>; mapping '
+        + (v.mapping_source ? '<code>' + v.mapping_source + '</code>'
+           : 'auto (<code>openwq_out/HDF5/</code>). Needs &gt;1 mapped cell to vary.'));
+    });
+    Object.keys(s.ml_closures || {}).forEach(function(k){
+      var v = s.ml_closures[k];
+      var cons = (v.term === 'CHEM' || v.term === 'SORPT')
+        ? ' (group-scaled → mass-conserving)'
+        : (v.term === 'SS' ? ' (external forcing)' : '');
+      if ((v.alpha || 0) === 0)
+        add(false, k + ' (L2)', 'alpha = 0 → exact physics.');
+      else if (v.mode === 'calibrated')
+        add(true, k + ' (L2)', 'DDS-calibrated closure on <code>' + v.species
+          + '</code> ' + v.term + cons + ' — (cw, cb) fit during calibration, '
+          + 'no weights file needed.');
+      else if (!v.weights_filepath)
+        add(false, k + ' (L2)', 'pretrained mode but no weights file set.');
+      else add(true, k + ' (L2)', 'pretrained closure on <code>' + v.species
+        + '</code> ' + v.term + cons + ' from <code>' + v.weights_filepath
+        + '</code> (must exist at run time).');
+    });
+    Object.keys(s.ml_runtime || {}).forEach(function(k){
+      var v = s.ml_runtime[k];
+      if (!v.weights_filepath || !v.attributes_filepath)
+        add(false, k + ' (L1B)', 'needs both a weights file and an attributes file.');
+      else add(true, k + ' (L1B)', 'runtime NN from <code>'
+        + v.weights_filepath + '</code>.');
+    });
+    if (!rows.length) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div class="card"><h3>ML activation check</h3>'
+      + '<div style="font-size:.85rem">' + rows.join('') + '</div></div>';
   }
 
   // \u2500\u2500 SLURM sbatch (Execution tab) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -6033,6 +6627,120 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       onSaved();
     }
   };
+
+  // ── Machine Learning tab: add/remove option rows ──
+  function _mlSelect(opts){
+    var o = '<option value="">— choose —</option>';
+    (opts||[]).forEach(function(v){ o += '<option value="'+v+'">'+v+'</option>'; });
+    return '<select class="ml-f">'+o+'</select>';
+  }
+  function _mlTxt(ph){ return '<input class="ml-f" type="text" placeholder="'+(ph||'')+'">'; }
+  function _mlNum(v,ph){ return '<input class="ml-f" type="number" step="any"'
+      + (v!=null?' value="'+v+'"':'') + (ph?' placeholder="'+ph+'"':'') + '>'; }
+  // Options filtered to a module (matrix "+ L1/L2" buttons pass the module kind
+  // so only that module's params/targets appear in the new row's dropdown).
+  function _mlParamsFor(mf){
+    if (!mf) return ML_PARAM_OPTS;
+    return ML_PARAM_OPTS.filter(function(o){
+      return ((ML_PARAM_INFO[o]||{}).module || 'bgc') === mf; });
+  }
+  function _mlTargetsFor(mf){
+    if (!mf) return ML_TARGET_OPTS;
+    return ML_TARGET_OPTS.filter(function(o){
+      return ((ML_TARGET_INFO[o]||{}).kind || 'bgc') === mf; });
+  }
+  // Toggle a whole ML layer ON/OFF — grays out its block when off and gates
+  // whether its rows are read into the run script (collectFormState).
+  window.toggleMlLayer = function(cb, bodyId){
+    var b = document.getElementById(bodyId);
+    if (b) b.classList.toggle('off', !cb.checked);
+    if (typeof updateScript === 'function') updateScript();
+  };
+  function _enableLayer(pid){
+    // adding a row auto-enables the owning layer so its block ungrays
+    var id = (pid === 'mlclo') ? 'ml-on-l2' : 'ml-on-l1';
+    var cb = document.getElementById(id);
+    if (cb && !cb.checked){ cb.checked = true; toggleMlLayer(cb, id.replace('ml-on-','ml-')+'-body'); }
+  }
+  window.addMlRow = function(pid, moduleFilter){
+    _enableLayer(pid);
+    var body = document.getElementById(pid+'-body'); if (!body) return;
+    var tr = document.createElement('tr'), h = '';
+    if (pid === 'mlreg') {
+      h += '<td>'+_mlSelect(_mlParamsFor(moduleFilter))+'</td>';
+      h += '<td><select class="ml-f"><option value="per_class">per_class</option>'
+         + '<option value="regression">regression</option></select></td>';
+      h += '<td>'+_mlTxt('soil_class')+'</td>';
+      h += '<td>'+_mlNum(null,'0.0003')+'</td>';
+      h += '<td>'+_mlTxt('openwq_in/attributes.csv')+'</td>';
+      h += '<td>'+_mlTxt('openwq_out/HDF5/ (auto)')+'</td>';
+      h += '<td>'+_mlTxt('{"sand":[1e-4,1e-2],"clay":[1e-4,1e-2]}')+'</td>';
+    } else if (pid === 'mlclo') {
+      h += '<td>'+_mlSelect(ML_SPECIES_OPTS)+'</td>';
+      h += '<td>'+_mlTxt('ALL')+'</td>';
+      h += '<td style="text-align:center"><input class="ml-f" type="checkbox" checked></td>';
+      h += '<td style="text-align:center"><input class="ml-f" type="checkbox"></td>';
+      h += '<td><select class="ml-f">'
+         + '<option value="calibrated">Calibrated (DDS)</option>'
+         + '<option value="pretrained">Pretrained (file)</option></select></td>';
+      h += '<td>'+_mlNum(0.3)+'</td>';
+      h += '<td>'+_mlNum(0.5)+'</td>';
+      h += '<td>'+_mlTxt('(calibrated: leave blank)')+'</td>';
+    } else {  // mlrt
+      h += '<td>'+_mlSelect(_mlParamsFor(moduleFilter))+'</td>';
+      h += '<td>'+_mlTxt('openwq_in/net.json')+'</td>';
+      h += '<td>'+_mlTxt('openwq_in/attr.json')+'</td>';
+      h += '<td>'+_mlNum(null,'0.0003')+'</td>';
+    }
+    h += '<td><button type="button" class="ml-btn" title="remove"'
+       + ' onclick="removeMlRow(this)">✕</button></td>';
+    tr.innerHTML = h;
+    body.appendChild(tr);
+    // Live-preview: new fields refresh the script like the static form inputs.
+    tr.querySelectorAll('.ml-f').forEach(function(el){
+      el.addEventListener('change', updateScript);
+      el.addEventListener('input', updateScript);
+    });
+    if (typeof updateScript === 'function') updateScript();
+  };
+  window.removeMlRow = function(btn){
+    var tr = btn.closest('tr'); if (tr) tr.remove();
+    if (typeof updateScript === 'function') updateScript();
+  };
+
+  // Per-module × per-layer matrix: one row per active module, with "+ L1 / + L2"
+  // buttons that add a module-scoped detail row below. Built from the same baked
+  // option maps, so it always reflects which modules actually support each layer.
+  function renderMlMatrix(){
+    var body = document.getElementById('ml-matrix-body'); if (!body) return;
+    var LABELS = {bgc:'BGC (reactions)', si:'Sorption (SI)', ts:'Sediment (TS)',
+                  td:'Dissolved transport (TD)', le:'Lateral exchange (LE)',
+                  ss:'Source/Sink loads (SS)'};
+    var ORDER = ['bgc','si','ts','td','le','ss'];
+    var l1 = {}, l2 = {};
+    ML_PARAM_OPTS.forEach(function(o){
+      var m = (ML_PARAM_INFO[o]||{}).module || 'bgc'; l1[m] = (l1[m]||0)+1; });
+    ML_TARGET_OPTS.forEach(function(o){
+      var k = (ML_TARGET_INFO[o]||{}).kind || 'bgc'; l2[k] = (l2[k]||0)+1; });
+    var mods = ORDER.filter(function(m){ return l1[m] || l2[m]; });
+    var dash = '<span style="color:var(--muted)">— n/a</span>';
+    var h = '';
+    mods.forEach(function(m){
+      var l1c = l1[m]
+        ? '<button type="button" class="ml-btn" onclick="addMlRow(\'mlreg\',\''+m+'\')">+ L1'
+          + ' ('+l1[m]+' param'+(l1[m]>1?'s':'')+')</button>'
+          + (m==='bgc' ? ' <button type="button" class="ml-btn" '
+             + 'onclick="addMlRow(\'mlrt\',\'bgc\')">+ runtime NN</button>' : '')
+        : dash;
+      var l2c = l2[m]
+        ? '<button type="button" class="ml-btn" onclick="addMlRow(\'mlclo\',\''+m+'\')">+ L2</button>'
+        : dash;
+      h += '<tr><td><strong>'+(LABELS[m]||m)+'</strong></td><td>'+l1c+'</td><td>'+l2c+'</td></tr>';
+    });
+    body.innerHTML = h || '<tr><td colspan="3" style="color:var(--muted)">'
+      + 'No ML-capable modules active.</td></tr>';
+  }
+  renderMlMatrix();
 
   // Event binding
   var formInputs = document.querySelectorAll(

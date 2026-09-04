@@ -111,6 +111,9 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
                                user_data.hostModelconfig, user_data.output);
     }
 
+    // Hybrid physics-ML LAYER 2 (per-species derivative closures) active?
+    const bool ml_on = !user_data.wqconfig.ml_deriv_closures.empty();
+
     // Compute flux derivatives in parallel
     #pragma omp parallel num_threads(user_data.num_threads)
     {
@@ -139,8 +142,19 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
 
                 d_chemass.zeros();
 
+                // LAYER 2 derivative-closure lookup for this (icmp, chemi).
+                int _mlc_chem = -1, _mlc_sorpt = -1, _mlc_ss = -1;
+                if (ml_on) {
+                    _mlc_chem  = user_data.wqconfig.ml_chem_cl[icmp][chemi];
+                    _mlc_sorpt = user_data.wqconfig.ml_sorpt_cl[icmp][chemi];
+                    _mlc_ss    = user_data.wqconfig.ml_ss_cl[icmp][chemi];
+                }
+                const bool _use_ml = (_mlc_chem >= 0 || _mlc_sorpt >= 0 || _mlc_ss >= 0);
+
                 for (ix = 0; ix < nx; ix++){
                     for (iy = 0; iy < ny; iy++){
+                      if (!_use_ml) {
+                        // ---- original pure-physics path (unchanged) ----
                         #pragma omp simd
                         for (iz = 0; iz < nz; iz++){
 
@@ -168,6 +182,38 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
                             d_chemass(ix, iy, iz) = dm_ic + dm_ss + dm_ewf
                                 + dm_dt_chem + dm_dt_sorpt + dm_dt_trans + dm_dt_part;
                         }
+                      } else {
+                        // ---- LAYER 2: bounded per-species derivative closures ----
+                        for (iz = 0; iz < nz; iz++){
+
+                            dm_ic = user_data.is_first_step ? d_chemass_ic(ix, iy, iz) : 0.0;
+                            dm_ss = d_chemass_ss(ix, iy, iz);
+                            dm_ewf = d_chemass_ewf(ix, iy, iz);
+                            dm_dt_chem = d_chemass_dt_chem(ix, iy, iz);
+                            dm_dt_sorpt = d_chemass_dt_sorpt(ix, iy, iz);
+                            dm_dt_trans = d_chemass_dt_transp_diss(ix, iy, iz);
+                            dm_dt_part = d_chemass_dt_transp_part(ix, iy, iz);
+
+                            if (_mlc_chem >= 0) {
+                                const auto& _cl = user_data.wqconfig.ml_deriv_closures[_mlc_chem];
+                                dm_dt_chem *= _cl.net.factor(arma::vec({
+                                    (*user_data.vars.chemass)(icmp)(_cl.chemi)(ix, iy, iz)}));
+                            }
+                            if (_mlc_sorpt >= 0) {
+                                const auto& _cl = user_data.wqconfig.ml_deriv_closures[_mlc_sorpt];
+                                dm_dt_sorpt *= _cl.net.factor(arma::vec({
+                                    (*user_data.vars.chemass)(icmp)(_cl.chemi)(ix, iy, iz)}));
+                            }
+                            if (_mlc_ss >= 0) {
+                                const auto& _cl = user_data.wqconfig.ml_deriv_closures[_mlc_ss];
+                                dm_ss *= _cl.net.factor(arma::vec({
+                                    (*user_data.vars.chemass)(icmp)(_cl.chemi)(ix, iy, iz)}));
+                            }
+
+                            d_chemass(ix, iy, iz) = dm_ic + dm_ss + dm_ewf
+                                + dm_dt_chem + dm_dt_sorpt + dm_dt_trans + dm_dt_part;
+                        }
+                      }
                     }
                 }
             }
@@ -273,6 +319,11 @@ void OpenWQ_compute::Solve_with_CVode(
         : OpenWQ_wqconfig.CH_model->PHREEQC->num_chem;
 
     const unsigned int num_comps = OpenWQ_hostModelconfig.get_num_HydroComp();
+
+    // Hybrid physics-ML LAYER 2: resolve/group the derivative closures once
+    // (before any RHS evaluation). Empty -> no-op in the RHS.
+    if (!OpenWQ_wqconfig.ml_closures_ready)
+        Prepare_MLClosures(OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_output);
 
     // Pre-compute compartment dimensions and offsets
     std::vector<std::tuple<unsigned int, unsigned int, unsigned int>> comp_dims;

@@ -71,6 +71,15 @@ class OpenWQ_compute{
         OpenWQ_json& OpenWQ_json,
         OpenWQ_output& OpenWQ_output);
 
+    // Hybrid physics-ML LAYER 2 (per-species derivative closures): resolve the
+    // ML_CLOSURES config (names -> indices), compute the CHEM/SORPT conservation
+    // groups, and build the per-(icmp,chemi) lookup arrays. Runs once (guarded
+    // by OpenWQ_wqconfig.ml_closures_ready). No-op when no closures configured.
+    void Prepare_MLClosures(
+        OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+        OpenWQ_wqconfig& OpenWQ_wqconfig,
+        OpenWQ_output& OpenWQ_output);
+
     public:
 
     std::vector<std::tuple<int,int,int,int,int,int,int,int,double,double,std::string>> sediment_calls;

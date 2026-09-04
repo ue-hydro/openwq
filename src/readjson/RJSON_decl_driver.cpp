@@ -16,6 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "readjson/headerfile_RJSON.hpp"
+#include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_closure (Layer 2 ML_CLOSURES)
 
 
 /* #################################################
@@ -138,7 +139,28 @@ void OpenWQ_readjson::SetConfigInfo_driver(
 
     // set sink and source
     SetConfigInfo_INPUT_SS(
-        OpenWQ_json, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
+        OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_utils, OpenWQ_output);
+
+    // #############################
+    // Hybrid physics-ML LAYER 2: per-species derivative closures.
+    // Read OPENWQ_INPUT > ML_CLOSURES (optional; absent -> pure physics). Each
+    // entry is a flat block {COMPARTMENT, SPECIES, TERM, ALPHA, MAX_CORRECTION,
+    // WEIGHTS_FILEPATH} (survives the config normalizer). Names are resolved to
+    // indices at first solve (OpenWQ_compute::Prepare_MLClosures).
+    // #############################
+    if (OpenWQ_json.Master.contains("OPENWQ_INPUT")
+        && OpenWQ_json.Master["OPENWQ_INPUT"].contains("ML_CLOSURES")) {
+        for (auto& _el : OpenWQ_json.Master["OPENWQ_INPUT"]["ML_CLOSURES"].items()) {
+            json _e = _el.value();
+            if (!_e.is_object()) continue;
+            OpenWQ_wqconfig::MLClosureConfig _cfg;
+            _cfg.compartment = _e.value("COMPARTMENT", std::string("ALL"));
+            _cfg.species     = _e.value("SPECIES", std::string(""));
+            _cfg.term        = _e.value("TERM", std::string("CHEM"));
+            _cfg.net         = OpenWQ_load_closure(_e);
+            OpenWQ_wqconfig.ml_closure_cfg.push_back(_cfg);
+        }
+    }
 
 
     // #############################

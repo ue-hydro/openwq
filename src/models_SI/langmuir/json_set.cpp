@@ -17,6 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "readjson/headerfile_RJSON.hpp"
+#include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_param: scalar->GLOBAL / object->SPATIAL
 
 
 // Parse Langmuir isotherm configuration.
@@ -46,6 +47,7 @@
 // Species listed but absent from the active chemical-species list are skipped.
 void OpenWQ_readjson::SetConfigInfo_SIModule_langmuir(
     OpenWQ_json &OpenWQ_json,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output){
@@ -239,20 +241,26 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_langmuir(
             }
         }
 
-        double qmax_val = OpenWQ_utils.RequestJsonKeyVal_double(
-            OpenWQ_wqconfig, OpenWQ_output,
-            specParams, "QMAX_MG/KG",
-            specErrId, true);
+        // Read each parameter's JSON node and build an OpenWQ_param via the
+        // shared loader: number -> GLOBAL scalar (historical, byte-identical);
+        // object ({"UNIFORM":v} / {"DEFAULT":d,"CELLS":[...]}) -> SPATIAL.
+        OpenWQ_param qmax_p = OpenWQ_load_param(
+            OpenWQ_utils.RequestJsonKeyVal_json(
+                OpenWQ_wqconfig, OpenWQ_output, specParams, "QMAX_MG/KG", specErrId, true),
+            OpenWQ_hostModelconfig);
+        OpenWQ_param KL_p = OpenWQ_load_param(
+            OpenWQ_utils.RequestJsonKeyVal_json(
+                OpenWQ_wqconfig, OpenWQ_output, specParams, "KL_L/MG", specErrId, true),
+            OpenWQ_hostModelconfig);
+        OpenWQ_param Kadsdes_p = OpenWQ_load_param(
+            OpenWQ_utils.RequestJsonKeyVal_json(
+                OpenWQ_wqconfig, OpenWQ_output, specParams, "KADSDES_1/S", specErrId, true),
+            OpenWQ_hostModelconfig);
 
-        double KL_val = OpenWQ_utils.RequestJsonKeyVal_double(
-            OpenWQ_wqconfig, OpenWQ_output,
-            specParams, "KL_L/MG",
-            specErrId, true);
-
-        double Kadsdes_val = OpenWQ_utils.RequestJsonKeyVal_double(
-            OpenWQ_wqconfig, OpenWQ_output,
-            specParams, "KADSDES_1/S",
-            specErrId, true);
+        // for logging: scalar value, or "spatial" when a per-cell field
+        std::string qmax_val    = qmax_p.is_spatial()    ? "spatial" : std::to_string(qmax_p.scalar());
+        std::string KL_val      = KL_p.is_spatial()      ? "spatial" : std::to_string(KL_p.scalar());
+        std::string Kadsdes_val = Kadsdes_p.is_spatial() ? "spatial" : std::to_string(Kadsdes_p.scalar());
 
         // Store in the LANGMUIR data structure
         OpenWQ_wqconfig.SI_model->LANGMUIR->species_index.push_back(
@@ -260,9 +268,9 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_langmuir(
         OpenWQ_wqconfig.SI_model->LANGMUIR->species_name.push_back(species_name_upper);
         OpenWQ_wqconfig.SI_model->LANGMUIR->sorbed_species_index.push_back(sorbed_idx);
         OpenWQ_wqconfig.SI_model->LANGMUIR->sorbed_species_name.push_back(sorbed_name_upper);
-        OpenWQ_wqconfig.SI_model->LANGMUIR->qmax.push_back(qmax_val);
-        OpenWQ_wqconfig.SI_model->LANGMUIR->KL.push_back(KL_val);
-        OpenWQ_wqconfig.SI_model->LANGMUIR->Kadsdes.push_back(Kadsdes_val);
+        OpenWQ_wqconfig.SI_model->LANGMUIR->qmax.push_back(qmax_p);
+        OpenWQ_wqconfig.SI_model->LANGMUIR->KL.push_back(KL_p);
+        OpenWQ_wqconfig.SI_model->LANGMUIR->Kadsdes.push_back(Kadsdes_p);
 
         si_species_count++;
 
@@ -272,9 +280,9 @@ void OpenWQ_readjson::SetConfigInfo_SIModule_langmuir(
             + "' => '" + sorbed_name_upper
             + "' (idx=" + std::to_string(species_idx)
             + "=>" + std::to_string(sorbed_idx)
-            + "), qmax=" + std::to_string(qmax_val)
-            + " mg/kg, KL=" + std::to_string(KL_val)
-            + " L/mg, Kadsdes=" + std::to_string(Kadsdes_val) + " 1/s";
+            + "), qmax=" + qmax_val
+            + " mg/kg, KL=" + KL_val
+            + " L/mg, Kadsdes=" + Kadsdes_val + " 1/s";
         OpenWQ_output.ConsoleLog(
             OpenWQ_wqconfig, msg_string, true, true);
     }

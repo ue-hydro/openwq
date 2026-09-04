@@ -133,6 +133,17 @@ if not model_chain:
 # The last model in the chain is the validation target (obs/objective + report).
 model_config_path = model_chain[-1]
 
+# Calibration + spin-up windows are OPTIONAL: if left commented out / undefined,
+# default to None so the report's timeline slider picks them.
+try:
+    calibration_period
+except NameError:
+    calibration_period = None
+try:
+    spinup_period
+except NameError:
+    spinup_period = None
+
 
 # ╔═══════════════════════════════════════════════════════════════════════╗
 # ║                                                                       ║

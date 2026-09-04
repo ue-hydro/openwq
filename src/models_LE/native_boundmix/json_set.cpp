@@ -17,6 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "readjson/headerfile_RJSON.hpp"
+#include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_closure (Layer 2)
 
 // Set LE_model module options
 void OpenWQ_readjson::SetConfigInfo_LEModule_BOUNDMIX(
@@ -93,11 +94,25 @@ void OpenWQ_readjson::SetConfigInfo_LEModule_BOUNDMIX(
             errorMsgIdentifier,
             true); 
 
-        input_k_val = OpenWQ_utils.RequestJsonKeyVal_double(
+        // K_VAL: a number (global exchange coefficient) OR a regionalized map
+        // (LAYER 1: {DEFAULT,CELLS}/UNIFORM/ML_RUNTIME -> per-cell field).
+        json k_node = OpenWQ_utils.RequestJsonKeyVal_json(
             OpenWQ_wqconfig, OpenWQ_output,
             json_BoundMix_subStruct_subStruct, "K_VAL",
             errorMsgIdentifier,
-            true); 
+            true);
+        OpenWQ_param k_param_entry;
+        if (k_node.is_number()){
+            input_k_val = k_node.get<double>();
+            k_param_entry.set_global(input_k_val);
+        } else {
+            // Spatial (regionalized): keep a representative scalar for the
+            // legacy info_vector, and build the per-cell field.
+            input_k_val = k_node.contains("DEFAULT") ? k_node["DEFAULT"].get<double>()
+                        : (k_node.contains("UNIFORM") ? k_node["UNIFORM"].get<double>()
+                        : 0.0);
+            k_param_entry = OpenWQ_load_param(k_node, OpenWQ_hostModelconfig);
+        }
 
         // Get corresponding indexes
         
@@ -174,6 +189,10 @@ void OpenWQ_readjson::SetConfigInfo_LEModule_BOUNDMIX(
                 input_k_val
             )
         );
+
+        // LAYER 1: keep the per-entry k parameter index-aligned with info_vector
+        // (pushed at the same point, after all the entry-skip guards above).
+        OpenWQ_wqconfig.LE_model->BoundMix->k_param.push_back(k_param_entry);
 
     }
 }
