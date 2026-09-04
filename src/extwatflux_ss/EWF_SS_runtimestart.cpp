@@ -224,6 +224,16 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
         const int iy = (*array_FORC)(ri,10);
         const int iz = (*array_FORC)(ri,11);
 
+        // Hybrid physics-ML for SS loads — Layer 1 per-cell load scale (default
+        // identity -> byte-identical). Applied only to source/sink loads (not
+        // EWF concentrations). The Layer-2 SS closure is applied later, on dm_ss
+        // in the solver (per-species derivative closure).
+        if (is_ss_input){
+            if (ix >= 0 && iy >= 0 && iz >= 0)
+                value_adjust *= OpenWQ_wqconfig.ss_scale.at(
+                    index, (unsigned int)ix, (unsigned int)iy, (unsigned int)iz);
+        }
+
         // Apply based on type
         if (is_ss_input && sinksource_flag == 0){
             // Source

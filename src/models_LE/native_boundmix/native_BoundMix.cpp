@@ -42,7 +42,7 @@ void OpenWQ_LE_model::native_BoundMix(
     // This lateral mixing only occurs when fluxes occur when fluxes along the interface of compartments or if leaving the system
     if (source != recipient && recipient != -1)
         return;
-    
+
     // Local Variables
     double chemass_exchange_upper_comprt;
     double chemass_exchange_lower_comprt;
@@ -69,7 +69,11 @@ void OpenWQ_LE_model::native_BoundMix(
         input_direction_index = OpenWQ_wqconfig.LE_model->BoundMix->get_exchange_direction(entry_i);
         input_upper_compartment_index = OpenWQ_wqconfig.LE_model->BoundMix->get_upper_compartment(entry_i);
         input_lower_compartment_index = OpenWQ_wqconfig.LE_model->BoundMix->get_lower_compartment(entry_i);
-        input_k_val = OpenWQ_wqconfig.LE_model->BoundMix->get_k_value(entry_i);
+        // LAYER 1: exchange coefficient at the source (upper-compartment) cell.
+        // Global by default (.at ignores indices -> byte-identical); a per-cell
+        // field when k was regionalized (ML Layer 1).
+        input_k_val = OpenWQ_wqconfig.LE_model->BoundMix->k_param[entry_i].at(
+            input_upper_compartment_index, ix_s, iy_s, iz_s);
 
         // Ignore if entry is not applicable to the current source compartment
         if (input_upper_compartment_index != source)
@@ -107,15 +111,15 @@ void OpenWQ_LE_model::native_BoundMix(
             // Cap each donating side at its LIVE balance (state + all claims
             // already written this step) so concurrent sinks cannot overdraw
             // the pool (which would create mass via the end-of-step clamp).
-            chemass_exchange_upper_comprt = 
+            chemass_exchange_upper_comprt =
                 fmin(
                     input_k_val
                     * wflux_s2r
                     * (*OpenWQ_vars.chemass)(input_upper_compartment_index)(chemi_mob)(ix_s,iy_s,iz_s),
                     std::fmax(OpenWQ_vars.live_mass(
                         input_upper_compartment_index, chemi_mob, ix_s,iy_s,iz_s), 0.0));
-            
-            chemass_exchange_lower_comprt = 
+
+            chemass_exchange_lower_comprt =
                 fmin(
                     input_k_val
                     * wflux_s2r

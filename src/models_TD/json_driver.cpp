@@ -16,6 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "readjson/headerfile_RJSON.hpp"
+#include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_closure (Layer 2)
 
 
 // Set TD_model module options
@@ -142,6 +143,19 @@ void OpenWQ_readjson::SetConfigInfo_TDModule(
                       + OpenWQ_wqconfig.TD_model->NativeAdvDisp->dispersion_z) / 3.0;
         double L = OpenWQ_wqconfig.TD_model->NativeAdvDisp->characteristic_length_m;
         OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff = D_avg / (L * L);
+
+        // LAYER 1: D_eff may be regionalized (per-cell) via an optional
+        // "D_EFF_1/S" key (a number -> global; {DEFAULT,CELLS}/ML_RUNTIME ->
+        // spatial). Default = the scalar D_eff computed above (global ->
+        // .at() returns the scalar -> byte-identical pure physics).
+        if (OpenWQ_json.TD_module["TRANSPORT_CONFIGURATION"].contains("D_EFF_1/S"))
+            OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff_param =
+                OpenWQ_load_param(
+                    OpenWQ_json.TD_module["TRANSPORT_CONFIGURATION"]["D_EFF_1/S"],
+                    OpenWQ_hostModelconfig);
+        else
+            OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff_param.set_global(
+                OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff);
 
         // Log the dispersion parameters
         msg_string = "<OpenWQ> ADVDISP: Dx="

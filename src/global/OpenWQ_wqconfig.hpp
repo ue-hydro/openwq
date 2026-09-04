@@ -20,6 +20,8 @@
 #include <ctime>
 #include <memory>
 #include "exprtk.hpp"
+#include "OpenWQ_param.hpp"    // scalar-or-spatial model parameter (Phase 0 / ML foundation)
+#include "OpenWQ_ML.hpp"       // OpenWQ_ML_closure (Layer 2 learned flux closure)
 #include <string>
 #include <unordered_map>
 #include <sys/stat.h>
@@ -116,9 +118,59 @@ class OpenWQ_wqconfig
     public:
 
         //###############################################
-        // Methods 
+        // Hybrid physics-ML for SOURCE/SINK loading (extwatflux_ss)
         //###############################################
-        
+        // LAYER 1: optional per-cell multiplier on the load (global 1.0 by
+        // default -> byte-identical; a regionalized {DEFAULT,CELLS} map makes it
+        // spatial). (The Layer-2 SS closure lives with the solver derivative
+        // closures, applied on dm_ss.)
+        OpenWQ_param       ss_scale = OpenWQ_param(1.0);
+
+        //###############################################
+        // Hybrid physics-ML LAYER 2 — per-species DERIVATIVE closures
+        //###############################################
+        // A bounded, learned correction applied in the SOLVER to a species' net
+        // tendency for ONE process term: CHEM (biogeochemistry), SORPT
+        // (sorption) or SS (source/sink loads). It replaces the old per-reaction
+        // /per-module closures with a single solver hook. Conservation is
+        // guaranteed for CHEM/SORPT by scaling the whole COUPLING GROUP (species
+        // linked by reactions / a dissolved-sorbed pair) by one factor, so every
+        // between-species transfer stays balanced. SS is external forcing.
+        // Empty ml_deriv_closures -> factors default 1.0 -> byte-identical.
+
+        // Raw config as read from OPENWQ_INPUT > ML_CLOSURES (names, resolved to
+        // indices at first solve by OpenWQ_compute::Prepare_MLClosures).
+        struct MLClosureConfig {
+            std::string compartment;   // compartment name, or "ALL"
+            std::string species;       // target (observed) species name
+            std::string term;          // "CHEM" | "SORPT" | "SS"
+            OpenWQ_ML_closure net;     // the bounded factor(state)
+        };
+        std::vector<MLClosureConfig> ml_closure_cfg;
+
+        // Resolved closures (indices into the model's compartment/species space).
+        struct MLDerivClosure {
+            unsigned int icmp;         // target compartment index
+            unsigned int chemi;        // driving (observed) species index
+            std::string  term;         // "CHEM" | "SORPT" | "SS"
+            OpenWQ_ML_closure net;
+        };
+        std::vector<MLDerivClosure> ml_deriv_closures;
+
+        // Global conservation groups (connected components): [chemi] -> group id.
+        std::vector<int> ml_chem_group;     // reaction-coupled species
+        std::vector<int> ml_sorpt_group;    // dissolved<->sorbed pairs
+        // Per [icmp][chemi] -> index into ml_deriv_closures (or -1 = none). A
+        // group member points at the closure driving its group.
+        std::vector<std::vector<int>> ml_chem_cl;
+        std::vector<std::vector<int>> ml_sorpt_cl;
+        std::vector<std::vector<int>> ml_ss_cl;
+        bool ml_closures_ready = false;     // Prepare_MLClosures ran once
+
+        //###############################################
+        // Methods
+        //###############################################
+
         /***********************************************
         * OpenWQ_masterjson
         ************************************************/
@@ -478,9 +530,6 @@ class OpenWQ_wqconfig::TD_model_::NativeAdv_{
 
     public:
 
-    // add variables here if needed
-    // current not passing any variables
-
 };
 
 class OpenWQ_wqconfig::TD_model_::NativeAdvDisp_{
@@ -501,6 +550,11 @@ class OpenWQ_wqconfig::TD_model_::NativeAdvDisp_{
     // Computed once after JSON parsing to avoid repeated division at runtime
     double D_eff = 0.0;
 
+    // LAYER 1: D_eff as a scalar-or-spatial parameter. Defaults to the scalar
+    // D_eff above (global -> byte-identical); becomes a per-cell field when the
+    // TD config provides a regionalized "D_EFF_1/S" map (ML Layer 1).
+    OpenWQ_param D_eff_param;
+
 };
 
 // Module LE_model -> BoundMix
@@ -518,6 +572,12 @@ class OpenWQ_wqconfig::LE_model_::BoundMix_{
             >> info_vector;
 
         
+
+    // LAYER 1: per-entry exchange coefficient k as a scalar-or-spatial param
+    // (index-aligned with info_vector). Global by default (K_VAL a number ->
+    // .at() returns the scalar -> byte-identical); becomes a per-cell field
+    // when K_VAL is a regionalized {DEFAULT,CELLS} map (ML Layer 1).
+    std::vector<OpenWQ_param> k_param;
 
     // METHODS
     int get_exchange_direction(unsigned int entry_i);
@@ -580,6 +640,26 @@ class OpenWQ_wqconfig::CH_model_::NativeFlex_{
     std::vector<std::vector<exprtk::expression<double>>> thread_BGCexpressions_eq;
     // Flag indicating thread-local copies are ready
     bool thread_local_ready = false;
+
+    // ########################################
+    // ML / SPATIAL BGC parameters (exprtk refactor)
+    // A BGC parameter is either GLOBAL (string-substituted as a literal into the
+    // expression - historical, byte-identical) or SPATIAL (per-cell). Spatial
+    // params are left in the expression as elements of a bound "openWQ_BGCparam"
+    // vector and refreshed per cell, exactly like chemass_InTransfEq. All of the
+    // members below stay empty / max_BGCparam_size==0 when NO parameter is
+    // spatial, so existing configs compile to identical expression strings, the
+    // openWQ_BGCparam vector is never bound, and the run is byte-identical.
+    // ########################################
+    // Per-expression ordered list of SPATIAL params; the list index equals the
+    // k used inside that expression as openWQ_BGCparam[k].
+    std::vector<std::vector<OpenWQ_param>> BGCexpr_spatial_params;
+    // Max number of spatial params across all expressions (vector sizing)
+    unsigned int max_BGCparam_size = 0;
+    // Serial path: the current cell's spatial-parameter values (bound once)
+    std::vector<double> BGCparam_InTransfEq;
+    // Parallel path: per-thread copies [thread_id][k]
+    std::vector<std::vector<double>> thread_BGCparam_InTransfEq;
 
 };
 // Module CH_model -> PHREEQC
@@ -654,6 +734,7 @@ class OpenWQ_wqconfig::TS_model_::HypeHVB_{
     std::vector<double> monthpar = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                                      0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
+
     // METHODS
     int get_exchange_direction();
     int get_eroding_transp_compartment();
@@ -716,6 +797,7 @@ class OpenWQ_wqconfig::TS_model_::HypeMMF_{
     // but it can only be mobilized if there is runoff
     arma::Cube<double> mobilisedsed_rain_potential;
 
+
     // METHODS
     int get_exchange_direction();
     int get_eroding_transp_compartment();
@@ -742,13 +824,16 @@ class OpenWQ_wqconfig::SI_model_::LANGMUIR_{
     std::vector<int> sorbed_species_index;       // Global index of the SORBED partner species
                                                  // (species-pair scheme, e.g. PO4-P => PP)
     std::vector<std::string> sorbed_species_name;// Sorbed partner name (for logging)
-    std::vector<double> qmax;                    // Maximum adsorption capacity [mg/kg_soil]
-    std::vector<double> KL;                      // Langmuir equilibrium constant [L/mg]
-    std::vector<double> Kadsdes;                 // Kinetic adsorption/desorption rate [1/s]
+    // Per-species parameters as OpenWQ_param: GLOBAL scalar by default
+    // (backward-compatible), or a per-cell SPATIAL field (map / ML).
+    std::vector<OpenWQ_param> qmax;              // Maximum adsorption capacity [mg/kg_soil]
+    std::vector<OpenWQ_param> KL;                // Langmuir equilibrium constant [L/mg]
+    std::vector<OpenWQ_param> Kadsdes;           // Kinetic adsorption/desorption rate [1/s]
 
     // Soil/medium properties (uniform or per-compartment in future)
     double bulk_density = 1500.0;                // Bulk density [kg/m^3]
     double layer_thickness = 1.0;                // Representative layer thickness [m]
+
 
 };
 
@@ -769,13 +854,17 @@ class OpenWQ_wqconfig::SI_model_::FREUNDLICH_{
     std::vector<int> sorbed_species_index;       // Global index of the SORBED partner species
                                                  // (species-pair scheme, e.g. PO4-P => PP)
     std::vector<std::string> sorbed_species_name;// Sorbed partner name (for logging)
-    std::vector<double> Kfr;                     // Freundlich coefficient [mg/kg / (mg/L)^(1/Nfr)]
-    std::vector<double> Nfr;                     // Freundlich exponent [-]
-    std::vector<double> Kadsdes;                 // Kinetic adsorption/desorption rate [1/s]
+    // Per-species parameters. Each is an OpenWQ_param: a GLOBAL scalar by
+    // default (backward-compatible, identical for every cell) that can instead
+    // hold a per-cell SPATIAL field (from an input map or ML regionalization).
+    std::vector<OpenWQ_param> Kfr;               // Freundlich coefficient [mg/kg / (mg/L)^(1/Nfr)]
+    std::vector<OpenWQ_param> Nfr;               // Freundlich exponent [-]
+    std::vector<OpenWQ_param> Kadsdes;           // Kinetic adsorption/desorption rate [1/s]
 
     // Soil/medium properties
     double bulk_density = 1500.0;                // Bulk density [kg/m^3]
     double layer_thickness = 1.0;                // Representative layer thickness [m]
+
 
 };
 

@@ -80,8 +80,11 @@ void OpenWQ_TD_model::AdvDisp(
     // This eliminates alternating-zero oscillations when time step ≥ cell residence time
     const double conc_factor = 1.0 - std::exp(-wflux_s2r / wmass_source);
 
-    // Get pre-computed effective dispersion rate [1/s]
-    const double D_eff = OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff;
+    // Get effective dispersion rate [1/s] at the source cell. LAYER 1: this is
+    // a per-cell field when D_eff was regionalized; otherwise the global scalar
+    // (.at() ignores the indices in global mode -> byte-identical pure physics).
+    const double D_eff = OpenWQ_wqconfig.TD_model->NativeAdvDisp->D_eff_param.at(
+        source, ix_s, iy_s, iz_s);
 
     // Host model time step [s]. D_eff has units of 1/s, so multiplying by dt
     // gives a dimensionless mass fraction. Without dt the dispersive flux
@@ -168,7 +171,8 @@ void OpenWQ_TD_model::AdvDisp(
         // to each pull recip_initial, creating N-1 copies of mass via the
         // end-of-step non-negativity clamp.
         // ===========================
-        double chemass_flux_total = chemass_flux_adv + chemass_flux_disp;
+        double chemass_flux_total =
+            chemass_flux_adv + chemass_flux_disp;
         if (chemass_flux_total > 0.0){
             // Net transfer source -> recipient
             const double src_live = std::fmax(

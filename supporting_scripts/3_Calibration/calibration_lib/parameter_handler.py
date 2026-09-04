@@ -38,6 +38,11 @@ import numpy as np
 import pandas as pd
 import logging
 
+try:                                   # works as a package module or standalone
+    from . import ml_regionalization
+except ImportError:                    # pragma: no cover
+    import ml_regionalization
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +57,9 @@ class ParameterHandler:
                  base_model_config_dir: Optional[str] = None,
                  test_case_dir: Optional[str] = None,
                  running_on_docker: bool = True,
-                 calibration_period: Optional[Tuple[str, str]] = None):
+                 calibration_period: Optional[Tuple[str, str]] = None,
+                 ml_closures: Optional[Dict[str, Any]] = None,
+                 ml_runtime: Optional[Dict[str, Any]] = None):
         """
         Initialize the parameter handler.
 
@@ -89,6 +96,18 @@ class ParameterHandler:
         # Ensure directories exist
         self.calibration_work_dir.mkdir(parents=True, exist_ok=True)
         (self.calibration_work_dir / "evaluations").mkdir(exist_ok=True)
+
+        # Cache of loaded regionalization inputs (attribute table + reach mapper),
+        # keyed by (attribute_table, mapping_source) so they load once per run.
+        self._regionalize_cache: Dict[Any, Any] = {}
+
+        # Hybrid physics-ML (activated in the report ML tab; empty = pure
+        # physics). Layer 2 flux closures + Layer 1B runtime NNs are injected
+        # into each evaluation's openWQ JSON after the calibration params are
+        # applied. Layer 1A regionalization arrives as ordinary bgc_regionalize
+        # sub-params (already handled), so it needs nothing here.
+        self.ml_closures: Dict[str, Any] = ml_closures or {}
+        self.ml_runtime: Dict[str, Any] = ml_runtime or {}
 
     # =====================================================================
     # Evaluation directory setup
@@ -382,6 +401,12 @@ class ParameterHandler:
                         # loop (seasonal modes group sibling params by species)
         _SS_LOAD_TYPES = ("ss_csv_scale", "ss_seasonal_amp",
                           "ss_seasonal_phase", "ss_seasonal_month")
+        regionalize_items = []  # ML regionalization sub-params (Layer 1): the
+                        # low-dim per-class/coefficient values are gathered per
+                        # regionalize_group and expanded to a per-cell map below.
+        closure_items = []  # Layer-2 DDS-calibrated closure sub-params (cw, cb):
+                        # gathered per closure_group and serialized to the
+                        # closure weights JSON below (no offline training).
         for i, param in enumerate(parameters):
             value = values[i]
             file_type = param["file_type"]
@@ -396,6 +421,16 @@ class ParameterHandler:
 
             if file_type in _SS_LOAD_TYPES:
                 ss_items.append((param, value))
+                continue
+
+            if file_type in ("bgc_regionalize", "sorption_regionalize",
+                             "module_regionalize", "ts_regionalize",
+                             "ss_regionalize"):
+                regionalize_items.append((param, value))
+                continue
+
+            if file_type == "closure_calib":
+                closure_items.append((param, value))
                 continue
 
             # Route to appropriate handler
@@ -433,6 +468,181 @@ class ParameterHandler:
         if ss_items:
             self._apply_ss_loads(eval_dir, ss_items)
 
+        # Apply regionalized parameters: group the sub-params by their parent
+        # physical parameter, then build + write one per-cell map per group.
+        if regionalize_items:
+            groups: Dict[str, List] = {}
+            for param, value in regionalize_items:
+                groups.setdefault(param["regionalize_group"], []).append((param, value))
+            for group_name, items in groups.items():
+                ft = items[0][0]["file_type"]
+                if ft == "sorption_regionalize":
+                    self._apply_sorption_regionalize_group(eval_dir, group_name, items)
+                elif ft == "module_regionalize":
+                    self._apply_module_regionalize_group(eval_dir, group_name, items)
+                elif ft == "ts_regionalize":
+                    self._apply_ts_regionalize_group(eval_dir, group_name, items)
+                elif ft == "ss_regionalize":
+                    self._apply_ss_regionalize_group(eval_dir, group_name, items)
+                else:
+                    self._apply_bgc_regionalize_group(eval_dir, group_name, items)
+
+        # Layer-2 DDS-calibrated closures: serialize the calibrated (cw, cb) to
+        # each closure's weights JSON and point its spec at it, so the injection
+        # below picks it up. Must run BEFORE _apply_ml_closures.
+        if closure_items:
+            self._apply_calibrated_closures(eval_dir, closure_items)
+
+        # Hybrid physics-ML injection (Layer 2 flux closures + Layer 1B runtime
+        # NN). Written AFTER the calibration params so nothing overwrites them.
+        # Empty dicts => no-op => byte-identical pure physics.
+        if self.ml_closures:
+            self._apply_ml_closures(eval_dir)
+        if self.ml_runtime:
+            self._apply_ml_runtime(eval_dir)
+
+    # =========================================================================
+    # Hybrid physics-ML — Layer 2 closures + Layer 1B runtime NN injection
+    # =========================================================================
+
+    @staticmethod
+    def _ml_closure_entry(spec: Dict) -> Dict:
+        """One flat ML_CLOSURES entry openWQ reads in the solver (survives the
+        config normalizer): strings for COMPARTMENT/SPECIES/TERM, numbers for
+        ALPHA/MAX_CORRECTION, and WEIGHTS_FILEPATH keeps its value (FILEPATH key).
+        alpha==0 or an empty/missing weights net => factor()==1 => exact physics."""
+        return {
+            "COMPARTMENT": str(spec.get("compartment", "ALL") or "ALL"),
+            "SPECIES": str(spec.get("species", "")),
+            "TERM": str(spec.get("term", "CHEM")).upper(),
+            "ALPHA": float(spec.get("alpha", 0.0)),
+            "MAX_CORRECTION": float(spec.get("max_correction", 1.0)),
+            "WEIGHTS_FILEPATH": spec.get("weights_filepath", ""),
+        }
+
+    def _apply_calibrated_closures(self, eval_dir: Path,
+                                   closure_items: List) -> None:
+        """Serialize each DDS-calibrated Layer-2 derivative closure to the weights
+        JSON openWQ reads. The (cw, cb) sub-params define ``g = tanh(cw*x + cb)``
+        with ``x`` = the target species' own state (the solver passes a 1-vector),
+        so the net is ALWAYS a single 1x1 tanh layer (n_in=1, uniform for
+        CHEM/SORPT/SS). Points ``self.ml_closures[key]['weights_filepath']`` at
+        the file; ``_apply_ml_closures`` then references it in the master
+        ML_CLOSURES list. Python-only — no rebuild."""
+        groups: Dict[str, Dict[str, float]] = {}
+        for param, value in closure_items:
+            groups.setdefault(param["closure_group"], {})[param["subparam_key"]] = float(value)
+        (eval_dir / "openwq_in").mkdir(parents=True, exist_ok=True)
+        for key, vals in groups.items():
+            spec = self.ml_closures.get(key)
+            if spec is None:
+                logger.warning(f"calibrated closure '{key}': no ml_closures "
+                               "entry to attach the net to — skipped.")
+                continue
+            cw = float(vals.get("cw", 0.0))
+            cb = float(vals.get("cb", 0.0))
+            net = ml_regionalization.export_mlp_weights([([[cw]], [cb], "tanh")])
+            safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(key))
+            rel = f"openwq_in/_ml_closure_{safe}.json"
+            with open(eval_dir / rel, "w") as f:
+                json.dump(net, f)
+            spec["weights_filepath"] = rel
+            if not float(spec.get("alpha", 0.0) or 0.0):
+                spec["alpha"] = 1.0     # a calibrated g needs a nonzero dial
+            logger.info(f"ML ACTIVE: calibrated closure '{key}' -> {rel} "
+                        f"(species={spec.get('species')}, term={spec.get('term')}, "
+                        f"cw={cw:.4g}, cb={cb:.4g}, alpha={spec.get('alpha')})")
+
+    def _apply_ml_closures(self, eval_dir: Path) -> None:
+        """Write all activated Layer-2 per-species DERIVATIVE closures into the
+        eval master at ``OPENWQ_INPUT > ML_CLOSURES`` — a flat list openWQ reads
+        in the solver, one entry per (species, term). Empty self.ml_closures =>
+        nothing written => byte-identical pure physics. Calibrated nets were
+        already written by _apply_calibrated_closures (weights_filepath filled)."""
+        if not self.ml_closures:
+            return
+        master = eval_dir / "openWQ_master.json"
+        if not master.exists():
+            logger.warning(f"ml_closures: master not found ({master}) — skipped.")
+            return
+        data, header = self._read_json_with_header(master)
+        oi = data.setdefault("OPENWQ_INPUT", {})
+        block: Dict[str, Dict] = {}
+        n = 0
+        for key, spec in self.ml_closures.items():
+            # P5: flag inadvertent no-ops in the run log.
+            a = float(spec.get("alpha", 0.0) or 0.0)
+            wf = spec.get("weights_filepath", "")
+            if a == 0.0:
+                logger.info(f"ML INERT: closure '{key}' alpha=0 -> pure physics")
+            elif spec.get("mode") != "calibrated" and wf \
+                    and not (eval_dir / wf).exists():
+                logger.warning(
+                    f"ML INERT: closure '{key}' weights file missing ({wf}) "
+                    "-> factor=1. Train/point a real file, or use calibrated mode.")
+            n += 1
+            block[str(n)] = self._ml_closure_entry(spec)
+        oi["ML_CLOSURES"] = block
+        self._write_json_with_header(master, data, header)
+        logger.info(f"ml_closures: wrote {n} ML_CLOSURES entry(ies) into "
+                    f"{master.name}")
+
+    def _write_master_ss_ml(self, eval_dir: Path, key: str, value) -> None:
+        """Write an SS hybrid-ML block into the eval's openWQ master at
+        ``OPENWQ_INPUT > SINK_SOURCE_ML > {key}`` (ML_CLOSURE or ML_SCALE). A
+        separate master section so it never inflates the SINK_SOURCE file list."""
+        master = eval_dir / "openWQ_master.json"
+        if not master.exists():
+            logger.warning(f"ss ML: master not found ({master}) — skipped.")
+            return
+        data, header = self._read_json_with_header(master)
+        oi = data.setdefault("OPENWQ_INPUT", {})
+        oi.setdefault("SINK_SOURCE_ML", {})[key] = value
+        self._write_json_with_header(master, data, header)
+        logger.info(f"ss ML: wrote OPENWQ_INPUT>SINK_SOURCE_ML>{key} to "
+                    f"{master.name}")
+
+    def _apply_ml_runtime(self, eval_dir: Path) -> None:
+        """Inject each activated Layer-1B ``ML_RUNTIME`` block into the BGC config,
+        REPLACING the target parameter's scalar value with
+        ``{"ML_RUNTIME": {WEIGHTS_FILEPATH, ATTRIBUTES_FILEPATH, DEFAULT}}`` at
+        the parameter's json path. openWQ evaluates the trained network per cell
+        at start-up (OpenWQ_load_param_runtime). Block is flat/file-based so it
+        survives the config normalizer."""
+        bgc_file = eval_dir / "openwq_in" / "openWQ_MODULE_NATIVE_BGC_FLEX.json"
+        if not bgc_file.exists():
+            logger.warning(f"ml_runtime: BGC file not found: {bgc_file}")
+            return
+        data, header = self._read_json_with_header(bgc_file)
+        n = 0
+        for key, spec in self.ml_runtime.items():
+            path = spec.get("path")
+            if not path:
+                logger.warning(f"ml_runtime['{key}']: missing parameter path — skipped.")
+                continue
+            obj = data
+            ok = True
+            for k in path[:-1]:
+                if isinstance(obj, dict) and k in obj:
+                    obj = obj[k]
+                else:
+                    ok = False
+                    break
+            if not ok:
+                logger.warning(f"ml_runtime['{key}']: path {path} not found in "
+                               "BGC config — skipped.")
+                continue
+            obj[path[-1]] = {"ML_RUNTIME": {
+                "WEIGHTS_FILEPATH": spec.get("weights_filepath", ""),
+                "ATTRIBUTES_FILEPATH": spec.get("attributes_filepath", ""),
+                "DEFAULT": float(spec.get("default", 0.0)),
+            }}
+            n += 1
+        if n:
+            self._write_json_with_header(bgc_file, data, header)
+            logger.info(f"ml_runtime: injected {n} ML_RUNTIME block(s) into "
+                        f"{bgc_file.name}")
+
     # =========================================================================
     # BGC JSON (NATIVE_BGC_FLEX)
     # =========================================================================
@@ -468,6 +678,241 @@ class ParameterHandler:
         obj[json_path[-1]] = value
 
         self._write_json_with_header(bgc_file, data, header)
+
+    # =========================================================================
+    # BGC JSON — regionalized (ML Layer 1) parameters
+    # =========================================================================
+
+    def _load_regionalize_inputs(self, spec: Dict, eval_dir: Path):
+        """Load (and cache) the attribute table + reach mapper for a
+        regionalized parameter. Returns ``(attributes, mapper)`` where either
+        may be empty/None if its source is missing."""
+        at = spec.get("attribute_table")
+        ms = spec.get("mapping_source")
+        cache_key = (at, ms)
+        if cache_key in self._regionalize_cache:
+            return self._regionalize_cache[cache_key]
+
+        def _resolve(p):
+            if not p:
+                return None
+            return p if os.path.isabs(p) else str(eval_dir / p)
+
+        attributes = (ml_regionalization.load_attribute_table(
+            _resolve(at), id_column=spec.get("id_column", "id")) if at else {})
+
+        try:
+            from .reach_mapping import ReachMapper
+        except ImportError:            # pragma: no cover
+            from reach_mapping import ReachMapper
+        hostmodel = "mizuroute"
+        if isinstance(self.model_config, dict):
+            hostmodel = self.model_config.get("hostmodel", hostmodel) or hostmodel
+        mapper = ReachMapper(hostmodel=hostmodel)
+        ms_path = _resolve(ms)
+        if not ms_path:
+            # P3: no explicit mapping source -> auto-default to the eval's own
+            # HDF5 output dir (ReachMapper scans *.h5 for reachID/hruId +
+            # xyz_elements), so a regionalize row needs no manual mapping source
+            # when a baseline HDF5 output is present in the eval.
+            cand = eval_dir / "openwq_out" / "HDF5"
+            if cand.is_dir():
+                ms_path = str(cand)
+                logger.info(f"regionalize: auto mapping_source -> {ms_path}")
+        if not ms_path or not mapper.load_mapping(ms_path):
+            if ms_path:
+                logger.warning(f"regionalize: could not load reach mapping from {ms_path}")
+            mapper = None
+
+        result = (attributes, mapper)
+        self._regionalize_cache[cache_key] = result
+        return result
+
+    def _apply_bgc_regionalize_group(self, eval_dir: Path,
+                                     group_name: str, items: List) -> None:
+        """Build the per-cell ``{"DEFAULT","CELLS"}`` map for one regionalized
+        BGC parameter from its calibrated low-dim sub-params and write it into
+        the BGC JSON at the parameter's path (replacing the scalar)."""
+        spec = items[0][0]["regionalize_spec"]
+        json_path = items[0][0]["path"]
+        subparam_values = {p["subparam_key"]: float(v) for p, v in items}
+
+        attributes, mapper = self._load_regionalize_inputs(spec, eval_dir)
+
+        icmp = int(spec.get("icmp", 0))
+        if attributes and mapper is not None:
+            spatial_obj = ml_regionalization.make_spatial_param(
+                spec, subparam_values, attributes, mapper, icmp=icmp)
+        else:
+            # Graceful fallback: a uniform map at the block default (no per-cell
+            # variation) so a missing attribute table / mapping never crashes a
+            # run — it just degrades to a spatially-uniform value.
+            logger.warning(
+                f"ML INERT: regionalize '{group_name}': missing "
+                "attributes/mapping — DEFAULT-only map (no per-cell variation). "
+                "Set an attribute table + mapping source.")
+            spatial_obj = {"DEFAULT": float(spec.get("default", 0.0)), "CELLS": []}
+
+        bgc_file = eval_dir / "openwq_in" / "openWQ_MODULE_NATIVE_BGC_FLEX.json"
+        if not bgc_file.exists():
+            logger.warning(f"BGC file not found: {bgc_file}")
+            return
+        data, header = self._read_json_with_header(bgc_file)
+        obj = data
+        for key in json_path[:-1]:
+            obj = obj[key]
+        obj[json_path[-1]] = spatial_obj
+        self._write_json_with_header(bgc_file, data, header)
+        logger.debug(
+            f"regionalize '{group_name}': wrote map with "
+            f"{len(spatial_obj.get('CELLS', []))} per-cell entries "
+            f"(default={spatial_obj.get('DEFAULT')})")
+
+    def _resolve_module_file(self, eval_dir: Path, module_key: str):
+        """Path to a module's config file, from the eval's openWQ master
+        (MODULES[module_key].MODULE_CONFIG_FILEPATH). None if inactive/missing."""
+        master = eval_dir / "openWQ_master.json"
+        if not master.exists():
+            logger.warning(f"regionalize: master not found ({master})")
+            return None
+        mdata, _ = self._read_json_with_header(master)
+        entry = mdata.get("MODULES", {}).get(module_key, {})
+        rel = entry.get("MODULE_CONFIG_FILEPATH", "")
+        name = entry.get("MODULE_NAME", "NONE")
+        if not rel or str(name).upper() in ("", "NONE"):
+            return None
+        f = eval_dir / rel
+        return f if f.exists() else None
+
+    def _build_regionalize_map(self, group_name: str, items: List, eval_dir: Path):
+        """Shared: build the ``{DEFAULT,CELLS}`` per-cell map for a regionalize
+        group from its calibrated low-dim sub-params (DEFAULT-only fallback if
+        the attribute table / reach mapping is missing). Returns (map, icmp)."""
+        spec = items[0][0]["regionalize_spec"]
+        subparam_values = {p["subparam_key"]: float(v) for p, v in items}
+        attributes, mapper = self._load_regionalize_inputs(spec, eval_dir)
+        icmp = int(spec.get("icmp", 0))
+        if attributes and mapper is not None:
+            m = ml_regionalization.make_spatial_param(
+                spec, subparam_values, attributes, mapper, icmp=icmp)
+            ncells = len(m.get("CELLS", []))
+            if ncells:
+                logger.info(f"ML ACTIVE: regionalize '{group_name}' -> "
+                            f"{ncells} per-cell values")
+            else:
+                logger.warning(f"ML INERT: regionalize '{group_name}' produced "
+                               "0 per-cell values (attributes/mapping did not "
+                               "match any cell) -> DEFAULT everywhere.")
+            return m, icmp
+        logger.warning(f"ML INERT: regionalize '{group_name}': missing "
+                       "attributes/mapping — DEFAULT-only map (no per-cell "
+                       "variation). Set an attribute table + mapping source.")
+        return {"DEFAULT": float(spec.get("default", 0.0)), "CELLS": []}, icmp
+
+    def _apply_module_regionalize_group(self, eval_dir: Path,
+                                        group_name: str, items: List) -> None:
+        """Regionalize a param in a non-BGC module that reads OpenWQ_load_param
+        (``{DEFAULT,CELLS}``) — currently TD (D_eff) and LE (k). Writes the map
+        at the param's json path in the module file, resolved from the master
+        via ``module_key`` (so any module name works)."""
+        p0 = items[0][0]
+        module_key = p0.get("module_key")
+        json_path = p0["path"]
+        spatial_obj, _ = self._build_regionalize_map(group_name, items, eval_dir)
+        mod_file = self._resolve_module_file(eval_dir, module_key)
+        if mod_file is None:
+            logger.warning(f"regionalize '{group_name}': module {module_key} not "
+                           "active — skipped.")
+            return
+        data, header = self._read_json_with_header(mod_file)
+        obj = data
+        for key in json_path[:-1]:
+            if not isinstance(obj, dict):
+                logger.warning(f"regionalize '{group_name}': bad path {json_path}")
+                return
+            obj = obj.setdefault(key, {})
+        obj[json_path[-1]] = spatial_obj
+        self._write_json_with_header(mod_file, data, header)
+        logger.info(f"regionalize '{group_name}': wrote {module_key} map "
+                    f"({len(spatial_obj.get('CELLS', []))} cells) to {mod_file.name}")
+
+    def _apply_ts_regionalize_group(self, eval_dir: Path,
+                                    group_name: str, items: List) -> None:
+        """Regionalize a TS (sediment) parameter. TS reads a per-cell TABLE
+        (``PARAMETERS[param] = {"0":[IX,IY,IZ,VALUE],"1":[...]}``, 1-based) plus a
+        scalar ``PARAMETER_DEFAULTS[param]``, so convert the {DEFAULT,CELLS} map
+        to that format (single compartment: rows filtered to icmp)."""
+        p0 = items[0][0]
+        ts_param = p0.get("ts_param") or (p0["path"][-1] if p0.get("path") else None)
+        spatial_obj, icmp = self._build_regionalize_map(group_name, items, eval_dir)
+        mod_file = self._resolve_module_file(eval_dir, "TRANSPORT_SEDIMENTS")
+        if mod_file is None or not ts_param:
+            logger.warning(f"regionalize '{group_name}': TS module/param missing "
+                           "— skipped.")
+            return
+        data, header = self._read_json_with_header(mod_file)
+        table = {"0": ["IX", "IY", "IZ", "VALUE"]}
+        r = 1
+        for cell in spatial_obj.get("CELLS", []):
+            if len(cell) < 5 or int(cell[0]) != icmp:
+                continue
+            table[str(r)] = [int(cell[1]) + 1, int(cell[2]) + 1,
+                             int(cell[3]) + 1, float(cell[4])]
+            r += 1
+        data.setdefault("PARAMETERS", {})[ts_param] = table
+        data.setdefault("PARAMETER_DEFAULTS", {})[ts_param] = float(
+            spatial_obj.get("DEFAULT", 0.0))
+        self._write_json_with_header(mod_file, data, header)
+        logger.info(f"regionalize '{group_name}': wrote TS param '{ts_param}' "
+                    f"table ({r-1} cells) to {mod_file.name}")
+
+    def _apply_ss_regionalize_group(self, eval_dir: Path,
+                                    group_name: str, items: List) -> None:
+        """Regionalize the SS load scale: build the per-cell ``{DEFAULT,CELLS}``
+        multiplier and write it into the master's OPENWQ_INPUT > SINK_SOURCE_ML >
+        ML_SCALE (openWQ applies it per-cell to every source/sink load)."""
+        spatial_obj, _ = self._build_regionalize_map(group_name, items, eval_dir)
+        self._write_master_ss_ml(eval_dir, "ML_SCALE", spatial_obj)
+
+    def _apply_sorption_regionalize_group(self, eval_dir: Path,
+                                          group_name: str, items: List) -> None:
+        """Build the per-cell map for one regionalized SORPTION parameter and
+        write it into the SI parameter database at ``[species][module][param]``
+        (openWQ's SI loader reads it as a spatial field)."""
+        spec = items[0][0]["regionalize_spec"]
+        path = items[0][0]["path"]      # {module, species, param, database_file}
+        subparam_values = {p["subparam_key"]: float(v) for p, v in items}
+
+        attributes, mapper = self._load_regionalize_inputs(spec, eval_dir)
+        icmp = int(spec.get("icmp", 0))
+        if attributes and mapper is not None:
+            spatial_obj = ml_regionalization.make_spatial_param(
+                spec, subparam_values, attributes, mapper, icmp=icmp)
+        else:
+            logger.warning(
+                f"regionalize '{group_name}': missing attributes/mapping — "
+                f"writing DEFAULT-only map (no per-cell variation).")
+            spatial_obj = {"DEFAULT": float(spec.get("default", 0.0)), "CELLS": []}
+
+        db_rel = path.get("database_file", "openwq_in/SI_param_database.json")
+        db_file = Path(db_rel) if os.path.isabs(db_rel) else (eval_dir / db_rel)
+        if not db_file.exists():
+            logger.warning(f"SI param database not found: {db_file}")
+            return
+        data, header = self._read_json_with_header(db_file)
+        species, module, pkey = path["species"], path["module"], path["param"]
+        try:
+            data[species][module][pkey] = spatial_obj
+        except (KeyError, TypeError):
+            logger.warning(
+                f"regionalize '{group_name}': path {species}/{module}/{pkey} "
+                f"not found in {db_file.name}")
+            return
+        self._write_json_with_header(db_file, data, header)
+        logger.debug(
+            f"regionalize '{group_name}': wrote SI map at "
+            f"{species}/{module}/{pkey} with "
+            f"{len(spatial_obj.get('CELLS', []))} per-cell entries")
 
     # =========================================================================
     # PHREEQC PQI File

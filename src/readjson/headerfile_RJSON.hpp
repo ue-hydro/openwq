@@ -126,6 +126,7 @@ class OpenWQ_readjson{
 
         void SetConfigInfo_INPUT_SS(
             OpenWQ_json& OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig& OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
@@ -261,12 +262,14 @@ class OpenWQ_readjson{
         // options
         void SetConfigInfo_SIModule_freundlich(
             OpenWQ_json &OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig &OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);
 
         void SetConfigInfo_SIModule_langmuir(
             OpenWQ_json &OpenWQ_json,
+            OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
             OpenWQ_wqconfig &OpenWQ_wqconfig,
             OpenWQ_utils& OpenWQ_utils,
             OpenWQ_output& OpenWQ_output);

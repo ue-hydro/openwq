@@ -113,6 +113,14 @@ void OpenWQ_CH_model::bgc_flex_transform(
                 const unsigned int num_chem_in_transf = index_chemtransf.size();
                 const unsigned int expr_idx = transf_index[transi];
 
+                // Does this expression have SPATIAL (per-cell) parameters? If so,
+                // the bound openWQ_BGCparam vector must be refreshed per cell
+                // (below). Empty for all-GLOBAL configs -> no per-cell fill,
+                // byte-identical to the historical code.
+                const bool expr_has_spatial =
+                    expr_idx < nativeFlex->BGCexpr_spatial_params.size()
+                    && !nativeFlex->BGCexpr_spatial_params[expr_idx].empty();
+
                 // Check if consumed/produced species are valid
                 // (index remains UINT_MAX when species name is "NONE" or not found in species list)
                 const bool has_cons = (index_cons != static_cast<unsigned int>(-1));
@@ -165,6 +173,7 @@ void OpenWQ_CH_model::bgc_flex_transform(
                         // Get thread-local data vectors and expression
                         auto& tl_chemass = nativeFlex->thread_chemass_InTransfEq[tid];
                         auto& tl_depvar = nativeFlex->thread_dependVar_scalar[tid];
+                        auto& tl_bgcparam = nativeFlex->thread_BGCparam_InTransfEq[tid];
                         auto& tl_expr = nativeFlex->thread_BGCexpressions_eq[tid][expr_idx];
 
                         #pragma omp for schedule(static)
@@ -182,6 +191,14 @@ void OpenWQ_CH_model::bgc_flex_transform(
                             // Fill thread-local dependency scalars
                             for (unsigned int depi = 0; depi < num_depend; depi++) {
                                 tl_depvar[depi] = OpenWQ_hostModelconfig.get_dependVar_at(depi, ix, iy, iz);
+                            }
+
+                            // Fill thread-local SPATIAL parameter values (no-op
+                            // when this expression has only global params)
+                            if (expr_has_spatial) {
+                                const auto& sp = nativeFlex->BGCexpr_spatial_params[expr_idx];
+                                for (unsigned int k = 0; k < sp.size(); k++)
+                                    tl_bgcparam[k] = sp[k].at(icmp, ix, iy, iz);
                             }
 
                             // Evaluate expression using thread-local data
@@ -232,6 +249,14 @@ void OpenWQ_CH_model::bgc_flex_transform(
                                 for (unsigned int depi=0;depi<num_depend;depi++){
                                     OpenWQ_hostModelconfig.set_dependVar_scalar_at(
                                         depi, OpenWQ_hostModelconfig.get_dependVar_at(depi,ix,iy,iz));
+                                }
+
+                                // Update SPATIAL parameter values for this cell
+                                // (no-op when only global params are present)
+                                if (expr_has_spatial) {
+                                    const auto& sp = nativeFlex->BGCexpr_spatial_params[expr_idx];
+                                    for (unsigned int k=0;k<sp.size();k++)
+                                        nativeFlex->BGCparam_InTransfEq[k] = sp[k].at(icmp,ix,iy,iz);
                                 }
 
                                 // Mass transfered: Consumed -> Produced (using exprtk)

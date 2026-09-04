@@ -96,18 +96,20 @@ void OpenWQ_readjson::SetConfigInfo_SIModule(
     // Load information fo the TS_model model selected
     if ((OpenWQ_wqconfig.SI_model->SI_module).compare("FREUNDLICH") == 0){
         
-        SetConfigInfo_SIModule_freundlich(  
-            OpenWQ_json, 
-            OpenWQ_wqconfig, 
-            OpenWQ_utils, 
-            OpenWQ_output);    
+        SetConfigInfo_SIModule_freundlich(
+            OpenWQ_json,
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,
+            OpenWQ_utils,
+            OpenWQ_output);
 
     }else if ((OpenWQ_wqconfig.SI_model->SI_module).compare("LANGMUIR") == 0){
-        
-        SetConfigInfo_SIModule_langmuir(  
-            OpenWQ_json, 
-            OpenWQ_wqconfig, 
-            OpenWQ_utils, 
+
+        SetConfigInfo_SIModule_langmuir(
+            OpenWQ_json,
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,
+            OpenWQ_utils,
             OpenWQ_output);
 
     }

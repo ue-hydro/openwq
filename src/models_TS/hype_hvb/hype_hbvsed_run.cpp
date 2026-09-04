@@ -132,7 +132,9 @@ void OpenWQ_TS_model::hbvsed_hype_erosion_run(
     // If cell area is unavailable, keep the legacy 1000x scaling so results are
     // unchanged for couplings that do not publish cell area.
     double abs_scale = (cellArea_m2 > 0.0) ? (cellArea_m2 / 1000.0) : 1000.0;
-    (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_r, iy_r, iz_r) = abs_scale * mobilisedsed * erodmonth;  // kg
+    double eros_flux = abs_scale * mobilisedsed * erodmonth;  // kg
+
+    (*OpenWQ_vars.d_sedmass_mobilized_dt)(ix_r, iy_r, iz_r) = eros_flux;  // kg
   
   // #######################
   // Mobind with runoff if flow exists

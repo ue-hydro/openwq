@@ -297,6 +297,16 @@ def run_calibration(
         # Calibration parameters
         calibration_parameters: List[Dict] = None,
 
+        # Hybrid physics-ML (activated in the report's ML tab). Layer 1A
+        # regionalization is already expanded into calibration_parameters by the
+        # run script (extract_parameters.apply_regionalize_to_params), so it
+        # needs nothing here. Layer 2 closures / Layer 1B runtime NNs reference
+        # trained weight files; they are ACCEPTED here so the generated script
+        # runs, but their per-evaluation injection into the openWQ JSON is not
+        # active yet (a follow-up) — a warning is logged if they are provided.
+        ml_closures: Optional[Dict] = None,
+        ml_runtime: Optional[Dict] = None,
+
         # Calibration settings
         algorithm: str = "DDS",
         max_evaluations: int = 500,
@@ -352,6 +362,30 @@ def run_calibration(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     ))
     logging.getLogger().addHandler(file_handler)
+
+    # Hybrid physics-ML: Layer 2 flux closures + Layer 1B runtime NNs are
+    # injected into each evaluation's openWQ JSON by the parameter handler
+    # (single-model directly; chain split per model). Layer 1A regionalization
+    # arrives as ordinary sub-params (handled upstream via
+    # apply_regionalize_to_params). Empty = pure physics.
+    if ml_closures:
+        _cal = sum(1 for v in ml_closures.values()
+                   if isinstance(v, dict) and v.get("mode") == "calibrated")
+        _pre = len(ml_closures) - _cal
+        logger.info("Hybrid ML: %d Layer-2 closure(s) will be injected per "
+                    "evaluation (%d DDS-calibrated, %d pretrained).",
+                    len(ml_closures), _cal, _pre)
+        if _cal:
+            logger.info("Hybrid ML: %d closure(s) are DDS-calibrated — their "
+                        "(cw, cb) weights are fit during calibration; no "
+                        "offline training or weights file needed.", _cal)
+        if _pre:
+            logger.info("Hybrid ML: pretrained closures act only if their "
+                        "weights file exists and alpha != 0 (watch for "
+                        "'ML INERT' in the per-evaluation log).")
+    if ml_runtime:
+        logger.info("Hybrid ML: %d Layer-1B runtime-NN parameter(s) will be "
+                    "injected per evaluation.", len(ml_runtime))
 
     # Offer to clear stale evaluation folders / old results from a previous
     # run (so a smaller new run doesn't inherit leftover eval_* folders).
@@ -525,6 +559,8 @@ def run_calibration(
             apptainer_bind_path=apptainer_bind_path,
             command_template=command_template,
             executable_args=executable_args,
+            ml_closures=ml_closures,
+            ml_runtime=ml_runtime,
         )
         logger.info("Chain runner built (%d models)." % len(model_chain))
         # Skip the single-model construction below.
@@ -539,6 +575,8 @@ def run_calibration(
         test_case_dir=test_case_dir,
         running_on_docker=(container_runtime == "docker"),
         calibration_period=_eval_sim_window,
+        ml_closures=ml_closures,
+        ml_runtime=ml_runtime,
     )
 
     model_runner = model_runner if _is_chain else ModelRunner(

@@ -276,11 +276,14 @@ void OpenWQ_TS_model::mmf_hype_erosion_run(
 	// Mobilization by rainfall if transport/flow exists
 	mobilisedsed_EWF = OpenWQ_wqconfig.TS_model->HypeMMF->mobilisedsed_rain_potential(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]);
 
-	(*OpenWQ_vars.d_sedmass_mobilized_dt)(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]) 
-		= ((cellArea_m2 > 0.0) ? (cellArea_m2 / 1000.0) : 1000.0) * (
+	{
+		double eros_flux = ((cellArea_m2 > 0.0) ? (cellArea_m2 / 1000.0) : 1000.0) * (
 			mobilisedsed_EWF    // mobilization by rainfall
 			+ mobilisedsed_LE   // mobilization by runoff/flow
 			) * transportfactor;  // kg (abs mass via cell area; legacy 1000x if no area)
+
+		(*OpenWQ_vars.d_sedmass_mobilized_dt)(xyz_SedCmpt_interface[0], xyz_SedCmpt_interface[1], xyz_SedCmpt_interface[2]) = eros_flux;
+	}
 
 	}
 

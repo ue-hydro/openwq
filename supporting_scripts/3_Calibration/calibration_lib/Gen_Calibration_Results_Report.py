@@ -235,14 +235,23 @@ def generate_results_report(
         ]
         if _did_calib:
             _ofn = calibration_settings.get('objective_function', 'KGE')
-            # Convert the minimised objective back to the real metric for the
-            # header (KGE/NSE: metric = 1 - objective), matching the Summary.
-            # When NO evaluation succeeded the "best" is still the penalty, so
-            # show "n/a" rather than a nonsensical 1 - 1e10 = -9999999999.
+            # Header "Best {metric}" = the BEST per-species score (matching the
+            # Summary tile), so a poorly-observed species can't drag the headline
+            # below the well-fit target species.  Falls back to the optimiser's
+            # best objective (metric = 1 - objective for KGE/NSE) when no
+            # per-species metrics exist.  "n/a" when no evaluation succeeded.
             if _no_successful_eval(best_obj):
                 _bobj = "n/a (no successful evaluations)"
             else:
-                if _ofn in ("KGE", "NSE"):
+                _mk = _ofn.upper()
+                _sv = []
+                for _r in (performance_metrics or []):
+                    _v = _r.get(_mk)
+                    if isinstance(_v, (int, float)) and not (isinstance(_v, float) and _v != _v):
+                        _sv.append(abs(_v) if _mk == "PBIAS" else float(_v))
+                if _sv:
+                    _hdr_metric = min(_sv) if _mk in ("RMSE", "PBIAS") else max(_sv)
+                elif _ofn in ("KGE", "NSE"):
                     _hdr_metric = 1.0 - best_obj
                 else:
                     _hdr_metric = best_obj
@@ -676,10 +685,31 @@ def _build_summary_section(
     # = -9999999999", which is meaningless, so flag it and show a clear
     # diagnostic instead of a fake number.
     no_success = _no_successful_eval(best_obj)
+    # Headline "Best {metric}" = the BEST score achieved for ANY single species
+    # (max KGE/NSE/R2, or min RMSE / |PBIAS|), taken from the per-species
+    # performance metrics — NOT the multi-species objective the optimiser
+    # minimises.  The objective is an (equal-weighted) mean across species, so a
+    # species with very few / unfittable observations can drag it far below the
+    # well-fit target species; the headline should instead show the best species'
+    # fit.  Falls back to the optimiser's best objective when no per-species
+    # metrics are available (e.g. sensitivity-only runs).
+    _mk = obj_fn.upper()
+    _spec_vals = []
+    if performance_metrics:
+        for _row in performance_metrics:
+            _v = _row.get(_mk)
+            if isinstance(_v, (int, float)) and not (isinstance(_v, float) and _v != _v):
+                _spec_vals.append(abs(_v) if _mk == "PBIAS" else float(_v))
+    _lower_is_better = _mk in ("RMSE", "PBIAS")
     if no_success:
         best_metric = None
         best_value_str = "n/a"
         obj_quality = None
+    elif _spec_vals:
+        # best across species (best-fit species, not the mean objective)
+        best_metric = min(_spec_vals) if _lower_is_better else max(_spec_vals)
+        best_value_str = f"{best_metric:.4f}"
+        obj_quality = _assess_objective(best_metric, obj_fn)
     elif obj_fn in ("KGE", "NSE"):
         best_metric = 1.0 - best_obj
         best_value_str = f"{best_metric:.4f}"

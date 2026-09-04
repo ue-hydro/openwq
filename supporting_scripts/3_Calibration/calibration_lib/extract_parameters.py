@@ -31,6 +31,11 @@ import os
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 
+try:                                   # works as a package module or standalone
+    from . import ml_regionalization
+except ImportError:                    # pragma: no cover
+    import ml_regionalization
+
 logger = logging.getLogger(__name__)
 
 
@@ -150,6 +155,39 @@ def extract_calibration_parameters(bgc_template_path: str) -> List[Dict]:
 
                 # Build unique parameter name
                 param_id = f"{framework_name}_{rxn_name_clean}_{param_name}"
+
+                # Regionalization (Layer 1): if this parameter carries an
+                # ML_REGIONALIZE block, expand it into low-dimensional DDS
+                # sub-parameters (per-class values or regression coefficients)
+                # instead of a single global scalar. The parameter handler
+                # regroups them per parameter and writes the per-cell
+                # {"DEFAULT","CELLS"} map that openWQ's OpenWQ_load_param reads.
+                ml_spec = info.get("ML_REGIONALIZE")
+                if isinstance(ml_spec, dict):
+                    json_path = ["CYCLING_FRAMEWORKS", framework_name, rxn_num,
+                                 "PARAMETER_VALUES", param_name]
+                    subs = ml_regionalization.expand_regionalized_param(
+                        param_id, json_path, ml_spec)
+                    _rung = ml_spec.get("rung", "per_class")
+                    _attr = (ml_spec.get("attribute")
+                             or ", ".join(ml_spec.get("attributes", []) or []))
+                    for s in subs:
+                        s["units"] = info.get("UNITS", "")
+                        s["description"] = (
+                            f"regionalized ({_rung}"
+                            + (f" by {_attr}" if _attr else "")
+                            + f") · '{s['subparam_key']}'"
+                            + (f" — {info.get('DESCRIPTION','')}"
+                               if info.get("DESCRIPTION") else ""))
+                        s["regionalize_of"] = param_id     # parent physical param
+                        s["_framework"] = framework_name
+                        s["_reaction"] = rxn_name
+                        s["_reaction_num"] = rxn_num
+                    parameters.extend(subs)
+                    logger.info(
+                        f"Regionalized {param_id}: {len(subs)} sub-params "
+                        f"(rung={ml_spec.get('rung', 'per_class')})")
+                    continue
 
                 param_entry = {
                     "name": param_id,
@@ -439,6 +477,37 @@ def make_sorption_param(
     }
 
 
+def make_sorption_regionalize_param(
+    base_name: str,
+    module: str,
+    species: str,
+    param_key: str,
+    ml_spec: Dict,
+    database_file: str = "openwq_in/SI_param_database.json"
+) -> List[Dict]:
+    """Declare a REGIONALIZED sorption parameter (ML Layer 1).
+
+    Returns a LIST of low-dimensional DDS sub-parameters (per-class values or
+    regression coefficients) — use ``parameters.extend(...)`` in the template.
+    Each carries ``file_type="sorption_regionalize"`` and a ``path`` dict
+    ``{module, species, param, database_file}``; the parameter handler groups
+    them and writes a per-cell ``{"DEFAULT","CELLS"}`` map to the SI parameter
+    database at ``[species][module][param_key]`` (which openWQ's SI loader,
+    already routed through OpenWQ_load_param, reads as a spatial field).
+
+    ``ml_spec`` is the same block as BGC regionalization, e.g.::
+
+        {"rung":"per_class","attribute":"soil_class","default":50.0,
+         "attribute_table":"openwq_in/attributes.csv",
+         "mapping_source":"openwq_out/HDF5/...main.h5",
+         "classes":{"sand":[10,80],"clay":[10,80],"peat":[30,120]}}
+    """
+    path = {"module": module, "species": species,
+            "param": param_key, "database_file": database_file}
+    return ml_regionalization.expand_regionalized_param(
+        base_name, path, ml_spec, file_type="sorption_regionalize")
+
+
 def make_ss_csv_scale_param(
     name: str,
     species: str = "all",
@@ -561,6 +630,145 @@ _LULC_CLASS_NAMES = {
     160: "Freshwater_flood", 170: "Saltwater_flood", 180: "Shrub_herb_flood",
     190: "Urban", 200: "Bare", 210: "Water", 220: "Ice_snow",
 }
+
+
+def apply_regionalize_to_params(params: List[Dict],
+                                ml_regionalize: Optional[Dict]) -> List[Dict]:
+    """Expand any calibration parameter named in ``ml_regionalize`` into its
+    low-dimensional regionalization sub-parameters (hybrid-ML Layer 1A), in
+    place of the single scalar. Parameters not listed pass through unchanged.
+
+    The generated run script calls this (only when the report's ML tab activated
+    regionalization) right after defining ``calibration_parameters``. Keys in
+    ``ml_regionalize`` are the parameter ``name`` as shown in the report — which
+    is model-tagged (``m{i}:``) in a chain; the un-tagged name is also accepted.
+    Each expanded sub-parameter (per-class value / regression coefficient) is a
+    normal low-dim DDS knob the parameter handler already knows how to apply.
+    """
+    if not ml_regionalize:
+        return params
+
+    _MODULE_FT = {"td": "module_regionalize", "le": "module_regionalize",
+                  "ts": "ts_regionalize", "ss": "ss_regionalize"}  # else -> bgc_regionalize
+
+    def _untag(nm):
+        head, sep, rest = nm.partition(":")
+        if sep and head.startswith("m") and head[1:].isdigit():
+            return head + ":", rest, int(head[1:])
+        return "", nm, None
+
+    def _expand(name, spec, path, model_index=None, units=None):
+        """Expand one regionalize entry into its DDS sub-params, tagged with the
+        right file_type / module so the parameter handler writes to the correct
+        module file. Works whether the target param is a BGC param (path from
+        calibration_parameters) or a non-BGC module param (path baked in spec)."""
+        tag, base_id, mi = _untag(name)
+        if model_index is not None:
+            mi = model_index
+        subs = ml_regionalization.expand_regionalized_param(base_id, path, spec)
+        module = spec.get("module", "bgc")
+        ft = _MODULE_FT.get(module, "bgc_regionalize")
+        _rung = spec.get("rung", "per_class")
+        _attr = (spec.get("attribute")
+                 or ", ".join(spec.get("attributes", []) or []))
+        for s in subs:
+            if tag:
+                s["name"] = tag + s["name"]
+            if mi is not None:
+                s["model_index"] = mi
+            if units:
+                s.setdefault("units", units)
+            s["file_type"] = ft
+            if module in ("td", "le"):
+                s["module_key"] = spec.get("module_key")
+            if module == "ts":
+                s["ts_param"] = spec.get("ts_param") or (path[-1] if path else None)
+            s.setdefault("description",
+                         f"regionalized ({_rung}"
+                         + (f" by {_attr}" if _attr else "")
+                         + f") · '{s.get('subparam_key')}'")
+            s["regionalize_of"] = name
+        return subs
+
+    out: List[Dict] = []
+    consumed = set()
+    # Pass 1: BGC (and any) params ALREADY in calibration_parameters — replace
+    # the lumped scalar with its regionalized sub-params (a param NOT listed here
+    # stays a normal lumped scalar knob, so lumped calibration still works).
+    for p in params:
+        name = p.get("name", "")
+        _, base, _ = _untag(name)
+        key = name if name in ml_regionalize else (base if base in ml_regionalize else None)
+        spec = ml_regionalize.get(key) if key else None
+        if isinstance(spec, dict):
+            consumed.add(key)
+            path = spec.get("path") or p.get("path")
+            subs = _expand(name, spec, path,
+                           model_index=p.get("model_index"), units=p.get("units"))
+            out.extend(subs)
+            logger.info(f"Regionalized {name}: {len(subs)} sub-params")
+        else:
+            out.append(p)
+    # Pass 2: non-BGC module/TS params (TD/LE/TS) that are not calibration
+    # parameters — expand from the entry's own baked path/module.
+    for key, spec in ml_regionalize.items():
+        if key in consumed or not isinstance(spec, dict):
+            continue
+        subs = _expand(key, spec, spec.get("path"),
+                       model_index=spec.get("model_index"))
+        out.extend(subs)
+        logger.info(f"Regionalized {key} (module): {len(subs)} sub-params")
+    return out
+
+
+# =========================================================================
+# Layer-2 DDS-CALIBRATED per-species DERIVATIVE closures (no training / file)
+# =========================================================================
+
+
+def apply_calibrated_closures_to_params(params: List[Dict],
+                                        ml_closures: Optional[Dict]) -> List[Dict]:
+    """Expand every Layer-2 closure declared with ``mode == "calibrated"`` into
+    its DDS sub-parameters — the weight ``cw`` and bias ``cb`` of a small bounded
+    correction ``g = tanh(cw*x + cb)`` where ``x`` is the target species' own
+    state (the solver passes a 1-vector, so ``n_in`` is always 1 — uniform for
+    CHEM / SORPT / SS, no per-reaction width machinery). No offline training and
+    no weights file: DDS fits the closure against the same observations as every
+    other parameter, and the parameter handler serializes the calibrated
+    ``(cw, cb)`` to the weights JSON openWQ reads each evaluation (see
+    ``ParameterHandler._apply_calibrated_closures``).
+
+    The generated run script calls this right after ``calibration_parameters`` is
+    defined (only when the ML tab activated a calibrated closure). Closures with
+    ``mode != "calibrated"`` (pretrained weights-file) pass through untouched.
+    """
+    if not ml_closures:
+        return params
+    out = list(params)
+    for key, spec in ml_closures.items():
+        if not isinstance(spec, dict) or spec.get("mode") != "calibrated":
+            continue
+        mi = spec.get("model_index", 0)
+        _term = spec.get("term", "?")
+        _sp = spec.get("species", "?")
+        # cw (state sensitivity) and cb (offset) both start at 0 -> g=tanh(0)=0
+        # -> factor=1 (exact physics) at the DDS start; the optimizer moves them.
+        for sk, (lo, hi) in (("cw", (-5.0, 5.0)), ("cb", (-3.0, 3.0))):
+            out.append({
+                "name": f"{key}@{sk}",
+                "file_type": "closure_calib",
+                "path": [],
+                "bounds": (lo, hi),
+                "initial": 0.0,
+                "transform": "linear",
+                "closure_group": key,
+                "subparam_key": sk,
+                "model_index": mi,
+                "source": "ml-closure-calib",
+                "description": f"calibrated closure ({_term} on {_sp}) · '{sk}'",
+            })
+        logger.info(f"Calibrated closure {key}: 2 DDS sub-params (cw, cb)")
+    return out
 
 
 # =========================================================================

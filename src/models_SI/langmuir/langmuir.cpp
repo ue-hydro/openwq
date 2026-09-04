@@ -105,15 +105,30 @@ void OpenWQ_SI_model::langmuir(
 
         const unsigned int chemi = LG->species_index[si];
         const int sorbi = LG->sorbed_species_index[si];
-        const double qmax = LG->qmax[si];
-        const double KL = LG->KL[si];
-        const double Kadsdes = LG->Kadsdes[si];
 
-        // Skip if parameters are invalid or the pair is unresolved
-        if (qmax <= 0.0 || KL <= 0.0 || Kadsdes <= 0.0 || sorbi < 0) continue;
+        // Sorbed partner must be resolved (species-pair scheme) in any layout
+        if (sorbi < 0) continue;
 
-        // Pre-compute kinetic factor: (1 - exp(-Kadsdes * dt))
-        const double kinetic_factor = 1.0 - std::exp(-Kadsdes * dt);
+        // Parameters are OpenWQ_param: a GLOBAL scalar (default) or a per-cell
+        // SPATIAL field. When all three are global we hoist the scalar reads and
+        // the kinetic factor out of the cell loops - the historical fast path,
+        // byte-identical. When any is spatial the effective values are read per
+        // cell inside the loop below.
+        const OpenWQ_param& qmax_p = LG->qmax[si];
+        const OpenWQ_param& KL_p   = LG->KL[si];
+        const OpenWQ_param& Kads_p = LG->Kadsdes[si];
+        const bool si_uniform =
+            !qmax_p.is_spatial() && !KL_p.is_spatial() && !Kads_p.is_spatial();
+
+        double qmax_u = 0.0, KL_u = 0.0, kfac_u = 0.0;
+        if (si_uniform) {
+            qmax_u = qmax_p.scalar();
+            KL_u   = KL_p.scalar();
+            const double Kads_u = Kads_p.scalar();
+            // Invalid global parameters -> skip the whole species (as before)
+            if (qmax_u <= 0.0 || KL_u <= 0.0 || Kads_u <= 0.0) continue;
+            kfac_u = 1.0 - std::exp(-Kads_u * dt);
+        }
 
         // Loop over all compartments and cells
         for (unsigned int icmp = 0; icmp < num_comps; icmp++) {
@@ -136,6 +151,24 @@ void OpenWQ_SI_model::langmuir(
 
                         // Skip dry cells
                         if (Vol <= watervol_minlim) continue;
+
+                        // Effective parameters for THIS cell: the hoisted global
+                        // scalars in the uniform case, otherwise the per-cell
+                        // SPATIAL field. (Kadsdes only forms the kinetic factor,
+                        // so it stays local to the spatial path.)
+                        double qmax, KL, kinetic_factor;
+                        if (si_uniform) {
+                            qmax = qmax_u;
+                            KL   = KL_u;
+                            kinetic_factor = kfac_u;
+                        } else {
+                            qmax = qmax_p.at(icmp, ix, iy, iz);
+                            KL   = KL_p.at(icmp, ix, iy, iz);
+                            const double Kadsdes = Kads_p.at(icmp, ix, iy, iz);
+                            // Invalid parameters in this cell -> skip the cell
+                            if (qmax <= 0.0 || KL <= 0.0 || Kadsdes <= 0.0) continue;
+                            kinetic_factor = 1.0 - std::exp(-Kadsdes * dt);
+                        }
 
                         // Current dissolved and sorbed mass [g] in this cell,
                         // from the LIVE balance (state + claims already written

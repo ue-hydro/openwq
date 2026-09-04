@@ -15,10 +15,12 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "readjson/headerfile_RJSON.hpp"
+#include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_closure + OpenWQ_load_param (Layer 1/2)
 
 // Set SS info
 void OpenWQ_readjson::SetConfigInfo_INPUT_SS(
     OpenWQ_json &OpenWQ_json,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
     OpenWQ_wqconfig &OpenWQ_wqconfig,
     OpenWQ_utils& OpenWQ_utils,
     OpenWQ_output& OpenWQ_output){
@@ -41,6 +43,19 @@ void OpenWQ_readjson::SetConfigInfo_INPUT_SS(
     // If not found, skip (no SS configured)
     if (!jsonMaster_SubStruct.contains("SINK_SOURCE")) {
         return;
+    }
+
+    // Hybrid physics-ML for SS loads (Layer 1 only here). A separate master
+    // section OPENWQ_INPUT > SINK_SOURCE_ML (so it does NOT inflate the
+    // SINK_SOURCE file list below) carries ML_SCALE: a per-cell load multiplier
+    // (a number = global, {DEFAULT,CELLS} = spatial). Defaults to identity ->
+    // byte-identical. (The Layer-2 SS closure lives with the other per-species
+    // derivative closures, applied on dm_ss in the solver.)
+    if (jsonMaster_SubStruct.contains("SINK_SOURCE_ML")) {
+        json ss_ml = jsonMaster_SubStruct["SINK_SOURCE_ML"];
+        if (ss_ml.contains("ML_SCALE"))
+            OpenWQ_wqconfig.ss_scale =
+                OpenWQ_load_param(ss_ml["ML_SCALE"], OpenWQ_hostModelconfig);
     }
 
     unsigned int num_ssf = jsonMaster_SubStruct["SINK_SOURCE"].size();
