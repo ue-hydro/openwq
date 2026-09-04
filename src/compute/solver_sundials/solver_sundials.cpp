@@ -456,6 +456,47 @@ void OpenWQ_compute::Solve_with_CVode(
         }
     }
 
+    // ── Case-2 diagnostics ("how much the ML pulled") ──
+    // CVode evaluates the RHS many times per step, so we sample the closure
+    // factor ONCE per step here, at the step's final state, weighting by the
+    // same per-term tendency openWQ accumulates into `_out` above. All chemass
+    // are already updated to the final state, so the driving-species state is
+    // consistent. Serial (this post-integration block is not parallelized).
+    if (cvode_ran && !OpenWQ_wqconfig.ml_deriv_closures.empty()){
+        for (unsigned int icmp = 0; icmp < num_comps; icmp++){
+            for (unsigned int chemi = 0; chemi < num_chem; chemi++){
+                const int _ic  = OpenWQ_wqconfig.ml_chem_cl[icmp][chemi];
+                const int _is  = OpenWQ_wqconfig.ml_sorpt_cl[icmp][chemi];
+                const int _iss = OpenWQ_wqconfig.ml_ss_cl[icmp][chemi];
+                if (_ic < 0 && _is < 0 && _iss < 0) continue;
+                if (_ic >= 0){
+                    const auto& _cl = OpenWQ_wqconfig.ml_deriv_closures[_ic];
+                    const auto& _drv = (*OpenWQ_vars.chemass)(icmp)(_cl.chemi);
+                    const auto& _w   = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi);
+                    auto& _st = OpenWQ_wqconfig.ml_closure_stats[_ic];
+                    for (unsigned int i=0; i<_w.n_elem; i++)
+                        _st.add(_cl.net.factor(arma::vec({_drv(i)})), _w(i));
+                }
+                if (_is >= 0){
+                    const auto& _cl = OpenWQ_wqconfig.ml_deriv_closures[_is];
+                    const auto& _drv = (*OpenWQ_vars.chemass)(icmp)(_cl.chemi);
+                    const auto& _w   = (*OpenWQ_vars.d_chemass_dt_sorpt)(icmp)(chemi);
+                    auto& _st = OpenWQ_wqconfig.ml_closure_stats[_is];
+                    for (unsigned int i=0; i<_w.n_elem; i++)
+                        _st.add(_cl.net.factor(arma::vec({_drv(i)})), _w(i));
+                }
+                if (_iss >= 0){
+                    const auto& _cl = OpenWQ_wqconfig.ml_deriv_closures[_iss];
+                    const auto& _drv = (*OpenWQ_vars.chemass)(icmp)(_cl.chemi);
+                    const auto& _w   = (*OpenWQ_vars.d_chemass_ss)(icmp)(chemi);
+                    auto& _st = OpenWQ_wqconfig.ml_closure_stats[_iss];
+                    for (unsigned int i=0; i<_w.n_elem; i++)
+                        _st.add(_cl.net.factor(arma::vec({_drv(i)})), _w(i));
+                }
+            }
+        }
+    }
+
     // Cleanup
     N_VDestroy(u);
     CVodeFree(&cvode_mem);

@@ -95,6 +95,14 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
                 }
                 const bool _use_ml = (_mlc_chem >= 0 || _mlc_sorpt >= 0 || _mlc_ss >= 0);
 
+                // Case-2 diagnostics: thread-local factor accumulators for the
+                // up-to-3 active closures at this (icmp,chemi), merged into the
+                // shared stats ONCE after the grid loop (no per-cell atomics).
+                OpenWQ_wqconfig::MLClosureStats _acc_chem, _acc_sorpt, _acc_ss;
+                if (_mlc_chem  >= 0) _acc_chem.max_correction  = OpenWQ_wqconfig.ml_deriv_closures[_mlc_chem ].net.max_correction;
+                if (_mlc_sorpt >= 0) _acc_sorpt.max_correction = OpenWQ_wqconfig.ml_deriv_closures[_mlc_sorpt].net.max_correction;
+                if (_mlc_ss    >= 0) _acc_ss.max_correction    = OpenWQ_wqconfig.ml_deriv_closures[_mlc_ss   ].net.max_correction;
+
                 // X, Y, Z loops - process entire 3D grid for this compartment-chemical pair
                 for (ix = 0; ix < nx; ix++){
                     for (iy = 0; iy < ny; iy++){
@@ -170,18 +178,24 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
 
                             if (_mlc_chem >= 0) {
                                 const auto& _cl = OpenWQ_wqconfig.ml_deriv_closures[_mlc_chem];
-                                dm_dt_chem *= _cl.net.factor(arma::vec({
+                                const double _f = _cl.net.factor(arma::vec({
                                     (*OpenWQ_vars.chemass)(icmp)(_cl.chemi)(ix, iy, iz)}));
+                                _acc_chem.add(_f, dm_dt_chem);   // w = unscaled tendency
+                                dm_dt_chem *= _f;
                             }
                             if (_mlc_sorpt >= 0) {
                                 const auto& _cl = OpenWQ_wqconfig.ml_deriv_closures[_mlc_sorpt];
-                                dm_dt_sorpt *= _cl.net.factor(arma::vec({
+                                const double _f = _cl.net.factor(arma::vec({
                                     (*OpenWQ_vars.chemass)(icmp)(_cl.chemi)(ix, iy, iz)}));
+                                _acc_sorpt.add(_f, dm_dt_sorpt);
+                                dm_dt_sorpt *= _f;
                             }
                             if (_mlc_ss >= 0) {
                                 const auto& _cl = OpenWQ_wqconfig.ml_deriv_closures[_mlc_ss];
-                                dm_ss *= _cl.net.factor(arma::vec({
+                                const double _f = _cl.net.factor(arma::vec({
                                     (*OpenWQ_vars.chemass)(icmp)(_cl.chemi)(ix, iy, iz)}));
+                                _acc_ss.add(_f, dm_ss);
+                                dm_ss *= _f;
                             }
 
                             d_chemass_ss_out(ix, iy, iz) += dm_ss;
@@ -205,6 +219,17 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
                             }
                         }
                       }
+                    }
+                }
+
+                // Case-2 diagnostics: fold this (icmp,chemi)'s thread-local
+                // factor stats into the shared per-closure accumulators.
+                if (_use_ml) {
+                    #pragma omp critical(mlclosure_stats)
+                    {
+                        if (_mlc_chem  >= 0) OpenWQ_wqconfig.ml_closure_stats[_mlc_chem ].merge(_acc_chem);
+                        if (_mlc_sorpt >= 0) OpenWQ_wqconfig.ml_closure_stats[_mlc_sorpt].merge(_acc_sorpt);
+                        if (_mlc_ss    >= 0) OpenWQ_wqconfig.ml_closure_stats[_mlc_ss   ].merge(_acc_ss);
                     }
                 }
             }
@@ -389,6 +414,22 @@ void OpenWQ_compute::Prepare_MLClosures(
         } else { // SS
             OpenWQ_wqconfig.ml_ss_cl[mdc.icmp][mdc.chemi]=(int)idx;
         }
+    }
+
+    // ---- Case-2 diagnostics: one stats accumulator per closure ----
+    // (labels + dials emitted verbatim to ml_closure_diagnostics.json so the
+    // report is fully self-contained; accumulators start at zero.)
+    OpenWQ_wqconfig.ml_closure_stats.assign(
+        OpenWQ_wqconfig.ml_deriv_closures.size(),
+        OpenWQ_wqconfig::MLClosureStats());
+    for (unsigned idx=0; idx<OpenWQ_wqconfig.ml_deriv_closures.size(); idx++){
+        const auto& mdc = OpenWQ_wqconfig.ml_deriv_closures[idx];
+        auto& st = OpenWQ_wqconfig.ml_closure_stats[idx];
+        st.species        = (mdc.chemi < num_chem) ? species[mdc.chemi] : std::string("?");
+        st.compartment    = OpenWQ_hostModelconfig.get_HydroComp_name_at((int)mdc.icmp);
+        st.term           = mdc.term;
+        st.alpha          = mdc.net.alpha;
+        st.max_correction = mdc.net.max_correction;
     }
 
     _m = "<OpenWQ> Hybrid ML: "

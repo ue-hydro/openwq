@@ -168,6 +168,75 @@ class OpenWQ_wqconfig
         bool ml_closures_ready = false;     // Prepare_MLClosures ran once
 
         //###############################################
+        // Hybrid physics-ML LAYER 2 — closure DIAGNOSTICS ("how much the ML
+        // pulled"). Accumulated in the solver during the run and written to
+        // <output_dir>/ml_closure_diagnostics.json on print steps, so the
+        // calibration results report can quantify the correction the closure
+        // applied WITHOUT re-deriving anything on the Python side.
+        //   * factor = tendency_ML / tendency_physics (dimensionless);
+        //     factor = 1 -> pure physics, |factor-1| = the "pull".
+        //   * w = the term's (unscaled) tendency, accumulated exactly as openWQ
+        //     accumulates its own `_out` flux, so sum_dev_w / sum_absdev_w are
+        //     the NET / GROSS mass the closure moved in the SAME units as the
+        //     model's reported flux (× output_units_numerator -> display mass).
+        //   * flux-weighted sums weight the pull by |w| so near-zero-flux cells
+        //     don't dominate.
+        // Solver-agnostic: Forward Euler accumulates exactly per cell·step;
+        // CVode evaluates the factor once per step at the step's final state.
+        // Empty when no closures are active -> nothing written, no overhead.
+        //###############################################
+        struct MLClosureStats {
+            // labels (filled by Prepare_MLClosures; emitted for the report)
+            std::string species, compartment, term;
+            double alpha = 0.0;             // the closure dial (0 = physics)
+            double max_correction = 0.0;    // |alpha*g| clamp bound
+            // accumulators
+            long long n = 0;                // factor evaluations (cell·step)
+            long long n_clamp = 0;          // times |factor-1| hit max_correction
+            double sum_factor = 0.0;        // Σ factor
+            double sum_absdev = 0.0;        // Σ |factor-1|            (mean pull)
+            double max_absdev = 0.0;        // peak |factor-1|         (peak pull)
+            double min_factor = 0.0;        // running min factor (seeded at n==1)
+            double max_factor = 0.0;        // running max factor
+            double sum_abs_w = 0.0;         // Σ |w|          (gross physics flux)
+            double sum_absdev_w = 0.0;      // Σ |w·(factor-1)|   (GROSS mass moved)
+            double sum_dev_w = 0.0;         // Σ  w·(factor-1)    (NET   mass moved)
+            // Add one factor sample for a term whose (unscaled) tendency is `w`.
+            // Thread-UNSAFE: callers accumulate into a thread-local and merge()
+            // under a critical section (Forward Euler), or call serially (CVode).
+            inline void add(double factor, double w){
+                const double dev  = factor - 1.0;
+                const double adev = dev < 0.0 ? -dev : dev;
+                const double aw   = w   < 0.0 ? -w   : w;
+                ++n;
+                sum_factor   += factor;
+                sum_absdev   += adev;
+                sum_abs_w    += aw;
+                sum_absdev_w += aw * adev;      // = |w·(factor-1)|
+                sum_dev_w    += w  * dev;
+                if (adev > max_absdev) max_absdev = adev;
+                if (n == 1) { min_factor = factor; max_factor = factor; }
+                else { if (factor < min_factor) min_factor = factor;
+                       if (factor > max_factor) max_factor = factor; }
+                if (adev >= max_correction - 1e-12) ++n_clamp;
+            }
+            // Fold a thread-local accumulator into this (shared) one.
+            inline void merge(const MLClosureStats& a){
+                if (a.n == 0) return;
+                const bool first = (n == 0);
+                n += a.n; n_clamp += a.n_clamp;
+                sum_factor += a.sum_factor; sum_absdev += a.sum_absdev;
+                sum_abs_w += a.sum_abs_w; sum_absdev_w += a.sum_absdev_w;
+                sum_dev_w += a.sum_dev_w;
+                if (a.max_absdev > max_absdev) max_absdev = a.max_absdev;
+                if (first) { min_factor = a.min_factor; max_factor = a.max_factor; }
+                else { if (a.min_factor < min_factor) min_factor = a.min_factor;
+                       if (a.max_factor > max_factor) max_factor = a.max_factor; }
+            }
+        };
+        std::vector<MLClosureStats> ml_closure_stats;   // 1:1 with ml_deriv_closures
+
+        //###############################################
         // Methods
         //###############################################
 
