@@ -176,6 +176,69 @@ def _load_observation_data(obs_dir=None, obs_csv=None):
     return obs_by_species, station_locations
 
 
+def _load_calibration_observations(csv_path):
+    """Load the observations exactly as the openWQ calibration used them.
+
+    The calibration driver writes ``<calibration_dir>/calibration_observations.csv``
+    (``datetime, reach_id, species, value[, units, source, is_primary]``) —
+    every record is already pinned to the model feature (HRU / reach) it was
+    compared against, so no station→feature spatial matching (and no
+    shapefile) is needed to overlay it on the plots.
+
+    Returns
+    -------
+    obs_by_species : dict or None
+        {species_name: list of {station_id, feature_id, datetime, value,
+        is_primary}}
+    """
+    if not (csv_path and os.path.isfile(csv_path)):
+        return None
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as e:
+        print(f"  WARNING: Failed to read calibration observations: {e}")
+        return None
+    required = ['datetime', 'reach_id', 'species', 'value']
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        print(f"  WARNING: calibration observations CSV missing columns: "
+              f"{missing}")
+        return None
+    df['_dt'] = pd.to_datetime(df['datetime'], errors='coerce')
+    obs_by_species = {}
+    for species, grp in df.groupby('species'):
+        records = []
+        for _, row in grp.iterrows():
+            try:
+                dt = row['_dt']
+                if pd.isna(dt):
+                    continue
+                fid = row['reach_id']
+                # normalise "1.0" → "1" so it matches the plot-space feature ids
+                fid = str(int(fid)) if float(fid).is_integer() else str(fid)
+                src = row.get('source')
+                stn = (str(src) if isinstance(src, str) and src.strip()
+                       else f'feature {fid}')
+                prim = row.get('is_primary', True)
+                if isinstance(prim, str):
+                    prim = prim.strip().lower() in ('true', '1', 'yes')
+                records.append({
+                    'station_id': stn,
+                    'feature_id': fid,
+                    'datetime': dt.strftime('%Y-%m-%d %H:%M'),
+                    'value': float(row['value']),
+                    'is_primary': bool(prim) if not pd.isna(prim) else True,
+                })
+            except (ValueError, TypeError):
+                continue
+        if records:
+            obs_by_species[str(species)] = records
+    print(f"  ✓ Loaded calibration observations: {len(df)} records, "
+          f"{len(obs_by_species)} species, "
+          f"{df['reach_id'].nunique()} feature(s)")
+    return obs_by_species or None
+
+
 def _render_static_matrices(plots, openwq_results, mapping_key_values,
                             observation_data, basin_geojson, basin_mapping_key,
                             out_dir, feature_label, separator, extract_features,
@@ -2444,12 +2507,20 @@ def Plot_h5_driver(what2map=None,
                    observation_dir=None,
                    observation_csv=None,
                    observation_compartments=None,
+                   observation_calibration_csv=None,
                    separator=' | ',
                    config_template_path=None,
                    static_matrix_dir=None,
                    flux_names=None):
     """
     Generate interactive HTML time-series plots (Plotly.js).
+
+    Observations can come from ``observation_dir`` / ``observation_csv``
+    (station coordinates → matched to features through the shapefile) or,
+    for a calibrated run, from ``observation_calibration_csv`` — the
+    ``calibration_observations.csv`` the openWQ calibration driver wrote,
+    which already carries the feature id each record was compared against
+    (no shapefile needed; takes precedence over the other two).
 
     Produces a single self-contained HTML file with one interactive chart
     per chemical species (or host-model variable).  The file uses Plotly.js
@@ -3148,7 +3219,63 @@ def Plot_h5_driver(what2map=None,
     station_locations = None          # {station_id: (lat, lon)}
     station_to_feature = None         # {station_id: feature_id}
     _pouring_point_stations = set()   # subset of stations flagged as "primary"
-    if (observation_dir or observation_csv) and _primary_geojson:
+    if observation_calibration_csv:
+        # Calibration observations: feature ids are pre-resolved, so overlay
+        # them directly (no station coordinates → no map markers, no matching).
+        print("\n" + "-" * 40)
+        print("Loading calibration observation data...")
+        _cal_obs = _load_calibration_observations(observation_calibration_csv)
+        if _cal_obs:
+            _obs_comps = None
+            if observation_compartments:
+                if isinstance(observation_compartments, str):
+                    _obs_comps = {observation_compartments.strip().lower()}
+                else:
+                    _obs_comps = {c.strip().lower()
+                                  for c in observation_compartments}
+            _plot_fids = {str(v) for v in (mapping_key_values or [])}
+            if any(str(v).strip().lower() == 'all' for v in _plot_fids):
+                _plot_fids = set()   # plotting every feature → no filtering
+            _observation_data = {}
+            station_to_feature = {}
+            for p in plots:
+                if _obs_comps:
+                    p_comp = (p.get('compartment') or '').strip().lower()
+                    if p_comp not in _obs_comps:
+                        continue
+                p_species = p.get('species')
+                species_obs = _cal_obs.get(p_species) if p_species else None
+                if not species_obs:
+                    continue
+                stn_groups = defaultdict(lambda: {'x': [], 'y': []})
+                stn_fid = {}
+                for rec in species_obs:
+                    if _plot_fids and rec['feature_id'] not in _plot_fids:
+                        continue
+                    key = (rec['station_id'], rec['feature_id'])
+                    stn_groups[key]['x'].append(rec['datetime'])
+                    stn_groups[key]['y'].append(rec['value'])
+                    stn_fid[key] = rec['feature_id']
+                    if rec.get('is_primary', True):
+                        _pouring_point_stations.add(rec['station_id'])
+                plot_obs = []
+                for (stn_id, fid), data in stn_groups.items():
+                    station_to_feature[stn_id] = fid
+                    plot_obs.append({
+                        'x': data['x'], 'y': data['y'],
+                        'station_id': stn_id, 'feature_id': str(fid),
+                    })
+                if plot_obs:
+                    _observation_data[p['id']] = plot_obs
+                    print(f"  ✓ {p_species}: {len(plot_obs)} station(s) "
+                          f"with calibration observations")
+            if not _observation_data:
+                _observation_data = None
+                station_to_feature = None
+                print("  No calibration observations matched any plotted "
+                      "species/compartment/feature.")
+        print("-" * 40)
+    elif (observation_dir or observation_csv) and _primary_geojson:
         print("\n" + "-" * 40)
         print("Loading observation data...")
         obs_by_species, station_locations = _load_observation_data(
