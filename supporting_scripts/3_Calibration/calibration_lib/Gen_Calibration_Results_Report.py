@@ -531,6 +531,7 @@ def generate_results_report(
             H.append(_build_run_best_section(
                 calibration_results, model_config, calibration_settings,
                 calibration_parameters=calibration_parameters,
+                output_dir=output_dir,
             ))
 
         H.append('</div>')  # container
@@ -727,6 +728,21 @@ def _get_results_css() -> str:
         display: block; height: 2.4rem; margin-top: -2.4rem; pointer-events: none;
         background: linear-gradient(to bottom, transparent, var(--surface)); }
     .rb-expand.locked-on { border-color: var(--primary); color: var(--primary); }
+    .rb-warn { font-size: .85rem; line-height: 1.5; border-left: 4px solid var(--accent);
+        background: rgba(255,107,53,.08); border-radius: 6px; padding: .55rem .8rem; }
+    /* output-report interactive controls (tickboxes) */
+    .viz-ctrl { display: flex; flex-direction: column; gap: .5rem; margin: .2rem 0 .6rem; }
+    .viz-group { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; }
+    .viz-label { font-size: .74rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .5px; color: var(--text2); min-width: 6.5rem; }
+    .viz-cb { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer;
+        font-size: .84rem; font-family: 'JetBrains Mono', monospace;
+        border: 1px solid var(--border); border-radius: 6px; padding: .2rem .5rem;
+        background: var(--surface); }
+    .viz-cb input { accent-color: var(--primary); cursor: pointer; margin: 0; }
+    .viz-in { font: inherit; font-size: .82rem; font-family: 'JetBrains Mono', monospace;
+        border: 1px solid var(--border); border-radius: 6px; padding: .25rem .5rem;
+        background: var(--surface); color: var(--text); width: 10rem; }
     """
 
 
@@ -2297,11 +2313,90 @@ def _minify_python(src: str) -> str:
         return src
 
 
+def _build_code_toolbox(code_text: str, prefix: str, lang: str = "python",
+                        save_name: str = "", save_path: str = "",
+                        meta: str = "") -> str:
+    """A reusable, ID-scoped code box: the code in a collapsible/lockable scroll
+    box (Expand/Collapse + Lock-scroll) plus optional Save-As (.py) and Copy-path
+    controls. Every element id is namespaced by `prefix`, so multiple boxes can
+    coexist on one page. Self-contained (its own IIFE reads the code from the DOM)."""
+    n_lines = code_text.count("\n") + 1
+    save_btn = (f'<button type="button" id="{prefix}-save" class="rb-save-btn" '
+                f'title="Open a Save-As dialog to choose where to save this .py file">'
+                f'&#128190; Save (.py)&hellip;</button>') if save_name else ""
+    path_row = (f'<span class="rb-path"><span>Path:</span>'
+                f'<span class="p" id="{prefix}-path">{html_lib.escape(save_path)}</span>'
+                f'<button type="button" id="{prefix}-copypath" class="rb-copy-path" '
+                f'title="Copy this path">&#128203; Copy path</button></span>') if save_path else ""
+    toolbar = (f'<div class="rb-toolbar">{save_btn}{path_row}</div>'
+               if (save_btn or path_row) else "")
+    controls = (
+        '<div class="rb-code-controls">'
+        f'<button type="button" id="{prefix}-expand" class="rb-expand">&#9660; Expand</button>'
+        f'<button type="button" id="{prefix}-lock" class="rb-expand" '
+        f'title="Lock the box so the page scrolls past it">&#128274; Lock scroll</button>'
+        f'<span class="rb-code-meta">{n_lines} lines'
+        f'{(" &mdash; " + meta) if meta else ""} &mdash; scroll inside, lock, or expand</span>'
+        '</div>')
+    body = (f'{toolbar}{controls}'
+            f'<div id="{prefix}-wrap" class="rb-codewrap">'
+            f'<div id="{prefix}-code">{rh.build_code_block(code_text, lang)}</div></div>')
+    fname_j = json.dumps(save_name or "script.py")
+    fpath_j = json.dumps(save_path or "")
+    script = f"""
+    <script>(function() {{
+      var P = "{prefix}";
+      var wrap = document.getElementById(P + "-wrap");
+      var expBtn = document.getElementById(P + "-expand");
+      var lockBtn = document.getElementById(P + "-lock");
+      var saveBtn = document.getElementById(P + "-save");
+      var copyBtn = document.getElementById(P + "-copypath");
+      function codeText() {{ var c = document.querySelector("#" + P + "-code code");
+                            return c ? c.textContent : ""; }}
+      function flash(b) {{ var o = b.innerHTML; b.innerHTML = "&#10003; Copied";
+                          setTimeout(function() {{ b.innerHTML = o; }}, 1500); }}
+      function fbCopy(t, b) {{ var ta = document.createElement("textarea"); ta.value = t;
+        ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta);
+        ta.focus(); ta.select(); try {{ document.execCommand("copy"); }} catch (e) {{}}
+        ta.remove(); flash(b); }}
+      if (expBtn && wrap) expBtn.addEventListener("click", function() {{
+        var e = wrap.classList.toggle("expanded");
+        expBtn.innerHTML = e ? "&#9650; Collapse" : "&#9660; Expand";
+        if (!e) wrap.scrollTop = 0; }});
+      if (lockBtn && wrap) lockBtn.addEventListener("click", function() {{
+        var l = wrap.classList.toggle("locked");
+        lockBtn.classList.toggle("locked-on", l);
+        lockBtn.innerHTML = l ? "&#128275; Unlock scroll" : "&#128274; Lock scroll"; }});
+      if (copyBtn) copyBtn.addEventListener("click", function() {{
+        var fp = {fpath_j};
+        if (navigator.clipboard && navigator.clipboard.writeText)
+          navigator.clipboard.writeText(fp).then(function() {{ flash(copyBtn); }},
+                                                  function() {{ fbCopy(fp, copyBtn); }});
+        else fbCopy(fp, copyBtn); }});
+      function blobDL(t) {{ var b = new Blob([t], {{type: "text/x-python"}});
+        var a = document.createElement("a"); a.href = URL.createObjectURL(b);
+        a.download = {fname_j}; document.body.appendChild(a); a.click();
+        setTimeout(function() {{ URL.revokeObjectURL(a.href); a.remove(); }}, 0); }}
+      if (saveBtn) saveBtn.addEventListener("click", async function() {{
+        var t = codeText();
+        if (window.showSaveFilePicker) {{
+          try {{
+            var h = await window.showSaveFilePicker({{ suggestedName: {fname_j},
+              types: [{{description: "Python script", accept: {{"text/x-python": [".py"]}}}}] }});
+            var w = await h.createWritable(); await w.write(t); await w.close(); return;
+          }} catch (e) {{ if (e && e.name === "AbortError") return; }}
+        }}
+        blobDL(t); }});
+    }})();</script>"""
+    return body + script
+
+
 def _build_run_best_section(
     results: Dict[str, Any],
     model_config: Dict[str, Any],
     settings: Dict[str, Any],
     calibration_parameters: Optional[List[Dict[str, Any]]] = None,
+    output_dir: str = "",
 ) -> str:
     """One copy-paste block: the user's ``model_config_template.py``
     script with the calibrated setup.
@@ -2340,33 +2435,327 @@ def _build_run_best_section(
     template_abspath = os.path.abspath(template_path)
     template_dir = os.path.dirname(template_abspath)
 
+    # ── PRIMARY: run the calibrated model = re-run the GLOBAL-BEST evaluation's
+    #    config, which ALREADY has the best parameters applied (that is how its
+    #    result was produced). Re-running the model-config TEMPLATE instead only
+    #    regenerates the template's DEFAULT parameter values — so it must not be
+    #    mistaken for the calibrated model. ──
+    import glob as _glob2, re as _re2
+    _best_n = None
+    try:
+        _best_n = _best_eval_number(output_dir) if output_dir else None
+    except Exception:
+        _best_n = None
+    _best_dir = None
+    if _best_n is not None and output_dir:
+        for _d in _glob2.glob(os.path.join(str(output_dir), "evaluations", "eval_*")):
+            _m = _re2.search(r"eval_(\d+)", os.path.basename(_d))
+            if _m and int(_m.group(1)) == _best_n:
+                _best_dir = os.path.abspath(_d)
+                break
+    _exe = model_config.get("executable_path", "") or ""
+    _host = (model_config.get("hostmodel") or "").lower()
+    _bp_path = os.path.join(os.path.abspath(str(output_dir)), "results",
+                            "best_parameters.json") if output_dir else ""
+
+    # Container config: the executable is a LINUX binary built in the openWQ
+    # container — it cannot run natively (e.g. on macOS). So the reproduce
+    # command must `docker exec` into the SAME container the calibration used,
+    # with host paths translated to the container mount (…/Documents -> /code).
+    _container, _compose, _runtime, _cc = "docker_openwq", "", "docker", {}
+    try:
+        from calibration_lib import config_integration as _ci2
+        _cc = _ci2.get_container_config(model_config) or {}
+        _container = _cc.get("docker_container_name") or _container
+        _compose = _cc.get("docker_compose_path") or model_config.get("docker_compose_path") or ""
+        _runtime = (_cc.get("container_runtime") or "docker").lower()
+    except Exception:
+        _compose = model_config.get("docker_compose_path") or ""
+    _hroot, _croot = None, "/code"
+    if _compose and os.path.isfile(_compose):
+        try:
+            _vm = _re2.search(r'volumes:\s*\n\s*-\s*([^:\n]+):([^:\s]+)', open(_compose).read())
+            if _vm:
+                _croot = _vm.group(2).strip()
+                _hroot = os.path.abspath(os.path.join(os.path.dirname(_compose),
+                                                       _vm.group(1).strip()))
+        except Exception:
+            pass
+    def _c(p):
+        return (_croot + p[len(_hroot):]) if (_hroot and p and p.startswith(_hroot)) else p
+
+    calibrated_block = ""
+    if _best_dir and _exe and os.path.isdir(_best_dir):
+        _master = os.path.join(_best_dir, "openWQ_master.json")
+        if _host == "summa":
+            _ctrl, _flag, _np = os.path.join(_best_dir, "fileManager_eval.txt"), "-m ", "1"
+        else:
+            _cands = (_glob2.glob(os.path.join(_best_dir, "*.control"))
+                      + _glob2.glob(os.path.join(_best_dir, "*.control.txt")))
+            _ctrl, _flag, _np = (_cands[0] if _cands else os.path.join(_best_dir, "<control_file>")), "", "2"
+        _out_dir = os.path.join(_best_dir, "openwq_out")
+        _sif, _bind = _resolve_hpc_settings(_cc, settings or {}, model_config)
+
+        # Debug export = re-run with RUN_MODE_DEBUG=true (openWQ then also writes
+        # the per-process terms: dt_chem/sorpt/transp, ss, ewf, ic). Done
+        # NON-destructively: a `sed` on the host writes an openWQ_master_debug.json
+        # copy with the flag flipped, and master_json points at that copy (the
+        # eval's original master is untouched; all other paths in it are relative).
+        # NOTE: every host link (SUMMA + mizuRoute OpenWQ_hydrolink.cpp) HARDCODES
+        # `set_OpenWQ_masterjson("openWQ_master.json")` -> openWQ always reads
+        # ./openWQ_master.json from the run cwd and IGNORES the master_json env
+        # var. So a separate debug copy is never read; debug export must flip
+        # RUN_MODE_DEBUG in the cwd master ITSELF: back it up, write the flipped
+        # version in place, run, then restore the original (net non-destructive).
+        _orig_bak = os.path.join(_best_dir, ".openWQ_master.orig.json")
+        _swap_in = (
+            f'cd "{_best_dir}" && cp openWQ_master.json "{_orig_bak}" && '
+            "sed -E 's/(\"RUN_MODE_DEBUG\"[[:space:]]*:[[:space:]]*)false/\\1true/' "
+            f'"{_orig_bak}" > openWQ_master.json')
+        _swap_back = f'mv "{_orig_bak}" "{_best_dir}/openWQ_master.json"'
+
+        def _mk_cmd(pre="", post=""):
+            if _runtime == "docker":
+                body = (
+                    f'docker exec -e OMP_NUM_THREADS=1 -e master_json={_c(_master)} {_container} \\\n'
+                    f'  /bin/bash -lc "cd {_c(_best_dir)} && \\\n'
+                    f'    mpirun --allow-run-as-root -np {_np} -x master_json -x OMP_NUM_THREADS \\\n'
+                    f'    {_c(_exe)} {_flag}{_c(_ctrl)}"')
+            else:
+                # cd into the eval dir so ./openWQ_master.json is the one read.
+                body = (
+                    f'cd "{_best_dir}" && OMP_NUM_THREADS=1 apptainer exec \\\n'
+                    f'  --bind "{_bind}" \\\n'
+                    f'  --env master_json="{_master}" \\\n'
+                    f'  "{_sif}" \\\n'
+                    f'  mpirun -np {_np} "{_exe}" {_flag}"{_ctrl}"')
+            return (pre + "\n" if pre else "") + body + ("\n" + post if post else "")
+
+        _cal_cmd = _mk_cmd()                                     # normal run
+        _cal_cmd_dbg = _mk_cmd(pre=_swap_in, post=_swap_back)    # debug-export run
+        if _runtime == "docker":
+            _how = ('run it <strong>inside the openWQ Docker container</strong> '
+                    f'(<code>{html_lib.escape(_container)}</code> &mdash; started by the '
+                    'calibration; if stopped, <code>docker compose up -d</code> from the '
+                    '<code>containers/</code> folder):')
+        else:
+            _how = ('run it with <strong>Apptainer/Singularity</strong> on your HPC '
+                    '(bind the folder holding the config &amp; outputs):')
+
+        # Debug-export tickbox: swaps the command between the two variants live.
+        _cal_ctrl = (
+            '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .7rem;'
+            'margin:.1rem 0 .5rem;">'
+            '<label class="viz-cb"><input type="checkbox" id="rbcal-debug"> Debug export</label>'
+            '<span style="font-size:.8rem;color:var(--text2);line-height:1.5;">'
+            '<code>RUN_MODE_DEBUG = true</code> &mdash; also writes the per-process terms '
+            '(larger output) and enables the <em>Debug</em> option in the output report below.'
+            '</span></div>'
+            '<div id="rbcal-codewrap">' + rh.build_code_block(_cal_cmd, "bash") + '</div>'
+            '<script>(function(){'
+            f'var N={json.dumps(_cal_cmd)},D={json.dumps(_cal_cmd_dbg)};'
+            'var cb=document.getElementById("rbcal-debug");'
+            'var code=document.querySelector("#rbcal-codewrap code");'
+            'if(cb&&code)cb.addEventListener("change",function(){code.textContent=cb.checked?D:N;});'
+            '})();</script>')
+
+        # ── Output-report controls: INTERACTIVE tickboxes (species/compartments)
+        #    + space-elements + debug that rebuild a copy-paste heredoc snippet
+        #    LIVE (like the config report). Options come from THIS run's actual
+        #    output files. Mirrors 2_Read_Outputs/reading_plotting_results_template.py. ──
+        _h5lib = os.path.abspath(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "..", "2_Read_Outputs", "hdf5_support_lib"))
+        _mapkey = (model_config.get("h5_mapping_key")
+                   or ("hruId" if _host == "summa" else "reachID"))
+        _feat = (model_config.get("river_network_mapping_key")
+                 or ("hruId" if _host == "summa" else "SegId"))
+        _river_shp = model_config.get("river_network_shapefile") or ""
+        _basin = model_config.get("ss_method_copernicus_basins_hrus") or {}
+        _basin_shp = (_basin.get("path_to_shp") if isinstance(_basin, dict) else "") or ""
+        _rep_out = os.path.join(_out_dir, "openwq_calibrated_report.html")
+        # Observations for the plot: exactly the ones the calibration was run
+        # against (`<calibration_dir>/calibration_observations.csv`, written by
+        # the driver with the feature id each record was compared to), plus the
+        # compartment(s) they belong to (from the model config).
+        _cal_obs_csv = os.path.join(str(output_dir), "calibration_observations.csv")
+        _obs_comps = list(model_config.get("observation_compartments") or [])
+        _basin_key = (_basin.get("mapping_key") if isinstance(_basin, dict) else "") or ""
+        _obs_lines = ""
+        if os.path.isfile(_cal_obs_csv):
+            _obs_lines = (f"    observation_calibration_csv=r'{os.path.abspath(_cal_obs_csv)}',\n"
+                          f"    observation_compartments={json.dumps(_obs_comps)},\n")
+        if _basin_key:
+            _obs_lines += f"    basin_mapping_key='{_basin_key}',\n"
+        # discover available compartments + species from the output filenames
+        _comps, _specs = set(), set()
+        for _f in _glob2.glob(os.path.join(_out_dir, "HDF5", "*.h5")):
+            _b = os.path.basename(_f)
+            if "@" in _b:
+                _cn, _rest = _b.split("@", 1)
+                _comps.add(_cn)
+                if "#" in _rest:
+                    _specs.add(_rest.split("#")[0])
+        if not _specs:                               # CSV output (no species in names)
+            for _f in _glob2.glob(os.path.join(_out_dir, "CSV", "*.txt")):
+                _b = os.path.basename(_f)
+                if "@" in _b:
+                    _comps.add(_b.split("@", 1)[0])
+            _specs = set(model_config.get("chemical_species") or [])
+        if not _specs:
+            _specs = set(model_config.get("chemical_species") or ["NO3-N"])
+        _def_cmp_name = "ILAYERVOLFRACWAT_SOIL" if _host == "summa" else "RIVER_NETWORK_REACHES"
+        if not _comps:
+            _comps = {_def_cmp_name}
+        _specs, _comps = sorted(_specs), sorted(_comps)
+        _cmp_default = _def_cmp_name if _def_cmp_name in _comps else (_comps[0] if _comps else "")
+        # output format actually produced by this run (the driver appends /<FMT>/)
+        _out_fmt = ("HDF5" if _glob2.glob(os.path.join(_out_dir, "HDF5", "*.h5"))
+                    else "CSV" if _glob2.glob(os.path.join(_out_dir, "CSV", "*"))
+                    else "HDF5")
+
+        def _cbs(items, cls, checked):
+            return "".join(
+                f'<label class="viz-cb"><input type="checkbox" class="{cls}" '
+                f'value="{html_lib.escape(it)}"' + (" checked" if it in checked else "")
+                + f'> {html_lib.escape(it)}</label>' for it in items)
+        _species_cbs = _cbs(_specs, "rbviz-sp", set(_specs))
+        _comp_cbs = _cbs(_comps, "rbviz-cmp", {_cmp_default})
+
+        _viz_template = (
+            "python3 - <<'PY'\n"
+            "# ---- Output report for the calibrated best simulation (runs on host) ----\n"
+            "SPECIES      = __SPECIES__\n"
+            "COMPARTMENTS = __COMPARTMENTS__\n"
+            "SPACE_ELEM   = __SPACE_ELEM__\n"
+            "DEBUG        = __DEBUG__\n"
+            f"H5LIB        = r'{_h5lib}'   # openWQ supporting_scripts/2_Read_Outputs/hdf5_support_lib (edit if relocated)\n"
+            "\n"
+            "import sys, os\n"
+            "if not os.path.isdir(H5LIB):\n"
+            "    raise SystemExit('H5LIB not found - set it to your openWQ supporting_scripts/2_Read_Outputs/hdf5_support_lib')\n"
+            "sys.path.insert(0, H5LIB)\n"
+            "import Read_h5_driver as h5_rlib\n"
+            "import Plot_h5_driver as h5_plib\n"
+            "\n"
+            f"openwq_info = {{'path_to_results': r'{_out_dir}', 'mapping_key': '{_mapkey}'}}\n"
+            "openwq_results = h5_rlib.Read_h5_driver(\n"
+            f"    openwq_info=openwq_info, output_format='{_out_fmt}',\n"
+            "    debugmode=DEBUG, cmp=COMPARTMENTS, space_elem=SPACE_ELEM,\n"
+            "    chemSpec=SPECIES, chemUnits='MG/L')\n"
+            "\n"
+            "h5_plib.Plot_h5_driver(\n"
+            f"    what2map='openwq', hostmodel='{_host}', mapping_key_values='all',\n"
+            "    openwq_results=openwq_results, chemSpec=SPECIES, debugmode=DEBUG,\n"
+            f"    output_path=r'{_rep_out}',\n"
+            f"    mapping_key='{_feat}', feature_label='{_feat}',\n"
+            f"    river_network_shp=r'{_river_shp}', basin_shapefile=r'{_basin_shp}',\n"
+            + _obs_lines +
+            "    )\n"
+            f"print('Report:', r'{_rep_out}')\n"
+            "import webbrowser\n"
+            f"webbrowser.open('file://' + os.path.abspath(r'{_rep_out}'))   # open it automatically\n"
+            "PY\n"
+        )
+        _tpl_json = json.dumps(_viz_template)
+        _viz_js = (
+            "<script>(function(){\n"
+            "var TPL=" + _tpl_json + ";\n"
+            'var code=document.querySelector("#rbviz-codewrap code");\n'
+            'var sp=document.getElementById("rbviz-space");\n'
+            'var dbg=document.getElementById("rbviz-debug");\n'
+            'function L(sel){var a=[];document.querySelectorAll(sel).forEach('
+            'function(n){if(n.checked)a.push(JSON.stringify(n.value));});return "["+a.join(", ")+"]";}\n'
+            "function build(){if(!code)return;\n"
+            'var sv=(sp&&sp.value.trim())?sp.value.trim():"\'all\'";\n'
+            'var d=(dbg&&dbg.checked)?"True":"False";\n'
+            'code.textContent=TPL.replace("__SPECIES__",L(".rbviz-sp"))'
+            '.replace("__COMPARTMENTS__",L(".rbviz-cmp"))'
+            '.replace("__SPACE_ELEM__",sv).replace("__DEBUG__",d);}\n'
+            'document.querySelectorAll(".rbviz-sp,.rbviz-cmp").forEach('
+            'function(n){n.addEventListener("change",build);});\n'
+            "if(sp)sp.addEventListener(\"input\",build);"
+            "if(dbg)dbg.addEventListener(\"change\",build);\n"
+            "build();\n"
+            "})();</script>"
+        )
+        viz_block = (
+            '<p style="margin:1rem 0 .2rem;font-weight:600;">&#9654; Generate the output '
+            'report for this simulation</p>'
+            '<p style="margin:.1rem 0 .5rem;font-size:.85rem;color:var(--text2);">'
+            'Tick the species / compartments (from this run&rsquo;s output), set the options, '
+            'then copy &amp; paste the <strong>whole block</strong> into your terminal:</p>'
+            '<div class="viz-ctrl">'
+            f'<div class="viz-group"><span class="viz-label">Species</span>{_species_cbs}</div>'
+            f'<div class="viz-group"><span class="viz-label">Compartments</span>{_comp_cbs}</div>'
+            '<div class="viz-group"><span class="viz-label">Space elements</span>'
+            '<input type="text" id="rbviz-space" class="viz-in" value="\'all\'"'
+            ' title="\'all\' or a Python list of ids, e.g. [1, 2]"></div>'
+            '<div class="viz-group"><label class="viz-cb"><input type="checkbox" id="rbviz-debug"> '
+            'Debug (per-process terms)</label></div>'
+            '</div>'
+            '<div id="rbviz-codewrap">' + rh.build_code_block("", "bash") + '</div>'
+            + _viz_js)
+
+        calibrated_block = (
+            '<div class="card primary" style="margin-bottom:1rem;">'
+            '<h3 style="margin-top:0;">&#9654; Run the calibrated model</h3>'
+            '<p style="font-size:.9rem;margin:.2rem 0 .5rem;">'
+            f'The best evaluation (<code>{html_lib.escape(os.path.basename(_best_dir))}</code>) '
+            'already ran with the <strong>calibrated best parameters</strong>, so '
+            '<strong>its output already IS the calibrated best simulation</strong> '
+            f'(no re-run needed to see results). To reproduce it, {_how}</p>'
+            + _cal_ctrl +
+            '<p style="font-size:.8rem;color:var(--text2);margin:.5rem 0 0;line-height:1.6;">'
+            f'&#128193; Calibrated output (already on disk): <code>{html_lib.escape(_out_dir)}</code><br>'
+            f'&#9881;&#65039; Calibrated config folder: <code>{html_lib.escape(_best_dir)}</code>'
+            + (f'<br>&#128202; Best parameter values: <code>{html_lib.escape(_bp_path)}</code>'
+               if _bp_path else '')
+            + '</p>'
+            + viz_block
+            + '</div>')
+    else:
+        # Best-eval config not locatable — fall back to the raw best values.
+        _bp = results.get("best_params") or {}
+        calibrated_block = (
+            '<div class="card primary" style="margin-bottom:1rem;">'
+            '<h3 style="margin-top:0;">&#9654; Run the calibrated model</h3>'
+            '<p style="font-size:.9rem;">The calibrated best simulation is the '
+            '<strong>best evaluation</strong> under <code>evaluations/</code> '
+            '(its config already has the best parameters applied). The best values '
+            + (f'are saved in <code>{html_lib.escape(_bp_path)}</code> and '
+               if _bp_path else '')
+            + 'are listed below &mdash; apply them to your model config, then run.</p>'
+            + (rh.build_code_block(json.dumps(_bp, indent=2, default=str), "json") if _bp else "")
+            + '</div>')
+
     # Minified, still-runnable version (comments + blank lines stripped) so the
     # config shown here is compact; the full template stays on disk untouched.
     _orig_lines = template_text.count("\n") + 1
     template_text = _minify_python(template_text)
     _min_lines = template_text.count("\n") + 1
-    _trim = (f" &mdash; minimized from {_orig_lines} to {_min_lines} lines "
-             f"(comments &amp; blanks stripped; functionally identical)"
+    _trim = (f" (minimized {_orig_lines}&rarr;{_min_lines} lines)"
              if _min_lines < _orig_lines else "")
 
     sub = (
-        '<p style="margin-top:.2rem">'
-        'Minimized, run-ready config template' + _trim + '. '
-        '<strong>Save</strong> it (button below), then <strong>run</strong> it '
-        '(command below) to regenerate the openWQ input configuration from these '
-        'settings. Source: '
-        f'<code>{html_lib.escape(template_filename)}</code>.'
-        '</p>'
+        '<div class="rb-warn"><strong>&#9888; This is your model setup template with its '
+        'DEFAULT parameter values &mdash; not the calibrated ones.</strong> Re-running it '
+        'regenerates the openWQ config from these defaults (handy to inspect or edit your '
+        'setup). To run the <em>calibrated</em> model, use '
+        '<em>&#9654; Run the calibrated model</em> above.</div>'
+        f'<p style="margin-top:.4rem">Model config template{_trim}. Source: '
+        f'<code>{html_lib.escape(template_filename)}</code>.</p>'
     )
 
     # "Code to run it": execute the saved template. Its paths are absolute, so
     # this works from any working directory once the file is saved.
     run_cmd = f'python "{template_abspath}"'
     run_block = (
-        '<p style="margin:.9rem 0 .2rem;font-weight:600;">&#9654; Run it</p>'
+        '<p style="margin:.9rem 0 .2rem;font-weight:600;">&#9654; Run the template '
+        '(regenerates DEFAULT config)</p>'
         '<p style="margin:.1rem 0 .3rem;font-size:.85rem;color:var(--text2);">'
-        'Regenerates the openWQ input config (master + <code>openwq_in/</code>) '
-        'from the saved template:</p>'
+        'Regenerates the openWQ input config (master + <code>openwq_in/</code>) from these '
+        '<strong>default</strong> settings &mdash; not the calibrated parameters:</p>'
         + rh.build_code_block(run_cmd, "bash")
     )
 
@@ -2456,28 +2845,41 @@ def _build_run_best_section(
         }})();
         </script>"""
 
+    # ── Calibration config + run script (_run.py) — the script that configured &
+    #    ran THIS calibration. Shown BEFORE the run-the-calibrated-model snippet.
+    #    Uses the ID-scoped code toolbox (prefix "rbrun") so it coexists with the
+    #    template box (prefix "rb-…"). ──
+    runpy_card = ""
+    _runpy_cands = (_glob2.glob(os.path.join(str(output_dir), "*_run.py"))
+                    if output_dir else [])
+    if _runpy_cands:
+        _runpy_path = os.path.abspath(_runpy_cands[0])
+        _runpy_name = os.path.basename(_runpy_path)
+        try:
+            with open(_runpy_path, "r", encoding="utf-8", errors="replace") as _rf:
+                _runpy_text = _rf.read()
+        except Exception:
+            _runpy_text = ""
+        _ro = _runpy_text.count("\n") + 1
+        _runpy_text = _minify_python(_runpy_text)
+        _rm = _runpy_text.count("\n") + 1
+        _rmeta = f"minimized {_ro}&rarr;{_rm}" if _rm < _ro else ""
+        _runpy_box = _build_code_toolbox(
+            _runpy_text, "rbrun", save_name=_runpy_name,
+            save_path=_runpy_path, meta=_rmeta)
+        runpy_card = (
+            '<div class="card">'
+            '<h3 style="margin-top:0;">Best parameter simulation run script</h3>'
+            '<p style="margin:.2rem 0 .3rem;font-size:.9rem;">The script that configured and '
+            f'ran this calibration: <code>{html_lib.escape(_runpy_name)}</code>.</p>'
+            + _runpy_box
+            + '</div>')
+
     return f"""
 <div class="section" id="run-best">
-    <h2>Run with Best Parameters
-        <span style="font-weight:400;font-size:.7em;color:var(--muted,#888)">
-        (configuration template python script with the best parameters)
-        </span>
-    </h2>
-    <div class="card primary">
-        {sub}
-        {toolbar}
-        <div class="rb-code-controls">
-            <button type="button" id="rb-expand-btn" class="rb-expand">&#9660; Expand</button>
-            <button type="button" id="rb-lock-btn" class="rb-expand"
-                    title="Lock the box so the page scrolls past it">&#128274; Lock scroll</button>
-            <span class="rb-code-meta">{_min_lines} lines &mdash; scroll inside, lock to scroll the page, or expand</span>
-        </div>
-        <div id="rb-codewrap" class="rb-codewrap">
-            <div id="run-best-code">{rh.build_code_block(template_text, "python")}</div>
-        </div>
-        {run_block}
-        {script}
-    </div>
+    <h2>Run with Best Parameters</h2>
+    {runpy_card}
+    {calibrated_block}
 </div>
 """
 
