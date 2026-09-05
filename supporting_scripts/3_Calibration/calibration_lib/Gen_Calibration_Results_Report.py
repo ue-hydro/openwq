@@ -686,6 +686,47 @@ def _get_results_css() -> str:
         font-weight: 600; }
     .mlc-note { font-size: .82rem; color: var(--text2); line-height: 1.5;
         margin-top: .8rem; padding-top: .7rem; border-top: 1px dashed var(--border); }
+
+    /* ── Run-with-best "save template" toolbar ─────────────────── */
+    .rb-toolbar { display: flex; flex-wrap: wrap; align-items: center;
+        gap: .55rem .9rem; margin: .3rem 0 .9rem; }
+    .rb-save-btn { display: inline-flex; align-items: center; gap: .45rem;
+        cursor: pointer; font: inherit; font-size: .85rem; font-weight: 600;
+        color: #fff; background: var(--primary); border: none; border-radius: 8px;
+        padding: .5rem .95rem; }
+    .rb-save-btn:hover { filter: brightness(1.08); }
+    .rb-path { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem;
+        font-size: .8rem; color: var(--text2); }
+    .rb-path .p { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,.05);
+        padding: .25rem .55rem; border-radius: 5px; word-break: break-all; color: var(--text); }
+    [data-theme="dark"] .rb-path .p { background: rgba(255,255,255,.06); }
+    .rb-copy-path { cursor: pointer; font: inherit; font-size: .78rem; color: var(--text2);
+        border: 1px solid var(--border); background: var(--surface); border-radius: 6px;
+        padding: .28rem .6rem; white-space: nowrap; }
+    .rb-copy-path:hover { border-color: var(--primary); color: var(--primary); }
+    .rb-hint { font-size: .78rem; color: var(--text3); margin: -.3rem 0 .9rem; line-height: 1.5; }
+    .rb-hint kbd { font-family: 'JetBrains Mono', monospace; font-size: .72rem;
+        background: rgba(0,0,0,.06); border: 1px solid var(--border); border-radius: 4px;
+        padding: .05rem .35rem; }
+    [data-theme="dark"] .rb-hint kbd { background: rgba(255,255,255,.08); }
+    /* collapsible code box: top visible, scroll for the rest, expandable */
+    .rb-code-controls { display: flex; align-items: center; gap: .6rem; margin: .2rem 0 .3rem; }
+    .rb-expand { cursor: pointer; font: inherit; font-size: .8rem; font-weight: 600;
+        color: var(--text2); border: 1px solid var(--border); background: var(--surface);
+        border-radius: 6px; padding: .3rem .7rem; }
+    .rb-expand:hover { border-color: var(--primary); color: var(--primary); }
+    .rb-code-meta { font-size: .74rem; color: var(--text3); }
+    .rb-codewrap { position: relative; max-height: 11rem; overflow: auto;
+        overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 8px; }
+    .rb-codewrap.expanded { max-height: none; }
+    /* locked: box stops capturing the wheel so the PAGE scrolls past it */
+    .rb-codewrap.locked { overflow: hidden; }
+    .rb-codewrap .code-block { margin: 0; border-radius: 0; overflow-x: auto; }
+    /* fade hint at the bottom while collapsed */
+    .rb-codewrap:not(.expanded)::after { content: ""; position: sticky; left: 0; bottom: 0;
+        display: block; height: 2.4rem; margin-top: -2.4rem; pointer-events: none;
+        background: linear-gradient(to bottom, transparent, var(--surface)); }
+    .rb-expand.locked-on { border-color: var(--primary); color: var(--primary); }
     """
 
 
@@ -2219,6 +2260,43 @@ def _build_next_steps_section(
 """
 
 
+def _minify_python(src: str) -> str:
+    """Strip comments (full-line and inline) and collapse blank lines from a
+    Python source, keeping it byte-for-byte RUNNABLE. Uses ``tokenize`` so it
+    never touches ``#`` inside strings, and re-parses the result as a guard —
+    on any doubt it returns the original source unchanged."""
+    try:
+        import tokenize as _tk, io as _io
+        lines = src.splitlines(keepends=True)
+        drop_line = set()          # 1-based full-line comment lines
+        inline_at = {}             # 1-based line -> col where an inline comment starts
+        for t in _tk.generate_tokens(_io.StringIO(src).readline):
+            if t.type == _tk.COMMENT:
+                r, c = t.start
+                if lines[r - 1][:c].strip() == "":
+                    drop_line.add(r)
+                else:
+                    inline_at[r] = min(inline_at.get(r, 1 << 30), c)
+        out, prev_blank = [], False
+        for i, ln in enumerate(lines, 1):
+            if i in drop_line:
+                continue
+            if i in inline_at:
+                ln = ln[:inline_at[i]].rstrip() + "\n"
+            if ln.strip() == "":
+                if prev_blank:
+                    continue
+                prev_blank = True
+            else:
+                prev_blank = False
+            out.append(ln)
+        result = "".join(out).strip() + "\n"
+        compile(result, "<minified>", "exec")   # must still parse -> still runnable
+        return result
+    except Exception:
+        return src
+
+
 def _build_run_best_section(
     results: Dict[str, Any],
     model_config: Dict[str, Any],
@@ -2259,15 +2337,124 @@ def _build_run_best_section(
         template_text = ""
 
     template_filename = os.path.basename(template_path)
+    template_abspath = os.path.abspath(template_path)
+    template_dir = os.path.dirname(template_abspath)
+
+    # Minified, still-runnable version (comments + blank lines stripped) so the
+    # config shown here is compact; the full template stays on disk untouched.
+    _orig_lines = template_text.count("\n") + 1
+    template_text = _minify_python(template_text)
+    _min_lines = template_text.count("\n") + 1
+    _trim = (f" &mdash; minimized from {_orig_lines} to {_min_lines} lines "
+             f"(comments &amp; blanks stripped; functionally identical)"
+             if _min_lines < _orig_lines else "")
+
     sub = (
         '<p style="margin-top:.2rem">'
-        'Run-ready model setup. After applying the calibrated parameters '
-        'with <code>python calibration_config_template.py --apply-best</code>, '
-        'the BGC JSON pointed to by this template contains the best '
-        'values — so re-running this script produces the calibrated '
-        f'model.  Source: <code>{html_lib.escape(template_filename)}</code>.'
+        'Minimized, run-ready config template' + _trim + '. '
+        '<strong>Save</strong> it (button below), then <strong>run</strong> it '
+        '(command below) to regenerate the openWQ input configuration from these '
+        'settings. Source: '
+        f'<code>{html_lib.escape(template_filename)}</code>.'
         '</p>'
     )
+
+    # "Code to run it": execute the saved template. Its paths are absolute, so
+    # this works from any working directory once the file is saved.
+    run_cmd = f'python "{template_abspath}"'
+    run_block = (
+        '<p style="margin:.9rem 0 .2rem;font-weight:600;">&#9654; Run it</p>'
+        '<p style="margin:.1rem 0 .3rem;font-size:.85rem;color:var(--text2);">'
+        'Regenerates the openWQ input config (master + <code>openwq_in/</code>) '
+        'from the saved template:</p>'
+        + rh.build_code_block(run_cmd, "bash")
+    )
+
+    # Save-template button + the exact path to save it at (so its baked paths
+    # resolve when run). The button downloads the script text verbatim; the
+    # path is the template's canonical location on disk.
+    fname_json = json.dumps(template_filename)
+    path_json = json.dumps(template_abspath)
+    toolbar = f"""
+        <div class="rb-toolbar">
+            <button type="button" id="rb-save-btn" class="rb-save-btn"
+                    title="Open a Save-As dialog to choose where to save this .py file">
+                &#128190; Save config template (.py)&hellip;
+            </button>
+            <span class="rb-path">
+                <span>Save it here so its paths resolve:</span>
+                <span class="p" id="rb-save-path">{html_lib.escape(template_abspath)}</span>
+                <button type="button" id="rb-copy-path-btn" class="rb-copy-path"
+                        title="Copy this path">&#128203; Copy path</button>
+            </span>
+        </div>
+        <p class="rb-hint">Copy the path, click <em>Save config template</em>, then paste it
+           in the Save dialog (on macOS press <kbd>&#8679;&#8984;G</kbd> to go to the folder)
+           so the file lands where its baked paths resolve.</p>"""
+    script = f"""
+        <script>
+        (function() {{
+            var FNAME = {fname_json}, FPATH = {path_json};
+            var saveBtn = document.getElementById('rb-save-btn');
+            var copyBtn = document.getElementById('rb-copy-path-btn');
+            function blobDownload(txt) {{
+                var blob = new Blob([txt], {{type: 'text/x-python'}});
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob); a.download = FNAME;
+                document.body.appendChild(a); a.click();
+                setTimeout(function() {{ URL.revokeObjectURL(a.href); a.remove(); }}, 0);
+            }}
+            if (saveBtn) saveBtn.addEventListener('click', async function() {{
+                var code = document.querySelector('#run-best-code code');
+                var txt = code ? code.textContent : '';
+                // Preferred: native Save-As dialog (File System Access API) so the
+                // user can choose the location / paste the path. Falls back to a
+                // plain download on browsers without it (Firefox/Safari) or file://.
+                if (window.showSaveFilePicker) {{
+                    try {{
+                        var handle = await window.showSaveFilePicker({{
+                            suggestedName: FNAME,
+                            types: [{{description: 'Python script',
+                                      accept: {{'text/x-python': ['.py']}}}}]
+                        }});
+                        var w = await handle.createWritable();
+                        await w.write(txt); await w.close();
+                        return;
+                    }} catch (e) {{
+                        if (e && e.name === 'AbortError') return;   // user cancelled
+                        // any other error (e.g. blocked on file://) -> fall back
+                    }}
+                }}
+                blobDownload(txt);
+            }});
+            function flash(btn) {{ var o = btn.innerHTML; btn.innerHTML = '&#10003; Copied';
+                setTimeout(function() {{ btn.innerHTML = o; }}, 1500); }}
+            function fallbackCopy(t, btn) {{ var ta = document.createElement('textarea');
+                ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.focus(); ta.select();
+                try {{ document.execCommand('copy'); }} catch (e) {{}} ta.remove(); flash(btn); }}
+            if (copyBtn) copyBtn.addEventListener('click', function() {{
+                if (navigator.clipboard && navigator.clipboard.writeText) {{
+                    navigator.clipboard.writeText(FPATH).then(
+                        function() {{ flash(copyBtn); }},
+                        function() {{ fallbackCopy(FPATH, copyBtn); }});
+                }} else {{ fallbackCopy(FPATH, copyBtn); }}
+            }});
+            var wrap = document.getElementById('rb-codewrap');
+            var expBtn = document.getElementById('rb-expand-btn');
+            if (expBtn && wrap) expBtn.addEventListener('click', function() {{
+                var expanded = wrap.classList.toggle('expanded');
+                expBtn.innerHTML = expanded ? '&#9650; Collapse' : '&#9660; Expand';
+                if (!expanded) wrap.scrollTop = 0;
+            }});
+            var lockBtn = document.getElementById('rb-lock-btn');
+            if (lockBtn && wrap) lockBtn.addEventListener('click', function() {{
+                var locked = wrap.classList.toggle('locked');
+                lockBtn.classList.toggle('locked-on', locked);
+                lockBtn.innerHTML = locked ? '&#128275; Unlock scroll' : '&#128274; Lock scroll';
+            }});
+        }})();
+        </script>"""
 
     return f"""
 <div class="section" id="run-best">
@@ -2278,7 +2465,18 @@ def _build_run_best_section(
     </h2>
     <div class="card primary">
         {sub}
-        {rh.build_code_block(template_text, "python")}
+        {toolbar}
+        <div class="rb-code-controls">
+            <button type="button" id="rb-expand-btn" class="rb-expand">&#9660; Expand</button>
+            <button type="button" id="rb-lock-btn" class="rb-expand"
+                    title="Lock the box so the page scrolls past it">&#128274; Lock scroll</button>
+            <span class="rb-code-meta">{_min_lines} lines &mdash; scroll inside, lock to scroll the page, or expand</span>
+        </div>
+        <div id="rb-codewrap" class="rb-codewrap">
+            <div id="run-best-code">{rh.build_code_block(template_text, "python")}</div>
+        </div>
+        {run_block}
+        {script}
     </div>
 </div>
 """
