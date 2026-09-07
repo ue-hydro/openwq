@@ -141,7 +141,7 @@ class DDS:
                  initial_point: np.ndarray = None,
                  callback: Callable[[int, float, np.ndarray], None] = None,
                  early_stop_threshold: float = None,
-                 early_stop_patience: int = 50) -> DDSResult:
+                 early_stop_patience: Optional[int] = None) -> DDSResult:
         """
         Run DDS optimization.
 
@@ -156,8 +156,11 @@ class DDS:
             Called after each evaluation: callback(eval_num, obj_val, params)
         early_stop_threshold : float
             Stop if objective falls below this value
-        early_stop_patience : int
-            Stop if no improvement for this many evaluations
+        early_stop_patience : Optional[int]
+            Stop if no improvement for this many consecutive evaluations.
+            None / 0 (default) = disabled: run the full max_evals budget, as
+            DDS is designed to (its perturbation radius shrinks with
+            evals/max_evals, so the late evaluations do the fine-tuning).
 
         Returns
         -------
@@ -242,7 +245,7 @@ class DDS:
                     convergence_reason=f"Objective below threshold ({early_stop_threshold})"
                 )
 
-            if no_improvement_count >= early_stop_patience:
+            if early_stop_patience and no_improvement_count >= early_stop_patience:
                 return DDSResult(
                     best_params=x_best,
                     best_objective=f_best,

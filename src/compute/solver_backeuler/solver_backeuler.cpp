@@ -430,6 +430,12 @@ void OpenWQ_compute::Prepare_MLClosures(
         st.term           = mdc.term;
         st.alpha          = mdc.net.alpha;
         st.max_correction = mdc.net.max_correction;
+        st.input_transform = mdc.net.net.in_transform.empty() ? std::string("raw")
+                                                             : mdc.net.net.in_transform;
+        if (!mdc.net.net.in_std.is_empty()) {
+            st.input_mean = mdc.net.net.in_mean(0);
+            st.input_std  = mdc.net.net.in_std(0);
+        }
     }
 
     _m = "<OpenWQ> Hybrid ML: "

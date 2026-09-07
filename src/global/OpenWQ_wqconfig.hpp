@@ -190,6 +190,9 @@ class OpenWQ_wqconfig
             std::string species, compartment, term;
             double alpha = 0.0;             // the closure dial (0 = physics)
             double max_correction = 0.0;    // |alpha*g| clamp bound
+            std::string input_transform = "raw"; // net input: raw | log1p (before std.)
+            double input_mean = 0.0;        // input standardization (x-mean)/std
+            double input_std  = 1.0;        //   (1.0 / 0.0 = none)
             // accumulators
             long long n = 0;                // factor evaluations (cell·step)
             long long n_clamp = 0;          // times |factor-1| hit max_correction

@@ -315,6 +315,10 @@ def run_calibration(
         objective_weights: Dict[str, float] = None,
         calibration_targets: Dict = None,
         random_seed: int = None,
+        # DDS early stop ("patience"): None/0 = OFF (run the full budget);
+        # N = stop after N consecutive evaluations without improvement.
+        # Sequential DDS only (parallel chains / RANDOM always run the budget).
+        early_stop_patience: Optional[int] = None,
 
         # Sensitivity analysis
         run_sensitivity_first: bool = False,
@@ -874,6 +878,7 @@ def run_calibration(
                 "aggregation_method": kwargs.get("aggregation_method", "mean"),
                 "calibration_targets": calibration_targets or {},
                 "random_seed": random_seed,
+                "early_stop_patience": early_stop_patience,
                 "calibration_mode": calibration_mode,
                 "use_primary_only": kwargs.get("use_primary_only", True),
                 "zone_select": kwargs.get("zone_select"),
@@ -1065,6 +1070,7 @@ def run_calibration(
                 "zone_select": kwargs.get("zone_select"),
                 "metric_focus": kwargs.get("metric_focus", "both"),
                 "random_seed": random_seed,
+                "early_stop_patience": early_stop_patience,
             }
             calibration_results = {
                 "calibration_mode": calibration_mode,
@@ -1400,12 +1406,20 @@ def run_calibration(
             max_evals=max_evaluations - start_eval,
             seed=random_seed
         )
+        logger.info("DDS early stop (patience): "
+                    + (f"ON - stop after {early_stop_patience} evaluations "
+                       f"without improvement" if early_stop_patience
+                       else "OFF - run the full evaluation budget"))
         result = optimizer.optimize(
             objective_wrapper,
             initial_point=initial_opt,
-            callback=checkpoint_callback
+            callback=checkpoint_callback,
+            early_stop_patience=early_stop_patience or None
         )
     elif algorithm == "RANDOM":
+        if early_stop_patience:
+            logger.warning("early_stop_patience applies to sequential DDS only "
+                           "- ignored for RANDOM (runs the full budget)")
         # RANDOM (parallel): independent samples evaluated up to n_parallel at
         # a time via the batch objective.  With n_parallel == 1 this is the
         # plain sequential random baseline.
@@ -1422,6 +1436,9 @@ def run_calibration(
             callback=checkpoint_callback
         )
     elif algorithm in ("DDS_PARALLEL", "PARALLEL_DDS"):
+        if early_stop_patience:
+            logger.warning("early_stop_patience applies to sequential DDS only "
+                           "- ignored for DDS_PARALLEL (runs the full budget)")
         # Parallel DDS chains: n_parallel independent DDS chains advanced
         # together, one candidate per chain per round evaluated concurrently —
         # keeps DDS's sample efficiency while using n_parallel model runs.
@@ -1595,6 +1612,7 @@ def run_calibration(
                 "n_parameters": len(calibration_parameters),
                 "calibration_targets": kwargs.get("calibration_targets", {}),
                 "random_seed": random_seed,
+                "early_stop_patience": early_stop_patience,
                 "container_runtime": kwargs.get("container_runtime", ""),
             },
             temporal_resolution=temporal_resolution,
@@ -1751,6 +1769,7 @@ def run_calibration(
         "aggregation_method": kwargs.get("aggregation_method", "mean"),
         "calibration_targets": calibration_targets or {},
         "random_seed": random_seed,
+        "early_stop_patience": early_stop_patience,
         "calibration_mode": calibration_mode,
         "use_primary_only": kwargs.get("use_primary_only", True),
         "zone_select": kwargs.get("zone_select"),

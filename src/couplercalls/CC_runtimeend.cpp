@@ -77,6 +77,9 @@ static void _write_ml_closure_diagnostics(OpenWQ_wqconfig& OpenWQ_wqconfig){
         f << "      \"term\": "           << jstr(s.term)        << ",\n";
         f << "      \"alpha\": "          << s.alpha             << ",\n";
         f << "      \"max_correction\": " << s.max_correction    << ",\n";
+        f << "      \"input_transform\": " << jstr(s.input_transform) << ",\n";
+        f << "      \"input_mean\": "     << s.input_mean        << ",\n";
+        f << "      \"input_std\": "      << s.input_std         << ",\n";
         f << "      \"n_samples\": "      << s.n                 << ",\n";
         f << "      \"factor_mean\": "    << factor_mean         << ",\n";
         f << "      \"factor_min\": "     << (s.n > 0 ? s.min_factor : 1.0) << ",\n";
