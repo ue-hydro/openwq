@@ -406,6 +406,15 @@ def _build_parameters_section(parameters: List[Dict]) -> str:
 """
 
 
+def _early_stop_label(settings: Dict[str, Any]) -> str:
+    """Human label for the DDS early-stop ("patience") setting."""
+    _p = settings.get("early_stop_patience")
+    if _p:
+        return (f"ON &mdash; stop after {_p} consecutive evaluations without "
+                f"improvement (sequential DDS only)")
+    return "OFF &mdash; runs the full Max Evaluations budget"
+
+
 def _build_settings_section(settings: Dict[str, Any]) -> str:
     """Build the calibration settings section."""
 
@@ -417,6 +426,7 @@ def _build_settings_section(settings: Dict[str, Any]) -> str:
         ("Temporal Resolution", settings.get("temporal_resolution", "native")),
         ("Aggregation Method", settings.get("aggregation_method", "mean")),
         ("Random Seed", str(settings.get("random_seed", "None"))),
+        ("Early stop (DDS patience)", _early_stop_label(settings)),
     ]
 
     settings_rows = "".join(
@@ -2624,6 +2634,49 @@ def _build_interactive_settings_section(container_runtime_default: str = "docker
             {rh.build_form_number("random_seed", "Random Seed",
                 42, min_val=0, step=1)}
         </div>
+        <div class="form-row">
+            {rh.build_form_checkbox(
+                "early_stop_enabled",
+                "Early stop (DDS patience)",
+                checked=False,
+                hint="OFF (recommended) = always run the full Max Evaluations "
+                     "budget. ON = stop the search as soon as it stalls for "
+                     "the number of evaluations set on the right.")}
+            {rh.build_form_number("early_stop_patience",
+                "Patience (evaluations without improvement)",
+                50, min_val=1, step=1,
+                hint="Only used when Early stop is ON.")}
+        </div>
+        <div style="margin-top:.6rem;padding:.55rem .75rem;border-radius:8px;
+             background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.40);
+             border-left:4px solid #3b82f6;font-size:.8rem;color:var(--text);line-height:1.5;">
+            <strong style="color:#2563eb;">&#8505;&nbsp;What &ldquo;patience&rdquo; does.</strong>
+            DDS proposes one new parameter set per evaluation by perturbing the
+            best-so-far and keeps it only if it is <em>strictly</em> better
+            (greedy acceptance). With Early stop <strong>ON</strong>, the run is
+            terminated as soon as <em>N</em> consecutive evaluations fail to
+            improve the best objective &mdash; even if most of the Max
+            Evaluations budget is still unspent. With it <strong>OFF</strong> the
+            optimiser always uses the whole budget. DDS is designed to run to its
+            budget: the perturbation radius shrinks as
+            evaluations&nbsp;/&nbsp;max_evaluations grows, so the late
+            evaluations do the fine-tuning, and a stall of 50 evaluations is
+            common in the middle of a healthy run (in one test a 500-evaluation
+            run was cut at evaluation 92 while its twin, which happened to
+            escape the rule, kept improving up to evaluation 487). Early stop
+            trades completeness for wall-clock time: use it for quick screening
+            runs, keep it OFF for a final calibration. Applies to
+            <strong>DDS sequential</strong> only &mdash; DDS parallel chains and
+            RANDOM always run the full budget. The generated run script exposes
+            it as <code>early_stop_patience = None | N</code>.
+        </div>
+        <script>(function(){{
+          var c=document.getElementById('early_stop_enabled'),
+              n=document.getElementById('early_stop_patience');
+          if(!c||!n) return;
+          function u(){{ n.disabled=!c.checked; n.style.opacity=c.checked?'1':'.5'; }}
+          c.addEventListener('change',u); u();
+        }})();</script>
     </div>
 
     <!-- Theme: objective metric (how model vs obs is scored) -->
@@ -4922,6 +4975,11 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.temporal_resolution = document.getElementById('temporal_resolution').value;
     s.aggregation_method = document.getElementById('aggregation_method').value;
     s.random_seed = parseInt(document.getElementById('random_seed').value) || 42;
+    // DDS early stop (patience): OFF -> null -> `None` (run the full budget).
+    var _esEl = document.getElementById('early_stop_enabled');
+    var _espEl = document.getElementById('early_stop_patience');
+    s.early_stop_patience = (_esEl && _esEl.checked)
+      ? ((_espEl && parseInt(_espEl.value)) || 50) : null;
     // Container runtime: 'docker' or 'apptainer' (Singularity).
     var _crEl = document.getElementById('container_runtime');
     s.container_runtime = _crEl ? _crEl.value : 'docker';
@@ -5114,6 +5172,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
         s.ml_closures[sp + ':' + term] = {
           species: sp, term: term, compartment: comp, mode: mode,
           alpha: alpha, max_correction: maxc, weights_filepath: wf,
+          // calibrated closures: how the species' cell mass is fed to the 1x1
+          // tanh net -> x = (log1p(m) - log1p(m_ref)) / (decades*ln10): 0 at
+          // m_ref, +/-1 at +/-decades around it (raw mass saturates tanh).
+          input_transform: 'log1p', input_scale_mass_g: 1000, input_scale_decades: 3,
           model_index: 0};
       });
     });
@@ -5181,6 +5243,10 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('temporal_resolution = ' + pyRepr(s.temporal_resolution));
     lines.push('aggregation_method = ' + pyRepr(s.aggregation_method));
     lines.push('random_seed = ' + pyRepr(s.random_seed));
+    lines.push('# DDS early stop ("patience"): None = OFF (run the full max_evaluations');
+    lines.push('# budget, recommended); an integer N = stop as soon as N consecutive');
+    lines.push('# evaluations fail to improve the best objective (sequential DDS only).');
+    lines.push('early_stop_patience = ' + pyRepr(s.early_stop_patience));
     lines.push('');
     lines.push('# Container runtime selected in the setup report:');
     lines.push('#   "docker"    — local Docker (docker compose up -d first)');
@@ -5403,6 +5469,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        "calibration_targets": calibration_targets,');
     lines.push('        "objective_weights": objective_weights,');
     lines.push('        "random_seed": random_seed,');
+    lines.push('        "early_stop_patience": early_stop_patience,');
     lines.push('        "run_sensitivity_first": run_sensitivity_first,');
     lines.push('        "calibration_mode": calibration_mode,');
     lines.push('        "sensitivity_method": sensitivity_method,');
@@ -5438,6 +5505,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('');
     lines.push('    print(f"Algorithm: {algorithm}")');
     lines.push('    print(f"Max evaluations: {max_evaluations}")');
+    lines.push("    print(f\"Early stop patience: {early_stop_patience or 'OFF'}\")");
     lines.push('    print(f"Objective: {objective_function}")');
     lines.push('    print(f"Parameters: {len(calibration_parameters)}")');
     lines.push('    print()');
@@ -5460,6 +5528,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        objective_weights=objective_weights,');
     lines.push('        calibration_targets=calibration_targets,');
     lines.push('        random_seed=random_seed,');
+    lines.push('        # DDS early stop: None = OFF (full budget) | N evaluations.');
+    lines.push('        early_stop_patience=early_stop_patience,');
     lines.push('        run_sensitivity_first=run_sensitivity_first,');
     lines.push('        # Workflow: "sensitivity" | "both" | "calibration".');
     lines.push('        calibration_mode=calibration_mode,');
@@ -6752,7 +6822,9 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     el.addEventListener('input', updateScript);
   });
 
-  ['reach_ids', 'compartments'].forEach(function(id) {
+  // (early_stop_enabled: the DDS early-stop tick has no form-* class, so bind
+  // it here so the script preview refreshes when it is toggled.)
+  ['reach_ids', 'compartments', 'early_stop_enabled'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) {
       // 'change' covers <select multiple>; 'input' covers text fields.

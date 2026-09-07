@@ -31,6 +31,7 @@ import io
 import re
 import sys
 import json
+import math
 import html as html_lib
 import logging
 from pathlib import Path
@@ -888,10 +889,17 @@ def _build_summary_section(
     # Convergence info box
     conv_icon = "\u2705" if converged else "\u26a0\ufe0f"
     conv_style = "success" if converged else "warning"
+    # DDS early-stop ("patience") setting, when the run script recorded it
+    # (older runs pre-date the setting: nothing shown).
+    _esp_txt = ""
+    if isinstance(settings, dict) and "early_stop_patience" in settings:
+        _esp = settings.get("early_stop_patience")
+        _esp_txt = (f" &bull; Early stop: <strong>ON</strong> (patience {_esp})"
+                    if _esp else " &bull; Early stop: <strong>OFF</strong>")
     conv_html = rh.build_highlight_box(
         f"<strong>{conv_icon} Convergence:</strong> {html_lib.escape(str(conv_reason))} "
         f"&bull; Best found at evaluation <strong>{conv_eval}</strong> "
-        f"of <strong>{n_evals}</strong>",
+        f"of <strong>{n_evals}</strong>{_esp_txt}",
         conv_style
     )
 
@@ -1131,6 +1139,21 @@ def _build_ml_closure_section(diag_path):
         nsamp   = int(c.get("n_samples", 0) or 0)
         gross   = float(c.get("gross_mass_moved", 0.0) or 0.0)
         net     = float(c.get("net_mass_moved", 0.0) or 0.0)
+        # what the network was fed (diagnostics schema >= input_transform):
+        # raw mass (g) or log1p(mass) / log1p(m_ref); older JSONs lack the key.
+        _itr = str(c.get("input_transform", "") or "").lower()
+        _istd = float(c.get("input_std", 1.0) or 1.0)
+        _imean = float(c.get("input_mean", 0.0) or 0.0)
+        if _itr == "log1p":
+            _mref = math.expm1(_imean) if _imean > 0 else 0.0
+            _dec = _istd / math.log(10.0) if _istd > 0 else 0.0
+            input_disp = (f"log&#8321;&#8202;p(mass), centred at {_mref:.3g} g, "
+                          f"&plusmn;{_dec:.3g} decades &rarr; &plusmn;1")
+        elif _itr in ("raw", "none", ""):
+            input_disp = (f"mass / {_istd:.3g} g" if (_itr and abs(_istd - 1.0) > 1e-12)
+                          else "raw mass (g)") if _itr else "raw mass (g)"
+        else:
+            input_disp = _itr
         tot_gross += abs(gross)
         worst_pull = max(worst_pull, pull_fw)
 
@@ -1154,7 +1177,10 @@ def _build_ml_closure_section(diag_path):
         if saturated:
             shape = (f"The closure <strong>saturated</strong> — it applied a near-constant "
                      f"&times;{fmean:.2f} to the {term} tendency (a state-independent "
-                     f"{_pct(pull_m)} rescale, i.e. equivalent to a constant rate multiplier).")
+                     f"{_pct(pull_m)} rescale, i.e. equivalent to a constant rate multiplier)."
+                     + (" The network input was the <em>raw</em> mass, which drives tanh into "
+                        "saturation for any |cw| &gt; ~1 &mdash; use the scaled (log1p) input."
+                        if _itr in ("raw", "") else ""))
         else:
             shape = (f"<strong>State-dependent</strong>: the correction varied from "
                      f"&times;{fmin:.2f} to &times;{fmax:.2f} with the {sp} state.")
@@ -1202,6 +1228,7 @@ def _build_ml_closure_section(diag_path):
         <span class="k">Gross mass moved</span><span class="v">{_mass(gross)}</span>
         <span class="k">Net mass moved</span><span class="v">{netmass_disp}</span>
         <span class="k">&alpha; / max</span><span class="v">{alpha:.3g} / {maxc:.3g}</span>
+        <span class="k">Network input</span><span class="v">{input_disp}</span>
         <span class="k">Samples (cell&middot;step)</span><span class="v">{nsamp:,}</span>
       </div>
       <div class="mlc-note">{shape}{cons_txt}</div>

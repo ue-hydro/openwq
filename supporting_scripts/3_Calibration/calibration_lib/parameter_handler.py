@@ -28,6 +28,7 @@ Two modes of operation:
 """
 
 import json
+import math
 import os
 import re
 import copy
@@ -524,9 +525,17 @@ class ParameterHandler:
                                    closure_items: List) -> None:
         """Serialize each DDS-calibrated Layer-2 derivative closure to the weights
         JSON openWQ reads. The (cw, cb) sub-params define ``g = tanh(cw*x + cb)``
-        with ``x`` = the target species' own state (the solver passes a 1-vector),
-        so the net is ALWAYS a single 1x1 tanh layer (n_in=1, uniform for
-        CHEM/SORPT/SS). Points ``self.ml_closures[key]['weights_filepath']`` at
+        with ``x`` = the target species' own state (the solver passes a 1-vector:
+        the cell's mass in g), so the net is ALWAYS a single 1x1 tanh layer
+        (n_in=1, uniform for CHEM/SORPT/SS). The raw mass spans many decades
+        across compartments (canopy mg .. aquifer kg), which drives tanh into
+        saturation (a constant factor) for any |cw| > ~1; so the net input is
+        SCALED and CENTRED on a log scale: ``x = (log1p(m) - log1p(m_ref)) /
+        (D * ln 10)`` -> x = 0 at the reference mass m_ref and x = +/-1 at D
+        decades above/below it (spec ``input_transform`` = 'log1p' [default],
+        ``input_scale_mass_g`` = m_ref [1000 g], ``input_scale_decades`` = D
+        [3]); 'none' -> ``x = m / m_ref`` (linear). cb then shifts the centre
+        (by cb/cw decades*D) and cw sets how sharply g switches with mass. Points ``self.ml_closures[key]['weights_filepath']`` at
         the file; ``_apply_ml_closures`` then references it in the master
         ML_CLOSURES list. Python-only — no rebuild."""
         groups: Dict[str, Dict[str, float]] = {}
@@ -541,7 +550,27 @@ class ParameterHandler:
                 continue
             cw = float(vals.get("cw", 0.0))
             cb = float(vals.get("cb", 0.0))
-            net = ml_regionalization.export_mlp_weights([([[cw]], [cb], "tanh")])
+            _tr = str(spec.get("input_transform", "log1p") or "none").strip().lower()
+            try:
+                _mref = float(spec.get("input_scale_mass_g", 1000.0) or 1000.0)
+            except (TypeError, ValueError):
+                _mref = 1000.0
+            if _mref <= 0:
+                _mref = 1000.0
+            try:
+                _dec = float(spec.get("input_scale_decades", 3.0) or 3.0)
+            except (TypeError, ValueError):
+                _dec = 3.0
+            if _dec <= 0:
+                _dec = 3.0
+            if _tr == "log1p":
+                _mean, _std = math.log1p(_mref), _dec * math.log(10.0)
+            else:
+                _mean, _std = 0.0, _mref
+            net = ml_regionalization.export_mlp_weights(
+                [([[cw]], [cb], "tanh")],
+                in_mean=[_mean], in_std=[_std],
+                in_transform=("log1p" if _tr == "log1p" else None))
             safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(key))
             rel = f"openwq_in/_ml_closure_{safe}.json"
             with open(eval_dir / rel, "w") as f:
@@ -551,7 +580,8 @@ class ParameterHandler:
                 spec["alpha"] = 1.0     # a calibrated g needs a nonzero dial
             logger.info(f"ML ACTIVE: calibrated closure '{key}' -> {rel} "
                         f"(species={spec.get('species')}, term={spec.get('term')}, "
-                        f"cw={cw:.4g}, cb={cb:.4g}, alpha={spec.get('alpha')})")
+                        f"cw={cw:.4g}, cb={cb:.4g}, alpha={spec.get('alpha')}, "
+                        f"input={'log1p(m) centred at %g g, +/-%g decades -> +/-1' % (_mref, _dec) if _tr == 'log1p' else 'm/%g g' % _mref})")
 
     def _apply_ml_closures(self, eval_dir: Path) -> None:
         """Write all activated Layer-2 per-species DERIVATIVE closures into the
