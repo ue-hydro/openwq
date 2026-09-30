@@ -685,15 +685,6 @@ def Gen_Input_Driver(
         ss_climate_temp_q10: float = 2.0,
         ss_climate_temp_reference_c: float = 15.0,
 
-        # ML model source/sink parameters
-        # (used when ss_method = "ml_model")
-        ss_ml_training_data_csv: Optional[str] = None,
-        ss_ml_model_type: str = "xgboost",
-        ss_ml_target_species: Optional[List[str]] = None,
-        ss_ml_feature_columns: Optional[List[str]] = None,
-        ss_ml_n_estimators: int = 200,
-        ss_ml_max_depth: int = 6,
-
         # Optional parameters (MUST be at the end)
         ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class: Optional[Dict[int, Dict[str, float]]] = None,
 
@@ -1348,37 +1339,13 @@ def Gen_Input_Driver(
             lulc_sources=_lulc_sources,
         )
 
-    elif (ss_method == "ml_model"):
-
-        import Gen_MLmodel_SS as mlJSON_lib
-
-        if ss_ml_training_data_csv is None:
-            raise ValueError(
-                "ss_method='ml_model' requires ss_ml_training_data_csv.\n"
-                "Provide path to a CSV with columns: date, discharge_m3s, precip_mm, temp_c, <species_concentration>"
-            )
-
-        mlJSON_lib.train_and_generate_ss_json(
-            ss_config_filepath=ss_config_filepath,
-            json_header_comment=json_header_comment,
-            training_data_csv=ss_ml_training_data_csv,
-            model_type=ss_ml_model_type,
-            target_species=ss_ml_target_species,
-            feature_columns=ss_ml_feature_columns,
-            n_estimators=ss_ml_n_estimators,
-            max_depth=ss_ml_max_depth,
-            ss_metadata_comment=ss_metadata_comment,
-            ss_metadata_source=ss_metadata_source,
-            compartment_name=ss_method_copernicus_compartment_name_for_load,
-        )
-
     elif (ss_method == "none"):
         print("  Skipping sink/source generation (ss_method='none')")
 
     else:
         print(
             f"WARNING: The SS method '{ss_method}' is unknown or not available for automatic generation. "
-            f"Available methods: 'load_from_csv', 'based_on_lulc', 'ml_model', 'none'")
+            f"Available methods: 'load_from_csv', 'based_on_lulc', 'none'")
 
     ###############
     # Call gen_ewf_driver
@@ -1413,3 +1380,33 @@ def Gen_Input_Driver(
         print(
             f"WARNING: The EWF method '{ewf_method}' is unknown or not available for automatic generation. "
             f"Available methods: 'fixed_value', 'from_openwq_hdf5', 'none'")
+
+    ###############
+    # CALIBRATED MODEL CONFIG: apply the calibration's best parameter values
+    # (+ ML layers) to the inputs just generated. Set by the
+    # <template>_config_run.py the calibration results report saves
+    # (calibrated_from_calibration_dir / calibrated_from_run_script).
+    ###############
+    _cal_dir = kwargs.get("calibrated_from_calibration_dir")
+    if _cal_dir:
+        import sys as _sys2
+        _calib_root = os.path.normpath(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), '..', '..', '3_Calibration'))
+        if _calib_root not in _sys2.path:
+            _sys2.path.insert(0, _calib_root)
+        try:
+            from calibration_lib import calibrated_config as _cc_lib
+            print("\n  Applying the CALIBRATED best parameters to the generated inputs...")
+            _prov = _cc_lib.apply_calibrated_best(
+                dir2save_input_files, str(_cal_dir),
+                str(kwargs.get("calibrated_from_run_script") or ""),
+                model_config={k: v for k, v in locals().items()
+                              if isinstance(k, str) and not k.startswith('_')
+                              and k in ("hostmodel", "chemical_species", "dir2save_input_files",
+                                        "executable_path", "file_manager_path")})
+            print(f"  ✓ Calibrated setup applied: {_prov.get('n_from_best', 0)} parameter(s)"
+                  + (f", best eval {_prov['best_eval']}" if _prov.get('best_eval') else "")
+                  + f" -> {os.path.join(dir2save_input_files, _cc_lib.CALIBRATED_SETUP_FILE)}")
+        except Exception as _e:
+            print(f"  ERROR: could not apply the calibrated best parameters: {_e}")
+            raise

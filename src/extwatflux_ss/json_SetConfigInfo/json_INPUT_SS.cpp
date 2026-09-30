@@ -15,7 +15,10 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "readjson/headerfile_RJSON.hpp"
-#include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_closure + OpenWQ_load_param (Layer 1/2)
+#include "global/OpenWQ_paramload.hpp"
+#include <algorithm>
+#include <cctype>
+#include <iostream>   // OpenWQ_load_closure + OpenWQ_load_param (Layer 1/2)
 
 // Set SS info
 void OpenWQ_readjson::SetConfigInfo_INPUT_SS(
@@ -53,9 +56,36 @@ void OpenWQ_readjson::SetConfigInfo_INPUT_SS(
     // derivative closures, applied on dm_ss in the solver.)
     if (jsonMaster_SubStruct.contains("SINK_SOURCE_ML")) {
         json ss_ml = jsonMaster_SubStruct["SINK_SOURCE_ML"];
-        if (ss_ml.contains("ML_SCALE"))
-            OpenWQ_wqconfig.ss_scale =
-                OpenWQ_load_param(ss_ml["ML_SCALE"], OpenWQ_hostModelconfig);
+        if (ss_ml.contains("ML_SCALE")) {
+            const json& msc = ss_ml["ML_SCALE"];
+            // one scale for every species (number | {DEFAULT,CELLS} | {ML_RUNTIME}) ...
+            bool one_scale = !msc.is_object();
+            if (!one_scale) {
+                for (auto it = msc.begin(); it != msc.end(); ++it) {
+                    std::string k = it.key();
+                    std::transform(k.begin(), k.end(), k.begin(), ::toupper);
+                    if (k == "DEFAULT" || k == "CELLS" || k == "ML_RUNTIME") { one_scale = true; break; }
+                }
+            }
+            if (one_scale) {
+                OpenWQ_wqconfig.ss_scale = OpenWQ_load_param(msc, OpenWQ_hostModelconfig);
+            } else {
+                // ... or keyed by species: {"NO3-N": <scale>, "NH4-N": <scale>,
+                // "*": <scale for every other species>} — Layer 1 per species.
+                for (auto it = msc.begin(); it != msc.end(); ++it) {
+                    std::string k = it.key();
+                    std::transform(k.begin(), k.end(), k.begin(), ::toupper);
+                    if (k == "*" || k == "ALL")
+                        OpenWQ_wqconfig.ss_scale = OpenWQ_load_param(it.value(), OpenWQ_hostModelconfig);
+                    else
+                        OpenWQ_wqconfig.ss_scale_by_species.insert_or_assign(
+                            k, OpenWQ_load_param(it.value(), OpenWQ_hostModelconfig));
+                }
+                std::cout << "<OpenWQ> SS ML_SCALE: per-species load scale listed for "
+                          << OpenWQ_wqconfig.ss_scale_by_species.size() << " species" << std::endl;
+                OpenWQ_wqconfig.resolve_ss_scale_species();   // binds now if species are known
+            }
+        }
     }
 
     unsigned int num_ssf = jsonMaster_SubStruct["SINK_SOURCE"].size();

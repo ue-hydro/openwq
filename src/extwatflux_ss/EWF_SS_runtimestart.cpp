@@ -130,6 +130,10 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
         (!OpenWQ_wqconfig.is_tstep1()) && (nextTimeCache.size() == num_rowdata);
 
     // Reset all ewf_conc values to ZERO for new time step (parallelized)
+    // per-species SS load-scale overrides (Layer 1): bind once the species
+    // list is known (single-threaded, before the parallel region)
+    if (!OpenWQ_wqconfig.ss_scale_resolved) OpenWQ_wqconfig.resolve_ss_scale_species();
+
     #pragma omp parallel num_threads(num_threads)
     {
         #pragma omp for schedule(static)
@@ -228,9 +232,16 @@ void OpenWQ_extwatflux_ss::CheckApply_EWFandSS_jsonAscii(
         // identity -> byte-identical). Applied only to source/sink loads (not
         // EWF concentrations). The Layer-2 SS closure is applied later, on dm_ss
         // in the solver (per-species derivative closure).
+        // A load row that names one cell is scaled here; a row spanning "all"
+        // cells (ix/iy/iz = -1, the SUMMA per-HRU/all-layers case) is scaled
+        // PER CELL inside Apply_Source/Apply_Sink when the scale is spatial —
+        // a global scalar scale applies to every row either way.
         if (is_ss_input){
-            if (ix >= 0 && iy >= 0 && iz >= 0)
-                value_adjust *= OpenWQ_wqconfig.ss_scale.at(
+            const OpenWQ_param& _sc = OpenWQ_wqconfig.ss_scale_for(chemi);   // per-species or global
+            if (!_sc.is_spatial())
+                value_adjust *= _sc.scalar();
+            else if (ix >= 0 && iy >= 0 && iz >= 0)
+                value_adjust *= _sc.at(
                     index, (unsigned int)ix, (unsigned int)iy, (unsigned int)iz);
         }
 
@@ -548,10 +559,20 @@ void OpenWQ_extwatflux_ss::Apply_Source(
     const unsigned int spZ_max = (iz != -1) ? iz : nz - 1;
 
     try{
-        (*OpenWQ_vars.d_chemass_ss)(cmpi)(chemi)(
-            arma::span(spX_min, spX_max),
-            arma::span(spY_min, spY_max),
-            arma::span(spZ_min, spZ_max)) += ss_data_json;
+        if (OpenWQ_wqconfig.ss_scale_for(chemi).is_spatial() && (ix == -1 || iy == -1 || iz == -1)) {
+            // Hybrid-ML Layer-1 per-cell load scale on a row that spans cells
+            // (single-cell rows were already scaled by the caller)
+            for (unsigned int x = spX_min; x <= spX_max; x++)
+                for (unsigned int y = spY_min; y <= spY_max; y++)
+                    for (unsigned int z = spZ_min; z <= spZ_max; z++)
+                        (*OpenWQ_vars.d_chemass_ss)(cmpi)(chemi)(x, y, z) +=
+                            ss_data_json * OpenWQ_wqconfig.ss_scale_for(chemi).at(cmpi, x, y, z);
+        } else {
+            (*OpenWQ_vars.d_chemass_ss)(cmpi)(chemi)(
+                arma::span(spX_min, spX_max),
+                arma::span(spY_min, spY_max),
+                arma::span(spZ_min, spZ_max)) += ss_data_json;
+        }
 
     } catch (...) {
 
@@ -599,10 +620,19 @@ void OpenWQ_extwatflux_ss::Apply_Sink(
     const unsigned int spZ_max = (iz != -1) ? iz : nz - 1;
 
     try{
-        (*OpenWQ_vars.d_chemass_ss)(cmpi)(chemi)(
-            arma::span(spX_min, spX_max),
-            arma::span(spY_min, spY_max),
-            arma::span(spZ_min, spZ_max)) -= ss_data_json;
+        if (OpenWQ_wqconfig.ss_scale_for(chemi).is_spatial() && (ix == -1 || iy == -1 || iz == -1)) {
+            // Hybrid-ML Layer-1 per-cell load scale on a row that spans cells
+            for (unsigned int x = spX_min; x <= spX_max; x++)
+                for (unsigned int y = spY_min; y <= spY_max; y++)
+                    for (unsigned int z = spZ_min; z <= spZ_max; z++)
+                        (*OpenWQ_vars.d_chemass_ss)(cmpi)(chemi)(x, y, z) -=
+                            ss_data_json * OpenWQ_wqconfig.ss_scale_for(chemi).at(cmpi, x, y, z);
+        } else {
+            (*OpenWQ_vars.d_chemass_ss)(cmpi)(chemi)(
+                arma::span(spX_min, spX_max),
+                arma::span(spY_min, spY_max),
+                arma::span(spZ_min, spZ_max)) -= ss_data_json;
+        }
 
         // OPTIMIZED #14: Replace negative values with zero only in the modified sub-region
         // instead of transforming the entire cube

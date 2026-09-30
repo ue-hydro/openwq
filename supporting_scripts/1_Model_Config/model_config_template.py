@@ -345,7 +345,6 @@ si_param_database_filepath = ""
 #  ├─────────────────┼───────────────────────────────────────────────────────────────────┤
 #  │ "load_from_csv" │ You have measured load data                                       │
 #  │ "based_on_lulc" │ Estimate from land-cover maps                                     │
-#  │ "ml_model"      │ Train from monitoring data (not available yet; under development) │
 #  │ "none"          │ No external loads                                                 │
 #  └─────────────────┴───────────────────────────────────────────────────────────────────┘
 #
@@ -631,19 +630,6 @@ ss_climate_data_source_adjusting_resolution = "daily"
 ss_climate_precip_scaling_power = 1.0    # precip exponent (1.0 = linear)
 ss_climate_temp_q10             = 2.0    # Q10: load rate doubles per +10 °C
 ss_climate_temp_reference_c     = 15.0   # reference temperature [°C]
-
-
-# ── METHOD 4: Machine Learning model (ss_method = "ml_model") ────────────────
-# ⚠ Only used if ss_method = "ml_model"; ignored otherwise.
-#  Train a model from monitoring station data to predict loads.
-#  Requires: pip install scikit-learn xgboost
-
-ss_ml_training_data_csv = None         # Path to CSV with columns: date, discharge_m3s, precip_mm, temp_c, <species>
-ss_ml_model_type = "xgboost"           # "xgboost" or "random_forest"
-ss_ml_target_species = None            # e.g., ["NO3-N", "TP"]. None = auto-detect from CSV columns.
-ss_ml_feature_columns = None           # e.g., ["discharge_m3s", "precip_mm"]. None = auto-detect.
-ss_ml_n_estimators = 200               # Number of decision trees
-ss_ml_max_depth = 6                    # Maximum tree depth (higher = more complex, risk of overfitting)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

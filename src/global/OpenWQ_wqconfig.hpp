@@ -125,6 +125,20 @@ class OpenWQ_wqconfig
         // spatial). (The Layer-2 SS closure lives with the solver derivative
         // closures, applied on dm_ss.)
         OpenWQ_param       ss_scale = OpenWQ_param(1.0);
+        // Per-species overrides of ss_scale: master ML_SCALE may be keyed by
+        // species name ({"NO3-N": <scale>, "NH4-N": <scale>, "*": <scale for
+        // the rest>}; each <scale> = number | {DEFAULT,CELLS} | {ML_RUNTIME}).
+        // Names are kept UPPERCASED at parse time (the species list is loaded
+        // later) and resolved to species indices by resolve_ss_scale_species().
+        std::unordered_map<std::string, OpenWQ_param> ss_scale_by_species;
+        std::vector<const OpenWQ_param*> ss_scale_chem;   // chemi -> override | nullptr
+        bool ss_scale_resolved = false;
+        inline const OpenWQ_param& ss_scale_for(unsigned int chemi) const {
+            if (chemi < ss_scale_chem.size() && ss_scale_chem[chemi] != nullptr)
+                return *ss_scale_chem[chemi];
+            return ss_scale;
+        }
+        void resolve_ss_scale_species();
 
         //###############################################
         // Hybrid physics-ML LAYER 2 — per-species DERIVATIVE closures

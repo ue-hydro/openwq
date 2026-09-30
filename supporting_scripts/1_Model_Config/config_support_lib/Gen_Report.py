@@ -848,217 +848,6 @@ def _build_map_layers(river_network_shapefile, basin_shapefile, hostmodel="mizur
     return layers, map_center
 
 
-def _extract_grqa_for_report(river_network_shapefile, basin_shapefile,
-                              chemical_species, output_dir,
-                              grqa_local_data_path=None,
-                              grqa_buffer_km=10):
-    """Extract GRQA observation stations for the simulated species.
-
-    Uses the standalone Gen_GRQA_Extract module (no calibration_lib dependency).
-
-    Search strategy:
-      1. If a basin shapefile is provided, use it as the search area
-         (with a user-defined buffer around the basin boundary).
-      2. Otherwise use the buffer around the river network.
-
-    After extraction the clipped observations are saved to
-    ``openwq_in/grqa_clipped_data/`` and the raw cache (full GRQA CSVs)
-    is deleted to free disk space.
-
-    Returns:
-        (stations_geojson_str, grqa_stats) or (None, None) on failure.
-    """
-    if not _GRQA_AVAILABLE:
-        print("  GRQA tools not available (missing geopandas/shapely). Skipping.")
-        return None, None
-
-    # ── Reuse already-extracted clipped GRQA if present ─────────────────────
-    # Re-running the report must NOT re-read the multi-GB raw GRQA archive.
-    # If openwq_in/grqa_clipped_data/ already holds the clipped observations
-    # (produced by a previous run / the config workflow), load those instead.
-    # To force a fresh extraction, delete that folder before re-running.
-    _clipped_csv = os.path.join(output_dir, 'openwq_in', 'grqa_clipped_data',
-                                'grqa_clipped_observations.csv')
-    _reuse_grqa = os.path.isfile(_clipped_csv)
-    # Interactive standalone template runs: ask whether to reuse the cached GRQA
-    # extraction or regenerate it from the raw archive (needed after changing the
-    # EXPORTED species or the search buffer — the cache only holds what the prior
-    # run extracted).  Suppressed during calibration / non-interactive reruns
-    # (OPENWQ_SUPPRESS_PROMPTS=1, set by Gen_Input_Driver when force_regenerate=
-    # True) so it is NOT asked once per evaluation.
-    if _reuse_grqa and os.environ.get('OPENWQ_SUPPRESS_PROMPTS') != '1':
-        import sys as _sys
-        if _sys.stdin and _sys.stdin.isatty():
-            try:
-                _ans = input(
-                    f"\n  Pre-extracted GRQA observations already exist in "
-                    f"{os.path.dirname(_clipped_csv)}.\n"
-                    f"  Reuse them, or regenerate from the raw GRQA archive "
-                    f"(needed after changing exported species / buffer)? "
-                    f"[Reuse/regenerate] (R/g): ").strip().lower()
-                if _ans in ('g', 'regen', 'regenerate'):
-                    _reuse_grqa = False
-                    print("  ↳ Regenerating GRQA observations from the raw archive…")
-            except (EOFError, KeyboardInterrupt):
-                pass
-    if _reuse_grqa:
-        print("  Reusing pre-extracted GRQA from grqa_clipped_data/ "
-              "(skipping the slow raw-archive extraction).")
-        try:
-            _g, _s = _load_clipped_observations_for_report(output_dir, chemical_species)
-            if _s is not None:
-                return _g, _s
-            print("  Pre-extracted data unusable — re-extracting from raw GRQA…")
-        except Exception as _e:
-            print(f"  WARNING: reuse failed ({_e}) — re-extracting from raw GRQA…")
-
-    import geopandas as _gpd
-    from shapely.geometry import mapping as _shp_mapping
-    from shapely.ops import unary_union as _unary_union
-    import pandas as _pd
-
-    # Need at least one shapefile to define the search area
-    shp_for_search = basin_shapefile or river_network_shapefile
-    if not shp_for_search or not os.path.isfile(shp_for_search):
-        print("  No shapefile available for GRQA spatial search. Skipping.")
-        return None, None
-
-    # Build species mapping: GRQA code -> model species name
-    species_mapping = {}
-    unmapped_species = []
-    for model_name in chemical_species:
-        grqa_code = _MODEL_SPECIES_TO_GRQA.get(model_name)
-        if grqa_code and grqa_code not in species_mapping:
-            species_mapping[grqa_code] = model_name
-        elif not grqa_code:
-            unmapped_species.append(model_name)
-
-    if not species_mapping:
-        print("  No GRQA-compatible species found. Skipping GRQA extraction.")
-        return None, None
-
-    grqa_params = list(species_mapping.keys())
-    buffer_m = grqa_buffer_km * 1000
-    print(f"  GRQA species mapping: {species_mapping}")
-    print(f"  Will extract {len(grqa_params)} GRQA parameters: {', '.join(grqa_params)}")
-    print(f"  Search buffer: {grqa_buffer_km} km")
-    if grqa_local_data_path is None:
-        print("  No local GRQA data provided — will download from Zenodo (one-time, ~1.2 GB).")
-        print("  Tip: set grqa_local_data_path to skip future downloads.")
-
-    grqa_output_dir = os.path.join(output_dir, 'openwq_in', 'grqa_clipped_data')
-
-    try:
-        import shutil
-
-        # Determine search buffer
-        if basin_shapefile and os.path.isfile(basin_shapefile):
-            print(f"  Using basin shapefile for GRQA search area (+ {grqa_buffer_km} km buffer).")
-            basin_gdf = _gpd.read_file(basin_shapefile)
-            if basin_gdf.crs and not basin_gdf.crs.is_geographic:
-                basin_gdf = basin_gdf.to_crs(epsg=4326)
-            centroid = basin_gdf.geometry.unary_union.centroid
-            utm_zone = int((centroid.x + 180) / 6) + 1
-            hemi = 'north' if centroid.y >= 0 else 'south'
-            utm_epsg = 32600 + utm_zone if hemi == 'north' else 32700 + utm_zone
-            basin_proj = basin_gdf.to_crs(epsg=utm_epsg)
-            search_geom = _unary_union(basin_proj.geometry).buffer(buffer_m)
-            search_gdf = _gpd.GeoDataFrame(geometry=[search_geom],
-                                           crs=f'EPSG:{utm_epsg}')
-            search_gdf = search_gdf.to_crs(epsg=4326)
-        else:
-            print(f"  Using river network with {grqa_buffer_km} km buffer for GRQA search area.")
-
-        mapper = SpeciesMapper(mapping=species_mapping)
-        extractor = GRQACalibrationExtractor(
-            output_dir=grqa_output_dir,
-            species_mapper=mapper,
-            local_data_path=grqa_local_data_path,
-            buffer_distance_m=buffer_m,
-        )
-
-        if basin_shapefile and os.path.isfile(basin_shapefile):
-            stations, observations = extractor.extract_stations_and_observations(
-                search_gdf)
-        else:
-            river_gdf = extractor.load_river_network(river_network_shapefile)
-            buffer_gdf = extractor.create_buffer(river_gdf)
-            stations, observations = extractor.extract_stations_and_observations(
-                buffer_gdf)
-
-        # Clean up: delete the large raw cache files
-        cache_dir = os.path.join(grqa_output_dir, 'grqa_cache')
-        if os.path.isdir(cache_dir):
-            print(f"  Cleaning up GRQA cache ({cache_dir})...")
-            shutil.rmtree(cache_dir, ignore_errors=True)
-
-        if stations is None or stations.empty:
-            print("  No GRQA stations found in the search area.")
-            grqa_stats = {
-                'n_stations': 0, 'n_observations': 0,
-                'year_start': None, 'year_end': None,
-                'species_stats': [],
-                'output_dir': grqa_output_dir,
-                'searched_species': list(species_mapping.values()),
-                'unmapped_species': unmapped_species,
-                'buffer_km': grqa_buffer_km,
-            }
-            return None, grqa_stats
-
-        # Generate clipped observation files (CSV)
-        extractor.generate_calibration_files(prefix="grqa_clipped")
-
-        # Build GeoJSON for map
-        features = []
-        for _, row in stations.iterrows():
-            props = {k: (str(v) if v is not None else '')
-                     for k, v in row.items() if k != 'geometry'}
-            features.append({
-                'type': 'Feature',
-                'geometry': _shp_mapping(row.geometry),
-                'properties': props,
-            })
-        stations_geojson = {'type': 'FeatureCollection', 'features': features}
-
-        # Compute statistics
-        site_col = extractor.column_map.get('site_id', 'site_id')
-        date_col = extractor.column_map.get('obs_date', 'obs_date')
-        dates = _pd.to_datetime(observations[date_col], errors='coerce')
-        species_stats = []
-        found_model_species = set()
-        for model_sp in observations['model_species'].unique():
-            sp_obs = observations[observations['model_species'] == model_sp]
-            sp_dates = _pd.to_datetime(sp_obs[date_col], errors='coerce')
-            sp_stations = sp_obs[site_col].nunique()
-            species_stats.append({
-                'species': model_sp,
-                'n_stations': sp_stations,
-                'n_observations': len(sp_obs),
-                'year_start': int(sp_dates.min().year) if not sp_dates.isna().all() else None,
-                'year_end': int(sp_dates.max().year) if not sp_dates.isna().all() else None,
-            })
-            found_model_species.add(model_sp)
-
-        no_data_species = [s for s in species_mapping.values()
-                           if s not in found_model_species]
-
-        grqa_stats = {
-            'n_stations': len(stations),
-            'n_observations': len(observations),
-            'year_start': int(dates.min().year) if not dates.isna().all() else None,
-            'year_end': int(dates.max().year) if not dates.isna().all() else None,
-            'species_stats': species_stats,
-            'output_dir': grqa_output_dir,
-            'buffer_km': grqa_buffer_km,
-            'no_data_species': no_data_species,
-            'unmapped_species': unmapped_species,
-        }
-
-        return json.dumps(stations_geojson), grqa_stats
-
-    except Exception:
-        raise
-
 
 def _extract_observations_for_report(
         river_network_shapefile, basin_shapefile, chemical_species, output_dir,
@@ -1142,27 +931,34 @@ def _extract_observations_for_report(
 
 
 def _load_clipped_observations_for_report(output_dir, chemical_species):
-    """Load pre-extracted observation data from ``openwq_in/grqa_clipped_data/``.
-
-    This is a lightweight loader that reads the CSV files produced by the
-    calibration tools (GRQA extraction).  It does NOT depend on
-    ``calibration_lib`` — only standard library + pandas.
-
-    Expected files:
-        openwq_in/grqa_clipped_data/grqa_clipped_observations.csv
-        openwq_in/grqa_clipped_data/grqa_clipped_stations.csv
-
-    Returns:
-        (stations_geojson_str, obs_stats) or (None, None) when data is absent.
-    """
-    clipped_dir = os.path.join(output_dir, 'openwq_in', 'grqa_clipped_data')
-    obs_csv = os.path.join(clipped_dir, 'grqa_clipped_observations.csv')
-    stn_csv = os.path.join(clipped_dir, 'grqa_clipped_stations.csv')
-
-    if not os.path.isfile(obs_csv):
-        print(f"  No pre-extracted observation data found at {clipped_dir}")
-        print("  To generate it, run the GRQA extraction from the calibration tools first,")
-        print("  or set observation_data_source = 'user_csv' with your own CSV.")
+    """Rebuild the report's station GeoJSON + stats from the basin-clipped
+    observations a previous model-config run wrote under ``openwq_in/``
+    (``obs_clipped_data/`` multi-source layout, or the legacy
+    ``grqa_clipped_data/``) — no re-extraction. (None, None) when absent."""
+    if not _OBS_LIB_AVAILABLE:
+        print("  Gen_Observation_Sources unavailable; cannot load clipped observations.")
+        return None, None
+    try:
+        clipped_dir = _obs_lib.find_clipped_obs_dir(output_dir)
+        df = _obs_lib.load_clipped_observations(output_dir) if clipped_dir else None
+        if df is None or len(df) == 0:
+            print(f"  No pre-extracted observations under {os.path.join(output_dir, 'openwq_in')} "
+                  f"({_obs_lib.CLIPPED_OBS_DIRNAME}/ or legacy {_obs_lib.LEGACY_CLIPPED_OBS_DIRNAME}/).")
+            print("  Run the model-config setup with observation sources selected, or set "
+                  "observation_data_sources = ['user_csv'] with your own CSV.")
+            return None, None
+        geojson = _obs_lib.build_stations_geojson(df)
+        attempted = [[str(src), int(n), "cached"]
+                     for src, n in df.groupby("source").size().items()]
+        stats = _obs_lib.compute_stats(df, chemical_species, 0, clipped_dir,
+                                       sources_attempted=attempted)
+        print(f"  Loaded {stats['n_observations']} pre-extracted observations from "
+              f"{stats['n_stations']} stations ({clipped_dir}).")
+        if stats.get('no_data_species'):
+            print(f"  Species without observations: {stats['no_data_species']}")
+        return json.dumps(geojson), stats
+    except Exception as e:
+        print(f"  WARNING: Failed to load clipped observations: {e}")
         return None, None
 
     try:
@@ -2249,6 +2045,31 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 </div>""")
 
     H.append('<div class="container">')
+
+    # --- Calibrated model config? (written by <template>_config_run.py, see
+    #     calibration_lib.calibrated_config) -> say so up front, with provenance.
+    try:
+        _cal_p = os.path.join(str(output_dir), "calibrated_setup.json")
+        if os.path.isfile(_cal_p):
+            import html as _html_c
+            _cal = json.load(open(_cal_p))
+            _obj = _cal.get("best_objective")
+            _obj_txt = (f" &mdash; {_html_c.escape(str(_cal.get('objective_function') or 'objective'))} = "
+                        f"{float(_obj):.4g}" if isinstance(_obj, (int, float)) else "")
+            _ml_txt = ("".join([" &middot; ML closures" if _cal.get("ml_closures") else "",
+                                " &middot; ML runtime nets" if _cal.get("ml_runtime") else ""]))
+            H.append(f"""<div class="highlight-box success" style="margin-top:1.2rem;">
+<strong>&#10003; Calibrated model config.</strong> The inputs of this run folder were generated for the full
+model period and then the <strong>calibrated best values</strong> were applied
+({_cal.get('n_from_best', 0)} of {_cal.get('n_parameters', 0)} calibrated parameter(s){_ml_txt}),
+exactly as the best evaluation was configured:
+<code>{_html_c.escape(str(_cal.get('best_eval') or '?'))}</code>{_obj_txt} of the calibration in
+<code>{_html_c.escape(str(_cal.get('calibration_dir') or ''))}</code> (applied {_html_c.escape(str(_cal.get('applied') or ''))}).
+Provenance: <code>calibrated_setup.json</code> in the run folder. This run folder is the base for scenario
+analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code>).
+</div>""")
+    except Exception:
+        pass   # a config report never fails because of the provenance banner
 
     # --- SECTION: Project Information ---
     H.append(f"""<div class="section" id="project">
@@ -3631,11 +3452,28 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
         _out_all_html_safe = _py_path(_out_all_html)
         # Build optional observation parameter for the plotting snippet
         _obs_plot_param = ''
-        if _obs_source == "grqa" and obs_stats and obs_stats.get('n_stations', 0) > 0:
-            _grqa_clip_dir = os.path.join(_abs_output_dir, 'openwq_in',
-                                          'grqa_clipped_data')
+        if _obs_source != "user_csv" and obs_stats and obs_stats.get('n_stations', 0) > 0:
+            # The clipped observations live in openwq_in/obs_clipped_data/
+            # (multi-source pipeline: observations_all_sources.csv + one CSV per
+            # species) or, for a legacy single-GRQA extraction, in
+            # openwq_in/grqa_clipped_data/. Point the snippet at the one that
+            # exists so the results report plots the stations automatically.
+            _clip_dir = None
+            if _OBS_LIB_AVAILABLE:
+                try:
+                    _clip_dir = _obs_lib.find_clipped_obs_dir(_abs_output_dir)
+                except Exception:
+                    _clip_dir = None
+            if _clip_dir is None:      # lib unavailable: same rule, inline
+                for _nm in ('obs_clipped_data', 'grqa_clipped_data'):
+                    _cand = os.path.join(_abs_output_dir, 'openwq_in', _nm)
+                    if os.path.isdir(_cand):
+                        _clip_dir = _cand
+                        break
+            if _clip_dir is None:
+                _clip_dir = os.path.join(_abs_output_dir, 'openwq_in', 'obs_clipped_data')
             _obs_plot_param = (
-                f'    observation_dir="{_py_path(_grqa_clip_dir)}",\n')
+                f'    observation_dir="{_py_path(_clip_dir)}",\n')
         elif _obs_source == "user_csv" and user_observation_csv:
             _obs_plot_param = (
                 f'    observation_csv="{_py_path(os.path.abspath(user_observation_csv))}",\n')

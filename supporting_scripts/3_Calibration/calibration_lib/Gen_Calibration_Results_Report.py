@@ -31,6 +31,7 @@ import io
 import re
 import sys
 import json
+import glob
 import math
 import html as html_lib
 import logging
@@ -175,6 +176,15 @@ def generate_results_report(
             _ml_diag = _ml_diag_path(output_dir) if _did_calib else None
         except Exception:
             _ml_diag = None
+        # Hybrid physics-ML LAYER 1: regionalized parameters (per-eval
+        # diagnostics written by the parameter handler for the best eval).
+        try:
+            _mlr_html = (_build_ml_regionalize_section(
+                output_dir, calibration_parameters, calibration_results)
+                if _did_calib else "")
+        except Exception as _e:
+            logger.warning(f"ML regionalization section skipped: {_e}")
+            _mlr_html = ""
         _mode = calibration_settings.get("calibration_mode") or (
             "both" if (_did_sens and _did_calib)
             else "sensitivity" if _did_sens else "calibration")
@@ -203,6 +213,8 @@ def generate_results_report(
             nav_items.append({"id": "best-params", "label": "Best Parameters"})
             if _ml_diag:
                 nav_items.append({"id": "ml-closures", "label": "ML Closures"})
+            if _mlr_html:
+                nav_items.append({"id": "ml-regionalize", "label": "ML Regionalization"})
             nav_items.extend([
                 {"id": "param-evolution", "label": "Parameter Evolution"},
                 {"id": "param-correlations", "label": "Correlations"},
@@ -469,6 +481,8 @@ def generate_results_report(
             # pulled"), rendered only when openWQ wrote the diagnostics JSON.
             if _ml_diag:
                 H.append(_build_ml_closure_section(_ml_diag))
+            if _mlr_html:
+                H.append(_mlr_html)
             H.append(_build_param_evolution_section(
                 calibration_results, calibration_parameters, output_dir))
             H.append(_build_correlations_section(
@@ -643,6 +657,22 @@ def _get_results_css() -> str:
     }
 
     /* ── ML closure diagnostics ("how much the ML pulled") ───────── */
+    .mlr-table { width: 100%; border-collapse: collapse; margin: .6rem 0 .3rem;
+      font-size: .8rem; }
+    .mlr-table th, .mlr-table td { padding: .25rem .5rem; border-bottom: 1px solid var(--border);
+      text-align: left; vertical-align: middle; }
+    .mlr-table th { color: var(--text2); font-weight: 600; font-size: .72rem;
+      text-transform: uppercase; letter-spacing: .04em; }
+    .mlr-table .num { text-align: right; font-family: 'JetBrains Mono', monospace; }
+    .mlr-name { color: var(--text2); font-size: .75rem; margin-left: .3rem; }
+    .mlr-bnd { display: block; font-size: .68rem; color: var(--text2);
+      font-family: 'JetBrains Mono', monospace; margin-top: .15rem; }
+    .mlr-bar { position: relative; height: 8px; border-radius: 4px; min-width: 110px;
+      background: var(--border); }
+    .mlr-bar i { position: absolute; top: -2px; width: 4px; height: 12px; margin-left: -2px;
+      border-radius: 2px; background: var(--primary); }
+    .mlr-bar i.ref { background: var(--text2); opacity: .55; width: 2px; height: 14px; top: -3px; }
+    .mlr-det summary { cursor: pointer; font-size: .78rem; color: var(--text2); margin-top: .3rem; }
     .mlc-grid { display: grid; gap: 1rem;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
     .mlc-card { border: 1px solid var(--border); border-radius: 12px;
@@ -1253,6 +1283,494 @@ def _build_ml_closure_section(diag_path):
         <code>|factor&minus;1|</code> &mdash; is exactly how hard the ML had to pull
         to improve the fit. These numbers are measured <em>inside the solver</em>
         during the best evaluation{(' (' + _solver_note + ')') if _solver_note else ''}.
+    </p>
+    <p style="color:var(--text2);margin-bottom:1rem;max-width:70ch;">{lead}</p>
+    <div class="mlc-grid">{''.join(cards)}</div>
+</div>
+"""
+
+
+def _ml_regionalize_diag_paths(output_dir):
+    """``openwq_in/_ml_regionalize_*.json`` files of the GLOBAL-best evaluation
+    (Layer-1 counterpart of the closure diagnostics; written by the parameter
+    handler for every eval). Falls back to any eval that has them."""
+    import os as _os, re as _re, glob as _glob
+    n = _best_eval_number(output_dir)
+    roots = []
+    for d in sorted(_glob.glob(_os.path.join(str(output_dir), "evaluations", "eval_*"))):
+        m = _re.search(r"eval_(\d+)", _os.path.basename(d))
+        if m and n is not None and int(m.group(1)) == n:
+            roots.insert(0, d)
+        else:
+            roots.append(d)
+    for d in roots:
+        hits = sorted(_glob.glob(_os.path.join(d, "openwq_in", "_ml_regionalize_*.json")))
+        if hits:
+            return hits, d
+    return [], None
+
+
+
+
+def _best_eval_dir(output_dir):
+    """Folder of the GLOBAL-best evaluation (falls back to the first eval)."""
+    import os as _os, re as _re, glob as _glob
+    n = _best_eval_number(output_dir)
+    dirs = sorted(_glob.glob(_os.path.join(str(output_dir), "evaluations", "eval_*")))
+    for d in dirs:
+        m = _re.search(r"eval_(\d+)", _os.path.basename(d))
+        if m and n is not None and int(m.group(1)) == n:
+            return d
+    return dirs[0] if dirs else None
+
+
+def _ml_runtime_blocks(eval_dir):
+    """Layer-1B parameters in an eval's BGC config: every parameter whose value
+    is ``{"ML_RUNTIME": {...}}`` -> list of {framework, reaction, param, block}."""
+    import os as _os, re as _re, json as _json
+    out = []
+    if not eval_dir:
+        return out
+    f = _os.path.join(eval_dir, "openwq_in", "openWQ_MODULE_NATIVE_BGC_FLEX.json")
+    if not _os.path.isfile(f):
+        return out
+    try:
+        txt = _re.sub(r"^\s*//.*$", "", open(f).read(), flags=_re.M)
+        data = _json.loads(txt)
+    except Exception:
+        return out
+    for fw, rxns in (data.get("CYCLING_FRAMEWORKS") or {}).items():
+        if not isinstance(rxns, dict):
+            continue
+        for rn, rx in rxns.items():
+            pv = (rx or {}).get("PARAMETER_VALUES") if isinstance(rx, dict) else None
+            if not isinstance(pv, dict):
+                continue
+            for pname, val in pv.items():
+                if isinstance(val, dict) and "ML_RUNTIME" in val:
+                    out.append({"framework": fw, "reaction": rn, "param": pname,
+                                "block": val["ML_RUNTIME"]})
+    # source/sink load scale (master: OPENWQ_INPUT > SINK_SOURCE_ML > ML_SCALE)
+    try:
+        mf = _os.path.join(eval_dir, "openWQ_master.json")
+        if _os.path.isfile(mf):
+            mtxt = _re.sub(r"^\s*//.*$", "", open(mf).read(), flags=_re.M)
+            ms = _json.loads(mtxt).get("OPENWQ_INPUT", {}).get("SINK_SOURCE_ML", {})
+            sc = ms.get("ML_SCALE") if isinstance(ms, dict) else None
+            if isinstance(sc, dict) and "ML_RUNTIME" in sc:
+                out.append({"framework": "SINK_SOURCE", "reaction": "loads",
+                            "param": "load_scale", "block": sc["ML_RUNTIME"]})
+            elif isinstance(sc, dict) and not any(
+                    str(k).upper() in ("DEFAULT", "CELLS") for k in sc):
+                # species-keyed scale: {"NO3-N": <scale>, "*": <scale>}
+                for spk, v in sc.items():
+                    if isinstance(v, dict) and "ML_RUNTIME" in v:
+                        out.append({"framework": "SINK_SOURCE", "reaction": "loads",
+                                    "param": ("load_scale" if spk == "*"
+                                              else f"load_scale:{spk}"),
+                                    "block": v["ML_RUNTIME"]})
+    except Exception:
+        pass
+    return out
+
+
+def _build_ml_runtime_cards(output_dir, eval_dir):
+    """Cards for Layer-1B (runtime NN) parameters of the best eval: the net,
+    the per-cell field it produces (re-evaluated in Python — the exact twin of
+    OpenWQ_ML::forward), and openWQ's own activation trace from the run log."""
+    import os as _os, json as _json, statistics as _st, re as _re
+    try:
+        from . import ml_regionalization as _mr
+    except ImportError:                                  # pragma: no cover
+        import ml_regionalization as _mr
+    blocks = _ml_runtime_blocks(eval_dir)
+    if not blocks:
+        return [], 0
+    # id lookup for the attribute rows (ix,iy,iz -> unit id) via the saved mapping
+    rev = {}
+    try:
+        mp = _os.path.join(str(output_dir), "ml_attributes", "mapping.json")
+        if _os.path.isfile(mp):
+            for rid, xyz in _json.load(open(mp)).items():
+                rev[tuple(int(v) for v in xyz)] = str(rid)
+    except Exception:
+        rev = {}
+    # engine trace (proof the net was loaded + applied)
+    trace = []
+    try:
+        lg = _os.path.join(eval_dir, "model_output.log")
+        if _os.path.isfile(lg):
+            trace = [l.strip() for l in open(lg, errors="ignore")
+                     if "ML_RUNTIME (Layer 1B)" in l]
+    except Exception:
+        trace = []
+
+    def _fmt(v):
+        try:
+            v = float(v)
+        except Exception:
+            return "n/a"
+        if v == 0:
+            return "0"
+        return f"{v:.3g}" if 1e-3 <= abs(v) < 1e4 else f"{v:.2e}"
+
+    def _resolve(p):
+        if not p:
+            return None
+        return p if _os.path.isabs(p) else _os.path.join(eval_dir, p)
+
+    cards = []
+    n_units_max = 0
+    for i, b in enumerate(blocks):
+        blk = b["block"]
+        wpath = _resolve(blk.get("WEIGHTS_FILEPATH") or blk.get("weights_filepath"))
+        apath = _resolve(blk.get("ATTRIBUTES_FILEPATH") or blk.get("attributes_filepath"))
+        default = blk.get("DEFAULT", blk.get("default"))
+        weights, rows = None, []
+        try:
+            weights = _json.load(open(wpath)) if wpath and _os.path.isfile(wpath) else None
+        except Exception:
+            weights = None
+        try:
+            rows = _json.load(open(apath)) if apath and _os.path.isfile(apath) else []
+        except Exception:
+            rows = []
+        field = {}
+        if weights and rows:
+            for r in rows:
+                try:
+                    key = rev.get((int(r[1]), int(r[2]), int(r[3])), f"({r[1]},{r[2]},{r[3]})")
+                    field[key] = _mr.forward_mlp(weights, r[4:])
+                except Exception:
+                    continue
+        vals = list(field.values())
+        n_units_max = max(n_units_max, len(vals))
+        feats = (weights or {}).get("_features") or []
+        tr = (weights or {}).get("_training") or {}
+        layers = (weights or {}).get("layers") or []
+        arch = " &rarr; ".join([str(len(feats) or (len(layers[0]["W"][0]) if layers else "?"))]
+                               + [f"{len(L['b'])}{'·tanh' if L.get('activation')=='tanh' else ''}" for L in layers])
+        if vals:
+            vmin, vmax, vmed = min(vals), max(vals), _st.median(vals)
+            vmean = _st.fmean(vals); cv = (_st.pstdev(vals) / vmean) if (len(vals) > 1 and vmean) else 0.0
+            ratio = (vmax / vmin) if vmin > 0 else float("inf")
+        else:
+            vmin = vmax = vmed = float("nan"); cv = 0.0; ratio = float("nan")
+        notes = []
+        if not weights:
+            notes.append(f"<strong style=\"color:#d97706;\">&#9888; Weights file not found</strong> "
+                         f"({html_lib.escape(str(blk.get('WEIGHTS_FILEPATH') or ''))}) &mdash; openWQ "
+                         "falls back to the DEFAULT everywhere.")
+        if not rows:
+            notes.append("No attribute rows found &mdash; nothing for the network to evaluate.")
+        if trace:
+            _t = trace[min(i, len(trace) - 1)]
+            _m = _re.search(r"rows evaluated = (\d+)", _t)
+            notes.append(f"<strong>Engine trace</strong> (<code>model_output.log</code>): "
+                         f"<code>{html_lib.escape(_t[:220])}</code>"
+                         + (f" &mdash; {_m.group(1)} cells filled by openWQ itself." if _m else ""))
+        else:
+            notes.append("No <code>ML_RUNTIME</code> trace in the eval's model_output.log (engine "
+                         "predates the trace, or the run did not start) &mdash; the field below is "
+                         "the Python re-evaluation of the same network.")
+        if tr:
+            notes.append(f"Training: {tr.get('n', '?')} cells, hidden {tr.get('hidden', '?')}, "
+                         f"R&sup2; = {float(tr.get('r2', 0)):.3f} on the training targets.")
+        det = ""
+        if field:
+            lines = "".join(f"<tr><td>{html_lib.escape(str(k))}</td><td class=\"num\">{_fmt(v)}</td></tr>"
+                            for k, v in sorted(field.items(), key=lambda kv: (len(kv[0]), kv[0]))[:300])
+            det = (f"<details class=\"mlr-det\"><summary>Per-cell values ({len(field)})</summary>"
+                   f"<table class=\"mlr-table\"><tr><th>unit id</th><th class=\"num\">value</th></tr>"
+                   f"{lines}</table></details>")
+        cards.append(f"""
+    <div class="mlc-card">
+      <div class="mlc-head">
+        <span class="mlc-title">{html_lib.escape(b['param'])}</span>
+        <span class="mlc-badge">Layer 1B &middot; runtime NN &middot; {html_lib.escape(b['framework'])}:{html_lib.escape(str(b['reaction']))}</span>
+      </div>
+      <div class="mlc-stats">
+        <span class="k">Default (unmapped cells)</span><span class="v">{_fmt(default)}</span>
+        <span class="k">Network</span><span class="v">{arch}</span>
+        <span class="k">Inputs</span><span class="v">{html_lib.escape(', '.join(feats)) if feats else f'{len(rows[0]) - 4 if rows else 0} attribute(s)'}</span>
+        <span class="k">Cells evaluated</span><span class="v">{len(vals)}</span>
+        <span class="k">Field</span><span class="v">{(_fmt(vmin) + ' &hellip; ' + _fmt(vmax) + ' (median ' + _fmt(vmed) + ')') if vals else 'n/a'}</span>
+        <span class="k">Spread (max/min &middot; CV)</span><span class="v">{('%.2f' % ratio) if vals and ratio != float('inf') else 'n/a'} &middot; {('%.0f%%' % (cv * 100)) if vals else 'n/a'}</span>
+      </div>
+      {det}
+      <div class="mlc-note">{' '.join(notes)}</div>
+    </div>""")
+    return cards, n_units_max
+
+
+def _build_ml_regionalize_section(output_dir, calibration_parameters,
+                                  calibration_results):
+    """Hybrid physics-ML LAYER 1 — "what the regionalization did".  For every
+    parameter calibrated as an attribute->parameter mapping (per-class values
+    or a standardized-attribute regression) show the calibrated low-dim
+    values against the lumped default, the per-cell field they produced in
+    the best evaluation (spread, mapped cells, clamping), and whether the
+    observation network can actually identify that many degrees of freedom."""
+    import json as _json, os as _os, csv as _csv, math as _math
+    import statistics as _st
+    reg = [p for p in (calibration_parameters or [])
+           if p.get("source") == "ml-regionalize"
+           or str(p.get("file_type", "")).endswith("_regionalize")]
+    # Layer 1B (runtime NN) parameters live in the eval config, not in the
+    # DDS parameter list — pick them up from the best eval's BGC JSON.
+    try:
+        _rt_cards, _rt_units = _build_ml_runtime_cards(output_dir, _best_eval_dir(output_dir))
+    except Exception as _e:
+        logger.warning(f"ML runtime cards skipped: {_e}")
+        _rt_cards, _rt_units = [], 0
+    if not reg and not _rt_cards:
+        return ""
+    groups = {}
+    for p in reg:
+        groups.setdefault(p.get("regionalize_group") or p.get("regionalize_of")
+                          or p.get("name", "?").split("@")[0], []).append(p)
+    best = calibration_results.get("best_params") or {}
+    if not best:
+        try:
+            with open(_os.path.join(str(output_dir), "results", "best_parameters.json")) as f:
+                best = _json.load(f)
+        except Exception:
+            best = {}
+    diag_paths, best_dir = _ml_regionalize_diag_paths(output_dir)
+    diags = {}
+    for pth in diag_paths:
+        try:
+            with open(pth) as f:
+                d = _json.load(f)
+            diags[str(d.get("parameter"))] = d
+        except Exception as _e:
+            logger.warning(f"regionalize diagnostics unreadable ({pth}): {_e}")
+    # observation network size (identifiability check)
+    n_stations = None
+    try:
+        obs = _os.path.join(str(output_dir), "calibration_observations.csv")
+        if _os.path.isfile(obs):
+            with open(obs, newline="") as f:
+                rd = _csv.DictReader(f)
+                n_stations = len({(r.get("reach_id"), r.get("source", "")) for r in rd})
+    except Exception:
+        n_stations = None
+
+    def _fmt(v):
+        try:
+            v = float(v)
+        except Exception:
+            return "n/a"
+        if v == 0:
+            return "0"
+        a = abs(v)
+        return f"{v:.3g}" if (1e-3 <= a < 1e4) else f"{v:.2e}"
+
+    def _bar(v, lo, hi, ref=None):
+        try:
+            v, lo, hi = float(v), float(lo), float(hi)
+            pos = 0.0 if hi == lo else max(0.0, min(1.0, (v - lo) / (hi - lo)))
+        except Exception:
+            return ""
+        refh = ""
+        if ref is not None:
+            try:
+                r = float(ref)
+                rp = 0.0 if hi == lo else max(0.0, min(1.0, (r - lo) / (hi - lo)))
+                refh = f'<i class="ref" style="left:{rp*100:.1f}%;" title="lumped default"></i>'
+            except Exception:
+                pass
+        return (f'<div class="mlr-bar" title="position within the bounds [{_fmt(lo)}, {_fmt(hi)}]">'
+                f'{refh}<i style="left:{pos*100:.1f}%;"></i></div>')
+
+    def _names_for(spec, attr):
+        """class code -> name, from the attribute table's <attr>_name column."""
+        out = {}
+        try:
+            at = (spec or {}).get("attribute_table")
+            if at and not _os.path.isabs(at) and best_dir:
+                at = _os.path.join(best_dir, at)
+            if at and _os.path.isfile(at):
+                with open(at, newline="") as f:
+                    for r in _csv.DictReader(f):
+                        c, nm = r.get(attr), r.get(f"{attr}_name")
+                        if c is not None and nm:
+                            try:
+                                c = str(int(float(c)))
+                            except Exception:
+                                c = str(c)
+                            out.setdefault(c, nm)
+        except Exception:
+            pass
+        return out
+
+    cards = []
+    tot_units = 0
+    any_inert = False
+    for group, params in groups.items():
+        spec = params[0].get("regionalize_spec") or {}
+        d = diags.get(group) or {}
+        rung = str(spec.get("rung") or d.get("rung") or "per_class")
+        default = spec.get("default", d.get("default"))
+        ft = str(params[0].get("file_type", ""))
+        module = {"bgc_regionalize": "BGC", "module_regionalize": params[0].get("module_key") or "module",
+                  "ts_regionalize": "sediment (TS)", "sorption_regionalize": "sorption (SI)",
+                  "ss_regionalize": "source/sink"}.get(ft, ft or "?")
+        attr = spec.get("attribute") or d.get("attribute") or ", ".join(
+            spec.get("attributes") or d.get("attributes") or [])
+        inert = bool(d.get("inert"))
+        any_inert = any_inert or inert
+        cell_vals = {k: float(v) for k, v in (d.get("cell_values") or {}).items()}
+        n_cells = int(d.get("n_cells") or len(cell_vals) or 0)
+        n_mapped = d.get("n_mapped")
+        tot_units = max(tot_units, n_cells)
+        vals = list(cell_vals.values())
+        if vals:
+            vmin, vmax, vmed = min(vals), max(vals), _st.median(vals)
+            vmean = _st.fmean(vals)
+            cv = (_st.pstdev(vals) / vmean) if (len(vals) > 1 and vmean) else 0.0
+            ratio = (vmax / vmin) if vmin > 0 else float("inf")
+        else:
+            vmin = vmax = vmed = vmean = float("nan"); cv = 0.0; ratio = float("nan")
+        # ---- sub-parameter table
+        rows = []
+        if rung == "per_class":
+            names = _names_for(spec, str(attr))
+            counts = {}
+            for c in (d.get("cell_classes") or {}).values():
+                counts[str(c)] = counts.get(str(c), 0) + 1
+            for p in params:
+                key = str(p.get("subparam_key"))
+                v = best.get(p["name"], p.get("initial"))
+                lo, hi = (p.get("bounds") or (None, None))
+                try:
+                    dv = (float(v) / float(default) - 1.0) * 100.0 if default else None
+                except Exception:
+                    dv = None
+                nm_html = ((' <span class="mlr-name">' + html_lib.escape(names[key]) + '</span>')
+                           if key in names else '')
+                rows.append(
+                    f"<tr><td><code>{html_lib.escape(key)}</code>{nm_html}</td>"
+                    f"<td class=\"num\">{counts.get(key, 0) if counts else '&ndash;'}</td>"
+                    f"<td class=\"num\"><strong>{_fmt(v)}</strong></td>"
+                    f"<td class=\"num\">{('%+.0f%%' % dv) if dv is not None else '&ndash;'}</td>"
+                    f"<td>{_bar(v, lo, hi, ref=default)}<span class=\"mlr-bnd\">{_fmt(lo)} &hellip; {_fmt(hi)}</span></td></tr>")
+            head = ("<tr><th>Class</th><th class=\"num\">cells</th><th class=\"num\">calibrated</th>"
+                    "<th class=\"num\">vs lumped</th><th>within bounds (| = lumped default)</th></tr>")
+            n_free = len(params)
+        else:
+            stats = d.get("standardization") or {}
+            for p in params:
+                key = str(p.get("subparam_key"))
+                v = best.get(p["name"], p.get("initial"))
+                lo, hi = (p.get("bounds") or (None, None))
+                st = stats.get(key) or {}
+                meaning = ("&theta; at the mean attributes" if key == "intercept" else
+                           f"&Delta;&theta; per 1 SD of <code>{html_lib.escape(key)}</code>"
+                           + (f" (mean {_fmt(st.get('mean'))}, SD {_fmt(st.get('std'))})" if st else ""))
+                rows.append(
+                    f"<tr><td><code>{html_lib.escape(key)}</code></td>"
+                    f"<td>{meaning}</td>"
+                    f"<td class=\"num\"><strong>{_fmt(v)}</strong></td>"
+                    f"<td>{_bar(v, lo, hi, ref=(default if key == 'intercept' else 0.0))}"
+                    f"<span class=\"mlr-bnd\">{_fmt(lo)} &hellip; {_fmt(hi)}</span></td></tr>")
+            head = ("<tr><th>Coefficient</th><th>meaning</th><th class=\"num\">calibrated</th>"
+                    "<th>within bounds (| = no effect)</th></tr>")
+            n_free = len(params)
+        # ---- notes
+        notes = []
+        if inert:
+            notes.append(f"<strong style=\"color:#d97706;\">&#9888; INERT in the best evaluation:</strong> "
+                         f"{html_lib.escape(str(d.get('inert_reason') or 'no per-cell map'))} "
+                         "&mdash; every cell used the lumped default, so this regionalization "
+                         "had no effect on the fit.")
+        elif not d:
+            notes.append("No per-evaluation diagnostics found for the best evaluation "
+                         "(run predates the Layer-1 diagnostics); only the calibrated "
+                         "low-dimensional values are shown.")
+        else:
+            if n_mapped is not None and n_cells and n_mapped < n_cells:
+                notes.append(f"{n_cells - n_mapped} of {n_cells} unit id(s) did not map to a "
+                             "model cell and kept the default.")
+            if rung == "per_class" and d.get("n_cells_class_not_calibrated"):
+                notes.append(f"{d['n_cells_class_not_calibrated']} cell(s) belong to a class "
+                             "without a calibrated value (kept the default).")
+            if rung == "regression":
+                ncl = int(d.get("n_cells_clamped") or 0)
+                if ncl:
+                    notes.append(f"<strong>{ncl} of {n_cells} cells hit the clamp bounds</strong> "
+                                 f"[{_fmt(d.get('lower'))}, {_fmt(d.get('upper'))}] &mdash; the "
+                                 "fitted relation saturates there (consider wider bounds or "
+                                 "fewer attributes).")
+                if d.get("standardize") is False:
+                    notes.append("Attributes were NOT standardized (raw units) &mdash; "
+                                 "coefficient bounds are not comparable across attributes.")
+            if vals and ratio != float("inf") and ratio < 1.05:
+                notes.append("The calibrated field is essentially uniform (max/min &lt; 1.05): "
+                             "DDS found no benefit in spatial variation for this parameter.")
+        if n_stations is not None and n_free > n_stations:
+            notes.append(f"<strong>Identifiability:</strong> {n_free} regionalized degrees of "
+                         f"freedom vs {n_stations} observation station(s) &mdash; the per-class / "
+                         "coefficient values are not separately constrained by the data "
+                         "(several combinations give the same fit); treat them as a "
+                         "spread, not as physical estimates.")
+        # ---- per-cell details
+        det = ""
+        if cell_vals:
+            cls = d.get("cell_classes") or {}
+            attz = d.get("cell_attributes") or {}
+            lines = []
+            for cid in sorted(cell_vals, key=lambda k: (len(k), k))[:300]:
+                extra = (html_lib.escape(str(cls.get(cid, ""))) if rung == "per_class"
+                         else ", ".join(f"{k}={_fmt(v)}" for k, v in (attz.get(cid) or {}).items()))
+                lines.append(f"<tr><td>{html_lib.escape(str(cid))}</td><td>{extra}</td>"
+                             f"<td class=\"num\">{_fmt(cell_vals[cid])}</td></tr>")
+            det = (f"<details class=\"mlr-det\"><summary>Per-cell values ({len(cell_vals)}"
+                   f"{', first 300 shown' if len(cell_vals) > 300 else ''})</summary>"
+                   f"<table class=\"mlr-table\"><tr><th>unit id</th><th>"
+                   f"{'class' if rung == 'per_class' else 'attributes'}</th>"
+                   f"<th class=\"num\">value</th></tr>{''.join(lines)}</table></details>")
+        spread = (f"{_fmt(vmin)} &hellip; {_fmt(vmax)} (median {_fmt(vmed)})") if vals else "n/a"
+        cards.append(f"""
+    <div class="mlc-card">
+      <div class="mlc-head">
+        <span class="mlc-title">{html_lib.escape(str(group))}</span>
+        <span class="mlc-badge">{html_lib.escape(module)} &middot; {html_lib.escape(rung)} &middot; {html_lib.escape(str(attr))}</span>
+      </div>
+      <div class="mlc-stats">
+        <span class="k">Lumped default</span><span class="v">{_fmt(default)}</span>
+        <span class="k">Spatial units</span><span class="v">{n_cells if n_cells else 'n/a'}{(' (' + str(n_mapped) + ' mapped)') if n_mapped is not None else ''}</span>
+        <span class="k">Calibrated field</span><span class="v">{spread}</span>
+        <span class="k">Spread (max/min &middot; CV)</span><span class="v">{('%.2f' % ratio) if vals and ratio != float('inf') else 'n/a'} &middot; {('%.0f%%' % (cv * 100)) if vals else 'n/a'}</span>
+        <span class="k">Degrees of freedom</span><span class="v">{n_free}{(' vs ' + str(n_stations) + ' station(s)') if n_stations is not None else ''}</span>
+      </div>
+      <table class="mlr-table">{head}{''.join(rows)}</table>
+      {det}
+      <div class="mlc-note">{' '.join(notes) if notes else 'The regionalization was active on the best fit and every unit mapped to a model cell.'}</div>
+    </div>""")
+
+    cards.extend(_rt_cards)
+    tot_units = max(tot_units, _rt_units)
+    lead = ((f"The best fit regionalized <strong>{len(groups)}</strong> parameter"
+             f"{'s' if len(groups) != 1 else ''}" if groups else "No DDS-calibrated regionalization")
+            + (f" and used <strong>{len(_rt_cards)}</strong> pretrained runtime-NN parameter"
+               f"{'s' if len(_rt_cards) != 1 else ''} (Layer 1B)" if _rt_cards else "")
+            + f" over <strong>{tot_units or 'n/a'}</strong> spatial units. A value equal to "
+              "the lumped default in every cell means the regionalization did nothing; a "
+              "wide spread means the parameter varies across the domain with the attributes.")
+    return f"""
+<div class="section" id="ml-regionalize">
+    <h2>ML Regionalization &mdash; what Layer 1 did to the parameters</h2>
+    <p style="color:var(--text2);margin-bottom:.4rem;max-width:70ch;">
+        Layer 1 replaces a lumped parameter by <code>&theta; = g(attributes)</code>:
+        <em>per_class</em> gives every attribute class its own calibrated value;
+        <em>regression</em> fits an intercept plus one coefficient per
+        <strong>standardized</strong> (z-scored) attribute, clamped to the parameter's
+        bounds. Both start from the lumped value (class values = default, coefficients
+        = 0) so the first evaluation is the pure lumped model; what you see here is how
+        far DDS moved away from it in the best evaluation. A <em>Layer 1B</em> card is a
+        <strong>pretrained</strong> network openWQ evaluates itself at start-up to fill
+        the parameter field (fixed during the calibration).
     </p>
     <p style="color:var(--text2);margin-bottom:1rem;max-width:70ch;">{lead}</p>
     <div class="mlc-grid">{''.join(cards)}</div>
@@ -2248,6 +2766,94 @@ def _build_visualization_snippet(model_config: Dict[str, Any],
     return body
 
 
+def _build_config_run_block(results, model_config, settings, output_dir, best_dir) -> str:
+    """The 'Save the calibrated model config' step: builds
+    ``<template>_config_run.py`` (the user's model-config template + the
+    calibrated block, see calibration_lib.calibrated_config) and offers it as a
+    file save, with the commands to run it and to start a scenario analysis."""
+    try:
+        from . import calibrated_config as _ccfg
+    except ImportError:                              # pragma: no cover
+        import calibrated_config as _ccfg
+    tpl = model_config.get("_model_config_path", "") or ""
+    if not tpl or not os.path.isfile(tpl) or not output_dir:
+        return ""
+    run_script = os.path.join(str(output_dir), f"{settings.get('report_stem') or ''}_run.py") \
+        if settings.get("report_stem") else ""
+    if not run_script or not os.path.isfile(run_script):
+        cands = sorted(glob.glob(os.path.join(str(output_dir), "*_run.py")))
+        run_script = cands[0] if cands else os.path.join(str(output_dir), "<calibration>_run.py")
+    pdefs = []
+    try:
+        pdefs = json.load(open(os.path.join(str(output_dir), "results", "parameter_definitions.json")))
+    except Exception:
+        pass
+    best_eval = os.path.basename(best_dir) if best_dir else None
+    _bo = results.get("best_objective")
+    try:
+        text, path = _ccfg.build_config_run_text(
+            tpl, str(output_dir), run_script, model_config,
+            best_params=results.get("best_params") or {}, parameter_definitions=pdefs,
+            best_eval=best_eval, best_objective=_bo,
+            objective_name=str(settings.get("objective_function") or ""))
+    except Exception as _e:
+        logger.warning(f"config_run block not built: {_e}")
+        return ""
+    cal_dir_out = _ccfg.calibrated_dir_for(model_config)
+    tpl_dir = os.path.dirname(os.path.abspath(tpl))
+    fname = os.path.basename(path)
+    scn_tpl = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                            "..", "..", "4_Scenarios", "scenario_config_template.py"))
+    run_cmd = f"cd {tpl_dir} && python {fname}"
+    ev = json.dumps(text)
+    return (
+        '<div style="border:1px solid var(--border);border-left:3px solid var(--secondary);'
+        'border-radius:8px;padding:.6rem .9rem;margin:.8rem 0 .4rem;background:var(--surface);">'
+        '<div style="font-weight:800;margin-bottom:.25rem;">&#128190; Save the calibrated model config'
+        f' <code style="font-size:.78rem;">{html_lib.escape(fname)}</code></div>'
+        '<p style="font-size:.85rem;margin:.2rem 0 .5rem;line-height:1.55;color:var(--text2);">'
+        'Your model-config template regenerates the <em>default</em> parameter values; this file is '
+        'that same template plus a block that generates the inputs for the <strong>full model '
+        'period</strong> and applies the <strong>calibrated best values and ML layers</strong> '
+        f'(best evaluation <code>{html_lib.escape(str(best_eval or "?"))}</code>) to them '
+        f'&mdash; the calibrated model as a normal template, written to '
+        f'<code>{html_lib.escape(cal_dir_out)}</code>. Run it like any model config (its config '
+        'report gives the run / output-report snippets) and use it as the base of '
+        '<strong>scenario analyses</strong>.</p>'
+        '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin:.2rem 0 .5rem;">'
+        f'<button id="cfgrunSaveBtn" onclick="owqSaveText(\'cfgrunText\', {json.dumps(fname)}, \'cfgrunSaveBtn\')" '
+        'style="font-size:.82rem;padding:.4rem .95rem;font-weight:600;border:1px solid var(--border);'
+        'border-radius:7px;cursor:pointer;color:var(--secondary);'
+        'background:linear-gradient(135deg,rgba(0,102,204,.18),rgba(0,168,107,.18));">'
+        '&#128190; Save (.py)&hellip;</button>'
+        f'<span style="font-size:.74rem;color:var(--text3);word-break:break-all;">Save to: '
+        f'<code>{html_lib.escape(path)}</code></span></div>'
+        f'<script type="text/plain" id="cfgrunText">{html_lib.escape(text)}</script>'
+        '<p style="font-size:.8rem;margin:.4rem 0 .2rem;color:var(--text2);">Then generate the calibrated '
+        'inputs + config report (a few minutes; it reuses the cached observations / LULC):</p>'
+        + rh.build_code_block(run_cmd, "bash") +
+        '<p style="font-size:.8rem;margin:.4rem 0 .2rem;color:var(--text2);">Scenario analysis on this '
+        f'calibrated model: copy <code>{html_lib.escape(scn_tpl)}</code>, set '
+        f'<code>config_run_path = {html_lib.escape(json.dumps(path))}</code> in the copy and run it '
+        '&mdash; the interactive scenario report lets you build management, land-use, point-source, '
+        'policy and climate scenarios and gives the script that runs them and compares every '
+        'scenario with this baseline.</p>'
+        '<script>(function(){ if (window.owqSaveText) return;'
+        'window.owqSaveText = function(id, name, btnId){'
+        ' var el = document.getElementById(id); if (!el) return;'
+        ' var txt = el.textContent; var blob = new Blob([txt], {type: "text/x-python"});'
+        ' var btn = btnId ? document.getElementById(btnId) : null;'
+        ' function done(){ if (btn){ var o = btn.innerHTML; btn.textContent = "\u2713 Saved"; setTimeout(function(){ btn.innerHTML = o; }, 2000);} }'
+        ' if (window.showSaveFilePicker){'
+        '  window.showSaveFilePicker({suggestedName: name, types: [{description: "Python", accept: {"text/x-python": [".py"]}}]})'
+        '  .then(function(h){ return h.createWritable().then(function(w){ return w.write(blob).then(function(){ return w.close(); }); }); })'
+        '  .then(done).catch(function(e){ if (e.name !== "AbortError") console.error(e); });'
+        ' } else { var u = URL.createObjectURL(blob); var a = document.createElement("a"); a.href = u; a.download = name;'
+        '  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(u); done(); }'
+        '};})();</script>'
+        '</div>')
+
+
 def _build_next_steps_section(
     model_config: Dict[str, Any],
     settings: Dict[str, Any],
@@ -2724,6 +3330,13 @@ def _build_run_best_section(
             '<div id="rbviz-codewrap">' + rh.build_code_block("", "bash") + '</div>'
             + _viz_js)
 
+        # ── Save the CALIBRATED MODEL CONFIG (<template>_config_run.py): the
+        #    user's model-config template + a block that regenerates the inputs
+        #    for the FULL period and applies the calibrated best (+ ML layers).
+        #    Base of scenario analyses (supporting_scripts/4_Scenarios). ──
+        _cfgrun_block = _build_config_run_block(results, model_config, settings,
+                                                output_dir, _best_dir)
+
         calibrated_block = (
             '<div class="card primary" style="margin-bottom:1rem;">'
             '<h3 style="margin-top:0;">&#9654; Run the calibrated model</h3>'
@@ -2739,6 +3352,7 @@ def _build_run_best_section(
             + (f'<br>&#128202; Best parameter values: <code>{html_lib.escape(_bp_path)}</code>'
                if _bp_path else '')
             + '</p>'
+            + _cfgrun_block
             + viz_block
             + '</div>')
     else:
@@ -5040,34 +5654,11 @@ def _build_observation_map_section(
 
     # Load observations and pull station locations.
     obs_csv = obs_cfg.get("user_observation_csv")
-    grqa_dir = obs_cfg.get("grqa_local_data_path")
-    # The model-config setup writes the *clipped* GRQA station/observation CSVs
-    # into <run_dir>/openwq_in/grqa_clipped_data/ — NOT into the raw GRQA
-    # database dir (grqa_local_data_path).  Resolve that folder so the map can
-    # find station coordinates.  (This was why the map came up empty for GRQA
-    # runs: it only looked inside the raw DB dir, where the clipped CSV never
-    # exists.)
-    def _resolve_clipped_dir():
-        cands = []
-        _rd = model_config.get("dir2save_input_files")
-        if not _rd:
-            try:
-                _exe = (_ci.get_container_config(model_config) or {}).get(
-                    "executable_path", "")
-            except Exception:
-                _exe = ""
-            _rd = os.path.dirname(os.path.abspath(_exe)) if _exe else ""
-        if _rd:
-            cands.append(os.path.join(_rd, "openwq_in", "grqa_clipped_data"))
-        if grqa_dir:
-            cands.append(os.path.join(grqa_dir, "grqa_clipped_data"))
-            cands.append(grqa_dir)
-        for _c in cands:
-            if _c and os.path.isdir(_c):
-                return _c
-        return None
-    _clipped_dir = _resolve_clipped_dir()
+    # Station coordinates: from the user CSV when it carries lat/lon, else
+    # from the basin-clipped observations the model-config step wrote (any
+    # layout — resolved in ONE place, config_integration.load_clipped_obs_frame).
     station_locations: Dict[str, tuple] = {}
+    _clipped_df = None
     if obs_csv and os.path.isfile(obs_csv):
         try:
             df = pd.read_csv(obs_csv)
@@ -5081,18 +5672,19 @@ def _build_observation_map_section(
                                                   float(row['lon']))
         except Exception:
             pass
-    if not station_locations and _clipped_dir:
-        stn_csv = os.path.join(_clipped_dir, "grqa_clipped_stations.csv")
-        if os.path.isfile(stn_csv):
-            try:
-                df = pd.read_csv(stn_csv)
-                for _, row in df.iterrows():
-                    sid = str(row.get('site_id', ''))
-                    if sid:
-                        station_locations[sid] = (float(row['lat_wgs84']),
-                                                  float(row['lon_wgs84']))
-            except Exception:
-                pass
+    if not station_locations:
+        try:
+            _clipped_df = _ci.load_clipped_obs_frame(model_config)
+        except Exception:
+            _clipped_df = None
+        if _clipped_df is not None and len(_clipped_df):
+            for sid, grp in _clipped_df.groupby("station_id"):
+                try:
+                    station_locations[str(sid)] = (
+                        float(pd.to_numeric(grp["lat"], errors="coerce").median()),
+                        float(pd.to_numeric(grp["lon"], errors="coerce").median()))
+                except Exception:
+                    pass
     if not station_locations:
         return ""
 
@@ -5146,19 +5738,14 @@ def _build_observation_map_section(
                     station_stats[str(sid)]["n_obs"] = int(n)
         except Exception:
             pass
-    elif _clipped_dir:
-        # GRQA case: count rows per station from the clipped observations CSV
-        # (keyed by site_id) so the marker radius reflects data density.
-        _obs_clip = os.path.join(_clipped_dir, "grqa_clipped_observations.csv")
-        if os.path.isfile(_obs_clip):
-            try:
-                _df = pd.read_csv(
-                    _obs_clip, usecols=lambda c: c == "site_id")
-                for sid, n in _df.groupby("site_id").size().to_dict().items():
-                    if str(sid) in station_stats:
-                        station_stats[str(sid)]["n_obs"] = int(n)
-            except Exception:
-                pass
+    elif _clipped_df is not None:
+        # rows per station in the clipped observations -> marker radius
+        try:
+            for sid, n in _clipped_df.groupby("station_id").size().to_dict().items():
+                if str(sid) in station_stats:
+                    station_stats[str(sid)]["n_obs"] = int(n)
+        except Exception:
+            pass
 
     # 2) Per-station, per-species metrics by reverse-lookup through s2f
     #    + performance_metrics (which is keyed on reach_id + species).
