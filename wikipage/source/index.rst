@@ -42,5 +42,6 @@ Key capabilities:
    4_2_2support_scripts
    4_2_2_Calibration
    4_4_Hybrid_ML
+   4_5_Scenarios
    2_4_AI_Assistant
    5_0_Developer

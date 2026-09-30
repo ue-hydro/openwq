@@ -127,10 +127,6 @@ class ParameterHandler:
             "Q10_biological":       ("ss_climate_temp_q10", "float"),
             "T_reference":          ("ss_climate_temp_reference_c", "float"),
         },
-        "ss_ml": {
-            "n_estimators": ("ss_ml_n_estimators", "int"),
-            "max_depth":    ("ss_ml_max_depth", "int"),
-        },
     }
 
     def setup_working_directory(self,
@@ -314,11 +310,12 @@ class ParameterHandler:
         eval_dir.mkdir(parents=True)
 
         # Copy the processed input config, skipping report-only / bulky
-        # artefacts (clipped GRQA data, any previously-written HDF5 output).
+        # artefacts (clipped observations + source caches, any HDF5 output).
         shutil.copytree(
             src_in, eval_dir / "openwq_in",
             ignore=shutil.ignore_patterns(
-                'grqa_clipped_data', 'HDF5', '*.h5', '*.nc'))
+                'obs_clipped_data', 'obs_cache_*', 'grqa_clipped_data',
+                'HDF5', '*.h5', '*.nc'))
         shutil.copy2(src_master, eval_dir / "openWQ_master.json")
         (eval_dir / "openwq_out" / "HDF5").mkdir(parents=True, exist_ok=True)
 
@@ -398,6 +395,7 @@ class ParameterHandler:
         values : np.ndarray
             Parameter values to apply (in real scale, after transform)
         """
+        eval_dir = Path(eval_dir)   # accept str paths too
         ss_items = []   # source/sink load params, applied together after the
                         # loop (seasonal modes group sibling params by species)
         _SS_LOAD_TYPES = ("ss_csv_scale", "ss_seasonal_amp",
@@ -450,11 +448,9 @@ class ParameterHandler:
             elif file_type in ("ss_copernicus_static", "ss_copernicus_dynamic"):
                 initial = param.get("initial", None)
                 self._apply_ss_copernicus_coeff(eval_dir, path, value, initial_value=initial)
-            elif file_type in ("ss_climate", "ss_climate_param",
-                                "ss_ml", "ss_ml_param"):
+            elif file_type in ("ss_climate", "ss_climate_param"):
                 # Generation-time parameter: the dynamic SS climate-response
-                # params reshape the monthly load distribution, and the ML SS
-                # hyperparameters (tree count/depth) retrain the model — both
+                # params reshape the monthly load distribution — they
                 # change how the SS JSON is *generated*, so they are baked
                 # into the eval config at setup_working_directory() time (see
                 # _build_eval_config).  Nothing to edit post-hoc here.
@@ -632,6 +628,31 @@ class ParameterHandler:
         logger.info(f"ss ML: wrote OPENWQ_INPUT>SINK_SOURCE_ML>{key} to "
                     f"{master.name}")
 
+    def _write_master_ss_ml_scale(self, eval_dir: Path, value, species=None) -> None:
+        """Write a Layer-1 SS load scale (a {DEFAULT,CELLS} map or an
+        {ML_RUNTIME} block) into OPENWQ_INPUT > SINK_SOURCE_ML > ML_SCALE.
+        ``species=None`` = every species. Several groups may target ML_SCALE in
+        one evaluation (one per species): they are MERGED into the species-keyed
+        form openWQ reads ({"NO3-N": <scale>, "*": <scale for the rest>}); a
+        single all-species scale keeps the plain form (byte-identical config)."""
+        master = eval_dir / "openWQ_master.json"
+        if not master.exists():
+            logger.warning(f"ss ML: master not found ({master}) — skipped.")
+            return
+        data, header = self._read_json_with_header(master)
+        oi = data.setdefault("OPENWQ_INPUT", {})
+        cur = oi.setdefault("SINK_SOURCE_ML", {}).get("ML_SCALE")
+        _map_keys = ("DEFAULT", "CELLS", "ML_RUNTIME")
+        keyed = (isinstance(cur, dict)
+                 and not any(str(k).upper() in _map_keys for k in cur))
+        d = dict(cur) if keyed else ({"*": cur} if cur is not None else {})
+        d[str(species) if species else "*"] = value
+        oi["SINK_SOURCE_ML"]["ML_SCALE"] = d["*"] if set(d) == {"*"} else d
+        self._write_json_with_header(master, data, header)
+        logger.info("ss ML: wrote OPENWQ_INPUT>SINK_SOURCE_ML>ML_SCALE"
+                    + (f" for species '{species}'" if species else " (all species)")
+                    + f" to {master.name}")
+
     def _apply_ml_runtime(self, eval_dir: Path) -> None:
         """Inject each activated Layer-1B ``ML_RUNTIME`` block into the BGC config,
         REPLACING the target parameter's scalar value with
@@ -645,10 +666,51 @@ class ParameterHandler:
             return
         data, header = self._read_json_with_header(bgc_file)
         n = 0
+
+        def _stage(src_path, tag):
+            """openWQ reads the weights/attributes files ITSELF, inside the
+            container / on the HPC node, where the host path of the prepared
+            file does not exist. Copy it into the eval's openwq_in/ and
+            reference it RELATIVE to the eval dir (like the closure nets)."""
+            import shutil as _sh
+            src = str(src_path or "")
+            if not src:
+                return ""
+            if not os.path.isabs(src):
+                return src                              # already eval-relative
+            if not os.path.isfile(src):
+                src = str(self._relocate_ml_path(src))      # moved folder / HPC
+            if not os.path.isfile(src):
+                logger.warning(f"ml_runtime: {tag} file not found: {src}")
+                return src
+            dst_dir = eval_dir / "openwq_in"
+            dst_dir.mkdir(parents=True, exist_ok=True)
+            dst = dst_dir / os.path.basename(src)
+            try:
+                _sh.copyfile(src, dst)
+            except Exception as _e:
+                logger.warning(f"ml_runtime: could not stage {tag} file ({_e})")
+                return src
+            return f"openwq_in/{dst.name}"
+
         for key, spec in self.ml_runtime.items():
             path = spec.get("path")
             if not path:
                 logger.warning(f"ml_runtime['{key}']: missing parameter path — skipped.")
+                continue
+            wfile = _stage(spec.get("weights_filepath", ""), "weights")
+            afile = _stage(spec.get("attributes_filepath", ""), "attributes")
+            if (spec.get("module") == "ss"
+                    or list(path) == ["SINK_SOURCE_ML", "ML_SCALE"]):
+                # source/sink load scale: the net fills the per-cell multiplier
+                # (OpenWQ_load_param resolves the ML_RUNTIME object at start-up)
+                self._write_master_ss_ml_scale(eval_dir, {"ML_RUNTIME": {
+                    "WEIGHTS_FILEPATH": wfile,
+                    "ATTRIBUTES_FILEPATH": afile,
+                    "DEFAULT": float(spec.get("default", 1.0)),
+                }}, species=spec.get("species"))
+                logger.info(f"ml_runtime['{key}']: ML_RUNTIME net set on the SS load "
+                            "scale (OPENWQ_INPUT > SINK_SOURCE_ML > ML_SCALE)")
                 continue
             obj = data
             ok = True
@@ -663,8 +725,8 @@ class ParameterHandler:
                                "BGC config — skipped.")
                 continue
             obj[path[-1]] = {"ML_RUNTIME": {
-                "WEIGHTS_FILEPATH": spec.get("weights_filepath", ""),
-                "ATTRIBUTES_FILEPATH": spec.get("attributes_filepath", ""),
+                "WEIGHTS_FILEPATH": wfile,
+                "ATTRIBUTES_FILEPATH": afile,
                 "DEFAULT": float(spec.get("default", 0.0)),
             }}
             n += 1
@@ -713,6 +775,25 @@ class ParameterHandler:
     # BGC JSON — regionalized (ML Layer 1) parameters
     # =========================================================================
 
+    def _relocate_ml_path(self, p):
+        """A Layer-1 file baked as an ABSOLUTE host path (attribute table,
+        mapping.json, runtime-net weights/attributes) does not exist when the
+        calibration folder is moved or runs on HPC/Apptainer. Fall back to the
+        same file name under <calibration_work_dir>/ml_attributes/ (where the
+        setup report writes them) or the work dir itself."""
+        try:
+            if not p or not os.path.isabs(str(p)) or os.path.exists(str(p)):
+                return p
+            base = os.path.basename(str(p))
+            for cand in (self.calibration_work_dir / "ml_attributes" / base,
+                         self.calibration_work_dir / base):
+                if cand.exists():
+                    logger.info(f"ML path relocated: {base} -> {cand}")
+                    return str(cand)
+        except Exception:
+            pass
+        return p
+
     def _load_regionalize_inputs(self, spec: Dict, eval_dir: Path):
         """Load (and cache) the attribute table + reach mapper for a
         regionalized parameter. Returns ``(attributes, mapper)`` where either
@@ -729,7 +810,8 @@ class ParameterHandler:
             return p if os.path.isabs(p) else str(eval_dir / p)
 
         attributes = (ml_regionalization.load_attribute_table(
-            _resolve(at), id_column=spec.get("id_column", "id")) if at else {})
+            self._relocate_ml_path(_resolve(at)),
+            id_column=spec.get("id_column", "id")) if at else {})
 
         try:
             from .reach_mapping import ReachMapper
@@ -739,19 +821,36 @@ class ParameterHandler:
         if isinstance(self.model_config, dict):
             hostmodel = self.model_config.get("hostmodel", hostmodel) or hostmodel
         mapper = ReachMapper(hostmodel=hostmodel)
-        ms_path = _resolve(ms)
-        if not ms_path:
-            # P3: no explicit mapping source -> auto-default to the eval's own
-            # HDF5 output dir (ReachMapper scans *.h5 for reachID/hruId +
-            # xyz_elements), so a regionalize row needs no manual mapping source
-            # when a baseline HDF5 output is present in the eval.
-            cand = eval_dir / "openwq_out" / "HDF5"
-            if cand.is_dir():
-                ms_path = str(cand)
-                logger.info(f"regionalize: auto mapping_source -> {ms_path}")
-        if not ms_path or not mapper.load_mapping(ms_path):
-            if ms_path:
+        ms_path = self._relocate_ml_path(_resolve(ms))
+        loaded = False
+        if ms_path:
+            loaded = mapper.load_mapping(ms_path)
+            if not loaded:
                 logger.warning(f"regionalize: could not load reach mapping from {ms_path}")
+        if not loaded:
+            # No (usable) explicit mapping source -> try, in order:
+            #   1. the eval's own HDF5 output (only exists AFTER it ran, e.g. a
+            #      repaired/re-run eval),
+            #   2. the mapping.json the setup report saved next to the auto-built
+            #      attribute table (<calibration_work_dir>/ml_attributes/),
+            #   3. the BASELINE model output of the model config
+            #      (<dir2save_input_files>/openwq_out/HDF5) — always present for
+            #      a configured domain, and the same id space as every eval.
+            _cands = [eval_dir / "openwq_out" / "HDF5",
+                      self.calibration_work_dir / "ml_attributes" / "mapping.json"]
+            if isinstance(self.model_config, dict) and self.model_config.get("dir2save_input_files"):
+                _cands.append(Path(str(self.model_config["dir2save_input_files"])) / "openwq_out" / "HDF5")
+            for cand in _cands:
+                try:
+                    if cand.exists() and mapper.load_mapping(str(cand)):
+                        logger.info(f"regionalize: auto mapping_source -> {cand}")
+                        loaded = True
+                        break
+                except Exception:
+                    continue
+        if not loaded:
+            logger.warning("regionalize: no reach/HRU mapping found (set 'Mapping "
+                           "source' to a run's openwq_out/HDF5 or a mapping.json)")
             mapper = None
 
         result = (attributes, mapper)
@@ -769,10 +868,14 @@ class ParameterHandler:
 
         attributes, mapper = self._load_regionalize_inputs(spec, eval_dir)
 
-        icmp = int(spec.get("icmp", 0))
+        icmp = int(spec.get("icmp", -1))   # -1 = every compartment
+        _diag: Dict[str, Any] = {}
         if attributes and mapper is not None:
             spatial_obj = ml_regionalization.make_spatial_param(
-                spec, subparam_values, attributes, mapper, icmp=icmp)
+                spec, subparam_values, attributes, mapper, icmp=icmp,
+                diagnostics=_diag)
+            self._write_regionalize_diag(eval_dir, group_name, spec,
+                                         subparam_values, _diag, spatial_obj)
         else:
             # Graceful fallback: a uniform map at the block default (no per-cell
             # variation) so a missing attribute table / mapping never crashes a
@@ -782,6 +885,10 @@ class ParameterHandler:
                 "attributes/mapping — DEFAULT-only map (no per-cell variation). "
                 "Set an attribute table + mapping source.")
             spatial_obj = {"DEFAULT": float(spec.get("default", 0.0)), "CELLS": []}
+            self._write_regionalize_diag(
+                eval_dir, group_name, spec, subparam_values, _diag, spatial_obj,
+                inert_reason=("attribute table not found/empty" if not attributes
+                              else "reach/HRU mapping not found"))
 
         bgc_file = eval_dir / "openwq_in" / "openWQ_MODULE_NATIVE_BGC_FLEX.json"
         if not bgc_file.exists():
@@ -821,14 +928,24 @@ class ParameterHandler:
         spec = items[0][0]["regionalize_spec"]
         subparam_values = {p["subparam_key"]: float(v) for p, v in items}
         attributes, mapper = self._load_regionalize_inputs(spec, eval_dir)
-        icmp = int(spec.get("icmp", 0))
+        icmp = int(spec.get("icmp", -1))   # -1 = every compartment
+        _diag: Dict[str, Any] = {}
         if attributes and mapper is not None:
             m = ml_regionalization.make_spatial_param(
-                spec, subparam_values, attributes, mapper, icmp=icmp)
+                spec, subparam_values, attributes, mapper, icmp=icmp,
+                diagnostics=_diag)
+            self._write_regionalize_diag(eval_dir, group_name, spec,
+                                         subparam_values, _diag, m)
             ncells = len(m.get("CELLS", []))
             if ncells:
                 logger.info(f"ML ACTIVE: regionalize '{group_name}' -> "
                             f"{ncells} per-cell values")
+            elif int(_diag.get("n_mapped", 0) or 0) > 0:
+                # every calibrated value equals the default (e.g. the lumped
+                # start of DDS): the map is valid, it just has nothing to write
+                logger.info(f"regionalize '{group_name}': {_diag['n_mapped']} cells "
+                            "mapped, all at the default value (lumped field, "
+                            "0 CELLS entries written)")
             else:
                 logger.warning(f"ML INERT: regionalize '{group_name}' produced "
                                "0 per-cell values (attributes/mapping did not "
@@ -837,7 +954,46 @@ class ParameterHandler:
         logger.warning(f"ML INERT: regionalize '{group_name}': missing "
                        "attributes/mapping — DEFAULT-only map (no per-cell "
                        "variation). Set an attribute table + mapping source.")
-        return {"DEFAULT": float(spec.get("default", 0.0)), "CELLS": []}, icmp
+        m = {"DEFAULT": float(spec.get("default", 0.0)), "CELLS": []}
+        self._write_regionalize_diag(
+            eval_dir, group_name, spec, subparam_values, _diag, m,
+            inert_reason=("attribute table not found/empty" if not attributes
+                          else "reach/HRU mapping not found"))
+        return m, icmp
+
+    def _write_regionalize_diag(self, eval_dir: Path, group_name: str,
+                                spec: Dict, subparam_values: Dict[str, float],
+                                diag: Dict[str, Any], spatial_obj: Dict[str, Any],
+                                inert_reason: Optional[str] = None) -> None:
+        """Layer-1 counterpart of openWQ's ``ml_closure_diagnostics.json``: a
+        self-contained record of what the regionalization did in THIS eval
+        (the calibrated low-dim values, the per-cell field they produced, the
+        classes / standardized attributes behind it, clamp + mapping counts),
+        written to ``openwq_in/_ml_regionalize_<group>.json`` so the results
+        report can show it for the best evaluation without re-deriving anything."""
+        try:
+            safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(group_name))
+            out = eval_dir / "openwq_in" / f"_ml_regionalize_{safe}.json"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            cells = spatial_obj.get("CELLS", []) or []
+            rec = {
+                "schema": "openwq_ml_regionalize_diagnostics/1",
+                "parameter": group_name,
+                "spec": {k: spec.get(k) for k in (
+                    "rung", "default", "attribute", "attributes", "lower", "upper",
+                    "attribute_table", "mapping_source", "icmp", "standardize")},
+                "subparam_values": {str(k): float(v) for k, v in subparam_values.items()},
+                "map": {"default": spatial_obj.get("DEFAULT"),
+                        "n_cells_written": len(cells),
+                        "cells": cells[:5000]},
+                "inert": bool(inert_reason),
+                "inert_reason": inert_reason or "",
+            }
+            rec.update({k: v for k, v in diag.items()})
+            with open(out, "w") as f:
+                json.dump(rec, f)
+        except Exception as _e:               # diagnostics must never break an eval
+            logger.warning(f"regionalize '{group_name}': diagnostics not written ({_e})")
 
     def _apply_module_regionalize_group(self, eval_dir: Path,
                                         group_name: str, items: List) -> None:
@@ -883,12 +1039,26 @@ class ParameterHandler:
         data, header = self._read_json_with_header(mod_file)
         table = {"0": ["IX", "IY", "IZ", "VALUE"]}
         r = 1
+        # the TS table needs explicit (ix,iy,iz) rows: expand a column
+        # wildcard (iz=-1) into the layers the mapping knows for that column
+        _mapper = self._load_regionalize_inputs(
+            items[0][0]["regionalize_spec"], eval_dir)[1]
+        _layers: Dict[tuple, set] = {}
+        try:
+            for _rid in _mapper.get_all_reach_ids():
+                _x = _mapper.get_xyz(_rid)
+                if _x is not None:
+                    _layers.setdefault((int(_x[0]), int(_x[1])), set()).add(int(_x[2]))
+        except Exception:
+            pass
         for cell in spatial_obj.get("CELLS", []):
-            if len(cell) < 5 or int(cell[0]) != icmp:
+            if len(cell) < 5 or (icmp >= 0 and int(cell[0]) not in (icmp, -1)):
                 continue
-            table[str(r)] = [int(cell[1]) + 1, int(cell[2]) + 1,
-                             int(cell[3]) + 1, float(cell[4])]
-            r += 1
+            ix, iy, iz = int(cell[1]), int(cell[2]), int(cell[3])
+            zs = sorted(_layers.get((ix, iy), set())) if iz < 0 else [iz]
+            for z in (zs or [1]):
+                table[str(r)] = [ix, iy, z, float(cell[4])]
+                r += 1
         data.setdefault("PARAMETERS", {})[ts_param] = table
         data.setdefault("PARAMETER_DEFAULTS", {})[ts_param] = float(
             spatial_obj.get("DEFAULT", 0.0))
@@ -900,9 +1070,12 @@ class ParameterHandler:
                                     group_name: str, items: List) -> None:
         """Regionalize the SS load scale: build the per-cell ``{DEFAULT,CELLS}``
         multiplier and write it into the master's OPENWQ_INPUT > SINK_SOURCE_ML >
-        ML_SCALE (openWQ applies it per-cell to every source/sink load)."""
+        ML_SCALE (openWQ applies it per-cell to every source/sink load of the
+        group's species, or of every species when the spec names none)."""
         spatial_obj, _ = self._build_regionalize_map(group_name, items, eval_dir)
-        self._write_master_ss_ml(eval_dir, "ML_SCALE", spatial_obj)
+        spec = items[0][0].get("regionalize_spec") or {}
+        self._write_master_ss_ml_scale(eval_dir, spatial_obj,
+                                       species=spec.get("species"))
 
     def _apply_sorption_regionalize_group(self, eval_dir: Path,
                                           group_name: str, items: List) -> None:
@@ -914,7 +1087,7 @@ class ParameterHandler:
         subparam_values = {p["subparam_key"]: float(v) for p, v in items}
 
         attributes, mapper = self._load_regionalize_inputs(spec, eval_dir)
-        icmp = int(spec.get("icmp", 0))
+        icmp = int(spec.get("icmp", -1))   # -1 = every compartment
         if attributes and mapper is not None:
             spatial_obj = ml_regionalization.make_spatial_param(
                 spec, subparam_values, attributes, mapper, icmp=icmp)
@@ -1674,24 +1847,6 @@ class ParameterHandler:
     # =========================================================================
     # Source/Sink: ML Model Parameters
     # =========================================================================
-
-    def _apply_ss_ml_param(self,
-                           eval_dir: Path,
-                           path: str,
-                           value: float) -> None:
-        """
-        [SUPERSEDED] ML source/sink hyperparameters (n_estimators, max_depth)
-        are now applied at *generation time*: setup_working_directory() bakes
-        their calibrated values into the per-evaluation model config via
-        _build_eval_config(), so Gen_Input_Driver/Gen_MLmodel_SS retrains the
-        model and regenerates the SS JSON with the chosen hyperparameters.
-
-        This post-hoc hook is therefore no longer wired into
-        apply_parameters() and is kept only for backward compatibility.
-        """
-        logger.debug(
-            f"_apply_ss_ml_param({path}) is a no-op; ML hyperparameters are "
-            f"baked into the SS JSON at generation time.")
 
     # =========================================================================
     # Utility Methods

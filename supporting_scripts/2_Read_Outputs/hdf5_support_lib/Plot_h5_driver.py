@@ -76,6 +76,20 @@ def _load_observation_data(obs_dir=None, obs_csv=None):
     # orchestrator in the harmonized schema station_id/lat/lon/parameter/
     # year/month/day/minute/value/units/source). Resolve which one is present.
     _grqa_obs_path = _grqa_stn_path = None
+    # The observation folder name changed when the multi-source pipeline
+    # arrived (grqa_clipped_data -> obs_clipped_data). A path baked into an
+    # older report snippet may name the other one: look for a sibling folder
+    # that actually holds observations before giving up.
+    if obs_dir and not os.path.isdir(obs_dir):
+        _parent = os.path.dirname(os.path.normpath(obs_dir))
+        for _alt in ("obs_clipped_data", "grqa_clipped_data"):
+            _cand = os.path.join(_parent, _alt)
+            if os.path.isdir(_cand) and (
+                    os.path.isfile(os.path.join(_cand, "observations_all_sources.csv"))
+                    or os.path.isfile(os.path.join(_cand, "grqa_clipped_observations.csv"))):
+                print(f"  Observation dir not found: {obs_dir}\n  -> using {_cand}")
+                obs_dir = _cand
+                break
     if obs_dir and os.path.isdir(obs_dir):
         _g = os.path.join(obs_dir, 'grqa_clipped_observations.csv')
         _m = os.path.join(obs_dir, 'observations_all_sources.csv')

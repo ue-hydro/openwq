@@ -18,6 +18,8 @@
 #include "OpenWQ_hostModelConfig.hpp"
 #include <chrono>     // OPTIMIZED (perf): time the thread-local expression build
 #include <iostream>
+#include <algorithm>  // std::transform (per-species SS scale names)
+#include <cctype>
 
 
 // Constructor
@@ -446,6 +448,32 @@ void OpenWQ_wqconfig::cache_runtime_flags()
         cached_num_chem = CH_model->PHREEQC->num_chem;
         cached_chem_species_list_ptr = &(CH_model->PHREEQC->chem_species_list);
     }
+    // species now known -> bind any per-species SS load-scale overrides
+    resolve_ss_scale_species();
+}
+
+/* #################################################
+// Hybrid-ML Layer 1: bind per-species SS load-scale overrides (ML_SCALE keyed
+// by species name) to species indices. Safe to call any time; a no-op until
+// the species list is cached. Pointers into the unordered_map stay valid.
+################################################# */
+void OpenWQ_wqconfig::resolve_ss_scale_species(){
+    ss_scale_chem.clear();
+    if (cached_chem_species_list_ptr == nullptr) return;       // not yet known
+    const std::vector<std::string>& names = *cached_chem_species_list_ptr;
+    ss_scale_chem.assign(names.size(), nullptr);
+    unsigned int n_hit = 0;
+    for (size_t i = 0; i < names.size(); i++) {
+        std::string up = names[i];
+        std::transform(up.begin(), up.end(), up.begin(), ::toupper);
+        auto it = ss_scale_by_species.find(up);
+        if (it != ss_scale_by_species.end()) { ss_scale_chem[i] = &(it->second); n_hit++; }
+    }
+    ss_scale_resolved = true;
+    if (!ss_scale_by_species.empty())
+        std::cout << "<OpenWQ> SS ML_SCALE: per-species load scale bound for "
+                  << n_hit << " of " << ss_scale_by_species.size()
+                  << " listed species (others use the '*' / default scale)" << std::endl;
 }
 
 /***********************************************

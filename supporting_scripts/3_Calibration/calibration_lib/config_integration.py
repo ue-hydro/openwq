@@ -604,7 +604,7 @@ def get_observation_period(model_config: Dict[str, Any],
     """
     import pandas as pd
     _log = log or (lambda *a, **k: None)
-    source = model_config.get("observation_data_source", "skip")
+    source = _primary_obs_source(model_config)
     dd = None      # primary-only obs → slider range + in-window count
     dd_all = None  # ALL obs (primary + secondary) → per-species coverage lanes
 
@@ -643,27 +643,16 @@ def get_observation_period(model_config: Dict[str, Any],
 
     # 2) Fallback: the raw clipped GRQA / user observation CSV.
     try:
-        if dd is None and source == "grqa":
-            dir2save = model_config.get('dir2save_input_files')
-            if not dir2save:
-                exe = model_config.get('executable_path', '')
-                dir2save = os.path.dirname(os.path.abspath(exe)) if exe else None
-            if dir2save:
-                obs_csv = os.path.join(dir2save, 'openwq_in',
-                                       'grqa_clipped_data',
-                                       'grqa_clipped_observations.csv')
-                if os.path.isfile(obs_csv):
-                    df = pd.read_csv(obs_csv)
-                    col = ('obs_date' if 'obs_date' in df.columns
-                           else ('datetime' if 'datetime' in df.columns
-                                 else None))
-                    spc = ('model_species' if 'model_species' in df.columns
-                           else ('species' if 'species' in df.columns else None))
-                    if col:
-                        dd = pd.DataFrame({
-                            'datetime': pd.to_datetime(df[col], errors='coerce'),
-                            'species': (df[spc].astype(str) if spc else 'all'),
-                        }).dropna(subset=['datetime'])
+        if dd is None and source not in ("user_csv", "skip"):
+            # basin-clipped observations of the model-config step (any layout)
+            df = load_clipped_obs_frame(model_config, _log)
+            if df is not None and len(df):
+                dt = pd.to_datetime(pd.DataFrame({
+                    'year': df['year'], 'month': df['month'].replace(0, 1),
+                    'day': df['day'].replace(0, 1)}), errors='coerce')
+                dd = pd.DataFrame({'datetime': dt,
+                                   'species': df['parameter'].astype(str)}
+                                  ).dropna(subset=['datetime'])
         elif dd is None and source == "user_csv":
             csv_path = model_config.get('user_observation_csv')
             if csv_path and os.path.isfile(csv_path):
@@ -940,6 +929,62 @@ def get_observation_dates_by_reach(model_config: Dict[str, Any],
         return {}
 
 
+def _obs_sources_lib():
+    """Import ``Gen_Observation_Sources`` from the openWQ clone's
+    config_support_lib (or the flat hermetic HPC bundle) — the module that owns
+    the clipped-observation layout."""
+    import importlib
+    this_dir = os.path.dirname(os.path.abspath(__file__))
+    for cand in (os.path.normpath(os.path.join(this_dir, '..', '..', '1_Model_Config', 'config_support_lib')),
+                 os.path.normpath(os.path.join(this_dir, '..', 'config_support_lib'))):
+        if os.path.isfile(os.path.join(cand, 'Gen_Observation_Sources.py')):
+            if cand not in sys.path:
+                sys.path.insert(0, cand)
+            break
+    return importlib.import_module('Gen_Observation_Sources')
+
+
+def _primary_obs_source(model_config: Dict[str, Any]) -> str:
+    """'user_csv' when only a user CSV is selected, else the first data source
+    of ``observation_data_sources`` (or the legacy singular
+    ``observation_data_source``), else 'skip'."""
+    sel = model_config.get('observation_data_sources')
+    if isinstance(sel, str):
+        sel = [sel]
+    sel = [str(x).strip().lower() for x in (sel or []) if str(x).strip()]
+    if not sel:
+        return (model_config.get('observation_data_source') or 'skip').strip().lower()
+    dk = [x for x in sel if x not in ('user_csv', 'skip')]
+    return 'user_csv' if ('user_csv' in sel and not dk) else (dk[0] if dk else 'skip')
+
+
+def _dir2save(model_config: Dict[str, Any]):
+    d = model_config.get('dir2save_input_files')
+    if not d:
+        exe = model_config.get('executable_path', '')
+        d = os.path.dirname(os.path.abspath(exe)) if exe else None
+    return d
+
+
+def load_clipped_obs_frame(model_config: Dict[str, Any], log=None):
+    """The basin-clipped observations the model-config step wrote for this run
+    (``openwq_in/obs_clipped_data/`` or the legacy ``grqa_clipped_data/``) as
+    one harmonized frame — ``station_id, lat, lon, parameter, year, month,
+    day, minute, value, units, source`` — or None. Every calibration consumer
+    (setup-report period + station map, objective CSV, results-report map)
+    reads observations through this so the on-disk layout is decided in ONE
+    place (Gen_Observation_Sources)."""
+    _log = log or (lambda *a, **k: None)
+    d = _dir2save(model_config)
+    if not d:
+        return None
+    try:
+        return _obs_sources_lib().load_clipped_observations(d)
+    except Exception as exc:
+        _log(f"Could not load clipped observations: {exc}")
+        return None
+
+
 def get_station_locations(model_config: Dict[str, Any],
                           work_dir: Optional[str] = None,
                           log=None) -> list:
@@ -949,7 +994,8 @@ def get_station_locations(model_config: Dict[str, Any],
     monitoring station available to the calibration — read straight from the
     data the model-config step already clipped (no re-download):
 
-      * ``grqa``     → ``grqa_clipped_stations.csv`` (``lat_wgs84``/``lon_wgs84``)
+      * data sources → the basin-clipped observations (any layout, via
+        :func:`load_clipped_obs_frame`)
       * ``user_csv`` → the user CSV's lat/lon columns (deduplicated by site)
 
     Best-effort: returns ``[]`` when coordinates can't be found, in which case
@@ -957,29 +1003,22 @@ def get_station_locations(model_config: Dict[str, Any],
     """
     import pandas as pd
     _log = log or (lambda *a, **k: None)
-    src = (model_config.get('observation_data_source') or 'skip').strip().lower()
+    src = _primary_obs_source(model_config)
 
     def _num(s):
         return pd.to_numeric(s, errors='coerce')
 
     try:
-        if src == 'grqa':
-            dir2save = model_config.get('dir2save_input_files')
-            if not dir2save:
-                exe = model_config.get('executable_path', '')
-                dir2save = (os.path.dirname(os.path.abspath(exe))
-                            if exe else None)
-            if not dir2save:
+        if src not in ('user_csv', 'skip'):
+            # one marker per station of the basin-clipped observations
+            df = load_clipped_obs_frame(model_config, _log)
+            if df is None or not len(df):
                 return []
-            stn_csv = os.path.join(dir2save, 'openwq_in', 'grqa_clipped_data',
-                                   'grqa_clipped_stations.csv')
-            if not os.path.isfile(stn_csv):
-                return []
-            df = pd.read_csv(stn_csv)
-            lat = _num(df.get('lat_wgs84'))
-            lon = _num(df.get('lon_wgs84'))
-            name = (df['site_name'] if 'site_name' in df.columns
-                    else df.get('site_id', pd.Series(['']*len(df))))
+            _agg = df.groupby('station_id').agg(lat=('lat', 'median'),
+                                                lon=('lon', 'median')).reset_index()
+            lat = _num(_agg['lat'])
+            lon = _num(_agg['lon'])
+            name = _agg['station_id'].astype(str)
         elif src == 'user_csv':
             csv_path = model_config.get('user_observation_csv')
             if not csv_path or not os.path.isfile(csv_path):
@@ -1470,12 +1509,9 @@ def prepare_multisource_calibration_csv(model_config: Dict[str, Any],
     if not dir2save:
         return None
 
-    merged_csv = os.path.join(dir2save, 'openwq_in', 'obs_clipped_data',
-                              'observations_all_sources.csv')
-    if not os.path.isfile(merged_csv):
+    df = load_clipped_obs_frame(model_config, _log)   # any on-disk layout
+    if df is None:
         return None
-
-    df = pd.read_csv(merged_csv)
     if df.empty:
         _log("Merged multi-source observations CSV is empty.")
         return None

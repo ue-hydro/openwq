@@ -37,7 +37,7 @@ requests>=2.25.0
 #       (set EARTHENGINE_PROJECT to your Google Cloud project id if prompted).
 #   * cdsapi : the legacy "copernicus" (ESA CCI) LULC source, auto-downloaded
 #       from the Copernicus Climate Data Store (needs a ~/.cdsapirc API key).
-# Neither is needed for the other ss_method options (load_from_csv, ml_model).
+# Neither is needed for the other ss_method options (load_from_csv).
 #
 # NOTE: earthengine-api >= 1.0 requires Python >= 3.10 (its CLI uses `str | None`
 # syntax). On Python 3.9 (e.g. the anaconda base env) pin to the last 0.1.x line
@@ -46,11 +46,6 @@ requests>=2.25.0
 earthengine-api>=1.0.0; python_version >= "3.10"
 earthengine-api>=0.1.380,<1.0.0; python_version < "3.10"
 cdsapi>=0.6.1
-
-# Machine learning (for ML-based source/sink)
-scikit-learn>=1.0.0
-xgboost>=1.5.0
-joblib>=1.1.0
 
 # Sensitivity analysis (optional but recommended)
 SALib>=1.4.0

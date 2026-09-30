@@ -177,8 +177,8 @@ def _validate_observation_csv(path: str, obs_source: str) -> str:
             "yet.\n"
             "Run your MODEL-CONFIG script once first — it clips GRQA to the "
             "basin and writes:\n"
-            "    <dir2save_input_files>/openwq_in/grqa_clipped_data/"
-            "grqa_clipped_observations.csv\n"
+            "    <dir2save_input_files>/openwq_in/obs_clipped_data/"
+            "observations_all_sources.csv\n"
             "The calibration then reshapes that automatically (no "
             "re-download).\n\n"
             "Alternatively, set in your model config:\n"
@@ -999,6 +999,7 @@ def run_calibration(
 
     start_eval = 0
     history = []
+    state = None
 
     if resume and checkpoint_mgr.checkpoint_exists():
         state = checkpoint_mgr.load_state()
@@ -1047,11 +1048,13 @@ def run_calibration(
                 work_dir, model_runner, obj_func)
             logger.info("Resume repair: %d scanned, %d re-run OK, %d still "
                         "failing.", _ns, _nr, _nb)
-            if len(_existing) < max_evaluations:
-                logger.warning("Only %d of %d target evaluations are present; "
-                               "resume is repair-only and will NOT add the "
-                               "remaining %d.", len(_existing), max_evaluations,
-                               max_evaluations - len(_existing))
+            _topup = len(_existing) < max_evaluations
+            if _topup:
+                logger.info("RESUME TOP-UP: %d of %d target evaluations present "
+                            "— after the repair the optimiser CONTINUES from the "
+                            "best point for the remaining %d evaluation(s).",
+                            len(_existing), max_evaluations,
+                            max_evaluations - len(_existing))
             _hist = _reconstruct_history_from_evals(work_dir)
             _valid = [h for h in _hist if h["objective"] < 1e10]
             _best = (min(_valid, key=lambda h: h["objective"])
@@ -1150,7 +1153,34 @@ def run_calibration(
                         "evaluation(s).", objective_function,
                         calibration_results["best_objective"],
                         calibration_results["n_evaluations"])
-            return calibration_results
+            if not _topup:
+                return calibration_results
+            # ---- TOP-UP: continue the search for the remaining budget. New
+            # evaluations are numbered after the existing folders; DDS restarts
+            # from the (repaired) global best with max_evals = the remainder,
+            # so its perturbation-radius schedule runs over the remainder
+            # (a valid DDS run, not bit-identical to an uninterrupted one).
+            start_eval = max(start_eval, len(_existing))
+            if _best and isinstance(_best.get("parameters"), dict) and all(
+                    n in _best["parameters"] for n in param_names):
+                _io = []
+                for _n, _t in zip(param_names, transforms):
+                    _v = float(_best["parameters"][_n])
+                    _io.append(np.log10(_v) if _t == "log" else _v)
+                initial_opt = np.array(_io)
+            elif state is not None and state.get("best_params_array") is not None:
+                initial_opt = state["best_params_array"]
+            if state is not None:
+                history = list(state.get("history", []) or [])
+            try:      # re-arm the per-eval "N/max + ETA" banner for the remainder
+                model_runner._calib_total = max_evaluations
+                model_runner._calib_done = len(_existing)
+            except Exception:
+                pass
+            logger.info("=" * 60)
+            logger.info("RESUME TOP-UP — continuing %s from evaluation %d to %d",
+                        algorithm, start_eval, max_evaluations)
+            logger.info("=" * 60)
         else:
             logger.info("--resume requested but no existing evaluations were "
                         "found — starting a fresh calibration run.")
@@ -1489,7 +1519,9 @@ def run_calibration(
         eval_num, objective, params_array = entry[0], entry[1], entry[2]
         chain = entry[3] if len(entry) > 3 else None
         hist_entry = {
-            "eval_id": int(eval_num),
+            # resumed runs: the optimizer numbers from 0 again, the eval
+            # FOLDERS continue from start_eval -> keep ids == folder numbers
+            "eval_id": int(eval_num) + int(start_eval),
             "objective": float(objective),
             "parameters": {
                 name: ParameterHandler.transform_to_real(val, transforms[i])
@@ -1500,6 +1532,19 @@ def run_calibration(
             "chain": (int(chain) if chain is not None else None),
         }
         calibration_history.append(hist_entry)
+    if start_eval > 0:
+        # Resumed / topped-up run: prepend the evaluations that already existed
+        # (rebuilt from their folders) so the history, convergence plot and
+        # evaluation count describe the WHOLE run, not just the continuation.
+        try:
+            _prev = [h for h in _reconstruct_history_from_evals(work_dir)
+                     if int(h.get("eval_id", -1)) < int(start_eval)]
+            calibration_history = [{
+                "eval_id": int(h["eval_id"]), "objective": float(h["objective"]),
+                "parameters": dict(h.get("parameters") or {}),
+                "timestamp": 0, "chain": None} for h in _prev] + calibration_history
+        except Exception as _e:
+            logger.warning(f"Could not merge the pre-resume evaluations into the history: {_e}")
 
     with open(results_dir / "calibration_history.json", 'w') as f:
         json.dump(calibration_history, f, indent=2)

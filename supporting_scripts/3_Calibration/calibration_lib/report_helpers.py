@@ -1037,7 +1037,7 @@ def build_editable_param_table(parameters: List[Dict],
         <input type="checkbox" class="groupToggleAll" checked
                style="accent-color:var(--primary);"/>
     </th>
-    <th>Parameter</th>
+    <th>Parameter (lumped, no regionalization)</th>
     <th style="text-align:right;">Initial</th>
     <th style="text-align:right;">Min</th>
     <th style="text-align:right;">Max</th>

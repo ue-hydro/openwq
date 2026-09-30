@@ -1341,8 +1341,10 @@ def generate_interactive_setup(
         except Exception as _e:
             logger.warning(f"Could not discover cell dimensions: {_e}")
             _cell_dims = None
+        _rt_default = _runtime_default_for_this_machine(
+            container_config.get("container_runtime", "docker"))
         H.append(_build_interactive_settings_section(
-            container_config.get("container_runtime", "docker"),
+            _rt_default,
             hostmodel=model_config.get("hostmodel", ""),
             cell_dims=_cell_dims))
         H.append('</div>')
@@ -1532,8 +1534,34 @@ def generate_interactive_setup(
         # ── Tab: Machine Learning (hybrid physics–ML — all optional, OFF by
         # default; with no rows the run script is byte-identical pure physics) ──
         H.append('<div class="tab-panel" data-tab="ml">')
-        H.append(_build_interactive_ml_section(module_parameters,
-                                               module_selections))
+        # The model's species as a LIST (chemical_species may be "all" = every
+        # species of the BGC framework -> read from the baseline run).
+        try:
+            try:
+                from . import scenarios as _scn_sp
+            except ImportError:                          # pragma: no cover
+                import scenarios as _scn_sp
+            _species_resolved = _scn_sp.resolve_model_species(model_config)
+        except Exception:
+            _cs = model_config.get("chemical_species", [])
+            _species_resolved = list(_cs) if isinstance(_cs, (list, tuple)) else []
+        # Layer-1 attribute table: auto-built from the domain's shapefile +
+        # attribute rasters (ml_attributes) so a regionalize row is
+        # self-service; absent/failed -> the row falls back to manual paths.
+        _ml_attr = None
+        try:
+            try:
+                from . import ml_attributes as _mla
+            except ImportError:                          # pragma: no cover
+                import ml_attributes as _mla
+            _ml_attr = _mla.build_attribute_table(
+                model_config, os.path.join(str(calibration_work_dir), "ml_attributes"))
+        except Exception as _e:
+            logger.warning(f"Layer-1 attribute table not built: {_e}")
+            _ml_attr = None
+        H.append(_build_interactive_ml_section(
+            module_parameters, module_selections, ml_attr=_ml_attr,
+            chemical_species=_species_resolved))
         H.append('</div>')
 
         # ── Tab: Execution ──
@@ -1544,7 +1572,7 @@ def generate_interactive_setup(
         _hpc_defaults = _load_hpc_settings(hpc_settings_path)
         H.append('<div class="tab-panel" data-tab="execution">')
         H.append(_build_interactive_execution_section(
-            container_config.get("container_runtime", "docker"),
+            _rt_default,
             hpc_defaults=_hpc_defaults))
         H.append('</div>')
 
@@ -2301,7 +2329,6 @@ def generate_interactive_setup(
 </div>
 </div>
 """)
-
         H.append('</div>')  # script-pane
         H.append('</div>')  # panes-row
 
@@ -2360,8 +2387,8 @@ def generate_interactive_setup(
             model_chain_paths=model_chain_paths,
             default_calibration_period=default_calibration_period,
             default_spinup_period=default_spinup_period,
-            chemical_species=(model_config.get("chemical_species", [])
-                              if isinstance(model_config, dict) else []),
+            chemical_species=_species_resolved,
+            ml_attr=_ml_attr,
         ))
 
         H.append("</body></html>")
@@ -2491,6 +2518,36 @@ def _discover_cell_dims(output_dir, species_list=None):
         ny = max(ny, len({int(round(v)) for v in xyz[1]}))
         nz = max(nz, len({int(round(v)) for v in xyz[2]}))
     return (nx, ny, nz)
+
+
+def _runtime_default_for_this_machine(configured: str) -> str:
+    """Container runtime the setup report should pre-select.
+
+    The configured value (model config / HPC settings) is a hint; what
+    actually decides is the machine the report is generated on, using the
+    SAME rule as the run script's pre-flight check: a machine with `docker`
+    and no `apptainer`/`singularity` is a local Docker machine, a machine with
+    Apptainer and no Docker is an HPC node. The HPC deploy snippet re-points
+    the run script to Apptainer anyway, so a local report never needs to
+    pre-select it. Otherwise the saved run script fails its pre-flight check
+    with a runtime MISMATCH on the first run.
+    """
+    import shutil as _sh
+    cfg = str(configured or "docker").strip().lower()
+    if cfg not in ("docker", "apptainer"):
+        cfg = "docker"
+    docker_ok = _sh.which("docker") is not None
+    apptainer_ok = (_sh.which("apptainer") or _sh.which("singularity")) is not None
+    if cfg == "apptainer" and not apptainer_ok and docker_ok:
+        logger.info("Container runtime pre-selected as Docker (this machine has "
+                    "`docker` and no `apptainer`/`singularity`; the configured "
+                    "default was 'apptainer').")
+        return "docker"
+    if cfg == "docker" and not docker_ok and apptainer_ok:
+        logger.info("Container runtime pre-selected as Apptainer (this machine has "
+                    "`apptainer`/`singularity` and no `docker`).")
+        return "apptainer"
+    return cfg
 
 
 def _build_interactive_settings_section(container_runtime_default: str = "docker",
@@ -4316,12 +4373,21 @@ def _build_interactive_parameters_section_grouped(
         H.append(f'<summary>{label} '
                  f'<span class="group-badge">{count}</span></summary>')
         H.append('<div class="module-content">')
+        # Every parameter here is LUMPED: one value for the whole domain,
+        # calibrated directly by the optimizer. A per-cell field learned
+        # from catchment attributes (Layer 1) is set up in the Machine
+        # Learning tab instead, and replaces the lumped value there.
+        _note = ('The parameters below are <b>lumped</b>: one value applies '
+                 'to the whole domain and is calibrated directly. To let a '
+                 'parameter vary in space as a function of catchment '
+                 'attributes (regionalization, Layer&nbsp;1), add it in the '
+                 '<b>Machine Learning</b> tab instead; a regionalized '
+                 'parameter must not also be ticked here.')
         if has_disabled:
-            H.append(rh.build_highlight_box(
-                'Grayed-out parameters belong to sub-cycles for which '
-                'no observation data is available, so they cannot be '
-                'calibrated.',
-                'warning'))
+            _note += (' Grayed-out parameters belong to sub-cycles for which '
+                      'no observation data is available, so they cannot be '
+                      'calibrated.')
+        H.append(rh.build_highlight_box(_note, 'warning' if has_disabled else 'info'))
         H.append(rh.build_editable_param_table(
             group_params, idx_offset=start_idx))
         H.append('</div></details>')
@@ -4330,7 +4396,8 @@ def _build_interactive_parameters_section_grouped(
     return '\n'.join(H)
 
 
-def _ml_option_lists(module_parameters, module_selections=None):
+def _ml_option_lists(module_parameters, module_selections=None,
+                     chemical_species=None):
     """Build the Machine-Learning tab's dropdown options AND the lookup maps the
     run script needs to locate each target in the openWQ JSON. Returns
     ``(param_opts, targets, param_info, target_info)`` where:
@@ -4357,7 +4424,10 @@ def _ml_option_lists(module_parameters, module_selections=None):
         # Skip already-expanded regionalization sub-params (they carry a parent).
         if nm and not p.get("regionalize_of"):
             param_opts.append(nm)
-            param_info[nm] = {"path": p.get("path"), "model_index": mi}
+            _b = p.get("bounds")
+            param_info[nm] = {"path": p.get("path"), "model_index": mi,
+                              "initial": p.get("initial"),
+                              "bounds": (list(_b) if _b is not None else None)}
         # BGC closures attach per TRANSFORMATION.
         fw, rx, rn = p.get("_framework"), p.get("_reaction"), p.get("_reaction_num")
         if fw and rx and rn is not None:
@@ -4450,15 +4520,29 @@ def _ml_option_lists(module_parameters, module_selections=None):
         target_info[tk] = {"kind": "ss", "model_index": i}
         nm = f"{_mtag(i)}SINK_SOURCE:load_scale"
         param_opts.append(nm)
+        # per-cell multiplier on every source/sink load: 1 = the configured
+        # loads; the bounds give the report's Layer-1 auto-fill a sane range.
         param_info[nm] = {"module": "ss", "model_index": i,
-                          "path": ["SINK_SOURCE_ML", "ML_SCALE"]}
+                          "path": ["SINK_SOURCE_ML", "ML_SCALE"],
+                          "initial": 1.0, "bounds": [0.1, 10.0]}
+        # ... and one per species (its loads only; the all-species scale, if
+        # also set, applies to the remaining species). openWQ reads ML_SCALE
+        # keyed by species name; the handler merges the groups per evaluation.
+        for _sp in (chemical_species or []):
+            nm_sp = f"{_mtag(i)}SINK_SOURCE:load_scale:{_sp}"
+            param_opts.append(nm_sp)
+            param_info[nm_sp] = {"module": "ss", "model_index": i,
+                                 "path": ["SINK_SOURCE_ML", "ML_SCALE"],
+                                 "species": str(_sp),
+                                 "initial": 1.0, "bounds": [0.1, 10.0]}
 
     param_opts = sorted(dict.fromkeys(param_opts))
     targets = sorted(dict.fromkeys(targets))
     return param_opts, targets, param_info, target_info
 
 
-def _build_interactive_ml_section(module_parameters, module_selections=None):
+def _build_interactive_ml_section(module_parameters, module_selections=None,
+                                  ml_attr=None, chemical_species=None):
     """The 'Machine Learning (optional)' tab — all three hybrid physics–ML
     layers, EMPTY (OFF) by default. With no rows added, ``collectFormState``
     returns empty ML config and the generated run script is byte-identical to a
@@ -4466,7 +4550,7 @@ def _build_interactive_ml_section(module_parameters, module_selections=None):
     the user via JS (``addMlRow``); dropdowns are populated from the extracted
     parameters / reactions so only valid targets can be chosen."""
     _param_opts, _targets, _pinfo, _tinfo = _ml_option_lists(
-        module_parameters, module_selections)
+        module_parameters, module_selections, chemical_species)
     note = rh.build_highlight_box(
         "<strong>Everything here is optional and OFF by default.</strong> "
         "openWQ layers machine learning on top of the physics under your "
@@ -4578,14 +4662,67 @@ def _build_interactive_ml_section(module_parameters, module_selections=None):
       </div>
     </details>"""
 
+    # Layer-1 attribute table (auto-built by ml_attributes at report time):
+    # status line + a <datalist> so the Attribute cell offers real columns.
+    _attr_html, _datalist = "", ""
+    if isinstance(ml_attr, dict) and ml_attr.get("path"):
+        _cats = ml_attr.get("categorical") or {}
+        _nums = ml_attr.get("numeric") or {}
+        _parts = []
+        for _c, _d in _cats.items():
+            _cls = _d.get("classes") or {}
+            _lab = ", ".join(
+                f"{_k}{(' ' + html_lib.escape(str(_v.get('name')))) if _v.get('name') else ''}"
+                f" &times;{_v.get('n', 0)}" for _k, _v in list(_cls.items())[:8])
+            _parts.append(f"<code>{_c}</code> ({len(_cls)} class"
+                          f"{'es' if len(_cls) != 1 else ''}: {_lab}"
+                          f"{', &hellip;' if len(_cls) > 8 else ''})")
+        _numcols = [c for c in _nums if not c.endswith("_frac")]
+        if _numcols:
+            _parts.append("numeric: " + ", ".join(f"<code>{c}</code>" for c in _numcols))
+        _n, _nm, _nin = (ml_attr.get("n_units"), ml_attr.get("n_model_units"),
+                         ml_attr.get("n_units_in_model_output"))
+        _warn = ""
+        if _nm == 1:
+            _warn = ("<br><strong style=\"color:#d97706;\">&#9888; This model has a "
+                     "single spatial unit &mdash; regionalization has no effect "
+                     "on this domain.</strong>")
+        elif _nin is not None and _nin == 0:
+            _warn = ("<br><strong style=\"color:#d97706;\">&#9888; None of the unit "
+                     "ids were found in the baseline model output &mdash; check "
+                     "the shapefile mapping key.</strong>")
+        _notes = "; ".join(html_lib.escape(str(x)) for x in (ml_attr.get("notes") or [])[:3])
+        _attr_html = (
+            "<br><strong>Attribute table auto-built:</strong> "
+            f"{_n} spatial units (id <code>{html_lib.escape(str(ml_attr.get('id_col')))}</code>"
+            + (f", {_nin} found in the model output" if _nin is not None else "") + ")"
+            + (" &middot; " + " &middot; ".join(_parts) if _parts else "")
+            + f"<br><code style=\"font-size:.75rem;\">{html_lib.escape(str(ml_attr['path']))}</code>"
+            + (f"<br><span style=\"opacity:.8;\">{_notes}</span>" if _notes else "")
+            + _warn
+            + "<br>The Attribute / Default / Classes cells of a new row are "
+              "<strong>pre-filled</strong> from this table and the parameter's own "
+              "bounds &mdash; edit them if you want different classes or ranges.")
+        _datalist = ("<datalist id=\"mlAttrList\">" + "".join(
+            f"<option value=\"{html_lib.escape(str(c))}\">"
+            for c in (ml_attr.get("columns") or []) if not str(c).endswith("_name"))
+            + "</datalist>")
+    else:
+        _attr_html = ("<br><em>No attribute table could be auto-built for this "
+                      "domain (needs the basin/catchment shapefile + "
+                      "<code>attributes/**/*.tif</code> rasters next to it). Point "
+                      "<strong>Attribute table</strong> at your own CSV "
+                      "(<code>id</code> column + one column per attribute).</em>")
     reg = _panel(
         "mlreg", "Layer 1A — Parameter regionalization (dPL, DDS-calibrated)",
         "Replace a physical parameter with a low-dimensional "
         "attribute&rarr;parameter mapping that DDS calibrates (expanded to a "
-        "per-cell field each evaluation). Per-class bounds go in the Classes "
-        "box as JSON, e.g. <code>{\"sand\":[1e-4,1e-2],\"clay\":[1e-4,1e-2]}</code>. "
-        "Leave <em>Mapping source</em> blank to auto-use the eval's "
-        "<code>openwq_out/HDF5/</code>.",
+        "per-cell field each evaluation). <em>per_class</em> = one value per "
+        "attribute class (e.g. land class); <em>regression</em> = intercept + "
+        "coefficients on standardized numeric attributes (z-scored across "
+        "cells, so the bounds are comparable). Per-class / coefficient bounds "
+        "are the JSON in the last cell. Leave <em>Mapping source</em> blank to "
+        "auto-use the eval's <code>openwq_out/HDF5/</code>." + _attr_html + _datalist,
         ["Parameter", "Rung", "Attribute", "Default", "Attribute table",
          "Mapping source (opt.)", "Classes / coeffs (JSON)"],
         "Regionalize a parameter")
@@ -4606,11 +4743,27 @@ def _build_interactive_ml_section(module_parameters, module_selections=None):
         ["Target species", "Compartment", "Chem", "Sorp",
          "Mode", "Alpha", "Max corr.", "Weights (pretrained)"],
         "Add a species closure")
+    _rt_files = (ml_attr or {}).get("runtime_files") if isinstance(ml_attr, dict) else None
+    _rt_note = ""
+    if _rt_files:
+        _rt_note = ("<br><strong>Prepared runtime nets found</strong> (a new row is pre-filled "
+                    "with the first): " + ", ".join(
+                        f"<code>{html_lib.escape(str(r.get('name')))}</code>"
+                        f" ({html_lib.escape(', '.join(r.get('features') or []))}"
+                        f"{(', R&sup2; %.2f' % r['r2']) if r.get('r2') is not None else ''})"
+                        for r in _rt_files[:6]))
     rt = _panel(
         "mlrt", "Layer 1B — Runtime parameter NN (Mode B)",
-        "openWQ evaluates a trained network at start-up to fill a per-cell "
-        "parameter field. Needs trained weights + per-cell attributes files "
-        "from <code>ml_regionalization.py</code>.",
+        "openWQ evaluates a <em>pretrained</em> network at start-up to fill a per-cell "
+        "parameter field (fixed during the calibration). Prepare the two files with "
+        "<code>ml_regionalization.prepare_runtime_param(attribute_table, targets, "
+        "features, reach_mapper, default, out_dir, name)</code> &mdash; it trains a "
+        "small net on a per-cell target (typically the field of a Layer-1A "
+        "calibration: <code>_ml_regionalize_&lt;param&gt;.json &rarr; cell_values</code>) "
+        "and writes <code>_ml_runtime_&lt;name&gt;_weights.json</code> + "
+        "<code>_ml_runtime_&lt;name&gt;_attributes.json</code> into this calibration's "
+        "<code>ml_attributes/</code> folder; regenerate this report and the row is "
+        "pre-filled." + _rt_note,
         ["Parameter", "Weights file", "Attributes file", "Default"],
         "Add a runtime NN")
 
@@ -4842,7 +4995,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
                           model_chain_paths=None,
                           default_calibration_period=None,
                           default_spinup_period=None,
-                          chemical_species=None):
+                          chemical_species=None,
+                          ml_attr=None):
     """Build the JavaScript for the interactive setup report."""
     import json as json_mod
     # Absolute path to the openWQ "3_Calibration" folder (the parent of
@@ -4864,7 +5018,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     # Machine-Learning tab: dropdown option lists (parameter names + closure
     # targets) + the location maps the run script uses to inject each block.
     _ml_param_opts, _ml_targets, _ml_pinfo, _ml_tinfo = \
-        _ml_option_lists(module_parameters, module_selections)
+        _ml_option_lists(module_parameters, module_selections, chemical_species)
     ml_param_opts_json = rh._js(_ml_param_opts)
     ml_targets_json = rh._js(_ml_targets)
     ml_param_info_json = rh._js(_ml_pinfo)
@@ -4872,6 +5026,23 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     # Layer-2 per-species derivative closures target a SPECIES (not a reaction).
     _ml_species = list(chemical_species or [])
     ml_species_json = rh._js(_ml_species)
+    # Layer-1 attribute table summary (or null): path, columns, classes per
+    # categorical column, numeric ranges, and the attribute a new row starts with.
+    _attr_bake = None
+    if isinstance(ml_attr, dict) and ml_attr.get("path"):
+        _cats = ml_attr.get("categorical") or {}
+        _nums = ml_attr.get("numeric") or {}
+        _da = (next((c for c, d in _cats.items() if len(d.get("classes") or {}) > 1), None)
+               or next(iter(_cats), None)
+               or next((c for c in _nums if not str(c).endswith("_frac")), ""))
+        _attr_bake = {"path": ml_attr["path"], "columns": ml_attr.get("columns") or [],
+                      "mapping_file": ml_attr.get("mapping_file"),
+                      "runtime_files": ml_attr.get("runtime_files") or [],
+                      "categorical": _cats, "numeric": _nums,
+                      "n_units": ml_attr.get("n_units"),
+                      "n_model_units": ml_attr.get("n_model_units"),
+                      "default_attr": _da}
+    ml_attr_json = rh._js(_attr_bake)
 
     # Observation + model simulation periods → power the calibration /
     # validation split slider in the Settings tab.  Computed by the caller
@@ -4920,6 +5091,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   var ML_PARAM_INFO = ''' + ml_param_info_json + r''';
   var ML_TARGET_INFO = ''' + ml_target_info_json + r''';
   var ML_SPECIES_OPTS = ''' + ml_species_json + r''';
+  var ML_ATTR_INFO = ''' + ml_attr_json + r''';
   var OBS_PERIOD = ''' + obs_period_json + r''';
   var SIM_PERIOD = ''' + sim_period_json + r''';
   var FORCING_PERIOD = ''' + forcing_period_json + r''';
@@ -5141,6 +5313,14 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       var cls = (f[6].value||'').trim();
       if (cls) { try { spec[(spec.rung==='regression')?'coeffs':'classes'] =
                          JSON.parse(cls); } catch(e) { spec._classes_raw = cls; } }
+      if (spec.rung === 'regression') {
+        // clamp the per-cell value to the parameter's own bounds; the
+        // attributes are standardized (z-scored) by the parameter handler.
+        var _pb = (ML_PARAM_INFO[key] || {}).bounds;
+        if (_pb && _pb.length === 2) { spec.lower = _pb[0]; spec.upper = _pb[1]; }
+        spec.attributes = (spec.attribute || '').split(',')
+          .map(function(a){ return a.trim(); }).filter(Boolean);
+      }
       // Bake the param LOCATION so the run script writes the per-cell map to the
       // right module file (BGC by default; TD/LE/TS carry path + module + key).
       var rpinfo = ML_PARAM_INFO[key] || {};
@@ -5148,6 +5328,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       if (rpinfo.module) spec.module = rpinfo.module;
       if (rpinfo.module_key) spec.module_key = rpinfo.module_key;
       if (rpinfo.ts_param) spec.ts_param = rpinfo.ts_param;
+      if (rpinfo.species) spec.species = rpinfo.species;   // SS scale of ONE species
       spec.model_index = rpinfo.model_index != null ? rpinfo.model_index : 0;
       s.ml_regionalize[key] = spec;
     });
@@ -5188,6 +5369,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
         attributes_filepath: (f[2].value||'').trim(),
         default: parseFloat(f[3].value),
         path: pinfo.path,
+        module: pinfo.module || 'bgc',
+        species: pinfo.species || null,   // SS scale of ONE species (null = all)
         model_index: pinfo.model_index != null ? pinfo.model_index : 0};
     });
 
@@ -6185,7 +6368,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('#    own python + compiled/geo deps, so it sidesteps both.  Needs conda or');
     L.push('#    mamba on PATH (module load it, or source your miniconda).  Package');
     L.push('#    renames vs requirements.txt: netCDF4 -> netcdf4, SALib -> salib.');
-    L.push('#  conda create -y -p "$HPC_BASE/calib_env" -c conda-forge python=3.11 numpy pandas scipy xarray h5py netcdf4 imageio geopandas shapely fiona pyproj rasterio pyogrio contextily matplotlib tqdm requests scikit-learn xgboost joblib salib jsonschema');
+    L.push('#  conda create -y -p "$HPC_BASE/calib_env" -c conda-forge python=3.11 numpy pandas scipy xarray h5py netcdf4 imageio geopandas shapely fiona pyproj rasterio pyogrio contextily matplotlib tqdm requests salib jsonschema');
     L.push('#    then set Modules-to-load to (adjust the conda.sh path for your install):');
     L.push('#  module load apptainer && source ~/miniconda3/etc/profile.d/conda.sh && conda activate "$HPC_BASE/calib_env"');
     L.push('EOF');
@@ -6705,6 +6888,36 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     return '<select class="ml-f">'+o+'</select>';
   }
   function _mlTxt(ph){ return '<input class="ml-f" type="text" placeholder="'+(ph||'')+'">'; }
+  // Layer-1 row auto-fill: classes / coefficient bounds from the auto-built
+  // attribute table + the parameter's own bounds (user edits are preserved).
+  function _mlRegClassesJSON(rung, attr, key){
+    var AI = (typeof ML_ATTR_INFO !== 'undefined' && ML_ATTR_INFO) ? ML_ATTR_INFO : {};
+    var pi = ML_PARAM_INFO[key] || {};
+    var b = pi.bounds, d = (pi.initial != null) ? pi.initial : null, lo, hi;
+    if (b && b.length === 2) { lo = b[0]; hi = b[1]; }
+    else if (d != null && d !== 0) { lo = d / 10; hi = d * 10; }
+    else return '';
+    if (rung === 'regression') {
+      var span = (hi - lo) / 2, o = {intercept: [lo, hi]};
+      (attr || '').split(',').forEach(function(a){ a = a.trim(); if (a) o[a] = [-span, span]; });
+      return JSON.stringify(o);
+    }
+    var cat = ((AI.categorical || {})[(attr || '').trim()] || {}).classes;
+    if (!cat) return '';
+    var o2 = {}; Object.keys(cat).forEach(function(c){ o2[c] = [lo, hi]; });
+    return JSON.stringify(o2);
+  }
+  function _mlRegAutofill(tr){
+    var f = tr.querySelectorAll('.ml-f'); if (f.length < 7) return;
+    var key = f[0].value, rung = f[1].value, attr = f[2].value;
+    var pi = ML_PARAM_INFO[key] || {};
+    if (pi.initial != null && (!f[3].value || f[3].dataset.auto === '1')) {
+      f[3].value = pi.initial; f[3].dataset.auto = '1'; }
+    if (!f[6].value || f[6].dataset.auto === '1') {
+      var j = _mlRegClassesJSON(rung, attr, key);
+      if (j) { f[6].value = j; f[6].dataset.auto = '1'; }
+    }
+  }
   function _mlNum(v,ph){ return '<input class="ml-f" type="number" step="any"'
       + (v!=null?' value="'+v+'"':'') + (ph?' placeholder="'+ph+'"':'') + '>'; }
   // Options filtered to a module (matrix "+ L1/L2" buttons pass the module kind
@@ -6737,14 +6950,19 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var body = document.getElementById(pid+'-body'); if (!body) return;
     var tr = document.createElement('tr'), h = '';
     if (pid === 'mlreg') {
+      var AI = (typeof ML_ATTR_INFO !== 'undefined' && ML_ATTR_INFO) ? ML_ATTR_INFO : null;
       h += '<td>'+_mlSelect(_mlParamsFor(moduleFilter))+'</td>';
       h += '<td><select class="ml-f"><option value="per_class">per_class</option>'
          + '<option value="regression">regression</option></select></td>';
-      h += '<td>'+_mlTxt('soil_class')+'</td>';
+      h += '<td><input class="ml-f" type="text" list="mlAttrList" value="'
+         + (AI && AI.default_attr ? AI.default_attr : '') + '" placeholder="soil_class"'
+         + ' title="pick an attribute column (comma-separate several for regression)"></td>';
       h += '<td>'+_mlNum(null,'0.0003')+'</td>';
-      h += '<td>'+_mlTxt('openwq_in/attributes.csv')+'</td>';
-      h += '<td>'+_mlTxt('openwq_out/HDF5/ (auto)')+'</td>';
-      h += '<td>'+_mlTxt('{"sand":[1e-4,1e-2],"clay":[1e-4,1e-2]}')+'</td>';
+      h += '<td><input class="ml-f" type="text" value="' + (AI && AI.path ? AI.path : '')
+         + '" placeholder="openwq_in/attributes.csv"></td>';
+      h += '<td><input class="ml-f" type="text" value="' + (AI && AI.mapping_file ? AI.mapping_file : '')
+         + '" placeholder="openwq_out/HDF5/ (auto)"></td>';
+      h += '<td>'+_mlTxt('{"1":[1e-4,1e-2],"10":[1e-4,1e-2]} (auto-filled)')+'</td>';
     } else if (pid === 'mlclo') {
       h += '<td>'+_mlSelect(ML_SPECIES_OPTS)+'</td>';
       h += '<td>'+_mlTxt('ALL')+'</td>';
@@ -6757,15 +6975,28 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       h += '<td>'+_mlNum(0.5)+'</td>';
       h += '<td>'+_mlTxt('(calibrated: leave blank)')+'</td>';
     } else {  // mlrt
+      var AI2 = (typeof ML_ATTR_INFO !== 'undefined' && ML_ATTR_INFO) ? ML_ATTR_INFO : null;
+      var RF = (AI2 && AI2.runtime_files && AI2.runtime_files.length) ? AI2.runtime_files[0] : null;
       h += '<td>'+_mlSelect(_mlParamsFor(moduleFilter))+'</td>';
-      h += '<td>'+_mlTxt('openwq_in/net.json')+'</td>';
-      h += '<td>'+_mlTxt('openwq_in/attr.json')+'</td>';
-      h += '<td>'+_mlNum(null,'0.0003')+'</td>';
+      h += '<td><input class="ml-f" type="text" value="' + (RF ? RF.weights : '') + '" placeholder="openwq_in/net.json"></td>';
+      h += '<td><input class="ml-f" type="text" value="' + (RF ? RF.attributes : '') + '" placeholder="openwq_in/attr.json"></td>';
+      h += '<td>'+_mlNum((RF && RF.default != null) ? RF.default : null,'0.0003')+'</td>';
     }
     h += '<td><button type="button" class="ml-btn" title="remove"'
        + ' onclick="removeMlRow(this)">✕</button></td>';
     tr.innerHTML = h;
     body.appendChild(tr);
+    if (pid === 'mlreg') {
+      // auto-fill Default + Classes from the parameter / attribute choice;
+      // typing in those cells switches them to manual.
+      var _rf = tr.querySelectorAll('.ml-f');
+      [_rf[3], _rf[6]].forEach(function(el){
+        el.addEventListener('input', function(){ el.dataset.auto = '0'; }); });
+      [_rf[0], _rf[1], _rf[2]].forEach(function(el){
+        el.addEventListener('change', function(){ _mlRegAutofill(tr); });
+        el.addEventListener('input',  function(){ _mlRegAutofill(tr); }); });
+      _mlRegAutofill(tr);
+    }
     // Live-preview: new fields refresh the script like the static form inputs.
     tr.querySelectorAll('.ml-f').forEach(function(el){
       el.addEventListener('change', updateScript);
