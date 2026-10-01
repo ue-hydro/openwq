@@ -2226,3 +2226,39 @@ def get_species_observation_availability(
             "details": f"Unknown source: {source}",
         }
     return result
+
+
+def _read_json_with_comments(path: str):
+    """openWQ JSON files may carry '//' comment lines (as the generator writes them)."""
+    txt = open(path).read()
+    body = "\n".join(l for l in txt.splitlines() if not l.strip().startswith("//"))
+    return json.loads(body)
+
+
+def resolve_model_species(model_config: Dict[str, Any]) -> List[str]:
+    """The model's species as a LIST. ``chemical_species`` may be the string
+    ``"all"`` (every species of the BGC framework): then read the baseline
+    run's ``openWQ_config.json`` initial conditions, else the master's output
+    species list. Used by the calibration and scenario reports."""
+    cs = model_config.get("chemical_species")
+    if isinstance(cs, (list, tuple)) and cs:
+        return [str(x) for x in cs]
+    base = str(model_config.get("dir2save_input_files") or "")
+    if base:
+        try:
+            cfg = _read_json_with_comments(os.path.join(base, "openwq_in", "openWQ_config.json"))
+            for comp in (cfg.get("BIOGEOCHEMISTRY_CONFIGURATION") or {}).values():
+                ic = ((comp or {}).get("INITIAL_CONDITIONS") or {}).get("DATA") or {}
+                if ic:
+                    return [str(k) for k in ic.keys()]
+        except Exception:
+            pass
+        try:
+            m = _read_json_with_comments(os.path.join(base, "openWQ_master.json"))
+            out = (m.get("OPENWQ_OUTPUT") or {}).get("CHEMICAL_SPECIES")
+            if isinstance(out, list) and out:
+                return [str(x) for x in out]
+        except Exception:
+            pass
+    return [] if not isinstance(cs, str) or cs.strip().lower() == "all" else [cs]
+

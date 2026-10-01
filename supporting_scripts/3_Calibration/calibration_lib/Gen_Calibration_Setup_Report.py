@@ -1537,11 +1537,7 @@ def generate_interactive_setup(
         # The model's species as a LIST (chemical_species may be "all" = every
         # species of the BGC framework -> read from the baseline run).
         try:
-            try:
-                from . import scenarios as _scn_sp
-            except ImportError:                          # pragma: no cover
-                import scenarios as _scn_sp
-            _species_resolved = _scn_sp.resolve_model_species(model_config)
+            _species_resolved = _ci.resolve_model_species(model_config)
         except Exception:
             _cs = model_config.get("chemical_species", [])
             _species_resolved = list(_cs) if isinstance(_cs, (list, tuple)) else []
