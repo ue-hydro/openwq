@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 360" font-family="'IBM Plex Mono','SFMono-Regular',ui-monospace,monospace" role="img" aria-label="Three cells with different soil classes each pass through one shared per-class mapping that returns their parameter theta; the DDS optimizer calibrates the three class values, independent of the number of cells.">
+  <defs>
+    <marker id="l1ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1c2430"/></marker>
+    <marker id="l1av" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6d28d9"/></marker>
+  </defs>
+  <rect x="1" y="1" width="998" height="358" rx="14" fill="#f7f8fa" stroke="#d7dde5"/>
+  <text x="100" y="30" text-anchor="middle" letter-spacing="1" font-size="12" fill="#5d6875">cell attributes</text>
+  <rect x="16" y="44"  width="168" height="44" rx="8" fill="#eef1f6" stroke="#d7dde5" stroke-width="1.5"/><text x="100" y="71"  text-anchor="middle" font-size="13" fill="#1c2430">HRU 1 · sand</text>
+  <rect x="16" y="108" width="168" height="44" rx="8" fill="#eef1f6" stroke="#d7dde5" stroke-width="1.5"/><text x="100" y="135" text-anchor="middle" font-size="13" fill="#1c2430">HRU 2 · clay</text>
+  <rect x="16" y="172" width="168" height="44" rx="8" fill="#eef1f6" stroke="#d7dde5" stroke-width="1.5"/><text x="100" y="199" text-anchor="middle" font-size="13" fill="#1c2430">HRU 3 · peat</text>
+  <rect x="300" y="44" width="252" height="172" rx="12" fill="#efe9fd" stroke="#6d28d9" stroke-width="2"/>
+  <text x="426" y="70"  text-anchor="middle" font-size="12" font-weight="600" letter-spacing="1.2" fill="#6d28d9">SHARED MAPPING  g(attr)</text>
+  <text x="426" y="90"  text-anchor="middle" font-size="11.5" fill="#5d6875">per-class · regression · NN</text>
+  <line x1="322" y1="102" x2="530" y2="102" stroke="#5d6875" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <text x="330" y="130" text-anchor="start" font-size="14" fill="#1c2430">sand → 0.02</text>
+  <text x="330" y="160" text-anchor="start" font-size="14" fill="#1c2430">clay → 0.05</text>
+  <text x="330" y="190" text-anchor="start" font-size="14" fill="#1c2430">peat → 0.20</text>
+  <text x="742" y="30" text-anchor="middle" letter-spacing="1" font-size="12" fill="#5d6875">per-cell parameter θ</text>
+  <rect x="646" y="44"  width="196" height="44" rx="8" fill="#ffffff" stroke="#d7dde5" stroke-width="1.5"/><text x="744" y="71"  text-anchor="middle" font-size="13" fill="#1c2430">θ(HRU 1) = 0.02</text>
+  <rect x="646" y="108" width="196" height="44" rx="8" fill="#ffffff" stroke="#d7dde5" stroke-width="1.5"/><text x="744" y="135" text-anchor="middle" font-size="13" fill="#1c2430">θ(HRU 2) = 0.05</text>
+  <rect x="646" y="172" width="196" height="44" rx="8" fill="#ffffff" stroke="#d7dde5" stroke-width="1.5"/><text x="744" y="199" text-anchor="middle" font-size="13" fill="#1c2430">θ(HRU 3) = 0.20</text>
+  <line x1="184" y1="66"  x2="296" y2="70"  stroke="#1c2430" stroke-width="2" marker-end="url(#l1ah)"/>
+  <line x1="184" y1="130" x2="296" y2="130" stroke="#1c2430" stroke-width="2" marker-end="url(#l1ah)"/>
+  <line x1="184" y1="194" x2="296" y2="190" stroke="#1c2430" stroke-width="2" marker-end="url(#l1ah)"/>
+  <line x1="552" y1="70"  x2="642" y2="66"  stroke="#1c2430" stroke-width="2" marker-end="url(#l1ah)"/>
+  <line x1="552" y1="130" x2="642" y2="130" stroke="#1c2430" stroke-width="2" marker-end="url(#l1ah)"/>
+  <line x1="552" y1="190" x2="642" y2="194" stroke="#1c2430" stroke-width="2" marker-end="url(#l1ah)"/>
+  <text x="870" y="134" text-anchor="start" font-size="12" fill="#5d6875">→ used in Φ,</text>
+  <text x="870" y="150" text-anchor="start" font-size="12" fill="#5d6875">per cell</text>
+  <path d="M426 300 L426 220" fill="none" stroke="#6d28d9" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#l1av)"/>
+  <rect x="286" y="300" width="280" height="42" rx="8" fill="none" stroke="#6d28d9" stroke-width="1.5"/>
+  <text x="426" y="326" text-anchor="middle" font-size="12.5" font-weight="600" fill="#6d28d9">DDS calibrates these few values</text>
+  <text x="700" y="322" text-anchor="start" font-size="12" fill="#5d6875">3 classes — not 1 per cell ⇒</text>
+  <text x="700" y="338" text-anchor="start" font-size="12" fill="#5d6875">trainable size independent of #cells</text>
+</svg>
