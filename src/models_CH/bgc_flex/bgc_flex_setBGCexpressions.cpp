@@ -17,6 +17,36 @@
 
 #include "models_CH/headerfile_CH.hpp"
 #include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_param: scalar->GLOBAL / object->SPATIAL
+#include <algorithm>
+#include <cctype>
+
+/* #################################################
+// Whole-identifier search inside a kinetics expression.
+// A plain std::string::find would match a short symbol inside a longer
+// one (parameter "T" inside "InTransfEq", "K" inside "K_NIT", species "N"
+// inside "NH4-N"), silently corrupting the expression. A symbol only
+// matches when it is not glued to identifier characters on either side.
+// '-' is deliberately NOT an identifier character: it is the minus
+// operator, and species names that contain it (NO3-N) are matched as a
+// whole because longer names are substituted first.
+################################################# */
+static inline bool bgc_is_ident_char(char c){
+    return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '.';
+}
+static size_t bgc_find_whole_symbol(
+    const std::string& text,
+    const std::string& name,
+    size_t from = 0){
+    size_t p = text.find(name, from);
+    while (p != std::string::npos){
+        const bool left_ok  = (p == 0) || !bgc_is_ident_char(text[p - 1]);
+        const size_t end    = p + name.size();
+        const bool right_ok = (end >= text.size()) || !bgc_is_ident_char(text[end]);
+        if (left_ok && right_ok) return p;
+        p = text.find(name, p + 1);
+    }
+    return std::string::npos;
+}
 
 
 /* #################################################
@@ -56,7 +86,6 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
         num_transf,
         index_cons,index_prod,           // indexed for consumed and produced chemical
         index_new_chemass_InTransfEq;    // interactive index to build index_new_chemass_InTransfEq
-    int index_i;                         // iteractive index (can be zero because it is determined in a .find())
     std::vector<std::string> BGCcycles_namelist;
     std::string BGCcycles_name, Transf_name;
     double param_val; // prameter value
@@ -98,6 +127,18 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
             [BGCcycles_name]
             ["LIST_TRANSFORMATIONS"].size();
         
+        // The species-mass vector that every compiled expression is bound to
+        // (exprtk add_vector keeps a view of the vector's CURRENT buffer) is
+        // allocated ONCE here, to the largest size any expression can need
+        // (all species), and is never cleared, grown or resized afterwards.
+        // Growing it per transformation reallocated the buffer, so every
+        // expression compiled before the last reallocation kept a dangling
+        // view and read its species masses as 0 (first-order kinetics inert).
+        if (OpenWQ_wqconfig.CH_model->NativeFlex->chemass_InTransfEq.size()
+                < OpenWQ_wqconfig.CH_model->NativeFlex->num_chem)
+            OpenWQ_wqconfig.CH_model->NativeFlex->chemass_InTransfEq.assign(
+                OpenWQ_wqconfig.CH_model->NativeFlex->num_chem, 0.0);
+
         for (unsigned int transi=0;transi<num_transf;transi++){
 
             // Get Transformation name
@@ -169,11 +210,11 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
             index_new_chemass_InTransfEq = 0;
 
             for(unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem);chemi++){
-                
+
                 // Get chemical species name
                 chemname = (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi];
 
-                // Consumedchemass_consumed, chemass_produced;ty()) 
+                // Consumedchemass_consumed, chemass_produced;ty())
                 if(consumed_spec.compare(chemname) == 0 && !consumed_spec.empty()){
                     index_cons = chemi; // index
                 }
@@ -182,40 +223,66 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
                 if(produced_spec.compare(chemname) == 0 && !produced_spec.empty()){
                     index_prod = chemi; // index
                 }
-
-                // In expression (replace chemical species name by index)
-                // while loop to replace all occurances
-                index_i = expression_string_modif.find(chemname);
-                while(index_i!=-1){
-                    if (index_i!=-1 && !expression_string_modif.empty()){
-                        index_transf.push_back(chemi); // index
-                        expression_string_modif.replace(
-                            index_i,    // start position
-                            chemname.size(),    // length
-                            "openWQ_BGCnative_chemass_InTransfEq["+std::to_string(index_new_chemass_InTransfEq)+"]"); // string to replace by
-                        index_new_chemass_InTransfEq ++;    
-                    }
-                    index_i = expression_string_modif.find(chemname);
-                }
             }
 
             // ########################################
-            // Replace parameters in the expression.
-            //   GLOBAL param  -> substitute its literal value (historical path,
-            //                    byte-identical via std::to_string).
-            //   SPATIAL param -> leave it in the expression as element k of the
-            //                    bound openWQ_BGCparam vector, refreshed per cell.
+            // Substitute species and parameters in the expression.
+            //   species       -> element of the bound species-mass vector
+            //                    (one element per occurrence, in the order the
+            //                    occurrences are substituted; index_transf
+            //                    records which species each element holds)
+            //   GLOBAL param  -> its literal value (std::to_string)
+            //   SPATIAL param -> element k of the bound openWQ_BGCparam vector,
+            //                    refreshed per cell
             // A parameter is SPATIAL when its OpenWQ_param carries a per-cell
-            // field. Today values are JSON scalars (all GLOBAL) until the loader
-            // / ML layer populates a spatial field, so this stays byte-identical.
+            // field (JSON object); a JSON number is GLOBAL.
+            //
+            // All symbols (species + parameters) are substituted longest name
+            // first, whole identifiers only, every occurrence. This is what
+            // makes the substitution safe for one-letter parameters (T, K),
+            // parameters that prefix each other (K and K_NIT), species that
+            // contain other species (N inside NH4-N) and parameters that
+            // appear more than once in the same expression.
             // ########################################
             std::vector<OpenWQ_param> expr_spatial_params; // this expression's spatial params (index == k)
-            for (unsigned int i=0;i<parameter_names.size();i++){
-                index_i = expression_string_modif.find(parameter_names[i]);
 
-                // Read the parameter's JSON entry and build an OpenWQ_param:
-                // a number -> GLOBAL scalar (historical); an object (e.g.
-                // {"UNIFORM":v} or {"DEFAULT":d,"CELLS":[...]}) -> SPATIAL.
+            // symbol list: (name, species index) or (name, -(param index)-1)
+            std::vector<std::pair<std::string,int>> symbols;
+            for(unsigned int chemi=0;chemi<(OpenWQ_wqconfig.CH_model->NativeFlex->num_chem);chemi++)
+                symbols.emplace_back(
+                    (OpenWQ_wqconfig.CH_model->NativeFlex->chem_species_list)[chemi],
+                    static_cast<int>(chemi));
+            for (unsigned int i=0;i<parameter_names.size();i++)
+                symbols.emplace_back(parameter_names[i], -static_cast<int>(i)-1);
+            std::stable_sort(symbols.begin(), symbols.end(),
+                [](const std::pair<std::string,int>& a, const std::pair<std::string,int>& b){
+                    return a.first.size() > b.first.size();
+                });
+
+            for (const auto& sym : symbols){
+                const std::string& name = sym.first;
+                if (name.empty()) continue;
+
+                if (sym.second >= 0){
+                    // Species: replace every whole-word occurrence
+                    const unsigned int chemi = static_cast<unsigned int>(sym.second);
+                    size_t pos = bgc_find_whole_symbol(expression_string_modif, name);
+                    while (pos != std::string::npos){
+                        const std::string repl =
+                            "openWQ_BGCnative_chemass_InTransfEq["
+                            + std::to_string(index_new_chemass_InTransfEq) + "]";
+                        index_transf.push_back(chemi);
+                        expression_string_modif.replace(pos, name.size(), repl);
+                        index_new_chemass_InTransfEq ++;
+                        pos = bgc_find_whole_symbol(expression_string_modif, name, pos + repl.size());
+                    }
+                    continue;
+                }
+
+                // Parameter: read its JSON entry and build an OpenWQ_param
+                // (a number -> GLOBAL scalar; an object such as {"UNIFORM":v}
+                // or {"DEFAULT":d,"CELLS":[...]} -> SPATIAL).
+                const unsigned int i = static_cast<unsigned int>(-sym.second - 1);
                 json param_jval = OpenWQ_json.BGC_module
                     ["CYCLING_FRAMEWORKS"]
                     [BGCcycles_name]
@@ -227,52 +294,40 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
                     param_jval, OpenWQ_hostModelconfig);
                 param_val = param_i.scalar(); // scalar value (GLOBAL substitution + logging)
 
-                // Try replacing
-                try{
-                    if (!param_i.is_spatial()){
-                        // GLOBAL: literal substitution (unchanged behaviour)
-                        expression_string_modif.replace(
-                            index_i,
-                            parameter_names[i].size(),
-                            std::to_string(param_val));
-                    } else {
-                        // SPATIAL: reference the bound vector element k
-                        const unsigned int k = expr_spatial_params.size();
-                        expression_string_modif.replace(
-                            index_i,
-                            parameter_names[i].size(),
-                            "openWQ_BGCparam[" + std::to_string(k) + "]");
-                        expr_spatial_params.push_back(param_i);
-                    }
+                std::string repl;
+                if (!param_i.is_spatial()){
+                    repl = std::to_string(param_val);
+                } else {
+                    repl = "openWQ_BGCparam[" + std::to_string(expr_spatial_params.size()) + "]";
                 }
-                catch(...){
 
-                    // Create Message
+                size_t pos = bgc_find_whole_symbol(expression_string_modif, name);
+                if (pos == std::string::npos){
+                    // Declared but not used in this expression
                     msg_string = "<OpenWQ> Parameter ignored in CYCLING_FRAMEWORKS > "
                         + BGCcycles_name + " > "
                         + std::to_string(transi+1)
                         + ". Parameter " + parameter_names[i]
                         + " with value " + std::to_string(param_val);
-
-                    // Print it (Console and/or Log file)
                     OpenWQ_output.ConsoleLog(
                         OpenWQ_wqconfig,    // for Log file name
                         msg_string,         // message
                         true,               // print in console
                         true);              // print in log file
-
-                };
+                    continue;
+                }
+                if (param_i.is_spatial()) expr_spatial_params.push_back(param_i);
+                while (pos != std::string::npos){
+                    expression_string_modif.replace(pos, name.size(), repl);
+                    pos = bgc_find_whole_symbol(expression_string_modif, name, pos + repl.size());
+                }
             }
 
             // Add variables to symbol_table
             symbol_table_t symbol_table;
             
-            OpenWQ_wqconfig.CH_model->NativeFlex->chemass_InTransfEq.clear();
-            for (unsigned int i=0;i<index_transf.size();i++){
-                OpenWQ_wqconfig.CH_model->NativeFlex->chemass_InTransfEq.push_back(0); // creating the vector
-            }
-
-            // Add vectors to table of symbols
+            // Bind the (fixed-size, never reallocated) species-mass vector; the
+            // expression only indexes the first index_transf.size() entries.
             symbol_table.add_vector("openWQ_BGCnative_chemass_InTransfEq",OpenWQ_wqconfig.CH_model->NativeFlex->chemass_InTransfEq);
 
             // Bind the SPATIAL-parameter vector too (only when this expression
@@ -306,7 +361,22 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
 
             // Parse expression and compile 
             parser_t parser;
-            parser.compile(expression_string_modif,expression);
+            if (!parser.compile(expression_string_modif,expression)) {
+                // A kinetics expression that does not compile (typically a
+                // symbol that is neither a species, a declared parameter nor
+                // a dependency) would silently evaluate to NaN -> 0 mass
+                // transferred, i.e. the reaction is quietly switched off.
+                // That is a configuration error: stop and say which one.
+                msg_string = "<OpenWQ> FATAL: the KINETICS expression of "
+                    "CYCLING_FRAMEWORKS > " + BGCcycles_name + " > "
+                    + std::to_string(transi+1) + " (" + Transf_name + ") does not "
+                    "compile: '" + expression_string + "'. exprtk: "
+                    + parser.error() + ". Every symbol must be a chemical "
+                    "species, a name listed in PARAMETER_NAMES (with a value "
+                    "in PARAMETER_VALUES), or a declared dependency.";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                exit(EXIT_FAILURE);
+            }
 
             // Save expressions in openWQ_BGCnative_BGCexpressions_info and openWQ_BGCnative_BGCexpressions_eq
             OpenWQ_wqconfig.CH_model->NativeFlex->BGCexpressions_info.push_back(
