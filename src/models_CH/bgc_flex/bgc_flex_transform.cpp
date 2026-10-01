@@ -233,7 +233,9 @@ void OpenWQ_CH_model::bgc_flex_transform(
                     // ============================================
 
                     // Pre-allocate to correct size once, reuse via indexing
-                    nativeFlex->chemass_InTransfEq.resize(num_chem_in_transf);
+                    // NOTE: chemass_InTransfEq is sized once at setup (all
+                    // species) and must NOT be resized here: the compiled
+                    // expressions hold a view of its buffer.
 
                     for (unsigned int ix=0;ix<nx;ix++){
                         for (unsigned int iy=0;iy<ny;iy++){
