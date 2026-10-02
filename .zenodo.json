@@ -1,0 +1,65 @@
+{
+  "title": "OpenWQ: Open Water Quality modeling framework",
+  "upload_type": "software",
+  "description": "<p>OpenWQ (Open Water Quality) is a model-agnostic, multi-chemistry biogeochemical framework written in C++ that extends existing hydrological and Earth system models with flexible water-quality simulation. It couples to host models (e.g., SUMMA, mizuRoute, CRHM) through a model-agnostic API and lightweight host-specific couplers, separating process representations from the numerical solver. Interchangeable modules cover dissolved transport, user-defined biogeochemical reaction networks (and PHREEQC geochemistry), sediment transport, lateral exchange, and sorption, all configured through JSON files. The release includes the Python supporting scripts for model configuration, land-cover-based nutrient loading, observation retrieval from GRQA, calibration (DDS), and post-processing.</p><p>This is the version used in Costa et al. (submitted to the Journal of Advances in Modeling Earth Systems).</p><p>Documentation: https://openwq.readthedocs.io/ — Getting started: https://ue-hydro.uevora.pt/ue-hydro-models/</p>",
+  "creators": [
+    {
+      "name": "Costa, Diogo",
+      "affiliation": "Universidade de Évora",
+      "orcid": "0000-0002-8841-2522"
+    },
+    {
+      "name": "Klenk, Kyle",
+      "affiliation": "University of Saskatchewan"
+    },
+    {
+      "name": "Guenter, Victoria",
+      "affiliation": "University of Saskatchewan"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "Woldegiorgis, Befekadu Taddesse",
+      "affiliation": "University of Saskatchewan",
+      "type": "Other"
+    },
+    {
+      "name": "Trim, Sean",
+      "type": "Other"
+    },
+    {
+      "name": "Brannen, Rosa",
+      "type": "Other"
+    },
+    {
+      "name": "Baker, Christopher",
+      "type": "Other"
+    }
+  ],
+  "license": "GPL-3.0-only",
+  "keywords": [
+    "water quality",
+    "biogeochemistry",
+    "hydrological modeling",
+    "Earth system modeling",
+    "reactive transport",
+    "nitrogen",
+    "model coupling",
+    "SUMMA",
+    "mizuRoute",
+    "CRHM"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/ue-hydro/openwq",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://openwq.readthedocs.io/",
+      "relation": "isDocumentedBy",
+      "resource_type": "publication-softwaredocumentation"
+    }
+  ],
+  "language": "eng"
+}
