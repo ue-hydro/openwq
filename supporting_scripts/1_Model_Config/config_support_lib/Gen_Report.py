@@ -2982,12 +2982,17 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             "summa": ["SCALARCANOPYWAT", "ILAYERVOLFRACWAT_SNOW", "RUNOFF",
                        "ILAYERVOLFRACWAT_SOIL", "SCALARAQUIFER"],
         }
-        _cmp_names = _HOSTMODEL_COMPARTMENTS.get(
+        _cmp_names = list(_HOSTMODEL_COMPARTMENTS.get(
             hostmodel.lower(),
             list(compartments_and_cells.keys())
                 if isinstance(compartments_and_cells, dict)
                 else ['RIVER_NETWORK_REACHES']
-        )
+        ))
+        # Compartments configured for output that the host list above does not
+        # know (e.g. a pool added by the host hydrolink) are kept, so they are
+        # read and plotted like the others.
+        if isinstance(compartments_and_cells, dict):
+            _cmp_names += [c for c in compartments_and_cells if c not in _cmp_names]
         # Default selection: compartments that were configured for output
         _cmp_configured = set(compartments_and_cells.keys()) \
             if isinstance(compartments_and_cells, dict) else set(_cmp_names)
