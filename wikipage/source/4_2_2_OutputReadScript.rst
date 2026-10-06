@@ -142,7 +142,7 @@ The ``Plot_h5_driver`` function creates time-series plots for specific features:
     traces join the polygons, river traces the reaches, both layers are clickable and the
     observation stations are matched to basins or to the nearest reach per compartment.
     The report generated from the config template does this automatically when the
-    template sets ``mizuroute_config_path``. ``WebGL_h5_driver`` takes a
+    template sets ``hostmodel = "summa-mizuroute"`` and ``mizuroute_config_path``. ``WebGL_h5_driver`` takes a
     ``compartments=`` filter for the same reason (one viewer for land, one for the river).
 
 **Parameters:**

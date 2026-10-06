@@ -200,6 +200,18 @@ def load_model_config(model_config_path: str) -> Dict[str, Any]:
     # which dumps the template content) can find the file again
     # without it having to be passed through every helper signature.
     config['_model_config_path'] = os.path.abspath(model_config_path)
+    # Host model named in the template: "summa-mizuroute" = SUMMA with internally
+    # coupled mizuRoute. Handled as "summa" plus mizuroute_config_path; the
+    # template's name is kept in hostmodel_label for the reports.
+    _hm = str(config.get('hostmodel') or '')
+    if _hm.strip().lower().replace('_', '-') == 'summa-mizuroute':
+        config['hostmodel_label'] = _hm.strip()
+        config['hostmodel'] = 'summa'
+        if not config.get('mizuroute_config_path'):
+            logger.warning("hostmodel 'summa-mizuroute' but mizuroute_config_path is empty: "
+                           "the run will not be coupled to mizuRoute")
+    elif _hm.lower() == 'summa' and config.get('mizuroute_config_path'):
+        config['hostmodel_label'] = 'summa-mizuroute'
 
     # Resolve dir2save_input_files (where config files are generated + results
     # written).  Honour an explicit user path; otherwise — absent OR left as
@@ -1459,6 +1471,20 @@ def get_spatial_mapping(model_config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def host_model_label(model_config: Dict[str, Any]) -> str:
+    """Host model name for display: the template's own name ("summa-mizuroute"
+    for SUMMA with internally coupled mizuRoute), else the hostmodel value."""
+    if not isinstance(model_config, dict):
+        return str(model_config or "")
+    lbl = model_config.get("hostmodel_label")
+    if lbl:
+        return str(lbl)
+    hm = str(model_config.get("hostmodel") or "")
+    if hm.lower() == "summa" and model_config.get("mizuroute_config_path"):
+        return "summa-mizuroute"
+    return hm
+
+
 def get_compartment_indices(model_config: Dict[str, Any],
                             eval_dir: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Compartment name -> index of the OpenWQ instance, from the
@@ -1960,6 +1986,7 @@ def get_container_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
         "control_file_path": model_config.get("control_file_path", ""),
         "mpi_np": model_config.get("mpi_np", 2),
         "hostmodel": model_config.get("hostmodel", "mizuroute"),
+        "hostmodel_label": host_model_label(model_config),
         # SUMMA with internally coupled mizuRoute: TOML passed to SUMMA with -c
         "mizuroute_config_path": model_config.get("mizuroute_config_path", "") or "",
         "container_runtime": model_config.get("container_runtime", "docker"),

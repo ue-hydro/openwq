@@ -685,7 +685,7 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 pouring_point_stations=None, separator=' | ',
                 basin_geojson=None, river_line_geojson=None,
                 config_template_path=None, flux_names=None,
-                river_mapping_key=None, dual_interactive=False):
+                river_mapping_key=None, dual_interactive=False, host_label=None):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -1156,7 +1156,7 @@ a{color:var(--primary);text-decoration:none}
 
     # Header
     mode_label = what2map.upper() if what2map else 'N/A'
-    host_label = (hostmodel or 'N/A').upper()
+    host_label = (host_label or hostmodel or 'N/A').upper()
     _obs_label = (f'{_n_obs_stations} station(s), {_n_obs_records} records'
                   if _n_obs_stations else 'None')
     _species_str = ', '.join(_species_list) if _species_list else 'N/A'
@@ -2556,9 +2556,13 @@ def Plot_h5_driver(what2map=None,
                    config_template_path=None,
                    static_matrix_dir=None,
                    flux_names=None,
-                   river_compartments=None):
+                   river_compartments=None,
+                   host_label=None):
     """
     Generate interactive HTML time-series plots (Plotly.js).
+
+    ``host_label`` is the host model name shown in the report header (the
+    template's name, e.g. "summa-mizuroute"); defaults to ``hostmodel``.
 
     ``river_compartments`` (SUMMA with internally coupled mizuRoute) names the
     outputs that live on river reaches (``RIVER_NETWORK_REACHES``,
@@ -3650,7 +3654,8 @@ def Plot_h5_driver(what2map=None,
                                config_template_path=config_template_path,
                                flux_names=flux_names,
                                river_mapping_key=mapping_key,
-                               dual_interactive=_dual_interactive)
+                               dual_interactive=_dual_interactive,
+                               host_label=host_label)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)

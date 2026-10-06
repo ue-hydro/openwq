@@ -254,7 +254,7 @@ def parse_sim_period_from_control_file(
     else:
         raise ValueError(
             f"Cannot auto-detect simulation period: "
-            f"unknown hostmodel '{hostmodel}'. Expected 'mizuroute' or 'summa'."
+            f"unknown hostmodel '{hostmodel}'. Expected 'mizuroute', 'summa' or 'summa-mizuroute'."
         )
 
     if start_year is None or end_year is None:
@@ -696,6 +696,16 @@ def Gen_Input_Driver(
         **kwargs
 
 ) -> None:
+    # Host model named in the template: "summa-mizuroute" = SUMMA with internally
+    # coupled mizuRoute (land + river in one run). It is handled as "summa" plus
+    # the mizuRoute TOML (mizuroute_config_path); the template's name is kept for display.
+    hostmodel_label = str(hostmodel)
+    if str(hostmodel).strip().lower().replace("_", "-") == "summa-mizuroute":
+        hostmodel = "summa"
+        if not kwargs.get("mizuroute_config_path"):
+            raise ValueError("hostmodel 'summa-mizuroute' needs mizuroute_config_path "
+                             "(the mizuRoute TOML that SUMMA receives with -c)")
+
 
     print(f"Project: {project_name}")
     print(f"Authors: {authors}")

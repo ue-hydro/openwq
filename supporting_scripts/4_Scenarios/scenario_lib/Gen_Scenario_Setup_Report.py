@@ -177,7 +177,7 @@ def generate_interactive_scenario_setup(*, output_dir: str, model_config: Dict[s
 
 
 def _build_overview_section(model_config, config_run_path, base_dir, prov, species, sim, scn_info) -> str:
-    host = str(model_config.get("hostmodel") or "")
+    host = str(model_config.get("hostmodel_label") or model_config.get("hostmodel") or "")
     has_inputs = os.path.isdir(os.path.join(base_dir, "openwq_in"))
     if prov:
         prov_html = (

@@ -1422,6 +1422,15 @@ def generate_simulation_report(
 
     Returns the path to the generated HTML file.
     """
+    # Host model named in the template: "summa-mizuroute" = SUMMA with internally
+    # coupled mizuRoute (land + river in one run). It is handled as "summa" plus
+    # the mizuRoute TOML (mizuroute_config_path); the template's name is kept for display.
+    _host_label = str(hostmodel)
+    if str(hostmodel).strip().lower().replace("_", "-") == "summa-mizuroute":
+        hostmodel = "summa"
+    elif str(hostmodel).lower() == "summa" and mizuroute_config_path:
+        _host_label = "summa-mizuroute"
+
     _config_report_name = (f"{report_stem}_config_report.html"
                            if report_stem else "openwq_config_report.html")
     report_path = os.path.join(output_dir, _config_report_name)
@@ -2056,7 +2065,7 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 <div class="meta">
 <span>Authors: {authors}</span>
 <span>Date: {date}</span>
-<span>Host Model: {hostmodel}</span>
+<span>Host Model: {_host_label}</span>
 <span>Report: {now}</span>
 </div>
 </div>""")
@@ -2104,7 +2113,7 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
 <tr><td>Project Name</td><td><strong>{project_name}</strong></td></tr>
 <tr><td>Authors</td><td>{authors}</td></tr>
 <tr><td>Description</td><td>{comment}</td></tr>
-<tr><td>Host Model</td><td><span class="badge badge-primary">{hostmodel}</span>{_mizu_coupled_html}</td></tr>
+<tr><td>Host Model</td><td><span class="badge badge-primary">{_host_label}</span>{_mizu_coupled_html}</td></tr>
 <tr><td>Date</td><td>{date}</td></tr>
 </table></div></div>
 </div>""")
@@ -3254,7 +3263,7 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
         # --- Compartment (and flux) checkboxes ---
         H.append('<p style="font-weight:600;margin-top:1rem">Select compartments/fluxes to read:</p>')
         H.append('<p style="font-size:.82rem;color:var(--muted);margin:0 0 .5rem">'
-                 f'Available compartments for <strong>{hostmodel}</strong>'
+                 f'Available compartments for <strong>{_host_label}</strong>'
                  + (', plus the exported flux(es)' if _flux_names else '') + '. '
                  'Only checked entries are included in the code snippets.</p>')
         H.append('<div id="cmpCbRow" style="display:flex;flex-wrap:wrap;gap:.5rem .8rem;'
@@ -3603,6 +3612,7 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             f'_result = h5_plib.Plot_h5_driver(\n'
             f'    what2map="openwq",\n'
             f'    hostmodel="{hostmodel}",\n'
+            f'    host_label="{_host_label}",\n'
             f'    mapping_key_values="all",\n'
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
@@ -3645,6 +3655,7 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             f'h5_plib.Plot_h5_driver(\n'
             f'    what2map="openwq",\n'
             f'    hostmodel="{hostmodel}",\n'
+            f'    host_label="{_host_label}",\n'
             f'    mapping_key_values="all",\n'
             f'    openwq_results=openwq_results,\n'
             f'    chemSpec=[{_species_str}],\n'
@@ -4249,6 +4260,7 @@ function _owqRelayoutAll(){
             "generated_at": now,
             "report_path": report_path,
             "hostmodel": hostmodel,
+            "hostmodel_label": _host_label,
             # SUMMA with internally coupled mizuRoute (land + river in one run)
             "mizuroute_config_path": mizuroute_config_path,
             "coupled_river": _coupled_river,
@@ -4366,6 +4378,15 @@ def generate_report(
     Returns:
         str: Path to the generated HTML report, or None on failure
     """
+    # Host model named in the template: "summa-mizuroute" = SUMMA with internally
+    # coupled mizuRoute (land + river in one run). It is handled as "summa" plus
+    # the mizuRoute TOML (mizuroute_config_path); the template's name is kept for display.
+    _host_label = str(hostmodel)
+    if str(hostmodel).strip().lower().replace("_", "-") == "summa-mizuroute":
+        hostmodel = "summa"
+    elif str(hostmodel).lower() == "summa" and mizuroute_config_path:
+        _host_label = "summa-mizuroute"
+
     print("\n" + "=" * 60)
     print("GENERATING REPORT")
     print("=" * 60)

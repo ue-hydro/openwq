@@ -6172,7 +6172,7 @@ def _build_observation_map_section(
     sub = (f"{len(s2f)} matched ({n_primary} primary"
            + (f", {n_secondary} secondary" if n_secondary else "")
            + (f", {n_unmatched} unmatched" if n_unmatched else "")
-           + f") — hostmodel: {hostmodel}")
+           + f") — host model: {_ci.host_model_label(model_config)}")
     if _lumped_colour:
         sub += (f" &middot; stations coloured by the overall calibrated "
                 f"{_obj_name} (lumped network — no per-feature spatial match)")

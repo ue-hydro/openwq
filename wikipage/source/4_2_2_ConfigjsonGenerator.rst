@@ -53,10 +53,10 @@ Configuration parameters
     date = "January, 2026"
     comment = "Project description"
 
-    hostmodel = "mizuroute"  # "mizuroute" or "summa"
+    hostmodel = "mizuroute"  # "mizuroute", "summa" or "summa-mizuroute"
     dir2save_input_files = "/path/to/output/"
 
-    # SUMMA with internally coupled mizuRoute: keep hostmodel = "summa" and give the
+    # SUMMA with internally coupled mizuRoute: hostmodel = "summa-mizuroute" and the
     # host path of the mizuRoute TOML; the generator then adds RIVER_NETWORK_REACHES to
     # the compartments and "-c <toml>" to the run command (one process, no mpirun)
     mizuroute_config_path = "/path/to/settings/mizuRoute/mizuroute.toml"
@@ -325,7 +325,7 @@ paths inside the container.
 
 .. note::
 
-    SUMMA with internally coupled mizuRoute (``hostmodel = "summa"`` with ``mizuroute_config_path``)
+    SUMMA with internally coupled mizuRoute (``hostmodel = "summa-mizuroute"`` with ``mizuroute_config_path``)
     runs as a single process: the report's command is
     ``summa-mizuroute_openwq_Release -m <fileManager> -c <mizuRoute TOML>`` without ``mpirun``.
 
