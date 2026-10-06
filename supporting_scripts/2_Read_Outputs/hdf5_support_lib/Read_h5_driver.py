@@ -215,6 +215,10 @@ def Read_h5_save_engine(
 
     except (FileNotFoundError, OSError) as e:
         print(f"<main_hdf5> Warning: Could not open file {filepath_i}: {e}")
+        if "bad object header" in str(e).lower() or "unable to open file" in str(e).lower():
+            print("<main_hdf5>   The file is incomplete: a model run is still writing it, or the run "
+                  "was interrupted while writing. Wait for the run to finish, or rerun the model, "
+                  "before reading its results.")
         return []
     except Exception as e:
         print(f"<main_hdf5> Warning: Error reading {filepath_i}: {e}")
