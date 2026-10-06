@@ -1579,9 +1579,14 @@ def _build_cascade_section(output_dir):
     <h2>Sub-basin cascade calibration</h2>
     <p style="font-size:.9rem;color:var(--text2);">
         {len(zones)} gauged zones calibrated in {len(S.get('levels', []))} levels, upstream to downstream,
-        after a global stage. KGE of every station after each stage (bold = the stage that
-        calibrated that station's zone; grey = the station was not a target of that stage).
-        The ungauged zone ({ung.get('n_reaches', 0)} reaches, {(ung.get('area_m2', 0) or 0)/1e6:,.0f} km&sup2;)
+        after a global stage. A zone is the set of reaches above a station and below the stations
+        further upstream, with the land units draining to them. In every stage the whole model is
+        simulated; the zone-specific parameters of that stage's zones are free (one value per zone),
+        the zones already calibrated keep their values, the other parameters keep their global value,
+        and only the stations of the stage are scored. The table gives the KGE of every station after
+        each stage (bold = the stage that calibrated that station's zone; grey = the station was not a
+        target of that stage, so its change there is a side effect of the other zones). The ungauged zone
+        ({ung.get('n_reaches', 0)} reaches, {(ung.get('area_m2', 0) or 0)/1e6:,.0f} km&sup2;)
         takes {_h.escape(str(S.get('inherit', 'global')))} values.
     </p>
     <div class="card">

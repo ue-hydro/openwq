@@ -4150,16 +4150,34 @@ def _build_cascade_card(info: Optional[Dict[str, Any]], feature_label: str = "Re
     return f"""
     <div class="card" id="cascade-card">
         <h3>Sub-basin cascade calibration</h3>
-        <p style="font-size:.85rem;color:var(--text2);margin-bottom:.6rem;">
+        <p style="font-size:.85rem;color:var(--text2);margin-bottom:.4rem;">
             Calibrate each gauged sub-basin (zone) with its own values of the chosen
-            parameters, upstream to downstream: the zones with no gauged zone above them
-            first, then the zones below them with the upstream values held fixed. A zone is
-            the set of reaches (and the land units draining to them) above a station and
-            below the stations further upstream; it is defined by the network, not by the
-            hydrology sub-basins. The run starts with a global calibration (one value for
-            the whole domain) that gives the baseline and the starting values. Zone values
-            are ordinary Layer-1 per-class values on the <code>wq_zone</code> attribute, so
-            they combine with the Machine Learning tab.
+            parameters, upstream to downstream. A zone is the set of reaches above a station
+            and below the stations further upstream, together with the land units (HRUs)
+            draining to those reaches: it is defined by the river network and the stations,
+            not by the hydrology sub-basins, so a zone normally holds several reaches and HRUs.
+            Reaches below the last station, or on tributaries without a station, form the
+            ungauged zone, which inherits its values.
+        </p>
+        <p style="font-size:.85rem;color:var(--text2);margin-bottom:.4rem;">
+            <b>How it runs.</b> The whole model is simulated in every evaluation; what changes
+            from stage to stage is which values are free and which station is scored.
+            <b>Stage 0 (global):</b> every selected parameter with one value for the whole
+            domain, scored at all target stations; baseline and starting values.
+            <b>Stage 1:</b> the zone-specific parameters of the zones with no gauged zone
+            upstream are free (one value per zone), everything else keeps its global value,
+            and only the stations of those zones are scored. <b>Stage 2, 3, ...:</b> the next
+            zones downstream, with the upstream zones frozen at their calibrated values.
+            Zones on separate tributaries with the same position in the network share a stage.
+            <b>Optional final polish:</b> every zone value free at once, scored at all stations,
+            to redistribute the errors that downstream zones absorb from upstream ones.
+        </p>
+        <p style="font-size:.85rem;color:var(--text2);margin-bottom:.6rem;">
+            Zone values are Layer-1 per-class values on the <code>wq_zone</code> attribute, so
+            they combine with the Machine Learning tab (a parameter already regionalized there is
+            left to its mapping; Layer-2 closures keep one set of weights for the domain). Each
+            stage is a complete calibration folder inside the work directory; <code>--resume</code>
+            continues the interrupted stage and <code>--report</code> adds a Sub-basins section.
         </p>
         <label style="display:flex;align-items:center;gap:.5rem;font-weight:600;">
             <input type="checkbox" id="cascade-on" class="form-input" style="width:auto">
