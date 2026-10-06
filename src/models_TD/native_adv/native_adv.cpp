@@ -41,13 +41,27 @@ void OpenWQ_TD_model::Adv(
     const unsigned int numspec = OpenWQ_wqconfig.cached_num_mobile_species;
     const std::vector<unsigned int>& mobile_species = *OpenWQ_wqconfig.cached_mobile_species_ptr;
 
-    // Pre-compute advective concentration factor using exponential decay
-    // (analytical well-mixed CSTR solution): conc_factor = 1 - exp(-Q*dt/V)
-    // For CFL << 1: ≈ CFL (same as linear upwind, difference < 5% for CFL < 0.1)
-    // For CFL = 1:  0.632 (retains 36.8% of mass, prevents full cell flushing)
-    // For CFL >> 1: → 1.0 (asymptotically flushes cell)
-    // This eliminates alternating-zero oscillations when time step ≥ cell residence time
-    const double conc_factor = 1.0 - std::exp(-wflux_s2r / wmass_source);
+    // Advected fraction of the source mass: the share of the source water that
+    // leaves with this flux in the step, conc_factor = min(Q*dt/V, 1), with V
+    // the water available in the source cell during the step (as passed by the
+    // host). This is the explicit upwind (donor-cell) scheme.
+    //
+    // It is the fraction that is consistent with the rest of the scheme: the
+    // flux is taken from the START-OF-STEP mass only (see below), so the mass
+    // that enters the cell in a step stays there until the next one. At steady
+    // state the stored mass is then (inflow mass)/conc_factor, and the cell
+    // concentration equals the inflow concentration only if conc_factor is
+    // Q*dt/V. The exponential form 1 - exp(-Q*dt/V) used before removes less
+    // than that, and the cell concentration settled at
+    // (Q*dt/V)/(1 - exp(-Q*dt/V)) times the inflow concentration: +5% for
+    // Q*dt/V = 0.1 and +58% for Q*dt/V = 1 (river reaches and other
+    // through-flow cells). The sediment transport (models_TS) already uses the
+    // same linear fraction.
+    //
+    // No oscillations: the fraction is capped at 1 (a cell cannot export more
+    // than it holds) and only start-of-step mass is exported, so the result
+    // does not depend on the order in which the host processes the cells.
+    const double conc_factor = std::fmin(wflux_s2r / wmass_source, 1.0);
 
     // OPTIMIZED: pre-fetch field references to avoid repeated pointer dereferencing
     auto& chemass_source = (*OpenWQ_vars.chemass)(source);
