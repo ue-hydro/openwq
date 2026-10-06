@@ -937,6 +937,11 @@ def Gen_Input_Driver(
                              "RUNOFF",
                              "ILAYERVOLFRACWAT_SOIL",
                              "SCALARAQUIFER"]
+        # SUMMA with its internally coupled mizuRoute (mizuroute_config_path = the
+        # mizuRoute TOML passed to SUMMA with -c): the same OpenWQ instance also
+        # carries the river reaches.
+        if kwargs.get("mizuroute_config_path"):
+            compartment_names.append("RIVER_NETWORK_REACHES")
 
     ###############
     # Call create_config_json

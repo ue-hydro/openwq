@@ -55,8 +55,10 @@ Project(OpenWQ)
 # optA4) mizuroute_lakes_openwq -> compile with mizuroute-lakes using hydrolink
 # optA5) mizuroute_lakes_cslm_openwq -> compile with mizuroute-cslm using hydrolink
 # optA6) fluxos_openwq -> compile with fluxos using hydrolink
+# optA7) summa-mizuroute_openwq -> compile with summa and its internally coupled mizuroute using hydrolink
 set(VALID_COMPILE_TARGETS "crhm_openwq" "summa_openwq"
-                          "mizuroute_openwq" "mizuroute_lakes_openwq" "mizuroute_lakes_cslm_openwq" "fluxos_openwq")
+                          "mizuroute_openwq" "mizuroute_lakes_openwq" "mizuroute_lakes_cslm_openwq" "fluxos_openwq"
+                          "summa-mizuroute_openwq")
 
 if(NOT HOST_MODEL_TARGET)
    message(FATAL_ERROR "Need to set -DHOST_MODEL_TARGET. Options are ${VALID_COMPILE_TARGETS}")
@@ -1393,4 +1395,97 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "fluxos_openwq")
                 MESSAGE(STATUS "See intructions in the CMakeLists.txt.")
 
         ENDIF()
+# ..................
+# IF TARGET = summa-mizuroute_openwq
+# SUMMA with its internally coupled mizuRoute (CH-Earth/summa, develop branch).
+# The SUMMA tree carries the complete CMake build of SUMMA, mizuRoute, toml-f and
+# of this openWQ (build/source/openwq), so the tree is built here as an external
+# project and the executable is copied to bin/ under the openWQ naming.
+# Expected layout: <summa>/build/source/openwq/openwq is this folder, and the git
+# submodules <summa>/external/mizuRoute and <summa>/external/toml-f are checked out.
+# Dependency hints (CMAKE_PREFIX_PATH, SUNDIALS_DIR) are forwarded. PhreeqcRM must be
+# a SHARED library because SUMMA is built as a shared library: set -DSUMMA_PHREEQCRM_DIR
+# to its cmake folder, or build it into <summa>/build/source/openwq/_deps/phreeqcrm-install
+# (used automatically when present; see <summa>/build/source/openwq/README.md).
+# Only supports compilation in linux
+# ..................
+ELSEIF("${COMPILE_TARGET}" STREQUAL "summa-mizuroute_openwq")
+
+    if(NOT UNIX)
+        MESSAGE(STATUS "Current Operating System is not supported yet!")
+    endif()
+
+    PROJECT(openwq_summa_mizuroute LANGUAGES CXX Fortran)
+    INCLUDE(ExternalProject)
+
+    SET(exec_name "${COMPILE_TARGET}_${COMPILE_MODE}")
+    get_filename_component(SUMMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../.. ABSOLUTE)
+    SET(EXEC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+    SET(SUMMA_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/summa-mizuroute_build)
+
+    if(NOT EXISTS ${SUMMA_DIR}/build/source/mizuroute/CMakeLists.txt)
+        MESSAGE(FATAL_ERROR "summa-mizuroute_openwq: ${SUMMA_DIR} is not a SUMMA tree with the internal "
+                            "mizuRoute coupling (build/source/mizuroute missing). This folder must be "
+                            "<summa>/build/source/openwq/openwq of the CH-Earth/summa develop branch.")
+    endif()
+    if(NOT EXISTS ${SUMMA_DIR}/external/mizuRoute/route/build/src/dataTypes.f90
+       OR NOT EXISTS ${SUMMA_DIR}/external/toml-f/CMakeLists.txt)
+        MESSAGE(FATAL_ERROR "summa-mizuroute_openwq: the mizuRoute and toml-f submodules are not checked out. "
+                            "Run: git -C ${SUMMA_DIR} submodule update --init external/mizuRoute external/toml-f")
+    endif()
+
+    # SUMMA solver (IDA/KINSOL); openWQ itself always uses SUNDIALS CVODE
+    if(SOLVER_TYPE MATCHES Sundials)
+        SET(SUMMA_USE_SUNDIALS ON)
+        SET(SUMMA_EXE summa_sundials_openwq_mizuroute.exe)
+    else()
+        SET(SUMMA_USE_SUNDIALS OFF)
+        SET(SUMMA_EXE summa_openwq_mizuroute.exe)
+    endif()
+
+    SET(SUMMA_CMAKE_ARGS
+        -DUSE_OPENWQ=ON
+        -DUSE_MIZUROUTE=ON
+        -DUSE_SUNDIALS=${SUMMA_USE_SUNDIALS}
+        -DUSE_MPI=OFF
+        -DUSE_NEXTGEN=OFF
+        -DCMAKE_BUILD_TYPE=${COMPILE_MODE}
+        -DCMAKE_Fortran_COMPILER=${CMAKE_Fortran_COMPILER}
+        -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
+    # PhreeqcRM: SUMMA_PHREEQCRM_DIR, else the shared build under _deps, else the one found above
+    if(DEFINED SUMMA_PHREEQCRM_DIR)
+        LIST(APPEND SUMMA_CMAKE_ARGS -DPhreeqcRM_DIR=${SUMMA_PHREEQCRM_DIR})
+    elseif(EXISTS ${SUMMA_DIR}/build/source/openwq/_deps/phreeqcrm-install/lib/cmake/PhreeqcRM)
+        LIST(APPEND SUMMA_CMAKE_ARGS
+             -DPhreeqcRM_DIR=${SUMMA_DIR}/build/source/openwq/_deps/phreeqcrm-install/lib/cmake/PhreeqcRM)
+    elseif(DEFINED PhreeqcRM_DIR)
+        LIST(APPEND SUMMA_CMAKE_ARGS -DPhreeqcRM_DIR=${PhreeqcRM_DIR})
+    endif()
+    if(DEFINED SUNDIALS_DIR)
+        LIST(APPEND SUMMA_CMAKE_ARGS -DSUNDIALS_DIR=${SUNDIALS_DIR})
+    endif()
+    if(DEFINED CMAKE_PREFIX_PATH)
+        STRING(REPLACE ";" "|" SUMMA_PREFIX_PATH "${CMAKE_PREFIX_PATH}")
+        LIST(APPEND SUMMA_CMAKE_ARGS -DCMAKE_PREFIX_PATH=${SUMMA_PREFIX_PATH})
+    endif()
+
+    MESSAGE(STATUS "** OpenWQ **: SUMMA tree ${SUMMA_DIR}")
+    MESSAGE(STATUS "** OpenWQ **: SUMMA build dir ${SUMMA_BUILD_DIR}")
+    MESSAGE(STATUS "** OpenWQ **: executable ${EXEC_DIR}/${exec_name}")
+
+    FILE(MAKE_DIRECTORY ${EXEC_DIR})
+
+    ExternalProject_Add(summa_mizuroute_tree
+        SOURCE_DIR        ${SUMMA_DIR}/build
+        BINARY_DIR        ${SUMMA_BUILD_DIR}
+        CMAKE_COMMAND     ${CMAKE_COMMAND} -E env FC=${CMAKE_Fortran_COMPILER} ${CMAKE_COMMAND}
+        CMAKE_ARGS        ${SUMMA_CMAKE_ARGS}
+        LIST_SEPARATOR    |
+        BUILD_ALWAYS      ON
+        INSTALL_COMMAND   ${CMAKE_COMMAND} -E copy ${SUMMA_DIR}/bin/${SUMMA_EXE} ${EXEC_DIR}/${exec_name}
+        BUILD_BYPRODUCTS  ${SUMMA_DIR}/bin/${SUMMA_EXE})
+
+    # same target name as the executable, as for the other host models
+    ADD_CUSTOM_TARGET(${exec_name} ALL DEPENDS summa_mizuroute_tree)
+
 ENDIF()
