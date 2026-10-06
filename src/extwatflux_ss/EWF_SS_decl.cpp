@@ -17,6 +17,39 @@
 #include "headerfile_EWF_SS.hpp"
 #include <cstdlib>   // std::exit, EXIT_FAILURE (EWF-HDF5 SPATIAL_MODE validation)
 #include <cmath>     // std::llround (DISTRIBUTED reach-id matching)
+#include <hdf5.h>    // HDF5 C API — read the source cell-id label dataset (hruId/reachID)
+
+// Read a 1-D variable-length-string HDF5 dataset into a vector<string>.
+// Used by the DISTRIBUTED EWF reader to recover the SOURCE model's per-column
+// cell-id labels (openWQ writes them as a vlen-string dataset named by the
+// source model's cellid label — "hruId" for SUMMA, "reachID" for mizuRoute).
+// Returns empty on any failure / missing dataset.
+static std::vector<std::string> OpenWQ_readH5StringDataset(
+    const std::string& filepath, const std::string& dsetname){
+    std::vector<std::string> out;
+    hid_t fid = H5Fopen(filepath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (fid < 0) return out;
+    if (H5Lexists(fid, dsetname.c_str(), H5P_DEFAULT) <= 0){ H5Fclose(fid); return out; }
+    hid_t did = H5Dopen2(fid, dsetname.c_str(), H5P_DEFAULT);
+    if (did < 0){ H5Fclose(fid); return out; }
+    hid_t sid = H5Dget_space(did);
+    hsize_t n = 0;
+    if (H5Sget_simple_extent_ndims(sid) == 1) H5Sget_simple_extent_dims(sid, &n, NULL);
+    if (n > 0){
+        hid_t memtype = H5Tcopy(H5T_C_S1);
+        H5Tset_size(memtype, H5T_VARIABLE);
+        std::vector<char*> rdata(n, nullptr);
+        if (H5Dread(did, memtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, rdata.data()) >= 0){
+            out.reserve(n);
+            for (hsize_t i = 0; i < n; i++)
+                out.push_back(rdata[i] ? std::string(rdata[i]) : std::string());
+            H5Dvlen_reclaim(memtype, sid, H5P_DEFAULT, rdata.data());
+        }
+        H5Tclose(memtype);
+    }
+    H5Sclose(sid); H5Dclose(did); H5Fclose(fid);
+    return out;
+}
 
 
 /* #################################################
@@ -1242,9 +1275,11 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
     // Get spatial coupling mode (LUMPED or DISTRIBUTED)
     //  - LUMPED:      the EWF h5 carries a single column (one HRU/reach); its
     //                 concentration is broadcast to every receiving reach.
-    //  - DISTRIBUTED: the EWF h5 carries one column per receiving reach plus a
-    //                 numeric 'cellID' dataset; columns are matched to reaches
-    //                 by id (any mismatch => console error + abort).
+    //  - DISTRIBUTED: the EWF h5 carries one column per receiving reach; columns
+    //                 are matched to reaches by the source cell-id labels the
+    //                 output already writes (hruId/reachID), resolved against the
+    //                 host's cellid mapping (config mapping_key). Mismatch =>
+    //                 console error + abort.
     // (Replaces the former INTERACTION_INTERFACE dimension-matching, which
     //  assumed the external model shared this model's discretization.)
     std::string spatial_mode = OpenWQ_utils.RequestJsonKeyVal_str(
@@ -1511,31 +1546,40 @@ void OpenWQ_extwatflux_ss::Set_EWF_h5(
                 OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
                 std::exit(EXIT_FAILURE);
             }
-            // Read the numeric per-column reach id vector (dataset 'cellID')
-            arma::mat cellID_h5;
-            cellID_h5.load(arma::hdf5_name(ewf_filenamePath, "cellID"));
-            if (cellID_h5.n_elem != ncells_src){
+            // Recover the SOURCE model's per-column cell-id labels from the h5.
+            // openWQ writes these as a vlen-string dataset named by the source
+            // model's cellid label ("hruId" for SUMMA, "reachID" for mizuRoute).
+            // Match each to a host reach via the host's cellid mapping (which the
+            // config mapping_key / reachID populates), so the SUMMA-HRU ->
+            // mizuRoute-reach correspondence is id-based — no separate 'cellID'
+            // dataset is needed.
+            std::vector<std::string> src_ids =
+                OpenWQ_readH5StringDataset(ewf_filenamePath, "hruId");
+            if (src_ids.size() != ncells_src)
+                src_ids = OpenWQ_readH5StringDataset(ewf_filenamePath, "reachID");
+            if (src_ids.size() != ncells_src){
                 msg_string =
                     "<OpenWQ> ERROR: EWF '" + external_waterFluxName
-                    + "' SPATIAL_MODE=DISTRIBUTED requires a numeric 'cellID' dataset "
-                    "with " + std::to_string(ncells_src) + " reach ids in "
-                    + ewf_filenamePath + " (found " + std::to_string(cellID_h5.n_elem)
-                    + "). Aborting.";
+                    + "' SPATIAL_MODE=DISTRIBUTED could not read " + std::to_string(ncells_src)
+                    + " source cell-id labels (hruId/reachID) from " + ewf_filenamePath
+                    + " (found " + std::to_string(src_ids.size()) + "). Aborting.";
                 OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
                 std::exit(EXIT_FAILURE);
             }
             for (unsigned int j = 0; j < ncells_src; j++){
-                long long _idv = (long long) std::llround(cellID_h5(j));
-                std::string _id_str = std::to_string(_idv);
+                // strip any zone suffix (e.g. '16_z1' -> '16') before matching
+                std::string _id_str = src_ids[j];
+                std::size_t _us = _id_str.find('_');
+                if (_us != std::string::npos) _id_str = _id_str.substr(0, _us);
                 int _ix = -1, _iy = -1, _iz = -1; bool _partial = false;
                 bool _found = OpenWQ_hostModelconfig.find_indices_from_cellid(
                     recipient_comp_index, _id_str, _ix, _iy, _iz, _partial);
                 if (!_found){
                     msg_string =
                         "<OpenWQ> ERROR: EWF '" + external_waterFluxName
-                        + "' SPATIAL_MODE=DISTRIBUTED: reach id '" + _id_str
+                        + "' SPATIAL_MODE=DISTRIBUTED: source cell id '" + _id_str
                         + "' from " + ewf_filenamePath
-                        + " does not match any host reach id. Aborting.";
+                        + " does not match any host reach id (check the config mapping_key). Aborting.";
                     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
                     std::exit(EXIT_FAILURE);
                 }

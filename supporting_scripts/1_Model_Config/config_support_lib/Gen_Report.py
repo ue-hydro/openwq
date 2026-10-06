@@ -1388,6 +1388,8 @@ def generate_simulation_report(
         # produced these results) — shown in the "Source Configuration
         # Template" card above the Basin Map.  None → derive name from report_stem.
         config_template_path=None,
+        # SUMMA with internally coupled mizuRoute: the mizuRoute TOML passed with -c
+        mizuroute_config_path=None,
 ):
     """Generate a self-contained HTML simulation report.
 
@@ -2046,6 +2048,13 @@ details.nested-details>summary:hover{border-color:var(--primary);background:rgba
 
     H.append('<div class="container">')
 
+    # SUMMA with internally coupled mizuRoute: say so next to the host model
+    _mizu_coupled_html = ''
+    if mizuroute_config_path:
+        import html as _html_mz
+        _mizu_coupled_html = (' <span class="badge badge-primary">+ mizuRoute</span> '
+                              f'<small>{_html_mz.escape(os.path.basename(str(mizuroute_config_path)))}</small>')
+
     # --- Calibrated model config? (written by <template>_config_run.py, see
     #     calibration_lib.calibrated_config) -> say so up front, with provenance.
     try:
@@ -2080,7 +2089,7 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
 <tr><td>Project Name</td><td><strong>{project_name}</strong></td></tr>
 <tr><td>Authors</td><td>{authors}</td></tr>
 <tr><td>Description</td><td>{comment}</td></tr>
-<tr><td>Host Model</td><td><span class="badge badge-primary">{hostmodel}</span></td></tr>
+<tr><td>Host Model</td><td><span class="badge badge-primary">{hostmodel}</span>{_mizu_coupled_html}</td></tr>
 <tr><td>Date</td><td>{date}</td></tr>
 </table></div></div>
 </div>""")
@@ -2896,6 +2905,11 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
                     # SUMMA requires '-m' flag before the file manager path;
                     # mizuRoute takes it as a positional argument.
                     _fm_arg = f'-m {_cont_fm}' if hostmodel.lower() == 'summa' else _cont_fm
+                    # SUMMA with internally coupled mizuRoute: add its TOML with -c
+                    if hostmodel.lower() == 'summa' and mizuroute_config_path:
+                        _cont_toml = _gJSON._correct_path_for_docker(
+                            os.path.abspath(mizuroute_config_path), _host_root, _cont_root)
+                        _fm_arg += f' -c {_cont_toml}'
                     # SUMMA-OpenWQ is serial (no MPI); force -np 1
                     _np = 1 if hostmodel.lower() == 'summa' else mpi_np
                     _docker_cmd = (
@@ -2913,13 +2927,15 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             # Fallback: show host paths (user will need to convert manually)
             _fm_flag = '-m ' if hostmodel.lower() == 'summa' else ''
             _np = 1 if hostmodel.lower() == 'summa' else mpi_np
+            _toml_arg = (f' -c <container_path_to:{os.path.abspath(mizuroute_config_path)}>'
+                         if hostmodel.lower() == 'summa' and mizuroute_config_path else '')
             _docker_cmd = (
                 f'{_caf}docker exec {docker_container_name} /bin/bash -c '
                 f'"export HDF5_USE_FILE_LOCKING=FALSE && '
                 f'cd <container_path_to:{os.path.abspath(output_dir)}> && '
                 f'mpirun --allow-run-as-root -np {_np} '
                 f'<container_path_to:{os.path.abspath(executable_path)}> '
-                f'{_fm_flag}<container_path_to:{os.path.abspath(file_manager_path)}>"'
+                f'{_fm_flag}<container_path_to:{os.path.abspath(file_manager_path)}>{_toml_arg}"'
             )
 
         if _docker_cmd:
@@ -2982,6 +2998,8 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             "summa": ["SCALARCANOPYWAT", "ILAYERVOLFRACWAT_SNOW", "RUNOFF",
                        "ILAYERVOLFRACWAT_SOIL", "SCALARAQUIFER"],
         }
+        if hostmodel.lower() == 'summa' and mizuroute_config_path:
+            _HOSTMODEL_COMPARTMENTS["summa"] = _HOSTMODEL_COMPARTMENTS["summa"] + ["RIVER_NETWORK_REACHES"]
         _cmp_names = list(_HOSTMODEL_COMPARTMENTS.get(
             hostmodel.lower(),
             list(compartments_and_cells.keys())
@@ -4231,6 +4249,7 @@ def generate_report(
         export_sediment=False,
         run_mode_debug=True,
         docker_compose_path=None,
+        mizuroute_config_path=None,   # SUMMA with internally coupled mizuRoute: the TOML passed with -c
 ):
     """Generate an HTML simulation report (entry point for template).
 
@@ -4306,6 +4325,7 @@ def generate_report(
             export_sediment=export_sediment,
             run_mode_debug=run_mode_debug,
             docker_compose_path=docker_compose_path,
+            mizuroute_config_path=mizuroute_config_path,
         )
 
         print(f"  Report saved: {report_path}")
