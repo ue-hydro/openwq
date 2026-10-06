@@ -1193,9 +1193,15 @@ def WebGL_h5_driver(shpfile_info=None,
                     period_start=0.0,
                     period_end=1.0,
                     satellite_resolution=1,
-                    fluxos_viewer_path=None):
+                    fluxos_viewer_path=None,
+                    compartments=None):
     """
     Export OpenWQ/mizuRoute results as an interactive WebGL 3D particle viewer.
+
+    ``compartments`` restricts the outputs considered for each species to the
+    given compartment / flux names (SUMMA with internally coupled mizuRoute
+    renders land compartments on the basin polygons and the river outputs on
+    the reaches, one viewer per group).
 
     Creates a directory with index.html + data files (velocity PNGs, concentration
     PNGs, heightmap, hillshade, metadata) that can be served via any HTTP server.
@@ -1401,19 +1407,27 @@ def WebGL_h5_driver(shpfile_info=None,
                       f"alternatives: {others}")
             return best_key
 
+        _cmp_filter = None
+        if compartments:
+            _cmp_filter = {str(c).strip().upper() for c in
+                           ([compartments] if isinstance(compartments, str) else compartments)}
+
+        def _in_cmp(k):
+            return _cmp_filter is None or str(k).split('@', 1)[0].strip().upper() in _cmp_filter
+
         if chemSpec is None:
-            species_list = list(openwq_results.keys())
+            species_list = [k for k in openwq_results.keys() if _in_cmp(k)]
         elif isinstance(chemSpec, list):
             species_list = []
             for chem in chemSpec:
                 matching = [k for k in openwq_results.keys()
-                            if chem in k and 'Sediment' not in k]
+                            if chem in k and 'Sediment' not in k and _in_cmp(k)]
                 pick = _pick_best(matching)
                 if pick is not None:
                     species_list.append(pick)
         else:
             matching = [k for k in openwq_results.keys()
-                        if chemSpec in k and 'Sediment' not in k]
+                        if chemSpec in k and 'Sediment' not in k and _in_cmp(k)]
             pick = _pick_best(matching)
             species_list = [pick] if pick is not None else []
 

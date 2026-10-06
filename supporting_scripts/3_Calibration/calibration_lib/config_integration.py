@@ -34,6 +34,7 @@ re-exec'ing the template the way it always has.
 """
 
 import os
+import glob
 import sys
 import copy
 import json
@@ -1408,11 +1409,16 @@ def get_spatial_mapping(model_config: Dict[str, Any]) -> Dict[str, Any]:
     manifest = model_config.get(_MANIFEST_CFG_KEY) or {}
     hostmodel = (model_config.get('hostmodel') or
                  manifest.get('hostmodel') or '').lower()
+    # SUMMA with internally coupled mizuRoute: land compartments on the basin
+    # polygons (hruId), river outputs on the reaches (segId); same HDF5 key
+    mizu_toml = (model_config.get('mizuroute_config_path')
+                 or manifest.get('mizuroute_config_path') or '')
+    coupled_river = bool(hostmodel == 'summa' and mizu_toml)
 
     # Sensible host-aware defaults (mirrors Gen_Report.py:2645/2660)
     if hostmodel == 'summa':
         default_h5_key = 'hruId'
-        default_shp_key = 'HRU_ID'
+        default_shp_key = 'segId' if coupled_river else 'HRU_ID'
     else:
         default_h5_key = 'reachID'
         default_shp_key = 'SegId'
@@ -1446,7 +1452,97 @@ def get_spatial_mapping(model_config: Dict[str, Any]) -> Dict[str, Any]:
         'basin_mapping_key': basin_key,
         'feature_label': feature_label,
         'from_manifest': bool(manifest),
+        'coupled_river': coupled_river,
+        'mizuroute_config_path': mizu_toml,
+        'river_compartments': list(manifest.get('river_compartments') or
+                                   (['RIVER_NETWORK_REACHES', 'Qlocal_out'] if coupled_river else [])),
     }
+
+
+def get_compartment_indices(model_config: Dict[str, Any],
+                            eval_dir: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Compartment name -> index of the OpenWQ instance, from the
+    ``openwq_compartments.json`` the SUMMA hydrolink writes into ``openwq_out``
+    (an evaluation folder first, then the baseline run of the model config).
+
+    Returns ``{"indices": {name: idx}, "river": idx or -1, "lake": idx or -1}``
+    or None when no table is found and the run is not coupled.  A coupled run
+    without the table falls back to the hydrolink's fixed declaration order.
+    """
+    import json as _json
+    cands = []
+    for base in ([str(eval_dir)] if eval_dir else []) + ([str(model_config.get("dir2save_input_files"))]
+                                                        if model_config.get("dir2save_input_files") else []):
+        # the hydrolink writes it into OpenWQ's output folder (RESULTS_FOLDERPATH, usually .../HDF5)
+        cands += [os.path.join(base, "openwq_out", "HDF5", "openwq_compartments.json"),
+                  os.path.join(base, "openwq_out", "openwq_compartments.json")]
+    d2s = model_config.get("dir2save_input_files") or ""
+    for c in cands:
+        if os.path.isfile(c):
+            try:
+                data = _json.load(open(c))
+                idx = {str(e["name"]).upper(): int(e["index"]) for e in data.get("compartments", [])}
+                return {"indices": idx, "river": int(data.get("river_compartment", -1)),
+                        "lake": int(data.get("lake_compartment", -1)), "source": c}
+            except Exception:
+                continue
+    spatial = get_spatial_mapping(model_config)
+    if not spatial.get("coupled_river"):
+        return None
+    # fixed order of the SUMMA + mizuRoute hydrolink (lake only when lake layers exist)
+    names = ["SCALARCANOPYWAT", "ILAYERVOLFRACWAT_SNOW", "RUNOFF", "ILAYERVOLFRACWAT_SOIL",
+             "SCALARAQUIFER", "RUNOFF_TO_STREAM"]
+    has_lake = bool(d2s and glob.glob(os.path.join(str(d2s), "openwq_out", "HDF5",
+                                                   "ILAYERVOLFRACWAT_LAKE@*.h5")))
+    if has_lake:
+        names.append("ILAYERVOLFRACWAT_LAKE")
+    names.append("RIVER_NETWORK_REACHES")
+    idx = {n: i for i, n in enumerate(names)}
+    return {"indices": idx, "river": idx["RIVER_NETWORK_REACHES"],
+            "lake": idx.get("ILAYERVOLFRACWAT_LAKE", -1), "source": "hydrolink declaration order"}
+
+
+def coupled_regionalize_targets(model_config: Dict[str, Any],
+                                eval_dir: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """For a coupled SUMMA + mizuRoute run: the compartment indices a
+    regionalized (spatially varying) parameter must address so that land
+    values go to the land compartments and reach values to the river
+    compartment (their cell indices overlap).  None when the run is not coupled.
+    """
+    spatial = get_spatial_mapping(model_config)
+    if not spatial.get("coupled_river"):
+        return None
+    ci = get_compartment_indices(model_config, eval_dir)
+    if not ci:
+        return None
+    river = ci.get("river", -1)
+    land = sorted(i for n, i in ci["indices"].items() if i != river)
+    return {"land_icmps": land, "river_icmp": river, "indices": ci["indices"], "source": ci.get("source")}
+
+
+def coupled_obs_target(model_config: Dict[str, Any],
+                       compartments=None) -> Optional[str]:
+    """Which features the observations belong to in a coupled SUMMA + mizuRoute run.
+
+    Returns ``'river'`` when every target compartment is a river output
+    (``RIVER_NETWORK_REACHES``, ``Qlocal_out``), ``'basin'`` for land
+    compartments, and ``None`` when the run is not coupled (host dispatch applies).
+    ``compartments`` defaults to the template's ``observation_compartments``.
+    """
+    spatial = get_spatial_mapping(model_config)
+    if not spatial.get('coupled_river'):
+        return None
+    cmps = compartments if compartments is not None else model_config.get('observation_compartments')
+    if isinstance(cmps, str):
+        cmps = [cmps]
+    cmps = [str(c).strip().upper() for c in (cmps or []) if str(c).strip()]
+    river_names = {'RIVER_NETWORK_REACHES', 'QLOCAL_OUT', 'REACH_OUTFLOW'}
+    if cmps and all(c in river_names for c in cmps):
+        return 'river'
+    if cmps and any(c in river_names for c in cmps):
+        _warn = f"observation compartments mix land and river outputs ({cmps}); stations are matched to basins"
+        print(f"  WARNING: {_warn}")
+    return 'basin'
 
 
 def prepare_calibration_observations_csv(model_config: Dict[str, Any],
@@ -1596,6 +1692,14 @@ def _match_and_write_obs(model_config: Dict[str, Any],
     river_gj = _load_shapefile_as_geojson(river_shp)[0] if river_shp else None
     basin_gj = _load_shapefile_as_geojson(basin_shp)[0] if basin_shp else None
 
+    # Coupled SUMMA + mizuRoute: match to reaches when the observation
+    # compartments are river outputs, to basins otherwise
+    _target = coupled_obs_target(model_config)
+    _match_kwargs = {}
+    if _target:
+        _match_kwargs['target'] = _target
+        _log(f"Coupled land + river run: stations matched to the "
+             f"{'river reaches' if _target == 'river' else 'basin polygons'}")
     s2f, primary = sm.match_stations(
         station_locations,
         hostmodel=hostmodel,
@@ -1604,6 +1708,7 @@ def _match_and_write_obs(model_config: Dict[str, Any],
         river_mapping_key=spatial.get('river_network_mapping_key') or 'SegId',
         basin_mapping_key=spatial.get('basin_mapping_key') or 'HRU_ID',
         log=_log,
+        **_match_kwargs,
     )
     if not s2f:
         _log("No observation stations matched a model feature.")
@@ -1855,6 +1960,8 @@ def get_container_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
         "control_file_path": model_config.get("control_file_path", ""),
         "mpi_np": model_config.get("mpi_np", 2),
         "hostmodel": model_config.get("hostmodel", "mizuroute"),
+        # SUMMA with internally coupled mizuRoute: TOML passed to SUMMA with -c
+        "mizuroute_config_path": model_config.get("mizuroute_config_path", "") or "",
         "container_runtime": model_config.get("container_runtime", "docker"),
         "docker_container_name": model_config.get(
             "docker_container_name", "docker_openwq"

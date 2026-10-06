@@ -192,6 +192,12 @@ def build_spatial_param(cell_values: Dict[Any, float],
 
     Cells whose id cannot be mapped are skipped (they inherit ``default``).
     """
+    # ``icmp`` may also be a list of compartment indices: one row per index
+    # (coupled SUMMA + mizuRoute: a land value addresses every land compartment
+    # explicitly, never the river compartment whose cell indices overlap)
+    icmps = [int(i) for i in icmp] if isinstance(icmp, (list, tuple, set)) else [int(icmp)]
+    if not icmps:
+        icmps = [-1]
     cells = []
     for rid, val in cell_values.items():
         cols = resolve_cell_columns(reach_mapper, rid)
@@ -200,7 +206,8 @@ def build_spatial_param(cell_values: Dict[Any, float],
         if skip_default_equal and abs(float(val) - float(default)) <= tol:
             continue
         for ix, iy in cols:
-            cells.append([int(icmp), int(ix), int(iy), -1, float(val)])
+            for ic in icmps:
+                cells.append([int(ic), int(ix), int(iy), -1, float(val)])
     return {"DEFAULT": float(default), "CELLS": cells}
 
 
@@ -268,9 +275,17 @@ def make_spatial_param(spec: Dict[str, Any],
                        subparam_values: Dict[str, float],
                        cell_attributes: Dict[Any, Dict[str, Any]],
                        reach_mapper,
-                       icmp: int = -1,
-                       diagnostics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                       icmp=-1,
+                       diagnostics: Optional[Dict[str, Any]] = None,
+                       river_attributes: Optional[Dict[Any, Dict[str, Any]]] = None,
+                       river_mapper=None,
+                       river_icmp: Optional[int] = None) -> Dict[str, Any]:
     """Produce the spatial-parameter object for one regionalized parameter.
+
+    ``icmp`` is an int or a list of compartment indices.  For a coupled SUMMA +
+    mizuRoute run, ``river_attributes`` (reach id -> attributes), ``river_mapper``
+    and ``river_icmp`` add the rows of the river compartment: the same rung and
+    calibrated values are applied to the reaches through their own id space.
 
     Parameters
     ----------
@@ -343,7 +358,23 @@ def make_spatial_param(spec: Dict[str, Any],
     _mapped = {cid for cid in vals if resolve_cell_xyz(reach_mapper, cid)}
     diag["n_mapped"] = len(_mapped)
     diag["ids_unmapped"] = [str(cid) for cid in vals if cid not in _mapped][:50]
-    return build_spatial_param(vals, reach_mapper, default, icmp)
+    out = build_spatial_param(vals, reach_mapper, default, icmp)
+    # river compartment of a coupled run: same rung on the reach attribute table
+    if river_attributes and river_mapper is not None and river_icmp is not None:
+        if rung == "per_class":
+            r_classes = {cid: attrs[attr] for cid, attrs in river_attributes.items() if attr in attrs}
+            r_vals = values_per_class(r_classes, subparam_values)
+        else:
+            r_in = river_attributes
+            if standardize and names:
+                r_in, _ = standardize_attributes(river_attributes, names)
+            r_vals = values_regression(r_in, coeffs, intercept, lower, upper)
+        r_mapped = {cid for cid in r_vals if resolve_cell_xyz(river_mapper, cid)}
+        diag["river_cell_values"] = {str(k): float(v) for k, v in r_vals.items()}
+        diag["n_mapped_river"] = len(r_mapped)
+        diag["river_icmp"] = int(river_icmp)
+        out["CELLS"].extend(build_spatial_param(r_vals, river_mapper, default, int(river_icmp))["CELLS"])
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +393,8 @@ def _canon_spec(ml_spec: Dict[str, Any]) -> Dict[str, Any]:
         "attribute_table": ml_spec.get("attribute_table"),
         "mapping_source":  ml_spec.get("mapping_source"),
         "icmp":            int(ml_spec.get("icmp", -1)),   # -1 = every compartment
+        # coupled SUMMA + mizuRoute: attribute table of the reaches (river compartment)
+        "attribute_table_river": ml_spec.get("attribute_table_river"),
         # rung 3: z-score the attributes across cells (default ON; see
         # standardize_attributes) so coefficient bounds are comparable.
         "standardize":     bool(ml_spec.get("standardize", True)),

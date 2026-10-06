@@ -18,7 +18,7 @@ In order to minimize the amount of code added to the host-models, the interface 
 
 These interface functions, which can be obtained from the respective GitHub repositories of the aforementioned coupled models (`link <https://openwq.readthedocs.io/en/latest/5_3_0_Hydro_coupled_models.html>`_), are listed below (ordered in terms of information flow):
 
-* (Fortran) ``summa_openWQ.f90`` (SUMA coupling) or ``mizuroute_openwq.f90`` (MizuRoute coupling)
+* (Fortran) ``summa_openWQ.f90`` (SUMMA coupling, also used by SUMMA with internally coupled mizuRoute, where ``wq_exchange.f90`` in SUMMA's ``mizuroute`` folder exposes the per-step reach budgets to it) or ``mizuroute_openwq.f90`` (MizuRoute coupling)
 * (Fortran) ``openWQInterface.f90``
 * (Fortran) ``openWQ.f90``
 * (C++) ``OpenWQ_interface.cpp`` and ``OpenWQ_interface.h``

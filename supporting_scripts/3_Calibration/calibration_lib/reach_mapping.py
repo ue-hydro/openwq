@@ -49,9 +49,16 @@ class ReachMapper:
     def __init__(self,
                  mapping_source: Union[str, Path] = None,
                  mapping_key: Optional[str] = None,
-                 hostmodel: str = "mizuroute"):
+                 hostmodel: str = "mizuroute",
+                 preferred_compartment: Optional[str] = None):
         """
         Initialize reach mapper.
+
+        ``preferred_compartment`` picks which output file provides the mapping
+        when a folder holds several compartments (SUMMA with internally coupled
+        mizuRoute writes land compartments with HRU ids and
+        RIVER_NETWORK_REACHES with reach ids side by side). Without it, land
+        compartments are preferred for SUMMA and river outputs for mizuRoute.
 
         Parameters
         ----------
@@ -75,6 +82,7 @@ class ReachMapper:
                            else "reachID")
         self.mapping_key = mapping_key
         self.hostmodel = (hostmodel or "mizuroute").lower()
+        self.preferred_compartment = preferred_compartment
         self.reach_to_xyz: Dict[str, Tuple[int, int, int]] = {}
         self.xyz_to_reach: Dict[Tuple[int, int, int], str] = {}
 
@@ -156,13 +164,29 @@ class ReachMapper:
             logger.error(f"Error loading HDF5 mapping: {e}")
             return False
 
+    def _order_h5_files(self, files):
+        """Put the files of the preferred compartment first (see __init__)."""
+        river_names = {'RIVER_NETWORK_REACHES', 'QLOCAL_OUT', 'REACH_OUTFLOW'}
+        pref = getattr(self, 'preferred_compartment', None)
+        pref = str(pref).strip().upper() if pref else None
+
+        def _rank(p):
+            comp = Path(p).name.split('@', 1)[0].strip().upper()
+            if pref:
+                return 0 if comp == pref else 1
+            is_river = comp in river_names
+            want_river = (self.hostmodel or '').lower() != 'summa'
+            return 0 if is_river == want_river else 1
+        return sorted(files, key=lambda p: (_rank(p), str(p)))
+
     def _load_from_directory(self, directory: Path) -> bool:
-        """Load mapping from first valid HDF5 file in directory."""
+        """Load mapping from the first valid HDF5 file in directory
+        (preferred compartment first)."""
         # Look for HDF5 files
         h5_patterns = ['*.h5', '*.hdf5']
 
         for pattern in h5_patterns:
-            for h5_file in directory.glob(pattern):
+            for h5_file in self._order_h5_files(list(directory.glob(pattern))):
                 if self._load_from_hdf5(h5_file):
                     return True
 
@@ -170,7 +194,7 @@ class ReachMapper:
         for subdir in directory.iterdir():
             if subdir.is_dir():
                 for pattern in h5_patterns:
-                    for h5_file in subdir.glob(pattern):
+                    for h5_file in self._order_h5_files(list(subdir.glob(pattern))):
                         if self._load_from_hdf5(h5_file):
                             return True
 

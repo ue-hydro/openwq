@@ -266,6 +266,33 @@ def _maybe_clean_work_dir(work_dir: Path, resume: bool = False,
                     "previous run may remain).")
 
 
+class _FixedParamsHandler:
+    """Parameter handler that appends fixed-value parameters (dicts with a
+    ``value`` key) to every setup/apply call and delegates everything else."""
+
+    def __init__(self, handler, fixed_parameters):
+        self._h = handler
+        self._fixed = [dict(p) for p in fixed_parameters]
+        self._vals = np.array([float(p["value"]) for p in self._fixed])
+
+    def _join(self, params, values):
+        return (list(params) + self._fixed,
+                np.concatenate([np.asarray(values, dtype=float), self._vals]))
+
+    def setup_working_directory(self, eval_id, calibration_parameters=None,
+                                params_real=None, *a, **k):
+        if calibration_parameters is not None and params_real is not None:
+            calibration_parameters, params_real = self._join(calibration_parameters, params_real)
+        return self._h.setup_working_directory(eval_id, calibration_parameters, params_real, *a, **k)
+
+    def apply_parameters(self, eval_dir, calibration_parameters, params_real, *a, **k):
+        calibration_parameters, params_real = self._join(calibration_parameters, params_real)
+        return self._h.apply_parameters(eval_dir, calibration_parameters, params_real, *a, **k)
+
+    def __getattr__(self, name):
+        return getattr(self._h, name)
+
+
 def run_calibration(
         # Paths
         calibration_work_dir: str,
@@ -293,6 +320,9 @@ def run_calibration(
         file_manager_path: str = None,
         executable_full_path: str = None,
         command_template: str = None,
+        # SUMMA with internally coupled mizuRoute: host path of the mizuRoute
+        # TOML (-c). Filled from the model config when left None.
+        mizuroute_config_path: str = None,
 
         # Calibration parameters
         calibration_parameters: List[Dict] = None,
@@ -350,6 +380,22 @@ def run_calibration(
     Dict
         Calibration results including best parameters and diagnostics
     """
+
+    # ── Sub-basin cascade calibration ──
+    # `cascade={...}` (from the setup report's Sub-basins card) turns this call
+    # into a sequence of ordinary calibrations, one per topological level of
+    # the gauged zones, run by cascade.run_cascade with these same arguments.
+    # Each stage comes back here with `_cascade_stage` set.
+    _cascade_cfg = kwargs.get("cascade")
+    if (isinstance(_cascade_cfg, dict) and _cascade_cfg.get("enabled", True)
+            and not kwargs.get("_cascade_stage")):
+        _call = {k: v for k, v in locals().items() if k not in ("kwargs", "_cascade_cfg")}
+        _call.update(kwargs)
+        try:
+            from .cascade import run_cascade
+        except ImportError:                    # pragma: no cover
+            from cascade import run_cascade
+        return run_cascade(**_call)
 
     start_time = datetime.now()
 
@@ -431,6 +477,8 @@ def run_calibration(
         container_runtime = container_runtime or "docker"
         executable_full_path = executable_full_path or _container.get("executable_path", "")
         file_manager_path = file_manager_path or _container.get("file_manager_path", "")
+        mizuroute_config_path = (mizuroute_config_path
+                                 or _container.get("mizuroute_config_path", "") or None)
 
         # Observation data path — may be supplied directly or derived from
         # the model config the user already set up.  Honours all sources:
@@ -595,6 +643,7 @@ def run_calibration(
         executable_full_path=executable_full_path,
         command_template=command_template,
         hostmodel=(model_config.get("hostmodel", "") if model_config else ""),
+        mizuroute_config_path=mizuroute_config_path,
         calibration_work_dir=calibration_work_dir,
         # Per-eval SIMULATION window (start, end) | None.  When set, each
         # eval's control file is rewritten to simulate only this window —
@@ -605,6 +654,15 @@ def run_calibration(
         # progress lines printed after each eval's spinner finishes.
         total_evaluations=max_evaluations,
     )
+
+    # Parameters held at a known value for this run (sub-basin cascade: the
+    # zones already calibrated and the non-zone parameters). They are applied
+    # to every evaluation together with the calibrated ones but never optimized.
+    _fixed_params = list(kwargs.get("fixed_parameters") or [])
+    if _fixed_params:
+        param_handler = _FixedParamsHandler(param_handler, _fixed_params)
+        logger.info("Fixed parameters applied to every evaluation: %d", len(_fixed_params))
+
 
     # H5 reader path for objective function.  Prefer OPENWQ_H5_SUPPORT_LIB (set by the
     # HPC sbatch to the shipped hermetic bundle) so it never depends on a cloned openWQ.
@@ -644,6 +702,7 @@ def run_calibration(
         aggregation_method=aggregation_method,
         hostmodel=_spatial.get("hostmodel", "mizuroute"),
         h5_mapping_key=_spatial.get("h5_mapping_key"),
+        coupled_river=_spatial.get("coupled_river", False),
         use_primary_only=kwargs.get("use_primary_only", True),
         zone_select=kwargs.get("zone_select"),
         metric_focus=kwargs.get("metric_focus", "both"),
@@ -2108,6 +2167,7 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
             aggregation_method=obj_func.aggregation_method,
             hostmodel=obj_func.hostmodel,
             h5_mapping_key=obj_func.h5_mapping_key,
+            coupled_river=getattr(obj_func, "coupled_river", False),
             use_primary_only=getattr(obj_func, "use_primary_only", True),
             zone_select=getattr(obj_func, "zone_select", None),
             metric_focus=getattr(obj_func, "metric_focus", "both"))
@@ -2245,12 +2305,13 @@ def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
     # (HPC bundle) so it works without a cloned openWQ on the cluster.
     _this = Path(__file__).resolve().parent
     h5_reader_path = os.environ.get("OPENWQ_H5_SUPPORT_LIB") or str(_this.parent.parent / "2_Read_Outputs" / "hdf5_support_lib")
-    hostmodel, mapkey = "mizuroute", None
+    hostmodel, mapkey, _sm_coupled = "mizuroute", None, False
     try:
         from . import config_integration as _cint
         _sm = (_cint.get_spatial_mapping(model_config) if model_config else {})
         hostmodel = _sm.get("hostmodel", "mizuroute")
         mapkey = _sm.get("h5_mapping_key")
+        _sm_coupled = bool(_sm.get("coupled_river", False))
     except Exception:
         pass
     try:
@@ -2265,6 +2326,7 @@ def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
             temporal_resolution=cs.get("temporal_resolution", "native"),
             aggregation_method=cs.get("aggregation_method", "mean"),
             hostmodel=hostmodel, h5_mapping_key=mapkey,
+            coupled_river=_sm_coupled,
             use_primary_only=cs.get("use_primary_only", True),
             zone_select=cs.get("zone_select"),
             metric_focus=cs.get("metric_focus", "both"))
@@ -2620,6 +2682,8 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         executable_full_path=kwargs.get('executable_full_path'),
         command_template=kwargs.get('command_template'),
         hostmodel=(_model_config.get("hostmodel", "") if _model_config else ""),
+        mizuroute_config_path=(kwargs.get('mizuroute_config_path')
+                               or (_model_config or {}).get('mizuroute_config_path') or None),
         calibration_work_dir=kwargs.get('calibration_work_dir'),
         calibration_period=kwargs.get("calibration_period"),
     )
@@ -2676,6 +2740,7 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         aggregation_method=aggregation_method,
         hostmodel=_spatial.get("hostmodel", "mizuroute"),
         h5_mapping_key=_spatial.get("h5_mapping_key"),
+        coupled_river=_spatial.get("coupled_river", False),
         use_primary_only=kwargs.get("use_primary_only", True),
     )
 

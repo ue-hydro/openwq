@@ -1360,7 +1360,12 @@ def generate_interactive_setup(
         # Host-model-aware reach/HRU + compartment options
         _spatial = _ci.get_spatial_mapping(model_config)
         _hostmodel = (_spatial.get("hostmodel") or "").lower()
-        if _hostmodel == "summa":
+        # SUMMA with internally coupled mizuRoute: the selectable features
+        # follow where the observations live (reaches for river targets)
+        _coupled_target = None
+        if _spatial.get("coupled_river") and hasattr(_ci, "coupled_obs_target"):
+            _coupled_target = _ci.coupled_obs_target(model_config)
+        if _hostmodel == "summa" and _coupled_target != "river":
             _feat_label = "HRU"
             _feat_shp = observation_config.get("basin_shapefile")
             _feat_key = _spatial.get("basin_mapping_key") or "HRU_ID"
@@ -1434,6 +1439,14 @@ def generate_interactive_setup(
             ]
         else:
             _available_compartments = ["RIVER_NETWORK_REACHES"]
+        if _spatial.get("coupled_river"):
+            # river compartment and exported reach fluxes (e.g. Qlocal_out) are targets too
+            if "RIVER_NETWORK_REACHES" not in _available_compartments:
+                _available_compartments.append("RIVER_NETWORK_REACHES")
+            _fx = model_config.get("fluxes_conc_to_print") or {}
+            for _fname in (list(_fx.keys()) if isinstance(_fx, dict) else []):
+                if _fname not in _available_compartments:
+                    _available_compartments.append(_fname)
 
         # Pre-tick the compartments the user already restricts obs to;
         # otherwise tick all available.
@@ -1448,6 +1461,22 @@ def generate_interactive_setup(
             _selected_compartments = list(_available_compartments)
 
         H.append('<div class="tab-panel" data-tab="targets">')
+        # Sub-basin cascade: delineate the gauged zones from the river network
+        # and the prepared observations (best-effort; None without a network).
+        _cascade_info = None
+        try:
+            try:
+                from . import wq_zones as _wqz
+            except ImportError:                          # pragma: no cover
+                import wq_zones as _wqz
+            if _wqz.find_topology(model_config) is not None:
+                _cascade_info = _wqz.delineate(
+                    model_config,
+                    os.path.join(str(calibration_work_dir or ""), "calibration_observations.csv"),
+                    species_list, min_obs=20)
+        except Exception as _e:
+            logger.warning(f"Sub-basin cascade card not built: {_e}")
+            _cascade_info = None
         H.append(_build_interactive_targets_section(
             species_list, species_obs_availability or {}, obs_source,
             hostmodel=_hostmodel,
@@ -1461,6 +1490,7 @@ def generate_interactive_setup(
             sim_window=(_sim_s, _sim_e),
             station_locations=_station_locs,
             reach_obs_dates=_reach_obs_dates,
+            cascade_info=_cascade_info,
         ))
         H.append('</div>')
 
@@ -2013,6 +2043,27 @@ def generate_interactive_setup(
                         if _ix + 1 < len(_pp) and _pp[_ix + 1] \
                                 and _pp[_ix + 1] not in _keep_dirs:
                             _keep_dirs.append(_pp[_ix + 1])
+            except Exception:
+                pass
+        # SUMMA with internally coupled mizuRoute: the TOML names the folders of
+        # the routing namelist, hydrofabric and remapping file; keep them too
+        _toml_hpc = (container_config or {}).get("mizuroute_config_path") or ""
+        if _domain_b and _toml_hpc and os.path.isfile(_toml_hpc):
+            try:
+                import re as _re4
+                _tomltxt = open(_toml_hpc, encoding="utf-8", errors="ignore").read()
+                for _mm in _re4.finditer(
+                        r"(?:namelist_path|hfabric_path|remap_path)\s*=\s*\"([^\"]+)\"", _tomltxt):
+                    _pp = _mm.group(1).strip().rstrip('/').split('/')
+                    if _domain_b in _pp:
+                        _ix = _pp.index(_domain_b)
+                        if _ix + 1 < len(_pp) and _pp[_ix + 1] \
+                                and _pp[_ix + 1] not in _keep_dirs:
+                            _keep_dirs.append(_pp[_ix + 1])
+                _tp = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(_toml_hpc))))
+                _tsub = os.path.basename(os.path.dirname(os.path.abspath(_toml_hpc)))
+                if _tp == _domain_b and _tsub and _tsub not in _keep_dirs:
+                    _keep_dirs.append(_tsub)
             except Exception:
                 pass
         _hpc_baked = {
@@ -3654,6 +3705,7 @@ def _build_interactive_targets_section(
     sim_window: Optional[tuple] = None,
     station_locations: Optional[List[Dict[str, Any]]] = None,
     reach_obs_dates: Optional[Dict[str, list]] = None,
+    cascade_info: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Calibration targets with species checkboxes and observation info.
 
@@ -4047,8 +4099,127 @@ def _build_interactive_targets_section(
         <h3>{feature_label} &amp; Compartment Selection</h3>
         {_selection_body}
     </div>
+    {_build_cascade_card(cascade_info, feature_label)}
 </div>
 """
+
+
+def _build_cascade_card(info: Optional[Dict[str, Any]], feature_label: str = "Reach") -> str:
+    """Targets-tab card that switches on the sub-basin cascade calibration.
+
+    ``info`` is the zone delineation computed at report time (see
+    ``wq_zones.delineate``); None when the model has no routed river network,
+    in which case the card only explains why the option is unavailable."""
+    import html as _h
+    if not info:
+        return """
+    <div class="card" id="cascade-card">
+        <h3>Sub-basin cascade calibration</h3>
+        <p style="font-size:.85rem;color:var(--text2);">
+            Calibrates the sub-basins that have observation stations one after the
+            other, upstream to downstream, with their own parameter values. It needs a
+            routed river network (a mizuRoute topology), which this model does not have,
+            so the option is not available here.
+        </p>
+    </div>"""
+    zones = info.get("zones", [])
+    rejected = info.get("rejected", [])
+    ung = info.get("ungauged", {}) or {}
+    rows = []
+    for z in zones:
+        rows.append(
+            f'<tr><td><b>{z["id"]}</b></td><td>{z["station_reach"]}</td>'
+            f'<td>{z["n_obs"]}</td><td style="white-space:nowrap">{_h.escape(str(z.get("obs_first","")))} &rarr; {_h.escape(str(z.get("obs_last","")))}</td>'
+            f'<td>{z["n_reaches"]}</td><td>{z["area_m2"]/1e6:,.0f}</td><td>{z["drainage_area_m2"]/1e6:,.0f}</td>'
+            f'<td>{z["level"]}</td>'
+            f'<td><select class="form-select cascade-station-role" data-reach="{z["station_reach"]}" style="min-width:7rem">'
+            f'<option value="target" selected>target</option><option value="validation">validation only</option></select></td></tr>')
+    for r in rejected:
+        rows.append(
+            f'<tr style="color:var(--muted)"><td>&ndash;</td><td>{r["station_reach"]}</td><td>{r["n_obs"]}</td>'
+            f'<td colspan="5" style="font-size:.78rem">{_h.escape(str(r.get("reason","")))}</td>'
+            f'<td><select class="form-select cascade-station-role" data-reach="{r["station_reach"]}" style="min-width:7rem">'
+            f'<option value="target">target</option><option value="validation" selected>validation only</option></select></td></tr>')
+    if ung:
+        rows.append(
+            f'<tr style="color:var(--muted)"><td>0</td><td>none (ungauged)</td><td>&ndash;</td><td>&ndash;</td>'
+            f'<td>{ung.get("n_reaches",0)}</td><td>{(ung.get("area_m2",0) or 0)/1e6:,.0f}</td><td>&ndash;</td>'
+            f'<td>inherits</td><td>&ndash;</td></tr>')
+    levels = info.get("levels", [])
+    order = " &rarr; ".join("zones " + ", ".join(str(z) for z in lv) for lv in levels) or "none"
+    return f"""
+    <div class="card" id="cascade-card">
+        <h3>Sub-basin cascade calibration</h3>
+        <p style="font-size:.85rem;color:var(--text2);margin-bottom:.6rem;">
+            Calibrate each gauged sub-basin (zone) with its own values of the chosen
+            parameters, upstream to downstream: the zones with no gauged zone above them
+            first, then the zones below them with the upstream values held fixed. A zone is
+            the set of reaches (and the land units draining to them) above a station and
+            below the stations further upstream; it is defined by the network, not by the
+            hydrology sub-basins. The run starts with a global calibration (one value for
+            the whole domain) that gives the baseline and the starting values. Zone values
+            are ordinary Layer-1 per-class values on the <code>wq_zone</code> attribute, so
+            they combine with the Machine Learning tab.
+        </p>
+        <label style="display:flex;align-items:center;gap:.5rem;font-weight:600;">
+            <input type="checkbox" id="cascade-on" class="form-input" style="width:auto">
+            Calibrate sub-basins in cascade (upstream to downstream)
+        </label>
+        <div id="cascade-body" style="display:none;margin-top:.8rem;">
+            <p style="font-size:.82rem;color:var(--text2);">Calibration order: {order}.
+               Stations with few observations are proposed as validation points; change the role to include them.</p>
+            <table class="ml-table"><thead><tr>
+                <th>Zone</th><th>Station {feature_label.lower()}</th><th>Obs</th><th>Record</th>
+                <th>{feature_label}es</th><th>Zone area (km&sup2;)</th><th>Drainage (km&sup2;)</th><th>Level</th><th>Role</th>
+            </tr></thead><tbody>{"".join(rows)}</tbody></table>
+            <div class="form-row" style="margin-top:.8rem;">
+                <div class="form-group"><label for="cascade_min_obs">Min. observations for a target station</label>
+                    <input class="form-input" type="number" id="cascade_min_obs" value="{int(info.get("min_obs",20))}" min="2"></div>
+                <div class="form-group"><label for="cascade_global_evals">Evaluations, global stage</label>
+                    <input class="form-input" type="number" id="cascade_global_evals" value="" placeholder="= max evaluations"></div>
+                <div class="form-group"><label for="cascade_stage_evals">Evaluations per level</label>
+                    <input class="form-input" type="number" id="cascade_stage_evals" value="" placeholder="= max evaluations"></div>
+                <div class="form-group"><label for="cascade_polish_evals">Evaluations, final joint polish (0 = none)</label>
+                    <input class="form-input" type="number" id="cascade_polish_evals" value="0" min="0"></div>
+                <div class="form-group"><label for="cascade_inherit">Ungauged zone takes</label>
+                    <select class="form-select" id="cascade_inherit">
+                        <option value="global" selected>the global value</option>
+                        <option value="upstream">the area-weighted value of the zones draining into it</option>
+                        <option value="downstream_most">the value of the most downstream zone</option>
+                    </select></div>
+            </div>
+            <div class="form-group" style="margin-top:.6rem;">
+                <label>Zone-specific parameters (from the Parameters tab; the others keep one global value)</label>
+                <div id="cascade-param-list" style="display:flex;flex-wrap:wrap;gap:.3rem .9rem;font-size:.82rem;"></div>
+            </div>
+        </div>
+        <script>
+        (function(){{
+          var on = document.getElementById('cascade-on');
+          var body = document.getElementById('cascade-body');
+          var list = document.getElementById('cascade-param-list');
+          function sync(){{
+            var keep = {{}};
+            list.querySelectorAll('.cascade-param-cb').forEach(function(cb){{ keep[cb.value] = cb.checked; }});
+            var html = '';
+            document.querySelectorAll('.param-row').forEach(function(row){{
+              var cb = row.querySelector('.param-cb'); if(!cb || !cb.checked) return;
+              var o = (typeof PARAMS !== 'undefined') ? PARAMS[parseInt(row.dataset.paramIdx)] : null; if(!o) return;
+              var chk = (o.name in keep) ? keep[o.name] : true;
+              html += '<label style="display:flex;align-items:center;gap:.3rem"><input type="checkbox" class="cascade-param-cb" value="'
+                    + o.name.replace(/"/g,'&quot;') + '"' + (chk ? ' checked' : '') + '> ' + o.name + '</label>';
+            }});
+            list.innerHTML = html || '<span style="color:var(--muted)">no parameter selected in the Parameters tab</span>';
+            list.querySelectorAll('.cascade-param-cb').forEach(function(cb){{
+              cb.addEventListener('change', function(){{ if (typeof updateScript === 'function') updateScript(); }});
+            }});
+          }}
+          on.addEventListener('change', function(){{ body.style.display = on.checked ? '' : 'none'; sync(); if (typeof updateScript === 'function') updateScript(); }});
+          document.addEventListener('change', function(ev){{ if (ev.target && ev.target.classList && ev.target.classList.contains('param-cb') && on.checked) sync(); }});
+          list.addEventListener('change', function(){{ if (typeof updateScript === 'function') updateScript(); }});
+        }})();
+        </script>
+    </div>"""
 
 
 def _build_interactive_parameters_section(parameters: List[Dict]) -> str:
@@ -5370,6 +5541,30 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
         model_index: pinfo.model_index != null ? pinfo.model_index : 0};
     });
 
+    // ── Sub-basin cascade calibration (Targets tab card) ── null = off.
+    s.cascade = null;
+    var _cOn = document.getElementById('cascade-on');
+    if (_cOn && _cOn.checked) {
+      var _zp = [];
+      document.querySelectorAll('.cascade-param-cb').forEach(function(cb){ if (cb.checked) _zp.push(cb.value); });
+      var _tg = [], _ex = [];
+      document.querySelectorAll('.cascade-station-role').forEach(function(sel){
+        var r = parseInt(sel.dataset.reach);
+        if (isNaN(r)) return;
+        if (sel.value === 'target') _tg.push(r); else _ex.push(r);
+      });
+      function _num(id, dflt){ var el = document.getElementById(id); var v = el ? parseInt(el.value) : NaN; return isNaN(v) ? dflt : v; }
+      s.cascade = {enabled: true,
+        min_obs: _num('cascade_min_obs', 20),
+        zone_parameters: _zp,
+        target_reaches: _tg,
+        excluded_reaches: _ex,
+        global_evaluations: _num('cascade_global_evals', s.max_evaluations),
+        stage_evaluations: _num('cascade_stage_evals', s.max_evaluations),
+        polish_evaluations: _num('cascade_polish_evals', 0),
+        inherit: ((document.getElementById('cascade_inherit') || {}).value) || 'global'};
+    }
+
     return s;
   }
 
@@ -5520,6 +5715,13 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('');
     lines.push('objective_weights = ' + pyRepr(s.objective_weights));
     lines.push('');
+    if (s.cascade && s.cascade.enabled) {
+      lines.push('# Sub-basin cascade calibration (Targets tab): the gauged zones are');
+      lines.push('# calibrated upstream to downstream, one value per zone for zone_parameters,');
+      lines.push('# after a global stage; stages run in sub-folders of the work dir.');
+      lines.push('cascade = ' + pyRepr(s.cascade));
+      lines.push('');
+    }
 
     lines.push('# Workflow mode (from the report slider):');
     lines.push('#   "sensitivity" -> identify influential parameters only (no calibration)');
@@ -5706,6 +5908,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        metric_focus=metric_focus,');
     lines.push('        objective_weights=objective_weights,');
     lines.push('        calibration_targets=calibration_targets,');
+    if (s.cascade && s.cascade.enabled) lines.push('        cascade=cascade,');
     lines.push('        random_seed=random_seed,');
     lines.push('        # DDS early stop: None = OFF (full budget) | N evaluations.');
     lines.push('        early_stop_patience=early_stop_patience,');
@@ -5746,6 +5949,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     lines.push('        executable_full_path=(os.environ.get("OWQ_EXEC_PATH")');
     lines.push('                              or container_config.get("executable_path", "")),');
     lines.push('        file_manager_path=container_config.get("file_manager_path", ""),');
+    lines.push('        # SUMMA with internally coupled mizuRoute: TOML passed with -c');
+    lines.push('        mizuroute_config_path=container_config.get("mizuroute_config_path", ""),');
     lines.push('        excluded_frameworks=excluded_frameworks,');
     lines.push('        # Spatial-matching options consumed by ObjectiveFunction.');
     lines.push('        # use_primary_only=True restricts the metric to pouring-');

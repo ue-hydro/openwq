@@ -58,6 +58,7 @@ OpenWQ uses CMake (minimum version 3.10) with support for multiple build targets
 
 * ``openwq`` -- Standalone
 * ``summa_openwq`` -- Coupled to SUMMA
+* ``summa-mizuroute_openwq`` -- Coupled to SUMMA with internally coupled mizuRoute (land and river in one executable)
 * ``crhm_openwq`` -- Coupled to CRHM
 * ``mizuroute_openwq`` -- Coupled to mizuRoute
 * ``mizuroute_lakes_openwq`` -- mizuRoute with lake routing

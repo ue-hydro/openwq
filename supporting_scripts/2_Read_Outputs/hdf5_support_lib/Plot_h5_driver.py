@@ -44,6 +44,7 @@ from spatial_matching import (
     find_basin_outlet as _find_basin_outlet,
     match_stations_to_features as _match_stations_to_features,
     match_stations_to_basins as _match_stations_to_basins,
+    match_stations,
 )
 
 
@@ -683,7 +684,8 @@ def _build_html(plots, what2map, hostmodel, river_geojson=None,
                 station_to_feature=None,
                 pouring_point_stations=None, separator=' | ',
                 basin_geojson=None, river_line_geojson=None,
-                config_template_path=None, flux_names=None):
+                config_template_path=None, flux_names=None,
+                river_mapping_key=None, dual_interactive=False):
     """Build a self-contained HTML string with interactive Plotly.js charts.
 
     Parameters
@@ -1822,6 +1824,11 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   L.control.zoom({{position:'topleft'}}).addTo(map);
 
   var mapKey='{mapping_key}';
+  var riverKey='{river_mapping_key or mapping_key}';
+  var dualInteractive={json.dumps(bool(dual_interactive))};
+  // plot div -> 'polygon' | 'line' (coupled layout): a reach and a basin may share an id,
+  // so selections are kept per layer ('B:'/'R:' keys) and each plot follows its own layer
+  var plotGeom={json.dumps({(p.get('id') or '') + '_div': p.get('geom') for p in plots})};
   var fidColor={_fid_color_json};
   var plotFids={_fid_list_json};
   var mapFidColor={json.dumps(_map_fid_color)};
@@ -1832,18 +1839,27 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   var plotToMap={json.dumps(_plot_to_map)};
   var mapToPlot={json.dumps(_map_to_plot)};
 
-  var featureLayers={{}};  // fid → Leaflet layer
+  var featureLayers={{}};  // fid → [{{layer, poly}}] (a basin and a reach may share an id)
   var selectedFids={{}};   // fid → true (multi-select set, map-space IDs)
   window._owqSelectedFids=selectedFids;  // expose for layer selector
 
   // Has the user clicked anything in *map* space that corresponds to this
   // plot-side HRU?  We accept either a direct match (mizuRoute) or the
   // bridged map-space ID (SUMMA when ID namespaces diverge).
-  window._owqIsSelected=function(plotHru){{
+  window._owqIsSelected=function(plotHru,geom){{
     if(plotHru==null) return false;
+    // SUMMA HRU with several domains: "<hruId>_d<n>" joins the map by hruId
+    var base=String(plotHru).replace(/_d\d+$/,'');
+    if(dualInteractive && geom){{
+      var pre=(geom==='line')?'R:':'B:';
+      if(selectedFids[pre+plotHru] || selectedFids[pre+base]) return true;
+      var mid=plotToMap[plotHru]||plotToMap[base];
+      return !!(mid && selectedFids[pre+mid]);
+    }}
     if(selectedFids[plotHru]) return true;
     var mapId=plotToMap[plotHru];
     if(mapId && selectedFids[mapId]) return true;
+    if(base!==String(plotHru) && (selectedFids[base] || (plotToMap[base] && selectedFids[plotToMap[base]]))) return true;
     return false;
   }};
 
@@ -1858,23 +1874,24 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
     return mapFidColor[fid]||fidColor[fid]||hruColor[fid]||'#888';
   }}
 
-  function _defaultStyle(fid){{
-    var c=_mapColor(fid);
-    if(isPolygon){{
+  // poly: geometry of the layer being styled (defaults to the primary layer)
+  function _defaultStyle(fid,poly){{
+    var c=_mapColor(fid); if(poly===undefined) poly=isPolygon;
+    if(poly){{
       return {{color:'#444',weight:1.5,opacity:0.7,fillColor:c,fillOpacity:0.5}};
     }}
     return {{color:c,weight:3,opacity:0.85}};
   }}
-  function _highlightStyle(fid){{
-    var c=_mapColor(fid);
-    if(isPolygon){{
+  function _highlightStyle(fid,poly){{
+    var c=_mapColor(fid); if(poly===undefined) poly=isPolygon;
+    if(poly){{
       return {{color:'#222',weight:2.5,opacity:1,fillColor:c,fillOpacity:0.75}};
     }}
     return {{color:c,weight:5,opacity:1}};
   }}
-  function _dimStyle(fid){{
-    var c=_mapColor(fid);
-    if(isPolygon){{
+  function _dimStyle(fid,poly){{
+    var c=_mapColor(fid); if(poly===undefined) poly=isPolygon;
+    if(poly){{
       return {{color:'#999',weight:0.5,opacity:0.3,fillColor:c,fillOpacity:0.15}};
     }}
     return {{color:c,weight:1.5,opacity:0.3}};
@@ -1883,22 +1900,24 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   // === LAYER ORDER: Basin (back) → River Network (middle) → Stations (front) ===
 
   // Helper: make a layer interactive (clickable, with selection logic)
-  function _makeInteractive(gjData){{
+  // key: property holding the feature id; poly: polygon (true) or line (false) styling
+  function _makeInteractive(gjData,key,poly){{
+    if(key===undefined) key=mapKey; if(poly===undefined) poly=isPolygon;
     return L.geoJSON(gjData,{{
       style:function(feature){{
-        var fid=String(feature.properties[mapKey]||'');
-        return _defaultStyle(fid);
+        var fid=String(feature.properties[key]||'');
+        return _defaultStyle(fid,poly);
       }},
       onEachFeature:function(feature,layer){{
-        var fid=String(feature.properties[mapKey]||'');
-        featureLayers[fid]=layer;
-        layer.bindTooltip(_owqFeatureLabel+fid,{{sticky:true,direction:'top',opacity:0.9}});
-        layer.on('click',function(){{ _owqToggleFeature(fid); }});
-        layer.on('mouseover',function(){{ layer.setStyle(_highlightStyle(fid)); }});
+        var fid=String(feature.properties[key]||'');
+        (featureLayers[fid]=featureLayers[fid]||[]).push({{layer:layer,poly:poly}});
+        layer.bindTooltip((poly?_owqFeatureLabel:'reach ')+fid,{{sticky:true,direction:'top',opacity:0.9}});
+        layer.on('click',function(){{ _owqToggleFeature(fid,poly); }});
+        layer.on('mouseover',function(){{ layer.setStyle(_highlightStyle(fid,poly)); }});
         layer.on('mouseout',function(){{
           var hasSel=Object.keys(selectedFids).length>0;
-          if(hasSel&&!selectedFids[fid]){{ layer.setStyle(_dimStyle(fid)); }}
-          else{{ layer.setStyle(_defaultStyle(fid)); }}
+          if(hasSel&&!selectedFids[fid]){{ layer.setStyle(_dimStyle(fid,poly)); }}
+          else{{ layer.setStyle(_defaultStyle(fid,poly)); }}
         }});
       }}
     }});
@@ -1908,10 +1927,10 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   var _basinData={json.dumps(basin_geojson) if basin_geojson else 'null'};
   var _basinLayer=null;
   var _basinVisible=true;
-  var _basinIsInteractive=isPolygon;  // interactive when primary is polygon (SUMMA)
+  var _basinIsInteractive=isPolygon||dualInteractive;  // interactive when primary is polygon (SUMMA) or coupled
   if(_basinData){{
     if(_basinIsInteractive){{
-      _basinLayer=_makeInteractive(_basinData);
+      _basinLayer=_makeInteractive(_basinData,mapKey,true);
     }}else{{
       _basinLayer=L.geoJSON(_basinData,{{
         interactive:false,
@@ -1927,10 +1946,10 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   var _riverData={json.dumps(river_line_geojson) if river_line_geojson else 'null'};
   var _riverLayer=null;
   var _riverVisible=true;
-  var _riverIsInteractive=!isPolygon;  // interactive when primary is line (mizuRoute)
+  var _riverIsInteractive=!isPolygon||dualInteractive;  // interactive when primary is line (mizuRoute) or coupled
   if(_riverData){{
     if(_riverIsInteractive){{
-      _riverLayer=_makeInteractive(_riverData);
+      _riverLayer=_makeInteractive(_riverData,dualInteractive?riverKey:mapKey,false);
     }}else{{
       _riverLayer=L.geoJSON(_riverData,{{
         interactive:false,
@@ -2236,9 +2255,17 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
   }}
 
   // Toggle a feature in/out of the multi-select set
-  window._owqToggleFeature=function(fid){{
-    if(selectedFids[fid]){{ delete selectedFids[fid]; }}
-    else{{ selectedFids[fid]=true; }}
+  window._owqToggleFeature=function(fid,poly){{
+    if(dualInteractive){{
+      // poly given: toggle that layer only; otherwise (legend) toggle both layers
+      var keys=(poly===undefined)?['B:'+fid,'R:'+fid]:[(poly?'B:':'R:')+fid];
+      var on=!selectedFids[keys[0]];
+      keys.forEach(function(k){{ if(on) selectedFids[k]=true; else delete selectedFids[k]; }});
+      if(selectedFids['B:'+fid]||selectedFids['R:'+fid]) selectedFids[fid]=true; else delete selectedFids[fid];
+    }}else{{
+      if(selectedFids[fid]){{ delete selectedFids[fid]; }}
+      else{{ selectedFids[fid]=true; }}
+    }}
     _owqRefreshSelection();
   }};
 
@@ -2257,10 +2284,13 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
     var hasSel=Object.keys(selectedFids).length>0;
     // 1) Update map feature styles
     for(var f in featureLayers){{
-      var ly=featureLayers[f];
-      if(!hasSel){{ ly.setStyle(_defaultStyle(f)); }}
-      else if(selectedFids[f]){{ ly.setStyle(_highlightStyle(f)); }}
-      else{{ ly.setStyle(_dimStyle(f)); }}
+      featureLayers[f].forEach(function(e){{
+        var ly=e.layer;
+        var k=dualInteractive?((e.poly?'B:':'R:')+f):f;
+        if(!hasSel){{ ly.setStyle(_defaultStyle(f,e.poly)); }}
+        else if(selectedFids[k]){{ ly.setStyle(_highlightStyle(f,e.poly)); }}
+        else{{ ly.setStyle(_dimStyle(f,e.poly)); }}
+      }});
     }}
     // 2) Filter station markers
     if(typeof _owqFilterStations==='function') _owqFilterStations(selectedFids);
@@ -2294,7 +2324,7 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
             // Secondary-station toggle (off → hide gray obs traces)
             if(!secOn && window._owqIsSecondaryObsTrace(gd.id,tidx)) return false;
             if(!hasSel) return true;
-            return selectedFids[om[tidx]]?true:false;
+            return window._owqIsSelected(om[tidx],plotGeom[gd.id])?true:false;
           }}
           var lg=t.legendgroup||'';
           var tname=(t.name||'').replace(_owqFeatureLabel,'');
@@ -2319,7 +2349,7 @@ _owqPlotQueue.push({{id:'{div_id}',traces:{traces_json},
           // Multi-select: show only selected features.  _owqIsSelected
           // bridges plot-side HRU IDs to map-side basin IDs when the two
           // namespaces differ (SUMMA).
-          return window._owqIsSelected(info.hru)?true:false;
+          return window._owqIsSelected(info.hru,plotGeom[gd.id])?true:false;
         }});
         Plotly.restyle(gd,{{visible:newVis}}).then(_nextRestyle);
       }}
@@ -2380,7 +2410,7 @@ window._owqSelectFeature = window._owqSelectFeature || function(){};
       if(hasSel){{
         var info=_owqExtractHru(tname,lg);
         if(typeof window._owqIsSelected==='function'){{
-          if(!window._owqIsSelected(info.hru)) return false;
+          if(!window._owqIsSelected(info.hru,(typeof plotGeom!=='undefined')?plotGeom[String(plotId).replace(/_div$/,'')+'_div']:undefined)) return false;
         }}else if(!selFids[info.hru]){{
           return false;
         }}
@@ -2525,9 +2555,16 @@ def Plot_h5_driver(what2map=None,
                    separator=' | ',
                    config_template_path=None,
                    static_matrix_dir=None,
-                   flux_names=None):
+                   flux_names=None,
+                   river_compartments=None):
     """
     Generate interactive HTML time-series plots (Plotly.js).
+
+    ``river_compartments`` (SUMMA with internally coupled mizuRoute) names the
+    outputs that live on river reaches (``RIVER_NETWORK_REACHES``,
+    ``Qlocal_out``): their traces are joined to the river-network shapefile by
+    ``mapping_key`` and their stations matched to the nearest reach, while the
+    other compartments keep the basin polygons; both map layers are clickable.
 
     Observations can come from ``observation_dir`` / ``observation_csv``
     (station coordinates → matched to features through the shapefile) or,
@@ -2581,6 +2618,13 @@ def Plot_h5_driver(what2map=None,
     str or None
         Path to the generated HTML file, or None if no plots were created.
     """
+    # Coupled SUMMA + mizuRoute: outputs defined on river reaches
+    _river_cmp_set = None
+    if river_compartments is not None:
+        if isinstance(river_compartments, str):
+            river_compartments = [river_compartments]
+        _river_cmp_set = {str(c).strip().upper() for c in river_compartments}
+
 
     # Default feature_label to mapping_key if not provided
     if feature_label is None:
@@ -2778,8 +2822,10 @@ def Plot_h5_driver(what2map=None,
             parts = col.split('_', 1)  # ['hruId', '1_z1'] or ['reachID', '740493340']
             if len(parts) < 2:
                 return (col, None)
-            value = parts[1]  # '1_z1' or '740493340'
-            # Check for layer suffix _z<digits>
+            value = parts[1]  # '1_z1', '1_d2_z1' or '740493340'
+            # Check for layer suffix _z<digits>; a domain suffix "_d<n>" (SUMMA
+            # HRU with several domains) stays in the feature id for the trace
+            # name and is stripped when joining the map (see _owqIsSelected).
             m = re.match(r'^(.+)_(z\d+)$', value)
             if m:
                 return (m.group(1), m.group(2))
@@ -2974,6 +3020,8 @@ def Plot_h5_driver(what2map=None,
                         'species': spec,
                         'compartment': comp,
                         'debug_labels': _debug_labels_found,
+                        'geom': (None if _river_cmp_set is None else
+                                 ('line' if str(comp).upper() in _river_cmp_set else 'polygon')),
                     })
 
                     print(f"  ✓ Plot: {comp}{separator}{chem_name}"
@@ -3103,6 +3151,11 @@ def Plot_h5_driver(what2map=None,
     else:
         _primary_geojson = _basin_geojson or _river_geojson
         _map_geom_type = 'polygon' if _basin_geojson else 'line'
+    # Coupled SUMMA + mizuRoute: land plots live on the basin polygons and
+    # river plots on the reaches, so both layers are clickable
+    _dual_interactive = bool(_river_cmp_set is not None and _basin_geojson and _river_geojson)
+    if _dual_interactive:
+        print("  Coupled land + river layout: basin polygons and river reaches are both interactive")
 
     # Compute map bounds from whichever layers are available
     _all_bounds = []
@@ -3141,6 +3194,26 @@ def Plot_h5_driver(what2map=None,
                 m = re.match(r'^(.+?) \(z\d+\)$', tfid)
                 _plot_hru_ids.add(m.group(1) if m else tfid)
 
+    # Coupled layout: detect the basin key from land plots and the river key
+    # from river plots, so a reach id never drives the basin detection
+    _plot_ids_land, _plot_ids_river = _plot_hru_ids, _plot_hru_ids
+    if _river_cmp_set is not None and plots:
+        _plot_ids_land, _plot_ids_river = set(), set()
+        for p in plots:
+            _tgt = _plot_ids_river if p.get('geom') == 'line' else _plot_ids_land
+            for t in p.get('traces', []):
+                if t.get('legendgroup', '').startswith('debug_'):
+                    continue
+                tname = t.get('name', '')
+                if feature_label and tname.startswith(feature_label + ' '):
+                    tname = tname[len(feature_label) + 1:]
+                m = re.match(r'^(.+?) \(z\d+\)$', tname)
+                _tgt.add(re.sub(r'_d\d+$', '', m.group(1) if m else tname))
+        if not _plot_ids_land:
+            _plot_ids_land = _plot_hru_ids
+        if not _plot_ids_river:
+            _plot_ids_river = _plot_hru_ids
+
     if _basin_geojson and _basin_geojson.get('features'):
         _props = _basin_geojson['features'][0].get('properties', {})
 
@@ -3150,7 +3223,7 @@ def Plot_h5_driver(what2map=None,
             _map_vals = set()
             for feat in _basin_geojson['features']:
                 _map_vals.add(str(feat['properties'].get(_basin_mapping_key, '')))
-            if _plot_hru_ids & _map_vals:
+            if _plot_ids_land & _map_vals:
                 _found_match = True
                 print(f"  Basin mapping key '{_basin_mapping_key}' matches plot data ✓")
 
@@ -3160,7 +3233,7 @@ def Plot_h5_driver(what2map=None,
                 _map_vals = set()
                 for feat in _basin_geojson['features']:
                     _map_vals.add(str(feat['properties'].get(_try_key, '')))
-                if _plot_hru_ids and (_plot_hru_ids & _map_vals):
+                if _plot_ids_land and (_plot_ids_land & _map_vals):
                     _basin_mapping_key = _try_key
                     _found_match = True
                     print(f"  Auto-detected basin mapping key: '{_try_key}' "
@@ -3196,7 +3269,7 @@ def Plot_h5_driver(what2map=None,
             _river_vals = set()
             for feat in _river_geojson['features']:
                 _river_vals.add(str(feat['properties'].get(mapping_key, '')))
-            if _plot_hru_ids & _river_vals:
+            if _plot_ids_river & _river_vals:
                 _found_river_match = True
                 print(f"  River-network mapping key '{mapping_key}' "
                       f"matches plot data ✓")
@@ -3207,7 +3280,7 @@ def Plot_h5_driver(what2map=None,
                 _rv_vals = set()
                 for feat in _river_geojson['features']:
                     _rv_vals.add(str(feat['properties'].get(_try_key, '')))
-                if _plot_hru_ids and (_plot_hru_ids & _rv_vals):
+                if _plot_ids_river and (_plot_ids_river & _rv_vals):
                     mapping_key = _try_key
                     _found_river_match = True
                     print(f"  Auto-detected river-network mapping key: "
@@ -3304,6 +3377,8 @@ def Plot_h5_driver(what2map=None,
                                 if _basin_geojson else mapping_key)
             else:
                 _obs_map_key = mapping_key
+            _stf_by_geom = {}
+            _pp_by_geom = {}
             if _map_geom_type == 'polygon':
                 # SUMMA: match each station to its containing basin via
                 # point-in-polygon (with a nearest-basin fallback for
@@ -3315,12 +3390,40 @@ def Plot_h5_driver(what2map=None,
                     _match_stations_to_basins(
                         station_locations, _obs_geojson, _obs_map_key,
                         river_geojson=_river_geojson)
+                _stf_by_geom['polygon'] = station_to_feature
+                _pp_by_geom['polygon'] = _pouring_point_stations
             else:
                 # mizuRoute: match to nearest river reach; every matched
                 # station is "primary" for the purposes of the JS filter.
                 station_to_feature = _match_stations_to_features(
                     station_locations, _obs_geojson, _obs_map_key)
                 _pouring_point_stations = set(station_to_feature.keys())
+                _stf_by_geom['line'] = station_to_feature
+                _pp_by_geom['line'] = _pouring_point_stations
+            # Coupled layout: river plots get their stations matched to the
+            # nearest reach (bounded to 5 km) and land plots to the basins
+            if _dual_interactive:
+                if 'line' not in _stf_by_geom:
+                    _stf_river, _pp_river = match_stations(
+                        station_locations, 'summa', river_geojson=_river_geojson,
+                        river_mapping_key=mapping_key, log=print,
+                        max_distance_km=5.0, target='river')
+                    _stf_by_geom['line'] = _stf_river
+                    _pp_by_geom['line'] = _pp_river
+                if 'polygon' not in _stf_by_geom:
+                    _stf_b, _pp_b = _match_stations_to_basins(
+                        station_locations, _basin_geojson, _basin_mapping_key,
+                        river_geojson=_river_geojson)
+                    _stf_by_geom['polygon'] = _stf_b
+                    _pp_by_geom['polygon'] = _pp_b
+                # Map markers follow the layer the observation compartments live on
+                _obs_cmps_upper = {str(c).strip().upper() for c in (
+                    [observation_compartments] if isinstance(observation_compartments, str)
+                    else (observation_compartments or []))}
+                _marker_geom = 'line' if (_obs_cmps_upper and _obs_cmps_upper <= _river_cmp_set) else 'polygon'
+                station_to_feature = _stf_by_geom.get(_marker_geom) or station_to_feature
+                _pouring_point_stations = _pp_by_geom.get(_marker_geom, _pouring_point_stations)
+                print(f"  Station markers follow the {'river reaches' if _marker_geom == 'line' else 'basin polygons'}")
             if station_to_feature:
                 print(f"  Matched {len(station_to_feature)} stations to features:")
                 for sid, fid in station_to_feature.items():
@@ -3353,9 +3456,12 @@ def Plot_h5_driver(what2map=None,
                     for rec in species_obs:
                         stn_groups[rec['station_id']]['x'].append(rec['datetime'])
                         stn_groups[rec['station_id']]['y'].append(rec['value'])
+                    _stf_plot = station_to_feature
+                    if _dual_interactive:
+                        _stf_plot = _stf_by_geom.get(p.get('geom') or 'polygon') or {}
                     plot_obs = []
                     for stn_id, data in stn_groups.items():
-                        fid = station_to_feature.get(stn_id)
+                        fid = _stf_plot.get(stn_id)
                         if fid is None:
                             continue
                         plot_obs.append({
@@ -3542,7 +3648,9 @@ def Plot_h5_driver(what2map=None,
                                basin_geojson=_basin_geojson,
                                river_line_geojson=_river_geojson,
                                config_template_path=config_template_path,
-                               flux_names=flux_names)
+                               flux_names=flux_names,
+                               river_mapping_key=mapping_key,
+                               dual_interactive=_dual_interactive)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)

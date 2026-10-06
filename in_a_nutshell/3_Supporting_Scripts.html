@@ -689,8 +689,8 @@ python calibration_config_template.py [flags]
                     </tr>
                     <tr>
                         <td><strong>1. General Info</strong></td>
-                        <td>project_name, hostmodel, dir2save</td>
-                        <td>Project metadata and output directory</td>
+                        <td>project_name, hostmodel, dir2save, mizuroute_config_path</td>
+                        <td>Project metadata and output directory; <code>mizuroute_config_path</code> (with <code>hostmodel="summa"</code>) selects SUMMA with internally coupled mizuRoute: land and river compartments in one run</td>
                     </tr>
                     <tr>
                         <td><strong>2. Computational</strong></td>
@@ -796,7 +796,7 @@ ss_ml_training_data_csv = \
                 </div>
                 <div class="highlight-box info" style="margin-top: 20px;">
                     <strong>Cell ID Mapping:</strong> Set <code>ss_use_cellid_mapping = True</code> to use host model IDs
-                    (reachID for mizuroute, hruId_z{layer} for SUMMA) instead of internal (ix, iy, iz) indices.
+                    (reachID for mizuroute, hruId_z{layer} for SUMMA, both at once for SUMMA with internal mizuRoute) instead of internal (ix, iy, iz) indices.
                 </div>
             </div>
             <div class="slide-footer">
@@ -1190,6 +1190,10 @@ h5_mplib.Map_h5_driver(
                         <div class="card accent" style="margin-top: 15px;">
                             <h3>Host Model Mapping</h3>
                             <p>Set <code>what2map='hostmodel'</code> to map discharge, runoff, or other hydro variables</p>
+                        </div>
+                        <div class="card secondary" style="margin-top: 15px;">
+                            <h3>SUMMA + mizuRoute (internal coupling)</h3>
+                            <p style="font-size: 0.85rem;">One output folder holds the land compartments (HRU ids) and <code>RIVER_NETWORK_REACHES</code> / <code>Qlocal_out</code> (reach ids). The results report joins land cells to the basin shapefile and reaches to the river shapefile (<code>river_compartments=</code>), both map layers are clickable, and stations are matched to basins or reaches per compartment.</p>
                         </div>
                     </div>
                 </div>

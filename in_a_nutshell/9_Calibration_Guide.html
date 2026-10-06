@@ -1234,6 +1234,11 @@ python &lt;template&gt;_run.py --report   <span class="comment"># (re)build the 
                     for <strong>SUMMA</strong> only the pouring-point (HRU-outlet) station feeds the
                     metric by default (<code>use_primary_only=True</code>) — untick
                     <em>“use only primary”</em> to score the secondary stations too.
+                    For <strong>SUMMA with internally coupled mizuRoute</strong> (model config with
+                    <code>mizuroute_config_path</code>) river targets (<code>RIVER_NETWORK_REACHES</code>,
+                    <code>Qlocal_out</code>) are matched to the nearest reach as in mizuRoute and land targets to
+                    HRUs; the targets must be all land or all river, and every evaluation runs the single coupled
+                    executable (<code>-m fileManager -c toml</code>, one process).
                 </div>
             </div>
             <div class="slide-footer">

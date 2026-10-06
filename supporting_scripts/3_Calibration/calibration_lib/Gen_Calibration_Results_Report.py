@@ -185,6 +185,12 @@ def generate_results_report(
         except Exception as _e:
             logger.warning(f"ML regionalization section skipped: {_e}")
             _mlr_html = ""
+        # Sub-basin cascade calibration: per-stage summary written by cascade.py.
+        try:
+            _cascade_html = _build_cascade_section(output_dir)
+        except Exception as _e:
+            logger.warning(f"Sub-basin cascade section skipped: {_e}")
+            _cascade_html = ""
         _mode = calibration_settings.get("calibration_mode") or (
             "both" if (_did_sens and _did_calib)
             else "sensitivity" if _did_sens else "calibration")
@@ -215,12 +221,18 @@ def generate_results_report(
                 nav_items.append({"id": "ml-closures", "label": "ML Closures"})
             if _mlr_html:
                 nav_items.append({"id": "ml-regionalize", "label": "ML Regionalization"})
+            if _cascade_html:
+                nav_items.append({"id": "cascade", "label": "Sub-basins"})
             nav_items.extend([
                 {"id": "param-evolution", "label": "Parameter Evolution"},
                 {"id": "param-correlations", "label": "Correlations"},
             ])
         else:
             nav_items.append({"id": "best-params", "label": "Calibration"})
+            # a cascade run returns its per-zone summary without an evaluation
+            # history: the Sub-basins section is still shown
+            if _cascade_html:
+                nav_items.append({"id": "cascade", "label": "Sub-basins"})
         if _did_calib:
             # The time-series section is always rendered for a calibration run
             # (when no obs-sim pairs exist it shows a placeholder explaining
@@ -483,6 +495,8 @@ def generate_results_report(
                 H.append(_build_ml_closure_section(_ml_diag))
             if _mlr_html:
                 H.append(_mlr_html)
+            if _cascade_html:
+                H.append(_cascade_html)
             H.append(_build_param_evolution_section(
                 calibration_results, calibration_parameters, output_dir))
             H.append(_build_correlations_section(
@@ -530,7 +544,11 @@ def generate_results_report(
                 "Calibration is in progress &mdash; results will appear here as "
                 "evaluations complete. Reopen this report shortly.",
                 status="&#9203; In progress.", colour="#3b82f6"))
+            if _cascade_html:
+                H.append(_cascade_html)
         else:
+            if _cascade_html:
+                H.append(_cascade_html)
             H.append(_build_not_run_notice(
                 "best-params", "Calibration",
                 f"Calibration was not run for this workflow "
@@ -1501,6 +1519,81 @@ def _build_ml_runtime_cards(output_dir, eval_dir):
       <div class="mlc-note">{' '.join(notes)}</div>
     </div>""")
     return cards, n_units_max
+
+
+def _build_cascade_section(output_dir):
+    """Sub-basin cascade calibration: the zones, the fit of every station after
+    each stage, and the calibrated value of each zone-specific parameter.
+    Rendered only when ``wq_zones/cascade_summary.json`` exists."""
+    import json as _json, os as _os, html as _h
+    p = _os.path.join(str(output_dir), "wq_zones", "cascade_summary.json")
+    if not _os.path.isfile(p):
+        return ""
+    with open(p) as f:
+        S = _json.load(f)
+    zones = S.get("zones", [])
+    stages = S.get("stages", [])
+    if not zones or not stages:
+        return ""
+    zone_of_station = {str(z["station_reach"]): z for z in zones}
+    # per-station KGE after each stage
+    stations = []
+    for z in zones:
+        stations.append(str(z["station_reach"]))
+    head = "".join(f"<th>{_h.escape(st['stage'].replace('stage_', ''))}</th>" for st in stages)
+    rows = []
+    for stn in stations:
+        z = zone_of_station[stn]
+        cells = []
+        for st in stages:
+            fit = (st.get("fit") or {}).get(stn)
+            if fit is None:
+                cells.append("<td style='color:var(--muted)'>&ndash;</td>")
+            else:
+                calibrated_here = (z["id"] in (st.get("zones") or [])) or st.get("level") in (0, "polish")
+                style = "font-weight:600" if calibrated_here else "color:var(--muted)"
+                cells.append(f"<td style='{style}'>{fit['kge']:.2f}</td>")
+        rows.append(f"<tr><td><b>{z['id']}</b></td><td>{stn}</td><td>{z['level']}</td>"
+                    f"<td>{z['n_obs']}</td><td>{z['area_m2']/1e6:,.0f}</td>{''.join(cells)}</tr>")
+    fit_table = (f"<table class='param-table'><thead><tr><th>Zone</th><th>Station</th><th>Level</th>"
+                 f"<th>Obs</th><th>Area (km&sup2;)</th>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>")
+    # zone values
+    zv = S.get("zone_values") or {}
+    gl = (stages[0].get("best") or {}) if stages else {}
+    vrows = []
+    zone_ids = [z["id"] for z in zones] + [0]
+    for pname, d in zv.items():
+        cells = "".join(
+            f"<td>{float(d[str(zid)]):.4g}</td>" if str(zid) in d else "<td style='color:var(--muted)'>inherits</td>"
+            for zid in zone_ids)
+        g = gl.get(pname)
+        vrows.append(f"<tr><td><code>{_h.escape(pname)}</code></td>"
+                     f"<td>{(f'{float(g):.4g}' if g is not None else '&ndash;')}</td>{cells}</tr>")
+    vhead = "".join(f"<th>zone {zid}</th>" for zid in zone_ids[:-1]) + "<th>ungauged</th>"
+    value_table = (f"<table class='param-table'><thead><tr><th>Parameter</th><th>Global</th>{vhead}</tr></thead>"
+                   f"<tbody>{''.join(vrows)}</tbody></table>") if vrows else \
+                  "<p style='color:var(--muted)'>No zone-specific parameter was selected.</p>"
+    ung = S.get("ungauged") or {}
+    return f"""
+<div class="section" id="cascade">
+    <h2>Sub-basin cascade calibration</h2>
+    <p style="font-size:.9rem;color:var(--text2);">
+        {len(zones)} gauged zones calibrated in {len(S.get('levels', []))} levels, upstream to downstream,
+        after a global stage. KGE of every station after each stage (bold = the stage that
+        calibrated that station's zone; grey = the station was not a target of that stage).
+        The ungauged zone ({ung.get('n_reaches', 0)} reaches, {(ung.get('area_m2', 0) or 0)/1e6:,.0f} km&sup2;)
+        takes {_h.escape(str(S.get('inherit', 'global')))} values.
+    </p>
+    <div class="card">
+        <h3>Fit per station and stage</h3>
+        {fit_table}
+    </div>
+    <div class="card">
+        <h3>Calibrated values per zone</h3>
+        {value_table}
+    </div>
+</div>
+"""
 
 
 def _build_ml_regionalize_section(output_dir, calibration_parameters,
@@ -2546,6 +2639,10 @@ def _build_docker_run_snippet(container_cfg: Dict[str, Any],
     mpi_np = container_cfg.get("mpi_np", 2)
     _np = 1 if hostmodel == "summa" else mpi_np
     _fm_flag = "-m " if hostmodel == "summa" else ""
+    # SUMMA with internally coupled mizuRoute: TOML passed with -c
+    _toml = container_cfg.get("mizuroute_config_path") or ""
+    _coupled = bool(hostmodel == "summa" and _toml)
+    _cont_toml = None
 
     # Try to resolve container paths from docker-compose.yml so the user
     # gets a fully literal command they can paste.  Use the same helper the
@@ -2573,6 +2670,9 @@ def _build_docker_run_snippet(container_cfg: Dict[str, Any],
                     os.path.abspath(exe), _host_root, _cont_root)
                 _cont_fm = _gid._correct_path_for_docker(
                     os.path.abspath(fm), _host_root, _cont_root)
+                if _coupled:
+                    _cont_toml = _gid._correct_path_for_docker(
+                        os.path.abspath(_toml), _host_root, _cont_root)
                 _wd = os.path.dirname(os.path.abspath(exe))
                 _cont_wd = _gid._correct_path_for_docker(
                     _wd + "/", _host_root, _cont_root).rstrip("/")
@@ -2580,18 +2680,20 @@ def _build_docker_run_snippet(container_cfg: Dict[str, Any],
             pass
 
     if _cont_exe and _cont_fm and _cont_wd:
+        _c_arg = f' -c {_cont_toml}' if (_coupled and _cont_toml) else ''
         return (f'docker exec {name} /bin/bash -c '
                 f'"export HDF5_USE_FILE_LOCKING=FALSE && '
                 f'cd {_cont_wd} && '
                 f'mpirun --allow-run-as-root -np {_np} '
-                f'{_cont_exe} {_fm_flag}{_cont_fm}"')
+                f'{_cont_exe} {_fm_flag}{_cont_fm}{_c_arg}"')
 
+    _c_arg = f' -c <container_path_to:{os.path.abspath(_toml)}>' if _coupled else ''
     return (f'docker exec {name} /bin/bash -c '
             f'"export HDF5_USE_FILE_LOCKING=FALSE && '
             f'cd <container_path_to:{os.path.dirname(os.path.abspath(exe)) if exe else "<exec_dir>"}> && '
             f'mpirun --allow-run-as-root -np {_np} '
             f'<container_path_to:{os.path.abspath(exe) if exe else "<executable>"}> '
-            f'{_fm_flag}<container_path_to:{os.path.abspath(fm) if fm else "<file_manager>"}>"')
+            f'{_fm_flag}<container_path_to:{os.path.abspath(fm) if fm else "<file_manager>"}>{_c_arg}"')
 
 
 def _resolve_hpc_settings(container_cfg: Dict[str, Any],
@@ -2645,6 +2747,8 @@ def _build_apptainer_snippet(container_cfg: Dict[str, Any],
     hostmodel = (spatial.get("hostmodel") or "mizuroute").lower()
     sif, bind = _resolve_hpc_settings(container_cfg, settings, model_config)
     fm_flag = "-m " if hostmodel == "summa" else ""
+    _toml = container_cfg.get("mizuroute_config_path") or ""
+    _coupled = bool(hostmodel == "summa" and _toml)
     return (
         '# 1) Module load (adjust for your cluster)\n'
         '# module load apptainer\n'
@@ -2654,7 +2758,8 @@ def _build_apptainer_snippet(container_cfg: Dict[str, Any],
         f'BIND_PATH={bind}        # bind-mount root (must contain config + outputs)\n'
         f'EXECUTABLE={os.path.basename(exe_path)}\n'
         f'FILE_MANAGER={fm_path}\n'
-        '\n'
+        + (f'MIZUROUTE_TOML={_toml}            # SUMMA with internally coupled mizuRoute (-c)\n' if _coupled else '')
+        + '\n'
         '# 3) Run\n'
         'cd "$(dirname "$EXECUTABLE")"\n'
         'apptainer exec \\\n'
@@ -2662,6 +2767,7 @@ def _build_apptainer_snippet(container_cfg: Dict[str, Any],
         '    --env master_json="$PWD/openWQ_master.json" \\\n'
         '    "$SIF_PATH" \\\n'
         f'    ./"$EXECUTABLE" {fm_flag}"$FILE_MANAGER"'
+        + (' -c "$MIZUROUTE_TOML"' if _coupled else '')
     )
 
 
@@ -2684,6 +2790,8 @@ def _build_slurm_snippet(container_cfg: Dict[str, Any],
     # SLURM resource hints — use the calibration's mpi_np / hostmodel
     # rather than hard-coding 4 tasks.  SUMMA-OpenWQ is serial.
     _np = 1 if hostmodel == "summa" else container_cfg.get("mpi_np", 2)
+    _toml = container_cfg.get("mizuroute_config_path") or ""
+    _coupled = bool(hostmodel == "summa" and _toml)
     return (
         '#!/bin/bash\n'
         '#SBATCH --job-name=openwq_best\n'
@@ -2698,13 +2806,15 @@ def _build_slurm_snippet(container_cfg: Dict[str, Any],
         f'BIND_PATH={bind}\n'
         f'EXECUTABLE={os.path.basename(exe_path)}\n'
         f'FILE_MANAGER={fm_path}\n'
-        '\n'
+        + (f'MIZUROUTE_TOML={_toml}   # SUMMA with internally coupled mizuRoute (-c)\n' if _coupled else '')
+        + '\n'
         'cd "$(dirname "$EXECUTABLE")"\n'
         'apptainer exec \\\n'
         '    --bind "$BIND_PATH" \\\n'
         '    --env master_json="$PWD/openWQ_master.json" \\\n'
         '    "$SIF_PATH" \\\n'
         f'    ./"$EXECUTABLE" {fm_flag}"$FILE_MANAGER"'
+        + (' -c "$MIZUROUTE_TOML"' if _coupled else '')
     )
 
 
@@ -3114,12 +3224,32 @@ def _build_run_best_section(
                                                        _vm.group(1).strip()))
         except Exception:
             pass
+    # The running container's actual bind mount wins over the compose guess
+    # (the compose file's relative path resolves differently with the depth of
+    # the openWQ clone, e.g. a SUMMA tree one folder deeper).
+    if _runtime == "docker":
+        try:
+            import json as _json_m, shutil as _sh_m, subprocess as _sp_m
+            if _sh_m.which("docker"):
+                _ins = _sp_m.run(["docker", "inspect", "-f", "{{json .Mounts}}", _container],
+                                 capture_output=True, text=True, timeout=15)
+                if _ins.returncode == 0 and _ins.stdout.strip():
+                    _binds = [m for m in _json_m.loads(_ins.stdout) if m.get("Type") == "bind"]
+                    _pick = next((m for m in _binds if m.get("Destination", "").rstrip("/") == _croot.rstrip("/")),
+                                 _binds[0] if _binds else None)
+                    if _pick:
+                        _hroot, _croot = str(_pick["Source"]).rstrip("/"), str(_pick["Destination"]).rstrip("/")
+        except Exception:
+            pass
     def _c(p):
         return (_croot + p[len(_hroot):]) if (_hroot and p and p.startswith(_hroot)) else p
 
     calibrated_block = ""
     if _best_dir and _exe and os.path.isdir(_best_dir):
         _master = os.path.join(_best_dir, "openWQ_master.json")
+        # SUMMA with internally coupled mizuRoute: the TOML goes with -c
+        _toml_best = (_cc or {}).get("mizuroute_config_path") or ""
+        _coupled_best = bool(_host == "summa" and _toml_best)
         if _host == "summa":
             _ctrl, _flag, _np = os.path.join(_best_dir, "fileManager_eval.txt"), "-m ", "1"
         else:
@@ -3153,7 +3283,8 @@ def _build_run_best_section(
                     f'docker exec -e OMP_NUM_THREADS=1 -e master_json={_c(_master)} {_container} \\\n'
                     f'  /bin/bash -lc "cd {_c(_best_dir)} && \\\n'
                     f'    mpirun --allow-run-as-root -np {_np} -x master_json -x OMP_NUM_THREADS \\\n'
-                    f'    {_c(_exe)} {_flag}{_c(_ctrl)}"')
+                    f'    {_c(_exe)} {_flag}{_c(_ctrl)}'
+                    + (f' -c {_c(_toml_best)}' if _coupled_best else '') + '"')
             else:
                 # cd into the eval dir so ./openWQ_master.json is the one read.
                 body = (
@@ -3161,7 +3292,8 @@ def _build_run_best_section(
                     f'  --bind "{_bind}" \\\n'
                     f'  --env master_json="{_master}" \\\n'
                     f'  "{_sif}" \\\n'
-                    f'  mpirun -np {_np} "{_exe}" {_flag}"{_ctrl}"')
+                    f'  mpirun -np {_np} "{_exe}" {_flag}"{_ctrl}"'
+                    + (f' -c "{_toml_best}"' if _coupled_best else ''))
             return (pre + "\n" if pre else "") + body + ("\n" + post if post else "")
 
         _cal_cmd = _mk_cmd()                                     # normal run
@@ -5641,7 +5773,11 @@ def _build_observation_map_section(
         return ""
 
     # Pick the primary interactive layer the same way Plot_h5_driver does.
-    if hostmodel.lower() == "summa":
+    # Coupled SUMMA + mizuRoute: the stations follow the observation target
+    # (reaches when the targets are river outputs)
+    _coupled_target = (_ci.coupled_obs_target(model_config)
+                       if (spatial.get("coupled_river") and hasattr(_ci, "coupled_obs_target")) else None)
+    if hostmodel.lower() == "summa" and _coupled_target != "river":
         primary_gj = basin_gj or river_gj
         primary_key = spatial.get("basin_mapping_key") or "HRU_ID"
         is_polygon = bool(basin_gj)
@@ -5702,6 +5838,7 @@ def _build_observation_map_section(
         river_mapping_key=spatial.get("river_network_mapping_key") or "SegId",
         basin_mapping_key=spatial.get("basin_mapping_key") or "HRU_ID",
         log=lambda *a, **kw: None,
+        **({'target': _coupled_target} if _coupled_target else {}),
     )
 
     # ── Per-station performance summary ─────────────────────────────

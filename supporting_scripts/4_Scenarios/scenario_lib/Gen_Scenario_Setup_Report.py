@@ -1653,6 +1653,7 @@ def _scenario_js() -> str:
     L.push('        docker_compose_path=cc.get("docker_compose_path", ""),');
     L.push('        executable_full_path=(os.environ.get("OWQ_EXEC_PATH") or cc.get("executable_path", "")),');
     L.push('        file_manager_path=cc.get("file_manager_path", ""),');
+    L.push('        mizuroute_config_path=cc.get("mizuroute_config_path", ""),');
     L.push('        apptainer_sif_path=apptainer_sif_path, apptainer_bind_path=apptainer_bind_path,');
     L.push('        n_parallel=n_parallel, species=scenario_species, compartments=scenario_compartments,');
     L.push('        thresholds=thresholds, include_baseline=include_baseline,');

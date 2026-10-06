@@ -57,9 +57,14 @@ class ObjectiveFunction:
                  h5_mapping_key: Optional[str] = None,
                  use_primary_only: bool = True,
                  zone_select=None,
-                 metric_focus: str = "both"):
+                 metric_focus: str = "both",
+                 coupled_river: bool = False):
         """
         Initialize objective function calculator.
+
+        ``coupled_river`` marks a SUMMA run with internally coupled mizuRoute:
+        land compartments (HRU ids) and river outputs (reach ids) share one
+        output folder, so the target compartments must be all land or all river.
 
         Parameters
         ----------
@@ -102,6 +107,16 @@ class ObjectiveFunction:
         # writes `reachID`.  Explicit `h5_mapping_key` wins; otherwise
         # we derive from `hostmodel` to match Gen_Report's convention.
         self.hostmodel = (hostmodel or "mizuroute").lower()
+        self.coupled_river = bool(coupled_river)
+        if self.coupled_river:
+            _river_names = {'RIVER_NETWORK_REACHES', 'QLOCAL_OUT', 'REACH_OUTFLOW'}
+            _cmps = [str(c).strip().upper() for c in (compartments or [])]
+            _n_river = sum(1 for c in _cmps if c in _river_names)
+            if 0 < _n_river < len(_cmps):
+                raise ValueError(
+                    "Coupled SUMMA + mizuRoute run: the target compartments mix land "
+                    f"compartments and river outputs ({compartments}). HRU ids and reach "
+                    "ids would be averaged together; choose only land or only river targets.")
         if h5_mapping_key:
             self.h5_mapping_key = h5_mapping_key
         elif self.hostmodel == "summa":
@@ -375,6 +390,29 @@ class ObjectiveFunction:
                 "sim_end": (we.strftime('%Y-%m-%d %H:%M')
                             if we is not None else None)}
 
+    def _metric_value(self, obs_vals: np.ndarray, sim_vals: np.ndarray) -> float:
+        """The objective (lower is better) of one obs/sim pair set with the
+        configured metric and focus."""
+        if self.metric_focus in ("phase", "magnitude"):
+            # PHASE / MAGNITUDE focus is defined via the universal KGE
+            # decomposition (correlation r vs variability+bias) and so
+            # applies to ANY base metric: RMSE conflates timing+level,
+            # PBIAS is pure bias, and NSE doesn't split into a weightable
+            # sum — only the r/alpha/beta decomposition cleanly isolates
+            # "phase" from "magnitude".  ('both' keeps the chosen metric.)
+            _sr, _sa, _sb = self._FOCUS_WEIGHTS[self.metric_focus]
+            return 1.0 - self.kge_scaled(obs_vals, sim_vals, _sr, _sa, _sb)
+        if self.metric == "RMSE":
+            return self.rmse(obs_vals, sim_vals)
+        if self.metric == "NSE":
+            return self.nse_minimization(obs_vals, sim_vals)
+        if self.metric == "KGE":
+            return self.kge_minimization(obs_vals, sim_vals)
+        if self.metric == "PBIAS":
+            # Perfect bias = 0; minimise its absolute value.
+            return abs(self.pbias(obs_vals, sim_vals))
+        return self.rmse(obs_vals, sim_vals)
+
     def compute(self,
                 output_dir: Path,
                 units: str = "MG/L") -> float:
@@ -442,6 +480,28 @@ class ObjectiveFunction:
         # Store matched data for later analysis/plotting
         self._last_matched_data = matched
 
+        # Per-station values (one per reach_id), used by the sub-basin cascade
+        # calibration and the reports. Same metric, weights and focus as the
+        # pooled objective below.
+        self._last_reach_objectives = {}
+        try:
+            for _rid, _rdata in matched.groupby('reach_id'):
+                _robjs = {}
+                for _sp in self.target_species:
+                    _sd = _rdata[_rdata['species'] == _sp]
+                    _o = _sd['observed'].values
+                    _s = _sd['simulated'].values
+                    _m = ~(np.isnan(_o) | np.isnan(_s))
+                    if _m.sum() < 2:
+                        continue
+                    _robjs[_sp] = self._metric_value(_o[_m], _s[_m])
+                if _robjs:
+                    _tw = sum(self.weights.get(k, 1.0) for k in _robjs)
+                    self._last_reach_objectives[_rid] = sum(
+                        self.weights.get(k, 1.0) * v for k, v in _robjs.items()) / _tw
+        except Exception as _e:   # the pooled objective must never fail because of this
+            logger.debug(f"per-reach objectives not computed: {_e}")
+
         # Compute objective by species
         objectives = {}
         for species in self.target_species:
@@ -460,28 +520,7 @@ class ObjectiveFunction:
             if len(obs_vals) < 2:
                 continue
 
-            if self.metric_focus in ("phase", "magnitude"):
-                # PHASE / MAGNITUDE focus is defined via the universal KGE
-                # decomposition (correlation r vs variability+bias) and so
-                # applies to ANY base metric: RMSE conflates timing+level,
-                # PBIAS is pure bias, and NSE doesn't split into a weightable
-                # sum — only the r/alpha/beta decomposition cleanly isolates
-                # "phase" from "magnitude".  ('both' keeps the chosen metric.)
-                _sr, _sa, _sb = self._FOCUS_WEIGHTS[self.metric_focus]
-                obj = 1.0 - self.kge_scaled(obs_vals, sim_vals, _sr, _sa, _sb)
-            elif self.metric == "RMSE":
-                obj = self.rmse(obs_vals, sim_vals)
-            elif self.metric == "NSE":
-                obj = self.nse_minimization(obs_vals, sim_vals)
-            elif self.metric == "KGE":
-                obj = self.kge_minimization(obs_vals, sim_vals)
-            elif self.metric == "PBIAS":
-                # Perfect bias = 0; minimise its absolute value.
-                obj = abs(self.pbias(obs_vals, sim_vals))
-            else:
-                obj = self.rmse(obs_vals, sim_vals)
-
-            objectives[species] = obj
+            objectives[species] = self._metric_value(obs_vals, sim_vals)
 
         if not objectives:
             return 1e10
@@ -553,8 +592,11 @@ class ObjectiveFunction:
             if s.startswith(pre):
                 s = s[len(pre):]
                 break
-        # Strip a trailing vertical zone / layer tag like '_z1', '_Z12'.
+        # Strip a trailing vertical zone / layer tag like '_z1', '_Z12', and a
+        # SUMMA domain tag '_d2' (HRU with several domains): every layer and
+        # domain of HRU 1 maps to HRU 1, matching the observation id.
         s = re.sub(r"_z\d+$", "", s, flags=re.IGNORECASE)
+        s = re.sub(r"_d\d+$", "", s, flags=re.IGNORECASE)
         try:
             return int(s)
         except ValueError:
