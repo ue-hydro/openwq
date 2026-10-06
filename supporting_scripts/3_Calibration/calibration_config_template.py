@@ -252,7 +252,7 @@ def _main():
     print(f"      Species with observations: {obs_count}/{len(species_obs_availability)}")
     if ss_load_species:
         print(f"      SS species with loads: {', '.join(sorted(ss_load_species))}")
-    print(f"      Host model: {container_config.get('hostmodel', 'unknown')}")
+    print(f"      Host model: {container_config.get('hostmodel_label') or container_config.get('hostmodel', 'unknown')}")
 
     # ── Validate ──
     if args.dry_run:

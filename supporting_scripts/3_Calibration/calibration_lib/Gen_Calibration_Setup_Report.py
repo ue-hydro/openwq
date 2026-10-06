@@ -288,7 +288,7 @@ def _build_summary_section(
     )
 
     model_info = rh.build_highlight_box(
-        f"<strong>Model:</strong> {model_config.get('hostmodel', '')} "
+        f"<strong>Model:</strong> {_ci.host_model_label(model_config)} "
         f"&bull; <strong>BGC:</strong> {bgc_name} "
         + (f"(<code>{bgc_template}</code>)" if bgc_template else ""),
         "success"
@@ -532,8 +532,8 @@ def _build_chain_overview_banner(chain_models, model_chain_paths):
     paths = list(model_chain_paths or [])
     n = len(chain_models)
     flow = ' &nbsp;&rarr;&nbsp; '.join(
-        '<strong>' + _hl.escape(str(cm.get("hostmodel") or cm.get("label")
-                                    or ("m%d" % i))) + '</strong>'
+        '<strong>' + _hl.escape(str(cm.get("hostmodel_label") or cm.get("hostmodel")
+                                    or cm.get("label") or ("m%d" % i))) + '</strong>'
         for i, cm in enumerate(chain_models))
     cards = []
     for i, cm in enumerate(chain_models):
@@ -590,7 +590,7 @@ def _build_model_config_section(
     si = model_config.get("si_module_name", "N/A")
     ss = model_config.get("ss_method", "N/A")
     solver = model_config.get("solver", "N/A")
-    hostmodel = model_config.get("hostmodel", "N/A")
+    hostmodel = _ci.host_model_label(model_config) or "N/A"
 
     species = model_config.get("chemical_species", [])
     if isinstance(species, list):
@@ -2471,13 +2471,13 @@ def _build_interactive_summary(
     bgc_template = os.path.basename(
         model_config.get("path2selected_NATIVE_BGC_FLEX_framework", "")
     )
-    hostmodel = model_config.get("hostmodel", "N/A")
+    hostmodel = _ci.host_model_label(model_config) or "N/A"
     hostmodel_label = "Host Model"
     # Chained calibration: the KPI must list EVERY host model in the chain
     # (upstream -> target), not just the validated one — otherwise a chain
     # reads as a single-host-model calibration.
     if chain_models and len(chain_models) > 1:
-        _hms = [str(cm.get("hostmodel") or cm.get("label") or "").strip()
+        _hms = [str(cm.get("hostmodel_label") or cm.get("hostmodel") or cm.get("label") or "").strip()
                 for cm in chain_models]
         _hms = [h for h in _hms if h]
         if _hms:
