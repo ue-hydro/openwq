@@ -1324,6 +1324,21 @@ def _parse_hostmodel_output_info(file_manager_path, hostmodel, host_exe_dir):
     return norm, file_prefix or ""
 
 
+def _mizuroute_toml_value(toml_path, key):
+    """Return the string value of ``key = ...`` in a mizuRoute TOML, or None."""
+    try:
+        import re as _re
+        with open(toml_path, 'r', encoding='utf-8') as _f:
+            for _line in _f:
+                _line = _line.split('#', 1)[0].strip()
+                _m = _re.match(r'^' + _re.escape(key) + r'\s*=\s*"?([^"\s]+)"?\s*$', _line)
+                if _m:
+                    return _m.group(1)
+    except Exception:
+        pass
+    return None
+
+
 def generate_simulation_report(
         output_dir,
         project_name,
@@ -3026,6 +3041,11 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             if isinstance(fluxes_conc_to_print, dict) else []
         _cmp_and_flux = _cmp_default + [f for f in _flux_names if f not in _cmp_default]
         _cmp_str = ', '.join(f'"{c}"' for c in _cmp_and_flux)
+        # Outputs that live on river reaches (coupled SUMMA + mizuRoute): they
+        # are joined to the river shapefile, the others to the basin shapefile.
+        _river_cmps = [c for c in _cmp_and_flux
+                       if str(c).upper() in ('RIVER_NETWORK_REACHES', 'QLOCAL_OUT', 'REACH_OUTFLOW')]
+        _land_cmps = [c for c in _cmp_and_flux if c not in _river_cmps]
         # Passed to Plot_h5_driver so the report's left-column nav separates
         # exported fluxes from compartments under their own group headers.
         _flux_names_repr = repr(_flux_names)
@@ -3086,16 +3106,27 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
                 print(f"  WARNING: Could not inspect {label} shapefile: {_e}")
                 return explicit_override or default_key
 
+        # SUMMA with internally coupled mizuRoute: land compartments join the
+        # basin shapefile (HRU/GRU id), river outputs join the river shapefile
+        # by reach id (segId). Every HDF5 file keeps the 'hruId' dataset.
+        _coupled_river = (hostmodel.lower() == 'summa' and bool(mizuroute_config_path))
         if hostmodel.lower() == 'summa':
             _h5_mapping_key = 'hruId'
             # Order matters: prefer exact SUMMA conventions before fallbacks
             _rn_candidates = ['hruId', 'HRU_ID', 'hru_id', 'HruId',
                               'gruId', 'GRU_ID', 'gru_id',
                               'LINKNO', 'COMID', 'reachID', 'SegId']
+            _rn_default = 'HRU_ID'
+            if _coupled_river:
+                _toml_seg = _mizuroute_toml_value(mizuroute_config_path, 'varname_segId')
+                _rn_candidates = ([_toml_seg] if _toml_seg else []) + [
+                    'segId', 'SegId', 'seg_id', 'segID', 'reachID', 'REACHID',
+                    'reach_id', 'ReachID', 'COMID', 'LINKNO']
+                _rn_default = _toml_seg or 'segId'
             _basin_candidates = ['HRU_ID', 'hruId', 'hru_id', 'HruId',
                                  'GRU_ID', 'gruId', 'gru_id']
             _shp_key = _detect_shp_mapping_key(
-                river_network_shapefile, _rn_candidates, 'HRU_ID',
+                river_network_shapefile, _rn_candidates, _rn_default,
                 'River network',
                 explicit_override=river_network_mapping_key)
             _basin_mapping_key = _detect_shp_mapping_key(
@@ -3111,6 +3142,8 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
                 explicit_override=river_network_mapping_key)
             _basin_mapping_key = ''
         _feature_label = openwq_h5_mapping_key or _shp_key
+        if _coupled_river:
+            _feature_label = 'id'   # land traces carry HRU ids, river traces reach ids
 
         # --- Venv activation (OS-aware, uses _is_windows from earlier block) ---
         if _is_windows:
@@ -3297,6 +3330,8 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
                 _viewer_shp_path_safe = _basin_shp_path_safe
                 _viewer_shp_key       = _basin_mapping_key
                 _viewer_geom_label    = 'HRU/GRU polygons'
+                if _coupled_river and _shp_path_safe:
+                    _viewer_geom_label = 'HRU/GRU polygons (land) + river reaches (river outputs, second viewer)'
             else:
                 # No basin shapefile — fall back to river network with a warning
                 _viewer_shp_path_safe = _shp_path_safe
@@ -3320,6 +3355,17 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
                 _hm_dir, _hm_pfx = _parse_hostmodel_output_info(
                     file_manager_path, hostmodel,
                     os.path.dirname(os.path.abspath(executable_path)))
+                # The host-model control file holds CONTAINER paths (Docker runs):
+                # map the output folder back to the host so the snippet finds the netCDF
+                _dc_path = docker_compose_path if 'docker_compose_path' in dir() else ''
+                if _hm_dir and not os.path.isdir(_hm_dir) and _dc_path:
+                    try:
+                        import Gen_Input_Driver as _gid_m
+                        _hr, _cr = _gid_m._parse_docker_volume_mount(_dc_path)
+                        if _hr and _cr and str(_hm_dir).startswith(_cr.rstrip('/') + '/'):
+                            _hm_dir = os.path.join(_hr, str(_hm_dir)[len(_cr.rstrip('/')) + 1:])
+                    except Exception:
+                        pass
                 if _hm_dir:
                     _hm_out_dir_safe = _py_path(os.path.abspath(_hm_dir))
                     _hm_prefix = _hm_pfx or ''
@@ -3339,6 +3385,19 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             f'}}\n'
             f'\n'
         )
+        # Coupled SUMMA + mizuRoute: a second viewer draws the river outputs on
+        # the reaches of the river-network shapefile
+        _webgl_two_viewers = bool(_coupled_river and _shp_path_safe and _basin_shp_path_safe)
+        _webgl_cmp_param = (f'    compartments={repr(_land_cmps)},\n' if _webgl_two_viewers else '')
+        _webgl_out_dir_river_safe = _webgl_out_dir_safe.rstrip('/') + '_river'
+        if _webgl_two_viewers:
+            _webgl_body += (
+                f'shpfile_info_river = {{\n'
+                f'    "path_to_shp": "{_shp_path_safe}",\n'
+                f'    "mapping_key": "{_shp_key}"\n'
+                f'}}\n'
+                f'\n'
+            )
 
         # Host-specific flow-variable candidates (used at SNIPPET runtime to
         # pick whichever variable actually exists in the netCDF).
@@ -3424,10 +3483,34 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             f'    n_particles=65536,\n'
             f'    river_width_cells=3,\n'
             f'    grid_resolution=None,\n'
+            f'{_webgl_cmp_param}'
             f'    satellite_resolution=2\n'
             f')\n'
             f'\n'
-            f'if _result:\n'
+            + (
+            f'# River outputs (reaches) in a second viewer\n'
+            f'_result_river = h5_wlib.WebGL_h5_driver(\n'
+            f'    what2map="openwq",\n'
+            f'    hostmodel="mizuroute",\n'
+            f'    shpfile_info=shpfile_info_river,\n'
+            f'    openwq_results=openwq_results,\n'
+            f'    chemSpec=[{_species_str}],\n'
+            f'    sediment_as_well={_sed_flag},\n'
+            f'    hydromodel_info=None,\n'
+            f'    hydromodel_var2print=None,\n'
+            f'    output_dir="{_webgl_out_dir_river_safe}",\n'
+            f'    timeframes=50,\n'
+            f'    period_start=0.0,\n'
+            f'    period_end=1.0,\n'
+            f'    n_particles=65536,\n'
+            f'    river_width_cells=3,\n'
+            f'    grid_resolution=None,\n'
+            f'    compartments={repr(_river_cmps)},\n'
+            f'    satellite_resolution=2\n'
+            f')\n'
+            f'_result = _result or _result_river\n'
+            f'\n' if _webgl_two_viewers else f'_result_river = None\n\n')
+            + f'if _result:\n'
             f'    # Start local HTTP server and open the 3D viewer.\n'
             f'    # Walk a small port range so the snippet works even if a\n'
             f'    # previous run is still holding 8080, then fall back to an\n'
@@ -3453,6 +3536,8 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             f'    threading.Thread(target=_httpd.serve_forever, daemon=True).start()\n'
             f'    print(f"Serving at http://localhost:{{_port}}")\n'
             f'    webbrowser.open(_url)\n'
+            f'    if _result_river:\n'
+            f'        webbrowser.open(f"http://localhost:{{_port}}/openwq_webgl_viewer_river/index.html")\n'
             f'\n'
             f'    print("Press Ctrl+C to stop the server...")\n'
             f'    try:\n'
@@ -3504,6 +3589,11 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
         if observation_compartments:
             _obs_plot_param += (
                 f'    observation_compartments={repr(observation_compartments)},\n')
+        # Coupled SUMMA + mizuRoute: tell the plot driver which outputs are
+        # river-based so they are joined (and stations matched) to reaches
+        _river_cmps_param = (
+            f'    river_compartments={repr(_river_cmps)},\n'
+            if _coupled_river else '')
 
         _plot_all_body = (
             f'{_python_preamble()}\n'
@@ -3527,6 +3617,7 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             f'    separator="{plot_separator}",\n'
             f'    config_template_path={repr(config_template_path or "")},\n'
             f'    flux_names={_flux_names_repr},\n'
+            f'{_river_cmps_param}'
             f'{_obs_plot_param}'
             f')\n'
             f'\n'
@@ -3566,6 +3657,7 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
             f'    separator="{plot_separator}",\n'
             f'    config_template_path={repr(config_template_path or "")},\n'
             f'    flux_names={_flux_names_repr},\n'
+            f'{_river_cmps_param}'
             f'{_obs_plot_param}'
             f'    static_matrix_dir="{_static_out_dir_safe}",\n'
             f')\n'
@@ -4146,6 +4238,10 @@ function _owqRelayoutAll(){
         _basin_mapping_key = ''
     if '_feature_label' not in locals():
         _feature_label = openwq_h5_mapping_key or ''
+    if '_coupled_river' not in locals():
+        _coupled_river = (str(hostmodel).lower() == 'summa' and bool(mizuroute_config_path))
+    if '_river_cmps' not in locals():
+        _river_cmps = []
     try:
         import json as _json
         manifest = {
@@ -4153,6 +4249,10 @@ function _owqRelayoutAll(){
             "generated_at": now,
             "report_path": report_path,
             "hostmodel": hostmodel,
+            # SUMMA with internally coupled mizuRoute (land + river in one run)
+            "mizuroute_config_path": mizuroute_config_path,
+            "coupled_river": _coupled_river,
+            "river_compartments": _river_cmps,
             # Resolved spatial mapping (the actual columns used by the
             # config viewer at the time the report was generated)
             "h5_mapping_key": _h5_mapping_key,

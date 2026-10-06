@@ -24,6 +24,7 @@ Executes OpenWQ model in Docker or Apptainer containers.
 import subprocess
 import sys
 import os
+import re
 import time
 import threading
 from pathlib import Path
@@ -94,9 +95,14 @@ class ModelRunner:
                  calibration_work_dir: str = None,
                  calibration_period: Optional[Tuple[str, str]] = None,
                  total_evaluations: int = None,
-                 timeout_seconds: int = 7200):
+                 timeout_seconds: int = 7200,
+                 mizuroute_config_path: str = None):
         """
         Initialize model runner.
+
+        ``mizuroute_config_path`` (host path of the mizuRoute TOML) with
+        ``hostmodel="summa"`` selects SUMMA with internally coupled mizuRoute:
+        the executable gets ``-m <fileManager> -c <toml>`` in one process.
 
         Parameters
         ----------
@@ -146,6 +152,10 @@ class ModelRunner:
         #   SUMMA      → `-m <fileManager>`   (master-file flag)
         #   mizuRoute  → `<control_file>`     (positional argument)
         self.hostmodel = (hostmodel or "").lower()
+        # SUMMA with internally coupled mizuRoute (land + river in one run)
+        self.mizuroute_config_path = mizuroute_config_path or None
+        self.coupled_river = (self.hostmodel == "summa"
+                              and bool(self.mizuroute_config_path))
         # Optional (start, end) calibration window.  When set, the per-eval
         # control file is rewritten so each evaluation simulates ONLY this
         # window instead of the model's full period — keeps runtime + memory
@@ -210,12 +220,18 @@ class ModelRunner:
                          f"{self._mem_per_eval_gb}.")
 
     def _parse_docker_compose(self):
-        """Parse docker-compose.yml to extract volume mapping."""
+        """Resolve the host -> container volume mapping.
+
+        The compose file's relative bind path resolves differently depending on
+        how deep the openWQ clone sits (e.g. a SUMMA tree one folder deeper
+        than another), while the RUNNING container keeps the mount it was
+        started with.  So, like the config generator, ask the running
+        container first (``docker inspect``) and fall back to the compose file.
+        """
         try:
             with open(self.docker_compose_path, 'r') as f:
                 content = f.read()
             # Simple parsing for "volumes: - host:container"
-            import re
             match = re.search(r'volumes:\s*\n\s*-\s*([^:]+):([^:\s]+)', content)
             if match:
                 host_rel = match.group(1).strip()
@@ -224,9 +240,39 @@ class ModelRunner:
                 compose_dir = Path(self.docker_compose_path).parent
                 self.docker_host_path = str((compose_dir / host_rel).resolve())
                 self.docker_container_path = container
-                logger.debug(f"Docker volume: {self.docker_host_path} -> {self.docker_container_path}")
+                logger.debug(f"Docker volume (compose): {self.docker_host_path} -> {self.docker_container_path}")
         except Exception as e:
             logger.warning(f"Could not parse docker-compose.yml: {e}")
+        # The running container's actual mount wins over the compose guess
+        live = self._query_running_container_mount()
+        if live:
+            if self.docker_host_path and live[0].rstrip('/') != str(self.docker_host_path).rstrip('/'):
+                logger.info(f"Docker volume: using the running container's mount "
+                            f"{live[0]} -> {live[1]} (compose file resolved to {self.docker_host_path})")
+            self.docker_host_path, self.docker_container_path = live
+
+    def _query_running_container_mount(self):
+        """Return (host_root, container_root) of the running container's bind
+        mount at the expected container path (or its first bind mount), or None."""
+        name = self.docker_container_name or "docker_openwq"
+        if shutil.which("docker") is None:
+            return None
+        try:
+            import json as _json
+            res = subprocess.run(["docker", "inspect", "-f", "{{json .Mounts}}", name],
+                                 capture_output=True, text=True, timeout=15)
+            if res.returncode != 0 or not res.stdout.strip():
+                return None
+            mounts = _json.loads(res.stdout.strip())
+            binds = [m for m in mounts if m.get("Type") == "bind" and m.get("Source") and m.get("Destination")]
+            if not binds:
+                return None
+            want = (self.docker_container_path or "/code").rstrip('/')
+            pick = next((m for m in binds if m["Destination"].rstrip('/') == want), binds[0])
+            return (str(pick["Source"]).rstrip('/'), str(pick["Destination"]).rstrip('/'))
+        except Exception as e:
+            logger.debug(f"docker inspect not usable for the volume mapping: {e}")
+            return None
 
     def preflight(self) -> Tuple[bool, str]:
         """Verify prerequisites exist BEFORE launching (potentially hundreds of)
@@ -248,6 +294,13 @@ class ModelRunner:
         # "Docker" selected but launched on an HPC node that only ships
         # Apptainer/Singularity.  Without this the run dies on the first
         # container call (or crashes cryptically every eval) with no clear cause.
+        # Coupled SUMMA + mizuRoute: the TOML must exist on the host
+        if self.coupled_river and not os.path.isfile(str(self.mizuroute_config_path)):
+            return False, (
+                f"mizuRoute TOML not found: {self.mizuroute_config_path} "
+                "(mizuroute_config_path in the model config template). SUMMA with "
+                "internally coupled mizuRoute needs it (passed to the executable with -c).")
+
         docker_ok = shutil.which("docker") is not None
         apptainer_ok = (shutil.which("apptainer")
                         or shutil.which("singularity")) is not None
@@ -419,7 +472,7 @@ class ModelRunner:
         # "_chain/m{i}" — without the host name the mizuRoute step just showed
         # the eval-dir name and looked like "no m1".
         if self.hostmodel:
-            label += f" · {self.hostmodel}-openWQ"
+            label += f" · {self.hostmodel}{'+mizuRoute' if self.coupled_river else ''}-openWQ"
         # The validation re-run uses the sentinel id 999999 (not a numbered DDS
         # eval) — show a human-readable label so the terminal says plainly what
         # is running instead of the cryptic "eval_999999".
@@ -585,8 +638,15 @@ class ModelRunner:
             eval_fm = self._summa_eval_filemanager(eval_dir, container_eval_dir)
             fm_arg = eval_fm or container_file_manager
             model_arg = f"-m {fm_arg}"
+            # Internally coupled mizuRoute: its TOML goes with -c (one process)
+            container_mizu_toml = ""
+            if self.coupled_river:
+                container_mizu_toml = (self._mizuroute_eval_toml(eval_dir, container_eval_dir)
+                                       or _to_container(str(self.mizuroute_config_path)))
+                model_arg += f" -c {container_mizu_toml}"
         else:
             n_ranks = 2
+            container_mizu_toml = ""
             # Per-eval control file with the calibration window (if set).
             eval_ctrl = self._mizuroute_eval_control(eval_dir, container_eval_dir)
             model_arg = f"{eval_ctrl or container_file_manager}"
@@ -603,6 +663,7 @@ class ModelRunner:
                 exec_path=exec_path,
                 master_json=container_master_json,
                 file_manager=container_file_manager,
+                mizuroute_config=container_mizu_toml,
                 args=self.executable_args or ""
             )
         else:
@@ -648,6 +709,9 @@ class ModelRunner:
             h5_files = list(output_dir.glob("*.h5"))
             if not h5_files:
                 return False, "No HDF5 output files generated"
+            if self.coupled_river and not list(output_dir.glob("RIVER_NETWORK_REACHES@*.h5")):
+                logger.warning(f"{eval_dir.name}: coupled run produced no RIVER_NETWORK_REACHES output "
+                               "(check the compartments selected for output)")
 
             return True, ""
 
@@ -712,6 +776,18 @@ class ModelRunner:
         if self.hostmodel == "summa":
             eval_fm = self._summa_eval_filemanager(eval_dir, container_eval_dir)
             model_args = ["-m", eval_fm or container_file_manager]
+            # Internally coupled mizuRoute: TOML with -c; bind its folder when
+            # it lies outside the bound host tree (like the executable above)
+            if self.coupled_river:
+                _eval_toml = self._mizuroute_eval_toml(eval_dir, container_eval_dir)
+                _toml = str(self.mizuroute_config_path)
+                if _eval_toml:
+                    model_args += ["-c", _eval_toml]
+                elif _toml.startswith(host_path):
+                    model_args += ["-c", _to_container(_toml)]
+                else:
+                    extra_binds += ["--bind", os.path.dirname(_toml)]
+                    model_args += ["-c", _toml]
         else:
             eval_ctrl = self._mizuroute_eval_control(eval_dir, container_eval_dir)
             model_args = [eval_ctrl or container_file_manager]
@@ -804,6 +880,9 @@ class ModelRunner:
             h5_files = list(output_dir.glob("*.h5"))
             if not h5_files:
                 return False, "No HDF5 output files generated"
+            if self.coupled_river and not list(output_dir.glob("RIVER_NETWORK_REACHES@*.h5")):
+                logger.warning(f"{eval_dir.name}: coupled run produced no RIVER_NETWORK_REACHES output "
+                               "(check the compartments selected for output)")
 
             return True, ""
 
@@ -867,6 +946,35 @@ class ModelRunner:
                 self._ref_file.write_text(str(int(nbytes)))
             except OSError:
                 pass
+
+    def _mizuroute_eval_toml(self, eval_dir, container_eval_dir):
+        """Per-evaluation copy of the mizuRoute TOML (SUMMA with internally
+        coupled mizuRoute), written as ``<eval_dir>/mizuroute_eval.toml``.
+
+        The copy drops ``hfabric_newfile``: with it set, every start rewrites
+        the augmented hydrofabric at ``<hfabric_path>/<hfabric_newfile>``, a
+        SHARED input file, so parallel evaluations would write it at the same
+        time.  Everything else (absolute container paths) is kept as is.
+        Returns the container path of the copy, or None when it could not be
+        written (the caller then passes the original TOML).
+        """
+        try:
+            src = Path(str(self.mizuroute_config_path))
+            if not src.is_file():
+                return None
+            kept = []
+            for line in src.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if re.match(r"^\s*hfabric_newfile\s*=", line):
+                    kept.append("# hfabric_newfile dropped for the calibration evaluation "
+                                "(shared file, parallel runs)")
+                    continue
+                kept.append(line)
+            dst = Path(eval_dir) / "mizuroute_eval.toml"
+            dst.write_text("\n".join(kept) + "\n", encoding="utf-8")
+            return f"{str(container_eval_dir).rstrip('/')}/mizuroute_eval.toml"
+        except Exception as e:
+            logger.warning(f"Could not write the per-evaluation mizuRoute TOML: {e}")
+            return None
 
     def _summa_eval_filemanager(self, eval_dir, container_eval_dir) -> str:
         """Create a per-evaluation SUMMA fileManager so each eval writes its

@@ -37,6 +37,8 @@ the manual, automatic, and report-rendering paths.
 from __future__ import annotations
 
 import math
+import os
+import re
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 
@@ -491,8 +493,14 @@ def match_stations(
         basin_mapping_key: Optional[str] = None,
         log: Optional[callable] = None,
         max_distance_km: Optional[float] = 5.0,
+        target: Optional[str] = None,
 ) -> Tuple[Dict[str, str], Set[str]]:
     """One-stop entry point for "match my stations to the model elements".
+
+    ``target`` (``'basin'`` or ``'river'``) forces the matcher regardless of
+    ``hostmodel``; it is used for SUMMA runs with internally coupled
+    mizuRoute, where land compartments live on basin polygons and the river
+    compartments on reaches.
 
     Dispatches to the right matcher based on ``hostmodel``:
 
@@ -512,6 +520,13 @@ def match_stations(
     """
     h = (hostmodel or '').lower()
     _log = log or (lambda *a, **kw: None)
+    # ``target`` overrides the host dispatch: a SUMMA run with internally
+    # coupled mizuRoute matches river compartments to reaches, land ones to basins.
+    t = (target or '').lower()
+    if t == 'river':
+        h = 'mizuroute'
+    elif t == 'basin':
+        h = 'summa'
     if h == 'summa':
         if not basin_geojson:
             (log or print)(
@@ -566,10 +581,145 @@ def match_stations(
     return bounded, set(bounded.keys())
 
 
+# ---------------------------------------------------------------------------
+# SUMMA with internally coupled mizuRoute: one output folder holds land
+# compartments (ids ``<hruId>[_d<domain>]_z<layer>``) and river outputs
+# (ids ``<segId>``).  These helpers tell the two apart.
+# ---------------------------------------------------------------------------
+
+# OpenWQ outputs (compartments and flux exports) that live on river reaches
+RIVER_OUTPUT_NAMES = {'RIVER_NETWORK_REACHES', 'QLOCAL_OUT', 'REACH_OUTFLOW'}
+
+_CELL_ID_RE = re.compile(r'^(?P<base>.+?)(?:_d(?P<dom>\d+))?(?:_z(?P<lay>\d+))?$')
+
+
+def is_river_output(name: str) -> bool:
+    """True for compartments / flux exports defined on river reaches."""
+    return str(name or '').strip().upper() in RIVER_OUTPUT_NAMES
+
+
+def split_river_outputs(names: Iterable[str]) -> Tuple[List[str], List[str]]:
+    """Split output names into ``(land_names, river_names)`` keeping order."""
+    land, river = [], []
+    for n in names or []:
+        (river if is_river_output(n) else land).append(n)
+    return land, river
+
+
+def parse_cell_id(cell_id: str) -> Tuple[str, Optional[int], Optional[int]]:
+    """Split an OpenWQ cell id into ``(feature_id, domain, layer)``.
+
+    ``'710285850_z3'`` -> ``('710285850', None, 3)``;
+    ``'710285850_d2_z1'`` -> ``('710285850', 2, 1)``;
+    ``'710285850'`` -> ``('710285850', None, None)``.
+    The feature id is what joins the shapefile (hruId for land, segId for reaches).
+    """
+    m = _CELL_ID_RE.match(str(cell_id or '').strip())
+    if not m:
+        return str(cell_id), None, None
+    dom = m.group('dom'); lay = m.group('lay')
+    return m.group('base'), (int(dom) if dom is not None else None), (int(lay) if lay is not None else None)
+
+
+def read_mizuroute_toml(toml_path: str) -> dict:
+    """Read the mizuRoute TOML used by SUMMA's internal coupling (``-c``).
+
+    Returns a flat dict with the keys used by the supporting scripts:
+    ``hfabric_path``, ``hfabric_file``, ``varname_segId``, ``varname_HRUid``,
+    ``varname_hruSegId``, ``varname_downSegId``, ``seg_outlet``, ``dt``,
+    ``methods``, ``use_mizuroute``.  Missing keys are absent.
+    """
+    try:
+        import tomllib as _toml  # Python 3.11+
+        data = _toml.loads(open(toml_path, 'rb').read().decode('utf-8'))
+    except ImportError:
+        try:
+            import tomli as _toml  # type: ignore
+            data = _toml.loads(open(toml_path, 'rb').read().decode('utf-8'))
+        except ImportError:
+            data = _read_toml_minimal(toml_path)
+    out: dict = {}
+    for section in ('simulation', 'mizuRoute', 'hydrofabric', 'remapping'):
+        for k, v in (data.get(section) or {}).items():
+            out[k] = v
+    return out
+
+
+def _read_toml_minimal(toml_path: str) -> dict:
+    """Tiny ``key = value`` TOML reader (strings, numbers, booleans) for old Pythons."""
+    data: dict = {}; section = None
+    for raw in open(toml_path, encoding='utf-8'):
+        line = raw.split('#', 1)[0].strip()
+        if not line:
+            continue
+        if line.startswith('[') and line.endswith(']'):
+            section = line[1:-1].strip(); data.setdefault(section, {}); continue
+        if '=' not in line or section is None:
+            continue
+        k, v = (x.strip() for x in line.split('=', 1))
+        if v.startswith('"') and v.endswith('"'):
+            val = v[1:-1]
+        elif v.lower() in ('true', 'false'):
+            val = (v.lower() == 'true')
+        else:
+            try:
+                val = int(v)
+            except ValueError:
+                try:
+                    val = float(v)
+                except ValueError:
+                    val = v
+        data[section][k] = val
+    return data
+
+
+def read_mizuroute_topology(toml_path: str, run_dir: Optional[str] = None) -> dict:
+    """Read the river network topology named by the mizuRoute TOML.
+
+    Returns ``{'segId': [...], 'downSegId': [...], 'hruId': [...],
+    'hruToSegId': [...], 'segId_var': <variable name>, 'topology_path': <file>}``
+    (lists are empty when a variable is missing).  Paths are resolved against
+    the TOML as given, then relative to the TOML folder, then to ``run_dir``.
+    The topology carries no geometry: reach lines still come from a shapefile.
+    """
+    cfg = read_mizuroute_toml(toml_path)
+    out = {'segId': [], 'downSegId': [], 'hruId': [], 'hruToSegId': [],
+           'segId_var': cfg.get('varname_segId', 'segId'), 'topology_path': None,
+           'seg_outlet': cfg.get('seg_outlet')}
+    fab_dir = str(cfg.get('hfabric_path') or ''); fab_file = str(cfg.get('hfabric_file') or '')
+    if not fab_file:
+        return out
+    candidates = [os.path.join(fab_dir, fab_file),
+                  os.path.join(os.path.dirname(os.path.abspath(toml_path)), fab_dir, fab_file)]
+    if run_dir:
+        candidates.append(os.path.join(run_dir, fab_dir, fab_file))
+    path = next((c for c in candidates if os.path.isfile(c)), None)
+    out['topology_path'] = path
+    if path is None:
+        return out
+    try:
+        import netCDF4 as _nc
+        ds = _nc.Dataset(path)
+    except Exception:
+        return out
+    try:
+        for key, var in (('segId', cfg.get('varname_segId', 'segId')),
+                         ('downSegId', cfg.get('varname_downSegId', 'downSegId')),
+                         ('hruId', cfg.get('varname_HRUid', 'hruId')),
+                         ('hruToSegId', cfg.get('varname_hruSegId', 'hruToSegId'))):
+            if var in ds.variables:
+                out[key] = [int(x) for x in ds.variables[var][:].astype('int64').ravel()]
+    finally:
+        ds.close()
+    return out
+
+
 __all__ = [
     'haversine', 'extract_coords', 'polygon_rings',
     'point_in_polygon', 'polygon_centroid',
     'river_endpoint_degrees', 'find_basin_outlet',
     'match_stations_to_features', 'match_stations_to_basins',
     'match_stations',
+    'RIVER_OUTPUT_NAMES', 'is_river_output', 'split_river_outputs', 'parse_cell_id',
+    'read_mizuroute_toml', 'read_mizuroute_topology',
 ]

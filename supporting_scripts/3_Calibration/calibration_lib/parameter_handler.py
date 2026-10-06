@@ -855,7 +855,91 @@ class ParameterHandler:
 
         result = (attributes, mapper)
         self._regionalize_cache[cache_key] = result
+
+        # Coupled SUMMA + mizuRoute: the reaches have their own id space and
+        # compartment; load their mapper (and attribute table, when the spec
+        # names one) so the regionalized value can also address the river
+        if self._coupled_targets(eval_dir):
+            r_attr = {}
+            r_tab = spec.get("attribute_table_river")
+            if r_tab:
+                try:
+                    r_attr = ml_regionalization.load_attribute_table(
+                        self._relocate_ml_path(_resolve(r_tab)), id_column=spec.get("id_column", "id"))
+                except Exception as e:
+                    logger.warning(f"regionalize: river attribute table not loaded: {e}")
+            r_mapper = ReachMapper(hostmodel=hostmodel, preferred_compartment="RIVER_NETWORK_REACHES")
+            r_loaded = False
+            for cand in ([ms_path] if ms_path else []) + [eval_dir / "openwq_out" / "HDF5",
+                        self.calibration_work_dir / "ml_attributes" / "mapping.json"] + (
+                        [Path(str(self.model_config["dir2save_input_files"])) / "openwq_out" / "HDF5"]
+                        if isinstance(self.model_config, dict) and self.model_config.get("dir2save_input_files") else []):
+                try:
+                    if cand and Path(str(cand)).exists() and r_mapper.load_mapping(str(cand)):
+                        r_loaded = True
+                        break
+                except Exception:
+                    continue
+            if not hasattr(self, "_regionalize_river_cache"):
+                self._regionalize_river_cache = {}
+            self._regionalize_river_cache[cache_key] = (r_attr, r_mapper if r_loaded else None)
         return result
+
+    def _coupled_targets(self, eval_dir=None):
+        """Land / river compartment indices of a coupled SUMMA + mizuRoute run
+        (None otherwise); cached per handler."""
+        if hasattr(self, "_coupled_targets_cache"):
+            return self._coupled_targets_cache
+        tg = None
+        try:
+            if isinstance(self.model_config, dict):
+                try:
+                    from . import config_integration as _ci
+                except ImportError:            # pragma: no cover
+                    import config_integration as _ci
+                tg = _ci.coupled_regionalize_targets(self.model_config, str(eval_dir) if eval_dir else None)
+                if tg:
+                    logger.info("regionalize: coupled land + river run -> land compartments "
+                                f"{tg['land_icmps']}, river compartment {tg['river_icmp']} "
+                                f"({tg.get('source')})")
+        except Exception as e:
+            logger.warning(f"regionalize: could not resolve the compartment indices: {e}")
+        self._coupled_targets_cache = tg
+        return tg
+
+    def _spec_icmp(self, spec: Dict, eval_dir=None):
+        """Compartment index a regionalized parameter addresses: the spec's
+        explicit value, or, in a coupled run where the spec says 'every
+        compartment' (-1), the list of LAND compartments (the river gets its own
+        rows from the reach table)."""
+        icmp = spec.get("icmp", -1)
+        if isinstance(icmp, (list, tuple)):
+            return [int(i) for i in icmp]
+        icmp = int(icmp)
+        tg = self._coupled_targets(eval_dir)
+        if tg and icmp == -1:
+            return list(tg["land_icmps"])
+        return icmp
+
+    def _river_extras(self, spec: Dict, eval_dir=None) -> Dict[str, Any]:
+        """kwargs for ml_regionalization.make_spatial_param adding the river
+        rows of a coupled run (empty when not coupled or no reach table/mapper)."""
+        tg = self._coupled_targets(eval_dir)
+        if not tg:
+            return {}
+        cache = getattr(self, "_regionalize_river_cache", {})
+        r_attr, r_mapper = cache.get((spec.get("attribute_table"), spec.get("mapping_source")), ({}, None))
+        if not r_attr or r_mapper is None:
+            return {}
+        return {"river_attributes": r_attr, "river_mapper": r_mapper, "river_icmp": int(tg["river_icmp"])}
+
+    @staticmethod
+    def _icmp_excluded(cell_icmp, icmp) -> bool:
+        """True when a CELLS row does not belong to the compartment(s) ``icmp``."""
+        c = int(cell_icmp)
+        if isinstance(icmp, (list, tuple)):
+            return c != -1 and c not in [int(i) for i in icmp]
+        return int(icmp) >= 0 and c not in (int(icmp), -1)
 
     def _apply_bgc_regionalize_group(self, eval_dir: Path,
                                      group_name: str, items: List) -> None:
@@ -868,12 +952,12 @@ class ParameterHandler:
 
         attributes, mapper = self._load_regionalize_inputs(spec, eval_dir)
 
-        icmp = int(spec.get("icmp", -1))   # -1 = every compartment
+        icmp = self._spec_icmp(spec, eval_dir)   # -1 = every compartment (land ones when coupled)
         _diag: Dict[str, Any] = {}
         if attributes and mapper is not None:
             spatial_obj = ml_regionalization.make_spatial_param(
                 spec, subparam_values, attributes, mapper, icmp=icmp,
-                diagnostics=_diag)
+                diagnostics=_diag, **self._river_extras(spec, eval_dir))
             self._write_regionalize_diag(eval_dir, group_name, spec,
                                          subparam_values, _diag, spatial_obj)
         else:
@@ -928,12 +1012,12 @@ class ParameterHandler:
         spec = items[0][0]["regionalize_spec"]
         subparam_values = {p["subparam_key"]: float(v) for p, v in items}
         attributes, mapper = self._load_regionalize_inputs(spec, eval_dir)
-        icmp = int(spec.get("icmp", -1))   # -1 = every compartment
+        icmp = self._spec_icmp(spec, eval_dir)   # -1 = every compartment (land ones when coupled)
         _diag: Dict[str, Any] = {}
         if attributes and mapper is not None:
             m = ml_regionalization.make_spatial_param(
                 spec, subparam_values, attributes, mapper, icmp=icmp,
-                diagnostics=_diag)
+                diagnostics=_diag, **self._river_extras(spec, eval_dir))
             self._write_regionalize_diag(eval_dir, group_name, spec,
                                          subparam_values, _diag, m)
             ncells = len(m.get("CELLS", []))
@@ -1052,7 +1136,7 @@ class ParameterHandler:
         except Exception:
             pass
         for cell in spatial_obj.get("CELLS", []):
-            if len(cell) < 5 or (icmp >= 0 and int(cell[0]) not in (icmp, -1)):
+            if len(cell) < 5 or self._icmp_excluded(cell[0], icmp):
                 continue
             ix, iy, iz = int(cell[1]), int(cell[2]), int(cell[3])
             zs = sorted(_layers.get((ix, iy), set())) if iz < 0 else [iz]
@@ -1087,10 +1171,11 @@ class ParameterHandler:
         subparam_values = {p["subparam_key"]: float(v) for p, v in items}
 
         attributes, mapper = self._load_regionalize_inputs(spec, eval_dir)
-        icmp = int(spec.get("icmp", -1))   # -1 = every compartment
+        icmp = self._spec_icmp(spec, eval_dir)   # -1 = every compartment (land ones when coupled)
         if attributes and mapper is not None:
             spatial_obj = ml_regionalization.make_spatial_param(
-                spec, subparam_values, attributes, mapper, icmp=icmp)
+                spec, subparam_values, attributes, mapper, icmp=icmp,
+                **self._river_extras(spec, eval_dir))
         else:
             logger.warning(
                 f"regionalize '{group_name}': missing attributes/mapping — "

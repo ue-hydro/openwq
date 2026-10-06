@@ -698,6 +698,9 @@ cmake -DHOST_MODEL_TARGET=&lt;target&gt; \
 cmake -DHOST_MODEL_TARGET=summa_openwq \
       -DCMAKE_BUILD_TYPE=Release .
 
+cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq \
+      -DCMAKE_BUILD_TYPE=Release .
+
 cmake -DHOST_MODEL_TARGET=mizuroute_lakes_openwq \
       -DCMAKE_BUILD_TYPE=Debug .
 
@@ -714,6 +717,7 @@ make -j1
                             <h3>HOST_MODEL_TARGET Options</h3>
                             <table style="font-size: 0.76rem; line-height: 1.15;">
                                 <tr><td><strong>summa_openwq</strong></td><td>SUMMA land model</td></tr>
+                                <tr><td><strong>summa-mizuroute_openwq</strong></td><td>SUMMA with internal mizuRoute (land + river, one executable)</td></tr>
                                 <tr><td><strong>mizuroute_openwq</strong></td><td>MizuRoute routing</td></tr>
                                 <tr><td><strong>mizuroute_lakes_openwq</strong></td><td>MizuRoute + lakes</td></tr>
                                 <tr><td><strong>mizuroute_lakes_cslm_openwq</strong></td><td>MizuRoute + lakes + CSLM</td></tr>
@@ -858,6 +862,7 @@ make -j1
                             <h3>HOST_MODEL_TARGET Options</h3>
                             <table style="font-size: 0.76rem; line-height: 1.15;">
                                 <tr><td><strong>summa_openwq</strong></td><td>SUMMA land model</td></tr>
+                                <tr><td><strong>summa-mizuroute_openwq</strong></td><td>SUMMA with internal mizuRoute (land + river, one executable)</td></tr>
                                 <tr><td><strong>mizuroute_openwq</strong></td><td>MizuRoute routing</td></tr>
                                 <tr><td><strong>mizuroute_lakes_openwq</strong></td><td>MizuRoute + lakes</td></tr>
                                 <tr><td><strong>mizuroute_lakes_cslm_openwq</strong></td><td>MizuRoute + lakes + CSLM</td></tr>
@@ -971,6 +976,7 @@ module load cmake/3.22.1
                             <h3>Output Executables</h3>
                             <table style="font-size: 0.9rem;">
                                 <tr><td><strong>summa_openwq</strong></td><td>SUMMA + OpenWQ</td></tr>
+                                <tr><td><strong>summa-mizuroute_openwq</strong></td><td>SUMMA + mizuRoute + OpenWQ</td></tr>
                                 <tr><td><strong>mizuroute_openwq</strong></td><td>mizuRoute + OpenWQ</td></tr>
                                 <tr><td><strong>mizuroute_lakes_cslm_openwq</strong></td><td>Full lakes model</td></tr>
                             </table>

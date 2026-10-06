@@ -739,3 +739,35 @@ python my_calibration.py --prepare-obs-only       # Prepare observation data onl
 | 30 min | 300 | ~150 hours |
 
 For long calibrations, use HPC with job arrays to run evaluations in parallel.
+
+## 11. Sub-basin cascade calibration (upstream to downstream)
+
+Available for models with a routed river network (mizuRoute alone, a SUMMA to
+mizuRoute chain, or SUMMA with internally coupled mizuRoute, whose network is read
+from the TOML named by `mizuroute_config_path`). The option is switched on in the
+configuration report, **Targets tab, card "Sub-basin cascade calibration"**:
+
+1. The card lists the stations found in the observations, the zone each one
+   defines (the reaches above the station and below the stations further upstream,
+   with the land units draining to them), its area, and the calibration order
+   (level). Stations with few observations are proposed as validation points; the
+   role can be changed per station.
+2. Tick *Calibrate sub-basins in cascade*, choose the zone-specific parameters (the
+   others keep one global value), the evaluations per stage and what the ungauged
+   zone inherits, then download the script as usual.
+3. `python <run>.py --clean` runs the stages inside the work directory:
+   `stage_00_global/` (one value per parameter, all target stations), then one
+   `stage_NN_levelL/` per level (zone values free, upstream zones frozen, scored at
+   the stations of the level), and optionally `stage_NN_polish/`. `--resume` continues
+   the interrupted stage; `--report` adds a *Sub-basins* section with the fit of every
+   station after each stage and the calibrated value per zone.
+
+Zone values are Layer-1 `per_class` values on the `wq_zone` attribute (tables in
+`<work_dir>/wq_zones/`), so they combine with the Machine Learning tab; in the
+internally coupled SUMMA + mizuRoute model the HRU table drives the land
+compartments and the reach table the river compartment (their cell indices
+overlap, so the rows carry explicit compartment indices read from
+`openwq_out/openwq_compartments.json`); a parameter
+already regionalized there is left to the ML mapping. Layer-2 closures keep one set
+of weights for the domain. The objective of a stage is pooled over the stations of
+that level; `wq_zones/cascade_summary.json` holds the per-station values.

@@ -844,6 +844,13 @@ docker exec docker_openwq /bin/bash -c \
    mpirun --allow-run-as-root -np 2 \
    /code/bin/mizuroute_openwq_Release \
    /code/my_project/mizuroute.control"</span>
+
+<span class="comment"># SUMMA with internal mizuRoute: one process, no mpirun</span>
+docker exec docker_openwq /bin/bash -c \
+  <span class="string">"cd /code/my_project && \
+   /code/bin/summa-mizuroute_openwq_Release \
+   -m /code/my_project/fileManager.txt \
+   -c /code/my_project/mizuroute.toml"</span>
                             </pre>
                         </div>
                         <div class="highlight-box warning" style="margin-top: 12px;">

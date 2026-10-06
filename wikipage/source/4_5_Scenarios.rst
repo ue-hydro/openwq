@@ -166,7 +166,10 @@ compose multiplicatively.
   a proxy) is written under ``forcing_scenario/`` in the run folder and the
   per-run file manager / control points at it. Presets are illustrative
   global-mean ranges — use regional CMIP6 deltas. A CO2 change is not
-  represented.
+  represented. With SUMMA internally coupled to mizuRoute the single run
+  carries the land and the river compartments (the executable receives the
+  mizuRoute TOML with ``-c``); the compartment compared by default is then
+  ``RIVER_NETWORK_REACHES`` and the statistics are summarised per compartment.
 * *Precipitation intensification* — the wettest days are scaled up and the
   rest rescaled so the annual total is unchanged.
 

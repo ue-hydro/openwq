@@ -2200,7 +2200,8 @@ def run_scenarios(*, model_config: Dict[str, Any], scenarios: List[Dict[str, Any
                   run_mode_debug: bool = False, ml_closures=None, ml_runtime=None,
                   report_stem: str = "scenarios", clean: bool = True,
                   param_info: Optional[Dict[str, Any]] = None,
-                  timeout_seconds: int = 7200) -> Dict[str, Any]:
+                  timeout_seconds: int = 7200,
+                  mizuroute_config_path: str = "") -> Dict[str, Any]:
     """Run every scenario (plus the baseline) on top of the base model config
     — normally the CALIBRATED model config (``<template>_config_run.py``,
     whose inputs already hold the calibrated values) — extract the simulated
@@ -2221,10 +2222,14 @@ def run_scenarios(*, model_config: Dict[str, Any], scenarios: List[Dict[str, Any
     hostmodel = str(model_config.get("hostmodel") or "mizuroute").lower()
     spatial = ci.get_spatial_mapping(model_config) if hasattr(ci, "get_spatial_mapping") else {}
     mapping_key = spatial.get("h5_mapping_key") or ("hruId" if hostmodel == "summa" else "reachID")
+    # SUMMA with internally coupled mizuRoute: TOML passed to the executable with -c
+    mizuroute_config_path = (mizuroute_config_path
+                             or str(model_config.get("mizuroute_config_path") or ""))
+    coupled_river = bool(hostmodel == "summa" and mizuroute_config_path)
     model_species = resolve_model_species(model_config)
     species = list(species or model_species)
     compartments = list(compartments or [str(model_config.get("ss_method_copernicus_compartment_name_for_load")
-                                              or ("ILAYERVOLFRACWAT_SOIL" if hostmodel == "summa"
+                                              or ("ILAYERVOLFRACWAT_SOIL" if (hostmodel == "summa" and not coupled_river)
                                                   else "RIVER_NETWORK_REACHES"))])
     sim_window = None
     if period and period[1]:
@@ -2247,7 +2252,8 @@ def run_scenarios(*, model_config: Dict[str, Any], scenarios: List[Dict[str, Any
     mapper = None
     try:
         from calibration_lib.reach_mapping import ReachMapper
-        mapper = ReachMapper(hostmodel=hostmodel)
+        mapper = ReachMapper(hostmodel=hostmodel,
+                             preferred_compartment=(compartments[0] if compartments else None))
         cands = [Path(base_dir) / "openwq_out" / "HDF5" if base_dir else None,
                  Path(prov["mapping_json"]) if prov and prov.get("mapping_json") else None,
                  Path(prov["calibration_dir"]) / "ml_attributes" / "mapping.json" if prov and prov.get("calibration_dir") else None,
@@ -2280,6 +2286,7 @@ def run_scenarios(*, model_config: Dict[str, Any], scenarios: List[Dict[str, Any
         docker_compose_path=docker_compose_path, apptainer_sif_path=apptainer_sif_path,
         apptainer_bind_path=apptainer_bind_path, file_manager_path=file_manager_path,
         executable_full_path=executable_full_path, hostmodel=hostmodel,
+        mizuroute_config_path=(mizuroute_config_path or None),
         calibration_work_dir=str(scen_root), calibration_period=sim_window,
         total_evaluations=len(scenarios) + (1 if include_baseline else 0),
         timeout_seconds=timeout_seconds)
@@ -2368,35 +2375,49 @@ def summarize(df, thresholds: Dict[str, float], baseline: Optional[str]) -> "pd.
     import numpy as np
     rows = []
     thr = {_canon(k): float(v) for k, v in (thresholds or {}).items()}
-    for (sc, sp, u), g in df.groupby(["scenario", "species", "unit"]):
+    # Several compartments (e.g. soil and river in a coupled SUMMA + mizuRoute
+    # run) are summarised separately, never averaged together
+    _cmp_cols = ["compartment"] if ("compartment" in df.columns and df["compartment"].nunique() > 1) else []
+    for key, g in df.groupby(["scenario", "species", "unit"] + _cmp_cols):
+        sc, sp, u = key[0], key[1], key[2]
         v = g["value"].to_numpy(dtype=float)
         t = thr.get(_canon(sp))
-        rows.append({"scenario": sc, "species": sp, "unit": str(u), "n": len(v),
-                     "mean": float(np.nanmean(v)), "median": float(np.nanmedian(v)),
-                     "p90": float(np.nanpercentile(v, 90)), "max": float(np.nanmax(v)),
-                     "min": float(np.nanmin(v)),
-                     "exceed_frac": float(np.mean(v > t)) if t is not None else np.nan,
-                     "threshold": t if t is not None else np.nan})
+        row = {"scenario": sc, "species": sp, "unit": str(u), "n": len(v),
+               "mean": float(np.nanmean(v)), "median": float(np.nanmedian(v)),
+               "p90": float(np.nanpercentile(v, 90)), "max": float(np.nanmax(v)),
+               "min": float(np.nanmin(v)),
+               "exceed_frac": float(np.mean(v > t)) if t is not None else np.nan,
+               "threshold": t if t is not None else np.nan}
+        if _cmp_cols:
+            row["compartment"] = key[3]
+        rows.append(row)
     out = pd.DataFrame(rows)
     if out.empty:
         return out
     # basin aggregate = mean over units of the daily means (unweighted)
-    agg = (df.groupby(["scenario", "species", "datetime"], as_index=False)["value"].mean())
-    for (sc, sp), g in agg.groupby(["scenario", "species"]):
+    agg = (df.groupby(["scenario", "species"] + _cmp_cols + ["datetime"], as_index=False)["value"].mean())
+    for key, g in agg.groupby(["scenario", "species"] + _cmp_cols):
+        sc, sp = key[0], key[1]
         v = g["value"].to_numpy(dtype=float)
         t = thr.get(_canon(sp))
-        out.loc[len(out)] = {"scenario": sc, "species": sp, "unit": "ALL", "n": len(v),
-                             "mean": float(np.nanmean(v)), "median": float(np.nanmedian(v)),
-                             "p90": float(np.nanpercentile(v, 90)), "max": float(np.nanmax(v)),
-                             "min": float(np.nanmin(v)),
-                             "exceed_frac": float(np.mean(v > t)) if t is not None else np.nan,
-                             "threshold": t if t is not None else np.nan}
+        row = {"scenario": sc, "species": sp, "unit": "ALL", "n": len(v),
+               "mean": float(np.nanmean(v)), "median": float(np.nanmedian(v)),
+               "p90": float(np.nanpercentile(v, 90)), "max": float(np.nanmax(v)),
+               "min": float(np.nanmin(v)),
+               "exceed_frac": float(np.mean(v > t)) if t is not None else np.nan,
+               "threshold": t if t is not None else np.nan}
+        if _cmp_cols:
+            row["compartment"] = key[2]
+        out.loc[len(out)] = row
     if baseline and baseline in set(out["scenario"]):
-        b = out[out["scenario"] == baseline].set_index(["species", "unit"])
+        _idx = ["species", "unit"] + _cmp_cols
+        b = out[out["scenario"] == baseline].set_index(_idx)
+        def _k(r):
+            return tuple(r[c] for c in _idx)
         for col in ("mean", "median", "p90", "max"):
             out[f"{col}_pct_change"] = [
-                (100.0 * (r[col] - b.loc[(r["species"], r["unit"]), col]) / b.loc[(r["species"], r["unit"]), col])
-                if (r["species"], r["unit"]) in b.index and b.loc[(r["species"], r["unit"]), col] not in (0, 0.0)
+                (100.0 * (r[col] - b.loc[_k(r), col]) / b.loc[_k(r), col])
+                if _k(r) in b.index and b.loc[_k(r), col] not in (0, 0.0)
                 else np.nan for _, r in out.iterrows()]
     return out
 
@@ -2489,5 +2510,11 @@ def scenario_info_for_report(model_config: Dict[str, Any], work_dir: str,
             "units": units[:20000], "n_units": len(units), "species": resolve_model_species(model_config),
             "bgc_params": bgc, "n_point_entries": n_point,
             "hostmodel": str(model_config.get("hostmodel") or "mizuroute").lower(),
-            "compartment": str(model_config.get("ss_method_copernicus_compartment_name_for_load") or ""),
+            # default compartments compared by the report; a coupled SUMMA +
+            # mizuRoute run adds the river reaches next to the load compartment
+            "compartment": ", ".join([c for c in [
+                str(model_config.get("ss_method_copernicus_compartment_name_for_load") or ""),
+                ("RIVER_NETWORK_REACHES" if (str(model_config.get("hostmodel") or "").lower() == "summa"
+                                             and model_config.get("mizuroute_config_path")) else "")]
+                if c]),
             "has_lulc_breakdown": bool(ctx.get("loads"))}

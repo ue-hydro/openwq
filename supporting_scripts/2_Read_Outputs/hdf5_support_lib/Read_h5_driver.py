@@ -44,6 +44,28 @@ def _normalize_filename(file_name, file_extensions_i):
     return f"{file_name.replace(' ', '').upper().replace('/', '|')}-{file_extensions_i}"
 
 
+def _resolve_h5_path(folderpath, file_name, file_extensions_i):
+    """Return the path of the output file, or None.
+
+    Tries the name exactly as given (spaces removed), then upper-cased (legacy),
+    then a case-insensitive match over the folder, so compartment and flux
+    names keep working on case-sensitive filesystems.
+    """
+    base = f"{str(file_name).replace(' ', '').replace('/', '|')}-{file_extensions_i}.h5"
+    for cand in (base, _normalize_filename(file_name, file_extensions_i) + ".h5"):
+        full = os.path.join(folderpath, cand)
+        if os.path.isfile(full):
+            return full
+    try:
+        wanted = base.lower()
+        for entry in os.listdir(folderpath):
+            if entry.lower() == wanted:
+                return os.path.join(folderpath, entry)
+    except OSError:
+        pass
+    return None
+
+
 def _find_matching_cells(xyz_elements_source, xyz_elements_requested):
     """
     Find indices of matching cells between source and requested coordinates.
@@ -114,12 +136,13 @@ def Read_h5_save_engine(
     folderpath = openwq_info["path_to_results"]
     mappingKey = openwq_info["mapping_key"]
 
-    # Normalize and find the file
+    # Normalize and find the file (names are written as registered by the host
+    # model, e.g. "Qlocal_out", so fall back to a case-insensitive match)
     filename_fix = _normalize_filename(file_name, file_extensions_i)
-    filepath_i = os.path.join(folderpath, f"{filename_fix}.h5")
+    filepath_i = _resolve_h5_path(folderpath, file_name, file_extensions_i)
 
     # Check file existence
-    if not os.path.isfile(filepath_i):
+    if filepath_i is None:
         print(f"<Read_h5_save_tscollection> Warning: could not find \"{filename_fix}.h5\" file. Request skipped.")
         return []
 
@@ -270,10 +293,13 @@ def Read_h5_driver(openwq_info=None,
         print(">> Only supports HDF5 outputs <<")
         return {}
 
-    # Updating fullpath to outputs
-    openwq_info["path_to_results"] = os.path.join(
-        openwq_info["path_to_results"]
-        , output_format, '')
+    # Updating fullpath to outputs (on a copy, so a second call with the same
+    # dict does not read ".../HDF5/HDF5/")
+    openwq_info = dict(openwq_info)
+    _root = openwq_info["path_to_results"]
+    if os.path.basename(os.path.normpath(_root)) != output_format:
+        _root = os.path.join(_root, output_format, '')
+    openwq_info["path_to_results"] = _root
 
     # Define file extensions
     file_extensions = [

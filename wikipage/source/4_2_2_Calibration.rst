@@ -678,6 +678,24 @@ Complete Configuration Example
         "-x master_json {exec_path} {file_manager}"
     )
 
+.. note::
+
+    **SUMMA with internally coupled mizuRoute.** Nothing extra is needed in the
+    calibration template: the model config's ``mizuroute_config_path`` is read from the
+    container configuration and every evaluation runs the single coupled executable as
+    ``-m <fileManager_eval> -c <mizuRoute TOML>`` in one process (Docker and Apptainer).
+    A custom ``command_template`` can use the ``{mizuroute_config}`` placeholder. The
+    calibration targets must be all land compartments or all river outputs
+    (``RIVER_NETWORK_REACHES``, ``Qlocal_out``), because HRU ids and reach ids share one
+    output folder; river targets have their observation stations matched to the nearest
+    reach (river-network shapefile, reach-id column), land targets to the HRU polygons.
+    The two-model chain (SUMMA then mizuRoute reading the exported fluxes) is replaced by
+    this single model in ``model_chain``. The sub-basin cascade calibration and the
+    Machine Learning regionalization work on it too: zone or attribute tables keyed by HRU
+    id address the land compartments and tables keyed by reach id the river compartment,
+    each with explicit compartment indices (the hydrolink writes them to
+    ``openwq_out/openwq_compartments.json``).
+
     # =============================================================================
     # CALIBRATION PARAMETERS
     # =============================================================================

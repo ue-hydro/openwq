@@ -131,6 +131,20 @@ The ``Plot_h5_driver`` function creates time-series plots for specific features:
         figsize=(12, 6)
     )
 
+.. note::
+
+    **SUMMA with internally coupled mizuRoute.** One ``openwq_out/HDF5`` folder then
+    holds the land compartments (cell ids ``<hruId>_z<layer>``) and the river outputs
+    ``RIVER_NETWORK_REACHES`` and ``Qlocal_out`` (cell ids ``<segId>``), all with the
+    ``hruId`` dataset. Pass ``river_compartments=["RIVER_NETWORK_REACHES", "Qlocal_out"]``
+    together with ``basin_shapefile`` (HRU polygons) and ``river_network_shp`` (reach
+    lines, ``mapping_key`` = the reach-id column, e.g. ``segId`` or ``LINKNO``): land
+    traces join the polygons, river traces the reaches, both layers are clickable and the
+    observation stations are matched to basins or to the nearest reach per compartment.
+    The report generated from the config template does this automatically when the
+    template sets ``mizuroute_config_path``. ``WebGL_h5_driver`` takes a
+    ``compartments=`` filter for the same reason (one viewer for land, one for the river).
+
 **Parameters:**
 
 +------------------------+-------------------------------------------------------------------+
