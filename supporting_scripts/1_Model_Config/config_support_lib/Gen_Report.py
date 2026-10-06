@@ -33,6 +33,11 @@ import datetime
 import glob as _glob
 import platform
 import numpy as np
+try:
+    from Gen_Input_Driver import _get_docker_container_name
+except Exception:  # pragma: no cover
+    def _get_docker_container_name(_p):
+        return 'docker_openwq'
 
 
 def _caller_template_stem(default="openwq"):
@@ -2885,7 +2890,31 @@ analyses (<code>supporting_scripts/4_Scenarios/scenario_config_template.py</code
                 os.path.join(_script_dir, '..', '..', '..', 'containers'))
         _step1_cmd = f'{_cd_cmd(_containers_dir)}\ndocker compose up -d'
         H.append('<h3 style="margin-top:1rem">1. Start the Docker container</h3>')
-        H.append('<p>If the container is not already running:</p>')
+        # A running container must be reused: `docker compose up` from ANOTHER
+        # compose folder recreates it (kills whatever runs inside) and, when the
+        # folder sits at a different depth, mounts a different host root on /code.
+        _running_note = ''
+        try:
+            import subprocess as _sp_r, json as _js_r, shutil as _sh_r
+            _cname = _get_docker_container_name(docker_compose_path) if docker_compose_path else 'docker_openwq'
+            if _sh_r.which('docker'):
+                _ins = _sp_r.run(['docker', 'inspect', '-f',
+                                  '{{.State.Status}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{range .Mounts}}{{.Source}}->{{.Destination}} {{end}}',
+                                  _cname], capture_output=True, text=True, timeout=10)
+                if _ins.returncode == 0 and _ins.stdout.strip().startswith('running'):
+                    _st, _cdir, _mounts = (_ins.stdout.strip().split('|') + ['', ''])[:3]
+                    _running_note = (
+                        f'<p><strong>Container <code>{_cname}</code> is already running</strong>'
+                        + (f' (started from <code>{_cdir}</code>, mount {_mounts.strip()})' if _cdir else '')
+                        + '. Use it as is: running <code>docker compose up</code> from a different '
+                        'folder recreates the container and kills the runs inside it.</p>')
+        except Exception:
+            _running_note = ''
+        if _running_note:
+            H.append(_running_note)
+            H.append('<p>Only if no container is running:</p>')
+        else:
+            H.append('<p>If the container is not already running:</p>')
         H.append(_code_block(_step1_cmd))
 
         # Step 2: Run the model
