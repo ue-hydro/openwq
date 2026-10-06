@@ -483,6 +483,87 @@ For calibrations with many parameters (10+), run sensitivity analysis first to i
     sensitivity_sobol_samples = 1024
 
 
+Sub-basin Cascade Calibration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When a river network has several observation stations, the model can be
+calibrated zone by zone, upstream to downstream, with its own parameter
+values in each zone. The option is available for models with a mizuRoute
+river network (mizuRoute alone, or a SUMMA to mizuRoute chain).
+
+**Zones.** A zone is the set of reaches upstream of a station and downstream
+of the stations further upstream, together with the land units (HRUs) that
+drain to those reaches (``hruToSegId`` in the topology file). Zones are
+defined by the network and the stations, not by the hydrology sub-basins, so a
+zone normally holds several reaches and HRUs. Reaches below the last station,
+or on tributaries without a station, form the *ungauged zone*, whose values are
+inherited. A station is a calibration target when it has enough observations;
+the others are kept as validation points.
+
+**Stages.** The whole model is simulated in every evaluation; what changes
+from stage to stage is which values are free and which station is scored:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 34 34 14
+
+   * - Stage
+     - Free
+     - Frozen
+     - Scored at
+   * - ``stage_00_global``
+     - every selected parameter, one value for the whole domain
+     - nothing
+     - all target stations
+   * - ``stage_01_level1``
+     - the zone-specific parameters of the zones with no gauged zone upstream
+     - everything else at its global value
+     - the stations of those zones
+   * - ``stage_02_level2`` ...
+     - the zone-specific parameters of the zones whose upstream zones are calibrated
+     - the upstream zones at their calibrated values, the rest global
+     - the stations of those zones
+   * - ``stage_NN_polish`` (optional)
+     - every zone value at once
+     - the non-zone parameters
+     - all target stations
+
+Zones on separate tributaries with the same position in the network belong to
+the same level and are calibrated in the same stage. Parameters not marked as
+zone-specific keep their global value everywhere. Because the upstream values
+are fixed when a downstream zone is calibrated, that zone absorbs the errors
+left upstream; the global stage gives every zone a sensible starting value and
+the polish stage can redistribute the corrections.
+
+**Activation.** In the configuration report, Targets tab, the card
+*Sub-basin cascade calibration* lists the stations, the zone of each one
+(reaches, area, record) and the calibration order. Tick *Calibrate sub-basins in
+cascade*, choose the zone-specific parameters (a checklist of the parameters
+selected in the Parameters tab), the evaluations per stage, the role of each
+station and what the ungauged zone inherits, then download the script. The
+script gains a ``cascade = {...}`` block and is run as usual:
+
+.. code-block:: bash
+
+   python my_calibration_run.py --clean    # runs the stages in sub-folders of the work dir
+   python my_calibration_run.py --resume   # continues the interrupted stage
+   python my_calibration_run.py --report   # results report with a "Sub-basins" section
+
+**Outputs.** ``<work_dir>/wq_zones/`` holds ``zones.json``, the per-unit zone
+tables ``zone_reaches.csv`` and ``zone_hrus.csv`` (columns ``id``,
+``wq_zone``) and ``cascade_summary.json`` (per-stage best values and the fit of
+every station after every stage). Each stage is a complete calibration folder.
+The results of the last stage are copied to ``<work_dir>/results`` together with
+``best_parameters_cascade.json`` (global values plus ``<parameter>@zone<k>``).
+The results report adds a *Sub-basins* section with the fit of every station
+after each stage and the calibrated value of each zone.
+
+**Relation to the hybrid-ML layers.** Zone values are Layer-1 ``per_class``
+values on the ``wq_zone`` attribute (see :doc:`4_4_Hybrid_ML`), so the per-cell
+maps, the parameter handler and the reports are the same. A parameter already
+regionalized in the Machine Learning tab is left to its mapping. Layer-2
+closures keep one set of weights for the whole domain.
+
 Recommended HPC Workflow
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
