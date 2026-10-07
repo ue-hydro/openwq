@@ -74,6 +74,7 @@ GRQA_PARAMETERS = {
     'NO3': {'name': 'Nitrate',                       'unit': 'mg/L',       'group': 'nitrogen'},
     'NO2': {'name': 'Nitrite',                       'unit': 'mg/L',       'group': 'nitrogen'},
     'NH4': {'name': 'Ammonium',                      'unit': 'mg/L',       'group': 'nitrogen'},
+    'TAN': {'name': 'Total Ammonia Nitrogen (NH4+ + NH3)', 'unit': 'mg/L', 'group': 'nitrogen'},
     'NO3_NO2': {'name': 'Nitrate + Nitrite',         'unit': 'mg/L',       'group': 'nitrogen'},
     'DIN': {'name': 'Dissolved Inorganic Nitrogen',  'unit': 'mg/L',       'group': 'nitrogen'},
     'DON': {'name': 'Dissolved Organic Nitrogen',    'unit': 'mg/L',       'group': 'nitrogen'},

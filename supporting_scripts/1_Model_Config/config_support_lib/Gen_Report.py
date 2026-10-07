@@ -146,6 +146,13 @@ _GRQA_TO_MODEL_FACTOR = {
     # All other GRQA parameters: factor = 1.0 (no conversion needed)
 }
 
+# Further GRQA codes that report the same model species. Many agencies report
+# ammonium as total ammonia nitrogen (TAN = NH4+ + NH3, as N), which GRQA keeps
+# as a separate parameter; at the pH of most rivers it is almost all NH4+.
+_GRQA_ALTERNATE_CODES = {
+    'NH4': ['TAN'],
+}
+
 _MODEL_SPECIES_TO_GRQA = {
     # ── "as N" species (templates use -N suffix) ──
     'NO3-N': 'NO3', 'NH4-N': 'NH4', 'NO2-N': 'NO2',
@@ -879,6 +886,8 @@ def _extract_observations_for_report(
             grqa_mapping[code] = model_name
         elif not code:
             unmapped_species.append(model_name)
+        for alt in _GRQA_ALTERNATE_CODES.get(code, []):
+            grqa_mapping.setdefault(alt, model_name)
 
     buffer_m = observation_buffer_km * 1000
 
