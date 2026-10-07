@@ -478,6 +478,10 @@ class ModelRunner:
         # is running instead of the cryptic "eval_999999".
         if "999999" in label:
             label = "the VALIDATION run — best fit over the full period"
+        # e.g. the sub-basin cascade stage: "cascade 1/4 · global"
+        _tag = getattr(self, "progress_tag", "") or ""
+        if _tag:
+            label += f" · {_tag}"
         try:
             is_tty = sys.stdout.isatty()
         except Exception:
@@ -680,6 +684,7 @@ class ModelRunner:
             "docker", "exec",
             "-e", f"master_json={container_master_json}",
             "-e", f"OMP_NUM_THREADS={_omp_threads}",
+            "-e", "HDF5_USE_FILE_LOCKING=FALSE",
             self.docker_container_name,
             "/bin/bash", "-c",
             shell_cmd
@@ -702,7 +707,15 @@ class ModelRunner:
                 oom = self._oom_message(result.returncode, result.stderr)
                 if oom:
                     return False, oom
-                return False, f"Exit code {result.returncode}: {((result.stderr or '') + (result.stdout or '')).strip()[-900:] or '(no output captured)'}"
+                if self._simulation_completed(result):
+                    # SUMMA can fail while closing its netCDF output AFTER the time
+                    # loop finished (nc_file_close / HDF error on some mounts); the
+                    # OpenWQ outputs the objective reads are complete at that point
+                    logger.warning(f"{eval_dir.name}: exit code {result.returncode} after the simulation "
+                                   "completed (host model failed while closing its own output); "
+                                   "OpenWQ outputs are complete, evaluation kept")
+                else:
+                    return False, f"Exit code {result.returncode}: {((result.stderr or '') + (result.stdout or '')).strip()[-900:] or '(no output captured)'}"
 
             # Check if output files were created
             output_dir = eval_dir / "openwq_out" / "HDF5"
@@ -849,6 +862,7 @@ class ModelRunner:
             "--pwd", container_eval_dir,
             "--env", f"master_json={container_master_json}",
             "--env", f"OMP_NUM_THREADS={_omp_threads}",
+            "--env", "HDF5_USE_FILE_LOCKING=FALSE",
             self.apptainer_sif_path,
             *mpi_prefix,
             exec_path,
@@ -873,7 +887,15 @@ class ModelRunner:
                 oom = self._oom_message(result.returncode, result.stderr)
                 if oom:
                     return False, oom
-                return False, f"Exit code {result.returncode}: {((result.stderr or '') + (result.stdout or '')).strip()[-900:] or '(no output captured)'}"
+                if self._simulation_completed(result):
+                    # SUMMA can fail while closing its netCDF output AFTER the time
+                    # loop finished (nc_file_close / HDF error on some mounts); the
+                    # OpenWQ outputs the objective reads are complete at that point
+                    logger.warning(f"{eval_dir.name}: exit code {result.returncode} after the simulation "
+                                   "completed (host model failed while closing its own output); "
+                                   "OpenWQ outputs are complete, evaluation kept")
+                else:
+                    return False, f"Exit code {result.returncode}: {((result.stderr or '') + (result.stdout or '')).strip()[-900:] or '(no output captured)'}"
 
             # Check if output files were created
             output_dir = eval_dir / "openwq_out" / "HDF5"
@@ -1190,6 +1212,14 @@ class ModelRunner:
                     f"{Path(ss_path).name}: {e}")
 
     @staticmethod
+    @staticmethod
+    def _simulation_completed(result) -> bool:
+        """True when the model log shows the time loop ran to its end (SUMMA's
+        final message, or the OpenWQ coupler's end-of-run water check)."""
+        text = (result.stdout or "") + (result.stderr or "")
+        return ("finished simulation successfully" in text
+                or "water check over the run" in text)
+
     def _oom_message(returncode, stderr) -> Optional[str]:
         """If a failure matches a KNOWN failure mode (out-of-memory kill or a
         model-side segmentation fault), return an actionable message; otherwise

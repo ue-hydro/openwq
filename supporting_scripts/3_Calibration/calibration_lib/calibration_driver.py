@@ -67,6 +67,9 @@ _ALGO_DISPLAY = {
 }
 
 
+_CASCADE_PROGRESS = ""   # set while a sub-basin cascade stage runs (shown in the banner)
+
+
 def _print_eval_banner(eval_id, max_evals=None, best_obj=None, algorithm=None):
     """Print a prominent, colour-highlighted banner for each calibration
     simulation so its number stands out in the terminal amid the model's own
@@ -88,6 +91,8 @@ def _print_eval_banner(eval_id, max_evals=None, best_obj=None, algorithm=None):
         best = f"{DIM}      best so far: {best_obj:.4g}{RST}"
     bar = "═" * 66
     print(f"\n{BOLD}{bar}{RST}", flush=True)
+    if _CASCADE_PROGRESS:
+        print(f"{BOLD}  ▶  {_CASCADE_PROGRESS}{RST}", flush=True)
     print(f"{BOLD}  ▶  SIMULATION {eval_id}{total}{scheme}{RST}{best}", flush=True)
     print(f"{BOLD}{bar}{RST}", flush=True)
 
@@ -654,6 +659,16 @@ def run_calibration(
         # progress lines printed after each eval's spinner finishes.
         total_evaluations=max_evaluations,
     )
+
+    # Sub-basin cascade: say which stage is running in the banner and in the
+    # model progress line ("cascade 1/4 · global · stations 139, 198, 212").
+    global _CASCADE_PROGRESS
+    _CASCADE_PROGRESS = str(kwargs.get("cascade_progress") or "")
+    if _CASCADE_PROGRESS:
+        try:
+            model_runner.progress_tag = _CASCADE_PROGRESS.split(" · stations")[0]
+        except Exception:
+            pass
 
     # Parameters held at a known value for this run (sub-basin cascade: the
     # zones already calibrated and the non-zone parameters). They are applied
@@ -2338,6 +2353,68 @@ def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
         return None, None, None
 
 
+def cascade_active_stage(work_dir) -> Optional[Path]:
+    """The stage folder a sub-basin cascade is working on (or finished last):
+    the latest ``stage_NN_*`` folder that has evaluations. None when
+    ``work_dir`` is not the top folder of a cascade."""
+    work_dir = Path(work_dir)
+    if not (work_dir / "wq_zones").is_dir():
+        return None
+    stages = sorted(d for d in work_dir.glob("stage_[0-9][0-9]_*") if d.is_dir())
+    with_evals = [d for d in stages
+                  if (d / "evaluations").is_dir() and any((d / "evaluations").iterdir())]
+    return with_evals[-1] if with_evals else None
+
+
+def cascade_stage_stations(stage_dir) -> Optional[List[int]]:
+    """Station reaches scored in one cascade stage: from the stage parameter
+    file, else all target stations (global and polish stages) or the stations
+    of the level (``stage_NN_levelL``) from ``wq_zones/zones.json``."""
+    stage_dir = Path(stage_dir)
+    f = stage_dir / "cascade_stage_params.json"
+    if f.is_file():
+        try:
+            with open(f) as fh:
+                st = json.load(fh).get("stations")
+            if st:
+                return [int(x) for x in st]
+        except Exception:
+            pass
+    zf = stage_dir.parent / "wq_zones" / "zones.json"
+    if not zf.is_file():
+        return None
+    try:
+        with open(zf) as fh:
+            zones = json.load(fh).get("zones") or []
+    except Exception:
+        return None
+    name = stage_dir.name
+    if "_level" in name:
+        try:
+            lv = int(name.split("_level")[-1])
+            return [int(z["station_reach"]) for z in zones if z.get("level") == lv]
+        except ValueError:
+            return None
+    return [int(z["station_reach"]) for z in zones]
+
+
+def cascade_stage_parameters(stage_dir) -> Optional[List[Dict]]:
+    """Parameter definitions of one cascade stage (written by cascade.py)."""
+    f = Path(stage_dir) / "cascade_stage_params.json"
+    if not f.is_file():
+        return None
+    try:
+        with open(f) as fh:
+            params = json.load(fh).get("calibration_parameters")
+        for p in params or []:
+            if isinstance(p.get("bounds"), list):
+                p["bounds"] = tuple(p["bounds"])
+        return params or None
+    except Exception as _e:
+        logger.debug(f"cascade stage parameters not read from {f}: {_e}")
+        return None
+
+
 def regenerate_results_report(*, calibration_work_dir, model_config,
                               calibration_parameters, calibration_settings,
                               report_stem):
@@ -2351,6 +2428,32 @@ def regenerate_results_report(*, calibration_work_dir, model_config,
     """
     from . import Gen_Calibration_Results_Report as _GRR
     work_dir = Path(calibration_work_dir)
+
+    # Sub-basin cascade: the evaluations live in stage_NN_* sub-folders. Build
+    # the report of the active stage (with that stage's own parameter set) and
+    # place a copy where the run's report is normally opened.
+    _stage = cascade_active_stage(work_dir)
+    if _stage is not None:
+        _sp = cascade_stage_parameters(_stage) or calibration_parameters
+        # score and show the stations of that stage, not the run script's targets
+        _cs = dict(calibration_settings or {})
+        _st = cascade_stage_stations(_stage)
+        if _st:
+            _cs["calibration_targets"] = {**(_cs.get("calibration_targets") or {}),
+                                          "reach_ids": list(_st)}
+        _rp = regenerate_results_report(
+            calibration_work_dir=str(_stage), model_config=model_config,
+            calibration_parameters=_sp, calibration_settings=_cs,
+            report_stem=report_stem)
+        if _rp:
+            _top = work_dir / Path(_rp).name
+            try:
+                shutil.copy2(_rp, _top)
+                return str(_top)
+            except Exception as _e:
+                logger.warning(f"cascade report not copied to {_top}: {_e}")
+        return _rp
+
     results_dir = work_dir / "results"
     cs = dict(calibration_settings or {})
     mode = cs.get("calibration_mode") or "both"
@@ -2456,6 +2559,27 @@ def regenerate_results_report(*, calibration_work_dir, model_config,
             cr["best_params"] = _best_p
     if ck_eval is not None:
         cr["n_evaluations"] = max(cr.get("n_evaluations", 0), ck_eval + 1)
+
+    # Evaluation that found the best, and the model run time so far (from the
+    # per-evaluation runtime.txt files), when the run has not reported them.
+    if cr.get("convergence_eval") is None:
+        _bh = min((e for e in cr.get("history", [])
+                   if isinstance(e.get("objective"), (int, float))
+                   and e["objective"] < _REPORT_PENALTY),
+                  key=lambda e: e["objective"], default=None)
+        if _bh is not None and _bh.get("eval_id") is not None:
+            cr["convergence_eval"] = _bh["eval_id"]
+    if not cr.get("runtime_hours"):
+        _rt = 0.0
+        for _f in (work_dir / "evaluations").glob("eval_*/runtime.txt"):
+            try:
+                for _ln in open(_f):
+                    if _ln.startswith("runtime_seconds:"):
+                        _rt += float(_ln.split(":", 1)[1])
+            except Exception:
+                pass
+        if _rt > 0:
+            cr["runtime_hours"] = _rt / 3600.0
 
     # ── Sensitivity state ──
     sr = None

@@ -142,6 +142,22 @@ def generate_results_report(
     Optional[str]
         Path to the generated HTML report, or None on failure.
     """
+    # Sub-basin cascade: the top folder holds no evaluations of its own; the
+    # report is rebuilt from the active stage (calibration_driver handles it).
+    try:
+        from .calibration_driver import cascade_active_stage as _cas
+    except ImportError:                          # pragma: no cover
+        from calibration_driver import cascade_active_stage as _cas
+    if _cas(output_dir) is not None:
+        try:
+            from .calibration_driver import regenerate_results_report as _regen
+        except ImportError:                      # pragma: no cover
+            from calibration_driver import regenerate_results_report as _regen
+        return _regen(calibration_work_dir=output_dir, model_config=model_config,
+                      calibration_parameters=calibration_parameters,
+                      calibration_settings=calibration_settings,
+                      report_stem=report_stem)
+
     try:
         os.makedirs(output_dir, exist_ok=True)
         _results_report_name = (
@@ -304,6 +320,15 @@ def generate_results_report(
         ))
 
         H.append('<div class="container">')
+
+        # ── Sub-basin cascade: which stage this report shows ──
+        try:
+            _cas_banner = _cascade_stage_banner(output_dir)
+        except Exception as _e:
+            logger.warning(f"cascade stage banner skipped: {_e}")
+            _cas_banner = ""
+        if _cas_banner:
+            H.append(_cas_banner)
 
         # ── In-progress banner (partial report opened mid-run) ──
         if in_progress:
@@ -1521,19 +1546,123 @@ def _build_ml_runtime_cards(output_dir, eval_dir):
     return cards, n_units_max
 
 
+def _cascade_context(output_dir):
+    """(summary, stage_name, stage_stations) for a report of a sub-basin cascade
+    stage, or None. ``output_dir`` is a ``stage_NN_*`` folder (or the cascade
+    top folder). The summary falls back to ``wq_zones/zones.json`` while the
+    first stage is still running."""
+    import json as _json, os as _os, glob as _glob
+    od = str(output_dir).rstrip("/")
+    if _os.path.isdir(_os.path.join(od, "wq_zones")):
+        top = od
+        stages = sorted(d for d in _glob.glob(_os.path.join(top, "stage_[0-9][0-9]_*")) if _os.path.isdir(d))
+        stage_dir = stages[-1] if stages else None
+    elif _os.path.isdir(_os.path.join(_os.path.dirname(od), "wq_zones")) and \
+            _os.path.basename(od).startswith("stage_"):
+        top, stage_dir = _os.path.dirname(od), od
+    else:
+        return None
+    zdir = _os.path.join(top, "wq_zones")
+    S = None
+    for fn in ("cascade_summary.json", "zones.json"):
+        f = _os.path.join(zdir, fn)
+        if _os.path.isfile(f):
+            with open(f) as fh:
+                S = _json.load(fh)
+            break
+    if not S or not S.get("zones"):
+        return None
+    S.setdefault("stages", [])
+    if "zone_parameters" not in S:
+        # first stage still running with no summary yet: read the run log
+        try:
+            with open(_os.path.join(top, "cascade.log")) as fh:
+                if "no zone-specific parameter selected" in fh.read():
+                    S["zone_parameters"] = []
+        except Exception:
+            pass
+    stage = _os.path.basename(stage_dir) if stage_dir else None
+    stations = None
+    if stage_dir:
+        f = _os.path.join(stage_dir, "cascade_stage_params.json")
+        if _os.path.isfile(f):
+            try:
+                with open(f) as fh:
+                    stations = _json.load(fh).get("stations")
+            except Exception:
+                stations = None
+    if stations is None and stage:
+        zones = S["zones"]
+        if "_level" in stage:
+            try:
+                lv = int(stage.split("_level")[-1])
+                stations = [z["station_reach"] for z in zones if z.get("level") == lv]
+            except ValueError:
+                stations = None
+        if stations is None:
+            stations = [z["station_reach"] for z in zones]
+    return S, stage, stations
+
+
+def _cascade_stage_banner(output_dir):
+    """Card at the top of a cascade report saying which stage it shows, what is
+    free in that stage and which stations score it."""
+    import html as _h
+    ctx = _cascade_context(output_dir)
+    if not ctx:
+        return ""
+    S, stage, stations = ctx
+    zones = S["zones"]
+    st_txt = ", ".join(str(x) for x in (stations or []))
+    order = " &rarr; ".join(f"zone {z['id']} (station {z['station_reach']})"
+                            for z in sorted(zones, key=lambda z: (z.get("level", 0), z["id"])))
+    zp = S.get("zone_parameters")
+    if stage and stage.startswith("stage_00"):
+        what = (f"<b>Stage 00, global calibration.</b> Every parameter has one value for the whole "
+                f"domain and the fit is scored at all target stations together ({st_txt}); the "
+                f"tables below therefore show all of them. The zone stages come after this one.")
+    elif stage and "_level" in stage:
+        lz = [z["id"] for z in zones if z["station_reach"] in (stations or [])]
+        what = (f"<b>{_h.escape(stage.replace('_', ' '))}.</b> Free: the zone-specific parameters of "
+                f"zone(s) {', '.join(map(str, lz))}; scored at station(s) {st_txt}. Upstream zones keep "
+                f"their calibrated values and the other parameters their global values. The other "
+                f"stations in the tables are shown for reference: their fit changes here only as a "
+                f"side effect.")
+    elif stage and "polish" in stage:
+        what = (f"<b>Final polish.</b> Every zone value is free and the fit is scored at all target "
+                f"stations ({st_txt}).")
+    else:
+        what = ""
+    if zp is None:
+        zp_txt = ""
+    elif zp:
+        zp_txt = ("<br>Zone-specific parameters: " + ", ".join(f"<code>{_h.escape(x)}</code>" for x in zp))
+    else:
+        zp_txt = ("<br><span style='color:#c2410c'><b>No zone-specific parameter was selected</b>, so this "
+                  "run stops after the global stage. Add names to <code>zone_parameters</code> in the run "
+                  "script and run it again with <code>--resume</code> (the global stage is reused).</span>")
+    return f"""
+<div class="section" id="cascade-stage">
+    <div class="card" style="border-left:5px solid #0f766e;background:rgba(15,118,110,.07);">
+        <p style="margin:0;font-size:.95rem;">
+            <b>Sub-basin cascade calibration.</b> Order: {order}.<br>{what}{zp_txt}
+        </p>
+    </div>
+</div>"""
+
+
 def _build_cascade_section(output_dir):
     """Sub-basin cascade calibration: the zones, the fit of every station after
     each stage, and the calibrated value of each zone-specific parameter.
     Rendered only when ``wq_zones/cascade_summary.json`` exists."""
     import json as _json, os as _os, html as _h
-    p = _os.path.join(str(output_dir), "wq_zones", "cascade_summary.json")
-    if not _os.path.isfile(p):
+    _ctx = _cascade_context(output_dir)
+    if not _ctx:
         return ""
-    with open(p) as f:
-        S = _json.load(f)
+    S = _ctx[0]
     zones = S.get("zones", [])
     stages = S.get("stages", [])
-    if not zones or not stages:
+    if not zones:
         return ""
     zone_of_station = {str(z["station_reach"]): z for z in zones}
     # per-station KGE after each stage
@@ -1574,9 +1703,28 @@ def _build_cascade_section(output_dir):
                    f"<tbody>{''.join(vrows)}</tbody></table>") if vrows else \
                   "<p style='color:var(--muted)'>No zone-specific parameter was selected.</p>"
     ung = S.get("ungauged") or {}
+    _active = S.get("active_stage")
+    _done = {st.get("stage") for st in stages}
+    _shown = _ctx[1] or _os.path.basename(str(output_dir).rstrip('/'))
+    _active_note = (f"<p style='font-size:.9rem'><b>Stage shown in this report:</b> "
+                    f"{_h.escape(str(_shown))}"
+                    + (f" &middot; <b>running:</b> {_h.escape(str(_active))}" if _active and _active not in _done else "")
+                    + (" &middot; no stage finished yet, the table fills in as stages complete" if not stages else "")
+                    + "</p>")
+    if "zone_parameters" not in S:
+        _zp_note = ""
+    else:
+        zp = S.get("zone_parameters") or []
+        _zp_note = ("<p style='font-size:.9rem'><b>Zone-specific parameters:</b> "
+                    + (", ".join(f"<code>{_h.escape(x)}</code>" for x in zp) if zp
+                       else "<span style='color:#c2410c'>none selected: only the global stage runs. Add names to "
+                            "<code>zone_parameters</code> in the run script and run it with <code>--resume</code>.</span>")
+                    + "</p>")
     return f"""
 <div class="section" id="cascade">
     <h2>Sub-basin cascade calibration</h2>
+    {_active_note}
+    {_zp_note}
     <p style="font-size:.9rem;color:var(--text2);">
         {len(zones)} gauged zones calibrated in {len(S.get('levels', []))} levels, upstream to downstream,
         after a global stage. A zone is the set of reaches above a station and below the stations
