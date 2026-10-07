@@ -4207,8 +4207,10 @@ def _build_cascade_card(info: Optional[Dict[str, Any]], feature_label: str = "Re
                     </select></div>
             </div>
             <div class="form-group" style="margin-top:.6rem;">
-                <label>Zone-specific parameters (from the Parameters tab; the others keep one global value)</label>
+                <label>Zone-specific parameters (reaction rates and the load scale selected in the Parameters tab; the others keep one global value)</label>
                 <div id="cascade-param-list" style="display:flex;flex-wrap:wrap;gap:.3rem .9rem;font-size:.82rem;"></div>
+                <p id="cascade-param-warn" style="display:none;color:#c2410c;font-size:.82rem;margin-top:.4rem;">
+                    Tick at least one parameter: without zone-specific parameters only the global stage runs.</p>
             </div>
         </div>
         <script>
@@ -4220,21 +4222,36 @@ def _build_cascade_card(info: Optional[Dict[str, Any]], feature_label: str = "Re
             var keep = {{}};
             list.querySelectorAll('.cascade-param-cb').forEach(function(cb){{ keep[cb.value] = cb.checked; }});
             var html = '';
+            var nOn = 0;
             document.querySelectorAll('.param-row').forEach(function(row){{
               var cb = row.querySelector('.param-cb'); if(!cb || !cb.checked) return;
-              var o = (typeof PARAMS !== 'undefined') ? PARAMS[parseInt(row.dataset.paramIdx)] : null; if(!o) return;
-              var chk = (o.name in keep) ? keep[o.name] : true;
+              var o = null;
+              try {{ o = JSON.parse(row.getAttribute('data-param') || 'null'); }} catch(e) {{ o = null; }}
+              if(!o || !o.name) return;
+              var ft = String(o.file_type || '');
+              // only reaction rates and the load scale can vary by zone
+              var ok = /^(bgc_json|ss_csv_scale)/.test(ft);
+              if(!ok) return;
+              // default: the load scale and the nitrification/denitrification rates
+              var dflt = /^SS_.*scale/i.test(o.name) || /_k_(nit|den)$/i.test(o.name);
+              var chk = (o.name in keep) ? keep[o.name] : dflt;
+              if(chk) nOn++;
               html += '<label style="display:flex;align-items:center;gap:.3rem"><input type="checkbox" class="cascade-param-cb" value="'
                     + o.name.replace(/"/g,'&quot;') + '"' + (chk ? ' checked' : '') + '> ' + o.name + '</label>';
             }});
             list.innerHTML = html || '<span style="color:var(--muted)">no parameter selected in the Parameters tab</span>';
+            var warn = document.getElementById('cascade-param-warn');
+            if (warn) warn.style.display = (html && nOn === 0) ? '' : 'none';
             list.querySelectorAll('.cascade-param-cb').forEach(function(cb){{
               cb.addEventListener('change', function(){{ if (typeof updateScript === 'function') updateScript(); }});
             }});
           }}
           on.addEventListener('change', function(){{ body.style.display = on.checked ? '' : 'none'; sync(); if (typeof updateScript === 'function') updateScript(); }});
           document.addEventListener('change', function(ev){{ if (ev.target && ev.target.classList && ev.target.classList.contains('param-cb') && on.checked) sync(); }});
-          list.addEventListener('change', function(){{ if (typeof updateScript === 'function') updateScript(); }});
+          list.addEventListener('change', function(){{
+            var n = list.querySelectorAll('.cascade-param-cb:checked').length;
+            var warn = document.getElementById('cascade-param-warn'); if (warn) warn.style.display = n ? 'none' : '';
+            if (typeof updateScript === 'function') updateScript(); }});
         }})();
         </script>
     </div>"""

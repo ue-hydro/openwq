@@ -167,6 +167,16 @@ class ChainModelRunner:
         self._calib_total = 0
         self.total_evaluations = getattr(self._runners[-1], "total_evaluations", 0)
 
+    # progress tag shown in each model's progress line (e.g. the cascade stage)
+    @property
+    def progress_tag(self):
+        return getattr(self._runners[-1], "progress_tag", "")
+
+    @progress_tag.setter
+    def progress_tag(self, value):
+        for r in self._runners:
+            r.progress_tag = value
+
     # calibration_period is set by the driver (e.g. the validation re-run);
     # propagate it to every model so the whole chain uses the same window.
     @property
