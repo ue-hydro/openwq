@@ -2264,6 +2264,11 @@ def get_species_observation_availability(
             # Direct match first
             if model_species in GRQA_PARAMETERS:
                 return model_species
+            # PHREEQC decoupled components (see BGC_templates/PHREEQC and
+            # _MODEL_SPECIES_TO_GRQA in Gen_Report.py)
+            _phreeqc_components = {"Nit": "NO3", "Amm": "NH4", "Oxg": "DO", "Doc": "DOC"}
+            if model_species in _phreeqc_components:
+                return _phreeqc_components[model_species]
             # Strip common suffixes: -N, -P, _N, _P
             for suffix in ('-N', '-P', '_N', '_P'):
                 if model_species.endswith(suffix):
