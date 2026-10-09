@@ -508,6 +508,10 @@ void OpenWQ_hostModelconfig::set_dependVar_scalar_at(int index, double value)
 {
     (*this->dependVar_scalar)[index] = value;
 }
+double& OpenWQ_hostModelconfig::get_dependVar_scalar_ref(int index)
+{
+    return (*this->dependVar_scalar)[index];
+}
 
 
 /**************

@@ -528,6 +528,8 @@ void OpenWQ_wqconfig::build_thread_local_expressions(
     nativeFlex->thread_dependVar_scalar.resize(nthreads);
     nativeFlex->thread_BGCexpressions_eq.resize(nthreads);
     nativeFlex->thread_BGCparam_InTransfEq.resize(nthreads);  // spatial BGC params (empty if none)
+    // Sized once here, before the parallel loop binds its elements (Vw_m3)
+    nativeFlex->thread_cell_watervol_m3.assign(nthreads, 0.0);
 
     // For each thread, we need to:
     // 1. Create a local chemass vector (same size as the max needed)
@@ -604,6 +606,10 @@ void OpenWQ_wqconfig::build_thread_local_expressions(
                     hostModelconfig.get_HydroDepend_name_at(depi),
                     nativeFlex->thread_dependVar_scalar[t][depi]);
             }
+
+            // Water volume of the cell [m3], bound to this thread's scalar
+            sym_table.add_variable(
+                "Vw_m3", nativeFlex->thread_cell_watervol_m3[t]);
 
             // Create and compile expression
             expression_t expr;
