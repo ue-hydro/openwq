@@ -17,6 +17,8 @@
 #include "headerfile_EWF_SS.hpp"
 #include <cstdlib>   // std::exit, EXIT_FAILURE (EWF-HDF5 SPATIAL_MODE validation)
 #include <cmath>     // std::llround (DISTRIBUTED reach-id matching)
+#include <algorithm> // std::find_if (species-name lookup)
+#include <cctype>    // std::toupper (case-insensitive species names)
 #include <hdf5.h>    // HDF5 C API — read the source cell-id label dataset (hruId/reachID)
 
 // Read a 1-D variable-length-string HDF5 dataset into a vector<string>.
@@ -1658,11 +1660,17 @@ bool OpenWQ_extwatflux_ss::getModIndex(
     std::vector<std::string>::iterator find_i;  // iteractor used to store the position or searched element
     std::string msg_string;             // error/warning message string
 
-    // Try to find index
-    find_i = 
-        std::find(vec_list.begin(), 
-        vec_list.end(), 
-        obj_name);
+    // Try to find index. Names are compared without regard to case: the SS/EWF
+    // JSON is upper-cased when read, while the species list can keep its own
+    // spelling (PHREEQC component names such as "Amm" or "Oxg"), so an exact
+    // comparison silently dropped those loads.
+    auto same_name = [](const std::string& a, const std::string& b){
+        return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(),
+            [](char x, char y){ return std::toupper(static_cast<unsigned char>(x))
+                                    == std::toupper(static_cast<unsigned char>(y)); });
+    };
+    find_i = std::find_if(vec_list.begin(), vec_list.end(),
+        [&](const std::string& s){ return same_name(s, obj_name); });
 
     // If requested index exists, then okay 
     // (otherwise, throw warning and skip entry)

@@ -783,6 +783,14 @@ class OpenWQ_wqconfig::CH_model_::PHREEQC_{
     // To convert mol/kgw to mg/L: conc_mg_L = conc_mol * 1000 * gfw
     // Note: Assumes water density ~1 kg/L, so mg/L ≈ mg/kgw
 
+    // Cells that run PHREEQC (1) or not (0), in the grid order of all
+    // compartments. A cell is inactive when its compartment has no reaction
+    // block (only a SOLUTION): speciation alone does not change the totals, so
+    // its chemistry term is zero. Inactive cells are left out of PhreeqcRM
+    // (CreateMapping), which also keeps transient pools with almost no water
+    // (surface runoff, canopy, snow) from being solved at absurd concentrations.
+    std::vector<int> cell_active;
+
     // PHREEQC
     std::unique_ptr<PhreeqcRM> phreeqcrm;
 };
