@@ -193,6 +193,10 @@ void OpenWQ_CH_model::bgc_flex_transform(
                                 tl_depvar[depi] = OpenWQ_hostModelconfig.get_dependVar_at(depi, ix, iy, iz);
                             }
 
+                            // Water volume of the cell (symbol Vw_m3)
+                            nativeFlex->thread_cell_watervol_m3[tid] =
+                                OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
+
                             // Fill thread-local SPATIAL parameter values (no-op
                             // when this expression has only global params)
                             if (expr_has_spatial) {
@@ -252,6 +256,10 @@ void OpenWQ_CH_model::bgc_flex_transform(
                                     OpenWQ_hostModelconfig.set_dependVar_scalar_at(
                                         depi, OpenWQ_hostModelconfig.get_dependVar_at(depi,ix,iy,iz));
                                 }
+
+                                // Water volume of the cell (symbol Vw_m3)
+                                nativeFlex->cell_watervol_m3 =
+                                    OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
 
                                 // Update SPATIAL parameter values for this cell
                                 // (no-op when only global params are present)

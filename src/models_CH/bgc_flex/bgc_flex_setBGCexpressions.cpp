@@ -19,6 +19,7 @@
 #include "global/OpenWQ_paramload.hpp"   // OpenWQ_load_param: scalar->GLOBAL / object->SPATIAL
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 
 /* #################################################
 // Whole-identifier search inside a kinetics expression.
@@ -33,6 +34,16 @@
 static inline bool bgc_is_ident_char(char c){
     return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '.';
 }
+// Numeric literal substituted into an expression. std::to_string keeps only
+// six decimal places, so a value such as 2.5e-7 became "0.000000" and a
+// calibrated 0.000123456 became "0.000123": small parameters were switched off
+// or quantized. %.17g keeps every significant digit of a double.
+static std::string bgc_number_literal(double v){
+    char buf[40];
+    std::snprintf(buf, sizeof(buf), "%.17g", v);
+    return std::string(buf);
+}
+
 static size_t bgc_find_whole_symbol(
     const std::string& text,
     const std::string& name,
@@ -198,8 +209,8 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
             // Adjuct expression
             expression_string_modif = 
                 "(" + expression_string_modif 
-                + ")*" + std::to_string(unit_multiplers[0])
-                + "/" + std::to_string(unit_multiplers[1]);
+                + ")*" + bgc_number_literal(unit_multiplers[0])
+                + "/" + bgc_number_literal(unit_multiplers[1]);
 
             /* ########################################
             // Find species indexes: consumed, produced and in the expression
@@ -282,13 +293,32 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
                 // Parameter: read its JSON entry and build an OpenWQ_param
                 // (a number -> GLOBAL scalar; an object such as {"UNIFORM":v}
                 // or {"DEFAULT":d,"CELLS":[...]} -> SPATIAL).
+                // A name listed in PARAMETER_NAMES is looked up first in the
+                // reaction's PARAMETER_VALUES and, when absent there, in the
+                // module-level GLOBAL_PARAMETERS block. A global parameter is
+                // one value shared by several reactions (e.g. the rate constant
+                // of a reaction written as two transformations, one per species
+                // it consumes), so calibrating it keeps them consistent.
                 const unsigned int i = static_cast<unsigned int>(-sym.second - 1);
-                json param_jval = OpenWQ_json.BGC_module
+                const json& rxn_json = OpenWQ_json.BGC_module
                     ["CYCLING_FRAMEWORKS"]
                     [BGCcycles_name]
-                    [std::to_string(transi+1)]
-                    ["PARAMETER_VALUES"]
-                    [parameter_names[i]];
+                    [std::to_string(transi+1)];
+                json param_jval;
+                if (rxn_json.contains("PARAMETER_VALUES")
+                        && rxn_json["PARAMETER_VALUES"].contains(parameter_names[i])){
+                    param_jval = rxn_json["PARAMETER_VALUES"][parameter_names[i]];
+                } else if (OpenWQ_json.BGC_module.contains("GLOBAL_PARAMETERS")
+                        && OpenWQ_json.BGC_module["GLOBAL_PARAMETERS"].contains(parameter_names[i])){
+                    param_jval = OpenWQ_json.BGC_module["GLOBAL_PARAMETERS"][parameter_names[i]];
+                } else {
+                    msg_string = "<OpenWQ> FATAL: parameter '" + parameter_names[i]
+                        + "' of CYCLING_FRAMEWORKS > " + BGCcycles_name + " > "
+                        + std::to_string(transi+1) + " (" + Transf_name + ") has no "
+                        "value in PARAMETER_VALUES nor in GLOBAL_PARAMETERS.";
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    exit(EXIT_FAILURE);
+                }
 
                 OpenWQ_param param_i = OpenWQ_load_param(
                     param_jval, OpenWQ_hostModelconfig);
@@ -296,7 +326,7 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
 
                 std::string repl;
                 if (!param_i.is_spatial()){
-                    repl = std::to_string(param_val);
+                    repl = "(" + bgc_number_literal(param_val) + ")";
                 } else {
                     repl = "openWQ_BGCparam[" + std::to_string(expr_spatial_params.size()) + "]";
                 }
@@ -343,17 +373,25 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
                 symbol_table.add_vector("openWQ_BGCparam", nf_->BGCparam_InTransfEq);
             }
 
-            // Add variable dependencies to table of symbols (in case they are used)
+            // Add variable dependencies to table of symbols (in case they are used).
+            // exprtk binds a variable by reference, so it must be bound to the
+            // scalar that the transform updates for every cell. It used to be
+            // bound to a local copy, which went out of scope here: every
+            // expression evaluated on the serial path (one thread, or a
+            // compartment with a single cell such as a lumped aquifer) read a
+            // dangling value instead of the cell's temperature or moisture.
             for (unsigned int depi=0;depi<OpenWQ_hostModelconfig.get_num_HydroDepend();depi++){
-                
-                double var = OpenWQ_hostModelconfig.get_dependVar_scalar_at(depi);
 
                 symbol_table.add_variable(
                     OpenWQ_hostModelconfig.get_HydroDepend_name_at(depi),    // Dependency Var name
-                    var    // Variable data
+                    OpenWQ_hostModelconfig.get_dependVar_scalar_ref(depi)    // Variable data
                 );
 
             }
+
+            // Water volume of the cell [m3] (see Vw_m3 in OpenWQ_wqconfig.hpp)
+            symbol_table.add_variable(
+                "Vw_m3", OpenWQ_wqconfig.CH_model->NativeFlex->cell_watervol_m3);
             
             // Create Object
             expression_t expression;

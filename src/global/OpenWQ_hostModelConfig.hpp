@@ -205,6 +205,9 @@ class OpenWQ_hostModelconfig
         void add_dependVar_scalar(double dependVar_scalar);
         double get_dependVar_scalar_at(int index);
         void set_dependVar_scalar_at(int index, double value);
+        // Reference to the scalar, for binding to exprtk expressions (the
+        // vector is filled once at declaration and never reallocated).
+        double& get_dependVar_scalar_ref(int index);
 
         /*
         * interaction_step methods

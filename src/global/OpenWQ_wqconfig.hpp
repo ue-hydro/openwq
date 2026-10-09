@@ -747,6 +747,17 @@ class OpenWQ_wqconfig::CH_model_::NativeFlex_{
     // Parallel path: per-thread copies [thread_id][k]
     std::vector<std::vector<double>> thread_BGCparam_InTransfEq;
 
+    // ########################################
+    // Water volume of the cell being evaluated [m3], available to every
+    // KINETICS expression as the symbol Vw_m3. Species symbols are masses
+    // (g, the native unit), so species/Vw_m3 is a concentration in g/m3 =
+    // mg/L, and a rate written per unit volume (mg/L/time) times Vw_m3 is the
+    // mass rate (g/time) the engine expects. Refreshed per cell, like the
+    // species masses.
+    // ########################################
+    double cell_watervol_m3 = 0.0;                    // serial path
+    std::vector<double> thread_cell_watervol_m3;      // parallel path [thread_id]
+
 };
 // Module CH_model -> PHREEQC
 
