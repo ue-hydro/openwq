@@ -980,6 +980,7 @@ def Gen_Input_Driver(
             chemical_species_names=chem_names,
             ic_all_value=ic_all_value,
             ic_all_units=ic_all_units,
+            compartment_overrides=kwargs.get("bgc_compartment_overrides"),
         )
     else:
         # NATIVE_BGC_FLEX path
@@ -995,6 +996,7 @@ def Gen_Input_Driver(
             chemical_species_names=chemical_species,
             ic_all_value=ic_all_value,
             ic_all_units=ic_all_units,
+            compartment_overrides=kwargs.get("bgc_compartment_overrides"),
         )
 
     ###############
