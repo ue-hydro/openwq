@@ -1253,6 +1253,10 @@ class ParameterHandler:
             surface = path.get("surface", "")
             field = path.get("field", "sites")
             lines, modified = self._modify_pqi_surface(lines, surface, field, value)
+        elif block == "CALCULATE_VALUES":
+            lines, modified = self._modify_pqi_calculate_value(lines, path.get("name", ""), value)
+        elif block == "EXCHANGE":
+            lines, modified = self._modify_pqi_exchange(lines, path.get("species", ""), value)
 
         if modified:
             with open(pqi_file, 'w') as f:
@@ -1348,6 +1352,71 @@ class ParameterHandler:
                         parts[index + 1] = str(value)
                         lines[i] = "    " + " ".join(parts) + "\n"
                         return lines, True
+        return lines, False
+
+    @staticmethod
+    def _pqi_code(line: str) -> str:
+        """Line without its comment, stripped."""
+        return line.split("#", 1)[0].strip()
+
+    def _modify_pqi_calculate_value(self, lines: List[str], name: str,
+                                    value: float) -> Tuple[List[str], bool]:
+        """Set the SAVE value of a CALCULATE_VALUES function (shared constant
+        read by RATES through CALC_VALUE("name"))."""
+        import re
+        in_block, in_func = False, False
+        for i, line in enumerate(lines):
+            code = self._pqi_code(line)
+            first = code.split()[0] if code else ""
+            if first.upper() == "CALCULATE_VALUES":
+                in_block, in_func = True, False
+                continue
+            if not in_block:
+                continue
+            if code and self._is_phreeqc_block_start(code) and first.upper() != "CALCULATE_VALUES" \
+                    and not first.startswith("-") and not first[0].isdigit():
+                # RATES, SOLUTION, ... : left the block (a function name is
+                # not a block keyword, so it does not end it)
+                if first.upper() in ("RATES", "SOLUTION", "EQUILIBRIUM_PHASES", "EXCHANGE",
+                                     "KINETICS", "SURFACE", "GAS_PHASE", "END"):
+                    in_block = in_func = False
+                    continue
+            if not in_func and code == name:
+                in_func = True
+                continue
+            if in_func:
+                if code.lower() == "-end":
+                    return lines, False
+                m = re.match(r"^(\s*\d+\s+SAVE\s+)([-+0-9.eE]+)(.*)$", line, re.I)
+                if m:
+                    lines[i] = f"{m.group(1)}{value!r}{m.group(3)}" + ("" if line.endswith("\n") is False else "")
+                    if not lines[i].endswith("\n"):
+                        lines[i] += "\n"
+                    return lines, True
+        return lines, False
+
+    def _modify_pqi_exchange(self, lines: List[str], species: str,
+                             value: float) -> Tuple[List[str], bool]:
+        """Set the moles of an exchanger (e.g. X) in the first EXCHANGE block
+        that defines it, keeping the line's comment."""
+        in_block = False
+        for i, line in enumerate(lines):
+            code = self._pqi_code(line)
+            first = code.split()[0] if code else ""
+            if first.upper() == "EXCHANGE":
+                in_block = True
+                continue
+            if in_block and first and (first.upper() in ("END", "KINETICS", "SOLUTION",
+                    "EQUILIBRIUM_PHASES", "SURFACE", "GAS_PHASE", "RATES", "CALCULATE_VALUES")
+                    or first.upper().startswith("EXCHANGE_")):
+                in_block = False
+                continue
+            if in_block and first == species:
+                parts = code.split()
+                comment = ("  #" + line.split("#", 1)[1].rstrip("\n")) if "#" in line else ""
+                parts[1] = repr(float(value))
+                lines[i] = "    " + "   ".join(parts) + comment + "\n"
+                return lines, True
         return lines, False
 
     def _modify_pqi_surface(self, lines: List[str], surface: str, field: str,
