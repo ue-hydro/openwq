@@ -22,7 +22,7 @@ Simple function to create biogeochemistry JSON configuration from individual arg
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 
 def create_config_json(
@@ -44,6 +44,9 @@ def create_config_json(
         ic_all_value: Union[int, float],
         ic_all_units: str,
 
+        # Optional per-compartment settings (see below)
+        compartment_overrides: Optional[Dict[str, dict]] = None,
+
 ) -> None:
     """
     Create OpenWQ Biogeochemistry configuration JSON file from individual arguments.
@@ -56,6 +59,17 @@ def create_config_json(
         chemical_species_names: List of chemical species names (e.g., ["NO3-N", "NH4-N", ...])
         ic_all_value: Initial value for all species (same value for all)
         ic_all_units: Unit for initial conditions (e.g., "mg/l")
+        compartment_overrides: Optional settings per compartment, applied on top
+            of the defaults above (compartments not listed keep the defaults):
+              {"ILAYERVOLFRACWAT_SOIL": {"CYCLING_FRAMEWORK": ["N_SOIL"]},
+               "SCALARAQUIFER":         {"CYCLING_FRAMEWORK": ["N_AQUIFER"]},
+               "SCALARCANOPYWAT":       {"CYCLING_FRAMEWORK": [], "INITIAL_VALUE": 0.0}}
+            "CYCLING_FRAMEWORK" replaces the list of frameworks ([] = no reactions),
+            "INITIAL_VALUE" replaces ic_all_value for every species (a number) or
+            per species (a dict {species: value}; species not listed keep
+            ic_all_value), and any
+            other key (e.g. the PHREEQC block ids "SOLUTIONS", "EXCHANGE",
+            "EQUILIBRIUM_PHASES", "KINETICS") is written as given.
     """
 
     # Create the directory path if it doesn't exist
@@ -89,6 +103,31 @@ def create_config_json(
     biogeochemistry_config = {}
     for compartment_name in compartment_names:
         biogeochemistry_config[compartment_name] = compartment_config.copy()
+
+    for compartment_name, settings in (compartment_overrides or {}).items():
+        if compartment_name not in biogeochemistry_config:
+            raise ValueError(
+                f"bgc_compartment_overrides: unknown compartment '{compartment_name}'. "
+                f"Valid names: {list(biogeochemistry_config)}")
+        comp_cfg = dict(biogeochemistry_config[compartment_name])
+        for key, value in (settings or {}).items():
+            if key == "INITIAL_VALUE":
+                if isinstance(value, dict):
+                    unknown = [sp for sp in value if sp not in chemical_species_names]
+                    if unknown:
+                        raise ValueError(
+                            f"bgc_compartment_overrides['{compartment_name}']['INITIAL_VALUE']: "
+                            f"unknown species {unknown}. Valid names: {chemical_species_names}")
+                    per_sp = {sp: value.get(sp, ic_all_value) for sp in chemical_species_names}
+                else:
+                    per_sp = {sp: value for sp in chemical_species_names}
+                comp_cfg["INITIAL_CONDITIONS"] = {
+                    "DATA_FORMAT": "JSON",
+                    "DATA": {sp: {"1": ["ALL", "ALL", "ALL", v, ic_units_upper]}
+                             for sp, v in per_sp.items()}}
+            else:
+                comp_cfg[key] = value
+        biogeochemistry_config[compartment_name] = comp_cfg
 
     config = {
         "BIOGEOCHEMISTRY_CONFIGURATION": biogeochemistry_config

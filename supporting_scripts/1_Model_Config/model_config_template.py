@@ -171,6 +171,20 @@ path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/BGC_templates/NATI
 #     model_value = obs_value × MW(element) / MW(ion)
 #   See BGC_templates/README.md for the full conversion table.
 
+# ── Per-compartment settings (optional, both modules) ──
+# By default every compartment gets all the cycling frameworks of the template
+# and the same initial value (ic_all_value). Override that per compartment:
+#   "CYCLING_FRAMEWORK": list of frameworks ([] = no reactions in it)
+#   "INITIAL_VALUE":     initial concentration of every species there
+#   PHREEQC block ids, e.g. "SOLUTIONS": 1, "EXCHANGE": 1,
+#     "EQUILIBRIUM_PHASES": 1, "KINETICS": 1 (-1 or absent = none)
+# Example (SUMMA): reactions in soil and aquifer only, clean canopy and snow:
+#   bgc_compartment_overrides = {
+#       "SCALARCANOPYWAT":       {"CYCLING_FRAMEWORK": [], "INITIAL_VALUE": 0.0},
+#       "ILAYERVOLFRACWAT_SNOW": {"CYCLING_FRAMEWORK": [], "INITIAL_VALUE": 0.0},
+#   }
+bgc_compartment_overrides = None
+
 # ── PHREEQC settings ──
 # ⚠ Only used if bgc_module_name = "PHREEQC"; ignored otherwise.
 phreeqc_input_filepath = "config_support_lib/examples_PHREEQC/phreeqc_river.pqi"
