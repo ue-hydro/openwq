@@ -430,6 +430,7 @@ class OpenWQ_wqconfig
         bool readSet_print_errmsg = true;
         bool BGC_Transform_print_errmsg = true;
         bool invalid_bgc_entry_errmsg = true;
+        bool phreeqc_sundials_split_msg_done = false;
 
         // ########################################
         // PERFORMANCE: Cached flags to avoid repeated string comparisons at runtime

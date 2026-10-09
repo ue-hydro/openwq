@@ -96,9 +96,14 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
         }
     }
 
-    // Run chemistry model
-    user_data.chem.CH_driver_run(user_data.json, user_data.vars, user_data.wqconfig, 
-                                  user_data.hostModelconfig, user_data.output);
+    // Run chemistry model. Native BGC rate expressions are part of the ODE.
+    // PHREEQC is not: it returns the state after a whole time step (equilibrium
+    // solved instantly, kinetics integrated by PHREEQC itself) and keeps
+    // internal state, so it cannot be evaluated at CVode's trial states. It is
+    // applied once after the solve instead (see Solve_with_CVode).
+    if (user_data.wqconfig.is_native_bgc_flex)
+        user_data.chem.CH_driver_run(user_data.json, user_data.vars, user_data.wqconfig,
+                                      user_data.hostModelconfig, user_data.output);
 
     // Run sorption model (model_SI, species-pair scheme): shifts mass between
     // each dissolved species and its sorbed partner via d_chemass_dt_chem,
@@ -452,6 +457,37 @@ void OpenWQ_compute::Solve_with_CVode(
                 d_chemass_dt_sorpt_out += d_chemass_dt_sorpt;
                 d_chemass_dt_transp_diss_out += d_chemass_dt_transp_diss;
                 d_chemass_dt_transp_part_out += d_chemass_dt_transp_part;
+            }
+        }
+    }
+
+    // PHREEQC: sequential operator splitting. CVode has moved the water-borne
+    // mass (transport, sources/sinks, external fluxes); PHREEQC now reacts the
+    // resulting water over the same time step, once, and its mass change is
+    // applied and accumulated like any chemistry derivative.
+    if (cvode_ran && !OpenWQ_wqconfig.is_native_bgc_flex){
+
+        if (!OpenWQ_wqconfig.phreeqc_sundials_split_msg_done){
+            std::string msg = "<OpenWQ> SOLVER SUNDIALS with PHREEQC: CVode integrates transport, "
+                "sources/sinks and external fluxes; PHREEQC reacts the result once per "
+                "time step (sequential operator splitting).";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg, true, true);
+            OpenWQ_wqconfig.phreeqc_sundials_split_msg_done = true;
+        }
+
+        for (unsigned int icmp = 0; icmp < num_comps; icmp++)
+            for (unsigned int chemi = 0; chemi < num_chem; chemi++)
+                (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi).zeros();
+
+        OpenWQ_CH_model.CH_driver_run(OpenWQ_json, OpenWQ_vars, OpenWQ_wqconfig,
+                                      OpenWQ_hostModelconfig, OpenWQ_output);
+
+        for (unsigned int icmp = 0; icmp < num_comps; icmp++){
+            for (unsigned int chemi = 0; chemi < num_chem; chemi++){
+                auto& chemass = (*OpenWQ_vars.chemass)(icmp)(chemi);
+                const auto& d_chemass_dt_chem = (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi);
+                chemass = arma::clamp(chemass + d_chemass_dt_chem, 0.0, arma::datum::inf);
+                (*OpenWQ_vars.d_chemass_dt_chem_out)(icmp)(chemi) += d_chemass_dt_chem;
             }
         }
     }

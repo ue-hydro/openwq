@@ -148,27 +148,12 @@ void OpenWQ_couplercalls::RunTimeLoopStart(
 
     // #################################################
     // MODULES
-
-    // ########################################
-    // Biogeochemistry (doesn't need space loop => it's inside the function)
-    // ########################################
-    
-    OpenWQ_CH_model.CH_driver_run(
-        OpenWQ_json,
-        OpenWQ_vars,
-        OpenWQ_wqconfig,
-        OpenWQ_hostModelconfig,
-        OpenWQ_output);
-
-    // ########################################
-    // Sorption (doesn't need space loop => it's inside the function)
-    // ########################################
-    
-    OpenWQ_SI_model.SI_driver_run(
-        OpenWQ_json,
-        OpenWQ_vars,
-        OpenWQ_wqconfig,
-        OpenWQ_hostModelconfig,
-        OpenWQ_output);
+    // Biogeochemistry and sorption are not evaluated here but by the solver
+    // (Solve_with_ForwardEuler, Solve_with_CVode), once the host has set every
+    // water volume of the step: some are only known after the space loop
+    // (e.g. the mixing volume of a river reach, storage + upstream and lateral
+    // inflow, set while routing). Rates evaluated here saw the volumes of the
+    // start of the step, which in fast-flushing reaches put the mass of a whole
+    // step of inflow into the stored water alone.
 
 }
