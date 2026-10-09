@@ -1518,11 +1518,20 @@ class ParameterHandler:
 
         data, header = self._read_json_with_header(le_file)
 
-        exchange_id = str(path.get("exchange_id", 1))
+        # The exchanges are numbered entries ("1", "2", ...) under
+        # CONFIGURATION (Gen_LEmodule_file), while extract_parameters stores
+        # exchange_id as the 0-based position in le_module_config. Looking the
+        # id up at the top level of the file never matched, so K_val was never
+        # changed and the calibration of this parameter had no effect.
+        conf = data.get("CONFIGURATION", data)
         param_name = path.get("param", "K_val")
-
-        if exchange_id in data:
-            data[exchange_id][param_name] = value
+        idx = int(path.get("exchange_id", 0))
+        key = str(idx + 1)
+        if key not in conf:
+            logger.warning(f"Lateral exchange entry {key} (exchange_id {idx}) not found in {le_file}; "
+                           f"{param_name} not applied")
+            return
+        conf[key][param_name] = value
 
         self._write_json_with_header(le_file, data, header)
 
