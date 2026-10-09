@@ -191,6 +191,8 @@ _MODEL_SPECIES_TO_GRQA = {
     'OP_labile': 'DOP', 'OP_refrac': 'DP',
     'ORG_C_active': 'DOC', 'ORG_C_fresh': 'DOC', 'ORG_C_stable': 'TOC',
     'PART_P': 'PP', 'P_PART': 'PP', 'PartP': 'PP',
+    # ── PHREEQC decoupled components (see BGC_templates/PHREEQC) ──
+    'Nit': 'NO3', 'Amm': 'NH4', 'Oxg': 'DO', 'Doc': 'DOC',
     # ── HYPE model names ──
     'IN': 'DIN', 'SP': 'PO4',
     'fastN': 'DIN', 'humusN': 'TKN', 'fastP': 'PO4', 'humusP': 'DP',

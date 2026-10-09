@@ -57,6 +57,24 @@ from collections import defaultdict
 import re
 import warnings
 
+
+# PHREEQC decoupled components that stand for a nitrogen species of the load
+# tables (load coefficients are given per NO3-N / NH4-N). A PHREEQC component
+# name must look like an element (capital letter + lower case), so nitrate and
+# ammonium enter PHREEQC as "Nit" and "Amm" (mg N/L, gram formula weight of N).
+_LOAD_SPECIES_OF_COMPONENT = {"Nit": "NO3-N", "Amm": "NH4-N"}
+
+
+def _model_name_for_load(load_species, chemical_species_list):
+    """Model species that receives the load of `load_species` (a column of the
+    load tables), or None when the model does not simulate it."""
+    if not chemical_species_list or load_species in chemical_species_list:
+        return load_species
+    for comp, sp in _LOAD_SPECIES_OF_COMPONENT.items():
+        if sp == load_species and comp in chemical_species_list:
+            return comp
+    return None
+
 warnings.filterwarnings('ignore')
 
 
@@ -2765,10 +2783,14 @@ def set_ss_climate_adjusted_export_coefficients(
     exclude_cols = [shp_hru_id_column, 'Year']
     nutrient_cols = [col for col in pivot_df.columns if col not in exclude_cols]
 
-    # Filter to only species that exist in the BGC template
+    # Filter to only species that exist in the BGC template (a PHREEQC
+    # component can take the loads of the species it stands for, see
+    # _LOAD_SPECIES_OF_COMPONENT)
     if chemical_species_list:
-        _skipped = [c for c in nutrient_cols if c not in chemical_species_list]
-        nutrient_cols = [c for c in nutrient_cols if c in chemical_species_list]
+        _skipped = [c for c in nutrient_cols
+                    if _model_name_for_load(c, chemical_species_list) is None]
+        nutrient_cols = [c for c in nutrient_cols
+                         if _model_name_for_load(c, chemical_species_list) is not None]
         if _skipped:
             print(f"\n  ⚠ Skipping SS species not in BGC template: {', '.join(_skipped)}")
 
@@ -2965,7 +2987,7 @@ def set_ss_climate_adjusted_export_coefficients(
                 comment = f"Climate-adjusted loading for {nutrient} in {sim_year}"
 
             config[str(entry_idx)] = {
-                "CHEMICAL_NAME": nutrient,
+                "CHEMICAL_NAME": _model_name_for_load(nutrient, chemical_species_list),
                 "COMPARTMENT_NAME": ss_method_copernicus_compartment_name_for_load,
                 "COMMENT": comment,
                 "TYPE": "source",
@@ -3090,10 +3112,14 @@ def create_openwq_ss_json_from_loads(
     exclude_cols = [shp_hru_id_column, 'Year']
     nutrient_cols = [col for col in pivot_df.columns if col not in exclude_cols]
 
-    # Filter to only species that exist in the BGC template
+    # Filter to only species that exist in the BGC template (a PHREEQC
+    # component can take the loads of the species it stands for, see
+    # _LOAD_SPECIES_OF_COMPONENT)
     if chemical_species_list:
-        _skipped = [c for c in nutrient_cols if c not in chemical_species_list]
-        nutrient_cols = [c for c in nutrient_cols if c in chemical_species_list]
+        _skipped = [c for c in nutrient_cols
+                    if _model_name_for_load(c, chemical_species_list) is None]
+        nutrient_cols = [c for c in nutrient_cols
+                         if _model_name_for_load(c, chemical_species_list) is not None]
         if _skipped:
             print(f"\n  ⚠ Skipping SS species not in BGC template: {', '.join(_skipped)}")
 
@@ -3212,7 +3238,7 @@ def create_openwq_ss_json_from_loads(
 
             # Add to config
             config[str(entry_idx)] = {
-                "CHEMICAL_NAME": nutrient,
+                "CHEMICAL_NAME": _model_name_for_load(nutrient, chemical_species_list),
                 "COMPARTMENT_NAME": ss_method_copernicus_compartment_name_for_load,
                 "COMMENT": comment,
                 "TYPE": "source",
