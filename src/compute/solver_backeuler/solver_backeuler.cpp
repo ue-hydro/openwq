@@ -16,6 +16,8 @@
 
 
 #include "compute/headerfile_compute.hpp"
+#include "models_CH/headerfile_CH.hpp"
+#include "models_SI/headerfile_SI.hpp"
 #include "output/headerfile_OUT.hpp"   // OpenWQ_output::ConsoleLog (ML_CLOSURES logging)
 #include <cctype>   // std::toupper (ML_CLOSURES name resolution)
 
@@ -41,12 +43,41 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
     const unsigned int num_threads = OpenWQ_wqconfig.get_num_threads_requested();
     const bool is_first_step = OpenWQ_hostModelconfig.is_first_interaction_step();
 
+    // The first interaction step has time_step = 0 and only initializes the
+    // state with the initial conditions, as in the SUNDIALS solver (which
+    // seeds its state with d_chemass_ic and does not integrate on that step).
+    // Every other term is ignored on that step. Without this, the source/sink
+    // rows dated before the simulation start were applied here with their
+    // whole elapsed time (simTime - row time), which injected months of loads
+    // in one step (e.g. ~1e8 kg of nitrate-N in one soil layer of a lumped
+    // HRU), while the SUNDIALS runs of the same set-up silently dropped them.
+    const double w_step = is_first_step ? 0.0 : 1.0;
+
     // Hybrid physics-ML LAYER 2 (per-species derivative closures): resolve names
     // -> indices + build the conservation groups once (single-threaded, before
     // the parallel region). Empty -> ml_on false -> the original solver path.
     if (!OpenWQ_wqconfig.ml_closures_ready)
         Prepare_MLClosures(OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_output);
     const bool ml_on = !OpenWQ_wqconfig.ml_deriv_closures.empty();
+
+    // Chemistry and sorption rates, on the start-of-step mass (explicit scheme)
+    // and the water volumes the host has set for this step, i.e. the volumes
+    // the transport and the SUNDIALS solver use. Also run on the first step,
+    // so that stateful modules (PHREEQC) keep their call sequence; w_step
+    // discards the result there.
+    for (unsigned int icmp = 0; icmp < num_comps; icmp++){
+        for (unsigned int chemi = 0; chemi < num_chem; chemi++){
+            (*OpenWQ_vars.d_chemass_dt_chem)(icmp)(chemi).zeros();
+            (*OpenWQ_vars.d_chemass_dt_sorpt)(icmp)(chemi).zeros();
+        }
+    }
+    OpenWQ_CH_model.CH_driver_run(OpenWQ_json, OpenWQ_vars, OpenWQ_wqconfig,
+                                  OpenWQ_hostModelconfig, OpenWQ_output);
+    {
+        OpenWQ_SI_model si_model;   // stateless
+        si_model.SI_driver_run(OpenWQ_json, OpenWQ_vars, OpenWQ_wqconfig,
+                               OpenWQ_hostModelconfig, OpenWQ_output);
+    }
 
     /* #####################################################
     // Compartment loop - parallelized over compartments and chemicals
@@ -118,26 +149,26 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
 
                             // ####################################
                             // 2. SS (Sink & Sources)
-                            dm_ss = d_chemass_ss(ix, iy, iz);
+                            dm_ss = w_step * d_chemass_ss(ix, iy, iz);
                             d_chemass_ss_out(ix, iy, iz) += dm_ss;
 
                             // ####################################
                             // 3. EWF (External Water Fluxes)
-                            dm_ewf = d_chemass_ewf(ix, iy, iz);
+                            dm_ewf = w_step * d_chemass_ewf(ix, iy, iz);
                             d_chemass_ewf_out(ix, iy, iz) += dm_ewf;
 
                             // ####################################
                             // 4. Dynamic change (derivatives): chemistry and transport
-                            dm_dt_chem = d_chemass_dt_chem(ix, iy, iz);
+                            dm_dt_chem = w_step * d_chemass_dt_chem(ix, iy, iz);
                             d_chemass_dt_chem_out(ix, iy, iz) += dm_dt_chem;
 
-                            dm_dt_sorpt = d_chemass_dt_sorpt(ix, iy, iz);
+                            dm_dt_sorpt = w_step * d_chemass_dt_sorpt(ix, iy, iz);
                             d_chemass_dt_sorpt_out(ix, iy, iz) += dm_dt_sorpt;
 
-                            dm_dt_trans = d_chemass_dt_transp_diss(ix, iy, iz);
+                            dm_dt_trans = w_step * d_chemass_dt_transp_diss(ix, iy, iz);
                             d_chemass_dt_transp_diss_out(ix, iy, iz) += dm_dt_trans;
 
-                            dm_dt_part = d_chemass_dt_transp_part(ix, iy, iz);
+                            dm_dt_part = w_step * d_chemass_dt_transp_part(ix, iy, iz);
                             d_chemass_dt_transp_part_out(ix, iy, iz) += dm_dt_part;
 
                             // ####################################
@@ -169,12 +200,12 @@ void OpenWQ_compute::Solve_with_ForwardEuler(
                         for (iz = 0; iz < nz; iz++){
 
                             dm_ic = is_first_step ? d_chemass_ic(ix, iy, iz) : 0.0;
-                            dm_ss = d_chemass_ss(ix, iy, iz);
-                            dm_ewf = d_chemass_ewf(ix, iy, iz);
-                            dm_dt_chem = d_chemass_dt_chem(ix, iy, iz);
-                            dm_dt_sorpt = d_chemass_dt_sorpt(ix, iy, iz);
-                            dm_dt_trans = d_chemass_dt_transp_diss(ix, iy, iz);
-                            dm_dt_part = d_chemass_dt_transp_part(ix, iy, iz);
+                            dm_ss = w_step * d_chemass_ss(ix, iy, iz);
+                            dm_ewf = w_step * d_chemass_ewf(ix, iy, iz);
+                            dm_dt_chem = w_step * d_chemass_dt_chem(ix, iy, iz);
+                            dm_dt_sorpt = w_step * d_chemass_dt_sorpt(ix, iy, iz);
+                            dm_dt_trans = w_step * d_chemass_dt_transp_diss(ix, iy, iz);
+                            dm_dt_part = w_step * d_chemass_dt_transp_part(ix, iy, iz);
 
                             if (_mlc_chem >= 0) {
                                 const auto& _cl = OpenWQ_wqconfig.ml_deriv_closures[_mlc_chem];
@@ -244,6 +275,10 @@ void OpenWQ_compute::Solve_with_ForwardEuler_Sediment(
     OpenWQ_vars& OpenWQ_vars,
     OpenWQ_json& OpenWQ_json,
     OpenWQ_output& OpenWQ_output){
+
+    // First interaction step (time_step = 0): nothing to integrate, as in the
+    // SUNDIALS sediment solver (see Solve_with_ForwardEuler).
+    if (OpenWQ_hostModelconfig.is_first_interaction_step()) return;
 
     const unsigned int num_comps = OpenWQ_hostModelconfig.get_num_HydroComp();
     const unsigned int num_threads = OpenWQ_wqconfig.get_num_threads_requested();
