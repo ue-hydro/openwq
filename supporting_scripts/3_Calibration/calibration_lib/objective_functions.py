@@ -58,7 +58,8 @@ class ObjectiveFunction:
                  use_primary_only: bool = True,
                  zone_select=None,
                  metric_focus: str = "both",
-                 coupled_river: bool = False):
+                 coupled_river: bool = False,
+                 score_period=None):
         """
         Initialize objective function calculator.
 
@@ -193,6 +194,24 @@ class ObjectiveFunction:
             sys.path.insert(0, str(_hp.parent))
 
         self.observations = self._load_observations()
+
+        # Scored window [start, end): observations outside it are not scored.
+        # Each evaluation also simulates the spin-up, and without this filter
+        # the samples that fall in the spin-up were scored with the calibration
+        # window (the driver only restricted the simulated period).
+        self.score_period = score_period
+        if (score_period and len(score_period) == 2 and self.observations is not None
+                and not self.observations.empty and 'datetime' in self.observations.columns):
+            _dt = pd.to_datetime(self.observations['datetime'], errors='coerce')
+            _keep = pd.Series(True, index=self.observations.index)
+            if score_period[0]:
+                _keep &= _dt >= pd.to_datetime(score_period[0])
+            if score_period[1]:
+                _keep &= _dt < pd.to_datetime(score_period[1])
+            _n0 = len(self.observations)
+            self.observations = self.observations[_keep].copy()
+            logger.info(f"Scored window {score_period[0]} .. {score_period[1]}: "
+                        f"{len(self.observations)} of {_n0} observations kept")
 
     def _load_observations(self) -> pd.DataFrame:
         """Load and preprocess observation data.

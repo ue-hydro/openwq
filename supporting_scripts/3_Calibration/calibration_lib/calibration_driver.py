@@ -721,6 +721,8 @@ def run_calibration(
         use_primary_only=kwargs.get("use_primary_only", True),
         zone_select=kwargs.get("zone_select"),
         metric_focus=kwargs.get("metric_focus", "both"),
+        # score the calibration window only (the spin-up is simulated, not scored)
+        score_period=kwargs.get("calibration_period"),
     )
 
     checkpoint_mgr = CheckpointManager(work_dir / "checkpoints")
@@ -957,6 +959,7 @@ def run_calibration(
                 "use_primary_only": kwargs.get("use_primary_only", True),
                 "zone_select": kwargs.get("zone_select"),
                 "metric_focus": kwargs.get("metric_focus", "both"),
+                "calibration_period": kwargs.get("calibration_period"),   # scored window (report rebuilds skip the spin-up)
             }
             try:
                 _md = obj_func.get_matched_data()
@@ -1146,6 +1149,7 @@ def run_calibration(
                 "use_primary_only": kwargs.get("use_primary_only", True),
                 "zone_select": kwargs.get("zone_select"),
                 "metric_focus": kwargs.get("metric_focus", "both"),
+                "calibration_period": kwargs.get("calibration_period"),   # scored window (report rebuilds skip the spin-up)
                 "random_seed": random_seed,
                 "early_stop_patience": early_stop_patience,
             }
@@ -1893,6 +1897,7 @@ def run_calibration(
         "use_primary_only": kwargs.get("use_primary_only", True),
         "zone_select": kwargs.get("zone_select"),
         "metric_focus": kwargs.get("metric_focus", "both"),
+        "calibration_period": kwargs.get("calibration_period"),   # scored window (report rebuilds skip the spin-up)
     }
     _write_live_snapshot(results_dir, _snap_cr, _snap_cs, in_progress=False)
 
@@ -2167,7 +2172,7 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
     import pandas as pd
     _VAL_ID = 999999
 
-    def _mk_of():
+    def _mk_of(score_period=None):
         # Fresh ObjectiveFunction cloned from obj_func's config.  Using a fresh
         # instance per period (one compute each) keeps get_matched_data() bound
         # to THAT period's pairs (no cross-period best-tracking).  The h5 reader
@@ -2185,7 +2190,8 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
             coupled_river=getattr(obj_func, "coupled_river", False),
             use_primary_only=getattr(obj_func, "use_primary_only", True),
             zone_select=getattr(obj_func, "zone_select", None),
-            metric_focus=getattr(obj_func, "metric_focus", "both"))
+            metric_focus=getattr(obj_func, "metric_focus", "both"),
+            score_period=score_period)
 
     # Calibration half + best parameters from the GLOBAL-best eval folder
     # (ground truth across all runs/resumes) — independent of obj_func's
@@ -2194,7 +2200,7 @@ def _run_validation_and_combine(*, work_dir, results_dir, validation_period,
     cal_md, bp_arr = None, None
     if best_dir:
         try:
-            _cof = _mk_of()
+            _cof = _mk_of(getattr(obj_func, "score_period", None))
             _cof.compute(Path(best_dir) / "openwq_out")
             cal_md = _cof.get_matched_data()
         except Exception as _e:
@@ -2344,7 +2350,8 @@ def _rebuild_best_fit_from_evals(work_dir, calibration_settings, model_config):
             coupled_river=_sm_coupled,
             use_primary_only=cs.get("use_primary_only", True),
             zone_select=cs.get("zone_select"),
-            metric_focus=cs.get("metric_focus", "both"))
+            metric_focus=cs.get("metric_focus", "both"),
+            score_period=cs.get("calibration_period"))
         _of.compute(Path(best_dir) / "openwq_out")
         return (_of.get_matched_data(), _of.get_simulated_data(),
                 os.path.basename(best_dir))
@@ -2866,6 +2873,7 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         h5_mapping_key=_spatial.get("h5_mapping_key"),
         coupled_river=_spatial.get("coupled_river", False),
         use_primary_only=kwargs.get("use_primary_only", True),
+        score_period=kwargs.get("calibration_period"),
     )
 
     # Parameter info
