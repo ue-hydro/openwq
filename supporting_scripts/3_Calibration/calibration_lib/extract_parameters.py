@@ -218,6 +218,42 @@ def extract_calibration_parameters(bgc_template_path: str) -> List[Dict]:
                     f"[{range_min}, {range_max}] ({transform})"
                 )
 
+    # Module-level shared parameters: one value used by several reactions
+    # (GLOBAL_PARAMETERS, read by the engine when a reaction's PARAMETER_VALUES
+    # does not list the name). Calibration metadata sits in
+    # _GLOBAL_PARAMETERS_INFO, mirroring _PARAMETERS_INFO of a reaction; only
+    # the names listed there are extracted.
+    global_values = data.get("GLOBAL_PARAMETERS", {}) or {}
+    for param_name, info in (data.get("_GLOBAL_PARAMETERS_INFO", {}) or {}).items():
+        if not isinstance(info, dict) or param_name not in global_values:
+            continue
+        value = float(global_values[param_name])
+        param_range = info.get("RANGE")
+        has_explicit_range = (isinstance(param_range, (list, tuple))
+                              and len(param_range) == 2)
+        if has_explicit_range:
+            range_min, range_max = float(param_range[0]), float(param_range[1])
+        else:
+            abs_val = abs(value) if value != 0 else 0.01
+            range_min, range_max = _round_sig(abs_val * 0.5), _round_sig(abs_val * 2.0)
+        transform = ("log" if value > 0 and range_min > 0
+                     and range_max / range_min > 100 else "linear")
+        parameters.append({
+            "name": f"GLOBAL_{param_name}",
+            "file_type": "bgc_json",
+            "path": ["GLOBAL_PARAMETERS", param_name],
+            "initial": value,
+            "bounds": (range_min, range_max),
+            "transform": transform,
+            "units": info.get("UNITS", ""),
+            "description": info.get("DESCRIPTION", ""),
+            "source": "auto-extracted",
+            "has_explicit_range": has_explicit_range,
+            "_framework": "",
+            "_reaction": "",
+            "_reaction_num": "",
+        })
+
     logger.info(
         f"Auto-extracted {len(parameters)} calibration parameters "
         f"from {os.path.basename(bgc_template_path)}"
@@ -775,6 +811,92 @@ def apply_calibrated_closures_to_params(params: List[Dict],
 # Auto-extract parameters for ALL active modules
 # =========================================================================
 
+def extract_phreeqc_parameters(pqi_path: str) -> List[Dict]:
+    """
+    Extract calibration parameters from a PHREEQC input file (.pqi).
+
+    A value is calibratable when its line carries a tag
+    ``# CALIBRATE [min, max]``. Supported places:
+
+    * CALCULATE_VALUES: the tag sits on the function-name line and the value is
+      the number in its ``SAVE`` line, e.g.::
+
+          CALCULATE_VALUES
+          k_nit   # maximum nitrification rate [mg N/L/day]  # CALIBRATE [0.01, 20]
+          -start
+          10 SAVE 1.0
+          -end
+
+      RATES read it with CALC_VALUE("k_nit"), so one value is shared by every
+      KINETICS block that uses the rate.
+    * EXCHANGE: ``X  0.05   # CALIBRATE [0.001, 0.5]`` (moles of exchanger).
+    * EQUILIBRIUM_PHASES: ``CO2(g)  -2.0  10   # CALIBRATE [-3.5, -1.0]`` (the
+      target saturation index).
+    """
+    import re
+    if not pqi_path or not os.path.isfile(pqi_path):
+        logger.warning(f"PHREEQC input file not found: {pqi_path}")
+        return []
+    tag = re.compile(r"#\s*CALIBRATE\s*\[\s*([-+0-9.eE]+)\s*,\s*([-+0-9.eE]+)\s*\]")
+    blocks = ("SOLUTION_MASTER_SPECIES", "SOLUTION_SPECIES", "EXCHANGE_SPECIES",
+              "SURFACE_SPECIES", "PHASES", "CALCULATE_VALUES", "RATES", "SOLUTION",
+              "EQUILIBRIUM_PHASES", "EXCHANGE", "SURFACE", "KINETICS", "GAS_PHASE",
+              "SOLID_SOLUTIONS", "SELECTED_OUTPUT", "USER_PUNCH", "TITLE", "END")
+    lines = open(pqi_path).read().splitlines()
+    params, block = [], ""
+    for i, raw in enumerate(lines):
+        code = raw.split("#", 1)[0].strip()
+        first = code.split()[0].upper() if code else ""
+        if first in blocks:
+            block = first
+            continue
+        m = tag.search(raw)
+        if not m or not code:
+            continue
+        lo, hi = float(m.group(1)), float(m.group(2))
+        desc = raw.split("#", 1)[1].split("CALIBRATE")[0].strip(" #") if "#" in raw else ""
+        entry = None
+        if block == "CALCULATE_VALUES":
+            name = code.split()[0]
+            value = None
+            for nxt in lines[i + 1:]:
+                s = nxt.split("#", 1)[0].strip()
+                if s.lower() == "-end":
+                    break
+                mm = re.match(r"^\d+\s+SAVE\s+([-+0-9.eE]+)\s*$", s, re.I)
+                if mm:
+                    value = float(mm.group(1))
+            if value is not None:
+                entry = (f"PHREEQC_{name}", {"block": "CALCULATE_VALUES", "name": name}, value)
+        elif block == "EXCHANGE":
+            parts = code.split()
+            if len(parts) >= 2:
+                entry = (f"PHREEQC_EXCHANGE_{parts[0]}",
+                         {"block": "EXCHANGE", "species": parts[0]}, float(parts[1]))
+        elif block == "EQUILIBRIUM_PHASES":
+            parts = code.split()
+            if len(parts) >= 2:
+                entry = (f"PHREEQC_SI_{parts[0]}",
+                         {"block": "EQUILIBRIUM_PHASES", "phase": parts[0], "field": "si"},
+                         float(parts[1]))
+        if entry is None:
+            logger.warning(f"CALIBRATE tag not understood in {os.path.basename(pqi_path)} "
+                           f"line {i + 1}: {raw.strip()}")
+            continue
+        name, path, value = entry
+        params.append({
+            "name": name, "file_type": "phreeqc_pqi", "path": path,
+            "initial": value, "bounds": (lo, hi),
+            "transform": "log" if lo > 0 and hi / lo > 100 else "linear",
+            "units": "", "description": desc, "source": "auto-extracted",
+            "has_explicit_range": True,
+            "_framework": "", "_reaction": "", "_reaction_num": "",
+        })
+    logger.info(f"Extracted {len(params)} calibration parameters from "
+                f"{os.path.basename(pqi_path)}")
+    return params
+
+
 def extract_all_module_parameters(
     model_config: Dict[str, Any],
     bgc_params: Optional[List[Dict]] = None,
@@ -810,6 +932,10 @@ def extract_all_module_parameters(
     # ── BGC parameters ──
     if bgc_params:
         groups["bgc"] = bgc_params
+    elif model_config.get("bgc_module_name", "") == "PHREEQC":
+        _pqi = extract_phreeqc_parameters(model_config.get("phreeqc_input_filepath", ""))
+        if _pqi:
+            groups["bgc"] = _pqi
 
     # ── Transport Dissolved ──
     td_module = model_config.get("td_module_name", "NONE")
