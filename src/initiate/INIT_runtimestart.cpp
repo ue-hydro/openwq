@@ -201,6 +201,36 @@ void OpenWQ_initiate::setIC_phreeqc(
     }
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
+    // Cells with a reaction block (EQUILIBRIUM_PHASES, EXCHANGE, SURFACE,
+    // GAS_PHASE, SOLID_SOLUTIONS or KINETICS) run PHREEQC; cells with only a
+    // SOLUTION are made inactive (see cell_active in OpenWQ_wqconfig.hpp). When
+    // no compartment has a reaction block (pure speciation set-ups) every cell
+    // stays active, as before.
+    {
+        auto& cell_active = OpenWQ_wqconfig.CH_model->PHREEQC->cell_active;
+        cell_active.assign(nxyz, 1);
+        int n_active = 0;
+        for (int i = 0; i < nxyz; i++){
+            bool reactive = false;
+            for (int b = 1; b < 7; b++) if (ic1[b * nxyz + i] >= 0) reactive = true;
+            cell_active[i] = reactive ? 1 : 0;
+            if (reactive) n_active++;
+        }
+        if (n_active > 0 && n_active < nxyz){
+            std::vector<int> grid2chem(nxyz, -1);
+            int k = 0;
+            for (int i = 0; i < nxyz; i++) if (cell_active[i]) grid2chem[i] = k++;
+            OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->CreateMapping(grid2chem);
+            msg_string = "<OpenWQ> PHREEQC: " + std::to_string(n_active) + " of "
+                + std::to_string(nxyz) + " cells run PHREEQC (the others have no "
+                "reaction block in their compartment and keep their totals).";
+        } else {
+            cell_active.assign(nxyz, 1);
+            msg_string = "<OpenWQ> PHREEQC: all " + std::to_string(nxyz) + " cells run PHREEQC.";
+        }
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
+
     // Initialize PHREEQC cells from the input file definitions
     // Note: SetUnitsSolution, SetRepresentativeVolume, SetSaturationUser are called in phreeqc_setup
     msg_string = "<OpenWQ> PHREEQC: Calling InitialPhreeqc2Module...";
@@ -290,14 +320,18 @@ void OpenWQ_initiate::setIC_phreeqc(
                 for (int ix = 0; ix < nx; ix++){
                     for (int iy = 0; iy < ny; iy++){
                         for (int iz = 0; iz < nz; iz++){
-                            const double den = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
+                            // host volume in m3 -> litres (conc is mol/kgw ~ mol/L)
+                            const double den = 1000.0 * OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
                             const double volume = (den == 0) ? 1.0 : den;
 
                             // Write the IC into the chemass slot indexed by the PHREEQC
                             // component index (phreeqc_idx), NOT the mobile ordinal (chemi),
                             // so IC, transport and chemistry all use the same slot per species.
+                            // Inactive cells have no PHREEQC solution (start empty).
+                            const int cell = comp_start_idx + local_indx;
                             (*OpenWQ_vars.d_chemass_ic)(icmp)(phreeqc_idx)(ix, iy, iz) =
-                                c[phreeqc_idx * nxyz + comp_start_idx + local_indx] * gfw_k * volume;
+                                OpenWQ_wqconfig.CH_model->PHREEQC->cell_active[cell]
+                                ? c[phreeqc_idx * nxyz + cell] * gfw_k * volume : 0.0;
 
                             local_indx++;
                         }

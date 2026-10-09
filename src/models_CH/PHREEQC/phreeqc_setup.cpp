@@ -134,10 +134,21 @@ void OpenWQ_CH_model::phreeqc_setup(
         OpenWQ_wqconfig.CH_model->PHREEQC->num_chem = (unsigned int)num_chem_check;
     }
 
-    // NOTE: SetRepresentativeVolume, SetSaturationUser, and SetDensityUser
-    // are NOT called here - they will be set dynamically during simulation
-    // based on actual cell volumes from the hydrological model.
-    // Using default values (1 liter, saturation=1, density=1) is fine for setup.
+    // Each PhreeqcRM cell stands for 1 L of water: OpenWQ passes concentrations
+    // (mass / host water volume) and converts the results back with the host
+    // volume, so a cell holds water only. The representative volume is 1 L and
+    // the porosity must be 1. PhreeqcRM's default porosity is 0.1, which made
+    // every cell 0.1 kg of water: kinetic rates written per litre (moles of
+    // reaction per step) then ran 10 times too fast, and the amounts in
+    // EXCHANGE, SURFACE and EQUILIBRIUM_PHASES were 10 times too concentrated.
+    // Saturation and density are set to 1 before every RunCells (phreeqc_run.cpp
+    // and setIC_phreeqc). The representative volume is NOT set to the host
+    // volumes (millions of litres cause convergence failures).
+    {
+        std::vector<double> rv_one(nxyz, 1.0), porosity_one(nxyz, 1.0);
+        OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetRepresentativeVolume(rv_one);
+        OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetPorosity(porosity_one);
+    }
 
     // Log component names
     std::vector<std::string> components = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetComponents();
