@@ -741,8 +741,61 @@ make -j1
             </div>
         </div>
 
-        <!-- Slide 11: Section - Apptainer (or Singularity) -->
-        <div class="slide section-slide blue" data-slide="11">
+        <!-- Slide 11: Target summa-mizuroute_openwq: SUMMA with internal mizuRoute -->
+        <div class="slide" data-slide="11">
+            <div class="slide-header">
+                <h2>Target summa-mizuroute_openwq: SUMMA with internal mizuRoute</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+<span class="comment"># 1. SUMMA develop with its mizuRoute and toml-f submodules</span>
+git clone -b develop --recurse-submodules \
+    https://github.com/CH-Earth/summa.git
+<span class="comment">#    (ue-hydro fork: github.com/ue-hydro/summa-mizuroute-openwq)</span>
+
+<span class="comment"># 2. OpenWQ inside the SUMMA tree (git-ignored there)</span>
+cd summa/build/source/openwq
+git clone -b develop https://github.com/ue-hydro/openwq.git
+
+<span class="comment"># 3. Build from OpenWQ's CMake (SUMMA tree = ExternalProject)</span>
+cd openwq
+cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq \
+      -DCMAKE_BUILD_TYPE=Release .
+make -j 2
+<span class="comment"># -&gt; bin/summa-mizuroute_openwq_Release</span>
+
+<span class="comment"># 4. Run: one process, SUMMA file manager + mizuRoute TOML</span>
+cd &lt;folder with openWQ_master.json&gt;
+summa-mizuroute_openwq_Release -m fileManager.txt \
+                               -c mizuroute.toml
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Prerequisites</h3>
+                            <table style="font-size: 0.78rem; line-height: 1.2;">
+                                <tr><td><strong>SUMMA</strong></td><td>CH-Earth <code>develop</code> (the coupling was merged in October 2026); submodules <code>external/mizuRoute</code> (v3.1.1) and <code>external/toml-f</code></td></tr>
+                                <tr><td><strong>PhreeqcRM</strong></td><td>a shared build (the static library of the container is not position independent); the target looks under <code>build/source/openwq/_deps</code> or <code>-DSUMMA_PHREEQCRM_DIR</code></td></tr>
+                                <tr><td><strong>SUNDIALS</strong></td><td>optional: <code>SOLVER_TYPE Sundials</code> builds SUMMA with IDA</td></tr>
+                                <tr><td><strong>TOML</strong></td><td><code>[simulation] use_mizuroute = true</code>; routing methods kinematic wave, Muskingum-Cunge or diffusive wave (IRF is not available in the internal coupling)</td></tr>
+                            </table>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 12px;">
+                            <strong>No mpirun:</strong> the coupled executable is a single process. The hydrolink lives in <code>summa/build/source/openwq</code>, the reach budgets in <code>summa/build/source/mizuroute/wq_exchange.f90</code>.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">11</div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Section - Apptainer (or Singularity) -->
+        <div class="slide section-slide blue" data-slide="12">
             <div class="section-number">02</div>
             <h2>Apptainer / Singularity (HPC)</h2>
             <p style="font-size: 1.2rem; color: rgba(255,255,255,0.8); margin-top: 15px; max-width: 700px; text-align: center;">
@@ -751,8 +804,8 @@ make -j1
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 12: Apptainer Build Container & Enter It -->
-        <div class="slide" data-slide="12">
+        <!-- Slide 13: Apptainer Build Container & Enter It -->
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Apptainer/Singularity: Build Container & Enter It</h2>
             </div>
@@ -813,12 +866,12 @@ singularity shell --bind $(pwd):/code openwq.sif
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">12</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
-        <!-- Slide 13: Apptainer CMake & Compile -->
-        <div class="slide" data-slide="13" style="padding: 28px 75px;">
+        <!-- Slide 14: Apptainer CMake & Compile -->
+        <div class="slide" data-slide="14" style="padding: 28px 75px;">
             <div class="slide-header" style="margin-bottom: 16px;">
                 <h2>Apptainer/Singularity: Create Makefile via CMake and Compile the Coupled Hostmodel-OpenWQ</h2>
             </div>
@@ -882,19 +935,19 @@ make -j1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">13</div>
+                <div class="page-number">14</div>
             </div>
         </div>
 
-        <!-- Slide 14: Section - Native Linux -->
-        <div class="slide section-slide green" data-slide="14">
+        <!-- Slide 15: Section - Native Linux -->
+        <div class="slide section-slide green" data-slide="15">
             <div class="section-number">03</div>
             <h2>Native Linux Build</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 15: Native Linux -->
-        <div class="slide" data-slide="15">
+        <!-- Slide 16: Native Linux -->
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Native Linux: Manual Setup</h2>
             </div>
@@ -952,12 +1005,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
-        <!-- Slide 16: Key Files -->
-        <div class="slide" data-slide="16">
+        <!-- Slide 17: Key Files -->
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Key Build Files</h2>
             </div>
@@ -1001,12 +1054,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
-        <!-- Slide 17: Troubleshooting -->
-        <div class="slide" data-slide="17">
+        <!-- Slide 18: Troubleshooting -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Troubleshooting</h2>
             </div>
@@ -1068,12 +1121,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 18: Summary -->
-        <div class="slide" data-slide="18">
+        <!-- Slide 19: Summary -->
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1099,12 +1152,12 @@ module load cmake/3.22.1
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">18</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
-        <!-- Slide 19: Thank You -->
-        <div class="slide title-slide" data-slide="19">
+        <!-- Slide 20: Thank You -->
+        <div class="slide title-slide" data-slide="20">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">

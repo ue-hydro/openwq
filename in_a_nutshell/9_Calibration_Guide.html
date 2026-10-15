@@ -391,7 +391,7 @@
             </div>
         </div>
 
-        <!-- Slide 3: Parameter Categories -->
+        <!-- Slide 4: Parameter Categories -->
         <div class="slide" data-slide="4">
             <div class="slide-header">
                 <h2>Parameter Categories (106+ total)</h2>
@@ -457,14 +457,14 @@
             </div>
         </div>
 
-        <!-- Slide 4: Section - Sensitivity -->
+        <!-- Slide 5: Section - Sensitivity -->
         <div class="slide section-slide blue" data-slide="5">
             <div class="section-number">01</div>
             <h2>Sensitivity Analysis</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 5: Morris Screening -->
+        <!-- Slide 6: Morris Screening -->
         <div class="slide" data-slide="6">
             <div class="slide-header">
                 <h2>Morris Screening (Elementary Effects)</h2>
@@ -531,7 +531,7 @@
             </div>
         </div>
 
-        <!-- Slide 6: Sobol Analysis -->
+        <!-- Slide 7: Sobol Analysis -->
         <div class="slide" data-slide="7">
             <div class="slide-header">
                 <h2>Sobol Sensitivity Analysis</h2>
@@ -576,14 +576,14 @@
             </div>
         </div>
 
-        <!-- Slide 7: Section - Optimization -->
+        <!-- Slide 8: Section - Optimization -->
         <div class="slide section-slide" data-slide="8">
             <div class="section-number">02</div>
             <h2>DDS Optimization</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 8: DDS Algorithm -->
+        <!-- Slide 9: DDS Algorithm -->
         <div class="slide" data-slide="9">
             <div class="slide-header">
                 <h2>Dynamically Dimensioned Search (DDS)</h2>
@@ -639,7 +639,7 @@
             </div>
         </div>
 
-        <!-- Slide 9: Objective Functions -->
+        <!-- Slide 10: Objective Functions -->
         <div class="slide" data-slide="10">
             <div class="slide-header">
                 <h2>Objective Functions</h2>
@@ -736,14 +736,14 @@ aggregation_method = <span class="string">"mean"</span>
             </div>
         </div>
 
-        <!-- Slide 11: Section - Workflow -->
+        <!-- Slide 12: Section - Workflow -->
         <div class="slide section-slide green" data-slide="12">
             <div class="section-number">03</div>
             <h2>Calibration Workflow</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 12: Workflow Steps -->
+        <!-- Slide 13: Workflow Steps -->
         <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Step-by-Step Workflow</h2>
@@ -828,7 +828,7 @@ aggregation_method = <span class="string">"mean"</span>
             </div>
         </div>
 
-        <!-- Slide 13: Observation Data Sources -->
+        <!-- Slide 14: Observation Data Sources -->
         <div class="slide" data-slide="14">
             <div class="slide-header">
                 <h2>Observation Data Sources</h2>
@@ -870,7 +870,7 @@ aggregation_method = <span class="string">"mean"</span>
             </div>
         </div>
 
-        <!-- Slide 14: GRQA Integration -->
+        <!-- Slide 15: GRQA Integration -->
         <div class="slide" data-slide="15">
             <div class="slide-header">
                 <h2>GRQA Database Integration</h2>
@@ -928,7 +928,7 @@ grqa_config = {
             </div>
         </div>
 
-        <!-- Slide 15: CSV Format -->
+        <!-- Slide 16: CSV Format -->
         <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Observation Data CSV Format</h2>
@@ -970,7 +970,7 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
         </div>
 
-        <!-- Slide 16: Priority Parameters -->
+        <!-- Slide 17: Priority Parameters -->
         <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Priority-Based Calibration</h2>
@@ -1020,7 +1020,7 @@ datetime,reach_id,species,value,units,source,uncertainty,quality_flag
             </div>
         </div>
 
-        <!-- Slide 17: Running Calibration -->
+        <!-- Slide 18: Running Calibration -->
         <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Running Calibration</h2>
@@ -1080,7 +1080,7 @@ python &lt;template&gt;_run.py --report   <span class="comment"># (re)build the 
             </div>
         </div>
 
-        <!-- Slide 18: Output Files -->
+        <!-- Slide 19: Output Files -->
         <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Calibration Output</h2>
@@ -1131,7 +1131,7 @@ python &lt;template&gt;_run.py --report   <span class="comment"># (re)build the 
             </div>
         </div>
 
-        <!-- Slide 19: Best Practices -->
+        <!-- Slide 20: Best Practices -->
         <div class="slide" data-slide="20">
             <div class="slide-header">
                 <h2>Best Practices</h2>
@@ -1248,7 +1248,46 @@ python &lt;template&gt;_run.py --report   <span class="comment"># (re)build the 
         </div>
 
         <!-- Slide: Basin Maps -->
+
+        <!-- Slide 23: Calibrating the coupled SUMMA + mizuRoute model -->
         <div class="slide" data-slide="23">
+            <div class="slide-header">
+                <h2>Calibrating the coupled SUMMA + mizuRoute model</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>What changes with <code>hostmodel = "summa-mizuroute"</code></h3>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">One model in <code>model_chain</code> replaces the SUMMA then mizuRoute chain</li>
+                                <li style="font-size: 0.9rem;">Every evaluation runs <code>-m fileManager_eval.txt -c mizuroute_eval.toml</code> in one process (Docker or Apptainer); the per-evaluation TOML drops <code>hfabric_newfile</code> so parallel runs never rewrite the shared hydrofabric</li>
+                                <li style="font-size: 0.9rem;">Targets must be all land or all river (<code>RIVER_NETWORK_REACHES</code>, <code>Qlocal_out</code>); river targets have their stations matched to the nearest reach</li>
+                                <li style="font-size: 0.9rem;">An evaluation whose log proves the simulation finished is kept even if the executable exits non-zero while closing its own output</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card secondary">
+                            <h3>Sub-basin cascade and ML regionalization</h3>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">The zones are read from the TOML's hydrofabric; the HRU table drives the land compartments and the reach table the river compartment</li>
+                                <li style="font-size: 0.9rem;">Spatial parameter rows carry explicit compartment indices from <code>openwq_compartments.json</code>, because land and reach cell indices overlap</li>
+                                <li style="font-size: 0.9rem;">The results report shows the Sub-basins section after a cascade run</li>
+                            </ul>
+                        </div>
+                        <div class="highlight-box info" style="margin-top: 12px;">
+                            Scenarios work the same way: the TOML is passed with <code>-c</code>, the default compared compartment is the river, and statistics are summarised per compartment.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">23</div>
+            </div>
+        </div>
+        <div class="slide" data-slide="24">
             <div class="slide-header">
                 <h2>Interactive Basin Maps</h2>
             </div>
@@ -1295,12 +1334,12 @@ python &lt;template&gt;_run.py --report   <span class="comment"># (re)build the 
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">23</div>
+                <div class="page-number">24</div>
             </div>
         </div>
 
         <!-- Slide: Per-Basin Reports -->
-        <div class="slide" data-slide="24">
+        <div class="slide" data-slide="25">
             <div class="slide-header">
                 <h2>Per-Basin Multi-Variant Reports</h2>
             </div>
@@ -1351,12 +1390,12 @@ python &lt;template&gt;_run.py --report   <span class="comment"># (re)build the 
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">24</div>
+                <div class="page-number">25</div>
             </div>
         </div>
 
         <!-- Slide: Summary -->
-        <div class="slide" data-slide="25">
+        <div class="slide" data-slide="26">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1386,12 +1425,12 @@ python &lt;template&gt;_run.py --report   <span class="comment"># (re)build the 
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">25</div>
+                <div class="page-number">26</div>
             </div>
         </div>
 
         <!-- Slide: Thank You -->
-        <div class="slide title-slide" data-slide="26">
+        <div class="slide title-slide" data-slide="27">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">

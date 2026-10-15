@@ -27,6 +27,7 @@ OpenWQ couples with existing hydrological and hydrodynamic models to enable mult
 			- [Linux](#linux)
 			- [Docker](#docker)
 			- [Apptainer](#apptainer)
+		- [Summa-mizuRoute-OpenWQ (internal coupling)](#summa-mizuroute-openwq-internal-coupling)
 	- [Execution](#execution)
 	- [Visualization](#visualization)
 	- [Supporting Scripts](#supporting-scripts)
@@ -34,6 +35,12 @@ OpenWQ couples with existing hydrological and hydrodynamic models to enable mult
 
 ## Introduction
 * Soure code for the multi-chemistry, multi-scale OpenWQ modelling framework.
+* Coupled host models (see the [documentation](https://openwq.readthedocs.io/en/latest/5_3_0_Hydro_coupled_models.html)):
+	* SUMMA ([Summa-openWQ](https://github.com/ue-hydro/Summa-openWQ))
+	* SUMMA with internally coupled mizuRoute, land and river in one OpenWQ instance ([CH-Earth/summa](https://github.com/CH-Earth/summa) `develop`, ue-hydro fork [summa-mizuroute-openwq](https://github.com/ue-hydro/summa-mizuroute-openwq))
+	* mizuRoute ([mizuRoute-OpenWQ](https://github.com/ue-hydro/mizuRoute-OpenWQ))
+	* CRHM ([CRHM](https://github.com/ue-hydro/CRHM))
+	* FLUXOS ([FLUXOS_cpp](https://github.com/ue-hydro/FLUXOS_cpp))
 * Reading material:
 	* [Documentation](https://openwq.readthedocs.io)
 	* Articles: Coming soon!
@@ -152,6 +159,15 @@ RUNNING SUMMA-OPENWQ WITH THE CONTAINER:
 	  - This will run the summa-openwq executable within the container.
 	  - This script depends on the synthetic_tests: https://github.com/KyleKlenk/synthetic_tests, which will need to be cloned into `summa`
  
+
+### Summa-mizuRoute-OpenWQ (internal coupling)
+SUMMA's `develop` branch runs mizuRoute inside its own time loop and carries the OpenWQ coupling for that pair (one OpenWQ instance for the land compartments and the river reaches; merged in October 2026).
+
+ 1. Clone SUMMA with its submodules: `git clone -b develop --recurse-submodules https://github.com/CH-Earth/summa.git` (ue-hydro fork: [summa-mizuroute-openwq](https://github.com/ue-hydro/summa-mizuroute-openwq))
+ 2. `cd summa/build/source/openwq` and clone OpenWQ: `git clone -b develop https://github.com/ue-hydro/openwq.git`
+ 3. `cd openwq` and build with the dedicated target: `cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq -DCMAKE_BUILD_TYPE=Release . && make -j 2` (a shared PhreeqcRM is needed, see `build/source/openwq/README.md` in the SUMMA tree)
+ 4. Run from the folder holding `openWQ_master.json`, as a single process: `bin/summa-mizuroute_openwq_Release -m fileManager.txt -c mizuroute.toml` (the TOML sets `[simulation] use_mizuroute = true`)
+ 5. In the configuration template use `hostmodel = "summa-mizuroute"` with `mizuroute_config_path`
 
 ## Execution
 * Coming soon!
