@@ -889,8 +889,57 @@ docker exec docker_openwq /bin/bash -c \
             </div>
         </div>
 
-        <!-- Slide 17: Checklist -->
+        <!-- Slide 17: Configuring SUMMA + mizuRoute (one coupled run) -->
         <div class="slide" data-slide="17">
+            <div class="slide-header">
+                <h2>Configuring SUMMA + mizuRoute (one coupled run)</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <pre style="font-size: 0.72rem;">
+<span class="comment"># model_config_template.py (SUMMA with internal mizuRoute)</span>
+hostmodel = <span class="string">"summa-mizuroute"</span>
+mizuroute_config_path = <span class="string">"/path/settings/mizuRoute/mizuroute.toml"</span>
+file_manager_path = <span class="string">"/path/settings/SUMMA/fileManager.txt"</span>
+executable_path = <span class="string">".../openwq/bin/summa-mizuroute_openwq_Release"</span>
+
+compartments_and_cells = {
+    <span class="string">"ILAYERVOLFRACWAT_SOIL"</span>: {...},
+    <span class="string">"RIVER_NETWORK_REACHES"</span>: {...},   <span class="comment"># reaches</span>
+}
+fluxes_conc_to_print = {<span class="string">"Qlocal_out"</span>: {...}}  <span class="comment"># reach outflow conc</span>
+observation_compartments = [<span class="string">"RIVER_NETWORK_REACHES"</span>]
+
+<span class="comment"># shapefiles: HRU polygons (GRU_ID) + river lines (segId / LINKNO)</span>
+ss_method_copernicus_basins_hrus = {<span class="string">'path_to_shp'</span>: ..., <span class="string">'mapping_key'</span>: <span class="string">'GRU_ID'</span>}
+river_network_shapefile = <span class="string">".../riverNetwork.shp"</span>
+                        </pre>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>What the generator does</h3>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.9rem;">Adds <code>RIVER_NETWORK_REACHES</code> to the SUMMA compartments and <code>-c &lt;toml&gt;</code> to the run command (single process)</li>
+                                <li style="font-size: 0.9rem;">Detects the reach-id column of the river shapefile (the TOML's <code>varname_segId</code> first, then segId, LINKNO, COMID...)</li>
+                                <li style="font-size: 0.9rem;">Writes <code>hostmodel_label</code>, <code>coupled_river</code> and <code>river_compartments</code> to the baseline manifest for the calibration scripts</li>
+                            </ul>
+                        </div>
+                        <div class="card secondary" style="margin-top: 12px;">
+                            <h3>Outputs</h3>
+                            <p style="font-size: 0.9rem;">One <code>openwq_out/HDF5</code> folder: land cells <code>&lt;hruId&gt;_z&lt;layer&gt;</code> (or <code>&lt;hruId&gt;_d&lt;domain&gt;_z&lt;layer&gt;</code>), reach cells <code>&lt;segId&gt;</code>, flux export <code>Qlocal_out</code>, and <code>openwq_compartments.json</code> with the compartment indices.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">17</div>
+            </div>
+        </div>
+
+        <!-- Slide 18: Checklist -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>Setup Checklist</h2>
             </div>
@@ -929,12 +978,12 @@ docker exec docker_openwq /bin/bash -c \
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 18: Common Issues -->
-        <div class="slide" data-slide="18">
+        <!-- Slide 19: Common Issues -->
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Common Issues & Solutions</h2>
             </div>
@@ -975,12 +1024,12 @@ docker exec docker_openwq /bin/bash -c \
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">18</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
-        <!-- Slide 19: Summary -->
-        <div class="slide" data-slide="19">
+        <!-- Slide 20: Summary -->
+        <div class="slide" data-slide="20">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1005,12 +1054,12 @@ docker exec docker_openwq /bin/bash -c \
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">19</div>
+                <div class="page-number">20</div>
             </div>
         </div>
 
-        <!-- Slide 20: Thank You -->
-        <div class="slide title-slide" data-slide="20">
+        <!-- Slide 21: Thank You -->
+        <div class="slide title-slide" data-slide="21">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions?</div>
             <div style="margin-top: 2rem;">

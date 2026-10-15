@@ -629,6 +629,7 @@
                             <p style="margin-bottom: 8px;">• Core Capabilities</p>
                             <p style="margin-bottom: 8px;">• Available Modules</p>
                             <p style="margin-bottom: 8px;">• Coupled Host Models</p>
+                            <p style="margin-bottom: 8px;">• SUMMA + mizuRoute in one instance</p>
                             <p style="margin-top: 15px; color: var(--secondary); font-weight: 600;">Section 01: Theoretical Framework</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Governing Equation</p>
                             <p style="margin-left: 20px; margin-bottom: 8px;">• Compartment Structure</p>
@@ -882,15 +883,58 @@
             </div>
         </div>
 
-        <!-- Slide 7: Theoretical Framework -->
-        <div class="slide section-slide" data-slide="7">
+        <!-- Slide 7: SUMMA + mizuRoute: land and river in one instance -->
+        <div class="slide" data-slide="7">
+            <div class="slide-header">
+                <h2>SUMMA + mizuRoute: land and river in one instance</h2>
+            </div>
+            <div class="slide-content">
+                <div class="two-column">
+                    <div class="column">
+                        <p style="font-size: 1.15rem; margin-bottom: 18px;">
+                            The current SUMMA <code>develop</code> (CH-Earth) calls mizuRoute inside its own time loop. OpenWQ is coupled to the pair as <strong>one instance</strong>:
+                        </p>
+                        <ul>
+                            <li><strong>Land compartments</strong> of SUMMA: canopy, snow, surface runoff, soil, aquifer, runoff on its way to the stream (plus lake layers when a domain has them)</li>
+                            <li><strong>River compartment</strong> <code>RIVER_NETWORK_REACHES</code> of mizuRoute, one cell per reach</li>
+                            <li>Species are balanced in parallel over land and river; solute reaches the river in the <strong>same step</strong> as the water</li>
+                            <li>The GRU to reach delivery map is built from mizuRoute's own remapping and hydrofabric; <code>Qlocal_out</code> exports the reach outflow concentration</li>
+                        </ul>
+                        <div class="highlight-box success" style="margin-top: 18px;">
+                            <strong>Where:</strong> merged into <code>CH-Earth/summa</code> develop (October 2026); ue-hydro fork <code>summa-mizuroute-openwq</code>; OpenWQ CMake target <code>summa-mizuroute_openwq</code>; template <code>hostmodel = "summa-mizuroute"</code>.
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="card primary">
+                            <h3>Checks built into the coupler</h3>
+                            <ul style="margin: 8px 0 0 15px;">
+                                <li style="font-size: 0.95rem;">At initialization: runoff elements mapped to no reach, river-network area of each GRU against its SUMMA area, several active routing methods</li>
+                                <li style="font-size: 0.95rem;">At the end of the run: runoff routed by SUMMA versus lateral inflow received by the reaches, outlet outflow, end storage, summed reach budget residual (round-off on Bow and Athabasca)</li>
+                                <li style="font-size: 0.95rem;"><code>openwq_compartments.json</code> in the output folder lists the compartment indices for the scripts</li>
+                            </ul>
+                        </div>
+                        <div class="card secondary" style="margin-top: 15px;">
+                            <h3>Verified on</h3>
+                            <p style="font-size: 0.95rem;">Bow (1 GRU, 52 reaches, KW/MC/DW, remapping), a two-HRU variant with lateral flow, and Athabasca (69 GRUs, 69 reaches, 17 years): tracer closure to 1e-8 kg, water check at round-off.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <div class="logo">Open<span>WQ</span></div>
+                <div class="page-number">7</div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Theoretical Framework -->
+        <div class="slide section-slide" data-slide="8">
             <div class="section-number">01</div>
             <h2>Theoretical Framework</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 8: Mass Balance -->
-        <div class="slide" data-slide="8">
+        <!-- Slide 9: Mass Balance -->
+        <div class="slide" data-slide="9">
             <div class="slide-header">
                 <h2>Governing Equation: Mass Balance</h2>
             </div>
@@ -945,12 +989,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">8</div>
+                <div class="page-number">9</div>
             </div>
         </div>
 
-        <!-- Slide 9: Compartment Structure -->
-        <div class="slide" data-slide="9">
+        <!-- Slide 10: Compartment Structure -->
+        <div class="slide" data-slide="10">
             <div class="slide-header">
                 <h2>Compartment Structure</h2>
             </div>
@@ -1005,12 +1049,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">9</div>
+                <div class="page-number">10</div>
             </div>
         </div>
 
-        <!-- Slide 10: Module Architecture -->
-        <div class="slide" data-slide="10">
+        <!-- Slide 11: Module Architecture -->
+        <div class="slide" data-slide="11">
             <div class="slide-header">
                 <h2>Module Architecture</h2>
             </div>
@@ -1048,19 +1092,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">10</div>
+                <div class="page-number">11</div>
             </div>
         </div>
 
-        <!-- Slide 11: Supported Processes -->
-        <div class="slide section-slide" data-slide="11">
+        <!-- Slide 12: Supported Processes -->
+        <div class="slide section-slide" data-slide="12">
             <div class="section-number">02</div>
             <h2>Supported Processes</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 12: Biogeochemical Processes -->
-        <div class="slide" data-slide="12">
+        <!-- Slide 13: Biogeochemical Processes -->
+        <div class="slide" data-slide="13">
             <div class="slide-header">
                 <h2>Biogeochemical Processes</h2>
             </div>
@@ -1113,12 +1157,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">12</div>
+                <div class="page-number">13</div>
             </div>
         </div>
 
-        <!-- Slide 13: Available Templates -->
-        <div class="slide" data-slide="13">
+        <!-- Slide 14: Available Templates -->
+        <div class="slide" data-slide="14">
             <div class="slide-header">
                 <h2>Pre-Built Model Templates</h2>
             </div>
@@ -1178,19 +1222,19 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">13</div>
+                <div class="page-number">14</div>
             </div>
         </div>
 
-        <!-- Slide 14: Applications -->
-        <div class="slide section-slide" data-slide="14">
+        <!-- Slide 15: Applications -->
+        <div class="slide section-slide" data-slide="15">
             <div class="section-number">03</div>
             <h2>Applications</h2>
             <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
         </div>
 
-        <!-- Slide 15: Application Areas -->
-        <div class="slide" data-slide="15">
+        <!-- Slide 16: Application Areas -->
+        <div class="slide" data-slide="16">
             <div class="slide-header">
                 <h2>Application Areas</h2>
             </div>
@@ -1256,12 +1300,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">15</div>
+                <div class="page-number">16</div>
             </div>
         </div>
 
-        <!-- Slide 16: Technical Stack -->
-        <div class="slide" data-slide="16">
+        <!-- Slide 17: Technical Stack -->
+        <div class="slide" data-slide="17">
             <div class="slide-header">
                 <h2>Technical Stack</h2>
             </div>
@@ -1332,12 +1376,12 @@
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">16</div>
+                <div class="page-number">17</div>
             </div>
         </div>
 
-        <!-- Slide 17: AI Assistance -->
-        <div class="slide" data-slide="17">
+        <!-- Slide 18: AI Assistance -->
+        <div class="slide" data-slide="18">
             <div class="slide-header">
                 <h2>AI-Powered Assistance</h2>
             </div>
@@ -1389,12 +1433,12 @@ cd /path/to/openwq/ && claude
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">17</div>
+                <div class="page-number">18</div>
             </div>
         </div>
 
-        <!-- Slide 18: Summary -->
-        <div class="slide" data-slide="18">
+        <!-- Slide 19: Summary -->
+        <div class="slide" data-slide="19">
             <div class="slide-header">
                 <h2>Summary</h2>
             </div>
@@ -1424,12 +1468,12 @@ cd /path/to/openwq/ && claude
             </div>
             <div class="slide-footer">
                 <div class="logo">Open<span>WQ</span></div>
-                <div class="page-number">18</div>
+                <div class="page-number">19</div>
             </div>
         </div>
 
-        <!-- Slide 19: Resources -->
-        <div class="slide title-slide" data-slide="19">
+        <!-- Slide 20: Resources -->
+        <div class="slide title-slide" data-slide="20">
             <h1 style="font-size: 3.5rem;">Thank You</h1>
             <div class="subtitle" style="font-size: 1.8rem;">Questions & Resources</div>
             <div style="margin-top: 3rem;">

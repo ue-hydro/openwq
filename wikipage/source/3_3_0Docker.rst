@@ -17,6 +17,8 @@ Install Docker in your machine.
 
 **Compile your coupled OpenWQ model**
 
+(For SUMMA with internally coupled mizuRoute the target is ``summa-mizuroute_openwq``: ``cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq -DCMAKE_BUILD_TYPE=Release .`` from the OpenWQ clone inside the SUMMA tree, see :doc:`5_3_0_1_SUMMA_mizuRoute_OpenWQ`.)
+
 1. Go to the main OpenWQ folder that contains the ``CMakeLists.txt`` file
 2. Inside the ``CMakeLists.txt`` file, set up the compilation target: ``SET(COMPILE_TARGET XXXX)``
 3. Inside the ``CMakeLists.txt`` file, set up the compilation mode: ``SET(COMPILE_MODE XXXX)``
