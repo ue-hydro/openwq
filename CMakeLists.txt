@@ -56,9 +56,10 @@ Project(OpenWQ)
 # optA5) mizuroute_lakes_cslm_openwq -> compile with mizuroute-cslm using hydrolink
 # optA6) fluxos_openwq -> compile with fluxos using hydrolink
 # optA7) summa-mizuroute_openwq -> compile with summa and its internally coupled mizuroute using hydrolink
+# optA8) python_openwq -> compile the Python extension module (openwq_py) for Python host models (differentiable HBV) using hydrolink
 set(VALID_COMPILE_TARGETS "crhm_openwq" "summa_openwq"
                           "mizuroute_openwq" "mizuroute_lakes_openwq" "mizuroute_lakes_cslm_openwq" "fluxos_openwq"
-                          "summa-mizuroute_openwq")
+                          "summa-mizuroute_openwq" "python_openwq")
 
 if(NOT HOST_MODEL_TARGET)
    message(FATAL_ERROR "Need to set -DHOST_MODEL_TARGET. Options are ${VALID_COMPILE_TARGETS}")
@@ -168,6 +169,92 @@ FILE(GLOB OPENWQ_SOURCES
 
 SET(OPENWQ_INCLUDES ${OPENWQ_DIR}/src/)
 MESSAGE(STATUS "OpenWQ source files: ${OPENWQ_DIR}")
+
+# python_openwq (Python host models, e.g. the differentiable HBV of hydroDL2): the
+# Python interpreter, its pybind11 and a SHARED PhreeqcRM are resolved here, before
+# the common FIND_PACKAGE calls below, so that plain
+#     cmake -DHOST_MODEL_TARGET=python_openwq -DCMAKE_BUILD_TYPE=Release . && make
+# works with the Python environment active (nothing else to pass).
+# Layout, as for the other hosts: this folder is <host>/openwq and the hydrolink
+# files (OpenWQ_hydrolink.h/.cpp) are in its parent folder, where the module is written.
+IF("${COMPILE_TARGET}" STREQUAL "python_openwq")
+    get_filename_component(OPENWQ_INTERFACE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/.. ABSOLUTE)
+    if(NOT EXISTS ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp)
+        MESSAGE(FATAL_ERROR "python_openwq: ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp not found. "
+                            "This folder must be the OpenWQ clone inside the host's openwq folder "
+                            "that holds the hydrolink files.")
+    endif()
+    # Python of the active environment (a virtualenv is preferred) and its pybind11
+    if(DEFINED PYTHON_EXECUTABLE AND NOT DEFINED Python_EXECUTABLE)
+        SET(Python_EXECUTABLE ${PYTHON_EXECUTABLE})
+    endif()
+    FIND_PACKAGE(Python COMPONENTS Interpreter Development.Module REQUIRED)
+    if(NOT DEFINED pybind11_DIR OR NOT EXISTS "${pybind11_DIR}")
+        execute_process(COMMAND ${Python_EXECUTABLE} -m pybind11 --cmakedir
+                        OUTPUT_VARIABLE PY_PYBIND11_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
+                        RESULT_VARIABLE PY_PYBIND11_RC ERROR_QUIET)
+        if(NOT PY_PYBIND11_RC EQUAL 0)
+            MESSAGE(FATAL_ERROR "python_openwq: pybind11 is not installed for ${Python_EXECUTABLE} "
+                                "(pip install pybind11), or pass -Dpybind11_DIR=<its cmake dir>.")
+        endif()
+        SET(pybind11_DIR ${PY_PYBIND11_DIR} CACHE PATH "pybind11 cmake directory" FORCE)
+    endif()
+    FIND_PACKAGE(pybind11 CONFIG REQUIRED)
+    MESSAGE(STATUS "** OpenWQ **: Python ${Python_VERSION} (${Python_EXECUTABLE})")
+    MESSAGE(STATUS "** OpenWQ **: pybind11 ${pybind11_VERSION} (${pybind11_DIR})")
+    # Shared PhreeqcRM: a Python module is a shared object and cannot link the
+    # usual static (non-PIC) PhreeqcRM. Unless -DPhreeqcRM_DIR is given, use
+    # <host>/openwq/_deps/phreeqcrm-install, built once from PHREEQCRM_SOURCE_DIR,
+    # else /opt/phreeqcrm/phreeqcrm-master (OpenWQ container), else a git clone.
+    if(NOT DEFINED PhreeqcRM_DIR OR "${PhreeqcRM_DIR}" STREQUAL "" OR "${PhreeqcRM_DIR}" MATCHES "NOTFOUND")
+        SET(PY_DEPS_DIR ${OPENWQ_INTERFACE_DIR}/_deps)
+        SET(PY_PHREEQCRM_PREFIX ${PY_DEPS_DIR}/phreeqcrm-install)
+        FILE(GLOB_RECURSE PY_PHREEQCRM_CONFIG ${PY_PHREEQCRM_PREFIX}/*/PhreeqcRMConfig.cmake)
+        if(NOT PY_PHREEQCRM_CONFIG)
+            if(DEFINED PHREEQCRM_SOURCE_DIR AND EXISTS ${PHREEQCRM_SOURCE_DIR}/CMakeLists.txt)
+                SET(PY_PHREEQCRM_SRC ${PHREEQCRM_SOURCE_DIR})
+            elseif(EXISTS /opt/phreeqcrm/phreeqcrm-master/CMakeLists.txt)
+                SET(PY_PHREEQCRM_SRC /opt/phreeqcrm/phreeqcrm-master)
+            else()
+                SET(PY_PHREEQCRM_SRC ${PY_DEPS_DIR}/phreeqcrm-src)
+                if(NOT EXISTS ${PY_PHREEQCRM_SRC}/CMakeLists.txt)
+                    MESSAGE(STATUS "** OpenWQ **: cloning usgs-coupled/phreeqcrm into ${PY_PHREEQCRM_SRC}")
+                    execute_process(COMMAND git clone --depth 1 https://github.com/usgs-coupled/phreeqcrm.git ${PY_PHREEQCRM_SRC}
+                                    RESULT_VARIABLE PY_RC)
+                    if(NOT PY_RC EQUAL 0)
+                        MESSAGE(FATAL_ERROR "python_openwq: could not clone PhreeqcRM; pass -DPHREEQCRM_SOURCE_DIR=<source> or -DPhreeqcRM_DIR=<shared install cmake dir>")
+                    endif()
+                endif()
+            endif()
+            MESSAGE(STATUS "** OpenWQ **: building a shared PhreeqcRM once from ${PY_PHREEQCRM_SRC} into ${PY_PHREEQCRM_PREFIX} (a few minutes)")
+            execute_process(COMMAND ${CMAKE_COMMAND} -S ${PY_PHREEQCRM_SRC} -B ${PY_DEPS_DIR}/phreeqcrm-build
+                                    -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+                                    -DPHREEQCRM_BUILD_TESTS=OFF -DPHREEQCRM_FORTRAN_TESTING=OFF
+                                    -DPHREEQCRM_BUILD_MPI=OFF -DPHREEQCRM_BUILD_PYTHON=OFF
+                                    -DCMAKE_INSTALL_PREFIX=${PY_PHREEQCRM_PREFIX}
+                                    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+                            RESULT_VARIABLE PY_RC OUTPUT_QUIET)
+            if(PY_RC EQUAL 0)
+                execute_process(COMMAND ${CMAKE_COMMAND} --build ${PY_DEPS_DIR}/phreeqcrm-build -j 4
+                                RESULT_VARIABLE PY_RC OUTPUT_QUIET)
+            endif()
+            if(PY_RC EQUAL 0)
+                execute_process(COMMAND ${CMAKE_COMMAND} --install ${PY_DEPS_DIR}/phreeqcrm-build
+                                RESULT_VARIABLE PY_RC OUTPUT_QUIET)
+            endif()
+            FILE(GLOB_RECURSE PY_PHREEQCRM_CONFIG ${PY_PHREEQCRM_PREFIX}/*/PhreeqcRMConfig.cmake)
+            if(NOT PY_RC EQUAL 0 OR NOT PY_PHREEQCRM_CONFIG)
+                MESSAGE(FATAL_ERROR "python_openwq: the shared PhreeqcRM build in ${PY_DEPS_DIR} failed; "
+                                    "see ${PY_DEPS_DIR}/phreeqcrm-build, or pass -DPhreeqcRM_DIR=<shared install cmake dir>")
+            endif()
+        endif()
+        LIST(GET PY_PHREEQCRM_CONFIG 0 PY_PHREEQCRM_CONFIG)
+        get_filename_component(PY_PHREEQCRM_CMAKE_DIR ${PY_PHREEQCRM_CONFIG} DIRECTORY)
+        SET(PhreeqcRM_DIR ${PY_PHREEQCRM_CMAKE_DIR} CACHE PATH "shared PhreeqcRM for python_openwq" FORCE)
+        SET(ENV{PhreeqcRM_DIR} ${PY_PHREEQCRM_CMAKE_DIR})
+    endif()
+    MESSAGE(STATUS "** OpenWQ **: PhreeqcRM (shared) ${PhreeqcRM_DIR}")
+ENDIF()
 
 FIND_PACKAGE(Armadillo REQUIRED) 
 FIND_PACKAGE(HDF5 REQUIRED)
@@ -1487,5 +1574,51 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa-mizuroute_openwq")
 
     # same target name as the executable, as for the other host models
     ADD_CUSTOM_TARGET(${exec_name} ALL DEPENDS summa_mizuroute_tree)
+
+# ..................
+# IF TARGET = python_openwq
+# Python extension module "openwq_py" (pybind11) for Python host models
+# (differentiable HBV of hydroDL2/dMG). Python, pybind11 and the shared PhreeqcRM
+# were resolved above (before the common FIND_PACKAGE calls). The module is
+# compiled from <host>/openwq/OpenWQ_hydrolink.cpp and written to <host>/openwq.
+# ..................
+ELSEIF("${COMPILE_TARGET}" STREQUAL "python_openwq")
+
+    if(NOT UNIX)
+        MESSAGE(STATUS "Current Operating System is not supported yet!")
+    endif()
+
+    SET(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+    # OpenWQ core without any other host-model interface files
+    SET(PY_SOURCES ${OPENWQ_SOURCES})
+    LIST(FILTER PY_SOURCES EXCLUDE REGEX "OpenWQ_hydrolink\\.cpp$|OpenWQ_interface\\.cpp$")
+    LIST(APPEND PY_SOURCES ${OPENWQ_INTERFACE_DIR}/OpenWQ_hydrolink.cpp)
+
+    pybind11_add_module(openwq_py MODULE ${PY_SOURCES})
+    TARGET_INCLUDE_DIRECTORIES(openwq_py PRIVATE
+        ${ARMADILLO_INCLUDE_DIR}
+        ${HDF5_INCLUDE_DIRS}
+        ${PHREEQCRM_INCLUDE_DIR}
+        ${PhreeqcRM_INCLUDE_DIR}
+        ${OPENWQ_INCLUDES}
+        ${OPENWQ_INTERFACE_DIR})
+    TARGET_LINK_LIBRARIES(openwq_py PRIVATE
+        ${ARMADILLO_LIBRARIES}
+        SUNDIALS::cvode
+        PhreeqcRM::PhreeqcRM
+        ${HDF5_C_LIBRARY_hdf5})
+    IF(OpenMP_CXX_FOUND)
+        MESSAGE("** OpenWQ **: OpenMP enabled!")
+        TARGET_LINK_LIBRARIES(openwq_py PRIVATE OpenMP::OpenMP_CXX)
+    ENDIF()
+    SET_TARGET_PROPERTIES(openwq_py PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY ${OPENWQ_INTERFACE_DIR}
+        LIBRARY_OUTPUT_DIRECTORY_RELEASE ${OPENWQ_INTERFACE_DIR}
+        LIBRARY_OUTPUT_DIRECTORY_DEBUG ${OPENWQ_INTERFACE_DIR})
+    MESSAGE(STATUS "** OpenWQ **: Python module -> ${OPENWQ_INTERFACE_DIR}/openwq_py<abi>.so")
+
+    # same target name convention as the executables
+    ADD_CUSTOM_TARGET(${exec_name} ALL DEPENDS openwq_py)
 
 ENDIF()
