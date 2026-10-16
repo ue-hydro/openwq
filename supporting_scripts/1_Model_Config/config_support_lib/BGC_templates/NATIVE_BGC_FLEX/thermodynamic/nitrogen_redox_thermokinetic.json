@@ -1,0 +1,752 @@
+{
+  "_DESCRIPTION": "Nitrogen cycle with explicit dissolved oxygen and dissolved organic carbon. Redox rates are limited by the electron donor and acceptor (Monod), by inhibition (O2 on denitrification) and by the Gibbs energy of the reaction through the thermodynamic factor F_T of Jin and Bethke (2003, 2005). Activities are approximated by molar concentrations and the pH is prescribed (pH_w). Formulation RN-T of the OpenWQ PHREEQC paper.",
+  "_UNITS": "Species symbols are masses in the engine (g; as N for NO3-N and NH4-N, as O2 for DO, as C for DOC). Vw_m3 is the water volume of the cell (m3), so species/Vw_m3 is mg/L. Rates are written per unit volume (mg/L/day) and multiplied by Vw_m3 to give g/day.",
+  "_REFERENCES": [
+    "Jin and Bethke (2003, 2005) thermodynamic factor",
+    "Henze et al. (2000) ASM half-saturation and inhibition constants",
+    "Stumm and Morgan (1996) Gibbs energies of formation",
+    "Benson and Krause (1984) O2 saturation"
+  ],
+  "_TO_CHECK": "Constants are indicative values from the references above; m_ATP and chi are illustrative. For these three reactions F_T stays close to 1 except near depletion of a reactant.",
+  "MODULE_NAME": "NATIVE_BGC_FLEX",
+  "CHEMICAL_SPECIES": {
+    "LIST": {
+      "1": "NO3-N",
+      "2": "NH4-N",
+      "3": "DO",
+      "4": "DOC",
+      "5": "N2_loss",
+      "6": "CO2_loss",
+      "7": "NH3_loss",
+      "8": "PLANT_N"
+    },
+    "BGC_GENERAL_MOBILE_SPECIES": [
+      "NO3-N",
+      "NH4-N",
+      "DO",
+      "DOC"
+    ],
+    "_LIST_DESCRIPTIONS": {
+      "NO3-N": "Nitrate as N",
+      "NH4-N": "Ammonium as N",
+      "DO": "Dissolved oxygen as O2",
+      "DOC": "Dissolved organic carbon as C",
+      "N2_loss": "Dinitrogen produced (sink)",
+      "CO2_loss": "CO2 produced (sink)",
+      "NH3_loss": "Volatilized ammonia (sink)",
+      "PLANT_N": "Plant uptake (sink)"
+    }
+  },
+  "GLOBAL_PARAMETERS": {
+    "eps_V": 1e-09,
+    "eps_c": 1e-30,
+    "T_K0": 273.15,
+    "T_ref": 20.0,
+    "theta_T": 1.07,
+    "R_kJ": 0.008314,
+    "dG_ATP": 45.0,
+    "m_ATP": 1.0,
+    "chi": 2.0,
+    "pH_w": 7.0,
+    "c_CO2_M": 0.001,
+    "c_N2_M": 0.0006,
+    "MW_N": 14007.0,
+    "MW_C": 12011.0,
+    "MW_O2": 31998.0,
+    "dG0_nit": -301.79,
+    "dG0_resp": -486.61,
+    "dG0_den": -585.76,
+    "k_resp": 5.0,
+    "K_DOC": 7.5,
+    "K_O2_resp": 0.2,
+    "K_NH4": 1.0,
+    "K_O2_nit": 0.4,
+    "K_NO3": 0.5,
+    "K_I_O2": 0.2,
+    "CN_dom": 12.0,
+    "bk0": -139.34411,
+    "bk1": 157570.1,
+    "bk2": -66423080.0,
+    "bk3": 12438000000.0,
+    "bk4": -862194900000.0,
+    "a_Tw": 7.6,
+    "b_Tw": 0.6,
+    "k_vol": 0.01,
+    "depth_factor": 0.5,
+    "gamma_tmp": 1.0,
+    "k_dec": 0.5,
+    "k_nit": 1.0,
+    "k_den": 0.2,
+    "k_o2": 10.0,
+    "k_rea": 3.0,
+    "R_ben": 1.5,
+    "k_pu": 0.01,
+    "k_upt": 0.3
+  },
+  "_GLOBAL_PARAMETERS_INFO": {
+    "k_dec": {
+      "VALUE": 0.5,
+      "RANGE": [
+        0.01,
+        5.0
+      ],
+      "UNITS": "mg C/L/day",
+      "DESCRIPTION": "Maximum rate of decomposition of soil organic matter to DOC (and NH4-N at C:N = CN_dom), per unit soil water"
+    },
+    "k_nit": {
+      "VALUE": 1.0,
+      "RANGE": [
+        0.01,
+        20.0
+      ],
+      "UNITS": "mg N/L/day",
+      "DESCRIPTION": "Maximum nitrification rate (NH4-N + 2 O2 -> NO3-N)"
+    },
+    "k_den": {
+      "VALUE": 0.2,
+      "RANGE": [
+        0.001,
+        10.0
+      ],
+      "UNITS": "mg N/L/day",
+      "DESCRIPTION": "Maximum denitrification rate (NO3-N + DOC -> N2), inhibited by O2"
+    },
+    "k_o2": {
+      "VALUE": 10.0,
+      "RANGE": [
+        0.1,
+        200.0
+      ],
+      "UNITS": "1/day",
+      "DESCRIPTION": "First-order exchange of dissolved O2 with the soil atmosphere, towards saturation"
+    },
+    "k_rea": {
+      "VALUE": 3.0,
+      "RANGE": [
+        0.5,
+        50.0
+      ],
+      "UNITS": "1/day",
+      "DESCRIPTION": "River reaeration: first-order exchange of dissolved O2 with the atmosphere, towards saturation at water temperature"
+    },
+    "R_ben": {
+      "VALUE": 1.5,
+      "RANGE": [
+        0.001,
+        10.0
+      ],
+      "UNITS": "mg O2/L/day",
+      "DESCRIPTION": "River benthic and ecosystem respiration at 20 C (O2 consumption per unit reach water)"
+    },
+    "k_pu": {
+      "VALUE": 0.01,
+      "RANGE": [
+        0.0001,
+        1.0
+      ],
+      "UNITS": "1/day",
+      "DESCRIPTION": "Plant uptake of soil nitrate and ammonium at 20 C (first order, same in RN, RN-T and EQ)"
+    },
+    "k_upt": {
+      "VALUE": 0.3,
+      "RANGE": [
+        0.001,
+        3.0
+      ],
+      "UNITS": "1/day",
+      "DESCRIPTION": "River nitrate uptake by stream biota at 20 C (first order in nitrate)"
+    }
+  },
+  "CYCLING_FRAMEWORKS": {
+    "RNT_SOIL": {
+      "_DESCRIPTION": "Soil water: decomposition, aerobic respiration, nitrification, denitrification, O2 supply, volatilization and uptake",
+      "LIST_TRANSFORMATIONS": {
+        "1": "DECOMPOSITION_DOC",
+        "2": "DECOMPOSITION_NH4",
+        "3": "RESPIRATION_DOC",
+        "4": "RESPIRATION_O2",
+        "5": "NITRIFICATION_NH4",
+        "6": "NITRIFICATION_O2",
+        "7": "DENITRIFICATION_NO3",
+        "8": "DENITRIFICATION_DOC",
+        "9": "O2_EXCHANGE",
+        "10": "O2_DEGASSING",
+        "11": "VOLATILIZATION",
+        "12": "PLANT_UPTAKE_NO3-N",
+        "13": "PLANT_UPTAKE_NH4-N"
+      },
+      "1": {
+        "_NAME": "DECOMPOSITION_DOC",
+        "_DESCRIPTION": "Soil organic matter -> DOC (zero order per unit soil water, temperature dependent)",
+        "CONSUMED": "NONE",
+        "PRODUCED": "DOC",
+        "KINETICS": [
+          "k_dec*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "k_dec"
+        ]
+      },
+      "2": {
+        "_NAME": "DECOMPOSITION_NH4",
+        "_DESCRIPTION": "Soil organic matter -> NH4-N, at the C:N ratio CN_dom of the decomposed matter",
+        "CONSUMED": "NONE",
+        "PRODUCED": "NH4-N",
+        "KINETICS": [
+          "(k_dec/CN_dom)*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "CN_dom",
+          "k_dec"
+        ]
+      },
+      "3": {
+        "_NAME": "RESPIRATION_DOC",
+        "_DESCRIPTION": "Aerobic respiration CH2O + O2 -> CO2 + H2O: DOC consumed",
+        "CONSUMED": "DOC",
+        "PRODUCED": "CO2_loss",
+        "KINETICS": [
+          "k_resp*((DOC/max(Vw_m3,eps_V))/(K_DOC+(DOC/max(Vw_m3,eps_V))))*((DO/max(Vw_m3,eps_V))/(K_O2_resp+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_resp+R_kJ*Tsoil_K*(log(c_CO2_M)-log(max((DOC/max(Vw_m3,eps_V))/MW_C,eps_c))-log(max((DO/max(Vw_m3,eps_V))/MW_O2,eps_c)))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "c_CO2_M",
+          "MW_C",
+          "MW_O2",
+          "dG0_resp",
+          "k_resp",
+          "K_DOC",
+          "K_O2_resp"
+        ]
+      },
+      "4": {
+        "_NAME": "RESPIRATION_O2",
+        "_DESCRIPTION": "Aerobic respiration: O2 consumed (32/12 g O2 per g C)",
+        "CONSUMED": "DO",
+        "PRODUCED": "NONE",
+        "KINETICS": [
+          "2.666666667*k_resp*((DOC/max(Vw_m3,eps_V))/(K_DOC+(DOC/max(Vw_m3,eps_V))))*((DO/max(Vw_m3,eps_V))/(K_O2_resp+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_resp+R_kJ*Tsoil_K*(log(c_CO2_M)-log(max((DOC/max(Vw_m3,eps_V))/MW_C,eps_c))-log(max((DO/max(Vw_m3,eps_V))/MW_O2,eps_c)))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "c_CO2_M",
+          "MW_C",
+          "MW_O2",
+          "dG0_resp",
+          "k_resp",
+          "K_DOC",
+          "K_O2_resp"
+        ]
+      },
+      "5": {
+        "_NAME": "NITRIFICATION_NH4",
+        "_DESCRIPTION": "Nitrification NH4+ + 2 O2 -> NO3- + 2 H+ + H2O",
+        "CONSUMED": "NH4-N",
+        "PRODUCED": "NO3-N",
+        "KINETICS": [
+          "k_nit*((NH4-N/max(Vw_m3,eps_V))/(K_NH4+(NH4-N/max(Vw_m3,eps_V))))*((DO/max(Vw_m3,eps_V))/(K_O2_nit+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_nit+R_kJ*Tsoil_K*(log(max((NO3-N/max(Vw_m3,eps_V))/MW_N,eps_c))+2*log((10^(-pH_w)))-log(max((NH4-N/max(Vw_m3,eps_V))/MW_N,eps_c))-2*log(max((DO/max(Vw_m3,eps_V))/MW_O2,eps_c)))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "pH_w",
+          "MW_N",
+          "MW_O2",
+          "dG0_nit",
+          "K_NH4",
+          "K_O2_nit",
+          "k_nit"
+        ]
+      },
+      "6": {
+        "_NAME": "NITRIFICATION_O2",
+        "_DESCRIPTION": "Nitrification: O2 consumed (64/14 g O2 per g N)",
+        "CONSUMED": "DO",
+        "PRODUCED": "NONE",
+        "KINETICS": [
+          "4.571428571*k_nit*((NH4-N/max(Vw_m3,eps_V))/(K_NH4+(NH4-N/max(Vw_m3,eps_V))))*((DO/max(Vw_m3,eps_V))/(K_O2_nit+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_nit+R_kJ*Tsoil_K*(log(max((NO3-N/max(Vw_m3,eps_V))/MW_N,eps_c))+2*log((10^(-pH_w)))-log(max((NH4-N/max(Vw_m3,eps_V))/MW_N,eps_c))-2*log(max((DO/max(Vw_m3,eps_V))/MW_O2,eps_c)))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "pH_w",
+          "MW_N",
+          "MW_O2",
+          "dG0_nit",
+          "K_NH4",
+          "K_O2_nit",
+          "k_nit"
+        ]
+      },
+      "7": {
+        "_NAME": "DENITRIFICATION_NO3",
+        "_DESCRIPTION": "Denitrification 5/4 CH2O + NO3- + H+ -> 1/2 N2 + 5/4 CO2 + 7/4 H2O",
+        "CONSUMED": "NO3-N",
+        "PRODUCED": "N2_loss",
+        "KINETICS": [
+          "k_den*((NO3-N/max(Vw_m3,eps_V))/(K_NO3+(NO3-N/max(Vw_m3,eps_V))))*((DOC/max(Vw_m3,eps_V))/(K_DOC+(DOC/max(Vw_m3,eps_V))))*(K_I_O2/(K_I_O2+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_den+R_kJ*Tsoil_K*(0.5*log(c_N2_M)+1.25*log(c_CO2_M)-1.25*log(max((DOC/max(Vw_m3,eps_V))/MW_C,eps_c))-log(max((NO3-N/max(Vw_m3,eps_V))/MW_N,eps_c))-log((10^(-pH_w))))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "pH_w",
+          "c_CO2_M",
+          "c_N2_M",
+          "MW_N",
+          "MW_C",
+          "dG0_den",
+          "K_DOC",
+          "K_NO3",
+          "K_I_O2",
+          "k_den"
+        ]
+      },
+      "8": {
+        "_NAME": "DENITRIFICATION_DOC",
+        "_DESCRIPTION": "Denitrification: DOC consumed (15/14 g C per g N)",
+        "CONSUMED": "DOC",
+        "PRODUCED": "CO2_loss",
+        "KINETICS": [
+          "1.071428571*k_den*((NO3-N/max(Vw_m3,eps_V))/(K_NO3+(NO3-N/max(Vw_m3,eps_V))))*((DOC/max(Vw_m3,eps_V))/(K_DOC+(DOC/max(Vw_m3,eps_V))))*(K_I_O2/(K_I_O2+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_den+R_kJ*Tsoil_K*(0.5*log(c_N2_M)+1.25*log(c_CO2_M)-1.25*log(max((DOC/max(Vw_m3,eps_V))/MW_C,eps_c))-log(max((NO3-N/max(Vw_m3,eps_V))/MW_N,eps_c))-log((10^(-pH_w))))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "pH_w",
+          "c_CO2_M",
+          "c_N2_M",
+          "MW_N",
+          "MW_C",
+          "dG0_den",
+          "K_DOC",
+          "K_NO3",
+          "K_I_O2",
+          "k_den"
+        ]
+      },
+      "9": {
+        "_NAME": "O2_EXCHANGE",
+        "_DESCRIPTION": "O2 supply from the soil atmosphere, first order towards saturation (Benson and Krause 1984, temperature capped at 0 C)",
+        "CONSUMED": "NONE",
+        "PRODUCED": "DO",
+        "KINETICS": [
+          "k_o2*max(exp(bk0+bk1/max(Tsoil_K,T_K0)+bk2/max(Tsoil_K,T_K0)^2+bk3/max(Tsoil_K,T_K0)^3+bk4/max(Tsoil_K,T_K0)^4)-(DO/max(Vw_m3,eps_V)),0)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "T_K0",
+          "bk0",
+          "bk1",
+          "bk2",
+          "bk3",
+          "bk4",
+          "k_o2"
+        ]
+      },
+      "10": {
+        "_NAME": "O2_DEGASSING",
+        "_DESCRIPTION": "O2 loss to the soil atmosphere when supersaturated (same coefficient)",
+        "CONSUMED": "DO",
+        "PRODUCED": "NONE",
+        "KINETICS": [
+          "k_o2*max((DO/max(Vw_m3,eps_V))-exp(bk0+bk1/max(Tsoil_K,T_K0)+bk2/max(Tsoil_K,T_K0)^2+bk3/max(Tsoil_K,T_K0)^3+bk4/max(Tsoil_K,T_K0)^4),0)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "T_K0",
+          "bk0",
+          "bk1",
+          "bk2",
+          "bk3",
+          "bk4",
+          "k_o2"
+        ]
+      },
+      "11": {
+        "_NAME": "VOLATILIZATION",
+        "_DESCRIPTION": "As in the reaction network (RN)",
+        "CONSUMED": "NH4-N",
+        "PRODUCED": "NH3_loss",
+        "KINETICS": [
+          "k_vol * gamma_tmp * NH4-N * depth_factor",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "k_vol",
+          "depth_factor",
+          "gamma_tmp"
+        ]
+      },
+      "12": {
+        "_NAME": "PLANT_UPTAKE_NO3-N",
+        "_DESCRIPTION": "Plant uptake of nitrate, first order, soil temperature (same in RN, RN-T and EQ)",
+        "CONSUMED": "NO3-N",
+        "PRODUCED": "PLANT_N",
+        "KINETICS": [
+          "k_pu*theta_T^((max(Tsoil_K,T_K0)-T_K0)-T_ref)*NO3-N",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "k_pu"
+        ]
+      },
+      "13": {
+        "_NAME": "PLANT_UPTAKE_NH4-N",
+        "_DESCRIPTION": "Plant uptake of ammonium, first order, soil temperature (same in RN, RN-T and EQ)",
+        "CONSUMED": "NH4-N",
+        "PRODUCED": "PLANT_N",
+        "KINETICS": [
+          "k_pu*theta_T^((max(Tsoil_K,T_K0)-T_K0)-T_ref)*NH4-N",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "k_pu"
+        ]
+      }
+    },
+    "RNT_AQUIFER": {
+      "_DESCRIPTION": "Groundwater: aerobic respiration, nitrification and denitrification, no O2 supply",
+      "LIST_TRANSFORMATIONS": {
+        "1": "RESPIRATION_DOC",
+        "2": "RESPIRATION_O2",
+        "3": "NITRIFICATION_NH4",
+        "4": "NITRIFICATION_O2",
+        "5": "DENITRIFICATION_NO3",
+        "6": "DENITRIFICATION_DOC"
+      },
+      "1": {
+        "_NAME": "RESPIRATION_DOC",
+        "_DESCRIPTION": "Aerobic respiration CH2O + O2 -> CO2 + H2O: DOC consumed",
+        "CONSUMED": "DOC",
+        "PRODUCED": "CO2_loss",
+        "KINETICS": [
+          "k_resp*((DOC/max(Vw_m3,eps_V))/(K_DOC+(DOC/max(Vw_m3,eps_V))))*((DO/max(Vw_m3,eps_V))/(K_O2_resp+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_resp+R_kJ*Tsoil_K*(log(c_CO2_M)-log(max((DOC/max(Vw_m3,eps_V))/MW_C,eps_c))-log(max((DO/max(Vw_m3,eps_V))/MW_O2,eps_c)))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "c_CO2_M",
+          "MW_C",
+          "MW_O2",
+          "dG0_resp",
+          "k_resp",
+          "K_DOC",
+          "K_O2_resp"
+        ]
+      },
+      "2": {
+        "_NAME": "RESPIRATION_O2",
+        "_DESCRIPTION": "Aerobic respiration: O2 consumed (32/12 g O2 per g C)",
+        "CONSUMED": "DO",
+        "PRODUCED": "NONE",
+        "KINETICS": [
+          "2.666666667*k_resp*((DOC/max(Vw_m3,eps_V))/(K_DOC+(DOC/max(Vw_m3,eps_V))))*((DO/max(Vw_m3,eps_V))/(K_O2_resp+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_resp+R_kJ*Tsoil_K*(log(c_CO2_M)-log(max((DOC/max(Vw_m3,eps_V))/MW_C,eps_c))-log(max((DO/max(Vw_m3,eps_V))/MW_O2,eps_c)))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "c_CO2_M",
+          "MW_C",
+          "MW_O2",
+          "dG0_resp",
+          "k_resp",
+          "K_DOC",
+          "K_O2_resp"
+        ]
+      },
+      "3": {
+        "_NAME": "NITRIFICATION_NH4",
+        "_DESCRIPTION": "Nitrification NH4+ + 2 O2 -> NO3- + 2 H+ + H2O",
+        "CONSUMED": "NH4-N",
+        "PRODUCED": "NO3-N",
+        "KINETICS": [
+          "k_nit*((NH4-N/max(Vw_m3,eps_V))/(K_NH4+(NH4-N/max(Vw_m3,eps_V))))*((DO/max(Vw_m3,eps_V))/(K_O2_nit+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_nit+R_kJ*Tsoil_K*(log(max((NO3-N/max(Vw_m3,eps_V))/MW_N,eps_c))+2*log((10^(-pH_w)))-log(max((NH4-N/max(Vw_m3,eps_V))/MW_N,eps_c))-2*log(max((DO/max(Vw_m3,eps_V))/MW_O2,eps_c)))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "pH_w",
+          "MW_N",
+          "MW_O2",
+          "dG0_nit",
+          "K_NH4",
+          "K_O2_nit",
+          "k_nit"
+        ]
+      },
+      "4": {
+        "_NAME": "NITRIFICATION_O2",
+        "_DESCRIPTION": "Nitrification: O2 consumed (64/14 g O2 per g N)",
+        "CONSUMED": "DO",
+        "PRODUCED": "NONE",
+        "KINETICS": [
+          "4.571428571*k_nit*((NH4-N/max(Vw_m3,eps_V))/(K_NH4+(NH4-N/max(Vw_m3,eps_V))))*((DO/max(Vw_m3,eps_V))/(K_O2_nit+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_nit+R_kJ*Tsoil_K*(log(max((NO3-N/max(Vw_m3,eps_V))/MW_N,eps_c))+2*log((10^(-pH_w)))-log(max((NH4-N/max(Vw_m3,eps_V))/MW_N,eps_c))-2*log(max((DO/max(Vw_m3,eps_V))/MW_O2,eps_c)))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "pH_w",
+          "MW_N",
+          "MW_O2",
+          "dG0_nit",
+          "K_NH4",
+          "K_O2_nit",
+          "k_nit"
+        ]
+      },
+      "5": {
+        "_NAME": "DENITRIFICATION_NO3",
+        "_DESCRIPTION": "Denitrification 5/4 CH2O + NO3- + H+ -> 1/2 N2 + 5/4 CO2 + 7/4 H2O",
+        "CONSUMED": "NO3-N",
+        "PRODUCED": "N2_loss",
+        "KINETICS": [
+          "k_den*((NO3-N/max(Vw_m3,eps_V))/(K_NO3+(NO3-N/max(Vw_m3,eps_V))))*((DOC/max(Vw_m3,eps_V))/(K_DOC+(DOC/max(Vw_m3,eps_V))))*(K_I_O2/(K_I_O2+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_den+R_kJ*Tsoil_K*(0.5*log(c_N2_M)+1.25*log(c_CO2_M)-1.25*log(max((DOC/max(Vw_m3,eps_V))/MW_C,eps_c))-log(max((NO3-N/max(Vw_m3,eps_V))/MW_N,eps_c))-log((10^(-pH_w))))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "pH_w",
+          "c_CO2_M",
+          "c_N2_M",
+          "MW_N",
+          "MW_C",
+          "dG0_den",
+          "K_DOC",
+          "K_NO3",
+          "K_I_O2",
+          "k_den"
+        ]
+      },
+      "6": {
+        "_NAME": "DENITRIFICATION_DOC",
+        "_DESCRIPTION": "Denitrification: DOC consumed (15/14 g C per g N)",
+        "CONSUMED": "DOC",
+        "PRODUCED": "CO2_loss",
+        "KINETICS": [
+          "1.071428571*k_den*((NO3-N/max(Vw_m3,eps_V))/(K_NO3+(NO3-N/max(Vw_m3,eps_V))))*((DOC/max(Vw_m3,eps_V))/(K_DOC+(DOC/max(Vw_m3,eps_V))))*(K_I_O2/(K_I_O2+(DO/max(Vw_m3,eps_V))))*max(0,1-exp((dG0_den+R_kJ*Tsoil_K*(0.5*log(c_N2_M)+1.25*log(c_CO2_M)-1.25*log(max((DOC/max(Vw_m3,eps_V))/MW_C,eps_c))-log(max((NO3-N/max(Vw_m3,eps_V))/MW_N,eps_c))-log((10^(-pH_w))))+m_ATP*dG_ATP)/(chi*R_kJ*Tsoil_K)))*theta_T^((Tsoil_K-T_K0)-T_ref)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "eps_c",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "R_kJ",
+          "dG_ATP",
+          "m_ATP",
+          "chi",
+          "pH_w",
+          "c_CO2_M",
+          "c_N2_M",
+          "MW_N",
+          "MW_C",
+          "dG0_den",
+          "K_DOC",
+          "K_NO3",
+          "K_I_O2",
+          "k_den"
+        ]
+      }
+    },
+    "RNT_RIVER": {
+      "_DESCRIPTION": "River reaches: reaeration, benthic respiration and nitrate uptake at water temperature from air temperature",
+      "LIST_TRANSFORMATIONS": {
+        "1": "REAERATION",
+        "2": "REAERATION_DEGASSING",
+        "3": "BENTHIC_RESPIRATION",
+        "4": "NITRATE_UPTAKE"
+      },
+      "1": {
+        "_NAME": "REAERATION",
+        "_DESCRIPTION": "O2 from the atmosphere, first order towards saturation at water temperature (Benson and Krause 1984)",
+        "CONSUMED": "NONE",
+        "PRODUCED": "DO",
+        "KINETICS": [
+          "k_rea*max(exp(bk0+bk1/(T_K0+max(a_Tw+b_Tw*(Tair_K-T_K0),0))+bk2/(T_K0+max(a_Tw+b_Tw*(Tair_K-T_K0),0))^2+bk3/(T_K0+max(a_Tw+b_Tw*(Tair_K-T_K0),0))^3+bk4/(T_K0+max(a_Tw+b_Tw*(Tair_K-T_K0),0))^4)-(DO/max(Vw_m3,eps_V)),0)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "T_K0",
+          "bk0",
+          "bk1",
+          "bk2",
+          "bk3",
+          "bk4",
+          "a_Tw",
+          "b_Tw",
+          "k_rea"
+        ]
+      },
+      "2": {
+        "_NAME": "REAERATION_DEGASSING",
+        "_DESCRIPTION": "O2 loss to the atmosphere when supersaturated (same coefficient)",
+        "CONSUMED": "DO",
+        "PRODUCED": "NONE",
+        "KINETICS": [
+          "k_rea*max((DO/max(Vw_m3,eps_V))-exp(bk0+bk1/(T_K0+max(a_Tw+b_Tw*(Tair_K-T_K0),0))+bk2/(T_K0+max(a_Tw+b_Tw*(Tair_K-T_K0),0))^2+bk3/(T_K0+max(a_Tw+b_Tw*(Tair_K-T_K0),0))^3+bk4/(T_K0+max(a_Tw+b_Tw*(Tair_K-T_K0),0))^4),0)*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "T_K0",
+          "bk0",
+          "bk1",
+          "bk2",
+          "bk3",
+          "bk4",
+          "a_Tw",
+          "b_Tw",
+          "k_rea"
+        ]
+      },
+      "3": {
+        "_NAME": "BENTHIC_RESPIRATION",
+        "_DESCRIPTION": "Benthic and ecosystem respiration, temperature dependent, Monod in O2",
+        "CONSUMED": "DO",
+        "PRODUCED": "NONE",
+        "KINETICS": [
+          "R_ben*theta_T^(max(a_Tw+b_Tw*(Tair_K-T_K0),0)-T_ref)*((DO/max(Vw_m3,eps_V))/(K_O2_resp+(DO/max(Vw_m3,eps_V))))*max(Vw_m3,eps_V)",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "eps_V",
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "K_O2_resp",
+          "a_Tw",
+          "b_Tw",
+          "R_ben"
+        ]
+      },
+      "4": {
+        "_NAME": "NITRATE_UPTAKE",
+        "_DESCRIPTION": "Nitrate uptake by stream biota, first order, temperature dependent",
+        "CONSUMED": "NO3-N",
+        "PRODUCED": "PLANT_N",
+        "KINETICS": [
+          "k_upt*theta_T^(max(a_Tw+b_Tw*(Tair_K-T_K0),0)-T_ref)*NO3-N",
+          "1/day"
+        ],
+        "PARAMETER_NAMES": [
+          "T_K0",
+          "T_ref",
+          "theta_T",
+          "a_Tw",
+          "b_Tw",
+          "k_upt"
+        ]
+      }
+    }
+  }
+}

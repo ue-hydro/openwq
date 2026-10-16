@@ -1,0 +1,1102 @@
+{
+    "_DESCRIPTION": "SWAT-Style Full Nutrient Model - N, P, C cycling with soil processes + river nitrate uptake (RIVER_N_UPTAKE, same reaction as RNT_RIVER in nitrogen_redox_thermokinetic.json)",
+    "_REFERENCE": "SWAT Theoretical Documentation (Neitsch et al., 2011)",
+    "_MODEL": "Soil & Water Assessment Tool",
+    "_VERSION": "1.0",
+    "_NOTES": "Comprehensive soil-water nutrient cycling mimicking SWAT model structure RIVER_N_UPTAKE: first-order nitrate uptake by stream biota at water temperature estimated from air temperature, for the river reaches of SUMMA with internally coupled mizuRoute (OpenWQ PHREEQC paper, formulation RN). PLANT_UPTAKE (OpenWQ PHREEQC paper): the zero-order uptake U_N*frac_NO3*f_growth of SWAT_full_nutrients.json acts as a mass per cell and day in OpenWQ (about 0.08 g N per day per cell, negligible); here it is replaced by the first-order uptake shared by RN, RN-T and EQ.",
+    "CHEMICAL_SPECIES": {
+        "LIST": {
+            "1": "NO3-N",
+            "2": "NH4-N",
+            "3": "ORG_N_active",
+            "4": "ORG_N_fresh",
+            "5": "PO4-P_sol",
+            "6": "PO4-P_active",
+            "7": "PO4-P_stable",
+            "8": "ORG_P_humus",
+            "9": "ORG_P_fresh",
+            "10": "ORG_C_active",
+            "11": "ORG_C_fresh",
+            "12": "ALGAE",
+            "13": "CO2_loss",
+            "14": "N2_loss",
+            "15": "NH3_loss",
+            "16": "PLANT_P",
+            "17": "SED_N",
+            "18": "SED_P",
+            "19": "PLANT_N",
+            "20": "PP",
+            "21": "NH4-N_sorbed"
+        },
+        "BGC_GENERAL_MOBILE_SPECIES": [
+            "NO3-N",
+            "NH4-N",
+            "ORG_N_active",
+            "ORG_N_fresh",
+            "PO4-P_sol",
+            "PO4-P_active",
+            "PO4-P_stable",
+            "ORG_P_humus",
+            "ORG_P_fresh",
+            "ORG_C_active",
+            "ORG_C_fresh",
+            "ALGAE"
+        ],
+        "_LIST_DESCRIPTIONS": {
+            "NO3-N": "Nitrate nitrogen",
+            "NH4-N": "Ammonium nitrogen",
+            "ORG_N_active": "Active organic nitrogen (humus)",
+            "ORG_N_fresh": "Fresh organic nitrogen (residue)",
+            "PO4-P_sol": "Solution phosphorus",
+            "PO4-P_active": "Active mineral phosphorus",
+            "PO4-P_stable": "Stable mineral phosphorus",
+            "ORG_P_humus": "Organic phosphorus in humus",
+            "ORG_P_fresh": "Fresh organic phosphorus (residue)",
+            "ORG_C_active": "Active organic carbon",
+            "ORG_C_fresh": "Fresh organic carbon (residue)",
+            "ALGAE": "ALGAE",
+            "CO2_loss": "CO2 loss to atmosphere/sediment",
+            "N2_loss": "N2 loss to atmosphere/sediment",
+            "NH3_loss": "NH3 loss to atmosphere/sediment",
+            "PLANT_P": "Plant uptake of P",
+            "SED_N": "Settled N (sediment sink)",
+            "SED_P": "Settled P (sediment sink)",
+            "PLANT_N": "Plant uptake of N",
+            "PP": "Particulate P - sorbed partner of dissolved P (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS",
+            "NH4-N_sorbed": "Sorbed ammonium - sorbed partner of NH4-N (model_SI species-pair); NOT water-mobile, co-transported with sediment by model_TS"
+        }
+    },
+    "CYCLING_FRAMEWORKS": {
+        "SWAT_NITROGEN_CYCLE": {
+            "_DESCRIPTION": "SWAT nitrogen cycling processes",
+            "LIST_TRANSFORMATIONS": {
+                "1": "MINERALIZATION_ACTIVE",
+                "2": "MINERALIZATION_FRESH",
+                "3": "HUMIFICATION",
+                "4": "NITRIFICATION",
+                "5": "VOLATILIZATION",
+                "6": "DENITRIFICATION",
+                "7": "PLANT_UPTAKE_NO3-N",
+                "8": "PLANT_UPTAKE_NH4-N",
+                "9": "N_FIXATION"
+            },
+            "1": {
+                "_NAME": "MINERALIZATION_ACTIVE",
+                "CONSUMED": "ORG_N_active",
+                "PRODUCED": "NH4-N",
+                "KINETICS": [
+                    "beta_min * sqrt(gamma_tmp * gamma_sw) * ORG_N_active",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_min",
+                    "gamma_tmp",
+                    "gamma_sw"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_min": 0.0003,
+                    "gamma_tmp": 1.0,
+                    "gamma_sw": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_min": {
+                        "VALUE": 0.0003,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.0001,
+                            0.001
+                        ],
+                        "DESCRIPTION": "Rate constant for mineralization of humus"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor: 0.9^(T_soil - T_opt)"
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor"
+                    }
+                }
+            },
+            "2": {
+                "_NAME": "MINERALIZATION_FRESH",
+                "CONSUMED": "ORG_N_fresh",
+                "PRODUCED": "NH4-N",
+                "KINETICS": [
+                    "beta_rsd * sqrt(gamma_tmp * gamma_sw) * ORG_N_fresh * (1 - f_hp)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_rsd",
+                    "f_hp",
+                    "gamma_sw",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_rsd": 0.05,
+                    "f_hp": 0.2,
+                    "gamma_sw": 1.0,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_rsd": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.02,
+                            0.1
+                        ],
+                        "DESCRIPTION": "Residue decomposition rate"
+                    },
+                    "f_hp": {
+                        "VALUE": 0.2,
+                        "DESCRIPTION": "Fraction to humus pool (rest mineralized)"
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor (1 = no adjustment); SWAT: min(1, SW / FC)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "3": {
+                "_NAME": "HUMIFICATION",
+                "CONSUMED": "ORG_N_fresh",
+                "PRODUCED": "ORG_N_active",
+                "KINETICS": [
+                    "beta_rsd * sqrt(gamma_tmp * gamma_sw) * ORG_N_fresh * f_hp",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_rsd",
+                    "f_hp",
+                    "gamma_sw",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_rsd": 0.05,
+                    "f_hp": 0.2,
+                    "gamma_sw": 1.0,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_rsd": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day"
+                    },
+                    "f_hp": {
+                        "VALUE": 0.2
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor (1 = no adjustment); SWAT: min(1, SW / FC)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "4": {
+                "_NAME": "NITRIFICATION",
+                "CONSUMED": "NH4-N",
+                "PRODUCED": "NO3-N",
+                "KINETICS": [
+                    "k_nit * gamma_tmp * gamma_sw * (1 - exp(-c_n * NH4-N)) * NH4-N",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_nit",
+                    "c_n",
+                    "gamma_sw",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_nit": 0.1,
+                    "c_n": 0.1,
+                    "gamma_sw": 1.0,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "k_nit": {
+                        "VALUE": 0.1,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.01,
+                            0.5
+                        ],
+                        "DESCRIPTION": "Nitrification rate constant"
+                    },
+                    "c_n": {
+                        "VALUE": 0.1,
+                        "DESCRIPTION": "Nitrification constant"
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor (1 = no adjustment); SWAT: min(1, SW / FC)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "5": {
+                "_NAME": "VOLATILIZATION",
+                "CONSUMED": "NH4-N",
+                "PRODUCED": "NH3_loss",
+                "KINETICS": [
+                    "k_vol * gamma_tmp * NH4-N * depth_factor",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_vol",
+                    "depth_factor",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_vol": 0.01,
+                    "depth_factor": 0.5,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "k_vol": {
+                        "VALUE": 0.01,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.0,
+                            0.1
+                        ],
+                        "DESCRIPTION": "Volatilization rate"
+                    },
+                    "depth_factor": {
+                        "VALUE": 0.5,
+                        "DESCRIPTION": "Depth factor (1 at surface, decreases with depth)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "6": {
+                "_NAME": "DENITRIFICATION",
+                "CONSUMED": "NO3-N",
+                "PRODUCED": "N2_loss",
+                "KINETICS": [
+                    "k_den * gamma_tmp * ORG_C_active * (1 - exp(-c_den * NO3-N))",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_den",
+                    "c_den",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_den": 0.05,
+                    "c_den": 0.05,
+                    "gamma_tmp": 1.0
+                },
+                "_NOTES": "Only active when soil water > field capacity",
+                "_PARAMETERS_INFO": {
+                    "k_den": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.01,
+                            0.2
+                        ],
+                        "DESCRIPTION": "Denitrification rate constant"
+                    },
+                    "c_den": {
+                        "VALUE": 0.05,
+                        "DESCRIPTION": "Denitrification exponential constant"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "7": {
+                "_NAME": "PLANT_UPTAKE_NO3-N",
+                "CONSUMED": "NO3-N",
+                "PRODUCED": "PLANT_N",
+                "KINETICS": [
+                    "k_pu*theta_T^((max(Tsoil_K,T_K0)-T_K0)-T_ref)*NO3-N",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_pu",
+                    "theta_T",
+                    "T_K0",
+                    "T_ref"
+                ],
+                "PARAMETER_VALUES": {},
+                "_PARAMETERS_INFO": {},
+                "_DESCRIPTION": "Plant uptake, first order in the soil concentration, temperature factor with the soil temperature floored at 0 C (same process in RN, RN-T and EQ)"
+            },
+            "8": {
+                "_NAME": "PLANT_UPTAKE_NH4-N",
+                "CONSUMED": "NH4-N",
+                "PRODUCED": "PLANT_N",
+                "KINETICS": [
+                    "k_pu*theta_T^((max(Tsoil_K,T_K0)-T_K0)-T_ref)*NH4-N",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_pu",
+                    "theta_T",
+                    "T_K0",
+                    "T_ref"
+                ],
+                "PARAMETER_VALUES": {},
+                "_PARAMETERS_INFO": {},
+                "_DESCRIPTION": "Plant uptake, first order in the soil concentration, temperature factor with the soil temperature floored at 0 C (same process in RN, RN-T and EQ)"
+            },
+            "9": {
+                "_NAME": "N_FIXATION",
+                "CONSUMED": "NONE",
+                "PRODUCED": "NH4-N",
+                "KINETICS": [
+                    "k_fix * f_growth * f_nfix",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_fix",
+                    "f_nfix",
+                    "f_growth"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_fix": 0.01,
+                    "f_nfix": 0.0,
+                    "f_growth": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "k_fix": {
+                        "VALUE": 0.01,
+                        "UNITS": "mg/L/day",
+                        "DESCRIPTION": "N fixation rate for legumes"
+                    },
+                    "f_nfix": {
+                        "VALUE": 0.0,
+                        "DESCRIPTION": "1 for legumes, 0 for non-legumes"
+                    },
+                    "f_growth": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Growth stage factor"
+                    }
+                }
+            }
+        },
+        "SWAT_PHOSPHORUS_CYCLE": {
+            "_DESCRIPTION": "SWAT phosphorus cycling processes",
+            "LIST_TRANSFORMATIONS": {
+                "1": "P_MINERALIZATION_ACTIVE",
+                "2": "P_MINERALIZATION_FRESH",
+                "3": "P_HUMIFICATION",
+                "4": "P_SORPTION",
+                "5": "P_ACTIVE_TO_STABLE",
+                "6": "P_PLANT_UPTAKE"
+            },
+            "1": {
+                "_NAME": "P_MINERALIZATION_ACTIVE",
+                "CONSUMED": "ORG_P_humus",
+                "PRODUCED": "PO4-P_sol",
+                "KINETICS": [
+                    "beta_min * sqrt(gamma_tmp * gamma_sw) * ORG_P_humus",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_min",
+                    "gamma_sw",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_min": 0.0003,
+                    "gamma_sw": 1.0,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_min": {
+                        "VALUE": 0.0003,
+                        "UNITS": "1/day"
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor (1 = no adjustment); SWAT: min(1, SW / FC)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "2": {
+                "_NAME": "P_MINERALIZATION_FRESH",
+                "CONSUMED": "ORG_P_fresh",
+                "PRODUCED": "PO4-P_sol",
+                "KINETICS": [
+                    "beta_rsd * sqrt(gamma_tmp * gamma_sw) * ORG_P_fresh * 0.8",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_rsd",
+                    "gamma_sw",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_rsd": 0.05,
+                    "gamma_sw": 1.0,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_rsd": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day"
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor (1 = no adjustment); SWAT: min(1, SW / FC)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "3": {
+                "_NAME": "P_HUMIFICATION",
+                "CONSUMED": "ORG_P_fresh",
+                "PRODUCED": "ORG_P_humus",
+                "KINETICS": [
+                    "beta_rsd * sqrt(gamma_tmp * gamma_sw) * ORG_P_fresh * 0.2",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_rsd",
+                    "gamma_sw",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_rsd": 0.05,
+                    "gamma_sw": 1.0,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_rsd": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day"
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor (1 = no adjustment); SWAT: min(1, SW / FC)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "4": {
+                "_NAME": "P_SORPTION",
+                "CONSUMED": "PO4-P_sol",
+                "PRODUCED": "PO4-P_active",
+                "KINETICS": [
+                    "k_ads_P * (PO4-P_sol - PSP * PO4-P_active / (1 - PSP))",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_ads_P",
+                    "PSP"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_ads_P": 0.5,
+                    "PSP": 0.4
+                },
+                "_PARAMETERS_INFO": {
+                    "k_ads_P": {
+                        "VALUE": 0.5,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.1,
+                            2.0
+                        ],
+                        "DESCRIPTION": "P sorption rate"
+                    },
+                    "PSP": {
+                        "VALUE": 0.4,
+                        "RANGE": [
+                            0.1,
+                            0.7
+                        ],
+                        "DESCRIPTION": "Phosphorus sorption coefficient"
+                    }
+                }
+            },
+            "5": {
+                "_NAME": "P_ACTIVE_TO_STABLE",
+                "CONSUMED": "PO4-P_active",
+                "PRODUCED": "PO4-P_stable",
+                "KINETICS": [
+                    "beta_eq * (PO4-P_active * (1 - pai) / pai - PO4-P_stable)",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_eq",
+                    "pai"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_eq": 0.0001,
+                    "pai": 0.5
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_eq": {
+                        "VALUE": 0.0001,
+                        "UNITS": "1/day",
+                        "DESCRIPTION": "Slow equilibration rate"
+                    },
+                    "pai": {
+                        "VALUE": 0.5,
+                        "DESCRIPTION": "Active/stable equilibrium ratio"
+                    }
+                }
+            },
+            "6": {
+                "_NAME": "P_PLANT_UPTAKE",
+                "CONSUMED": "PO4-P_sol",
+                "PRODUCED": "PLANT_P",
+                "KINETICS": [
+                    "U_P * f_growth",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "U_P",
+                    "f_growth"
+                ],
+                "PARAMETER_VALUES": {
+                    "U_P": 0.01,
+                    "f_growth": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "U_P": {
+                        "VALUE": 0.01,
+                        "UNITS": "mg/L/day",
+                        "DESCRIPTION": "Plant P uptake demand"
+                    },
+                    "f_growth": {
+                        "VALUE": 1.0
+                    }
+                }
+            }
+        },
+        "SWAT_CARBON_CYCLE": {
+            "_DESCRIPTION": "SWAT carbon cycling (for C:N ratio)",
+            "LIST_TRANSFORMATIONS": {
+                "1": "C_MINERALIZATION_ACTIVE",
+                "2": "C_MINERALIZATION_FRESH",
+                "3": "C_HUMIFICATION"
+            },
+            "1": {
+                "_NAME": "C_MINERALIZATION_ACTIVE",
+                "CONSUMED": "ORG_C_active",
+                "PRODUCED": "CO2_loss",
+                "KINETICS": [
+                    "beta_min * sqrt(gamma_tmp * gamma_sw) * ORG_C_active",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_min",
+                    "gamma_sw",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_min": 0.0003,
+                    "gamma_sw": 1.0,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_min": {
+                        "VALUE": 0.0003,
+                        "UNITS": "1/day"
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor (1 = no adjustment); SWAT: min(1, SW / FC)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "2": {
+                "_NAME": "C_MINERALIZATION_FRESH",
+                "CONSUMED": "ORG_C_fresh",
+                "PRODUCED": "CO2_loss",
+                "KINETICS": [
+                    "beta_rsd * sqrt(gamma_tmp * gamma_sw) * ORG_C_fresh * 0.8",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_rsd",
+                    "gamma_sw",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_rsd": 0.05,
+                    "gamma_sw": 1.0,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_rsd": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day"
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor (1 = no adjustment); SWAT: min(1, SW / FC)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            },
+            "3": {
+                "_NAME": "C_HUMIFICATION",
+                "CONSUMED": "ORG_C_fresh",
+                "PRODUCED": "ORG_C_active",
+                "KINETICS": [
+                    "beta_rsd * sqrt(gamma_tmp * gamma_sw) * ORG_C_fresh * 0.2",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "beta_rsd",
+                    "gamma_sw",
+                    "gamma_tmp"
+                ],
+                "PARAMETER_VALUES": {
+                    "beta_rsd": 0.05,
+                    "gamma_sw": 1.0,
+                    "gamma_tmp": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "beta_rsd": {
+                        "VALUE": 0.05,
+                        "UNITS": "1/day"
+                    },
+                    "gamma_sw": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Soil water factor (1 = no adjustment); SWAT: min(1, SW / FC)"
+                    },
+                    "gamma_tmp": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor (1 = no adjustment); SWAT: 0.9 * T / (T + exp(9.93 - 0.312 T)) + 0.1"
+                    }
+                }
+            }
+        },
+        "SWAT_INSTREAM": {
+            "_DESCRIPTION": "In-stream nutrient processes",
+            "LIST_TRANSFORMATIONS": {
+                "1": "ALGAE_GROWTH",
+                "2": "ALGAE_RESPIRATION",
+                "3": "SETTLING_ORGN",
+                "4": "SETTLING_ORGP",
+                "5": "BENTHIC_N_FLUX",
+                "6": "BENTHIC_P_FLUX"
+            },
+            "1": {
+                "_NAME": "ALGAE_GROWTH",
+                "CONSUMED": "NO3-N",
+                "PRODUCED": "ALGAE",
+                "KINETICS": [
+                    "mu_max * ALGAE * f_L * f_N * f_P * f_T",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "mu_max",
+                    "f_L",
+                    "f_N",
+                    "f_P",
+                    "f_T"
+                ],
+                "PARAMETER_VALUES": {
+                    "mu_max": 2.0,
+                    "f_L": 0.7,
+                    "f_N": 0.9,
+                    "f_P": 0.8,
+                    "f_T": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "mu_max": {
+                        "VALUE": 2.0,
+                        "UNITS": "1/day",
+                        "DESCRIPTION": "Maximum algal growth rate"
+                    },
+                    "f_L": {
+                        "VALUE": 0.7,
+                        "DESCRIPTION": "Light factor"
+                    },
+                    "f_N": {
+                        "VALUE": 0.9,
+                        "DESCRIPTION": "N limitation"
+                    },
+                    "f_P": {
+                        "VALUE": 0.8,
+                        "DESCRIPTION": "P limitation"
+                    },
+                    "f_T": {
+                        "VALUE": 1.0,
+                        "DESCRIPTION": "Temperature factor"
+                    }
+                }
+            },
+            "2": {
+                "_NAME": "ALGAE_RESPIRATION",
+                "CONSUMED": "ALGAE",
+                "PRODUCED": "NH4-N",
+                "KINETICS": [
+                    "rho_a * ALGAE * 1.047^(T - 20) * r_N_alg",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "rho_a",
+                    "r_N_alg",
+                    "T"
+                ],
+                "PARAMETER_VALUES": {
+                    "rho_a": 0.1,
+                    "r_N_alg": 0.08,
+                    "T": 20.0
+                },
+                "_PARAMETERS_INFO": {
+                    "rho_a": {
+                        "VALUE": 0.1,
+                        "UNITS": "1/day",
+                        "DESCRIPTION": "Algal respiration rate"
+                    },
+                    "r_N_alg": {
+                        "VALUE": 0.08,
+                        "DESCRIPTION": "N fraction in algae"
+                    },
+                    "T": {
+                        "VALUE": 20.0,
+                        "DESCRIPTION": "Water temperature [C] used by the instream rate; constant unless supplied as a dependency"
+                    }
+                }
+            },
+            "3": {
+                "_NAME": "SETTLING_ORGN",
+                "CONSUMED": "ORG_N_fresh",
+                "PRODUCED": "SED_N",
+                "KINETICS": [
+                    "sigma_1 / depth * ORG_N_fresh",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "sigma_1",
+                    "depth"
+                ],
+                "PARAMETER_VALUES": {
+                    "sigma_1": 0.5,
+                    "depth": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "sigma_1": {
+                        "VALUE": 0.5,
+                        "UNITS": "m/day",
+                        "DESCRIPTION": "Organic N settling velocity"
+                    },
+                    "depth": {
+                        "VALUE": 1.0,
+                        "UNITS": "m"
+                    }
+                }
+            },
+            "4": {
+                "_NAME": "SETTLING_ORGP",
+                "CONSUMED": "ORG_P_fresh",
+                "PRODUCED": "SED_P",
+                "KINETICS": [
+                    "sigma_2 / depth * ORG_P_fresh",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "sigma_2",
+                    "depth"
+                ],
+                "PARAMETER_VALUES": {
+                    "sigma_2": 0.5,
+                    "depth": 1.0
+                },
+                "_PARAMETERS_INFO": {
+                    "sigma_2": {
+                        "VALUE": 0.5,
+                        "UNITS": "m/day",
+                        "DESCRIPTION": "Organic P settling velocity"
+                    },
+                    "depth": {
+                        "VALUE": 1.0,
+                        "UNITS": "m"
+                    }
+                }
+            },
+            "5": {
+                "_NAME": "BENTHIC_N_FLUX",
+                "CONSUMED": "NONE",
+                "PRODUCED": "NH4-N",
+                "KINETICS": [
+                    "sigma_3 / depth * 1.074^(T - 20)",
+                    "mg/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "sigma_3",
+                    "depth",
+                    "T"
+                ],
+                "PARAMETER_VALUES": {
+                    "sigma_3": 0.5,
+                    "depth": 1.0,
+                    "T": 20.0
+                },
+                "_PARAMETERS_INFO": {
+                    "sigma_3": {
+                        "VALUE": 0.5,
+                        "UNITS": "mg/m2/day",
+                        "DESCRIPTION": "Benthic NH4-N source rate"
+                    },
+                    "depth": {
+                        "VALUE": 1.0,
+                        "UNITS": "m"
+                    },
+                    "T": {
+                        "VALUE": 20.0,
+                        "DESCRIPTION": "Water temperature [C] used by the instream rate; constant unless supplied as a dependency"
+                    }
+                }
+            },
+            "6": {
+                "_NAME": "BENTHIC_P_FLUX",
+                "CONSUMED": "NONE",
+                "PRODUCED": "PO4-P_sol",
+                "KINETICS": [
+                    "sigma_4 / depth * 1.074^(T - 20)",
+                    "mg/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "sigma_4",
+                    "depth",
+                    "T"
+                ],
+                "PARAMETER_VALUES": {
+                    "sigma_4": 0.1,
+                    "depth": 1.0,
+                    "T": 20.0
+                },
+                "_PARAMETERS_INFO": {
+                    "sigma_4": {
+                        "VALUE": 0.1,
+                        "UNITS": "mg/m2/day",
+                        "DESCRIPTION": "Benthic P source rate"
+                    },
+                    "depth": {
+                        "VALUE": 1.0,
+                        "UNITS": "m"
+                    },
+                    "T": {
+                        "VALUE": 20.0,
+                        "DESCRIPTION": "Water temperature [C] used by the instream rate; constant unless supplied as a dependency"
+                    }
+                }
+            }
+        },
+        "SWAT_SEDIMENT_TRANSPORT": {
+            "_DESCRIPTION": "Sediment-bound nutrient transport: first-order settling/erosion loss of organic N and P from the active pools into the sediment sink species (SED_N, SED_P). NOTE: a first-order approximation (k_sed*enrich_ratio*pool) is used because the physical erosion/sediment-yield flux is not yet exposed to BGC as a dependency variable; tune k_sed (and/or promote it to a calibration parameter) accordingly.",
+            "LIST_TRANSFORMATIONS": {
+                "1": "SEDIMENT_BOUND_N",
+                "2": "SEDIMENT_BOUND_P"
+            },
+            "1": {
+                "_NAME": "SEDIMENT_BOUND_N",
+                "CONSUMED": "ORG_N_active",
+                "PRODUCED": "SED_N",
+                "KINETICS": [
+                    "k_sed * enrich_ratio * ORG_N_active",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_sed",
+                    "enrich_ratio"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_sed": 0.001,
+                    "enrich_ratio": 2.0
+                },
+                "_PARAMETERS_INFO": {
+                    "k_sed": {
+                        "VALUE": 0.001,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.0001,
+                            0.01
+                        ],
+                        "DESCRIPTION": "First-order settling/erosion loss rate of sediment-bound organic N"
+                    },
+                    "enrich_ratio": {
+                        "VALUE": 2.0,
+                        "RANGE": [
+                            1.5,
+                            3.0
+                        ],
+                        "DESCRIPTION": "SWAT sediment enrichment ratio (dimensionless, typically 1.5-3.0)"
+                    }
+                },
+                "_SED_BOUND_N_INFO": {
+                    "FORMULA": "conc_sed_N = (ORG_N_active + ORG_N_stable) * enrich_ratio",
+                    "NOTES": "Original SWAT diagnostic, kept for provenance"
+                }
+            },
+            "2": {
+                "_NAME": "SEDIMENT_BOUND_P",
+                "CONSUMED": "ORG_P_humus",
+                "PRODUCED": "SED_P",
+                "KINETICS": [
+                    "k_sed * enrich_ratio * ORG_P_humus",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_sed",
+                    "enrich_ratio"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_sed": 0.001,
+                    "enrich_ratio": 2.0
+                },
+                "_PARAMETERS_INFO": {
+                    "k_sed": {
+                        "VALUE": 0.001,
+                        "UNITS": "1/day",
+                        "RANGE": [
+                            0.0001,
+                            0.01
+                        ],
+                        "DESCRIPTION": "First-order settling/erosion loss rate of sediment-bound organic P"
+                    },
+                    "enrich_ratio": {
+                        "VALUE": 2.0,
+                        "RANGE": [
+                            1.5,
+                            3.0
+                        ],
+                        "DESCRIPTION": "SWAT sediment enrichment ratio (dimensionless, typically 1.5-3.0)"
+                    }
+                },
+                "_SED_BOUND_P_INFO": {
+                    "FORMULA": "conc_sed_P = (PO4-P_active + PO4-P_stable + ORG_P_humus) * enrich_ratio",
+                    "NOTES": "Original SWAT diagnostic, kept for provenance"
+                }
+            }
+        },
+        "RIVER_N_UPTAKE": {
+            "_DESCRIPTION": "River reaches: nitrate uptake by stream biota (first order, temperature dependent)",
+            "LIST_TRANSFORMATIONS": {
+                "1": "NITRATE_UPTAKE"
+            },
+            "1": {
+                "_NAME": "NITRATE_UPTAKE",
+                "CONSUMED": "NO3-N",
+                "PRODUCED": "PLANT_N",
+                "KINETICS": [
+                    "k_upt*theta_T^(max(a_Tw+b_Tw*(Tair_K-T_K0),0)-T_ref)*NO3-N",
+                    "1/day"
+                ],
+                "PARAMETER_NAMES": [
+                    "k_upt",
+                    "theta_T",
+                    "a_Tw",
+                    "b_Tw",
+                    "T_K0",
+                    "T_ref"
+                ],
+                "PARAMETER_VALUES": {
+                    "k_upt": 0.3,
+                    "theta_T": 1.07,
+                    "a_Tw": 7.6,
+                    "b_Tw": 0.6,
+                    "T_K0": 273.15,
+                    "T_ref": 20.0
+                },
+                "_PARAMETERS_INFO": {
+                    "k_upt": {
+                        "VALUE": 0.3,
+                        "UNITS": "1/day",
+                        "DESCRIPTION": "River nitrate uptake by stream biota at 20 C (first order in nitrate)"
+                    },
+                    "theta_T": {
+                        "VALUE": 1.07,
+                        "DESCRIPTION": "Temperature coefficient, rate x theta^(Tw-20)"
+                    },
+                    "a_Tw": {
+                        "VALUE": 7.6,
+                        "UNITS": "C",
+                        "DESCRIPTION": "Water temperature Tw = max(a_Tw + b_Tw*Tair, 0): intercept (USA_07068000 outlet fit; refit per basin)"
+                    },
+                    "b_Tw": {
+                        "VALUE": 0.6,
+                        "DESCRIPTION": "Water temperature Tw = max(a_Tw + b_Tw*Tair, 0): slope"
+                    },
+                    "T_K0": {
+                        "VALUE": 273.15,
+                        "UNITS": "K",
+                        "DESCRIPTION": "0 C in K"
+                    },
+                    "T_ref": {
+                        "VALUE": 20.0,
+                        "UNITS": "C",
+                        "DESCRIPTION": "Reference temperature of k_upt"
+                    }
+                }
+            }
+        }
+    },
+    "_COMPARTMENT_ASSIGNMENT": {
+        "SOIL_LAYER_1": [
+            "SWAT_NITROGEN_CYCLE",
+            "SWAT_PHOSPHORUS_CYCLE",
+            "SWAT_CARBON_CYCLE"
+        ],
+        "SOIL_LAYER_2": [
+            "SWAT_NITROGEN_CYCLE",
+            "SWAT_PHOSPHORUS_CYCLE",
+            "SWAT_CARBON_CYCLE"
+        ],
+        "RIVER": [
+            "SWAT_INSTREAM"
+        ],
+        "RESERVOIR": [
+            "SWAT_INSTREAM"
+        ]
+    },
+    "GLOBAL_PARAMETERS": {
+        "k_pu": 0.01,
+        "theta_T": 1.07,
+        "T_K0": 273.15,
+        "T_ref": 20.0
+    },
+    "_GLOBAL_PARAMETERS_INFO": {
+        "k_pu": {
+            "VALUE": 0.01,
+            "RANGE": [
+                0.0001,
+                1.0
+            ],
+            "UNITS": "1/day",
+            "DESCRIPTION": "Plant uptake of soil nitrate and ammonium at 20 C (first order, same in RN, RN-T and EQ)"
+        }
+    }
+}
