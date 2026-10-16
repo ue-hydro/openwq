@@ -128,7 +128,9 @@ use_num_threads = 4
 # ──────────────────────────────────────────────────────────────────────────────
 #  SECTION 3: INITIAL CONDITIONS
 # ──────────────────────────────────────────────────────────────────────────────
-#  Sets a uniform starting concentration for ALL species in ALL compartments.
+#  Sets a uniform starting concentration for the output species (chemical_species)
+#  in ALL compartments. Other species of the reaction network start at zero unless
+#  set per compartment in bgc_compartment_overrides (Section 4a).
 #  For spatially-varying ICs, use source/sink files to ramp up from zero.
 
 ic_all_value = 2          # Starting concentration value
@@ -175,13 +177,22 @@ path2selected_NATIVE_BGC_FLEX_framework = "config_support_lib/BGC_templates/NATI
 # By default every compartment gets all the cycling frameworks of the template
 # and the same initial value (ic_all_value). Override that per compartment:
 #   "CYCLING_FRAMEWORK": list of frameworks ([] = no reactions in it)
-#   "INITIAL_VALUE":     initial concentration of every species there
+#   "INITIAL_VALUE":     initial concentration of every species there (a number),
+#                        or per species ({species: value}); the dict may name any
+#                        species of the reaction network, not only output species
+#                        (e.g. soil organic pools, which start at zero elsewhere)
 #   PHREEQC block ids, e.g. "SOLUTIONS": 1, "EXCHANGE": 1,
 #     "EQUILIBRIUM_PHASES": 1, "KINETICS": 1 (-1 or absent = none)
 # Example (SUMMA): reactions in soil and aquifer only, clean canopy and snow:
 #   bgc_compartment_overrides = {
 #       "SCALARCANOPYWAT":       {"CYCLING_FRAMEWORK": [], "INITIAL_VALUE": 0.0},
 #       "ILAYERVOLFRACWAT_SNOW": {"CYCLING_FRAMEWORK": [], "INITIAL_VALUE": 0.0},
+#   }
+# Example (SWAT template): soil organic carbon and humus N, without which
+# denitrification and humus mineralization never run (values in mg per litre of
+# soil water; the template keeps these pools in the soil):
+#   bgc_compartment_overrides = {
+#       "ILAYERVOLFRACWAT_SOIL": {"INITIAL_VALUE": {"ORG_C_active": 20.0, "ORG_N_active": 1.5}},
 #   }
 bgc_compartment_overrides = None
 
@@ -473,7 +484,8 @@ lulc_source = "copernicus"
 
 # How the loads behave over time:
 #   "static"  → one constant annual export coefficient per LULC class.
-#   "dynamic" → the load varies within the year (set the shape + climate below).
+#   "dynamic" → the load varies within the year (set the shape below; climate
+#               data is optional, only needed with climate_dependency = True).
 lulc_loads = "static"
 
 # if lulc_loads="dynamic" -------
@@ -489,7 +501,7 @@ lulc_loads = "static"
 lulc_loads_dynamic_shape = "uniform"
 
 # (dynamic only) Multiply the within-year shape by the climate signal?
-#   False → the shape is used as-is.
+#   False → the shape is used as-is (no climate data needed).
 #   True  → the load is additionally scaled by precip/temperature (see the
 #           "Climate data" section below). A "uniform" shape with
 #           climate_dependency = True reproduces a purely climate-weighted

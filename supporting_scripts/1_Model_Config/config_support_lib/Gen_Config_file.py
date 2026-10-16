@@ -47,6 +47,11 @@ def create_config_json(
         # Optional per-compartment settings (see below)
         compartment_overrides: Optional[Dict[str, dict]] = None,
 
+        # Every species of the reaction network (NATIVE_BGC_FLEX). Lets an
+        # INITIAL_VALUE override set species that are not output species
+        # (e.g. the soil organic carbon and nitrogen pools).
+        bgc_species_names: Optional[List[str]] = None,
+
 ) -> None:
     """
     Create OpenWQ Biogeochemistry configuration JSON file from individual arguments.
@@ -67,7 +72,9 @@ def create_config_json(
             "CYCLING_FRAMEWORK" replaces the list of frameworks ([] = no reactions),
             "INITIAL_VALUE" replaces ic_all_value for every species (a number) or
             per species (a dict {species: value}; species not listed keep
-            ic_all_value), and any
+            ic_all_value; the dict may also name any species of the reaction
+            network, ``bgc_species_names``, which then starts at that value in
+            this compartment and at zero elsewhere), and any
             other key (e.g. the PHREEQC block ids "SOLUTIONS", "EXCHANGE",
             "EQUILIBRIUM_PHASES", "KINETICS") is written as given.
     """
@@ -113,12 +120,17 @@ def create_config_json(
         for key, value in (settings or {}).items():
             if key == "INITIAL_VALUE":
                 if isinstance(value, dict):
-                    unknown = [sp for sp in value if sp not in chemical_species_names]
+                    known = list(chemical_species_names) + [
+                        sp for sp in (bgc_species_names or []) if sp not in chemical_species_names]
+                    unknown = [sp for sp in value if sp not in known]
                     if unknown:
                         raise ValueError(
                             f"bgc_compartment_overrides['{compartment_name}']['INITIAL_VALUE']: "
-                            f"unknown species {unknown}. Valid names: {chemical_species_names}")
+                            f"unknown species {unknown}. Valid names: {known}")
                     per_sp = {sp: value.get(sp, ic_all_value) for sp in chemical_species_names}
+                    # network species that are not output species (e.g. soil organic pools)
+                    for sp, v in value.items():
+                        per_sp.setdefault(sp, v)
                 else:
                     per_sp = {sp: value for sp in chemical_species_names}
                 comp_cfg["INITIAL_CONDITIONS"] = {

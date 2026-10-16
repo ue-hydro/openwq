@@ -754,7 +754,13 @@ configuration report, **Targets tab, card "Sub-basin cascade calibration"**:
    role can be changed per station.
 2. Tick *Calibrate sub-basins in cascade*, choose the zone-specific parameters (the
    others keep one global value), the evaluations per stage and what the ungauged
-   zone inherits, then download the script as usual.
+   zone inherits, then download the script as usual. Every eligible parameter is
+   ticked by default, so each zone is calibrated with its own values. Eligible are
+   the reaction-network rates, the load scale and the within-year shape of the
+   loads (the 12 monthly multipliers of `lulc_loads_dynamic_shape = "monthly"`, or
+   the harmonic amplitude and phase). Climate response, sediment and lateral
+   exchange parameters have one value per domain in openWQ and stay global. A
+   parameter searched on a log scale keeps it for its zone values.
 3. `python <run>.py --clean` runs the stages inside the work directory:
    `stage_00_global/` (one value per parameter, all target stations), then one
    `stage_NN_levelL/` per level (zone values free, upstream zones frozen, scored at
@@ -769,5 +775,9 @@ compartments and the reach table the river compartment (their cell indices
 overlap, so the rows carry explicit compartment indices read from
 `openwq_out/openwq_compartments.json`); a parameter
 already regionalized there is left to the ML mapping. Layer-2 closures keep one set
-of weights for the domain. The objective of a stage is pooled over the stations of
+of weights for the domain. The within-year load shape varies in time, so its zone
+values multiply the load rows of the zone's own cells instead of a per-cell map
+(cells outside the zones keep the global shape). A frozen zone keeps its values in
+every land unit (all land compartments) and every reach that drains to its station.
+The objective of a stage is pooled over the stations of
 that level; `wq_zones/cascade_summary.json` holds the per-station values.

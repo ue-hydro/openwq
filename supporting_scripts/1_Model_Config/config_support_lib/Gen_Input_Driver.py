@@ -385,6 +385,79 @@ def extract_cycling_frameworks_from_bgc(
     return framework_names
 
 
+def _warn_reactions_without_substrate(
+        path2selected_NATIVE_BGC_FLEX_framework: str,
+        output_species: List[str],
+        compartment_overrides: Optional[Dict[str, dict]] = None,
+) -> List[str]:
+    """Warn about reactions of a NATIVE_BGC_FLEX network that can never run.
+
+    Initial values are written for the output species (``chemical_species``)
+    and for the species named in a per-compartment INITIAL_VALUE dict; every
+    other species starts at zero. A reaction whose kinetics reference a species
+    that starts at zero everywhere and is produced by no running reaction has a
+    rate of zero for the whole run, so its parameters have no effect (they are
+    inert in a calibration). Source/sink loads are not known here, so a species
+    that only receives loads is reported too. Returns the names of those
+    reactions."""
+    try:
+        with open(path2selected_NATIVE_BGC_FLEX_framework, 'r') as f:
+            bgc = json.load(f)
+    except Exception:
+        return []
+    started = set(output_species or [])
+    for settings in (compartment_overrides or {}).values():
+        iv = (settings or {}).get("INITIAL_VALUE")
+        if isinstance(iv, dict):
+            started.update(sp for sp, v in iv.items() if float(v) > 0)
+    try:
+        species = list(bgc["CHEMICAL_SPECIES"]["LIST"].values())
+    except Exception:
+        return []
+
+    def _refs(expr: str):
+        return {sp for sp in species
+                if re.search(r'(?<![A-Za-z0-9_])' + re.escape(sp) + r'(?![A-Za-z0-9_])', expr)}
+
+    reactions = []
+    for fw, block in (bgc.get("CYCLING_FRAMEWORKS") or {}).items():
+        if fw.startswith("_") or not isinstance(block, dict):
+            continue
+        for key, r in block.items():
+            if not isinstance(r, dict) or "KINETICS" not in r:
+                continue
+            kin = r["KINETICS"][0] if isinstance(r["KINETICS"], list) else str(r["KINETICS"])
+            needs = _refs(str(kin))
+            consumed = str(r.get("CONSUMED", "NONE"))
+            if consumed.upper() != "NONE":
+                needs.add(consumed)
+            reactions.append((f"{fw}:{r.get('_NAME', key)}", needs, str(r.get("PRODUCED", "NONE"))))
+
+    live = set(started)
+    running = set()
+    changed = True
+    while changed:
+        changed = False
+        for name, needs, produced in reactions:
+            if name not in running and needs <= live:
+                running.add(name)
+                if produced.upper() != "NONE" and produced not in live:
+                    live.add(produced)
+                changed = True
+    dead = [(name, sorted(needs - live)) for name, needs, _ in reactions if name not in running]
+    if dead:
+        missing = sorted({sp for _, m in dead for sp in m})
+        print(f"WARNING: {len(dead)} reaction(s) of the reaction network can never run: "
+              f"they need {missing}, which start at zero in every compartment and are "
+              f"produced by no running reaction (unless a source/sink load adds them). "
+              f"Their parameters have no effect, so leave them out of a calibration, or "
+              f"give these species a starting value with bgc_compartment_overrides "
+              f"(\"INITIAL_VALUE\": {{species: value}}).")
+        for name, m in dead:
+            print(f"    {name}  (needs {', '.join(m)})")
+    return [name for name, _ in dead]
+
+
 def _get_docker_container_name(docker_compose_path: str) -> str:
     """
     Extract the container_name from docker-compose.yml.
@@ -988,6 +1061,12 @@ def Gen_Input_Driver(
         cycling_fw_names = extract_cycling_frameworks_from_bgc(
             path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework
         )
+        try:
+            bgc_species = extract_species_from_bgc(
+                "NATIVE_BGC_FLEX",
+                path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework)
+        except Exception:
+            bgc_species = None
         cJSON_lib.create_config_json(
             config_file_fullpath=config_file_fullpath,
             json_header_comment=json_header_comment,
@@ -997,7 +1076,11 @@ def Gen_Input_Driver(
             ic_all_value=ic_all_value,
             ic_all_units=ic_all_units,
             compartment_overrides=kwargs.get("bgc_compartment_overrides"),
+            bgc_species_names=bgc_species,
         )
+        _warn_reactions_without_substrate(
+            path2selected_NATIVE_BGC_FLEX_framework, chemical_species,
+            kwargs.get("bgc_compartment_overrides"))
 
     ###############
     # Call create_td_module_json
