@@ -360,6 +360,9 @@ def create_phreeqc_module_json(
             dependency variable names for temperature (e.g., {"RIVER_NETWORK_REACHES": "T"})
             NOTE: Temperature is now provided in °C (converted from Kelvin in the coupler).
             For MIZUROUTE, use "T" (°C). For SUMMA, use "Tair_K" or "Tsoil_K".
+            A value can also be a linear relation to a variable,
+            {"DEPENDENCY": "Tair_K", "LINEAR": [a, b]} for T = a + b * variable (°C),
+            e.g. stream temperature from air temperature.
         phreeqc_pressure_mapping: Optional dict mapping compartment names to
             dependency variable names for pressure (in atm)
     """

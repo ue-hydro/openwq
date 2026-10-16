@@ -730,6 +730,17 @@ class ModelRunner:
 
         except subprocess.TimeoutExpired as e:
             self._dump_partial_log(eval_dir, e)
+            # The timeout kills `docker exec`, i.e. the client only: the model
+            # keeps running inside the container and competes with the next
+            # evaluations. Stop it there too (its command line holds this
+            # evaluation's folder).
+            try:
+                subprocess.run(["docker", "exec", self.docker_container_name,
+                                "pkill", "-f", container_eval_dir.rstrip("/") + "/"],
+                               capture_output=True, text=True, timeout=30)
+            except Exception as _e:
+                logger.warning(f"{eval_dir.name}: could not stop the timed-out model "
+                               f"in the container ({_e})")
             return False, f"Timeout after {self.timeout_seconds} seconds"
         except Exception as e:
             return False, str(e)

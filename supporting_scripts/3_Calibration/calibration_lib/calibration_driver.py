@@ -647,6 +647,9 @@ def run_calibration(
         file_manager_path=file_manager_path,
         executable_full_path=executable_full_path,
         command_template=command_template,
+        # Wall-clock limit of one model run (s); an evaluation that takes
+        # longer is stopped and scored as failed. Raise it for slow set-ups.
+        timeout_seconds=int(kwargs.get("model_timeout_seconds") or 7200),
         hostmodel=(model_config.get("hostmodel", "") if model_config else ""),
         mizuroute_config_path=mizuroute_config_path,
         calibration_work_dir=calibration_work_dir,
@@ -2812,6 +2815,7 @@ def run_sensitivity_analysis(**kwargs) -> Dict:
         file_manager_path=kwargs.get('file_manager_path'),
         executable_full_path=kwargs.get('executable_full_path'),
         command_template=kwargs.get('command_template'),
+        timeout_seconds=int(kwargs.get("model_timeout_seconds") or 7200),
         hostmodel=(_model_config.get("hostmodel", "") if _model_config else ""),
         mizuroute_config_path=(kwargs.get('mizuroute_config_path')
                                or (_model_config or {}).get('mizuroute_config_path') or None),

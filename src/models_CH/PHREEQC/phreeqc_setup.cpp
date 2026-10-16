@@ -18,6 +18,7 @@
 #include "models_CH/headerfile_CH.hpp"
 #include <unistd.h>  // for getcwd
 #include <climits>   // for PATH_MAX
+#include <algorithm> // for std::max
 
 // Helper function to resolve relative paths
 static std::string resolve_path(const std::string& path) {
@@ -56,9 +57,12 @@ void OpenWQ_CH_model::phreeqc_setup(
         nxyz += nx*ny*nz;
     }
 
-    // Use single thread for PhreeqcRM to avoid threading issues in calc_dens()
-    // TODO: investigate multi-threaded PhreeqcRM crashes
-    int nthreads = 1;  // OpenWQ_wqconfig.get_num_threads_requested();
+    // PhreeqcRM splits its cells over the threads requested in the master file
+    // (COMPUTATIONAL_SETTINGS > USE_NUM_THREADS). It was fixed at one thread
+    // because calc_dens() crashed with several; density and saturation are now
+    // set by OpenWQ before every RunCells (UseSolutionDensityVolume(false)), so
+    // PHREEQC no longer computes them.
+    int nthreads = std::max(1, OpenWQ_wqconfig.get_num_threads_requested());
     std::string msg_string = "<OpenWQ> PHREEQC: Creating PhreeqcRM with nxyz=" + std::to_string(nxyz)
         + ", nthreads=" + std::to_string(nthreads);
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
