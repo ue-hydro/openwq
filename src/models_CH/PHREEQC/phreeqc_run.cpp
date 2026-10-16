@@ -96,8 +96,22 @@ void OpenWQ_CH_model::phreeqc_run(
         ny = OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp); // num of y elements
         nz = OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp); // num of z elements
         compName_icmp = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
+        // Water temperature of the compartment: a host variable ("Tsoil_K"),
+        // or a linear relation to one, {"DEPENDENCY": "Tair_K", "LINEAR": [a, b]}
+        // for T = a + b * variable (C), e.g. stream temperature from air
+        // temperature. Below 0 C it is set to 0 C further down.
+        double temp_a = 0.0, temp_b = 1.0;
         try {
-            dependancy = OpenWQ_json.BGC_module["TEMPERATURE"][compName_icmp];
+            const json& temp_map = OpenWQ_json.BGC_module["TEMPERATURE"][compName_icmp];
+            if (temp_map.is_object()) {
+                dependancy = temp_map.at("DEPENDENCY").get<std::string>();
+                if (temp_map.contains("LINEAR")) {
+                    temp_a = temp_map["LINEAR"].at(0).get<double>();
+                    temp_b = temp_map["LINEAR"].at(1).get<double>();
+                }
+            } else {
+                dependancy = temp_map.get<std::string>();
+            }
             temperature_indx = -1;
             for (ndep = 0; ndep < OpenWQ_hostModelconfig.get_num_HydroDepend(); ndep ++) {
                 if (phreeqc_same_name(OpenWQ_hostModelconfig.get_HydroDepend_name_at(ndep), dependancy)) temperature_indx = ndep;
@@ -164,7 +178,7 @@ void OpenWQ_CH_model::phreeqc_run(
                             // Likely Kelvin - convert to Celsius
                             temp_val = temp_val - 273.15;
                         }
-                        temperatures[indx] = temp_val;
+                        temperatures[indx] = temp_a + temp_b * temp_val;
                     }
                     if (pressure_indx != -1) {
                         pressures[indx] = OpenWQ_hostModelconfig.get_dependVar_at(pressure_indx, ix, iy, iz);

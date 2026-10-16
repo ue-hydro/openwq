@@ -197,6 +197,9 @@ phreeqc_component_h2o = True
 # NOTE: OpenWQ auto-converts Kelvin → Celsius (detects K if value > 100).
 #   mizuRoute: use "T"  (°C, converted from basinAirTemp)
 #   SUMMA:     use "Tair_K" or "Tsoil_K"
+#   A linear relation to a variable is also accepted, T = a + b * variable (°C):
+#     {"RIVER_NETWORK_REACHES": {"DEPENDENCY": "Tair_K", "LINEAR": [7.6, 0.60]}}
+#   (stream temperature from air temperature; values below 0 °C are set to 0 °C)
 # Available compartment names (must match compartments_and_cells keys):
 #   mizuRoute : RIVER_NETWORK_REACHES
 #   SUMMA     : SCALARCANOPYWAT, ILAYERVOLFRACWAT_SNOW, RUNOFF,
