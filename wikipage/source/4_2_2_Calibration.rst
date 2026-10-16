@@ -529,8 +529,20 @@ from stage to stage is which values are free and which station is scored:
      - all target stations
 
 Zones on separate tributaries with the same position in the network belong to
-the same level and are calibrated in the same stage. Parameters not marked as
-zone-specific keep their global value everywhere. Because the upstream values
+the same level and are calibrated in the same stage. A frozen zone keeps its
+values in every land unit (all land compartments) and every reach that drains
+to its station. Parameters not marked as zone-specific keep their global value
+everywhere.
+
+**Zone-specific parameters.** Eligible are the reaction-network rates, the load
+scale and the within-year shape of the loads (the 12 monthly multipliers of
+``lulc_loads_dynamic_shape = "monthly"``, or the harmonic amplitude and phase);
+all of them are ticked by default. The rates and the load scale are written as
+per-cell maps on the zone tables. The load shape varies in time, so its zone
+values multiply the load rows of the zone's own cells, and cells outside the
+zones keep the global shape. A parameter searched on a log scale keeps it for
+its zone values. Climate response, sediment and lateral exchange parameters
+have one value per domain in openWQ and stay global. Because the upstream values
 are fixed when a downstream zone is calibrated, that zone absorbs the errors
 left upstream; the global stage gives every zone a sensible starting value and
 the polish stage can redistribute the corrections.

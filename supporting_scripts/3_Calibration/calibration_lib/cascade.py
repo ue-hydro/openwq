@@ -21,7 +21,10 @@ sub-folders of the work directory:
 Zone-specific values travel as Layer-1 ``per_class`` sub-parameters on the
 ``wq_zone`` attribute (see :mod:`wq_zones`), so the parameter handler writes
 them as the usual per-cell maps and the ML tab of the report can combine them
-with any other regionalization. Results of the last stage are copied to
+with any other regionalization. The within-year shape of the loads (monthly
+multipliers, harmonic amplitude and phase) varies in time, so its zone values
+multiply the load rows of the zone's cells instead (``path["zone"]``, applied
+by ``ParameterHandler._apply_ss_loads``). Results of the last stage are copied to
 ``<work_dir>/results`` so the standard results report works, and
 ``<work_dir>/wq_zones/cascade_summary.json`` holds the per-zone values and fits.
 
@@ -57,15 +60,23 @@ STAGE_PARAMS_FILE = "cascade_stage_params.json"
 # helpers
 # ---------------------------------------------------------------------------
 # Parameter types that can carry one value per zone: reaction-network rate
-# parameters and the sink/source load scale (written as per-cell maps). The
-# other types (climate response and shape of the loads, sediment, lateral
-# exchange) stay global.
-_ZONE_ELIGIBLE_PREFIXES = ("bgc_json", "ss_csv_scale")
+# parameters and the sink/source load scale (written as per-cell maps), and the
+# within-year shape of the loads (monthly multipliers, harmonic amplitude and
+# phase), applied to the load rows of each zone's own cells. The other types
+# (climate response of the loads, sediment, lateral exchange) stay global.
+_ZONE_ELIGIBLE_PREFIXES = ("bgc_json", "ss_csv_scale", "ss_seasonal_")
 
 
 def zone_eligible(param: Dict[str, Any]) -> bool:
     ft = str(param.get("file_type", ""))
     return any(ft.startswith(x) for x in _ZONE_ELIGIBLE_PREFIXES)
+
+
+def _row_zoned(param: Dict[str, Any]) -> bool:
+    """Load-shape parameters: their zone values multiply the load rows of the
+    zone's cells (time-varying), not a per-cell map. The global parameter stays
+    in the run as the value of every cell outside the zones being set."""
+    return str(param.get("file_type", "")).startswith("ss_seasonal_")
 
 
 def _untag(name: str):
@@ -248,6 +259,35 @@ def run_cascade(**call) -> Dict[str, Any]:
     def _river_table_for(p):
         return tables["reaches"] if _coupled else None
 
+    def _zone_subparams(p, classes: Dict[str, List[float]], default: float) -> List[Dict[str, Any]]:
+        """One sub-parameter per zone in ``classes`` ({zone: [lo, hi]}), each
+        tagged with its parent (``regionalize_of`` or ``zone_of``) and its zone
+        (``subparam_key``). Rates and the load scale become per-cell maps on the
+        zone tables; load-shape parameters become row multipliers of the zone."""
+        if _row_zoned(p):
+            path = dict(p.get("path") or {})
+            subs = []
+            for z, (lo, hi) in classes.items():
+                s = {k: v for k, v in p.items() if k not in ("value",)}
+                s.update({
+                    "name": f"{p['name']}@{z}",
+                    "path": {**path, "zone": int(z), "zone_table": _table_for(p),
+                             "zone_table_river": _river_table_for(p)},
+                    "bounds": (float(lo), float(hi)),
+                    "initial": float(default),
+                    "zone_of": p["name"],
+                    "subparam_key": str(z),
+                    "description": f"{p.get('description', p['name'])} · zone {z}",
+                })
+                subs.append(s)
+            return subs
+        spec = _zone_spec(p, classes, default, _table_for(p), _river_table_for(p))
+        subs = _ep.apply_regionalize_to_params([dict(p)], {p["name"]: spec})
+        return [s for s in subs if s.get("regionalize_group")]
+
+    def _parent_of(s) -> str:
+        return s.get("regionalize_of") or s.get("zone_of")
+
     # bookkeeping across stages
     zone_values: Dict[str, Dict[int, float]] = {p["name"]: {} for p in zone_params}
     summary: Dict[str, Any] = {"schema": "openwq_cascade/1", "zones": zones["zones"],
@@ -330,14 +370,15 @@ def run_cascade(**call) -> Dict[str, Any]:
         stage_dir = work_dir / f"stage_{stage_no:02d}_level{level}"
         stations = sorted(station_of[z] for z in zone_ids)
         free: List[Dict[str, Any]] = []
-        fixed: List[Dict[str, Any]] = [dict(f) for f in global_fixed if f["name"] not in zone_values]
+        # load-shape parameters keep their global value as the base of the
+        # cells outside the zones being set (the per-cell maps use a DEFAULT)
+        fixed: List[Dict[str, Any]] = [dict(f) for f in global_fixed
+                                       if f["name"] not in zone_values or _row_zoned(f)]
         for p in zone_params:
             gval = float(global_best.get(p["name"], p["initial"]))
             lo, hi = float(p["bounds"][0]), float(p["bounds"][1])
             classes = {str(z): [lo, hi] for z in zone_ids}
-            spec = _zone_spec(p, classes, gval, _table_for(p), _river_table_for(p))
-            subs = _ep.apply_regionalize_to_params([dict(p)], {p["name"]: spec})
-            subs = [s for s in subs if s.get("regionalize_group")]
+            subs = _zone_subparams(p, classes, gval)
             for s in subs:
                 s["initial"] = gval
             free.extend(subs)
@@ -346,11 +387,9 @@ def run_cascade(**call) -> Dict[str, Any]:
             frozen[0] = wq_zones.inherit_value(zones, zone_values[p["name"]], gval, inherit)
             fclasses = {str(z): [v, v] for z, v in frozen.items()}
             if fclasses:
-                fspec = _zone_spec(p, fclasses, gval, _table_for(p), _river_table_for(p))
-                for s in _ep.apply_regionalize_to_params([dict(p)], {p["name"]: fspec}):
-                    if s.get("regionalize_group"):
-                        s["value"] = float(frozen[int(s["subparam_key"])])
-                        fixed.append(s)
+                for s in _zone_subparams(p, fclasses, gval):
+                    s["value"] = float(frozen[int(s["subparam_key"])])
+                    fixed.append(s)
         if resume and _stage_done(stage_dir):
             logger.info("Cascade stage %02d (level %d): already complete, reusing", stage_no, level)
         else:
@@ -362,7 +401,7 @@ def run_cascade(**call) -> Dict[str, Any]:
         best = _best_params(stage_dir)
         for s in free:
             if s["name"] in best:
-                zone_values[s["regionalize_of"]][int(s["subparam_key"])] = best[s["name"]]
+                zone_values[_parent_of(s)][int(s["subparam_key"])] = best[s["name"]]
         summary["stages"].append({"stage": stage_dir.name, "level": level, "zones": zone_ids,
                                   "stations": stations, "best": best,
                                   "fit": _station_fit(stage_dir, call.get("objective_function", "KGE"))})
@@ -375,16 +414,14 @@ def run_cascade(**call) -> Dict[str, Any]:
     last_dir = work_dir / (f"stage_{stage_no-1:02d}_level{len(zones['levels'])}" if zone_params else "stage_00_global")
     if zone_params and n_polish > 0:
         stage_dir = work_dir / f"stage_{stage_no:02d}_polish"
-        free, fixed = [], [dict(f) for f in global_fixed if f["name"] not in zone_values]
+        free, fixed = [], [dict(f) for f in global_fixed
+                           if f["name"] not in zone_values or _row_zoned(f)]
         for p in zone_params:
             gval = float(global_best.get(p["name"], p["initial"]))
             lo, hi = float(p["bounds"][0]), float(p["bounds"][1])
             classes = {str(z): [lo, hi] for z in zone_values[p["name"]]}
             classes["0"] = [lo, hi]
-            spec = _zone_spec(p, classes, gval, _table_for(p), _river_table_for(p))
-            for s in _ep.apply_regionalize_to_params([dict(p)], {p["name"]: spec}):
-                if not s.get("regionalize_group"):
-                    continue
+            for s in _zone_subparams(p, classes, gval):
                 z = int(s["subparam_key"])
                 s["initial"] = float(zone_values[p["name"]].get(z,
                                      wq_zones.inherit_value(zones, zone_values[p["name"]], gval, inherit)))
@@ -397,7 +434,7 @@ def run_cascade(**call) -> Dict[str, Any]:
         best = _best_params(stage_dir)
         for s in free:
             if s["name"] in best:
-                zone_values[s["regionalize_of"]][int(s["subparam_key"])] = best[s["name"]]
+                zone_values[_parent_of(s)][int(s["subparam_key"])] = best[s["name"]]
         summary["stages"].append({"stage": stage_dir.name, "level": "polish", "zones": [z["id"] for z in zones["zones"]],
                                   "stations": all_stations, "best": best,
                                   "fit": _station_fit(stage_dir, call.get("objective_function", "KGE"))})
@@ -407,8 +444,8 @@ def run_cascade(**call) -> Dict[str, Any]:
 
     # ── expose the final stage as the run's results ──
     res_dir = work_dir / "results"
+    res_dir.mkdir(exist_ok=True)
     if (last_dir / "results").is_dir():
-        res_dir.mkdir(exist_ok=True)
         for f in (last_dir / "results").iterdir():
             if f.is_file():
                 shutil.copy2(f, res_dir / f.name)

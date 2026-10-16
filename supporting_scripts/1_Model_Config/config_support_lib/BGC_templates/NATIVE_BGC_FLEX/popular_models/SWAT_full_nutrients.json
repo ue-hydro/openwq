@@ -31,17 +31,12 @@
         "BGC_GENERAL_MOBILE_SPECIES": [
             "NO3-N",
             "NH4-N",
-            "ORG_N_active",
             "ORG_N_fresh",
             "PO4-P_sol",
-            "PO4-P_active",
-            "PO4-P_stable",
-            "ORG_P_humus",
             "ORG_P_fresh",
-            "ORG_C_active",
-            "ORG_C_fresh",
             "ALGAE"
         ],
+        "_MOBILE_SPECIES_NOTE": "Moved with the water: the dissolved nutrients, algae and the fresh organic N and P (the organic forms of the in-stream reactions). The soil pools stay where they are, as in SWAT: humus N (ORG_N_active), humus P (ORG_P_humus), the sorbed and stable mineral P (PO4-P_active, PO4-P_stable) and the organic carbon (ORG_C_active, ORG_C_fresh). They only change through the reactions, so a starting value in a soil compartment (bgc_compartment_overrides INITIAL_VALUE) stays in that soil instead of draining with the water.",
         "_LIST_DESCRIPTIONS": {
             "NO3-N": "Nitrate nitrogen",
             "NH4-N": "Ammonium nitrogen",

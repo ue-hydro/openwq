@@ -693,11 +693,16 @@ def apply_regionalize_to_params(params: List[Dict],
             return head + ":", rest, int(head[1:])
         return "", nm, None
 
-    def _expand(name, spec, path, model_index=None, units=None):
+    def _expand(name, spec, path, model_index=None, units=None, transform=None):
         """Expand one regionalize entry into its DDS sub-params, tagged with the
         right file_type / module so the parameter handler writes to the correct
         module file. Works whether the target param is a BGC param (path from
-        calibration_parameters) or a non-BGC module param (path baked in spec)."""
+        calibration_parameters) or a non-BGC module param (path baked in spec).
+
+        ``transform`` is the search transform of the parameter being expanded.
+        A per-class value (and a regression intercept) is a value of that same
+        parameter, so it keeps a "log" transform when its bounds are positive;
+        regression coefficients stay linear (their bounds may span zero)."""
         tag, base_id, mi = _untag(name)
         if model_index is not None:
             mi = model_index
@@ -708,6 +713,10 @@ def apply_regionalize_to_params(params: List[Dict],
         _attr = (spec.get("attribute")
                  or ", ".join(spec.get("attributes", []) or []))
         for s in subs:
+            if (str(transform or "").lower() == "log"
+                    and (_rung == "per_class" or s.get("subparam_key") == "intercept")
+                    and float(s["bounds"][0]) > 0):
+                s["transform"] = "log"
             if tag:
                 s["name"] = tag + s["name"]
             if mi is not None:
@@ -740,7 +749,8 @@ def apply_regionalize_to_params(params: List[Dict],
             consumed.add(key)
             path = spec.get("path") or p.get("path")
             subs = _expand(name, spec, path,
-                           model_index=p.get("model_index"), units=p.get("units"))
+                           model_index=p.get("model_index"), units=p.get("units"),
+                           transform=spec.get("transform") or p.get("transform"))
             out.extend(subs)
             logger.info(f"Regionalized {name}: {len(subs)} sub-params")
         else:
@@ -751,7 +761,8 @@ def apply_regionalize_to_params(params: List[Dict],
         if key in consumed or not isinstance(spec, dict):
             continue
         subs = _expand(key, spec, spec.get("path"),
-                       model_index=spec.get("model_index"))
+                       model_index=spec.get("model_index"),
+                       transform=spec.get("transform"))
         out.extend(subs)
         logger.info(f"Regionalized {key} (module): {len(subs)} sub-params")
     return out
@@ -1161,8 +1172,14 @@ def extract_all_module_parameters(
                                 seen_species.add(sp)
                                 ss_params.extend(_ss_params_for(sp))
 
-        # Climate response params (only when climate_dependency=True)
-        is_dynamic = _climate_dep
+        # Climate response params: only when the loads are dynamic AND climate
+        # dependent. With static loads the generator never applies the climate
+        # weighting, so these would be calibrated without any effect.
+        is_dynamic = _climate_dep and _lulc_loads == "dynamic"
+        if _climate_dep and not is_dynamic:
+            logger.warning("climate_dependency=True is ignored with lulc_loads='%s': "
+                           "the climate response parameters are not calibrated "
+                           "(they only act on dynamic loads)", _lulc_loads)
         if is_dynamic:
             psp = float(model_config.get("ss_climate_precip_scaling_power", 1.0))
             q10 = float(model_config.get("ss_climate_temp_q10", 2.0))

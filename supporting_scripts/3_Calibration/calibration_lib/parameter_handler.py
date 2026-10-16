@@ -47,6 +47,61 @@ except ImportError:                    # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
+def _cell_key(x) -> Optional[str]:
+    """Canonical id of a cell (``139``, ``"139"`` and ``139.0`` are the same)."""
+    try:
+        return str(int(float(x)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _read_zone_table(path) -> Dict[str, int]:
+    """``id -> wq_zone`` from a sub-basin zone table (``wq_zones`` writes them)."""
+    if not path or not os.path.isfile(str(path)):
+        return {}
+    df = pd.read_csv(path)
+    if "id" not in df.columns or "wq_zone" not in df.columns:
+        return {}
+    out = {}
+    for i, z in zip(df["id"], df["wq_zone"]):
+        k = _cell_key(i)
+        if k is not None:
+            out[k] = int(z)
+    return out
+
+
+class _ZonedMonthFactor:
+    """Load multiplier of a row from its month and its cell: cells of a zone
+    with its own load-shape values use that zone's month factor, every other
+    cell the base factor. Called with the month only (no cell), it returns the
+    base factor."""
+
+    def __init__(self, base, by_zone: Dict[int, Any],
+                 cell_zone: Dict[str, int], cell_zone_river: Dict[str, int]):
+        self.base = base
+        self.by_zone = by_zone
+        self.cell_zone = cell_zone
+        self.cell_zone_river = cell_zone_river
+        self.n_zoned = 0      # rows given a zone factor
+        self.n_unzoned = 0    # rows in cells of no zone with own values
+
+    @staticmethod
+    def _eval(f, m):
+        return f(m) if callable(f) else f
+
+    def __call__(self, m, cell=None, river: bool = False):
+        if cell is None:
+            return self._eval(self.base, m)
+        table = self.cell_zone_river if (river and self.cell_zone_river) else self.cell_zone
+        z = table.get(_cell_key(cell))
+        f = self.by_zone.get(z)
+        if f is None:
+            self.n_unzoned += 1
+            return self._eval(self.base, m)
+        self.n_zoned += 1
+        return self._eval(f, m)
+
+
 class ParameterHandler:
     """
     Handles reading, modifying, and writing parameter values to OpenWQ config files.
@@ -1688,6 +1743,12 @@ class ParameterHandler:
                 else:
                     rows = []
                 n_scaled = 0
+                # sub-basin load shape: the multiplier also depends on the
+                # row's cell (index 6), looked up in the zone table of the
+                # compartment family that receives this load
+                _zoned = isinstance(scale_factor, _ZonedMonthFactor)
+                _cname = str(entry.get("COMPARTMENT_NAME", "")).upper()
+                _river = ("RIVER" in _cname) or ("REACH" in _cname)
                 for row in rows:
                     if isinstance(row, list) and len(row) > 9:
                         try:
@@ -1696,7 +1757,8 @@ class ParameterHandler:
                                     _m = int(float(row[1]))
                                 except (ValueError, TypeError, IndexError):
                                     _m = 1
-                                _f = scale_factor(_m)
+                                _f = (scale_factor(_m, row[6], river=_river) if _zoned
+                                      else scale_factor(_m))
                             else:
                                 _f = scale_factor
                             row[9] = float(row[9]) * _f
@@ -1708,6 +1770,18 @@ class ParameterHandler:
                     logger.debug(
                         f"Scaled {n_scaled} inline-JSON SS load rows for "
                         f"'{chem_name}' ({'seasonal' if _is_seasonal else scale_factor})")
+
+        if isinstance(scale_factor, _ZonedMonthFactor):
+            if scale_factor.n_zoned == 0:
+                logger.warning(
+                    f"sub-basin load shape for '{species_filter}': no load row is in a cell "
+                    f"of a zone with its own values (CSV loads, rows for 'all' cells, or load "
+                    f"cell ids not in the zone tables); every row kept the global shape")
+            else:
+                logger.info(
+                    f"sub-basin load shape for '{species_filter}': {scale_factor.n_zoned} "
+                    f"load rows took their zone's values, {scale_factor.n_unzoned} the "
+                    f"global ones")
 
         # Persist inline-JSON edits back to the SS file.  (ASCII edits are
         # written to their own CSV files by _scale_csv_loads directly.)
@@ -1728,8 +1802,34 @@ class ParameterHandler:
             sp = (param.get("path") or {}).get("species", "all")
             by_sp.setdefault(sp, []).append((param, value))
         for sp, items in by_sp.items():
-            factor = self._build_month_factor(items)
+            base = [(p, v) for p, v in items if (p.get("path") or {}).get("zone") is None]
+            zoned = [(p, v) for p, v in items if (p.get("path") or {}).get("zone") is not None]
+            factor = self._build_month_factor(base)
+            if zoned:
+                factor = self._zoned_month_factor(base, zoned, factor)
             self._apply_ss_csv_scale(eval_dir, {"species": sp}, factor)
+
+    def _zoned_month_factor(self, base: list, zoned: list, base_factor):
+        """Sub-basin (cascade) load shape: the parameters carrying
+        ``path["zone"]`` replace their global parent (``zone_of``) in the cells
+        of that zone. Returns a :class:`_ZonedMonthFactor` that gives the
+        multiplier of a load row from its month and its cell id; cells outside
+        every zone keep ``base_factor``."""
+        by_zone: Dict[int, list] = {}
+        tables = (None, None)
+        for p, v in zoned:
+            pth = p.get("path") or {}
+            by_zone.setdefault(int(pth["zone"]), []).append((p, v))
+            if tables == (None, None):
+                tables = (pth.get("zone_table"), pth.get("zone_table_river"))
+        factors = {}
+        for z, items in by_zone.items():
+            merged = {p.get("name"): (p, v) for p, v in base}
+            for p, v in items:
+                merged[p.get("zone_of") or p.get("name")] = (p, v)
+            factors[z] = self._build_month_factor(list(merged.values()))
+        return _ZonedMonthFactor(base_factor, factors,
+                                 _read_zone_table(tables[0]), _read_zone_table(tables[1]))
 
     @staticmethod
     def _build_month_factor(items: list):

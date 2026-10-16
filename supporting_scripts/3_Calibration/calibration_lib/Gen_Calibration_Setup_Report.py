@@ -643,7 +643,13 @@ def _build_model_config_section(
                      _module_badge("per species"
                                    if model_config.get("species_dependency", True)
                                    else "shared (all species)")))
-        _uses_climate = _climate_dep
+        # the generator applies the climate weighting to dynamic loads only
+        _uses_climate = _climate_dep and _lulc_loads == "dynamic"
+        if _climate_dep and not _uses_climate:
+            rows.append(("&#8627; Climate dependency",
+                         _module_badge("ignored")
+                         + " &mdash; static loads are never climate weighted; "
+                           "set lulc_loads = \"dynamic\" to use it"))
         if _uses_climate:
             _cdt = model_config.get("ss_climate_data_type", "fixed_parameters")
             _cdt_label = ("time series &mdash; adjusted every time step"
@@ -4168,6 +4174,8 @@ def _build_cascade_card(info: Optional[Dict[str, Any]], feature_label: str = "Re
             upstream are free (one value per zone), everything else keeps its global value,
             and only the stations of those zones are scored. <b>Stage 2, 3, ...:</b> the next
             zones downstream, with the upstream zones frozen at their calibrated values.
+            A frozen zone keeps its values in every land unit (all land compartments) and
+            every reach that drains to its station.
             Zones on separate tributaries with the same position in the network share a stage.
             <b>Optional final polish:</b> every zone value free at once, scored at all stations,
             to redistribute the errors that downstream zones absorb from upstream ones.
@@ -4175,7 +4183,9 @@ def _build_cascade_card(info: Optional[Dict[str, Any]], feature_label: str = "Re
         <p style="font-size:.85rem;color:var(--text2);margin-bottom:.6rem;">
             Zone values are Layer-1 per-class values on the <code>wq_zone</code> attribute, so
             they combine with the Machine Learning tab (a parameter already regionalized there is
-            left to its mapping; Layer-2 closures keep one set of weights for the domain). Each
+            left to its mapping; Layer-2 closures keep one set of weights for the domain). The
+            within-year shape of the loads (monthly multipliers, or the harmonic amplitude and
+            phase) is applied to the load rows of each zone's own land units. Each
             stage is a complete calibration folder inside the work directory; <code>--resume</code>
             continues the interrupted stage and <code>--report</code> adds a Sub-basins section.
         </p>
@@ -4207,7 +4217,7 @@ def _build_cascade_card(info: Optional[Dict[str, Any]], feature_label: str = "Re
                     </select></div>
             </div>
             <div class="form-group" style="margin-top:.6rem;">
-                <label>Zone-specific parameters (reaction rates and the load scale selected in the Parameters tab; the others keep one global value)</label>
+                <label>Zone-specific parameters (reaction rates, the load scale and the within-year load shape selected in the Parameters tab; the others keep one global value)</label>
                 <div id="cascade-param-list" style="display:flex;flex-wrap:wrap;gap:.3rem .9rem;font-size:.82rem;"></div>
                 <p id="cascade-param-warn" style="display:none;color:#c2410c;font-size:.82rem;margin-top:.4rem;">
                     Tick at least one parameter: without zone-specific parameters only the global stage runs.</p>
@@ -4229,11 +4239,11 @@ def _build_cascade_card(info: Optional[Dict[str, Any]], feature_label: str = "Re
               try {{ o = JSON.parse(row.getAttribute('data-param') || 'null'); }} catch(e) {{ o = null; }}
               if(!o || !o.name) return;
               var ft = String(o.file_type || '');
-              // only reaction rates and the load scale can vary by zone
-              var ok = /^(bgc_json|ss_csv_scale)/.test(ft);
+              // reaction rates, the load scale and the within-year load shape can vary by zone
+              var ok = /^(bgc_json|ss_csv_scale|ss_seasonal_)/.test(ft);
               if(!ok) return;
-              // default: the load scale and the nitrification/denitrification rates
-              var dflt = /^SS_.*scale/i.test(o.name) || /_k_(nit|den)$/i.test(o.name);
+              // default: every eligible parameter, so each zone is calibrated with its own values
+              var dflt = true;
               var chk = (o.name in keep) ? keep[o.name] : dflt;
               if(chk) nOn++;
               html += '<label style="display:flex;align-items:center;gap:.3rem"><input type="checkbox" class="cascade-param-cb" value="'
