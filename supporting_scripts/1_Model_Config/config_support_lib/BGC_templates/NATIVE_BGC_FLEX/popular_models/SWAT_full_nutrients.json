@@ -3,7 +3,7 @@
     "_REFERENCE": "SWAT Theoretical Documentation (Neitsch et al., 2011)",
     "_MODEL": "Soil & Water Assessment Tool",
     "_VERSION": "1.0",
-    "_NOTES": "Comprehensive soil-water nutrient cycling mimicking SWAT model structure",
+    "_NOTES": "Comprehensive soil-water nutrient cycling mimicking SWAT model structure. Species symbols in KINETICS are masses (g) and the rate is a mass rate (g/day); a nonlinear term that needs a concentration divides the mass by the cell water volume Vw_m3 (g/m3 = mg/L)",
     "CHEMICAL_SPECIES": {
         "LIST": {
             "1": "NO3-N",
@@ -200,7 +200,7 @@
                 "CONSUMED": "NH4-N",
                 "PRODUCED": "NO3-N",
                 "KINETICS": [
-                    "k_nit * gamma_tmp * gamma_sw * (1 - exp(-c_n * NH4-N)) * NH4-N",
+                    "k_nit * gamma_tmp * gamma_sw * (1 - exp(-c_n * NH4-N / Vw_m3)) * NH4-N",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -227,7 +227,7 @@
                     },
                     "c_n": {
                         "VALUE": 0.1,
-                        "DESCRIPTION": "Nitrification constant"
+                        "DESCRIPTION": "Nitrification constant [L/mg]: saturation with the NH4-N concentration (NH4-N / Vw_m3)"
                     },
                     "gamma_sw": {
                         "VALUE": 1.0,
@@ -282,7 +282,7 @@
                 "CONSUMED": "NO3-N",
                 "PRODUCED": "N2_loss",
                 "KINETICS": [
-                    "k_den * gamma_tmp * ORG_C_active * (1 - exp(-c_den * NO3-N))",
+                    "k_den * gamma_tmp * ORG_C_active * (1 - exp(-c_den * NO3-N / Vw_m3))",
                     "1/day"
                 ],
                 "PARAMETER_NAMES": [
@@ -308,7 +308,7 @@
                     },
                     "c_den": {
                         "VALUE": 0.05,
-                        "DESCRIPTION": "Denitrification exponential constant"
+                        "DESCRIPTION": "Denitrification exponential constant [L/mg]: saturation with the NO3-N concentration (NO3-N / Vw_m3)"
                     },
                     "gamma_tmp": {
                         "VALUE": 1.0,

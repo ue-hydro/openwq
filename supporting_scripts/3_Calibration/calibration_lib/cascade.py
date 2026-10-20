@@ -31,7 +31,10 @@ by ``ParameterHandler._apply_ss_loads``). Results of the last stage are copied t
 ``cascade`` keys (all optional except ``enabled``):
     min_obs (20), target_reaches [..], excluded_reaches [..],
     zone_parameters [names], global_evaluations, stage_evaluations,
-    polish_evaluations (0 = none), inherit ("global" | "upstream" | "downstream_most")
+    polish_evaluations (0 = none), inherit ("global" | "upstream" | "downstream_most"),
+    load_shape_start ("observed" | "global"): where each zone's monthly load
+    multipliers start; "observed" (default) follows the observed seasonal cycle
+    at the zone's station (see :func:`_observed_load_start`)
 """
 
 import copy
@@ -120,6 +123,49 @@ def _zone_spec(param: Dict[str, Any], classes: Dict[str, List[float]], default: 
     if param.get("path"):
         spec["path"] = param["path"]
     return spec
+
+
+def _observed_load_start(obs_csv: str, station: int, species: str, period,
+                         global_months: Dict[int, float], beta: Optional[float]) -> Optional[Dict[int, float]]:
+    """Starting monthly load multipliers of a zone that follow the observed
+    seasonal cycle at its station (``load_shape_start = "observed"``).
+
+    Shape: mean observation per calendar month over the calibration period,
+    missing months filled by circular interpolation, smoothed over 3 months
+    and normalised to a mean of 1. Level: the annual sum of the global-stage
+    multipliers, divided by the station's bias in the global stage (``beta`` =
+    simulated / observed mean), the correction kept within a factor of 3.
+    Returns None (keep the global values) when fewer than 6 calendar months
+    have observations."""
+    try:
+        import pandas as pd
+        df = pd.read_csv(obs_csv)
+        tcol = "datetime" if "datetime" in df.columns else df.columns[0]
+        df[tcol] = pd.to_datetime(df[tcol], errors="coerce")
+        df = df[(df["reach_id"].astype(float).astype(int) == int(station))]
+        if species and "species" in df.columns and species in set(df["species"]):
+            df = df[df["species"] == species]
+        if period:
+            df = df[(df[tcol] >= pd.Timestamp(period[0])) & (df[tcol] < pd.Timestamp(period[1]))]
+        clim = df.groupby(df[tcol].dt.month)["value"].mean().dropna()
+    except Exception as e:
+        logger.warning(f"cascade: observed load shape not available for station {station}: {e}")
+        return None
+    if len(clim) < 6 or float(clim.mean()) <= 0:
+        return None
+    months = np.arange(1, 13)
+    known = clim.index.to_numpy(dtype=float)
+    vals = clim.to_numpy(dtype=float)
+    # circular interpolation over the gaps, then a 3-month circular mean
+    xs = np.concatenate([known - 12, known, known + 12])
+    ys = np.concatenate([vals, vals, vals])
+    filled = np.interp(months, xs, ys)
+    smooth = (np.roll(filled, 1) + filled + np.roll(filled, -1)) / 3.0
+    shape = smooth / smooth.mean()
+    total = float(sum(global_months.values()))
+    if beta and beta > 0:
+        total *= float(np.clip(1.0 / beta, 1.0 / 3.0, 3.0))
+    return {int(m): float(total / 12.0 * s) for m, s in zip(months, shape)}
 
 
 def _station_fit(stage_dir: Path, metric_name: str) -> Dict[str, Dict[str, float]]:
@@ -259,6 +305,27 @@ def run_cascade(**call) -> Dict[str, Any]:
     def _river_table_for(p):
         return tables["reaches"] if _coupled else None
 
+    # Mapping of the per-cell zone maps (cell ids -> openWQ indices): pinned to
+    # the output of a completed evaluation of the global stage, whose files are
+    # closed and never rewritten. The default search ends at the model's baseline
+    # output folder, which a forward run started there can be writing to (an
+    # unreadable HDF5 then leaves the zone maps at their default value).
+    pinned_mapping: Optional[str] = None
+
+    def _pin_mapping(stage_dir: Path) -> None:
+        nonlocal pinned_mapping
+        done = []
+        for f in (stage_dir / "evaluations").glob("eval_*/objective.txt"):
+            h5 = f.parent / "openwq_out" / "HDF5"
+            if h5.is_dir() and any(h5.glob("*.h5")):
+                try:
+                    done.append((float(open(f).readline().split()[1]), str(h5)))
+                except Exception:
+                    continue
+        if done:
+            pinned_mapping = sorted(done)[0][1]
+            logger.info("Cascade: zone maps use the cell mapping of %s", pinned_mapping)
+
     def _zone_subparams(p, classes: Dict[str, List[float]], default: float) -> List[Dict[str, Any]]:
         """One sub-parameter per zone in ``classes`` ({zone: [lo, hi]}), each
         tagged with its parent (``regionalize_of`` or ``zone_of``) and its zone
@@ -282,6 +349,8 @@ def run_cascade(**call) -> Dict[str, Any]:
                 subs.append(s)
             return subs
         spec = _zone_spec(p, classes, default, _table_for(p), _river_table_for(p))
+        if pinned_mapping:
+            spec["mapping_source"] = pinned_mapping
         subs = _ep.apply_regionalize_to_params([dict(p)], {p["name"]: spec})
         return [s for s in subs if s.get("regionalize_group")]
 
@@ -359,10 +428,52 @@ def run_cascade(**call) -> Dict[str, Any]:
                               "fit": _station_fit(g_dir, call.get("objective_function", "KGE"))})
     _save_summary()
     global_fixed = [{**p, "value": global_best.get(p["name"], p["initial"])} for p in params]
+    _pin_mapping(g_dir)
 
     # ── one stage per level ──
     n_stage = int(cfg.get("stage_evaluations") or call.get("max_evaluations") or 100)
     inherit = cfg.get("inherit", "global")
+
+    # Where the zone values of the monthly load multipliers start: "observed"
+    # (default) = the observed seasonal cycle at the zone's station, so the
+    # search refines a smooth shape; "global" = the global-stage values (a
+    # shape fitted to all stations at once, often dominated by one month).
+    load_start = str(cfg.get("load_shape_start", "observed")).lower()
+    month_start: Dict[int, Dict[str, Dict[int, float]]] = {}
+    if load_start == "observed":
+        month_params = [p for p in zone_params if str(p.get("file_type")) == "ss_seasonal_month"]
+        groups: Dict[str, Dict[int, float]] = {}
+        for p in month_params:
+            sp = str((p.get("path") or {}).get("species", "all"))
+            groups.setdefault(sp, {})[int(p["path"]["month"])] = float(global_best.get(p["name"], p["initial"]))
+        g_fit = summary["stages"][0].get("fit", {}) if summary["stages"] else {}
+        for z in zones["zones"]:
+            st = int(z["station_reach"])
+            pb = (g_fit.get(str(st)) or {}).get("pbias")
+            beta = (1.0 + float(pb) / 100.0) if pb is not None and pb == pb else None
+            for sp, gm in groups.items():
+                if len(gm) != 12:
+                    continue
+                obs_sp = sp if sp != "all" else (species[0] if species else None)
+                start = _observed_load_start(obs_csv, st, obs_sp, period, gm, beta)
+                if start:
+                    month_start.setdefault(z["id"], {})[sp] = start
+                    logger.info("Cascade: zone %s starts its monthly load multipliers (%s) from the observed "
+                                "seasonal cycle at station %s: %s", z["id"], sp, st,
+                                ", ".join(f"{start[m]:.3g}" for m in range(1, 13)))
+                else:
+                    logger.info("Cascade: zone %s keeps the global monthly load multipliers (%s) as its start "
+                                "(fewer than 6 months observed at station %s)", z["id"], sp, st)
+
+    def _start_value(p, z, gval):
+        if str(p.get("file_type")) != "ss_seasonal_month":
+            return gval
+        sp = str((p.get("path") or {}).get("species", "all"))
+        v = month_start.get(int(z), {}).get(sp, {}).get(int(p["path"]["month"]))
+        if v is None:
+            return gval
+        lo, hi = float(p["bounds"][0]), float(p["bounds"][1])
+        return float(min(max(v, lo), hi))
     stage_no = 1
     for level, zone_ids in enumerate(zones["levels"], start=1):
         if not zone_params:
@@ -380,7 +491,7 @@ def run_cascade(**call) -> Dict[str, Any]:
             classes = {str(z): [lo, hi] for z in zone_ids}
             subs = _zone_subparams(p, classes, gval)
             for s in subs:
-                s["initial"] = gval
+                s["initial"] = _start_value(p, s["subparam_key"], gval)
             free.extend(subs)
             # frozen classes: calibrated zones at their values, zone 0 at the inherited value
             frozen = dict(zone_values[p["name"]])
