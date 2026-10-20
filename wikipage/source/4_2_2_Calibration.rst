@@ -542,7 +542,12 @@ per-cell maps on the zone tables. The load shape varies in time, so its zone
 values multiply the load rows of the zone's own cells, and cells outside the
 zones keep the global shape. A parameter searched on a log scale keeps it for
 its zone values. Climate response, sediment and lateral exchange parameters
-have one value per domain in openWQ and stay global. Because the upstream values
+have one value per domain in openWQ and stay global. The monthly load multipliers of each zone start
+from the observed seasonal cycle at its station (monthly means over the
+calibration period, smoothed over three months, scaled by the station's bias
+in the global stage), so the search refines a smooth shape instead of the
+global stage's, which fits all stations at once; ``load_shape_start = "global"``
+keeps the global-stage values. Because the upstream values
 are fixed when a downstream zone is calibrated, that zone absorbs the errors
 left upstream; the global stage gives every zone a sensible starting value and
 the polish stage can redistribute the corrections.

@@ -4215,6 +4215,11 @@ def _build_cascade_card(info: Optional[Dict[str, Any]], feature_label: str = "Re
                         <option value="upstream">the area-weighted value of the zones draining into it</option>
                         <option value="downstream_most">the value of the most downstream zone</option>
                     </select></div>
+                <div class="form-group"><label for="cascade_load_start">Monthly load multipliers of a zone start from</label>
+                    <select class="form-select" id="cascade_load_start">
+                        <option value="observed" selected>the observed seasonal cycle at its station</option>
+                        <option value="global">the global-stage values</option>
+                    </select></div>
             </div>
             <div class="form-group" style="margin-top:.6rem;">
                 <label>Zone-specific parameters (reaction rates, the load scale and the within-year load shape selected in the Parameters tab; the others keep one global value)</label>
@@ -5607,7 +5612,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
         global_evaluations: _num('cascade_global_evals', s.max_evaluations),
         stage_evaluations: _num('cascade_stage_evals', s.max_evaluations),
         polish_evaluations: _num('cascade_polish_evals', 0),
-        inherit: ((document.getElementById('cascade_inherit') || {}).value) || 'global'};
+        inherit: ((document.getElementById('cascade_inherit') || {}).value) || 'global',
+        load_shape_start: ((document.getElementById('cascade_load_start') || {}).value) || 'observed'};
     }
 
     return s;

@@ -909,7 +909,11 @@ class ParameterHandler:
             mapper = None
 
         result = (attributes, mapper)
-        self._regionalize_cache[cache_key] = result
+        # A failed mapping is not cached: the source can be unreadable for a
+        # while (e.g. a model run writing into it), and caching the failure would
+        # leave every later evaluation of the run with a DEFAULT-only map.
+        if mapper is not None:
+            self._regionalize_cache[cache_key] = result
 
         # Coupled SUMMA + mizuRoute: the reaches have their own id space and
         # compartment; load their mapper (and attribute table, when the spec

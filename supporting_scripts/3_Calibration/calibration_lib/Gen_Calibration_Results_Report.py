@@ -436,6 +436,7 @@ def generate_results_report(
                         model_config, calibration_settings,
                         performance_metrics=performance_metrics,
                         matched_data=matched_data,
+                        output_dir=output_dir,
                     )
                 except Exception as _e:
                     logger.warning(f"Observation map skipped: {_e}")
@@ -1546,6 +1547,191 @@ def _build_ml_runtime_cards(output_dir, eval_dir):
     return cards, n_units_max
 
 
+def _cascade_scores_land(settings) -> bool:
+    """True when the calibration scores a land compartment (e.g. a SUMMA soil
+    layer) rather than the river reaches: the results then name each station by
+    the HRU it was matched to, not by its reach."""
+    comps = (((settings or {}).get("calibration_targets") or {}).get("compartments") or [])
+    return any(str(c).upper() != "RIVER_NETWORK_REACHES" for c in comps)
+
+
+def _cascade_zone_sources(output_dir, settings=None) -> List[Dict[str, Any]]:
+    """For a sub-basin cascade report (empty list otherwise): every gauged zone,
+    in calibration order, with the stage whose results represent it.
+
+    Each item: ``{"zone", "station", "ids", "stage_dir", "label", "final",
+    "n_evals"}``; ``ids`` are the result ids (``reach_id`` column) of the zone's
+    station in that stage. A zone takes the polish stage when one exists, else
+    its own level stage once that has results (``final`` when the stage is
+    complete, best so far while it runs), else the global stage (zone not
+    calibrated yet). When a land compartment is scored the station is found by
+    its reach or by any HRU of its zone (each zone holds its station's HRU and
+    no other station's), so it also works where HRU and reach ids differ."""
+    import glob as _glob
+    ctx = _cascade_context(output_dir)
+    if not ctx:
+        return []
+    S, _stage, _stations = ctx
+    od = str(output_dir).rstrip("/")
+    top = od if os.path.isdir(os.path.join(od, "wq_zones")) else os.path.dirname(od)
+    stages = {os.path.basename(d): d for d in _glob.glob(os.path.join(top, "stage_[0-9][0-9]_*"))
+              if os.path.isdir(d)}
+    polish = next((d for n, d in sorted(stages.items()) if n.endswith("_polish")), None)
+    done_names = {st.get("stage") for st in S.get("stages", [])}
+    land = _cascade_scores_land(settings)
+
+    def _zone_ids(z):
+        ids = {int(z["station_reach"])}
+        if land:
+            ids |= {int(h) for h in (z.get("hrus") or [])}
+        return ids
+
+    def _station_ids(stage_dir, zone):
+        f = os.path.join(stage_dir, "results", "matched_data.csv")
+        if not os.path.isfile(f):
+            return set()
+        try:
+            d = pd.read_csv(f, usecols=["reach_id"])
+        except Exception:
+            return set()
+        r = pd.to_numeric(d["reach_id"], errors="coerce").dropna().astype(int)
+        return {int(x) for x in r.unique() if int(x) in _zone_ids(zone)}
+
+    def _n_done(stage_dir):
+        return len([f for f in _glob.glob(os.path.join(stage_dir, "evaluations", "eval_*", "objective.txt"))
+                    if "eval_999999" not in f])
+
+    out = []
+    for z in sorted(S["zones"], key=lambda q: (q.get("level", 0), q["id"])):
+        st = int(z["station_reach"])
+        cands = []
+        if polish:
+            cands.append((polish, "polish"))
+        lv = next((d for n, d in sorted(stages.items()) if n.endswith(f"_level{z.get('level')}")), None)
+        if lv:
+            cands.append((lv, f"zone {z['id']}"))
+        if "stage_00_global" in stages:
+            cands.append((stages["stage_00_global"], "global stage"))
+        for d, label in cands:
+            ids = _station_ids(d, z)
+            if ids:
+                n = _n_done(d)
+                final = os.path.basename(d) in done_names
+                if label != "global stage":
+                    label += " · final" if final else f" · best so far ({n} evaluations)"
+                out.append({"zone": z, "station": st, "ids": sorted(ids), "stage_dir": d,
+                            "label": label, "final": final, "n_evals": n})
+                break
+    return out
+
+
+def _cascade_station_fits(output_dir, settings=None) -> Dict[str, Dict[str, Any]]:
+    """Fit of every gauged zone's station from the stage that calibrates it, for
+    the observation map of a sub-basin cascade report (empty outside a cascade).
+
+    ``{result_id: {"source": label, "by_species": {species: metrics}}}`` keyed by
+    the id the results use for the station (its reach, or its HRU when a land
+    compartment is scored), which is also the map feature the station matched;
+    the stage is chosen by :func:`_cascade_zone_sources`."""
+    try:
+        from .objective_functions import ObjectiveFunction as _OF
+    except ImportError:                              # pragma: no cover
+        from objective_functions import ObjectiveFunction as _OF
+
+    def _metrics(o, s):
+        o = np.asarray(o, dtype=float); s = np.asarray(s, dtype=float)
+        k = ~(np.isnan(o) | np.isnan(s)); o, s = o[k], s[k]
+        if o.size < 2:
+            return None
+        r = float(np.corrcoef(o, s)[0, 1]) if np.std(o) > 0 and np.std(s) > 0 else float("nan")
+        return {"KGE": float(_OF.kge(o, s)), "NSE": float(_OF.nse(o, s)), "RMSE": float(_OF.rmse(o, s)),
+                "PBIAS": float(_OF.pbias(o, s)), "R2": (r * r if r == r else None)}
+
+    def _stage_fit(stage_dir, rid):
+        f = os.path.join(stage_dir, "results", "matched_data.csv")
+        if not os.path.isfile(f):
+            return None
+        try:
+            d = pd.read_csv(f)
+        except Exception:
+            return None
+        d = d[pd.to_numeric(d["reach_id"], errors="coerce") == int(rid)]
+        out = {}
+        for sp, g in (d.groupby("species") if "species" in d.columns else [("", d)]):
+            m = _metrics(g["observed"], g["simulated"])
+            if m:
+                out[str(sp)] = m
+        return out or None
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for src in _cascade_zone_sources(output_dir, settings):
+        for rid in src["ids"]:
+            fit = _stage_fit(src["stage_dir"], rid)
+            if fit:
+                out[str(rid)] = {"source": src["label"], "by_species": fit}
+    return out
+
+
+def _cascade_zone_timeseries(output_dir, settings, model_config) -> str:
+    """Observed-vs-simulated blocks of a sub-basin cascade report, one per gauged
+    zone in calibration order: the zone's station with ALL simulations of the
+    stage that represents it (gray) and that stage's best fit, from the stage's
+    own ``results/`` files (empty string outside a cascade)."""
+    sources = _cascade_zone_sources(output_dir, settings)
+    if not sources:
+        return ""
+    try:
+        from .objective_functions import ObjectiveFunction as _OF
+    except ImportError:                              # pragma: no cover
+        from objective_functions import ObjectiveFunction as _OF
+    hostmodel = (model_config or {}).get("hostmodel") or "mizuroute"
+    of_species = [str(s) for s in (((settings or {}).get("calibration_targets") or {}).get("species") or [])]
+
+    def _read(stage_dir, name, ids):
+        f = os.path.join(stage_dir, "results", name)
+        if not os.path.isfile(f):
+            return None
+        try:
+            d = pd.read_csv(f)
+        except Exception:
+            return None
+        if "reach_id" not in d.columns:
+            return None
+        return d[pd.to_numeric(d["reach_id"], errors="coerce").isin([int(i) for i in ids])].copy()
+
+    blocks = []
+    for src in sources:
+        d, st, z = src["stage_dir"], src["station"], src["zone"]
+        md = _read(d, "matched_data.csv", src["ids"])
+        if md is None or md.empty:
+            continue
+        sim = _collapse_subunit_dups(_read(d, "simulated_data.csv", src["ids"]), settings)
+        alls = _collapse_subunit_dups(_read(d, "all_simulated.csv", src["ids"]), settings,
+                                      extra_keys=["eval_id", "chain"])
+        fit_txt = []
+        for sp, g in md.groupby("species") if "species" in md.columns else [("", md)]:
+            o, s = g["observed"].to_numpy(float), g["simulated"].to_numpy(float)
+            k = ~(np.isnan(o) | np.isnan(s))
+            if k.sum() >= 2:
+                fit_txt.append(f"{sp} KGE <b>{float(_OF.kge(o[k], s[k])):.2f}</b>")
+        best = _best_eval_number(d)
+        n_sims = (alls["eval_id"].nunique() if alls is not None and "eval_id" in alls.columns
+                  else src["n_evals"])
+        charts = _generate_timeseries_charts(md, d, hostmodel=hostmodel, simulated_data=sim,
+                                             of_species=of_species, all_sim=alls, best_eval=best)
+        if not charts:
+            continue
+        colour = "var(--secondary)" if src["final"] else ("#ff6b35" if "best so far" in src["label"] else "var(--text2)")
+        blocks.append(
+            f'<h3 style="margin:1.4rem 0 .3rem;">Zone {z["id"]} &middot; station reach {st}'
+            f' <span style="font-weight:400;font-size:.85rem;color:{colour};">({src["label"]})</span></h3>'
+            f'<p style="margin:0 0 .4rem;color:var(--text2);font-size:.86rem;">'
+            f'{" &middot; ".join(fit_txt)} &middot; best fit = simulation {best if best is not None else "?"}'
+            f' of the {n_sims} simulations of <code>{os.path.basename(d)}</code> (gray)</p>'
+            + charts)
+    return "".join(blocks)
+
+
 def _cascade_context(output_dir):
     """(summary, stage_name, stage_stations) for a report of a sub-basin cascade
     stage, or None. ``output_dir`` is a ``stage_NN_*`` folder (or the cascade
@@ -2375,7 +2561,35 @@ def _build_calibrated_timeseries_section(
 
     When there are no obs-sim pairs (e.g. every evaluation failed), it renders
     an explanatory placeholder rather than silently disappearing.
+
+    In a sub-basin cascade report it renders one block per gauged zone instead
+    (see :func:`_cascade_zone_timeseries`), so the zones already calibrated stay
+    visible while the next ones run.
     """
+    if HAS_NUMPY:
+        try:
+            _zone_html = _cascade_zone_timeseries(output_dir, settings, model_config)
+        except Exception as _e:
+            logger.warning(f"Cascade per-zone time series skipped: {_e}")
+            _zone_html = ""
+        if _zone_html:
+            return f"""
+<div class="section" id="timeseries">
+    <h2>Observed vs Simulated: calibration, per zone</h2>
+    <div class="card" style="border-left:4px solid var(--secondary);">
+        <p style="margin:.2rem 0;color:var(--text2);font-size:.92rem;line-height:1.6;">
+            One block per gauged zone of the sub-basin cascade, in calibration
+            order. Each shows the zone's station with <strong>every simulation</strong>
+            of the stage that calibrates it (light gray) and that stage's
+            <strong>best fit</strong>, next to the observed-vs-simulated scatter. A zone
+            is shown from its own stage once that stage has results
+            (<em>final</em> when it is complete, <em>best so far</em> while it runs);
+            a zone not calibrated yet is shown from the global stage.
+        </p>
+    </div>
+    {_zone_html}
+</div>
+"""
     # Do we have any obs-sim pairs to plot?  (Check before the matplotlib guard
     # so the placeholder still shows when plotting libs are missing.)
     _has_pairs = False
@@ -5891,8 +6105,13 @@ def _build_observation_map_section(
         calibration_settings: Dict[str, Any],
         performance_metrics: Optional[List[Dict[str, Any]]] = None,
         matched_data: Optional[Any] = None,
+        output_dir: Optional[str] = None,
 ) -> str:
     """Render a Leaflet map of basins / reaches + observation stations.
+
+    In a sub-basin cascade report (``output_dir`` is a stage or the cascade
+    folder) every zone's station shows the fit of the stage that calibrates it,
+    labelled with that stage, not only the stations of the running stage.
 
     Markers carry CALIBRATION-AWARE styling:
       * radius  ∝ √n_obs   (so a station with 10× more data renders
@@ -6188,6 +6407,32 @@ def _build_observation_map_section(
                 _lumped_colour = True
     except Exception as _e:
         logger.debug(f"obs-map matched_data colouring skipped: {_e}")
+
+    # 2c) Sub-basin cascade: each zone's station shows the fit of the stage
+    # that calibrates it (final, or best so far while it runs; the global stage
+    # before its zone starts), so the map fills in as the cascade progresses.
+    try:
+        _cfits = _cascade_station_fits(output_dir, calibration_settings) if output_dir else {}
+    except Exception as _e:
+        logger.debug(f"obs-map cascade fits skipped: {_e}")
+        _cfits = {}
+    if _cfits:
+        _n_cf = 0
+        for _sid, _fid in s2f.items():
+            _cf = _cfits.get(_norm_id(_fid))
+            if not _cf or _sid not in station_stats:
+                continue
+            station_stats[_sid]["by_species"] = dict(_cf["by_species"])
+            _agg: Dict[str, float] = {}
+            for k in metric_keys:
+                _vals = [m[k] for m in _cf["by_species"].values() if isinstance(m.get(k), (int, float))]
+                if _vals:
+                    _agg[k] = float(sum(_vals) / len(_vals))
+            station_stats[_sid]["metrics"] = _agg
+            station_stats[_sid]["stage"] = _cf["source"]
+            _n_cf += 1
+        _cf_txt = ", ".join("%s: %s" % (k, v["source"]) for k, v in sorted(_cfits.items()))
+        logger.info(f"[obs-map] cascade: {_n_cf} stations show the fit of their zone's stage ({_cf_txt})")
 
     # 3) The objective metric drives the marker colour.
     #
@@ -6497,6 +6742,7 @@ def _build_observation_map_section(
         '    lines.push("Matched "+P.feature_label+": "+fid+" <i>("+role+")</i>");\n'
         '  } else lines.push("<i>unmatched</i>");\n'
         '  lines.push("Observations: <b>"+(st.n_obs||0)+"</b>");\n'
+        '  if(st.stage) lines.push("Fit from: <b>"+st.stage+"</b>");\n'
         '  if(st.by_species && Object.keys(st.by_species).length){\n'
         '    var rows = "";\n'
         '    var allMetrics = {};\n'
@@ -6548,7 +6794,7 @@ def _build_observation_map_section(
         '  var tip = "Station "+sid + (fid?" \\u2192 "+fid:" (unmatched)") +\n'
         '            "  \\u2014  "+CB.metric+": "+\n'
         '            (typeof v === "number" ? v.toFixed(3) : "n/a") +\n'
-        '            "  ("+st.n_obs+" obs)";\n'
+        '            "  ("+st.n_obs+" obs)" + (st.stage ? "  \\u00b7  "+st.stage : "");\n'
         '  m.bindTooltip(tip,{direction:"top",sticky:true,opacity:0.95});\n'
         '  m.bindPopup(popupHtml(sid));\n'
         '  m.__sid = sid;\n'

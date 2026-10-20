@@ -761,6 +761,9 @@ configuration report, **Targets tab, card "Sub-basin cascade calibration"**:
    the harmonic amplitude and phase). Climate response, sediment and lateral
    exchange parameters have one value per domain in openWQ and stay global. A
    parameter searched on a log scale keeps it for its zone values.
+   The monthly load multipliers of each zone start from the observed seasonal
+   cycle at its station (smoothed, scaled by the station's bias in the global
+   stage); set `load_shape_start: "global"` to start from the global-stage values.
 3. `python <run>.py --clean` runs the stages inside the work directory:
    `stage_00_global/` (one value per parameter, all target stations), then one
    `stage_NN_levelL/` per level (zone values free, upstream zones frozen, scored at
