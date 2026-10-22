@@ -355,6 +355,15 @@ def generate_results_report(
 </div>
 """)
 
+        # ── Sub-basin cascade: status of every stage / zone, in order ──
+        try:
+            _cas_prog = _cascade_progress_panel(output_dir, calibration_settings)
+        except Exception as _e:
+            logger.warning(f"cascade progress panel skipped: {_e}")
+            _cas_prog = ""
+        if _cas_prog:
+            H.append(_cas_prog)
+
         # ── Warning: a targeted species has NO primary observations ──
         # The objective function scores only PRIMARY observations (the basin
         # outlet / pouring-point station).  If a species set as a calibration
@@ -1833,6 +1842,211 @@ def _cascade_stage_banner(output_dir):
         <p style="margin:0;font-size:.95rem;">
             <b>Sub-basin cascade calibration.</b> Order: {order}.<br>{what}{zp_txt}
         </p>
+    </div>
+</div>"""
+
+
+_CASCADE_ZONE_COLOURS = ["#d95f02", "#1b9e77", "#7570b3", "#e7298a", "#66a61e",
+                         "#e6ab02", "#a6761d", "#1f78b4", "#b2182b", "#5e3c99"]
+
+
+def _cascade_progress_panel(output_dir, settings=None) -> str:
+    """Progress of a sub-basin cascade as a flow of boxes, one per stage in
+    calibration order (global, each level with one box per zone, optional
+    polish), joined by arrows. Each box gives the status (done / running /
+    waiting), the evaluations done of those planned, the stations and the best
+    KGE per station (plus validation once it exists); the running stage is
+    highlighted and an estimate of the time left is given. Built only from the
+    cascade's own files, so it works for any basin and number of zones."""
+    import glob as _glob, html as _h, json as _json
+    ctx = _cascade_context(output_dir)
+    if not ctx:
+        return ""
+    S, _stage, _stations = ctx
+    od = str(output_dir).rstrip("/")
+    top = od if os.path.isdir(os.path.join(od, "wq_zones")) else os.path.dirname(od)
+    zones = {z["id"]: z for z in S["zones"]}
+    levels = S.get("levels") or sorted({z.get("level", 1) for z in S["zones"]})
+    if levels and not isinstance(levels[0], list):
+        levels = [[z["id"] for z in S["zones"] if z.get("level") == lv] for lv in levels]
+    done_stages = {st.get("stage"): st for st in S.get("stages", [])}
+    active = S.get("active_stage")
+    plan = S.get("plan") or {}
+    has_zone_params = bool(S.get("zone_parameters", [True]))
+    dirs = {os.path.basename(d): d for d in _glob.glob(os.path.join(top, "stage_[0-9][0-9]_*"))
+            if os.path.isdir(d)}
+    colour_of = {zid: _CASCADE_ZONE_COLOURS[i % len(_CASCADE_ZONE_COLOURS)]
+                 for i, zid in enumerate(sorted(zones, key=lambda q: (zones[q].get("level", 0), q)))}
+
+    def _kge(o, s):
+        o = np.asarray(o, float); s = np.asarray(s, float)
+        k = ~(np.isnan(o) | np.isnan(s)); o, s = o[k], s[k]
+        if o.size < 2 or np.std(o) == 0 or np.std(s) == 0 or np.mean(o) == 0:
+            return None
+        r = np.corrcoef(o, s)[0, 1]; a = np.std(s) / np.std(o); b = np.mean(s) / np.mean(o)
+        return float(1 - np.sqrt((r - 1) ** 2 + (a - 1) ** 2 + (b - 1) ** 2))
+
+    def _fits(d, stations, fname, period=None):
+        out = {}
+        f = os.path.join(d, "results", fname) if d else ""
+        if not d or not os.path.isfile(f):
+            return out
+        try:
+            m = pd.read_csv(f)
+        except Exception:
+            return out
+        if period and "period" in m.columns:
+            m = m[m["period"] == period]
+        rid = pd.to_numeric(m.get("reach_id"), errors="coerce")
+        for st in stations:
+            g = m[rid == int(st)]
+            k = _kge(g["observed"], g["simulated"]) if len(g) else None
+            if k is not None:
+                out[int(st)] = k
+        return out
+
+    def _evals(d):
+        if not d:
+            return 0, []
+        n, rt = 0, []
+        for e in _glob.glob(os.path.join(d, "evaluations", "eval_*")):
+            if "eval_999999" in e or not os.path.isfile(os.path.join(e, "objective.txt")):
+                continue
+            n += 1
+            try:
+                with open(os.path.join(e, "runtime.txt")) as fh:
+                    for line in fh:
+                        if line.startswith("runtime_seconds"):
+                            rt.append(float(line.split(":")[1]))
+            except Exception:
+                pass
+        return n, rt
+
+    def _planned(d, key):
+        try:
+            with open(os.path.join(d, "checkpoints", "calibration_state.json")) as fh:
+                return int(_json.load(fh).get("max_evals"))
+        except Exception:
+            return plan.get(key)
+
+    # stages in calibration order
+    stages = [{"name": "stage_00_global", "label": "Global", "zones": [], "key": "global_evaluations",
+               "stations": sorted(int(z["station_reach"]) for z in S["zones"])}]
+    if has_zone_params:
+        for i, lv in enumerate(levels, start=1):
+            name = next((n for n in dirs if n.endswith(f"_level{i}")), f"stage_{i:02d}_level{i}")
+            stages.append({"name": name, "label": f"Level {i}", "zones": list(lv), "key": "stage_evaluations",
+                           "stations": [int(zones[z]["station_reach"]) for z in lv]})
+        pol = next((n for n in dirs if n.endswith("_polish")), None)
+        if pol or (plan.get("polish_evaluations") or 0) > 0:
+            stages.append({"name": pol or f"stage_{len(levels) + 1:02d}_polish", "label": "Final polish",
+                           "zones": list(zones), "key": "polish_evaluations",
+                           "stations": sorted(int(z["station_reach"]) for z in S["zones"])})
+
+    # planned evaluations of a stage not started yet: the summary's plan, else
+    # (runs started before the plan was recorded) the global stage's budget
+    g_dir = dirs.get("stage_00_global")
+    g_total = _planned(g_dir, "global_evaluations") if g_dir else plan.get("global_evaluations")
+    all_rt, rows = [], []
+    for st in stages:
+        d = dirs.get(st["name"])
+        n, rt = _evals(d)
+        all_rt += rt
+        total = _planned(d, st["key"]) if d else plan.get(st["key"])
+        if not total and st["key"] != "polish_evaluations":
+            total = g_total
+        if st["name"] in done_stages:
+            status = "done"
+        elif st["name"] == active or (d and n > 0):
+            status = "running"
+        else:
+            status = "waiting"
+        fit = {}
+        if st["name"] in done_stages:
+            fit = {int(k): v.get("kge") for k, v in (done_stages[st["name"]].get("fit") or {}).items()}
+        if not fit:
+            fit = _fits(d, st["stations"], "matched_data.csv")
+        val = _fits(d, st["stations"], "validation_matched_data.csv", "validation")
+        rows.append({**st, "dir": d, "n": n, "total": total, "status": status, "fit": fit, "val": val,
+                     "validated": bool(d and os.path.isdir(os.path.join(d, "evaluations", "eval_999999")))})
+
+    # time left from the median evaluation runtime so far
+    med = float(np.median(all_rt)) if all_rt else None
+    left_evals = 0
+    for r in rows:
+        if r["status"] != "done" and r["total"]:
+            left_evals += max(int(r["total"]) - r["n"], 0) + 1          # + the stage's validation run
+    eta = (f"about {med * left_evals / 3600:.1f} h left at {med / 60:.0f} min per evaluation"
+           if med and left_evals else "")
+    n_done = sum(r["status"] == "done" for r in rows)
+    cur = next((r for r in rows if r["status"] == "running"), None)
+
+    def _box(r, zid=None):
+        col = colour_of.get(zid, "#475569") if zid is not None else (
+            "#475569" if r["label"] == "Global" else "#0f172a")
+        title = (f"Zone {zid}" if zid is not None else r["label"])
+        stations = [int(zones[zid]["station_reach"])] if zid is not None else r["stations"]
+        state = {"done": ("&#10003; Done", "#15803d"), "running": ("&#9654; Running now", "#1d4ed8"),
+                 "waiting": ("&#9675; Waiting", "#64748b")}[r["status"]]
+        prog = (f"{r['n']} of {r['total']} evaluations" if r["total"] else f"{r['n']} evaluations")
+        if r["status"] == "done" and r["validated"]:
+            prog += " &middot; validation run &#10003;"
+        elif r["status"] == "running" and r["total"] and r["n"] >= int(r["total"]):
+            prog += " &middot; validation run"
+        pct = (100.0 * r["n"] / int(r["total"])) if r["total"] else (100.0 if r["status"] == "done" else 0.0)
+        kge_lines = []
+        for s in stations:
+            k = r["fit"].get(s); v = r["val"].get(s)
+            if k is None and v is None:
+                continue
+            kge_lines.append(f"reach {s}: KGE <b>{k:.2f}</b>" if k is not None else f"reach {s}")
+            if v is not None:
+                kge_lines[-1] += f" &middot; val {v:.2f}"
+        kge_html = ("<br>".join(kge_lines) if kge_lines else
+                    "<span style='opacity:.7'>no results yet</span>")
+        best = "best so far" if r["status"] == "running" else ("final" if r["status"] == "done" else "")
+        running = r["status"] == "running"
+        border = (f"3px solid {col}" if running else
+                  (f"2px solid {col}" if r["status"] == "done" else f"2px dashed {col}"))
+        glow = f"box-shadow:0 0 0 4px {col}33;" if running else ""
+        fade = "opacity:.6;" if r["status"] == "waiting" else ""
+        return (f'<div style="border:{border};{glow}{fade}border-radius:10px;padding:.55rem .7rem;'
+                f'min-width:185px;max-width:250px;background:{col}14;font-size:.84rem;line-height:1.45;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;">'
+                f'<b style="color:{col};font-size:.95rem;">{_h.escape(title)}</b>'
+                f'<span style="font-size:.74rem;font-weight:600;color:{state[1]};white-space:nowrap;">{state[0]}</span></div>'
+                f'<div style="opacity:.8;font-size:.78rem;">stations {", ".join(map(str, stations))}</div>'
+                f'<div style="height:5px;border-radius:3px;background:{col}26;margin:.35rem 0 .25rem;">'
+                f'<div style="height:5px;border-radius:3px;width:{min(pct, 100):.0f}%;background:{col};"></div></div>'
+                f'<div style="font-size:.78rem;">{prog}</div>'
+                f'<div style="margin-top:.3rem;font-size:.8rem;">{kge_html}'
+                f'{f"<span style=opacity:.65> ({best})</span>" if best and kge_lines else ""}</div></div>')
+
+    arrow = ('<div style="align-self:center;font-size:1.5rem;color:var(--text2,#64748b);padding:0 .15rem;">'
+             '&#10132;</div>')
+    cols = []
+    for k_st, r in enumerate(rows, start=1):
+        boxes = ([_box(r, zid) for zid in r["zones"]] if r["zones"] and r["label"] != "Final polish"
+                 else [_box(r)])
+        head = (f'<div style="font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;'
+                f'color:var(--text2,#64748b);margin-bottom:.25rem;">Stage {k_st}'
+                f'{" &middot; " + str(len(r["zones"])) + " zones in parallel" if len(r["zones"]) > 1 and r["label"] != "Final polish" else ""}</div>')
+        cols.append(f'<div style="display:flex;flex-direction:column;gap:.45rem;">{head}{"".join(boxes)}</div>')
+    flow = arrow.join(cols)
+    where = (f"Now: <b>{_h.escape(cur['label'])}</b>"
+             + (f" (zone{'s' if len(cur['zones']) > 1 else ''} {', '.join(map(str, cur['zones']))})" if cur and cur["zones"] else "")
+             if cur else ("<b>Cascade complete.</b>" if n_done == len(rows) else ""))
+    summary = (f"{where} &middot; stage {min(n_done + 1, len(rows))} of {len(rows)}"
+               if cur else where) + (f" &middot; {eta}" if eta and cur else "")
+    return f"""
+<div class="section" id="cascade-progress">
+    <div class="card" style="border-left:5px solid #0f766e;">
+        <p style="margin:0 0 .6rem;font-size:.92rem;"><b>Cascade progress.</b> {summary}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:flex-start;overflow-x:auto;">{flow}</div>
+        <p style="margin:.6rem 0 0;font-size:.78rem;color:var(--text2,#64748b);">
+            Each zone is calibrated after the zones upstream of it, which keep their values.
+            KGE is the objective at the zone's station (calibration period; &ldquo;val&rdquo; = validation
+            period once the stage's validation run exists). Re-run <code>--report</code> to refresh.</p>
     </div>
 </div>"""
 
