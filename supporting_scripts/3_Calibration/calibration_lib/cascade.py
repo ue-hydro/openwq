@@ -364,7 +364,13 @@ def run_cascade(**call) -> Dict[str, Any]:
                                             if k not in ("reaches", "hrus")},
                                "levels": zones["levels"], "stages": [],
                                "zone_parameters": [p["name"] for p in zone_params],
-                               "inherit": cfg.get("inherit", "global")}
+                               "inherit": cfg.get("inherit", "global"),
+                               # planned evaluations per stage (the report's progress panel)
+                               "plan": {"global_evaluations": int(cfg.get("global_evaluations")
+                                                                  or call.get("max_evaluations") or 100),
+                                        "stage_evaluations": int(cfg.get("stage_evaluations")
+                                                                 or call.get("max_evaluations") or 100),
+                                        "polish_evaluations": int(cfg.get("polish_evaluations") or 0)}}
     summary_path = work_dir / wq_zones.ZONES_DIRNAME / "cascade_summary.json"
 
     def _save_summary():
