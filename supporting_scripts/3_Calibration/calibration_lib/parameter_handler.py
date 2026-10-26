@@ -1839,10 +1839,12 @@ class ParameterHandler:
     def _build_month_factor(items: list):
         """month(1-12) -> load multiplier for one species' SS params.
 
-        Per-month params -> each month its own multiplier; else a harmonic
-        S0*(1+A*cos(2pi*(m-phi)/12)) when amplitude+phase are present; else the
-        constant S0 (returned as a plain float so the scalar fast-path is used
-        and behaviour is unchanged when no seasonal params exist)."""
+        Per-month params -> each month its own multiplier, times S0 when an
+        annual scale is calibrated too (S0 sets the magnitude, the months the
+        seasonal shape; S0 = 1 without one, so per-month alone is unchanged);
+        else a harmonic S0*(1+A*cos(2pi*(m-phi)/12)) when amplitude+phase are
+        present; else the constant S0 (returned as a plain float so the scalar
+        fast-path is used and behaviour is unchanged when no seasonal params exist)."""
         import math
         S0 = 1.0
         amp = phase = None
@@ -1864,7 +1866,7 @@ class ParameterHandler:
                 if mo is not None:
                     monthly[int(mo)] = v
         if monthly:
-            return lambda m: monthly.get(int(m), 1.0)
+            return lambda m: S0 * monthly.get(int(m), 1.0)
         if amp is not None and phase is not None:
             return lambda m: S0 * (1.0 + amp * math.cos(
                 2.0 * math.pi * (m - phase) / 12.0))

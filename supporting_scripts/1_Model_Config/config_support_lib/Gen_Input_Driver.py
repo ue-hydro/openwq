@@ -687,6 +687,7 @@ def Gen_Input_Driver(
         ss_method_csv_config: List[Dict[str, Union[str, int]]] = None,
         ss_method_copernicus_basins_hrus: Dict[str, str] = None,
         ss_method_copernicus_compartment_name_for_load: str = "",
+        ss_method_copernicus_layer_for_load = "all",
         ss_method_copernicus_nc_lc_dir = None,
         ss_method_copernicus_period: List[Union[int, float]] = None,
         ss_method_copernicus_default_loads_bool: bool = True,
@@ -1165,7 +1166,8 @@ def Gen_Input_Driver(
         bgqmJSON_lib.load_bgq_module_json(
             json_header_comment=json_header_comment,
             path2selected_NATIVE_BGC_FLEX_framework=path2selected_NATIVE_BGC_FLEX_framework,
-            bgc_config_filepath=bgc_config_filepath
+            bgc_config_filepath=bgc_config_filepath,
+            global_parameter_overrides=kwargs.get("bgc_global_parameter_overrides")
         )
     else:
         print(f"WARNING: Unknown bgc_module_name '{bgc_module_name}'. "
@@ -1328,6 +1330,7 @@ def Gen_Input_Driver(
             ss_method_copernicus_basins_hrus=ss_method_copernicus_basins_hrus,
             ss_method_copernicus_nc_lc_dir=ss_method_copernicus_nc_lc_dir,
             ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
+            ss_method_copernicus_layer_for_load=ss_method_copernicus_layer_for_load,
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
             optional_load_coefficients=ss_method_copernicus_optional_custom_annual_load_coeffs_per_lulc_class,
@@ -1423,6 +1426,7 @@ def Gen_Input_Driver(
             ss_method_copernicus_period=ss_method_copernicus_period,
             ss_method_copernicus_default_loads_bool=ss_method_copernicus_default_loads_bool,
             ss_method_copernicus_compartment_name_for_load=ss_method_copernicus_compartment_name_for_load,
+            ss_method_copernicus_layer_for_load=ss_method_copernicus_layer_for_load,
             climate_data=_resolved_climate,
             precip_scaling_power=ss_climate_precip_scaling_power,
             temp_q10=ss_climate_temp_q10,

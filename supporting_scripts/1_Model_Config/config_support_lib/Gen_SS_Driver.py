@@ -2668,7 +2668,11 @@ def set_ss_climate_adjusted_export_coefficients(
         # temp_c}} — one SS entry per sub-daily period, unit = subannual_unit.
         subannual_climate_data: Optional[Dict[int, Dict[str, List]]] = None,
         subannual_unit: str = "hour",
-        lulc_sources: Optional[List[str]] = None
+        lulc_sources: Optional[List[str]] = None,
+        # Layer of the compartment that receives the load: "all" (every layer;
+        # OpenWQ adds the row value to EACH cell it names, so every layer gets
+        # the full load) or a layer number, e.g. 1 = top soil layer.
+        ss_method_copernicus_layer_for_load: Union[str, int] = "all"
 ) -> None:
     """
     Generate climate-adjusted source/sink JSON from Copernicus LULC data.
@@ -2882,6 +2886,9 @@ def set_ss_climate_adjusted_export_coefficients(
             f"// METADATA - Proxy_Years: {proxy_str}"
         )
 
+    _layer = str(ss_method_copernicus_layer_for_load)
+    print(f"  Load layer in {ss_method_copernicus_compartment_name_for_load}: {_layer}")
+
     entry_idx = 1
 
     for sim_year in sim_years:
@@ -2925,7 +2932,7 @@ def set_ss_climate_adjusted_export_coefficients(
                             temp_reference_c=temp_reference_c):
                         data_entries[str(sub_idx)] = [
                             sim_year, int(month), int(day), int(hour), "all", "all",
-                            spatial_id, "all", "all",
+                            spatial_id, "all", _layer,
                             float(prd_load_kg),
                             "continuous", subannual_unit
                         ]
@@ -2947,7 +2954,7 @@ def set_ss_climate_adjusted_export_coefficients(
                             temp_reference_c=temp_reference_c):
                         data_entries[str(sub_idx)] = [
                             sim_year, int(month), int(day), "all", "all", "all",
-                            spatial_id, "all", "all",
+                            spatial_id, "all", _layer,
                             float(day_load_kg),
                             "continuous", "day"
                         ]
@@ -2970,7 +2977,7 @@ def set_ss_climate_adjusted_export_coefficients(
                     daily_rate = load_kg / days
                     data_entries[str(sub_idx)] = [
                             sim_year, int(month), "all", "all", "all", "all",
-                            spatial_id, "all", "all",
+                            spatial_id, "all", _layer,
                             float(daily_rate),
                             "continuous", "day"
                         ]
@@ -3046,7 +3053,11 @@ def create_openwq_ss_json_from_loads(
         climate_data: Optional[Dict] = None,
         precip_scaling_power: float = 1.0,
         temp_q10: float = 2.0,
-        temp_reference_c: float = 15.0
+        temp_reference_c: float = 15.0,
+        # Layer of the compartment that receives the load: "all" (every layer;
+        # OpenWQ adds the row value to EACH cell it names, so every layer gets
+        # the full load) or a layer number, e.g. 1 = top soil layer.
+        ss_method_copernicus_layer_for_load: Union[str, int] = "all"
 ) -> None:
     """
     Generate OpenWQ source/sink JSON configuration from nutrient loads.
@@ -3167,6 +3178,9 @@ def create_openwq_ss_json_from_loads(
             f"// METADATA - Proxy_Years: {proxy_str}"
         )
 
+    _layer = str(ss_method_copernicus_layer_for_load)
+    print(f"  Load layer in {ss_method_copernicus_compartment_name_for_load}: {_layer}")
+
     entry_idx = 1
 
     # Group by simulation year and process each nutrient
@@ -3219,7 +3233,7 @@ def create_openwq_ss_json_from_loads(
                     daily_rate = load_kg / days
                     data_entries[str(sub_idx)] = [
                             sim_year, int(month), "all", "all", "all", "all",
-                            spatial_id, "all", "all",
+                            spatial_id, "all", _layer,
                             float(daily_rate),
                             "continuous", "day"
                         ]
@@ -3424,7 +3438,11 @@ def set_ss_from_copernicus_lulc_with_loads(
         precip_scaling_power: float = 1.0,
         temp_q10: float = 2.0,
         temp_reference_c: float = 15.0,
-        lulc_sources: Optional[List[str]] = None
+        lulc_sources: Optional[List[str]] = None,
+        # Layer of the compartment that receives the load: "all" (every layer;
+        # OpenWQ adds the row value to EACH cell it names, so every layer gets
+        # the full load) or a layer number, e.g. 1 = top soil layer.
+        ss_method_copernicus_layer_for_load: Union[str, int] = "all"
 ):
     """
     Process Copernicus LULC data, calculate nutrient loads, and generate OpenWQ JSON.
@@ -3540,6 +3558,7 @@ def set_ss_from_copernicus_lulc_with_loads(
         precip_scaling_power=precip_scaling_power,
         temp_q10=temp_q10,
         temp_reference_c=temp_reference_c,
+        ss_method_copernicus_layer_for_load=ss_method_copernicus_layer_for_load,
     )
 
     return results, summaries, rasters, loads_df
