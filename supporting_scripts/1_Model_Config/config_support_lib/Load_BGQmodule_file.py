@@ -19,14 +19,47 @@ OpenWQ JSON File Copy with Header Comments
 Copy JSON file and add header comments if they don't already exist
 """
 
+import json
+import re
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional
+
+
+def _apply_global_parameter_overrides(source_content: str, overrides: Dict[str, float]) -> str:
+    """Set values of the template's GLOBAL_PARAMETERS block in the copied text.
+
+    Only the numbers are replaced, so the template keeps its layout. Every key must
+    already exist in GLOBAL_PARAMETERS (a typo would otherwise be silently ignored).
+    """
+    try:
+        gp = json.loads(source_content).get("GLOBAL_PARAMETERS")
+    except json.JSONDecodeError as e:
+        raise ValueError(f"bgc_global_parameter_overrides: the BGC template is not plain JSON ({e})")
+    if not isinstance(gp, dict):
+        raise ValueError("bgc_global_parameter_overrides: the BGC template has no GLOBAL_PARAMETERS block")
+    unknown = [k for k in overrides if k not in gp]
+    if unknown:
+        raise ValueError(f"bgc_global_parameter_overrides: {unknown} not in the template's GLOBAL_PARAMETERS")
+    i0 = source_content.index('"GLOBAL_PARAMETERS"')
+    i1 = source_content.index("}", i0)          # the block holds numbers only, no nested objects
+    block = source_content[i0:i1]
+    for key, value in overrides.items():
+        block, n = re.subn(r'("%s"\s*:\s*)[-+0-9.eE]+' % re.escape(key),
+                           lambda m: m.group(1) + repr(float(value)), block)
+        if n != 1:
+            raise ValueError(f"bgc_global_parameter_overrides: '{key}' found {n} times in GLOBAL_PARAMETERS")
+    out = source_content[:i0] + block + source_content[i1:]
+    new = json.loads(out)["GLOBAL_PARAMETERS"]
+    for key, value in overrides.items():
+        print(f"  GLOBAL_PARAMETERS override: {key} = {new[key]} (template {gp[key]})")
+    return out
 
 
 def load_bgq_module_json(
         json_header_comment: List[str],
         path2selected_NATIVE_BGC_FLEX_framework: str,
-        bgc_config_filepath: str
+        bgc_config_filepath: str,
+        global_parameter_overrides: Optional[Dict[str, float]] = None
 ) -> None:
     """
     Copy a JSON file from source to destination and add header comments if they don't exist.
@@ -35,6 +68,9 @@ def load_bgq_module_json(
         json_header_comment: List of comment lines to add at the top of the file
         path2selected_NATIVE_BGC_FLEX_framework: Source file path to copy from
         bgc_config_filepath: Destination file path to copy to
+        global_parameter_overrides: optional {name: value} written into the copy's
+            GLOBAL_PARAMETERS, for site-specific constants of a shared template
+            (e.g. the water-temperature relation a_Tw, b_Tw of each basin)
     """
 
     # Create the destination directory path if it doesn't exist
@@ -52,6 +88,9 @@ def load_bgq_module_json(
 
     # Strip any leading/trailing whitespace from source content
     source_content = source_content.strip()
+
+    if global_parameter_overrides:
+        source_content = _apply_global_parameter_overrides(source_content, global_parameter_overrides)
 
     # Check if destination file already exists and has comments
     has_comments = False

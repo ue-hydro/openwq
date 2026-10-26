@@ -671,8 +671,12 @@ class ModelRunner:
                 args=self.executable_args or ""
             )
         else:
+            # --bind-to none: OpenMPI binds the ranks of every launch to the first
+            # cores (core 0 for -np 1), so concurrent evaluations / calibrations in
+            # the same container all shared one core and OpenMP/PHREEQC threads
+            # were confined to it. Unbound, the kernel spreads them over all cores.
             shell_cmd = (
-                f"cd {container_eval_dir} && mpirun --allow-run-as-root "
+                f"cd {container_eval_dir} && mpirun --allow-run-as-root --bind-to none "
                 f"-np {n_ranks} -x master_json {exec_path} {model_arg}"
             )
 

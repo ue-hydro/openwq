@@ -1,0 +1,355 @@
+# =====================================================================
+# OpenWQ PHREEQC template: NITROGEN WITH DECOUPLED REDOX SPECIES
+# (formulation EQ of the OpenWQ PHREEQC paper)
+#
+# Nitrate, ammonium, dissolved O2 and dissolved organic carbon are separate
+# components, so the database does not put nitrogen redox at equilibrium:
+#     Nit  = nitrate        (Nit-,  mg N/L, GFW 14.0067)
+#     Amm  = total ammonia  (AmmH+ / Amm, mg N/L, GFW 14.0067)
+#     Oxg  = dissolved O2   (database, mg O2/L, GFW 32)
+#     Doc  = dissolved organic carbon (mg C/L, GFW 12.011)
+# In the model template:  phreeqc_mobile_species = ["Nit","Amm","Oxg","Doc"]
+#
+# Formulation ladder of the paper: RN (reference kinetic network,
+# NATIVE_BGC_FLEX/thermodynamic/nitrogen_redox_kinetic.json) -> RN-T (RN + the
+# thermodynamic factor F_T) -> EQ (this file). EQ replicates RN process by
+# process and adds ONLY what a reaction network cannot represent: aqueous
+# speciation and activities, pH from the charge balance and the carbonate system
+# (soil-air CO2), the pH- and temperature-dependent NH3/NH4+ split, competitive
+# NH4+ cation exchange, and F_T computed from activities.
+#
+# Kinetic (the RN rate laws and constants, here with PHREEQC activities):
+#     decomposition of soil organic matter -> Doc + Amm (zero order, soil)
+#     aerobic respiration    Doc + Oxg -> CO2
+#     nitrification          AmmH+ + 2 Oxg -> Nit- + 2 H+
+#     denitrification        Nit- + 5/4 Doc + H+ -> 1/2 Ntg + 5/4 CO2 (O2-inhibited)
+#     soil O2 exchange with the soil air, k_o2 * (O2sat(T) - O2) (soil), as RN
+#     ammonia volatilization first order in un-ionized ammonia (soil); k_vol is
+#       set so that the rate equals RN's (0.005 1/day on total ammonium) at pH 7
+#       and 20 C, so only its pH and temperature dependence differs
+#     plant uptake of nitrate and ammonium, first order (soil), the same
+#       process as in RN and RN-T: k_pu * f_grow(T) * concentration,
+#       f_grow = clip((T - T_base_pu)/(T_opt_pu - T_base_pu), 0, 1)
+#     river reaches, the processes of RN-T's RNT_RIVER with the same rate laws:
+#       reaeration       k_rea * (O2sat(Tw) - O2), O2sat of Benson and Krause (1984)
+#       benthic respiration  R_ben * theta_T^(Tw-20) * O2/(K_O2 + O2)
+#       nitrate uptake   k_upt * theta_T^(Tw-20) * NO3
+#     Tw is the solution temperature of the reaches, set from air temperature
+#     in the model template (TEMPERATURE mapping {"DEPENDENCY": "Tair_K",
+#     "LINEAR": [7.6, 0.60]}, the a_Tw and b_Tw of RN-T).
+#   rate = k * F_D * F_A * F_I * F_T, F_T = max(0, 1-exp((dG + m dG_ATP)/(chi R T)))
+#   with dG = dG0 + R T ln Q from the activities computed by PHREEQC.
+# Equilibrium: speciation (AmmH+ = Amm + H+), NH4+ exchange on X (fixed capacity),
+# and in the soil CO2(g) of the soil air (EQUILIBRIUM_PHASES 1). pH is computed.
+#
+# Calibrated values carry a "# CALIBRATE [min, max]" tag: the maximum rates
+# (CALCULATE_VALUES k_dec, k_nit, k_den), the soil O2 exchange rate k_o2, the plant
+# uptake rate k_pu and the river nitrate uptake rate k_upt, the same six as RN and
+# RN-T with the same ranges. They are defined once and used by every KINETICS block.
+#
+# Block ids are assigned to compartments in openWQ_config.json
+# (template variable bgc_compartment_overrides):
+#     soil:    SOLUTIONS 1, EQUILIBRIUM_PHASES 1, EXCHANGE 1, KINETICS 1
+#     aquifer: SOLUTIONS 1, KINETICS 2
+#     river reaches: SOLUTIONS 3, KINETICS 3
+#     canopy, snow, surface runoff: SOLUTIONS 3 (rain water, no reactions)
+# Do NOT add a DATABASE line: OpenWQ loads the database (phreeqc.dat).
+# =====================================================================
+TITLE EQ formulation: decoupled N, O2 and DOC; kinetic redox as RN; equilibrium speciation, exchange and soil CO2
+
+SOLUTION_MASTER_SPECIES
+    Nit     Nit-      0.0     N       14.0067
+    Amm     AmmH+     0.0     N       14.0067
+    Doc     Doc       0.0     C       12.011
+
+SOLUTION_SPECIES
+    Nit- = Nit-
+        -log_k   0.0
+        -gamma   3.0   0.0
+    AmmH+ = AmmH+
+        -log_k   0.0
+        -gamma   2.5   0.0
+    AmmH+ = Amm + H+
+        -log_k   -9.252
+        -delta_h 12.48 kcal
+    Doc = Doc
+        -log_k   0.0
+
+EXCHANGE_SPECIES
+    AmmH+ + X- = AmmHX
+        -log_k   0.6
+        -gamma   2.5   0.0
+        -delta_h -2.4
+
+# ---------------------------------------------------------------------
+# Rate constants and fixed constants (one definition, used by all blocks)
+# ---------------------------------------------------------------------
+CALCULATE_VALUES
+k_dec          # maximum decomposition rate [mg C/L/day]   # CALIBRATE [0.01, 5.0]
+-start
+10 SAVE 0.5
+-end
+k_nit          # maximum nitrification rate [mg N/L/day]   # CALIBRATE [0.01, 20.0]
+-start
+10 SAVE 1.0
+-end
+k_den          # maximum denitrification rate [mg N/L/day] # CALIBRATE [0.001, 10.0]
+-start
+10 SAVE 0.2
+-end
+k_resp         # maximum aerobic respiration rate [mg C/L/day] (fixed)
+-start
+10 SAVE 5.0
+-end
+k_vol          # volatilization of un-ionized ammonia [1/day] (fixed): equals RN's 0.005 1/day on total ammonium at pH 7, 20 C
+-start
+10 SAVE 1.2844
+-end
+k_o2           # soil O2 exchange with the soil air [1/day], as RN   # CALIBRATE [0.1, 200.0]
+-start
+10 SAVE 10.0
+-end
+k_pu           # plant uptake of nitrate and ammonium at 20 C [1/day]   # CALIBRATE [0.0001, 1.0]
+-start
+10 SAVE 0.01
+-end
+theta_T        # temperature coefficient of all rates, rate x theta^(T-20)
+-start
+10 SAVE 1.07
+-end
+T_base_pu      # plant uptake: base temperature of the growing-season response [C] (fixed)
+-start
+10 SAVE 5.0
+-end
+T_opt_pu       # plant uptake: temperature of full uptake [C] (fixed)
+-start
+10 SAVE 25.0
+-end
+k_upt          # river nitrate uptake by stream biota at 20 C [1/day]   # CALIBRATE [0.001, 3.0]
+-start
+10 SAVE 0.3
+-end
+k_rea          # river reaeration towards O2 saturation [1/day] (fixed, as in RN-T)
+-start
+10 SAVE 3.0
+-end
+R_ben          # river benthic and ecosystem respiration at 20 C [mg O2/L/day] (fixed, as in RN-T)
+-start
+10 SAVE 1.5
+-end
+FT             # thermodynamic factor: arg = dG + m*dG_ATP [kJ/mol]
+-start
+10 dG_ATP = 45.0 : m_ATP = 1.0 : chi = 2.0 : Rg = 0.008314
+20 xx = (GET(1) + m_ATP * dG_ATP) / (chi * Rg * TK)
+30 ft = 1 - EXP(xx)
+40 IF ft < 0 THEN ft = 0
+50 SAVE ft
+-end
+
+# ---------------------------------------------------------------------
+# Rate laws. PHREEQC expects the moles of reaction in the cell over TIME, so
+# every rate [mol/kgw/s] is multiplied by the mass of water in the cell,
+# TOT("water") [kg], and the caps compare with moles (molality x kg water).
+# Concentrations in mg/L for the Monod terms.
+# ---------------------------------------------------------------------
+RATES
+decomposition
+-start
+10 kk = CALC_VALUE("k_dec") / 12011 / 86400 * CALC_VALUE("theta_T")^(TC - 20)
+20 SAVE kk * TOT("water") * TIME
+-end
+respiration
+-start
+5 dm = 0
+10 doc = TOT("Doc") * 12011 : o2 = TOT("Oxg") * 31998
+20 IF doc <= 0 OR o2 <= 0 THEN GOTO 190
+30 lnQ = LOG(ACT("CO2")) - LOG(ACT("Doc")) - LOG(ACT("Oxg"))
+40 PUT(-486.61 + 0.008314 * TK * lnQ, 1)
+50 rr = CALC_VALUE("k_resp") / 12011 / 86400 * (doc / (7.5 + doc)) * (o2 / (0.2 + o2))
+60 rr = rr * CALC_VALUE("FT") * CALC_VALUE("theta_T")^(TC - 20)
+70 dm = rr * TOT("water") * TIME
+80 IF dm > TOT("Doc") * TOT("water") THEN dm = TOT("Doc") * TOT("water")
+190 SAVE dm
+200 END
+-end
+nitrification
+-start
+5 dm = 0
+10 nh4 = TOT("Amm") * 14007 : o2 = TOT("Oxg") * 31998
+20 IF nh4 <= 0 OR o2 <= 0 THEN GOTO 190
+30 lnQ = LOG(ACT("Nit-")) + 2 * LOG(ACT("H+")) - LOG(ACT("AmmH+")) - 2 * LOG(ACT("Oxg"))
+40 PUT(-301.79 + 0.008314 * TK * lnQ, 1)
+50 rr = CALC_VALUE("k_nit") / 14007 / 86400 * (nh4 / (1.0 + nh4)) * (o2 / (0.4 + o2))
+60 rr = rr * CALC_VALUE("FT") * CALC_VALUE("theta_T")^(TC - 20)
+70 dm = rr * TOT("water") * TIME
+80 IF dm > TOT("Amm") * TOT("water") THEN dm = TOT("Amm") * TOT("water")
+190 SAVE dm
+200 END
+-end
+denitrification
+-start
+5 dm = 0
+10 no3 = TOT("Nit") * 14007 : doc = TOT("Doc") * 12011 : o2 = TOT("Oxg") * 31998
+20 IF no3 <= 0 OR doc <= 0 THEN GOTO 190
+30 lnQ = 0.5 * LOG(ACT("Ntg") + 1e-30) + 1.25 * LOG(ACT("CO2")) - 1.25 * LOG(ACT("Doc")) - LOG(ACT("Nit-")) - LOG(ACT("H+"))
+40 PUT(-585.76 + 0.008314 * TK * lnQ, 1)
+50 rr = CALC_VALUE("k_den") / 14007 / 86400 * (no3 / (0.5 + no3)) * (doc / (7.5 + doc)) * (0.2 / (0.2 + o2))
+60 rr = rr * CALC_VALUE("FT") * CALC_VALUE("theta_T")^(TC - 20)
+70 dm = rr * TOT("water") * TIME
+80 IF dm > TOT("Nit") * TOT("water") THEN dm = TOT("Nit") * TOT("water")
+90 IF 1.25 * dm > TOT("Doc") * TOT("water") THEN dm = TOT("Doc") * TOT("water") / 1.25
+190 SAVE dm
+200 END
+-end
+volatilization
+-start
+10 dm = CALC_VALUE("k_vol") / 86400 * MOL("Amm") * TOT("water") * TIME
+20 SAVE dm
+-end
+plant_uptake_nit
+-start
+5 dm = 0
+10 IF TOT("Nit") <= 0 THEN GOTO 190
+15 fg = (TC - CALC_VALUE("T_base_pu")) / (CALC_VALUE("T_opt_pu") - CALC_VALUE("T_base_pu"))
+16 IF fg < 0 THEN fg = 0
+17 IF fg > 1 THEN fg = 1
+20 dm = CALC_VALUE("k_pu") / 86400 * fg * TOT("Nit") * TOT("water") * TIME
+30 IF dm > TOT("Nit") * TOT("water") THEN dm = TOT("Nit") * TOT("water")
+190 SAVE dm
+200 END
+-end
+plant_uptake_amm
+-start
+5 dm = 0
+10 IF TOT("Amm") <= 0 THEN GOTO 190
+15 fg = (TC - CALC_VALUE("T_base_pu")) / (CALC_VALUE("T_opt_pu") - CALC_VALUE("T_base_pu"))
+16 IF fg < 0 THEN fg = 0
+17 IF fg > 1 THEN fg = 1
+20 dm = CALC_VALUE("k_pu") / 86400 * fg * TOT("Amm") * TOT("water") * TIME
+30 IF dm > TOT("Amm") * TOT("water") THEN dm = TOT("Amm") * TOT("water")
+190 SAVE dm
+200 END
+-end
+
+# ---------------------------------------------------------------------
+# Solutions (initial water; INITIAL_CONDITIONS of the OpenWQ config are not
+# used with PHREEQC)
+# ---------------------------------------------------------------------
+soil_o2_exchange
+-start
+10 o2sat = EXP(-139.34411 + 1.575701E5 / TK - 6.642308E7 / TK^2 + 1.2438E10 / TK^3 - 8.621949E11 / TK^4)
+30 o2 = TOT("Oxg") * 31998
+40 dm = CALC_VALUE("k_o2") / 31998 / 86400 * (o2sat - o2) * TOT("water") * TIME
+50 IF dm < -TOT("Oxg") * TOT("water") THEN dm = -TOT("Oxg") * TOT("water")
+60 SAVE dm
+-end
+river_reaeration
+-start
+10 o2sat = EXP(-139.34411 + 1.575701E5 / TK - 6.642308E7 / TK^2 + 1.2438E10 / TK^3 - 8.621949E11 / TK^4)
+30 o2 = TOT("Oxg") * 31998
+40 dm = CALC_VALUE("k_rea") / 31998 / 86400 * (o2sat - o2) * TOT("water") * TIME
+50 IF dm < -TOT("Oxg") * TOT("water") THEN dm = -TOT("Oxg") * TOT("water")
+60 SAVE dm
+-end
+river_respiration
+-start
+5 dm = 0
+10 o2 = TOT("Oxg") * 31998
+20 IF o2 <= 0 THEN GOTO 190
+30 dm = CALC_VALUE("R_ben") / 31998 / 86400 * CALC_VALUE("theta_T")^(TC - 20) * (o2 / (0.2 + o2)) * TOT("water") * TIME
+40 IF dm > TOT("Oxg") * TOT("water") THEN dm = TOT("Oxg") * TOT("water")
+190 SAVE dm
+200 END
+-end
+river_nitrate_uptake
+-start
+5 dm = 0
+10 IF TOT("Nit") <= 0 THEN GOTO 190
+20 dm = CALC_VALUE("k_upt") / 86400 * CALC_VALUE("theta_T")^(TC - 20) * TOT("Nit") * TOT("water") * TIME
+30 IF dm > TOT("Nit") * TOT("water") THEN dm = TOT("Nit") * TOT("water")
+190 SAVE dm
+200 END
+-end
+
+SOLUTION 1  Soil and ground water
+    temp    12.0
+    pH      7.0   charge
+    pe      4.0
+    units   mg/L
+    Nit     0.5
+    Amm     0.05
+    Doc     2.0
+    Oxg     8.0
+    Ntg     15.0
+    Ca      30.0
+    Mg      6.0
+    Na      8.0
+    K       1.5
+    Cl      10.0
+    C(4)    90.0  as HCO3
+    S(6)    10.0  as SO4
+SOLUTION 3  Rain and snow water
+    temp    5.0
+    pH      5.6   charge
+    units   mg/L
+    Oxg     11.0
+    Ntg     17.0
+    Na      0.3
+    Cl      0.5
+    C(4)    0.5  as HCO3
+END
+
+# ---------------------------------------------------------------------
+# Soil: gas phase, exchanger and kinetics. Aquifer: kinetics only.
+# ---------------------------------------------------------------------
+EQUILIBRIUM_PHASES 1  Soil air
+    CO2(g)   -2.0     10      # soil pCO2 = 1 %
+EXCHANGE 1  Soil cation exchanger (mol X per kg of soil water)
+    X        0.05             # cation exchange capacity [mol per kg of soil water] (fixed)
+    -equilibrate 1
+KINETICS 1  Soil
+decomposition
+    -formula  Doc 1.0  AmmH+ 0.0715
+    -m        1e10
+respiration
+    -formula  Doc -1  Oxg -1  CO2 1
+    -m        1e10
+nitrification
+    -formula  AmmH+ -1  Oxg -2  Nit- 1  H+ 2
+    -m        1e10
+denitrification
+    -formula  Nit- -1  Doc -1.25  H+ -1  Ntg 0.5  CO2 1.25
+    -m        1e10
+volatilization
+    -formula  Amm -1
+    -m        1e10
+plant_uptake_nit
+    -formula  Nit- -1  H+ -1        # nitrate taken up with a proton (charge neutral)
+    -m        1e10
+plant_uptake_amm
+    -formula  AmmH+ -1  H+ 1        # ammonium taken up, a proton released (charge neutral)
+    -m        1e10
+soil_o2_exchange
+    -formula  Oxg 1                  # negative rate = degassing when supersaturated
+    -m        1e10
+KINETICS 2  Aquifer
+respiration
+    -formula  Doc -1  Oxg -1  CO2 1
+    -m        1e10
+nitrification
+    -formula  AmmH+ -1  Oxg -2  Nit- 1  H+ 2
+    -m        1e10
+denitrification
+    -formula  Nit- -1  Doc -1.25  H+ -1  Ntg 0.5  CO2 1.25
+    -m        1e10
+KINETICS 3  River reaches
+river_reaeration
+    -formula  Oxg 1                  # negative rate = degassing when supersaturated
+    -m        1e10
+river_respiration
+    -formula  Oxg -1
+    -m        1e10
+river_nitrate_uptake
+    -formula  Nit- -1  H+ -1         # nitrate taken up with a proton (charge neutral)
+    -m        1e10
+END

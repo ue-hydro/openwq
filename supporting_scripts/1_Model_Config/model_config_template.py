@@ -545,6 +545,13 @@ river_network_shapefile = "/Users/diogocosta/Documents/openwq_code/diogo_test/mi
 #               ILAYERVOLFRACWAT_SOIL, SCALARAQUIFER
 ss_method_copernicus_compartment_name_for_load = "RIVER_NETWORK_REACHES"
 
+# Layer of that compartment that receives the loads (layered compartments such as
+# ILAYERVOLFRACWAT_SOIL or ILAYERVOLFRACWAT_SNOW):
+#   "all" → every layer. OpenWQ adds the full value to EACH layer, so the
+#           compartment receives n_layers x the load.
+#   1     → top layer only (e.g. the top soil layer); 2, 3, ... other layers.
+ss_method_copernicus_layer_for_load = "all"
+
 # Path to Copernicus ESA CCI Land Cover data.
 #   ⚠ Only used by the LOCAL "copernicus" source. The GEE sources above ignore
 #     this (they read land cover server-side from Earth Engine).
