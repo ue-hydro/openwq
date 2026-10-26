@@ -2930,24 +2930,84 @@ def _build_validation_section(output_dir, settings, model_config):
     over the validation window).  Renders the full record per species with the
     calibration window shaded green on the left, the validation window shaded
     orange on the right, a dashed boundary line, and the objective metric for
-    each period.  Shows a placeholder until that data exists."""
+    each period.  Shows a placeholder until that data exists.
+
+    One chart per station: a sub-basin cascade shows one block per gauged zone,
+    from the validation run of the stage that calibrates it (the global stage's
+    run, labelled as such, while the zone's own run is pending); otherwise each
+    station of a multi-station run gets its own block."""
     import os
     _head = ('Observed vs Simulated: Best Sim '
              '(Calibration &amp; Validation)')
-    vpath = os.path.join(str(output_dir), "results",
-                         "validation_matched_data.csv")
-    vd = None
-    have = os.path.isfile(vpath)
-    if have:
+
+    def _load_val(stage_dir):
+        """(validation pairs, full validation-run series) of a run folder."""
+        vpath = os.path.join(str(stage_dir), "results", "validation_matched_data.csv")
+        if not os.path.isfile(vpath):
+            return None, None
         try:
             import pandas as pd
-            vd = pd.read_csv(vpath)
-            have = (not vd.empty and "period" in vd.columns
-                    and {"observed", "simulated", "species", "datetime"}
-                    <= set(vd.columns))
+            vd_ = pd.read_csv(vpath)
         except Exception:
-            have = False
-    if not have:
+            return None, None
+        if (vd_.empty or "period" not in vd_.columns
+                or not {"observed", "simulated", "species", "datetime"} <= set(vd_.columns)):
+            return None, None
+        vs_ = None
+        try:
+            _vspath = os.path.join(str(stage_dir), "results", "validation_simulated_data.csv")
+            if os.path.isfile(_vspath):
+                vs_ = pd.read_csv(_vspath)
+        except Exception:
+            vs_ = None
+        return vd_, vs_
+
+    def _only(df, ids):
+        if df is None or "reach_id" not in df.columns:
+            return df
+        return df[pd.to_numeric(df["reach_id"], errors="coerce").isin([int(i) for i in ids])].copy()
+
+    # (heading html or None, validation pairs, full series) per station / zone
+    groups = []
+    try:
+        sources = _cascade_zone_sources(output_dir, settings)
+    except Exception:
+        sources = []
+    if sources:
+        import pandas as pd
+        od = str(output_dir).rstrip("/")
+        top = od if os.path.isdir(os.path.join(od, "wq_zones")) else os.path.dirname(od)
+        g_dir = os.path.join(top, "stage_00_global")
+        for src in sources:
+            label = src["label"]
+            vd_z, vs_z = _load_val(src["stage_dir"])
+            if (vd_z is None or _only(vd_z, src["ids"]).empty) and \
+                    os.path.normpath(src["stage_dir"]) != os.path.normpath(g_dir):
+                vd_z, vs_z = _load_val(g_dir)
+                label = "global stage · this zone's validation run is pending"
+            z = src["zone"]
+            colour = "var(--secondary)" if src["final"] else "var(--text2)"
+            heading = (f'<h3 style="margin:1.4rem 0 .4rem;">Zone {z["id"]} &middot; station reach '
+                       f'{src["station"]} <span style="font-weight:400;font-size:.85rem;color:{colour};">'
+                       f'({html_lib.escape(label)})</span></h3>')
+            if vd_z is None:
+                groups.append((heading + '<p style="color:var(--text2);font-size:.88rem;">No validation run '
+                               'yet for this zone.</p>', None, None))
+                continue
+            groups.append((heading, _only(vd_z, src["ids"]), _only(vs_z, src["ids"])))
+    else:
+        vd0, vs0 = _load_val(output_dir)
+        if vd0 is not None:
+            import pandas as pd
+            ids = (sorted({int(x) for x in pd.to_numeric(vd0["reach_id"], errors="coerce").dropna()})
+                   if "reach_id" in vd0.columns else [])
+            if len(ids) > 1:
+                for rid in ids:
+                    groups.append((f'<h3 style="margin:1.4rem 0 .4rem;">Station reach {rid}</h3>',
+                                   _only(vd0, [rid]), _only(vs0, [rid])))
+            else:
+                groups.append((None, vd0, vs0))
+    if not groups:
         return (
             '\n<div class="section" id="valid-ts">\n'
             f'    <h2>{_head}</h2>\n'
@@ -2963,23 +3023,6 @@ def _build_validation_section(output_dir, settings, model_config):
     import pandas as pd
     import numpy as np
     from .objective_functions import ObjectiveFunction as _OF
-    # Collapse any multi-zone HRU duplicates per period so the line is smooth
-    # (defensive — validation pairs come from the aggregated matcher already).
-    vd = _collapse_subunit_dups(vd, settings, extra_keys=["period"])
-    # Full validation-run simulated series (spans the ENTIRE cal+val record at
-    # native resolution) — drives a CONTINUOUS best-fit line like the
-    # calibration chart, instead of a line through only the sparse obs-matched
-    # points.  Falls back to the sparse pairs when this file is absent (so
-    # already-generated reports without it don't break).
-    vsim = None
-    try:
-        _vspath = os.path.join(str(output_dir), "results",
-                               "validation_simulated_data.csv")
-        if os.path.isfile(_vspath):
-            vsim = pd.read_csv(_vspath)
-            vsim = _collapse_subunit_dups(vsim, settings)
-    except Exception:
-        vsim = None
     metric = str((settings or {}).get("objective_function", "KGE")).upper()
     _mfn = {"KGE": _OF.kge, "NSE": _OF.nse, "RMSE": _OF.rmse,
             "PBIAS": _OF.pbias}.get(metric, _OF.kge)
@@ -3000,111 +3043,129 @@ def _build_validation_section(output_dir, settings, model_config):
     def _fmt(v):
         return "n/a" if v is None else f"{v:.3f}"
 
-    # One consistent calibration->validation boundary for ALL species charts:
-    # the first validation observation (else the last calibration observation).
-    # A single global boundary keeps the NO3 and NH4 charts aligned even when
-    # their sparse obs happen to fall in different periods.
-    _global_bnd = None
-    try:
-        _valr = vd[vd["period"] == "validation"]
-        _calr = vd[vd["period"] == "calibration"]
-        if not _valr.empty:
-            _global_bnd = str(
-                pd.to_datetime(_valr["datetime"], errors="coerce").min())
-        elif not _calr.empty:
-            _global_bnd = str(
-                pd.to_datetime(_calr["datetime"], errors="coerce").max())
-    except Exception:
+    def _species_blocks(vd, vsim):
+        # Collapse any multi-zone HRU duplicates per period so the line is smooth
+        # (defensive — validation pairs come from the aggregated matcher already).
+        vd = _collapse_subunit_dups(vd, settings, extra_keys=["period"])
+        vsim = _collapse_subunit_dups(vsim, settings) if vsim is not None else None
+        # One consistent calibration->validation boundary for ALL species charts:
+        # the first validation observation (else the last calibration observation).
+        # A single global boundary keeps the NO3 and NH4 charts aligned even when
+        # their sparse obs happen to fall in different periods.
         _global_bnd = None
+        try:
+            _valr = vd[vd["period"] == "validation"]
+            _calr = vd[vd["period"] == "calibration"]
+            if not _valr.empty:
+                _global_bnd = str(
+                    pd.to_datetime(_valr["datetime"], errors="coerce").min())
+            elif not _calr.empty:
+                _global_bnd = str(
+                    pd.to_datetime(_calr["datetime"], errors="coerce").max())
+        except Exception:
+            _global_bnd = None
 
-    # Render every species with obs pairs PLUS any that only have a full
-    # simulated series (so an objective species with no obs still gets a line).
-    _species = list(vd["species"].unique())
-    if vsim is not None and "species" in vsim.columns:
-        for _s in vsim["species"].unique():
-            if _s not in _species:
-                _species.append(_s)
+        # Render every species with obs pairs PLUS any that only have a full
+        # simulated series (so an objective species with no obs still gets a line).
+        _species = list(vd["species"].unique())
+        if vsim is not None and "species" in vsim.columns:
+            for _s in vsim["species"].unique():
+                if _s not in _species:
+                    _species.append(_s)
+
+        blocks = []
+        for sp in _species:
+            sd = vd[vd["species"] == sp].copy()
+            sd["_dt"] = pd.to_datetime(sd["datetime"], errors="coerce")
+            sd = sd.dropna(subset=["_dt"]).sort_values("_dt")
+            cal = sd[sd["period"] == "calibration"]
+            val = sd[sd["period"] == "validation"]
+            bnd = _global_bnd
+            # Observed markers (sparse, at observation times only)
+            x_obs = [str(v) for v in sd["_dt"]]
+            obs = [None if v != v else float(v)
+                   for v in pd.to_numeric(sd["observed"], errors="coerce")]
+            # Best-fit LINE: prefer this species' FULL validation series (continuous,
+            # native resolution, thinned like the calibration chart); fall back to
+            # the sparse matched sim when the full series is unavailable.
+            sim_x = x_obs
+            sim_y = [None if v != v else float(v)
+                     for v in pd.to_numeric(sd["simulated"], errors="coerce")]
+            if vsim is not None and "species" in vsim.columns:
+                fs = vsim[vsim["species"].astype(str) == str(sp)].copy()
+                if not fs.empty:
+                    fs["_dt"] = pd.to_datetime(fs["datetime"], errors="coerce")
+                    fs = fs.dropna(subset=["_dt"]).sort_values("_dt")
+                    _xl = [str(v) for v in fs["_dt"]]
+                    _yl = [None if v != v else float(v)
+                           for v in pd.to_numeric(fs["simulated"], errors="coerce")]
+                    if len(_xl) > 4000:                  # thin a long line
+                        _step = (len(_xl) // 4000) + 1
+                        _xl, _yl = _xl[::_step], _yl[::_step]
+                    sim_x, sim_y = _xl, _yl
+            if not any(v is not None for v in obs) and \
+               not any(v is not None for v in sim_y):
+                continue
+            traces = [
+                {"type": "scatter", "mode": "markers", "x": x_obs, "y": obs,
+                 "name": "observed",
+                 "marker": {"size": 6, "symbol": "circle", "color": "#ef4444",
+                            "line": {"width": 0.5, "color": "#7f1d1d"}},
+                 "hovertemplate": "%{x|%Y-%m-%d}<br>obs %{y:.4g}<extra></extra>"},
+                {"type": "scatter", "mode": "lines", "x": sim_x, "y": sim_y,
+                 "name": "best fit", "line": {"width": 1.5, "color": "#10b981"},
+                 "hovertemplate": "%{x|%Y-%m-%d}<br>best %{y:.4g}<extra></extra>"},
+            ]
+            shapes, annos = [], []
+            _x0 = sim_x[0] if sim_x else (x_obs[0] if x_obs else None)
+            _x1 = sim_x[-1] if sim_x else (x_obs[-1] if x_obs else None)
+            if bnd and _x0 is not None and _x1 is not None:
+                shapes.append({"type": "rect", "xref": "x", "x0": _x0, "x1": bnd,
+                               "yref": "paper", "y0": 0, "y1": 1,
+                               "fillcolor": "rgba(16,185,129,.06)",
+                               "line": {"width": 0}, "layer": "below"})
+                shapes.append({"type": "rect", "xref": "x", "x0": bnd, "x1": _x1,
+                               "yref": "paper", "y0": 0, "y1": 1,
+                               "fillcolor": "rgba(251,146,60,.08)",
+                               "line": {"width": 0}, "layer": "below"})
+                shapes.append({"type": "line", "xref": "x", "x0": bnd, "x1": bnd,
+                               "yref": "paper", "y0": 0, "y1": 1,
+                               "line": {"color": "#888", "width": 1.2,
+                                        "dash": "dash"}})
+            annos.append({"xref": "paper", "x": 0.01, "yref": "paper", "y": 1.0,
+                          "yanchor": "bottom", "showarrow": False, "align": "left",
+                          "font": {"size": 12, "color": "#0e9f6e"},
+                          "text": f"<b>Calibration</b>  {metric}={_fmt(_metric(cal))}"})
+            annos.append({"xref": "paper", "x": 0.99, "yref": "paper", "y": 1.0,
+                          "yanchor": "bottom", "xanchor": "right", "showarrow": False,
+                          "align": "right", "font": {"size": 12, "color": "#d97706"},
+                          "text": f"<b>Validation</b>  {metric}={_fmt(_metric(val))}"})
+            layout = {
+                "title": {"text": f"{sp} — best fit: calibration + validation"},
+                "xaxis": {"title": "Date"}, "yaxis": {"title": "Concentration"},
+                "hovermode": "closest", "showlegend": True,
+                "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.06,
+                           "xanchor": "left", "x": 0},
+                "margin": {"l": 64, "r": 24, "t": 100, "b": 52},
+                "shapes": shapes, "annotations": annos}
+            c = _plotly_chart(_plot_id("valts"), traces, layout, height=470,
+                              card=False, log_axes='y')
+            blocks.append(
+                f'<div class="card"><h3 style="margin:.2rem 0 .6rem;">'
+                f'{html_lib.escape(str(sp))}</h3>{c}</div>')
+        return blocks
 
     blocks = []
-    for sp in _species:
-        sd = vd[vd["species"] == sp].copy()
-        sd["_dt"] = pd.to_datetime(sd["datetime"], errors="coerce")
-        sd = sd.dropna(subset=["_dt"]).sort_values("_dt")
-        cal = sd[sd["period"] == "calibration"]
-        val = sd[sd["period"] == "validation"]
-        bnd = _global_bnd
-        # Observed markers (sparse, at observation times only)
-        x_obs = [str(v) for v in sd["_dt"]]
-        obs = [None if v != v else float(v)
-               for v in pd.to_numeric(sd["observed"], errors="coerce")]
-        # Best-fit LINE: prefer this species' FULL validation series (continuous,
-        # native resolution, thinned like the calibration chart); fall back to
-        # the sparse matched sim when the full series is unavailable.
-        sim_x = x_obs
-        sim_y = [None if v != v else float(v)
-                 for v in pd.to_numeric(sd["simulated"], errors="coerce")]
-        if vsim is not None and "species" in vsim.columns:
-            fs = vsim[vsim["species"].astype(str) == str(sp)].copy()
-            if not fs.empty:
-                fs["_dt"] = pd.to_datetime(fs["datetime"], errors="coerce")
-                fs = fs.dropna(subset=["_dt"]).sort_values("_dt")
-                _xl = [str(v) for v in fs["_dt"]]
-                _yl = [None if v != v else float(v)
-                       for v in pd.to_numeric(fs["simulated"], errors="coerce")]
-                if len(_xl) > 4000:                  # thin a long line
-                    _step = (len(_xl) // 4000) + 1
-                    _xl, _yl = _xl[::_step], _yl[::_step]
-                sim_x, sim_y = _xl, _yl
-        if not any(v is not None for v in obs) and \
-           not any(v is not None for v in sim_y):
+    for _heading, _vd, _vs in groups:
+        if _vd is None or _vd.empty:
+            if _heading:
+                blocks.append(_heading)
             continue
-        traces = [
-            {"type": "scatter", "mode": "markers", "x": x_obs, "y": obs,
-             "name": "observed",
-             "marker": {"size": 6, "symbol": "circle", "color": "#ef4444",
-                        "line": {"width": 0.5, "color": "#7f1d1d"}},
-             "hovertemplate": "%{x|%Y-%m-%d}<br>obs %{y:.4g}<extra></extra>"},
-            {"type": "scatter", "mode": "lines", "x": sim_x, "y": sim_y,
-             "name": "best fit", "line": {"width": 1.5, "color": "#10b981"},
-             "hovertemplate": "%{x|%Y-%m-%d}<br>best %{y:.4g}<extra></extra>"},
-        ]
-        shapes, annos = [], []
-        _x0 = sim_x[0] if sim_x else (x_obs[0] if x_obs else None)
-        _x1 = sim_x[-1] if sim_x else (x_obs[-1] if x_obs else None)
-        if bnd and _x0 is not None and _x1 is not None:
-            shapes.append({"type": "rect", "xref": "x", "x0": _x0, "x1": bnd,
-                           "yref": "paper", "y0": 0, "y1": 1,
-                           "fillcolor": "rgba(16,185,129,.06)",
-                           "line": {"width": 0}, "layer": "below"})
-            shapes.append({"type": "rect", "xref": "x", "x0": bnd, "x1": _x1,
-                           "yref": "paper", "y0": 0, "y1": 1,
-                           "fillcolor": "rgba(251,146,60,.08)",
-                           "line": {"width": 0}, "layer": "below"})
-            shapes.append({"type": "line", "xref": "x", "x0": bnd, "x1": bnd,
-                           "yref": "paper", "y0": 0, "y1": 1,
-                           "line": {"color": "#888", "width": 1.2,
-                                    "dash": "dash"}})
-        annos.append({"xref": "paper", "x": 0.01, "yref": "paper", "y": 1.0,
-                      "yanchor": "bottom", "showarrow": False, "align": "left",
-                      "font": {"size": 12, "color": "#0e9f6e"},
-                      "text": f"<b>Calibration</b>  {metric}={_fmt(_metric(cal))}"})
-        annos.append({"xref": "paper", "x": 0.99, "yref": "paper", "y": 1.0,
-                      "yanchor": "bottom", "xanchor": "right", "showarrow": False,
-                      "align": "right", "font": {"size": 12, "color": "#d97706"},
-                      "text": f"<b>Validation</b>  {metric}={_fmt(_metric(val))}"})
-        layout = {
-            "title": {"text": f"{sp} — best fit: calibration + validation"},
-            "xaxis": {"title": "Date"}, "yaxis": {"title": "Concentration"},
-            "hovermode": "closest", "showlegend": True,
-            "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.06,
-                       "xanchor": "left", "x": 0},
-            "margin": {"l": 64, "r": 24, "t": 100, "b": 52},
-            "shapes": shapes, "annotations": annos}
-        c = _plotly_chart(_plot_id("valts"), traces, layout, height=470,
-                          card=False, log_axes='y')
-        blocks.append(
-            f'<div class="card"><h3 style="margin:.2rem 0 .6rem;">'
-            f'{html_lib.escape(str(sp))}</h3>{c}</div>')
+        _b = _species_blocks(_vd, _vs)
+        if _b:
+            if _heading:
+                blocks.append(_heading)
+            blocks.extend(_b)
     if not blocks:
         return ""
     intro = ('<p style="color:var(--text2);margin-bottom:1rem;">Best-fit '
