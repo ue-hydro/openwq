@@ -1379,7 +1379,9 @@ def generate_interactive_setup(
             _feat_label = "Reach"
             _feat_shp = observation_config.get("river_network_shapefile")
             _feat_key = _spatial.get("river_network_mapping_key") or "SegId"
-        _available_reaches = _read_feature_ids(_feat_shp, _feat_key)
+        # NOTE: _available_reaches is built just AFTER the per-reach obs counts
+        # below, so reaches/HRUs that actually have observations are force-kept
+        # in the selectable list even when a large network is capped.
 
         # Per-reach/HRU observation counts within the simulated window — shown
         # after each id in the Targets tab so the user can see, at a glance,
@@ -1412,6 +1414,12 @@ def generate_interactive_setup(
         except Exception as _e:
             logger.warning(f"Could not compute per-reach obs counts: {_e}")
             _reach_obs_counts = {}
+        # Build the selectable reach/HRU list now, forcing in every feature that
+        # actually has observations (its id as a priority) so a target reach is
+        # never dropped by the large-network display cap (issue: a 9-digit reachID
+        # past the first 5000 in file order was missing from the Targets picker).
+        _available_reaches = _read_feature_ids(
+            _feat_shp, _feat_key, priority_ids=list((_reach_obs_counts or {}).keys()))
         # River/HRU geometry for the interactive selection map (best-effort —
         # the map is simply omitted when the geometry can't be loaded).
         _feat_geojson = _load_targets_geojson(_feat_shp)
@@ -2124,6 +2132,42 @@ def generate_interactive_setup(
       border:1px solid var(--code-border,#334155);
       border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+
+  <div style="margin:.4rem 0 .9rem;padding:.6rem .8rem;border:1px dashed var(--border);border-radius:8px;">
+    <p style="margin:0 0 .35rem;font-weight:600;color:var(--text);">Submission mode</p>
+    <label style="display:block;margin:.12rem 0;font-size:.8rem;cursor:pointer;">
+      <input type="radio" name="submit_mode" value="single" checked onchange="updateSubmitAll()">
+      Single job &mdash; submit only THIS calibration (the <code>.sbatch</code> above).</label>
+    <label style="display:block;margin:.12rem 0;font-size:.8rem;cursor:pointer;">
+      <input type="radio" name="submit_mode" value="aggregate" onchange="updateSubmitAll()">
+      Aggregate &mdash; one command submits this calibration PLUS the ones you list below, each as its
+      own independent job (its own wall-time &amp; <code>--resume</code>).</label>
+    <div id="submitAllBox" style="display:none;margin-top:.5rem;">
+      <p style="margin:.1rem 0 .2rem;font-size:.76rem;color:var(--text2);">
+        Other <code>.sbatch</code> files to submit together (one per line). Paste the local path you
+        saved each to (auto-mapped to <code>$HPC_BASE</code>), or a path already relative to
+        <code>$HPC_BASE</code>. This calibration's own job is always included.</p>
+      <textarea id="sibling_sbatches" rows="3" oninput="updateSubmitAll()"
+        placeholder="/path/to/.../0_P3C_RNT/..._rnt.sbatch&#10;/path/to/.../0_P3C_EQ/..._eq.sbatch"
+        style="width:100%;box-sizing:border-box;background:var(--code-bg,#1e293b);color:#e2e8f0;
+        border:1px solid var(--code-border,#334155);border-radius:6px;padding:.4rem .6rem;
+        font-family:'JetBrains Mono',monospace;font-size:.72rem;line-height:1.5;"></textarea>
+      <div style="position:relative;margin:.35rem 0 0;">
+        <button id="saveSubmitAllBtn" onclick="downloadSubmitAll()"
+          style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,168,107,.25);
+          border:1px solid rgba(0,168,107,.55);color:#d1fae5;padding:.18rem .6rem;
+          border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;
+          font-weight:600;">Save submit_all.sh</button>
+        <pre id="submitAllPreview" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+          border:1px solid var(--code-border,#334155);
+          border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+          font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+      </div>
+      <p style="margin:.3rem 0 0;font-size:.72rem;color:var(--text3);">
+        Run on the HPC <strong>login node</strong>: <code>cd $HPC_BASE &amp;&amp; bash submit_all.sh</code>
+        &mdash; it calls <code>sbatch</code> for each job. Do not <code>sbatch</code> this wrapper itself.</p>
+    </div>
   </div>
 
   <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
@@ -3102,6 +3146,24 @@ def _build_interactive_execution_section(
         </div>
         <div class="form-row">
             {rh.build_form_input(
+                "apptainer_sif_path", "Apptainer .sif the MODEL runs in (apptainer only)",
+                _hd("apptainer_sif_path", ""),
+                hint="Absolute path to the .sif the model is launched with "
+                     "(apptainer exec). Leave blank to reuse the '.sif on the HPC' "
+                     "field above. Only used when container_runtime = apptainer.",
+                placeholder="$HPC_BASE/openwq.sif", wrap=True)}
+            {rh.build_form_input(
+                "apptainer_bind_path", "Apptainer bind path  host[:container]  (apptainer only)",
+                _hd("apptainer_bind_path", ""),
+                hint="Bind mount for the run as host:container (e.g. "
+                     "/scratch/you/openwq_cal:/scratch/you/openwq_cal for an "
+                     "identity bind, or .../proj:/code). Leave BLANK and the job "
+                     "auto-derives an identity bind of $HPC_BASE at runtime. Only "
+                     "used when container_runtime = apptainer.",
+                placeholder="$HPC_BASE:$HPC_BASE", wrap=True)}
+        </div>
+        <div class="form-row">
+            {rh.build_form_input(
                 "hpc_openwq_dir", "openWQ clone path on the HPC",
                 _hd("hpc_openwq_dir", ""),
                 hint="Absolute path to the openWQ checkout INSIDE your host-model "
@@ -3199,9 +3261,16 @@ def _norm_feature_id(val) -> str:
 
 def _read_feature_ids(shapefile_path: Optional[str],
                       mapping_key: Optional[str],
-                      max_features: int = 5000) -> List[str]:
+                      max_features: int = 5000,
+                      priority_ids: Optional[List] = None) -> List[str]:
     """Return sorted unique feature IDs from *shapefile_path*'s *mapping_key*
     column (river reaches for mizuRoute, HRUs for SUMMA).
+
+    The whole column is read and sorted FIRST, then capped to *max_features*
+    deterministically (lowest ids kept) — never truncated in raw file order.
+    Any id in *priority_ids* (e.g. the reaches/HRUs that actually have
+    observations) is ALWAYS kept, regardless of the cap, so target features on
+    large networks (100k+ reaches) are never dropped from the selectable list.
 
     Best-effort and dependency-tolerant: returns ``[]`` on any problem
     (missing fiona, missing file, missing column), in which case the UI
@@ -3232,15 +3301,26 @@ def _read_feature_ids(shapefile_path: Optional[str],
                 if val is None:
                     continue
                 ids.add(_norm_feature_id(val))
-                if len(ids) >= max_features:
-                    break
         # numeric sort when every ID is numeric, else lexical
         def _key(x):
             try:
                 return (0, float(x))
             except (TypeError, ValueError):
                 return (1, str(x))
-        return sorted(ids, key=_key)
+        ordered = sorted(ids, key=_key)
+        # Cap for UI performance, but keep it DETERMINISTIC (sorted, not file
+        # order) and always retain the priority ids (observation reaches/HRUs).
+        if max_features and len(ordered) > max_features:
+            prio = {_norm_feature_id(p) for p in (priority_ids or [])
+                    if p is not None} & ids
+            budget = max(0, int(max_features) - len(prio))
+            rest = [i for i in ordered if i not in prio]
+            keep = prio | set(rest[:budget])
+            ordered = sorted(keep, key=_key)
+            if prio:
+                logger.info("Feature list capped to %d of %d ids; %d observation "
+                            "feature(s) force-kept.", len(ordered), len(ids), len(prio))
+        return ordered
     except Exception as e:  # pragma: no cover - defensive
         logger.warning(f"Could not read feature IDs from {shapefile_path}: {e}")
         return []
@@ -5404,9 +5484,20 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     s.zone_select = (_zsEl && _zsEl.value && _zsEl.value.trim())
         ? _zsEl.value.trim() : null;
     var _sifEl = document.getElementById('apptainer_sif_path');
-    s.apptainer_sif_path = _sifEl ? (_sifEl.value.trim() || null) : null;
+    var _sifHpcEl = document.getElementById('sif_hpc');
+    // Dedicated field wins; otherwise reuse the ".sif on the HPC" field so the
+    // user does not have to type the image path twice.
+    s.apptainer_sif_path = (_sifEl && _sifEl.value.trim())
+        ? _sifEl.value.trim()
+        : ((_sifHpcEl && _sifHpcEl.value.trim()) ? _sifHpcEl.value.trim() : null);
     var _bindEl = document.getElementById('apptainer_bind_path');
     s.apptainer_bind_path = _bindEl ? (_bindEl.value.trim() || null) : null;
+    // Multi-job submission (submit-all wrapper): 'single' | 'aggregate' + the
+    // sibling .sbatch paths to co-submit (one per line).
+    var _smEl = document.querySelector('input[name="submit_mode"]:checked');
+    s.submit_mode = _smEl ? _smEl.value : 'single';
+    var _sibEl = document.getElementById('sibling_sbatches');
+    s.sibling_sbatches = _sibEl ? _sibEl.value : '';
     // SLURM directives -> auto-filled sbatch (Execution tab). All optional;
     // guarded so older/customised reports without these fields still work.
     function _gv(id, dflt) {
@@ -6330,6 +6421,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
         state.algorithm + ' \u2022 ' + state.objective_function;
     }
     updateSbatch(state);
+    updateSubmitAll(state);
     updateHpcRun(state);
     updateProgress();
     renderMlCheck(state);
@@ -6404,6 +6496,22 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var r = (HPC && HPC.common_root) || '';
     return (r && p && p.indexOf(r) === 0) ? p.slice(r.length) : p;
   }
+  // Make a user-supplied module/activation block safe for a non-interactive
+  // SLURM shell: if it uses "conda activate" but never initialises conda's shell
+  // functions, inject  source "$(conda info --base)/etc/profile.d/conda.sh"  right
+  // before the first "conda activate" (otherwise conda activate aborts with
+  // "Your shell has not been properly configured to use conda activate").
+  function _owqCondaSafe(mods) {
+    if (!mods) return mods;
+    // Inject before the FIRST "conda activate" (works whether it is on its own
+    // line, after "&&"/";", or first token - "source ... && conda activate" is
+    // valid bash in any of those positions).  Skip if already initialised.
+    if (/conda[ \t]+activate/.test(mods) && !/etc\/profile\.d\/conda\.sh/.test(mods)) {
+      mods = mods.replace(/conda[ \t]+activate/,
+        'source "$(conda info --base)/etc/profile.d/conda.sh" && conda activate');
+    }
+    return mods;
+  }
   function buildSbatch(s) {
     var runLocalAbs = (HPC && HPC.run_local) ? HPC.run_local
                  : (CALIB_LIB_DIR + '/' +
@@ -6421,11 +6529,18 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('#SBATCH --mem=' + (s.slurm_mem || '16G'));
     L.push('#SBATCH --output=' + (s.slurm_job_name || 'openwq_calib') + '_%j.out');
     L.push('set -euo pipefail');
-    L.push(': "${HPC_BASE:?Pass HPC_BASE, e.g. sbatch --export=ALL,HPC_BASE=/scratch/$USER/openwq_cal ' + name + '}"');
+    L.push('# HPC_BASE = the root every baked path below is relative to.  The submit');
+    L.push('# helper passes it (sbatch --export=ALL,HPC_BASE=...).  If you submit this');
+    L.push('# file directly WITHOUT it, fall back to the directory you ran sbatch from');
+    L.push('# (SLURM_SUBMIT_DIR, = your HPC_BASE as long as you cd there first), else $PWD.');
+    L.push('# Override any time by exporting HPC_BASE before/at submit.');
+    L.push('HPC_BASE="${HPC_BASE:-${SLURM_SUBMIT_DIR:-$PWD}}"');
+    L.push('export HPC_BASE');
+    L.push('echo "Using HPC_BASE=$HPC_BASE"');
     L.push('');
     if (s.slurm_modules) {
       L.push('# Make Python + Apptainer available on the compute node:');
-      L.push(s.slurm_modules);
+      L.push(_owqCondaSafe(s.slurm_modules));
     } else {
       L.push('# --- EDIT (REQUIRED): make Python 3 + Apptainer available on the compute node ---');
       L.push('# Compute nodes start with a bare PATH - without this the job fails with');
@@ -6433,13 +6548,19 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('# Then set the "Modules to load" field, e.g.:');
       L.push('#   module load apptainer python && source $HPC_BASE/calib_venv/bin/activate');
       L.push('#       (calib_venv is created by the one-time setup block "0" in the report), OR');
+      L.push('#   module load Anaconda3 && source "$(conda info --base)/etc/profile.d/conda.sh" && conda activate openwq');
+      L.push('#       (the source line is REQUIRED before `conda activate` in a batch shell,');
+      L.push('#        otherwise conda aborts with "shell not properly configured"), OR');
       L.push('#   source ~/miniconda3/bin/activate openwq   # a conda env with the');
       L.push('#                                              # calibration deps (numpy, scipy, ...)');
     }
     L.push('');
     L.push('# calibration_lib + config_support_lib: PREFER the copies shipped with this run');
-    L.push('# (step a -> $HPC_BASE/_owq_calib_code), so the Python is version-locked to the');
-    L.push('# configs.  Fall back to a cloned openWQ only if the bundle is absent.');
+    L.push('# at $HPC_BASE/_owq_calib_code.  That bundle is created by the copy/deploy step');
+    L.push('# (block 0a in the setup report, which rsyncs the 3 support libs there) so the');
+    L.push('# Python stays version-locked to the configs.  The bundle is OPTIONAL: if it is');
+    L.push('# absent the job falls back to your cloned openWQ ($OWQ_REPO) and still runs -');
+    L.push('# the message below is INFORMATIONAL, not a failure.');
     L.push('OWQ_BUNDLE="$HPC_BASE/_owq_calib_code"');
     var owqDir = (s.hpc_openwq_dir || '').replace(/\/+$/, '') || '/path/to/openwq';
     L.push('# OWQ_REPO = your cloned openWQ (fallback for the libs + source of the venv).');
@@ -6447,7 +6568,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('if [ -d "$OWQ_BUNDLE/calibration_lib" ]; then');
     L.push('  export OWQ_CALIB_LIB_DIR="$OWQ_BUNDLE"   # shipped, version-locked to the configs');
     L.push('else');
-    L.push('  echo "WARNING: $OWQ_BUNDLE/calibration_lib is MISSING - falling back to the cloned openWQ, which may be STALE.  Re-run the copy step so the version-locked bundle ships (all 3 libs)." >&2');
+    L.push('  echo "NOTE (non-fatal): version-locked bundle $OWQ_BUNDLE/calibration_lib not found - using the cloned openWQ at $OWQ_REPO instead (it may be STALE vs these configs).  To ship the bundle, re-run the copy/deploy step (block 0a)." >&2');
     L.push('  for _c in "$OWQ_REPO/supporting_scripts/3_Calibration" "$OWQ_REPO/openwq/supporting_scripts/3_Calibration"; do');
     L.push('    [ -d "$_c/calibration_lib" ] && export OWQ_CALIB_LIB_DIR="$_c" && break');
     L.push('  done');
@@ -6478,8 +6599,20 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('export OWQ_EXEC_PATH="' + _exe + '"');
     else
       L.push('export OWQ_EXEC_PATH="/path/to/your/bin/<model>_openwq_Release"   # <-- EDIT: your HPC-compiled binary');
+    if (s.sif_hpc) {
+      L.push('# Apptainer image for the model container.  model_runner falls back to');
+      L.push('# this (and to an HPC_BASE identity bind) when container_runtime=apptainer');
+      L.push('# and the run script left apptainer_sif_path / apptainer_bind_path unset.');
+      L.push('export OWQ_APPTAINER_SIF="' + s.sif_hpc + '"');
+    }
     L.push('');
     L.push('RUN="$HPC_BASE' + runLocal + '"');
+    L.push('if [ ! -f "$RUN" ]; then');
+    L.push('  echo "ERROR: calibration script not found at: $RUN" >&2');
+    L.push('  echo "       HPC_BASE=$HPC_BASE is probably wrong.  Pass it explicitly, e.g.:" >&2');
+    L.push('  echo "       sbatch --export=ALL,HPC_BASE=/scratch/YOUR_USER/openwq_cal ' + name + '" >&2');
+    L.push('  exit 1');
+    L.push('fi');
     L.push('cd "$(dirname "$RUN")"');
     L.push('# Use python3 if present, else fall back to python (conda envs provide both).');
     L.push('PY="$(command -v python3 || command -v python)"');
@@ -6530,6 +6663,103 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url; a.download = sugName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      onSaved();
+    }
+  };
+
+  // ── Submit-all wrapper (Execution tab, "Aggregate" mode) ───────────────
+  // A LOGIN-NODE script (not an sbatch job) that submits THIS calibration's
+  // .sbatch plus any sibling .sbatch files the user lists, each as its own
+  // independent SLURM job (own wall-time + --resume).  One calibration = one
+  // run.py = one job; this only orchestrates the already-generated job files.
+  function submitAllName() { return 'submit_all.sh'; }
+  // Path for submit()'s 2nd arg: a CLEAN $HPC_BASE-relative path (no leading
+  // slash) when the file is under the common local root; otherwise the path as
+  // typed (a true HPC-absolute path, or one already relative to $HPC_BASE).
+  // submit() prepends $HPC_BASE only to non-absolute (relative) paths, so the
+  // relative ones must NOT start with "/" (unlike _owqRelToRoot's output).
+  function _toHpcRel(p) {
+    var r = (HPC && HPC.common_root) || '';
+    if (r && p && p.indexOf(r) === 0) return p.slice(r.length).replace(/^\/+/, '');
+    return p;
+  }
+  // This calibration's own .sbatch (saved next to the run script).
+  function _selfSbatchRel() {
+    var runAbs = (HPC && HPC.run_local) ? HPC.run_local
+               : (CALIB_LIB_DIR + '/' + (REPORT_STEM ? REPORT_STEM : 'calibration') + '_run.py');
+    var runRel = _toHpcRel(runAbs);
+    var dir = runRel.replace(/\/[^\/]*$/, '');
+    return (dir && dir !== runRel ? dir + '/' : '') + sbatchName();
+  }
+  function buildSubmitAll(s) {
+    var L = [];
+    L.push('#!/bin/bash');
+    L.push('# Auto-generated submit-all wrapper.  Submits this calibration + the ones listed in');
+    L.push('# the Execution tab as INDEPENDENT SLURM jobs (each keeps its own wall-time + --resume).');
+    L.push('# Run on the HPC LOGIN node:   cd "$HPC_BASE" && bash ' + submitAllName());
+    L.push('# Do NOT sbatch this file itself - it is a submitter, not a job.');
+    L.push('set -euo pipefail');
+    L.push(': "${HPC_BASE:=${SLURM_SUBMIT_DIR:-$PWD}}"');
+    L.push('export HPC_BASE');
+    L.push('echo "HPC_BASE=$HPC_BASE"');
+    L.push('');
+    L.push('submit () {  # $1=label  $2=sbatch path (absolute, or relative to $HPC_BASE)');
+    L.push('  local f="$2"; case "$f" in /*) ;; *) f="$HPC_BASE/$f" ;; esac');
+    L.push('  if [ ! -f "$f" ]; then echo "SKIP $1: not found: $f" >&2; return 1; fi');
+    L.push('  local jid; jid=$(sbatch --parsable --export=ALL,HPC_BASE="$HPC_BASE" "$f")');
+    L.push('  echo "submitted $1 -> job $jid  ($f)"');
+    L.push('}');
+    L.push('');
+    L.push('submit "' + (REPORT_STEM ? REPORT_STEM : 'this') + '" "' + _selfSbatchRel() + '"');
+    var sibs = (s.sibling_sbatches || '').split(/\r?\n/)
+                 .map(function(x){ return x.trim(); }).filter(function(x){ return x; });
+    sibs.forEach(function(p) {
+      var rel = _toHpcRel(p);                            // under common root -> clean $HPC_BASE-relative
+      var label = rel.replace(/^.*\//, '').replace(/\.sbatch$/, '');
+      L.push('submit "' + label + '" "' + rel + '"');
+    });
+    L.push('');
+    L.push('echo "All jobs submitted. Track with:  squeue -u $USER"');
+    return L.join('\n');
+  }
+  function updateSubmitAll(state) {
+    var box = document.getElementById('submitAllBox');
+    var modeEl = document.querySelector('input[name="submit_mode"]:checked');
+    var mode = modeEl ? modeEl.value : 'single';
+    if (box) box.style.display = (mode === 'aggregate') ? 'block' : 'none';
+    var pre = document.getElementById('submitAllPreview');
+    if (!pre) return;              // Execution tab not present
+    pre.textContent = buildSubmitAll(state || collectFormState());
+  }
+  window.updateSubmitAll = updateSubmitAll;
+  window.downloadSubmitAll = function() {
+    var text = buildSubmitAll(collectFormState());
+    var blob = new Blob([text], {type: 'text/x-sh'});
+    var btn = document.getElementById('saveSubmitAllBtn');
+    function onSaved() {
+      if (btn) { btn.textContent = '✓ Saved!';
+        setTimeout(function(){ btn.textContent = 'Save submit_all.sh'; }, 2000); }
+    }
+    if (window.showSaveFilePicker) {
+      window.showSaveFilePicker({
+        suggestedName: submitAllName(),
+        id: 'owqCalibSave',
+        startIn: window._owqSaveHandle || 'documents',
+        types: [{description: 'Shell script', accept: {'text/x-sh': ['.sh']}}],
+      }).then(function(handle) {
+        window._owqSaveHandle = handle;
+        return handle.createWritable().then(function(writable) {
+          return writable.write(blob).then(function() { return writable.close(); });
+        });
+      }).then(onSaved).catch(function(err) {
+        if (err.name !== 'AbortError') console.error(err);
+      });
+    } else {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = submitAllName();
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
       onSaved();
@@ -6886,7 +7116,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('set -euo pipefail');
     if (s.slurm_modules) {
       L.push('# Same python your job uses (Execution-tab "Modules to load"):');
-      L.push(s.slurm_modules);
+      L.push(_owqCondaSafe(s.slurm_modules));
     } else {
       L.push('# <-- EDIT: load the SAME python your job uses, e.g.');
       L.push('# module load python && source "$HPC_BASE/calib_venv/bin/activate"');

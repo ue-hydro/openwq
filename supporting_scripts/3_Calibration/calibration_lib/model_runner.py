@@ -335,6 +335,10 @@ class ModelRunner:
                 "runtime available here.")
 
         if self.runtime == "apptainer":
+            # Backfill bind/sif from the environment (HPC_BASE identity bind) when
+            # the run script shipped them as None - turns the old hard failure
+            # into a working default on HPC.
+            self._autofill_apptainer_bind()
             # A missing bind path is the #1 way a LOCAL user trips the HPC
             # path: the setup report's Execution tab left container_runtime on
             # "apptainer" (with no bind/sif set), so every eval would dispatch
@@ -749,6 +753,37 @@ class ModelRunner:
         except Exception as e:
             return False, str(e)
 
+    def _autofill_apptainer_bind(self):
+        """Backfill the apptainer bind/sif from the environment when the run
+        script left them unset.
+
+        The setup report historically shipped ``apptainer_bind_path = None``
+        (there was no Execution-tab field for it), which made every apptainer
+        eval fail preflight with "apptainer_bind_path is not set".  The .sbatch
+        always exports HPC_BASE, so derive an IDENTITY bind of HPC_BASE
+        (host == container) - absolute host paths then resolve unchanged inside
+        the container.  An explicit OWQ_APPTAINER_BIND / OWQ_APPTAINER_SIF always
+        wins.  No-op off-HPC (nothing exported), so the clear error still fires.
+        """
+        if not self.apptainer_bind_path:
+            env_bind = os.environ.get("OWQ_APPTAINER_BIND")
+            if not env_bind:
+                base = os.environ.get("HPC_BASE")
+                if base:
+                    env_bind = "{0}:{0}".format(base)   # identity bind
+            if env_bind:
+                self.apptainer_bind_path = env_bind
+                logger.info("apptainer_bind_path was unset; derived '%s' from the "
+                            "environment (OWQ_APPTAINER_BIND / HPC_BASE identity "
+                            "bind).", env_bind)
+        if not self.apptainer_sif_path:
+            env_sif = (os.environ.get("OWQ_APPTAINER_SIF")
+                       or os.environ.get("OWQ_SIF_PATH"))
+            if env_sif:
+                self.apptainer_sif_path = env_sif
+                logger.info("apptainer_sif_path was unset; derived '%s' from the "
+                            "environment (OWQ_APPTAINER_SIF).", env_sif)
+
     def _run_apptainer(self,
                        eval_dir: Path,
                        master_json_path: str) -> Tuple[bool, str]:
@@ -760,6 +795,7 @@ class ModelRunner:
         # Parse bind path.  preflight() already rejects a missing bind path
         # before any eval runs; guard here too so a direct/bypassed call fails
         # with a clear message instead of an opaque "NoneType is not iterable".
+        self._autofill_apptainer_bind()   # HPC_BASE identity bind when unset
         if not self.apptainer_bind_path:
             return False, (
                 "apptainer_bind_path is not set - set it in the setup report's "
