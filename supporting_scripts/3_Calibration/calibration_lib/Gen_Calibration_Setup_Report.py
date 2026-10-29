@@ -2110,35 +2110,11 @@ def generate_interactive_setup(
   copy&amp;run commands below fill in automatically from those fields &mdash; no editing
   required.</p>
 
-  <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
-    Save the SLURM job file (<code>{html_lib.escape(_sbatch_name)}</code>) next to your
-    run script:</p>
-  <div style="font-size:.72rem;color:var(--text3);word-break:break-all;line-height:1.45;margin:.1rem 0 .5rem;"
-       title="{html_lib.escape(_sbatch_local)}">
-    Save to: <code id="sbatchSaveHint" style="font-size:.68rem;">{html_lib.escape(_sbatch_local)}</code>
-    <button id="copySbatchHintBtn" onclick="copySbatchHint()" title="Copy path to clipboard"
-        style="margin-left:.4rem;font-size:.62rem;padding:.05rem .4rem;
-        background:rgba(0,102,204,.1);border:1px solid var(--border);
-        color:var(--primary);border-radius:4px;cursor:pointer;
-        font-family:inherit;white-space:nowrap;vertical-align:baseline;">Copy</button>
-  </div>
-  <div style="position:relative;margin:.35rem 0 .9rem;">
-    <button id="saveSbatchBtn" onclick="downloadSbatch()"
-      style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,168,107,.25);
-      border:1px solid rgba(0,168,107,.55);color:#d1fae5;padding:.18rem .6rem;
-      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;
-      font-weight:600;">Save .sbatch</button>
-    <pre id="sbatchPreview" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
-      border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
-      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
-  </div>
-
   <div style="margin:.4rem 0 .9rem;padding:.6rem .8rem;border:1px dashed var(--border);border-radius:8px;">
-    <p style="margin:0 0 .35rem;font-weight:600;color:var(--text);">Submission mode</p>
+    <p style="margin:0 0 .35rem;font-weight:600;color:var(--text);">Submission mode &mdash; choose this first</p>
     <label style="display:block;margin:.12rem 0;font-size:.8rem;cursor:pointer;">
       <input type="radio" name="submit_mode" value="single" checked onchange="updateSubmitAll()">
-      Single job &mdash; submit only THIS calibration (the <code>.sbatch</code> above).</label>
+      Single job &mdash; submit only THIS calibration (the <code>.sbatch</code> below).</label>
     <label style="display:block;margin:.12rem 0;font-size:.8rem;cursor:pointer;">
       <input type="radio" name="submit_mode" value="aggregate" onchange="updateSubmitAll()">
       Aggregate &mdash; one command submits this calibration PLUS the ones you list below, each as its
@@ -2153,34 +2129,53 @@ def generate_interactive_setup(
         style="width:100%;box-sizing:border-box;background:var(--code-bg,#1e293b);color:#e2e8f0;
         border:1px solid var(--code-border,#334155);border-radius:6px;padding:.4rem .6rem;
         font-family:'JetBrains Mono',monospace;font-size:.72rem;line-height:1.5;"></textarea>
-      <div style="position:relative;margin:.35rem 0 0;">
-        <button id="saveSubmitAllBtn" onclick="downloadSubmitAll()"
-          style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,168,107,.25);
-          border:1px solid rgba(0,168,107,.55);color:#d1fae5;padding:.18rem .6rem;
-          border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;
-          font-weight:600;">Save submit_all.sh</button>
-        <pre id="submitAllPreview" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
-          border:1px solid var(--code-border,#334155);
-          border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
-          font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
-      </div>
-      <p style="margin:.3rem 0 0;font-size:.72rem;color:var(--text3);">
-        Run on the HPC <strong>login node</strong>: <code>cd $HPC_BASE &amp;&amp; bash submit_all.sh</code>
-        &mdash; it calls <code>sbatch</code> for each job. Do not <code>sbatch</code> this wrapper itself.</p>
+      <p style="margin:.35rem 0 0;font-size:.72rem;color:var(--text3);">
+        &#10142;&nbsp;The ready-to-run command that submits all of these is generated below in
+        <strong>step 3.5</strong> &mdash; it adapts automatically to the files you list here, so
+        there is nothing separate to save.</p>
     </div>
   </div>
+
+  <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
+    3.1 &mdash; Save the SLURM job file (<code>{html_lib.escape(_sbatch_name)}</code>) next to your
+    run script:</p>
+  <div style="font-size:.72rem;color:var(--text3);word-break:break-all;line-height:1.45;margin:.1rem 0 .5rem;"
+       title="{html_lib.escape(_sbatch_local)}">
+    Save to: <code id="sbatchSaveHint" style="font-size:.68rem;">{html_lib.escape(_sbatch_local)}</code>
+    <button id="copySbatchHintBtn" onclick="copySbatchHint()" title="Copy path to clipboard"
+        style="margin-left:.4rem;font-size:.62rem;padding:.05rem .4rem;
+        background:rgba(0,102,204,.1);border:1px solid var(--border);
+        color:var(--primary);border-radius:4px;cursor:pointer;
+        font-family:inherit;white-space:nowrap;vertical-align:baseline;">Copy</button>
+  </div>
+  <details class="owq-hpc-step" style="margin:.1rem 0 .6rem;">
+  <summary style="cursor:pointer;font-weight:600;font-size:.8rem;padding:.4rem .2rem;color:var(--text);">
+    Generated <code>.sbatch</code> job file &mdash; click to view / save</summary>
+  <div style="position:relative;margin:.35rem 0 .9rem;">
+    <button id="saveSbatchBtn" onclick="downloadSbatch()"
+      style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,168,107,.25);
+      border:1px solid rgba(0,168,107,.55);color:#d1fae5;padding:.18rem .6rem;
+      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;
+      font-weight:600;">Save .sbatch</button>
+    <pre id="sbatchPreview" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
+      border:1px solid var(--code-border,#334155);
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
+      font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
+  </div>
+  </details>
 
   <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
     Run these blocks in order. The simplest way is from <strong>your LOCAL terminal</strong>
     &mdash; each one connects to the HPC for you (<code>rsync</code>/<code>ssh</code>), so
     you'll be asked for your HPC password and you don't need to log in first.
-    Blocks <strong>b</strong> and <strong>c</strong> <em>also</em> work if you've already
+    Steps <strong>3.4</strong> and <strong>3.5</strong> <em>also</em> work if you've already
     <code>ssh</code>-ed into the cluster &mdash; they auto-detect that and run there
-    directly. (Block <strong>a</strong> copies <em>from</em> your laptop, so it always
+    directly. (Step <strong>3.3</strong> copies <em>from</em> your laptop, so it always
     runs locally.)</p>
 
-  <p style="margin:.5rem 0 .1rem;font-size:.78rem;">
-    0. Set up the Python environment on the HPC <strong>(one-time)</strong></p>
+  <details class="owq-hpc-step" style="margin:.1rem 0;border-top:1px solid var(--border);">
+  <summary style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;">
+    3.2 &mdash; Set up the Python environment on the HPC <strong>(one-time)</strong></summary>
   <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
        background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
        border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
@@ -2200,12 +2195,14 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunEnv" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
-  <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
-    a. Copy code &amp; inputs to the HPC</p>
+  </details>
+  <details class="owq-hpc-step" style="margin:.1rem 0;border-top:1px solid var(--border);">
+  <summary style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;">
+    3.3 &mdash; Copy code &amp; inputs to the HPC</summary>
   <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
        background:rgba(217,119,6,.10);border:1px solid rgba(217,119,6,.45);
        border-left:3px solid #d97706;border-radius:6px;color:var(--text);line-height:1.5;">
@@ -2222,12 +2219,14 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunCopy" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
-  <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
-    b. Re-point the absolute paths to the HPC (run once)</p>
+  </details>
+  <details class="owq-hpc-step" style="margin:.1rem 0;border-top:1px solid var(--border);">
+  <summary style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;">
+    3.4 &mdash; Re-point the absolute paths to the HPC (run once)</summary>
   <div style="position:relative;margin:.2rem 0 .7rem;">
     <button onclick="copyHpcRun(this,'hpcRunRemap')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -2235,13 +2234,15 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunRemap" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
-  <p style="margin:.4rem 0 .1rem;font-size:.78rem;">
-    c. Submit the SLURM job</p>
-  <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
+  </details>
+  <details class="owq-hpc-step" style="margin:.1rem 0;border-top:1px solid var(--border);">
+  <summary id="hpcSubmitSummary" style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;">
+    3.5 &mdash; Submit the SLURM job</summary>
+  <div class="owq-single-only" style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
        background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
        border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
     <strong style="color:#1d4ed8;">&#8505; This runs on the cluster.</strong>
@@ -2252,6 +2253,16 @@ def generate_interactive_setup(
     HPC</strong> (<code>ssh&nbsp;$HPC_USER@$HPC_HOST</code>) and it calls <code>sbatch</code>
     directly. Either way works &mdash; nothing to edit.
   </div>
+  <div class="owq-agg-only" style="display:none;margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
+       background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
+       border-left:3px solid #2563eb;border-radius:6px;color:var(--text);line-height:1.5;">
+    <strong style="color:#1d4ed8;">&#8505; Aggregate.</strong> The command below submits
+    <strong>every calibration you listed</strong> in the Submission-mode box (this one + the
+    siblings) as independent jobs. Run it <strong>on the HPC login node</strong>
+    (<code>ssh&nbsp;$HPC_USER@$HPC_HOST</code> first). Each listed calibration must first be
+    deployed with steps <strong>3.3</strong> + <strong>3.4</strong> from <em>its own</em> report;
+    any not yet on the HPC are skipped with a note.
+  </div>
   <div style="position:relative;margin:.2rem 0 .7rem;">
     <button onclick="copyHpcRun(this,'hpcRunSubmit')"
       style="position:absolute;top:.4rem;right:.4rem;background:rgba(255,255,255,.12);
@@ -2259,9 +2270,11 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunSubmit" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
+
+  </details>
 
   <div class="hint" style="margin-top:.3rem;">
     Together these copy your code + inputs + the <code>.sif</code> under one
@@ -2313,7 +2326,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunStatus" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -2333,7 +2346,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunSlurmOut" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -2346,7 +2359,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunCancel" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
   </details>
@@ -2375,7 +2388,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunFetch" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
   <div style="margin:.45rem 0 .12rem;font-size:.74rem;color:var(--text2);line-height:1.5;">
@@ -2387,7 +2400,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunOpen" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -2400,7 +2413,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunOpenFolder" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
 
@@ -2418,7 +2431,7 @@ def generate_interactive_setup(
       border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;">Copy</button>
     <pre id="hpcRunFetchResults" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
-      border-radius:8px;padding:.7rem .9rem;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
   </details>
@@ -6547,7 +6560,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('# "python: command not found".  Find the names with: module avail python apptainer');
       L.push('# Then set the "Modules to load" field, e.g.:');
       L.push('#   module load apptainer python && source $HPC_BASE/calib_venv/bin/activate');
-      L.push('#       (calib_venv is created by the one-time setup block "0" in the report), OR');
+      L.push('#       (calib_venv is created by the one-time setup, step 3.2 in the report), OR');
       L.push('#   module load Anaconda3 && source "$(conda info --base)/etc/profile.d/conda.sh" && conda activate openwq');
       L.push('#       (the source line is REQUIRED before `conda activate` in a batch shell,');
       L.push('#        otherwise conda aborts with "shell not properly configured"), OR');
@@ -6557,7 +6570,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('');
     L.push('# calibration_lib + config_support_lib: PREFER the copies shipped with this run');
     L.push('# at $HPC_BASE/_owq_calib_code.  That bundle is created by the copy/deploy step');
-    L.push('# (block 0a in the setup report, which rsyncs the 3 support libs there) so the');
+    L.push('# (step 3.3 in the setup report, which rsyncs the 3 support libs there) so the');
     L.push('# Python stays version-locked to the configs.  The bundle is OPTIONAL: if it is');
     L.push('# absent the job falls back to your cloned openWQ ($OWQ_REPO) and still runs -');
     L.push('# the message below is INFORMATIONAL, not a failure.');
@@ -6568,12 +6581,12 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('if [ -d "$OWQ_BUNDLE/calibration_lib" ]; then');
     L.push('  export OWQ_CALIB_LIB_DIR="$OWQ_BUNDLE"   # shipped, version-locked to the configs');
     L.push('else');
-    L.push('  echo "NOTE (non-fatal): version-locked bundle $OWQ_BUNDLE/calibration_lib not found - using the cloned openWQ at $OWQ_REPO instead (it may be STALE vs these configs).  To ship the bundle, re-run the copy/deploy step (block 0a)." >&2');
+    L.push('  echo "NOTE (non-fatal): version-locked bundle $OWQ_BUNDLE/calibration_lib not found - using the cloned openWQ at $OWQ_REPO instead (it may be STALE vs these configs).  To ship the bundle, re-run the copy/deploy step (step 3.3)." >&2');
     L.push('  for _c in "$OWQ_REPO/supporting_scripts/3_Calibration" "$OWQ_REPO/openwq/supporting_scripts/3_Calibration"; do');
     L.push('    [ -d "$_c/calibration_lib" ] && export OWQ_CALIB_LIB_DIR="$_c" && break');
     L.push('  done');
     L.push('fi');
-    L.push(': "${OWQ_CALIB_LIB_DIR:?calibration_lib not found in $OWQ_BUNDLE or under $OWQ_REPO - run step a (copy), or check the openWQ clone path}"');
+    L.push(': "${OWQ_CALIB_LIB_DIR:?calibration_lib not found in $OWQ_BUNDLE or under $OWQ_REPO - run step 3.3 (copy), or check the openWQ clone path}"');
     L.push('# config_support_lib (Gen_Input_Driver) for the model-config templates.');
     L.push('if [ -d "$OWQ_BUNDLE/config_support_lib" ]; then');
     L.push('  export PYTHONPATH="$OWQ_BUNDLE/config_support_lib${PYTHONPATH:+:$PYTHONPATH}"');
@@ -6670,12 +6683,8 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
   };
 
   // ── Submit-all wrapper (Execution tab, "Aggregate" mode) ───────────────
-  // A LOGIN-NODE script (not an sbatch job) that submits THIS calibration's
-  // .sbatch plus any sibling .sbatch files the user lists, each as its own
-  // independent SLURM job (own wall-time + --resume).  One calibration = one
-  // run.py = one job; this only orchestrates the already-generated job files.
-  function submitAllName() { return 'submit_all.sh'; }
-  // Path for submit()'s 2nd arg: a CLEAN $HPC_BASE-relative path (no leading
+  // Helper used by step 3.5's submit loop: map a path to a CLEAN
+  // $HPC_BASE-relative form (no leading
   // slash) when the file is under the common local root; otherwise the path as
   // typed (a true HPC-absolute path, or one already relative to $HPC_BASE).
   // submit() prepends $HPC_BASE only to non-absolute (relative) paths, so the
@@ -6685,86 +6694,26 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     if (r && p && p.indexOf(r) === 0) return p.slice(r.length).replace(/^\/+/, '');
     return p;
   }
-  // This calibration's own .sbatch (saved next to the run script).
-  function _selfSbatchRel() {
-    var runAbs = (HPC && HPC.run_local) ? HPC.run_local
-               : (CALIB_LIB_DIR + '/' + (REPORT_STEM ? REPORT_STEM : 'calibration') + '_run.py');
-    var runRel = _toHpcRel(runAbs);
-    var dir = runRel.replace(/\/[^\/]*$/, '');
-    return (dir && dir !== runRel ? dir + '/' : '') + sbatchName();
-  }
-  function buildSubmitAll(s) {
-    var L = [];
-    L.push('#!/bin/bash');
-    L.push('# Auto-generated submit-all wrapper.  Submits this calibration + the ones listed in');
-    L.push('# the Execution tab as INDEPENDENT SLURM jobs (each keeps its own wall-time + --resume).');
-    L.push('# Run on the HPC LOGIN node:   cd "$HPC_BASE" && bash ' + submitAllName());
-    L.push('# Do NOT sbatch this file itself - it is a submitter, not a job.');
-    L.push('set -euo pipefail');
-    L.push(': "${HPC_BASE:=${SLURM_SUBMIT_DIR:-$PWD}}"');
-    L.push('export HPC_BASE');
-    L.push('echo "HPC_BASE=$HPC_BASE"');
-    L.push('');
-    L.push('submit () {  # $1=label  $2=sbatch path (absolute, or relative to $HPC_BASE)');
-    L.push('  local f="$2"; case "$f" in /*) ;; *) f="$HPC_BASE/$f" ;; esac');
-    L.push('  if [ ! -f "$f" ]; then echo "SKIP $1: not found: $f" >&2; return 1; fi');
-    L.push('  local jid; jid=$(sbatch --parsable --export=ALL,HPC_BASE="$HPC_BASE" "$f")');
-    L.push('  echo "submitted $1 -> job $jid  ($f)"');
-    L.push('}');
-    L.push('');
-    L.push('submit "' + (REPORT_STEM ? REPORT_STEM : 'this') + '" "' + _selfSbatchRel() + '"');
-    var sibs = (s.sibling_sbatches || '').split(/\r?\n/)
-                 .map(function(x){ return x.trim(); }).filter(function(x){ return x; });
-    sibs.forEach(function(p) {
-      var rel = _toHpcRel(p);                            // under common root -> clean $HPC_BASE-relative
-      var label = rel.replace(/^.*\//, '').replace(/\.sbatch$/, '');
-      L.push('submit "' + label + '" "' + rel + '"');
-    });
-    L.push('');
-    L.push('echo "All jobs submitted. Track with:  squeue -u $USER"');
-    return L.join('\n');
-  }
   function updateSubmitAll(state) {
+    var s = state || collectFormState();
+    var agg = (s.submit_mode === 'aggregate');
+    var els = document.querySelectorAll('.owq-agg-only'), i;
+    for (i = 0; i < els.length; i++) els[i].style.display = agg ? '' : 'none';
+    els = document.querySelectorAll('.owq-single-only');
+    for (i = 0; i < els.length; i++) els[i].style.display = agg ? 'none' : '';
     var box = document.getElementById('submitAllBox');
-    var modeEl = document.querySelector('input[name="submit_mode"]:checked');
-    var mode = modeEl ? modeEl.value : 'single';
-    if (box) box.style.display = (mode === 'aggregate') ? 'block' : 'none';
-    var pre = document.getElementById('submitAllPreview');
-    if (!pre) return;              // Execution tab not present
-    pre.textContent = buildSubmitAll(state || collectFormState());
+    if (box) box.style.display = agg ? 'block' : 'none';
+    // Step 3.5 (Run-on-HPC) adapts to the mode: single job vs submit-all loop.
+    var sumEl = document.getElementById('hpcSubmitSummary');
+    if (sumEl) sumEl.textContent = agg
+      ? '3.5 — Submit ALL the selected jobs at once (aggregate)'
+      : '3.5 — Submit the SLURM job';
+    var sub = document.getElementById('hpcRunSubmit');
+    if (sub) sub.textContent = buildHpcSubmit(s);
   }
   window.updateSubmitAll = updateSubmitAll;
-  window.downloadSubmitAll = function() {
-    var text = buildSubmitAll(collectFormState());
-    var blob = new Blob([text], {type: 'text/x-sh'});
-    var btn = document.getElementById('saveSubmitAllBtn');
-    function onSaved() {
-      if (btn) { btn.textContent = '✓ Saved!';
-        setTimeout(function(){ btn.textContent = 'Save submit_all.sh'; }, 2000); }
-    }
-    if (window.showSaveFilePicker) {
-      window.showSaveFilePicker({
-        suggestedName: submitAllName(),
-        id: 'owqCalibSave',
-        startIn: window._owqSaveHandle || 'documents',
-        types: [{description: 'Shell script', accept: {'text/x-sh': ['.sh']}}],
-      }).then(function(handle) {
-        window._owqSaveHandle = handle;
-        return handle.createWritable().then(function(writable) {
-          return writable.write(blob).then(function() { return writable.close(); });
-        });
-      }).then(onSaved).catch(function(err) {
-        if (err.name !== 'AbortError') console.error(err);
-      });
-    } else {
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url; a.download = submitAllName();
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      onSaved();
-    }
-  };
+  // (submit-all is generated entirely in step 3.5; there is no separate
+  //  downloadable submit_all.sh wrapper any more.)
 
   // ── HPC copy & run blocks (Run-on-HPC section) ─────────────────────────
   // Three independently-pasteable blocks, each pre-filled from the
@@ -7005,7 +6954,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('# sed keeps the edit atomic - a partial run would re-point some files and');
       L.push('# then wrongly report "Already re-pointed" on the next attempt.');
       L.push('for _f in "$RUN" "$MC"; do');
-      L.push('  [ -f "$_f" ] || { echo "ERROR: not found on the HPC: $_f"; echo "       Run the copy step (a) first; if the file exists under a different name, check the filename CASE matches your local file exactly."; exit 1; }');
+      L.push('  [ -f "$_f" ] || { echo "ERROR: not found on the HPC: $_f"; echo "       Run the copy step (3.3) first; if the file exists under a different name, check the filename CASE matches your local file exactly."; exit 1; }');
       L.push('done');
       var _bindVal = (HPC && HPC.container_prefix) ? ('$HPC_BASE:' + HPC.container_prefix) : '$HPC_BASE';
       L.push('# Idempotent + self-healing: re-point only while local $ROOT paths remain,');
@@ -7020,7 +6969,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('else');
       L.push('  echo "Already re-pointed - no $ROOT paths remain."');
       L.push('fi');
-      L.push('# Point the model config at the SHIPPED config_support_lib (step a copied it to');
+      L.push('# Point the model config at the SHIPPED config_support_lib (step 3.3 copied it to');
       L.push('# $HPC_BASE/_owq_calib_code), so Gen_Input_Driver + the BGC/SI templates match');
       L.push('# the configs regardless of any cloned openWQ.  This ONE rewrite covers BOTH the');
       L.push('# sys.path import AND the template paths (all live under config_support_lib).');
@@ -7044,7 +6993,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('  echo "Re-pointed residual openWQ-clone paths to $HPC_OWQ (bundle not used)."');
       L.push('fi');
       L.push('if [ ! -d "$CFG_DST" ] && [ -z "$HPC_OWQ" ]; then');
-      L.push('  echo "WARN: neither the shipped bundle ($CFG_DST) nor a clone config_support_lib was found - the model config still points at local paths.  Re-run step a (copy), or set the openWQ clone path."');
+      L.push('  echo "WARN: neither the shipped bundle ($CFG_DST) nor a clone config_support_lib was found - the model config still points at local paths.  Re-run step 3.3 (copy), or set the openWQ clone path."');
       L.push('fi');
       L.push('EOF');
     } else {
@@ -7075,19 +7024,44 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     var _sbatchHpc = '$HPC_BASE' + ((HPC && HPC.sbatch_local)
                        ? _owqRelToRoot(HPC.sbatch_local)
                        : ('/' + ((HPC && HPC.sbatch_name) || 'calibration.sbatch')));
-    L.push('# Submit the SLURM job (it was copied inside the work dir by step a).');
-    L.push('# Run this on your LAPTOP or after logging into the HPC - it auto-detects:');
-    L.push('# if sbatch is on PATH it submits here, otherwise it ssh-es into the HPC.');
-    L.push('SBATCH_FILE="' + _sbatchHpc + '"');
-    L.push('if command -v sbatch >/dev/null 2>&1; then');
-    L.push('  cd "$HPC_BASE" && sbatch --export=ALL,HPC_BASE="$HPC_BASE" "$SBATCH_FILE"');
-    L.push('else');
-    L.push('  ssh "$HPC_USER@$HPC_HOST" "cd $HPC_BASE && sbatch --export=ALL,HPC_BASE=$HPC_BASE $SBATCH_FILE"');
-    L.push('fi');
-    L.push('');
-    L.push('# Monitor (on the HPC):  squeue -u $HPC_USER');
-    L.push('#       (from laptop):   ssh "$HPC_USER@$HPC_HOST" "squeue -u $HPC_USER"');
-    L.push('# When it finishes, fetch + view the results report in step 4 below.');
+    var _agg = (s && s.submit_mode === 'aggregate');
+    var _sibs = _agg ? (s.sibling_sbatches || '').split(/\r?\n/)
+                        .map(function(x){ return x.trim(); }).filter(function(x){ return x; })
+                     : [];
+    if (!_agg) {
+      L.push('# Submit the SLURM job (it was copied inside the work dir by step 3.3).');
+      L.push('# Run this on your LAPTOP or after logging into the HPC - it auto-detects:');
+      L.push('# if sbatch is on PATH it submits here, otherwise it ssh-es into the HPC.');
+      L.push('SBATCH_FILE="' + _sbatchHpc + '"');
+      L.push('if command -v sbatch >/dev/null 2>&1; then');
+      L.push('  cd "$HPC_BASE" && sbatch --export=ALL,HPC_BASE="$HPC_BASE" "$SBATCH_FILE"');
+      L.push('else');
+      L.push('  ssh "$HPC_USER@$HPC_HOST" "cd $HPC_BASE && sbatch --export=ALL,HPC_BASE=$HPC_BASE $SBATCH_FILE"');
+      L.push('fi');
+      L.push('');
+      L.push('# Monitor (on the HPC):  squeue -u $HPC_USER');
+      L.push('#       (from laptop):   ssh "$HPC_USER@$HPC_HOST" "squeue -u $HPC_USER"');
+      L.push('# When it finishes, fetch + view the results report in step 4 below.');
+    } else {
+      var _self = (HPC && HPC.sbatch_local) ? _toHpcRel(HPC.sbatch_local)
+                  : ((HPC && HPC.sbatch_name) || 'calibration.sbatch');
+      var _items = [_self];
+      _sibs.forEach(function(p){ _items.push(_toHpcRel(p)); });
+      L.push('# AGGREGATE submit: one INDEPENDENT SLURM job per calibration you listed');
+      L.push('# (this one + the siblings) - each keeps its own wall-time + --resume.');
+      L.push('# FIRST deploy EACH: run steps 3.3 (copy) + 3.4 (re-point) from THAT');
+      L.push('# calibration\'s own setup report (every report copies its own inputs).');
+      L.push('# Then run this ON the HPC login node (ssh "$HPC_USER@$HPC_HOST" first).');
+      L.push('# Jobs not yet on the HPC are skipped with a note.');
+      L.push('cd "$HPC_BASE" || exit 1');
+      L.push('for f in ' + _items.map(function(it){ return '"' + it + '"'; }).join(' ') + '; do');
+      L.push('  case "$f" in /*) ff="$f" ;; *) ff="$HPC_BASE/$f" ;; esac');
+      L.push('  if [ ! -f "$ff" ]; then echo "SKIP (not on the HPC yet - deploy it with steps 3.3+3.4): $ff" >&2; continue; fi');
+      L.push('  jid=$(sbatch --parsable --export=ALL,HPC_BASE="$HPC_BASE" "$ff") && echo "submitted $ff -> job $jid"');
+      L.push('done');
+      L.push('');
+      L.push('# Monitor:  squeue -u $HPC_USER');
+    }
     return L.join('\n');
   }
   // Step 4 (HPC): fetch the calibration results report (+ data/plots) HPC -> laptop.
