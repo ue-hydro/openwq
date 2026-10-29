@@ -2137,6 +2137,15 @@ def generate_interactive_setup(
   </div>
 
   <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
+    Run these blocks in order. The simplest way is from <strong>your LOCAL terminal</strong>
+    &mdash; each one connects to the HPC for you (<code>rsync</code>/<code>ssh</code>), so
+    you'll be asked for your HPC password and you don't need to log in first.
+    Steps <strong>3.4</strong> and <strong>3.5</strong> <em>also</em> work if you've already
+    <code>ssh</code>-ed into the cluster &mdash; they auto-detect that and run there
+    directly. (Step <strong>3.3</strong> copies <em>from</em> your laptop, so it always
+    runs locally.)</p>
+
+  <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
     3.1 &mdash; Save the SLURM job file (<code>{html_lib.escape(_sbatch_name)}</code>) next to your
     run script:</p>
   <div style="font-size:.72rem;color:var(--text3);word-break:break-all;line-height:1.45;margin:.1rem 0 .5rem;"
@@ -2148,33 +2157,24 @@ def generate_interactive_setup(
         color:var(--primary);border-radius:4px;cursor:pointer;
         font-family:inherit;white-space:nowrap;vertical-align:baseline;">Copy</button>
   </div>
-  <details class="owq-hpc-step" style="margin:.1rem 0 .6rem;">
+  <details class="owq-hpc-step" style="margin:.1rem 0 .4rem;">
   <summary style="cursor:pointer;font-weight:600;font-size:.8rem;padding:.4rem .2rem;color:var(--text);">
-    Generated <code>.sbatch</code> job file &mdash; click to view / save</summary>
-  <div style="position:relative;margin:.35rem 0 .9rem;">
-    <button id="saveSbatchBtn" onclick="downloadSbatch()"
-      style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,168,107,.25);
-      border:1px solid rgba(0,168,107,.55);color:#d1fae5;padding:.18rem .6rem;
-      border-radius:5px;font-size:.66rem;cursor:pointer;font-family:inherit;
-      font-weight:600;">Save .sbatch</button>
+    Generated <code>.sbatch</code> job file &mdash; click to view</summary>
+  <div style="margin:.35rem 0 .5rem;">
     <pre id="sbatchPreview" style="background:var(--code-bg,#1e293b);color:#e2e8f0;
       border:1px solid var(--code-border,#334155);
       border-radius:8px;padding:.7rem .9rem;margin:0;max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
       font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.55;">Loading&#8230;</pre>
   </div>
   </details>
-
-  <p style="margin:.5rem 0 .15rem;font-weight:600;color:var(--text);">
-    Run these blocks in order. The simplest way is from <strong>your LOCAL terminal</strong>
-    &mdash; each one connects to the HPC for you (<code>rsync</code>/<code>ssh</code>), so
-    you'll be asked for your HPC password and you don't need to log in first.
-    Steps <strong>3.4</strong> and <strong>3.5</strong> <em>also</em> work if you've already
-    <code>ssh</code>-ed into the cluster &mdash; they auto-detect that and run there
-    directly. (Step <strong>3.3</strong> copies <em>from</em> your laptop, so it always
-    runs locally.)</p>
+  <button id="saveSbatchBtn" onclick="downloadSbatch()"
+      style="font-size:.8rem;padding:.4rem .95rem;font-weight:600;
+      background:linear-gradient(135deg,rgba(0,102,204,.18),rgba(0,168,107,.18));
+      border:1px solid var(--border);color:var(--secondary);border-radius:7px;
+      cursor:pointer;margin:.1rem 0 .7rem;">Save .sbatch</button>
 
   <details class="owq-hpc-step" style="margin:.1rem 0;border-top:1px solid var(--border);">
-  <summary style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;">
+  <summary style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;color:var(--text);">
     3.2 &mdash; Set up the Python environment on the HPC <strong>(one-time)</strong></summary>
   <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
        background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
@@ -2201,7 +2201,7 @@ def generate_interactive_setup(
 
   </details>
   <details class="owq-hpc-step" style="margin:.1rem 0;border-top:1px solid var(--border);">
-  <summary style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;">
+  <summary style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;color:var(--text);">
     3.3 &mdash; Copy code &amp; inputs to the HPC</summary>
   <div style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
        background:rgba(217,119,6,.10);border:1px solid rgba(217,119,6,.45);
@@ -2225,7 +2225,7 @@ def generate_interactive_setup(
 
   </details>
   <details class="owq-hpc-step" style="margin:.1rem 0;border-top:1px solid var(--border);">
-  <summary style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;">
+  <summary style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;color:var(--text);">
     3.4 &mdash; Re-point the absolute paths to the HPC (run once)</summary>
   <div style="position:relative;margin:.2rem 0 .7rem;">
     <button onclick="copyHpcRun(this,'hpcRunRemap')"
@@ -2240,7 +2240,7 @@ def generate_interactive_setup(
 
   </details>
   <details class="owq-hpc-step" style="margin:.1rem 0;border-top:1px solid var(--border);">
-  <summary id="hpcSubmitSummary" style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;">
+  <summary id="hpcSubmitSummary" style="cursor:pointer;font-weight:600;font-size:.82rem;padding:.45rem .2rem;color:var(--text);">
     3.5 &mdash; Submit the SLURM job</summary>
   <div class="owq-single-only" style="margin:.15rem 0 .4rem;padding:.4rem .6rem;font-size:.74rem;
        background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.40);
