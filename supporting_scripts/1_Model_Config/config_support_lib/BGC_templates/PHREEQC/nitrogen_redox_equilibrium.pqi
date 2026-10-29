@@ -84,9 +84,9 @@ EXCHANGE_SPECIES
 # Rate constants and fixed constants (one definition, used by all blocks)
 # ---------------------------------------------------------------------
 CALCULATE_VALUES
-k_dec          # maximum decomposition rate [mg C/L/day]   # CALIBRATE [0.01, 5.0]
+k_dec          # maximum decomposition rate [mg C/L/day]   # CALIBRATE [0.001, 5.0]
 -start
-10 SAVE 0.5
+10 SAVE 0.01
 -end
 k_nit          # maximum nitrification rate [mg N/L/day]   # CALIBRATE [0.01, 20.0]
 -start

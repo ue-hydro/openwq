@@ -60,7 +60,7 @@
         "k_vol": 0.01,
         "depth_factor": 0.5,
         "gamma_tmp": 1.0,
-        "k_dec": 0.5,
+        "k_dec": 0.01,
         "k_nit": 1.0,
         "k_den": 0.2,
         "k_o2": 10.0,
@@ -71,9 +71,9 @@
     },
     "_GLOBAL_PARAMETERS_INFO": {
         "k_dec": {
-            "VALUE": 0.5,
+            "VALUE": 0.01,
             "RANGE": [
-                0.01,
+                0.001,
                 5.0
             ],
             "UNITS": "mg C/L/day",
