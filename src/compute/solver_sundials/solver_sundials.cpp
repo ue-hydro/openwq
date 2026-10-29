@@ -21,6 +21,8 @@
 #include "utils/headerfile_UTILS.hpp"
 
 #include <cstring> // for std::memcpy (OPTIMIZED #10)
+#include <cmath>   // for std::isfinite
+#include <cstdio>  // for std::snprintf
 #include <sundials/sundials_core.hpp>
 #include <sundials/sundials_types.h>
 #include <sundials/sundials_nvector.h>
@@ -241,6 +243,38 @@ int totalFlux(sunrealtype t, N_Vector u, N_Vector f, void* udata) {
             std::memcpy(fvec_data + chem_offset, src, cube_size * sizeof(double));
             for (unsigned int i = 0; i < cube_size; i++){
                 fvec_data[chem_offset + i] *= inv_dt;
+            }
+        }
+    }
+
+    // A non-finite derivative (an overflowed state or a non-finite input term)
+    // cannot be cured by a smaller step: return an unrecoverable error so that
+    // CVode stops at once (CV_RHSFUNC_FAIL) instead of retrying with ever
+    // smaller steps up to the convergence-failure limit, which cost ~15 times a
+    // normal step on every remaining step of the run. The first occurrence is
+    // reported with its compartment, species and cell.
+    for (unsigned int icmp = 0; icmp < user_data.num_comps; icmp++){
+        const auto& [nx, ny, nz] = user_data.comp_dims[icmp];
+        const unsigned int offset = user_data.comp_offsets[icmp];
+        const unsigned int cube_size = nx * ny * nz;
+        for (unsigned int chemi = 0; chemi < user_data.num_chem; chemi++){
+            const unsigned int chem_offset = offset + chemi * cube_size;
+            for (unsigned int i = 0; i < cube_size; i++){
+                if (std::isfinite(fvec_data[chem_offset + i])) continue;
+                static bool reported = false;
+                if (!reported){
+                    reported = true;
+                    char mass_str[32];
+                    std::snprintf(mass_str, sizeof(mass_str), "%.3e", uvec_data[chem_offset + i]);
+                    std::string msg = "<OpenWQ> WARNING: CVODE chemistry right-hand side is not finite in compartment "
+                        + user_data.hostModelconfig.get_HydroComp_name_at(icmp)
+                        + ", species index " + std::to_string(chemi)
+                        + ", cell " + std::to_string(i % nx) + "," + std::to_string((i / nx) % ny) + "," + std::to_string(i / (nx * ny))
+                        + " (mass " + mass_str + "). The state has overflowed; "
+                        + "this warning is printed once, the time steps that follow keep their start-of-step state.";
+                    user_data.output.ConsoleLog(user_data.wqconfig, msg, true, true);
+                }
+                return -1;
             }
         }
     }

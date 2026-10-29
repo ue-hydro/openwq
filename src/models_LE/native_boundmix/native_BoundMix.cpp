@@ -135,9 +135,15 @@ void OpenWQ_LE_model::native_BoundMix(
             (*OpenWQ_vars.d_chemass_dt_transp_diss)(input_upper_compartment_index)(chemi_mob)(ix_s,iy_s,iz_s) 
                 += (chemass_exchange_lower_comprt - chemass_exchange_upper_comprt);
 
-            // Add Chemical mass flux to RECIPIENT
-            // if recipient == -1, then  it's an OUT-flux (loss from system)
-            if (recipient == -1) continue;
+            // Add the opposite exchange to the LOWER compartment (the exchange
+            // partner), also when the water flux leaves the domain (recipient
+            // == -1): the exchange is between the two compartments, not with
+            // the flux recipient. Skipping it for out-fluxes (as before) gave
+            // the upper cell the lower cell's share without debiting the lower
+            // cell, so every out-flux created mass. With the surface runoff
+            // (the out-flux of RUNOFF) and infiltration returning part of that
+            // mass to the soil, the total grew exponentially for large K_val
+            // and overflowed (CVODE flag -4 at every step thereafter).
             (*OpenWQ_vars.d_chemass_dt_transp_diss)(input_lower_compartment_index)(chemi_mob)(xyz_lowerComp[0],xyz_lowerComp[1],xyz_lowerComp[2]) 
                 += (chemass_exchange_upper_comprt - chemass_exchange_lower_comprt);
 
