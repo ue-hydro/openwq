@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWQ - Hybrid Physics-ML</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004499;
+            --secondary: #00a86b;
+            --accent: #ff6b35;
+            --purple: #7c3aed;
+            --dark: #1a1a2e;
+            --light: #f8f9fa;
+            --text: #2d3436;
+            --text-light: #636e72;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: #000; overflow: hidden; }
+        .presentation { height: 100vh; width: 100vw; position: relative; }
+
+        .slide {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; padding: 60px 80px;
+            background: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%); overflow: hidden;
+        }
+        .slide.active { display: flex; }
+
+        .slide.title-slide {
+            background: linear-gradient(135deg, var(--dark) 0%, #16213e 50%, #0f3460 100%);
+            justify-content: center; align-items: center; text-align: center; color: white;
+        }
+        .slide.title-slide h1 { font-size: 4rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .slide.title-slide h1 span { color: var(--primary); }
+        .slide.title-slide .subtitle { font-size: 2rem; font-weight: 300; color: #a0aec0; margin-bottom: 1rem; }
+        .slide.title-slide .tagline { font-size: 1.3rem; color: #718096; max-width: 900px; }
+
+        /* Dynamic reveal animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .title-slide .reveal-title { opacity: 0; animation: fadeInScale 0.8s ease-out forwards; animation-delay: 0.2s; }
+        .title-slide .reveal-subtitle { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.6s; }
+        .title-slide .reveal-tagline { opacity: 0; animation: fadeInUp 0.7s ease-out forwards; animation-delay: 0.9s; }
+        .title-slide .reveal-logo { opacity: 0; animation: fadeInUp 0.5s ease-out forwards; animation-delay: 1.2s; }
+
+        /* University Logo - Only on title and section slides */
+        .university-logo {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            height: 60px;
+            opacity: 0.9;
+        }
+        .slide.title-slide .university-logo { height: 70px; }
+        .slide.section-slide .university-logo { height: 55px; opacity: 0.85; }
+
+        .slide.section-slide {
+            background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%);
+            justify-content: center; align-items: center; color: white;
+        }
+        .slide.section-slide.purple { background: linear-gradient(135deg, var(--purple) 0%, #5b21b6 100%); }
+        .slide.section-slide h2 { font-size: 4rem; font-weight: 600; }
+        .slide.section-slide .section-number { font-size: 10rem; font-weight: 700; opacity: 0.15; position: absolute; top: 40px; right: 80px; }
+
+        .slide-header { margin-bottom: 40px; }
+        .slide-header h2 { font-size: 2.8rem; font-weight: 600; color: var(--dark); border-left: 6px solid var(--primary); padding-left: 24px; }
+        .slide-content { flex: 1; display: flex; flex-direction: column; }
+
+        .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; height: 100%; }
+        .three-column { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 35px; }
+        .column { display: flex; flex-direction: column; }
+
+        .card {
+            background: white; border-radius: 16px; padding: 28px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }
+        .card.primary { border-left: 5px solid var(--primary); }
+        .card.secondary { border-left: 5px solid var(--secondary); }
+        .card.accent { border-left: 5px solid var(--accent); }
+        .card.purple { border-left: 5px solid var(--purple); }
+        .card h3 { font-size: 1.4rem; color: var(--dark); margin-bottom: 12px; }
+        .card p, .card li { font-size: 1.1rem; color: var(--text); line-height: 1.5; }
+
+        ul, ol { margin-left: 25px; }
+        li { font-size: 1.35rem; color: var(--text); margin-bottom: 14px; line-height: 1.4; }
+        li strong { color: var(--primary-dark); }
+
+        .equation-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 30px 40px; border-radius: 16px; margin: 15px 0; text-align: center;
+        }
+        .equation-box .equation { font-family: 'JetBrains Mono', monospace; font-size: 1.6rem; margin: 10px 0; }
+        .equation-box .label { font-size: 1rem; opacity: 0.9; }
+        .equation-box.green { background: linear-gradient(135deg, #00b894 0%, #00cec9 100%); }
+        .equation-box.orange { background: linear-gradient(135deg, #e17055 0%, #d63031 100%); }
+
+        pre {
+            background: var(--dark); color: #e2e8f0; padding: 22px; border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; line-height: 1.45; overflow-x: auto;
+        }
+        pre .comment { color: #68d391; }
+        pre .string { color: #fbd38d; }
+        pre .keyword { color: #63b3ed; }
+
+        .code-container {
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            color: #a0aec0;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.25);
+            color: white;
+        }
+        .copy-btn.copied {
+            background: var(--secondary);
+            color: white;
+        }
+
+        /* Inline code highlighting (outside pre blocks) */
+        :not(pre) > code {
+            background: rgba(255, 107, 53, 0.12);
+            color: #e05500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        /* Important note label */
+        .important-note {
+            color: #e05500;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        /* PDF Export Button */
+        .pdf-btn {
+            position: absolute;
+            bottom: 30px;
+            left: 40px;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            color: white;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pdf-btn:hover {
+            background: rgba(255,255,255,0.25);
+            border-color: rgba(255,255,255,0.5);
+        }
+        .slide:not(.title-slide) .pdf-btn {
+            background: var(--dark);
+            border-color: var(--dark);
+            color: white;
+        }
+        .slide:not(.title-slide) .pdf-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .diagram { background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 25px; text-align: center; }
+        .diagram pre { background: transparent; color: var(--text); display: inline-block; text-align: left; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 1.05rem; background: white; border-radius: 12px; overflow: hidden; }
+        th { background: var(--dark); color: white; padding: 14px 18px; text-align: left; font-weight: 600; }
+        td { padding: 12px 18px; border-bottom: 1px solid #e2e8f0; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #fff7ed, #ffedd5);
+            border-left: 5px solid var(--accent); padding: 22px 28px; border-radius: 0 12px 12px 0; margin: 18px 0;
+        }
+        .highlight-box.info { background: linear-gradient(135deg, #eff6ff, #dbeafe); border-left-color: var(--primary); }
+        .highlight-box.success { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-left-color: var(--secondary); }
+        .highlight-box.purple { background: linear-gradient(135deg, #f5f3ff, #ede9fe); border-left-color: var(--purple); }
+
+        .slide-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 18px; border-top: 1px solid #e2e8f0; margin-top: auto;
+        }
+        .slide-footer .logo { font-weight: 700; font-size: 1.2rem; color: var(--dark); }
+        .slide-footer .logo span { color: var(--primary); }
+        .slide-footer .page-number {
+            background: var(--dark); color: white; width: 40px; height: 40px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;
+        }
+
+        .redox-ladder { display: flex; flex-direction: column; gap: 6px; }
+        .redox-step {
+            display: grid; grid-template-columns: 90px 1fr 110px 90px; align-items: center;
+            padding: 12px 20px; border-radius: 8px; font-size: 1rem; font-weight: 500;
+        }
+        .redox-step.level-1 { background: linear-gradient(90deg, #dbeafe, #bfdbfe); }
+        .redox-step.level-2 { background: linear-gradient(90deg, #d1fae5, #a7f3d0); }
+        .redox-step.level-3 { background: linear-gradient(90deg, #fef3c7, #fde68a); }
+        .redox-step.level-4 { background: linear-gradient(90deg, #fee2e2, #fecaca); }
+
+        .nav-hint {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 12px 24px; border-radius: 30px;
+            font-size: 0.9rem; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+        }
+        .nav-hint.visible { opacity: 1; }
+
+        .comparison-box { background: white; border-radius: 16px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+        .comparison-box h4 { font-size: 1.3rem; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 3px solid; }
+        .comparison-box.blue h4 { border-color: var(--primary); color: var(--primary); }
+        .comparison-box.green h4 { border-color: var(--secondary); color: var(--secondary); }
+        .comparison-box.purple h4 { border-color: var(--purple); color: var(--purple); }
+        .comparison-box li { font-size: 1.05rem; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="presentation" id="presentation">
+
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1 class="reveal-title">Open<span>WQ</span></h1>
+            <div class="subtitle reveal-subtitle">Hybrid Physics&ndash;ML</div>
+            <div class="tagline reveal-tagline">
+                Machine learning layered on the governing equations &mdash;<br>
+                switchable, bounded, and exact-physics when turned off
+            </div>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo reveal-logo">
+            <button class="pdf-btn" onclick="exportToPDF()">📄 Export to PDF</button>
+        </div>
+
+        <!-- Slide 2: Contents / principles -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header"><h2>The idea in one slide</h2></div>
+            <div class="slide-content">
+                <div class="highlight-box" style="font-size:1.2rem;">
+                    OpenWQ keeps its physics &amp; chemistry equations and adds ML <strong>on top</strong>,
+                    under explicit user control. Every ML component is <strong>opt-in</strong> and
+                    <strong>switchable</strong>; with all dials off the model is
+                    <strong>byte-identical</strong> to traditional OpenWQ.
+                </div>
+                <div class="two-column" style="gap:50px;margin-top:20px;">
+                    <div class="column">
+                        <h3 style="color:var(--primary);">Guiding principles</h3>
+                        <p style="line-height:2;">
+                        • Physics-first, ML opt-in<br>
+                        • Exact physics recovery (dials off)<br>
+                        • Bounded trainable dimension<br>
+                        • Inference in C++, training in Python
+                        </p>
+                    </div>
+                    <div class="column">
+                        <h3 style="color:var(--secondary);">Three layers</h3>
+                        <p style="line-height:2;">
+                        • <strong>Layer 0</strong> — per-cell parameters (foundation)<br>
+                        • <strong>Layer 1</strong> — learn the <em>parameters</em><br>
+                        • <strong>Layer 2</strong> — learn a bounded <em>flux</em> correction
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">2</div></div>
+        </div>
+
+        <!-- Slide 3: Overview diagram -->
+        <div class="slide" data-slide="3">
+            <div class="slide-header"><h2>Where the two ML layers plug in</h2></div>
+            <div class="slide-content" style="justify-content:center;">
+                <div class="diagram" style="padding:30px;">
+                    <img src="hybrid_overview.svg" alt="Attributes feed Layer 1, which sets theta into the physics equation; the physics flux passes through Layer 2, a bounded closure, to give the corrected flux" style="width:100%;max-width:1100px;height:auto;">
+                </div>
+                <div class="highlight-box info" style="margin-top:22px;">
+                    The physics block runs unchanged. <strong>Layer 1</strong> sets the parameter &theta; going <em>in</em>; <strong>Layer 2</strong> multiplies the flux coming <em>out</em>. Remove Layer 1 and &theta; is a global scalar; set &alpha;&nbsp;=&nbsp;0 and the Layer-2 factor is 1.
+                </div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">3</div></div>
+        </div>
+
+        <!-- Slide 4: Section 0 -->
+        <div class="slide section-slide" data-slide="4">
+            <div class="section-number">00</div>
+            <h2>Layer 0 &mdash; Spatial parameters</h2>
+        </div>
+
+        <!-- Slide 5: Layer 0 -->
+        <div class="slide" data-slide="5">
+            <div class="slide-header"><h2>Any parameter can be a per-cell field</h2></div>
+            <div class="slide-content">
+                <p style="font-size:1.15rem;margin-bottom:14px;">The foundation both ML layers write into &mdash; and useful on its own (set per-HRU values from a soil/land-cover map, no ML needed). A parameter value is read three ways:</p>
+                <div class="card"><pre>"beta_min": 0.0003                              // global scalar (default)
+"beta_min": {"UNIFORM": 0.0003}                 // spatial, every cell = v
+"beta_min": {"DEFAULT": 0.0003,                 // spatial, per-cell
+             "CELLS": [[icmp, ix, iy, iz, v], ...]}</pre></div>
+                <div class="highlight-box success">A plain number is the historical behaviour; the model is unchanged until a spatial field is supplied. Applies to BGC rate constants and the Freundlich/Langmuir isotherm parameters.</div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">5</div></div>
+        </div>
+
+        <!-- Slide 6: Section 1 -->
+        <div class="slide section-slide" data-slide="6">
+            <div class="section-number">01</div>
+            <h2>Layer 1 &mdash; Parameter regionalization</h2>
+        </div>
+
+        <!-- Slide 7: Layer 1 concept -->
+        <div class="slide" data-slide="7">
+            <div class="slide-header"><h2>Learn the knobs, keep the equations</h2></div>
+            <div class="slide-content">
+                <div class="highlight-box" style="font-size:1.15rem;">
+                    A small <strong>shared</strong> mapping sets each cell's parameter from static attributes:
+                    <strong>&theta; = g(attributes)</strong>. The equations are untouched &mdash; only <em>where on
+                    the parameter axis</em> each cell sits is learned.
+                </div>
+                <div class="two-column" style="gap:50px;">
+                    <div class="column">
+                        <h3 style="color:var(--primary);">Why a mapping, not free values?</h3>
+                        <p style="line-height:1.9;">Calibrating one value per (cell &times; parameter) explodes and is ill-posed. A shared mapping has a <strong>fixed</strong> trainable size, independent of the number of cells &mdash; more cells become more <em>constraint</em>, not more unknowns.</p>
+                    </div>
+                    <div class="column">
+                        <h3 style="color:var(--secondary);">Global-by-default</h3>
+                        <p style="line-height:1.9;">Regionalize only <em>effective</em> parameters (mineralization, denitrification tied to soil). Keep universal constants (stoichiometry, Arrhenius) global. Opt-in per parameter.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">7</div></div>
+        </div>
+
+        <!-- Slide 8: Layer 1 diagram -->
+        <div class="slide" data-slide="8">
+            <div class="slide-header"><h2>One shared mapping, per-cell parameters</h2></div>
+            <div class="slide-content" style="justify-content:center;">
+                <div class="diagram" style="padding:30px;">
+                    <img src="hybrid_layer1.svg" alt="Three cells with different soil classes each pass through one shared per-class mapping that returns their parameter theta; DDS calibrates the three class values, independent of the number of cells" style="width:100%;max-width:950px;height:auto;">
+                </div>
+                <div class="highlight-box purple" style="margin-top:22px;">
+                    Every cell can differ, yet the optimizer tunes only the <strong>handful of values inside the mapping</strong> (here, three per-class values) &mdash; a trainable size <em>independent of the number of cells</em>. Switched off, every cell falls back to one global scalar.
+                </div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">8</div></div>
+        </div>
+
+        <!-- Slide 9: Layer 1 config + DDS -->
+        <div class="slide" data-slide="9">
+            <div class="slide-header"><h2>Config &amp; calibration</h2></div>
+            <div class="slide-content">
+                <div class="card"><pre>"beta_min": {
+    "VALUE": 0.0003,
+    "ML_REGIONALIZE": {
+        "rung": "per_class",            // or "regression"
+        "attribute": "soil_class",
+        "default": 0.0003,
+        "attribute_table": "openwq_in/attributes.csv",
+        "mapping_source":  "openwq_out/HDF5/...main.h5",
+        "classes": {"sand":[1e-4,1e-2], "clay":[1e-4,1e-2], "peat":[1e-3,5e-2]}
+    }
+}</pre></div>
+                <div class="highlight-box success">This one declaration is expanded into low-dimensional <strong>DDS sub-parameters</strong> (one per class or coefficient). Each evaluation the optimizer proposes those values, the mapping builds the per-cell field, and it is written into the config &mdash; calibrated end-to-end with the standard DDS machinery.</div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">9</div></div>
+        </div>
+
+        <!-- Slide 10: Mode A vs B -->
+        <div class="slide" data-slide="10">
+            <div class="slide-header"><h2>Mode A (offline) vs Mode B (runtime)</h2></div>
+            <div class="slide-content">
+                <div class="two-column" style="gap:40px;">
+                    <div class="column"><div class="card">
+                        <h3 style="color:var(--primary);">Mode A &mdash; offline bake</h3>
+                        <p style="line-height:1.9;">The mapping runs in Python; the resulting per-cell map is written into the config. <strong>No extra C++</strong> &mdash; OpenWQ just loads the map (Layer 0).</p>
+                    </div></div>
+                    <div class="column"><div class="card">
+                        <h3 style="color:var(--secondary);">Mode B &mdash; runtime NN</h3>
+                        <p style="line-height:1.9;">OpenWQ evaluates the trained network itself at start-up (a hand-rolled Armadillo MLP, no ML runtime) to fill the field, via <code>ML_RUNTIME</code> referencing weights + attributes files.</p>
+                    </div></div>
+                </div>
+                <div class="highlight-box">Ladder of flexibility, all DDS-friendly except the last: <strong>per-class → regression → (dPL neural network)</strong>.</div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">10</div></div>
+        </div>
+
+        <!-- Slide 11: Section 2 -->
+        <div class="slide section-slide" data-slide="11">
+            <div class="section-number">02</div>
+            <h2>Layer 2 &mdash; Learned flux closures</h2>
+        </div>
+
+        <!-- Slide 12: Layer 2 concept -->
+        <div class="slide" data-slide="12">
+            <div class="slide-header"><h2>A bounded correction to the flux</h2></div>
+            <div class="slide-content">
+                <div class="card" style="text-align:center;">
+                    <div style="font-size:1.7rem;font-family:'JetBrains Mono',monospace;color:var(--dark);margin:10px 0;">
+                        y = &Phi;<sub>physics</sub>(state, &theta;) &middot; (1 + &alpha; &middot; g(inputs))
+                    </div>
+                </div>
+                <div class="two-column" style="gap:40px;">
+                    <div class="column"><p style="line-height:1.9;">
+                        Corrects the <em>process itself</em> &mdash; structural error no parameter can fix (a missing control, a wrong functional form). <strong>g</strong> is a small network bounded to [&minus;1, 1].</p>
+                    </div>
+                    <div class="column"><p style="line-height:1.9;">
+                        <strong>&alpha;</strong> is the user's dial. At <strong>&alpha; = 0</strong> the equation is recovered <em>exactly</em>. The total correction is clamped to &plusmn;max_correction &mdash; it can nudge a flux but never flip its sign or break mass conservation.</p>
+                    </div>
+                </div>
+                <div class="highlight-box success">Wired into the BGC reactions, the sorption fluxes, and the erosion fluxes (HBVSED &amp; MMF).</div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">12</div></div>
+        </div>
+
+        <!-- Slide 13: Layer 2 diagram -->
+        <div class="slide" data-slide="13">
+            <div class="slide-header"><h2>Every stage of the correction is bounded</h2></div>
+            <div class="slide-content" style="justify-content:center;">
+                <div class="diagram" style="padding:30px;">
+                    <img src="hybrid_layer2.svg" alt="The closure chain: inputs to a small network g, squashed by tanh to minus one to one, scaled by alpha, clamped to plus or minus max, giving one plus correction, which multiplies the physics flux to give the corrected flux" style="width:100%;max-width:1050px;height:auto;">
+                </div>
+                <div class="highlight-box" style="margin-top:22px;">
+                    The learned term is squashed to [&minus;1,&nbsp;1] by <code>tanh</code>, scaled by the dial &alpha;, and clamped to &plusmn;max_correction before it multiplies the physics flux &Phi;. It can only <em>reshape</em> a flux within a fixed envelope; at &alpha;&nbsp;=&nbsp;0 the multiplier is exactly&nbsp;1.
+                </div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">13</div></div>
+        </div>
+
+        <!-- Slide 14: Layer 2 config + training -->
+        <div class="slide" data-slide="14">
+            <div class="slide-header"><h2>Config &amp; training</h2></div>
+            <div class="slide-content">
+                <div class="card"><pre>"ML_CLOSURE": {
+    "ALPHA": 0.3,
+    "MAX_CORRECTION": 0.5,
+    "WEIGHTS_FILEPATH": "openwq_in/denit_closure.json"   // trained network
+}</pre></div>
+                <p style="font-size:1.12rem;line-height:1.8;">Because the closure sits <em>inside</em> the flux, its gradient runs through the physics. Training uses a <strong>differentiable emulator</strong>: the flux is re-implemented in differentiable form, the corrected system is unrolled in time, and the trajectory error is back-propagated (BPTT) into the network. Training is offline in Python; OpenWQ does inference only.</p>
+                <div class="highlight-box">Train in <strong>stages</strong>: fit Layer 1, freeze it, then train Layer 2 on the residual &mdash; so the two ML layers don't trade off against each other.</div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">14</div></div>
+        </div>
+
+        <!-- Slide 15: Chains + backward compat -->
+        <div class="slide" data-slide="15">
+            <div class="slide-header"><h2>Chained models &amp; safety</h2></div>
+            <div class="slide-content">
+                <div class="two-column" style="gap:40px;">
+                    <div class="column"><div class="card">
+                        <h3 style="color:var(--primary);">Chained calibration</h3>
+                        <p style="line-height:1.9;">All three layers work in a chain (e.g. SUMMA-OpenWQ → mizuRoute-OpenWQ). Regionalized sub-parameters are tagged by model position and routed to the correct model &mdash; each with its own attribute table and reach mapping.</p>
+                    </div></div>
+                    <div class="column"><div class="card">
+                        <h3 style="color:var(--secondary);">Backward-compatible</h3>
+                        <p style="line-height:1.9;">With every dial off the result is byte-identical to today's OpenWQ &mdash; verified in live runs. Trained networks are evaluated in C++ with no external ML dependency.</p>
+                    </div></div>
+                </div>
+                <div class="highlight-box success" style="text-align:center;">
+                    <strong>Decide whether to use ML, and how much.</strong> Layer 1 fixes wrong <em>values</em>; Layer 2 fixes a wrong <em>process</em>; the physics is always one dial away.
+                </div>
+            </div>
+            <div class="slide-footer"><div class="logo">Open<span>WQ</span></div><div class="page-number">15</div></div>
+        </div>
+
+        <!-- Slide 16: Thank You -->
+        <div class="slide title-slide" data-slide="16">
+            <h1 style="font-size:3.5rem;">Thank You</h1>
+            <div class="subtitle" style="font-size:1.8rem;">Questions?</div>
+            <img src="uevora_logo.png" alt="University of Évora" class="university-logo">
+            <button class="pdf-btn" onclick="exportToPDF()">📄 Export to PDF</button>
+        </div>
+    </div>
+
+    <div class="nav-hint" id="navHint">Use ← → arrows or Enter | Press F for fullscreen</div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            history.replaceState(null, null, `#${currentSlide}`);
+        }
+
+        function nextSlide() { currentSlide++; showSlide(currentSlide); }
+        function prevSlide() { currentSlide--; showSlide(currentSlide); }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'Enter': nextSlide(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp': prevSlide(); break;
+                case 'Home': currentSlide = 1; showSlide(currentSlide); break;
+                case 'End': currentSlide = totalSlides; showSlide(currentSlide); break;
+                case 'f': case 'F':
+                    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                    else document.exitFullscreen();
+                    break;
+            }
+        });
+
+        const navHint = document.getElementById('navHint');
+        navHint.classList.add('visible');
+        setTimeout(() => navHint.classList.remove('visible'), 4000);
+
+        let hintTimeout;
+        document.addEventListener('mousemove', () => {
+            navHint.classList.add('visible');
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => navHint.classList.remove('visible'), 2000);
+        });
+
+        if (window.location.hash) {
+            const slideNum = parseInt(window.location.hash.substring(1));
+            if (slideNum >= 1 && slideNum <= totalSlides) currentSlide = slideNum;
+        }
+        showSlide(currentSlide);
+
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+        document.addEventListener('touchend', (e) => {
+            const diff = touchStartX - e.changedTouches[0].screenX;
+            if (Math.abs(diff) > 50) { if (diff > 0) nextSlide(); else prevSlide(); }
+        });
+
+        // Copy to clipboard functionality
+        function addCopyButtons() {
+            document.querySelectorAll('pre').forEach(pre => {
+                if (pre.closest('.diagram')) return;
+                if (pre.parentElement.classList.contains('code-container')) return;
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-container';
+                pre.parentNode.insertBefore(wrapper, pre);
+                wrapper.appendChild(pre);
+
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.innerHTML = '📋 Copy';
+                btn.onclick = function() {
+                    const code = pre.textContent;
+                    navigator.clipboard.writeText(code).then(() => {
+                        btn.innerHTML = '✓ Copied!';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.innerHTML = '📋 Copy';
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    });
+                };
+                wrapper.appendChild(btn);
+            });
+        }
+        addCopyButtons();
+
+        // PDF Export functionality
+        function exportToPDF() {
+            const slides = document.querySelectorAll('.slide');
+            const presentation = document.getElementById('presentation');
+
+            // Store original styles
+            const originalPresentationStyle = presentation.style.cssText;
+            const originalBodyStyle = document.body.style.cssText;
+            const originalHtmlStyle = document.documentElement.style.cssText;
+            const originalSlideStyles = Array.from(slides).map(s => s.style.cssText);
+
+            // Create print-specific styles
+            const printStyles = document.createElement('style');
+            printStyles.id = 'print-styles';
+            printStyles.textContent = `
+                @media print {
+                    @page { size: landscape; margin: 0; }
+                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+                    html, body { height: auto !important; overflow: visible !important; background: white !important; }
+                    .presentation { height: auto !important; position: relative !important; overflow: visible !important; }
+                    .slide {
+                        display: flex !important;
+                        position: relative !important;
+                        page-break-after: always !important;
+                        page-break-inside: avoid !important;
+                        height: 100vh !important;
+                        width: 100vw !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
+                    }
+                    .slide:last-child { page-break-after: auto !important; }
+                    .nav-hint, .pdf-btn, .copy-btn { display: none !important; }
+                    .university-logo { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                }
+            `;
+            document.head.appendChild(printStyles);
+
+            // Temporarily modify for print - show all slides
+            document.body.style.cssText = 'height: auto; overflow: visible;';
+            document.documentElement.style.cssText = 'height: auto; overflow: visible;';
+            presentation.style.cssText = 'height: auto; position: relative; overflow: visible;';
+
+            slides.forEach(slide => {
+                slide.style.display = 'flex';
+                slide.style.position = 'relative';
+                slide.style.pageBreakAfter = 'always';
+                slide.style.height = '100vh';
+                slide.style.width = '100vw';
+            });
+
+            // Small delay to ensure styles are applied
+            setTimeout(() => {
+                window.print();
+
+                // Restore original styles after print dialog closes
+                setTimeout(() => {
+                    document.getElementById('print-styles')?.remove();
+                    document.body.style.cssText = originalBodyStyle;
+                    document.documentElement.style.cssText = originalHtmlStyle;
+                    presentation.style.cssText = originalPresentationStyle;
+                    slides.forEach((slide, i) => {
+                        slide.style.cssText = originalSlideStyles[i];
+                    });
+                    showSlide(currentSlide);
+                }, 500);
+            }, 100);
+        }
+    </script>
+</body>
+</html>
