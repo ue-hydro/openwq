@@ -429,7 +429,7 @@ void OpenWQ_compute::Solve_with_CVode(
 
     SUNLinearSolver LS = SUNLinSol_SPGMR(u, SUN_PREC_NONE, 0, sunctx);
     CVodeSetLinearSolver(cvode_mem, LS, NULL);
-    CVodeSStolerances(cvode_mem, 1e-2, 1e-4);
+    CVodeSStolerances(cvode_mem, OpenWQ_wqconfig.sundials_reltol, OpenWQ_wqconfig.sundials_abstol);
     CVodeSetMaxNumSteps(cvode_mem, 50000);
     CVodeSetMaxConvFails(cvode_mem, 200);
 
@@ -648,7 +648,7 @@ void OpenWQ_compute::Solve_with_CVode_Sediment(
 
     SUNLinearSolver LS = SUNLinSol_SPGMR(u, SUN_PREC_NONE, 0, sunctx);
     CVodeSetLinearSolver(cvode_mem, LS, NULL);
-    CVodeSStolerances(cvode_mem, 1e-2, 1e-4);
+    CVodeSStolerances(cvode_mem, OpenWQ_wqconfig.sundials_reltol, OpenWQ_wqconfig.sundials_abstol);
     CVodeSetMaxNumSteps(cvode_mem, 50000);
     CVodeSetMaxConvFails(cvode_mem, 200);
 

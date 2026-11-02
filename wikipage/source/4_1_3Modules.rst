@@ -507,6 +507,8 @@ Configuration fields:
 +-----------------------------------+-----------+--------------------------------------------------------------------+
 | ``TEMPERATURE``                   | object    | Temperature source variable name for each compartment              |
 +-----------------------------------+-----------+--------------------------------------------------------------------+
+| ``DIAGNOSTICS``                   | object    | Read-out components set from the speciation (pH, species molality) |
++-----------------------------------+-----------+--------------------------------------------------------------------+
 
 
 PHREEQC input file (.pqi)
@@ -544,6 +546,84 @@ Mobile species
 The ``BGC_GENERAL_MOBILE_SPECIES`` array specifies which PHREEQC components are subject to advective transport between compartment cells. Only mobile species are transported by the OpenWQ transport module; immobile species remain in their original grid cell.
 
 Species are identified by their component name (string), which must match the names returned by PHREEQC's ``FindComponents()`` function. The component list can be inspected in the OpenWQ debug output when ``RUN_MODE_DEBUG`` is enabled in the master configuration.
+
+
+Charge and water of the transported species
+""""""""""""""""""""""""""""""""""""""""""""
+
+PHREEQC adds the *elements* of a solute to a cell, never its charge. When OpenWQ writes the transported total of a
+mobile component back into a PhreeqcRM cell, it therefore also changes the cell's ``Charge`` and its excess ``H``
+and ``O`` by what the component carries in its aqueous species: the species made of that element plus H and O only,
+weighted by their concentrations in the cell after the previous time step. Nitrate defined as ``Nit-`` carries a
+charge of -1, and total ammonia carries the charge and the proton of its ``NH4+`` fraction. The carrier species of
+each mobile component are printed at the first time step (``mobile component ... carries ...``). Written without
+its charge, a transported anion is balanced by redox of the cell water: nitrate then acts as nitric acid and
+consumes half a mole of water per mole, and every quantity held at a molality drifts with the water mass.
+
+
+Renewal of the non-transported chemistry (``RENEWAL``)
+""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Components that are not mobile (major ions, inorganic carbon, the charge balance that sets the alkalinity, the
+excess H and O) stay in their cell and accumulate the effect of the reactions in it. A compartment can renew them
+toward a reference solution of the ``.pqi`` file, which represents the replacement of the cell water by inflowing
+water of that composition. In ``BIOGEOCHEMISTRY_CONFIGURATION``:
+
+.. code-block:: json
+
+    "RIVER_NETWORK_REACHES": {"SOLUTIONS": 4, "KINETICS": 3,
+                              "RENEWAL": {"SOLUTION": 4, "TIME_SCALE": "tau_r"}}
+
+``TIME_SCALE`` is either a number of seconds or the name of a ``CALCULATE_VALUES`` function of the ``.pqi`` file,
+so it can be calibrated like any other ``.pqi`` constant. Before the mobile components are written, every component
+of the cell relaxes toward the reference, ``c += (1 - exp(-dt/tau)) (c_ref - c)``; the mobile components are then
+overwritten with their carried charge, H and O, so that only the non-transported part is renewed. Applied in
+component space, the renewal conserves the charge and the water of the cell.
+
+.. warning::
+
+   Do not emulate a renewal or an acid/base flux with a ``KINETICS`` (or ``REACTION``) formula that carries a net
+   charge, such as ``-formula H+ 1``. PHREEQC adds the elements of the formula only, so such a reaction changes the
+   redox state of the water (it produces H2 or oxidizes the water), not the alkalinity.
+
+
+Read-out components (``DIAGNOSTICS``)
+"""""""""""""""""""""""""""""""""""""
+
+OpenWQ outputs component totals. A property of the speciated solution, such as the pH or the concentration of
+un-ionized ammonia, is output through a read-out component: a ``SOLUTION_MASTER_SPECIES`` of the ``.pqi`` file
+listed in ``BGC_GENERAL_MOBILE_SPECIES`` (so that it is an OpenWQ output) and named in ``DIAGNOSTICS``:
+
+.. code-block:: json
+
+    "DIAGNOSTICS": {"PHX": "pH", "NHX": "Amm"}
+
+After every ``RunCells``, in each cell that runs PHREEQC, ``"pH"`` sets the component to the pH, -log10 of the H+
+activity (its mg/L then equal the pH, whatever its gram formula weight), and the name of an aqueous species sets it
+to the molality of that species (output in mg/L of the component's formula weight). The value is exact at the end
+of the time step. The component takes no part in the chemistry: OpenWQ writes it to PhreeqcRM as 0 before
+``RunCells``, so it needs no ``KINETICS``. It must be nonzero in some ``SOLUTION`` of the ``.pqi`` file (e.g.
+``Phx 1e-9``), otherwise PhreeqcRM does not list it as a component. Names are matched without regard to case; write
+the keys upper-case, as the JSON reader upper-cases keys and values.
+
+.. code-block:: none
+
+    SOLUTION_MASTER_SPECIES
+        Phx     Phx       0.0     Phx     1.0       # read-out: pH (mg/L = pH)
+        Nhx     Nhx       0.0     Nhx     14.0067   # read-out: un-ionized NH3 (mg N/L)
+    SOLUTION_SPECIES
+        Phx = Phx
+            -log_k   0.0
+        Nhx = Nhx
+            -log_k   0.0
+
+.. warning::
+
+   Do not output such properties with a ``KINETICS`` tracer relaxed toward the value (e.g.
+   ``dm = (-LA("H+")/1000 - TOT("Phx")) * (1 - EXP(-TIME/600)) * TOT("water")``). A transported tracer restarts
+   each step from the transported (and renewed) value, far from the target, so the integrator takes many small
+   steps (in a 115-reach network such tracers took 88 % of the chemistry time), and the read-out keeps a fraction
+   of the starting deficit and depends on the integration substeps.
 
 
 Unit conversion (automatic)
@@ -638,6 +718,23 @@ Example configuration:
         "TEMPERATURE": {
             "RIVER_NETWORK_REACHES": "T",
             "LAKES": "Tlake_K"
+        }
+    }
+
+An entry can also be an object, ``{"DEPENDENCY": "Tair_K", "LINEAR": [a, b], "MIN_C": -40}``. ``LINEAR`` sets the
+temperature to ``a + b * variable`` (°C), e.g. a stream temperature estimated from the air temperature. Temperatures
+below ``MIN_C`` (default 0 °C) are raised to it before they reach PHREEQC, because the database expressions are fitted
+from 0 °C up. Lower ``MIN_C`` for compartments whose liquid water is below 0 °C (unfrozen water of frozen soil) when
+the rate laws must see the host temperature, e.g. to reproduce a reaction network whose rates use ``theta^(T-20)``
+with the unbounded soil temperature. Rate laws that use a gas solubility (e.g. O2 saturation) should then bound the
+temperature of that solubility themselves:
+
+.. code-block:: json
+
+    {
+        "TEMPERATURE": {
+            "ILAYERVOLFRACWAT_SOIL": {"DEPENDENCY": "Tsoil_K", "MIN_C": -40},
+            "RIVER_NETWORK_REACHES": {"DEPENDENCY": "Tair_K", "LINEAR": [7.6, 0.60]}
         }
     }
 

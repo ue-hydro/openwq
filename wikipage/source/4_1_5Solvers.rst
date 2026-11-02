@@ -76,6 +76,14 @@ The right-hand side (RHS) function computes the total flux rate for each chemica
 3. The chemistry driver computes reaction rates for all species
 4. The total flux derivative is assembled from chemistry, transport, and source/sink contributions
 
+The local error of each step is controlled by a relative and an absolute tolerance, set in the master file
+(``COMPUTATIONAL_SETTINGS``) with ``SUNDIALS_RELTOL`` (default ``1e-2``) and ``SUNDIALS_ABSTOL`` (default ``1e-4`` g
+of chemical mass per cell). The defaults favour speed: in a closed element, the concentrations of a native reaction
+network differ from a converged integration by up to ~0.4 % with them, and by ~0.04 % and ~0.002 % with relative
+tolerances of ``1e-6`` and ``1e-8``; in river-basin simulations the outlet concentrations changed by a median of
+<= 0.5 % between ``1e-2`` and ``1e-6``, at 1.4-2.2 times the cost. Tighten them for verification runs, or when
+results are compared at the level of a few percent.
+
 **Advantages**:
 
 * Higher-order accuracy (adaptive order selection)
