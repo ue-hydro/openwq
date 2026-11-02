@@ -119,4 +119,22 @@ void OpenWQ_readjson::SetConfigInfo_compute(
 
     }
 
+    // Optional CVODE tolerances of the SUNDIALS solver (defaults in OpenWQ_wqconfig.hpp)
+    for (const auto& kv : {std::make_pair(std::string("SUNDIALS_RELTOL"), &OpenWQ_wqconfig.sundials_reltol),
+                           std::make_pair(std::string("SUNDIALS_ABSTOL"), &OpenWQ_wqconfig.sundials_abstol)}) {
+        if (!json_computeSettings.contains(kv.first)) continue;
+        try {
+            const double v = json_computeSettings[kv.first].get<double>();
+            if (!(v > 0.0) || !std::isfinite(v)) throw std::runtime_error("not > 0");
+            *kv.second = v;
+        } catch (...) {
+            msg_string = "<OpenWQ> ERROR: COMPUTATIONAL_SETTINGS > " + kv.first + " must be a number > 0";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+            exit(EXIT_FAILURE);
+        }
+    }
+    msg_string = "<OpenWQ> SUNDIALS (CVODE) tolerances: relative " + std::to_string(OpenWQ_wqconfig.sundials_reltol)
+        + ", absolute " + std::to_string(OpenWQ_wqconfig.sundials_abstol) + " g";
+    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, false, true);
+
 }

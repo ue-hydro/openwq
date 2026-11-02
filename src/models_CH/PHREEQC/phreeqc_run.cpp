@@ -1,7 +1,11 @@
 #include "models_CH/headerfile_CH.hpp"
+#include "IPhreeqc.hpp"
 #include <cmath>  // for isnan, isinf
 #include <algorithm>
 #include <cctype>
+#include <map>
+#include <unistd.h>  // for getcwd
+#include <climits>   // for PATH_MAX
 
 // Host dependency names are matched without regard to case: the module JSON is
 // upper-cased when read ("Tsoil_K" arrives as "TSOIL_K"), the host registers
@@ -11,6 +15,220 @@ static bool phreeqc_same_name(const std::string& a, const std::string& b){
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(),
         [](char x, char y){ return std::toupper(static_cast<unsigned char>(x))
                                 == std::toupper(static_cast<unsigned char>(y)); });
+}
+
+static std::string phreeqc_resolve_path(const std::string& path) {
+    if (!path.empty() && path[0] == '/') return path;
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) != nullptr) return std::string(cwd) + "/" + path;
+    return path;
+}
+
+// Value of a CALCULATE_VALUES function of the .pqi file (RENEWAL time scales
+// given by name, so that they are calibrated like any other .pqi constant).
+// Evaluated in a separate IPhreeqc instance: nothing changes in PhreeqcRM.
+static bool phreeqc_calc_value(const std::string& database, const std::string& pqi,
+                               const std::string& name, double& value) {
+    IPhreeqc ip;
+    if (ip.LoadDatabase(database.c_str()) != 0) return false;
+    if (ip.RunFile(pqi.c_str()) != 0) return false;
+    const std::string in =
+        "SELECTED_OUTPUT 99999\n    -reset false\n"
+        "USER_PUNCH 99999\n    -headings v\n    10 PUNCH CALC_VALUE(\"" + name + "\")\n"
+        "SOLUTION 99999\nEND\n";
+    if (ip.RunString(in.c_str()) != 0) return false;
+    ip.SetCurrentSelectedOutputUserNumber(99999);
+    if (ip.GetSelectedOutputRowCount() < 2) return false;
+    VAR v; VarInit(&v);
+    ip.GetSelectedOutputValue(1, 0, &v);
+    const bool ok = (v.type == TT_DOUBLE);
+    if (ok) value = v.dVal;
+    VarClear(&v);
+    return ok;
+}
+
+/* #################################################
+// One-time preparation of the coupling (first call of phreeqc_run):
+// (1) the carrier species of every mobile component (charge, H and O that
+//     move with a transported element total), and
+// (2) the RENEWAL settings of each compartment: reference solution and time
+//     scale per cell, and
+// (3) the read-out components (DIAGNOSTICS).
+################################################# */
+static void phreeqc_prepare_coupling(
+    OpenWQ_json& OpenWQ_json,
+    OpenWQ_hostModelconfig& OpenWQ_hostModelconfig,
+    OpenWQ_wqconfig& OpenWQ_wqconfig,
+    OpenWQ_output& OpenWQ_output){
+
+    auto& P = *OpenWQ_wqconfig.CH_model->PHREEQC;
+    PhreeqcRM& rm = *P.phreeqcrm;
+    const int nxyz = rm.GetGridCellCount();
+    const std::vector<std::string>& comps = rm.GetComponents();
+    std::string msg_string;
+
+    for (size_t j = 0; j < comps.size(); j++) {
+        if (comps[j] == "H") P.comp_H = (int)j;
+        else if (comps[j] == "O") P.comp_O = (int)j;
+        else if (comps[j] == "Charge") P.comp_Charge = (int)j;
+    }
+    if (P.comp_H < 0 || P.comp_O < 0 || P.comp_Charge < 0) {
+        msg_string = "<OpenWQ> ERROR: PHREEQC components H, O and Charge not found.";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        exit(EXIT_FAILURE);
+    }
+
+    // (1) carriers
+    const std::vector<std::string>& sp_names = rm.GetSpeciesNames();
+    const std::vector<cxxNameDouble>& sp_stoich = rm.GetSpeciesStoichiometry();
+    P.carriers.assign(P.mobile_species.size(), {});
+    for (size_t m = 0; m < P.mobile_species.size(); m++) {
+        const std::string& elt = comps[P.mobile_species[m]];
+        std::decay_t<decltype(P.carriers)>::value_type simple, all;
+        for (size_t s = 0; s < sp_stoich.size(); s++) {
+            double nu = 0.0, h = 0.0, o = 0.0, z = 0.0;
+            bool other = false;
+            for (const auto& e : sp_stoich[s]) {
+                if (e.first == elt) nu = e.second;
+                else if (e.first == "H") h = e.second;
+                else if (e.first == "O") o = e.second;
+                else if (e.first == "Charge") z = e.second;
+                else other = true;
+            }
+            if (nu <= 0.0) continue;
+            all.push_back({(int)s, nu, h, o, z});
+            if (!other) simple.push_back({(int)s, nu, h, o, z});
+        }
+        P.carriers[m] = simple.empty() ? all : simple;
+        msg_string = "<OpenWQ> PHREEQC: mobile component " + elt + " carries";
+        if (simple.empty()) msg_string += " (no simple species, all its species)";
+        for (const auto& cs : P.carriers[m])
+            msg_string += " " + sp_names[cs.s] + " (H " + std::to_string(cs.h)
+                + ", O " + std::to_string(cs.o) + ", charge " + std::to_string(cs.z)
+                + " per " + std::to_string(cs.nu) + ")";
+        if (P.carriers[m].empty()) msg_string += " nothing (no species found: written without charge, H, O)";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
+
+    // (2) renewal
+    P.renewal_tau_s.assign(nxyz, 0.0);
+    P.renewal_ref.assign(nxyz, -1);
+    P.renewal_ref_c.clear();
+    std::map<int, int> ref_of_solution;
+    const std::string database = phreeqc_resolve_path(OpenWQ_json.BGC_module["DATABASE"].get<std::string>());
+    const std::string pqi = phreeqc_resolve_path(OpenWQ_json.BGC_module["FILEPATH"].get<std::string>());
+    int cell0 = 0;
+    for (unsigned int icmp = 0; icmp < OpenWQ_hostModelconfig.get_num_HydroComp(); icmp++) {
+        const int ncell = OpenWQ_hostModelconfig.get_HydroComp_num_cells_x_at(icmp)
+                        * OpenWQ_hostModelconfig.get_HydroComp_num_cells_y_at(icmp)
+                        * OpenWQ_hostModelconfig.get_HydroComp_num_cells_z_at(icmp);
+        const std::string cname = OpenWQ_hostModelconfig.get_HydroComp_name_at(icmp);
+        const json& bgc = OpenWQ_json.Config["BIOGEOCHEMISTRY_CONFIGURATION"];
+        if (bgc.contains(cname) && bgc[cname].contains("RENEWAL")) {
+            const json& ren = bgc[cname]["RENEWAL"];
+            int sol = -1;
+            double tau = 0.0;
+            std::string tau_label;
+            try {
+                sol = ren.at("SOLUTION").get<int>();
+                const json& ts = ren.at("TIME_SCALE");
+                if (ts.is_number()) {
+                    tau = ts.get<double>();
+                    tau_label = std::to_string(tau) + " s";
+                } else {
+                    const std::string name = ts.get<std::string>();
+                    if (!phreeqc_calc_value(database, pqi, name, tau)) {
+                        msg_string = "<OpenWQ> ERROR: RENEWAL of " + cname + ": CALCULATE_VALUES '"
+                            + name + "' could not be evaluated from " + pqi;
+                        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                        exit(EXIT_FAILURE);
+                    }
+                    tau_label = name + " = " + std::to_string(tau) + " s";
+                }
+            } catch (...) {
+                msg_string = "<OpenWQ> ERROR: RENEWAL of " + cname
+                    + " needs {\"SOLUTION\": <id>, \"TIME_SCALE\": <seconds or CALCULATE_VALUES name>}";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                exit(EXIT_FAILURE);
+            }
+            if (!(tau > 0.0) || !std::isfinite(tau)) {
+                msg_string = "<OpenWQ> ERROR: RENEWAL of " + cname + ": time scale must be > 0 (" + tau_label + ")";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                exit(EXIT_FAILURE);
+            }
+            if (!ref_of_solution.count(sol)) {
+                std::vector<double> cref;
+                std::vector<int> bc1(1, sol);
+                if (rm.InitialPhreeqc2Concentrations(cref, bc1) != IRM_OK
+                        || cref.size() != comps.size()) {
+                    msg_string = "<OpenWQ> ERROR: RENEWAL of " + cname + ": SOLUTION "
+                        + std::to_string(sol) + " not found in " + pqi;
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    exit(EXIT_FAILURE);
+                }
+                ref_of_solution[sol] = (int)P.renewal_ref_c.size();
+                P.renewal_ref_c.push_back(cref);
+            }
+            for (int i = 0; i < ncell; i++) {
+                P.renewal_tau_s[cell0 + i] = tau;
+                P.renewal_ref[cell0 + i] = ref_of_solution[sol];
+            }
+            msg_string = "<OpenWQ> PHREEQC: RENEWAL of " + cname + " towards SOLUTION "
+                + std::to_string(sol) + ", time scale " + tau_label;
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        }
+        cell0 += ncell;
+    }
+
+    // (3) read-out components (DIAGNOSTICS)
+    P.diagnostics.clear();
+    P.is_diagnostic.assign(comps.size(), 0);
+    P.species_Hplus = -1;
+    for (size_t s = 0; s < sp_names.size(); s++)
+        if (sp_names[s] == "H+") P.species_Hplus = (int)s;
+    if (OpenWQ_json.BGC_module.contains("DIAGNOSTICS")) {
+        const json& dg = OpenWQ_json.BGC_module["DIAGNOSTICS"];
+        for (auto it = dg.begin(); it != dg.end(); ++it) {
+            std::string what;
+            try { what = it.value().get<std::string>(); } catch (...) { what.clear(); }
+            int jc = -1, mob = -1, sp = -1;
+            for (size_t j = 0; j < comps.size(); j++)
+                if (phreeqc_same_name(comps[j], it.key())) jc = (int)j;
+            for (size_t m = 0; m < P.mobile_species.size(); m++)
+                if ((int)P.mobile_species[m] == jc) mob = (int)m;
+            const bool is_ph = phreeqc_same_name(what, "PH");
+            if (!is_ph) {
+                // JSON values arrive upper-cased: species matched without regard
+                // to case, an exact match preferred
+                int n_match = 0;
+                for (size_t s = 0; s < sp_names.size(); s++) {
+                    if (sp_names[s] == what) { sp = (int)s; n_match = 1; break; }
+                    if (phreeqc_same_name(sp_names[s], what)) { sp = (int)s; n_match++; }
+                }
+                if (n_match > 1) sp = -2;
+            }
+            std::string err;
+            if (jc < 0) err = "component '" + it.key() + "' not found (a read-out component must be"
+                " nonzero in a SOLUTION of the .pqi file to be a PhreeqcRM component)";
+            else if (mob < 0) err = "component '" + it.key() + "' is not in BGC_GENERAL_MOBILE_SPECIES (no output)";
+            else if (is_ph && P.species_Hplus < 0) err = "species H+ not found";
+            else if (!is_ph && sp == -1) err = "aqueous species '" + what + "' not found";
+            else if (!is_ph && sp == -2) err = "aqueous species '" + what + "' is ambiguous (names differ only by case)";
+            if (!err.empty()) {
+                msg_string = "<OpenWQ> ERROR: PHREEQC DIAGNOSTICS: " + err
+                    + ". Use {\"<component>\": \"pH\" or \"<aqueous species>\"}.";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                exit(EXIT_FAILURE);
+            }
+            P.diagnostics.push_back({jc, is_ph ? -1 : sp});
+            P.is_diagnostic[jc] = 1;
+            msg_string = "<OpenWQ> PHREEQC: read-out component " + comps[jc] + " = "
+                + (is_ph ? std::string("pH (-log10 a H+)") : "molality of " + sp_names[sp])
+                + " after each RunCells (not part of the chemistry)";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        }
+    }
+    P.coupling_ready = true;
 }
 
 /* #################################################
@@ -81,12 +299,74 @@ void OpenWQ_CH_model::phreeqc_run(
     // charge balance and guaranteeing the geochemical solve fails to converge.
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetConcentrations(c);
 
+    auto& P = *OpenWQ_wqconfig.CH_model->PHREEQC;
+    if (!P.coupling_ready)
+        phreeqc_prepare_coupling(OpenWQ_json, OpenWQ_hostModelconfig, OpenWQ_wqconfig, OpenWQ_output);
+    const auto& cell_is_active = P.cell_active;
+    auto active_cell = [&cell_is_active](int i){ return cell_is_active.empty() || cell_is_active[i] != 0; };
+
+    // Charge, H and O per mole of each mobile component in each cell, from the
+    // species after the previous RunCells (the state that c holds now). A cell
+    // without the component takes the domain-wide speciation, and a domain
+    // without it the first carrier species.
+    const unsigned int n_mob = P.mobile_species.size();
+    std::vector<double> carry_h(n_mob * nxyz, 0.0), carry_o(n_mob * nxyz, 0.0), carry_z(n_mob * nxyz, 0.0);
+    {
+        std::vector<double> sc;
+        P.phreeqcrm->GetSpeciesConcentrations(sc);
+        const size_t nsp = P.phreeqcrm->GetSpeciesCount();
+        const bool have_sc = (sc.size() == nsp * (size_t)nxyz);
+        for (unsigned int m = 0; m < n_mob && m < P.carriers.size(); m++) {
+            const auto& cs = P.carriers[m];
+            if (cs.empty()) continue;
+            double dom_k = 0.0, dom_h = 0.0, dom_o = 0.0, dom_z = 0.0;
+            std::vector<double> cell_k(nxyz, 0.0);
+            for (int i = 0; i < nxyz; i++) {
+                if (!active_cell(i) || !have_sc) continue;
+                double sk = 0.0, sh = 0.0, so = 0.0, sz = 0.0;
+                for (const auto& x : cs) {
+                    const double ms = std::max(0.0, sc[(size_t)x.s * nxyz + i]);
+                    sk += x.nu * ms; sh += x.h * ms; so += x.o * ms; sz += x.z * ms;
+                }
+                cell_k[i] = sk;
+                if (sk > 0.0) {
+                    carry_h[m * nxyz + i] = sh / sk; carry_o[m * nxyz + i] = so / sk; carry_z[m * nxyz + i] = sz / sk;
+                }
+                dom_k += sk; dom_h += sh; dom_o += so; dom_z += sz;
+            }
+            double def_h, def_o, def_z;
+            if (dom_k > 0.0) { def_h = dom_h / dom_k; def_o = dom_o / dom_k; def_z = dom_z / dom_k; }
+            else { def_h = cs[0].h / cs[0].nu; def_o = cs[0].o / cs[0].nu; def_z = cs[0].z / cs[0].nu; }
+            for (int i = 0; i < nxyz; i++) {
+                if (cell_k[i] > 0.0) continue;
+                carry_h[m * nxyz + i] = def_h; carry_o[m * nxyz + i] = def_o; carry_z[m * nxyz + i] = def_z;
+            }
+        }
+    }
+
+    // Renewal of the non-transported chemistry (all components; the mobile
+    // ones are overwritten below, carrying their charge, H and O, so that the
+    // result equals renewing the non-transported part only).
+    if (OpenWQ_hostModelconfig.get_time_step() > 0 && !P.renewal_ref_c.empty()) {
+        const double dt = OpenWQ_hostModelconfig.get_time_step();
+        for (int i = 0; i < nxyz; i++) {
+            if (!active_cell(i) || P.renewal_ref[i] < 0) continue;
+            const double f = 1.0 - std::exp(-dt / P.renewal_tau_s[i]);
+            const std::vector<double>& cref = P.renewal_ref_c[P.renewal_ref[i]];
+            for (int j = 0; j < nc; j++)
+                c[(size_t)j * nxyz + i] += f * (cref[j] - c[(size_t)j * nxyz + i]);
+        }
+    }
+
     volumes.resize(nxyz);
     temperatures.resize(nxyz);
     pressures.resize(nxyz);
     indx = 0;
     pressures = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetPressure();
     temperatures = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetTemperature();
+    // Lowest temperature passed to PHREEQC in each cell (C): 0 C unless the
+    // compartment's TEMPERATURE entry sets "MIN_C" (see the clamp below).
+    std::vector<double> temperatures_min(nxyz, 0.0);
 
     // First pass: collect volumes, temperatures, pressures
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
@@ -100,7 +380,7 @@ void OpenWQ_CH_model::phreeqc_run(
         // or a linear relation to one, {"DEPENDENCY": "Tair_K", "LINEAR": [a, b]}
         // for T = a + b * variable (C), e.g. stream temperature from air
         // temperature. Below 0 C it is set to 0 C further down.
-        double temp_a = 0.0, temp_b = 1.0;
+        double temp_a = 0.0, temp_b = 1.0, temp_min = 0.0;
         try {
             const json& temp_map = OpenWQ_json.BGC_module["TEMPERATURE"][compName_icmp];
             if (temp_map.is_object()) {
@@ -109,6 +389,8 @@ void OpenWQ_CH_model::phreeqc_run(
                     temp_a = temp_map["LINEAR"].at(0).get<double>();
                     temp_b = temp_map["LINEAR"].at(1).get<double>();
                 }
+                if (temp_map.contains("MIN_C"))
+                    temp_min = temp_map["MIN_C"].get<double>();
             } else {
                 dependancy = temp_map.get<std::string>();
             }
@@ -180,6 +462,7 @@ void OpenWQ_CH_model::phreeqc_run(
                         }
                         temperatures[indx] = temp_a + temp_b * temp_val;
                     }
+                    temperatures_min[indx] = temp_min;
                     if (pressure_indx != -1) {
                         pressures[indx] = OpenWQ_hostModelconfig.get_dependVar_at(pressure_indx, ix, iy, iz);
                     }
@@ -245,7 +528,20 @@ void OpenWQ_CH_model::phreeqc_run(
                             conc_mol_kgw = 0.0;
                         }
 
-                        // Use PHREEQC component index for concentration array
+                        // A read-out component is not part of the chemistry
+                        // (set after RunCells, see DIAGNOSTICS)
+                        const bool readout = P.is_diagnostic[phreeqc_idx] != 0;
+                        if (readout) conc_mol_kgw = 0.0;
+
+                        // Use PHREEQC component index for concentration array.
+                        // The change moves the charge, H and O of the
+                        // component's species with it (see carriers).
+                        if (active_cell(indx) && !readout) {
+                            const double dk = conc_mol_kgw - c[(size_t)phreeqc_idx*nxyz+indx];
+                            c[(size_t)P.comp_H*nxyz+indx]      += carry_h[chemi*nxyz+indx] * dk;
+                            c[(size_t)P.comp_O*nxyz+indx]      += carry_o[chemi*nxyz+indx] * dk;
+                            c[(size_t)P.comp_Charge*nxyz+indx] += carry_z[chemi*nxyz+indx] * dk;
+                        }
                         c[phreeqc_idx*nxyz+indx] = conc_mol_kgw;
                         indx++;
                     }
@@ -258,7 +554,7 @@ void OpenWQ_CH_model::phreeqc_run(
 
     // Validate and fix temperatures - PHREEQC needs reasonable values (0-100°C typical)
     for (int i = 0; i < nxyz; i++) {
-        if (std::isnan(temperatures[i]) || std::isinf(temperatures[i]) || temperatures[i] < -50 || temperatures[i] > 200) {
+        if (std::isnan(temperatures[i]) || std::isinf(temperatures[i]) || temperatures[i] > 200) {
             temperatures[i] = 25.0;  // Default to 25°C
         }
         if (std::isnan(pressures[i]) || std::isinf(pressures[i]) || pressures[i] <= 0) {
@@ -266,10 +562,14 @@ void OpenWQ_CH_model::phreeqc_run(
         }
         // Liquid water below 0 C (frozen soil layers, supercooled water) is
         // outside the range of the PHREEQC databases: the log K and gas
-        // solubility expressions are fitted from 0 C up and extrapolate badly
-        // below it (O2 solubility ~20 mg/L at -10 C). Chemistry is evaluated
-        // at 0 C instead.
-        if (temperatures[i] < 0.0) temperatures[i] = 0.0;
+        // solubility expressions are fitted from 0 C up and extrapolate below
+        // it (O2 solubility ~20 mg/L at -10 C). By default chemistry is
+        // evaluated at 0 C instead. A compartment can lower this bound with
+        // "MIN_C" in its TEMPERATURE entry, e.g. for the unfrozen water of
+        // frozen soil, so that rate laws with a temperature factor see the
+        // host temperature (rate laws that use a gas solubility should then
+        // bound the temperature of that solubility themselves).
+        if (temperatures[i] < temperatures_min[i]) temperatures[i] = temperatures_min[i];
     }
 
     // Log first cell values for debugging (with units)
@@ -335,6 +635,36 @@ void OpenWQ_CH_model::phreeqc_run(
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->GetConcentrations(c);
     msg_string = "<OpenWQ> PHREEQC: GetConcentrations succeeded, c.size()=" + std::to_string(c.size());
     if (OpenWQ_wqconfig.debug_mode) OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+
+    // Read-out components from the speciated solutions (DIAGNOSTICS): pH as
+    // -(log10 m + log10 gamma) of H+, divided by 1000 GFW so that the mg/L of
+    // the component equal the pH; a species as its molality. Species absent
+    // from a solution (concentration 0) give 0, not 10^0 (PhreeqcRM fills their
+    // log10 molality with 0).
+    if (!P.diagnostics.empty()) {
+        std::vector<double> lm, lg, sc;
+        P.phreeqcrm->GetSpeciesLog10Molalities(lm);
+        P.phreeqcrm->GetSpeciesLog10Gammas(lg);
+        P.phreeqcrm->GetSpeciesConcentrations(sc);
+        const size_t nsp = P.phreeqcrm->GetSpeciesCount();
+        const bool ok = lm.size() == nsp * (size_t)nxyz && lg.size() == lm.size() && sc.size() == lm.size();
+        for (const auto& d : P.diagnostics) {
+            double gfw_d = (has_gfw && (size_t)d.comp < gfw.size()) ? gfw[d.comp] : 1.0;
+            if (!(gfw_d > 0.0) || !std::isfinite(gfw_d)) gfw_d = 1.0;
+            for (int i = 0; i < nxyz; i++) {
+                if (!active_cell(i)) continue;
+                double v = 0.0;
+                if (ok && d.species < 0) {
+                    const size_t k = (size_t)P.species_Hplus * nxyz + i;
+                    v = -(lm[k] + lg[k]) / (1000.0 * gfw_d);
+                } else if (ok) {
+                    const size_t k = (size_t)d.species * nxyz + i;
+                    v = (sc[k] > 0.0) ? std::pow(10.0, lm[k]) : 0.0;
+                }
+                c[(size_t)d.comp * nxyz + i] = (std::isfinite(v) && v > 0.0) ? v : 0.0;
+            }
+        }
+    }
 
     msg_string = "<OpenWQ> PHREEQC DEBUG: mobile_species.size()=" + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->mobile_species.size())
         + ", num_chem=" + std::to_string(OpenWQ_wqconfig.CH_model->PHREEQC->num_chem)

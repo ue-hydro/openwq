@@ -342,6 +342,7 @@ def create_phreeqc_module_json(
         phreeqc_component_h2o: bool = True,
         phreeqc_temperature_mapping: Optional[Dict[str, str]] = None,
         phreeqc_pressure_mapping: Optional[Dict[str, str]] = None,
+        phreeqc_diagnostics: Optional[Dict[str, str]] = None,
 
 ) -> None:
     """
@@ -365,6 +366,15 @@ def create_phreeqc_module_json(
             e.g. stream temperature from air temperature.
         phreeqc_pressure_mapping: Optional dict mapping compartment names to
             dependency variable names for pressure (in atm)
+        phreeqc_diagnostics: Optional dict of read-out components, e.g.
+            {"Phx": "pH", "Nhx": "Amm"}: after every RunCells OpenWQ sets the
+            component to the pH ("pH"; its mg/L then equal the pH) or to the
+            molality of the named aqueous species. The component must be a
+            SOLUTION_MASTER_SPECIES of the .pqi listed in phreeqc_mobile_species
+            (to be an output) and present (nonzero) in a SOLUTION of the .pqi (so that
+            PhreeqcRM lists it as a component); it takes no part in the chemistry and needs
+            no KINETICS. The keys are written upper-cased: OpenWQ upper-cases the JSON keys
+            when it reads them, and renaming mixed-case keys of a nested object lost values.
     """
 
     # Create the destination directory path if it doesn't exist
@@ -436,6 +446,10 @@ def create_phreeqc_module_json(
     # Add optional pressure mapping
     if phreeqc_pressure_mapping:
         config["PRESSURE"] = phreeqc_pressure_mapping
+
+    # Add optional read-out components (exact pH / species molality after RunCells)
+    if phreeqc_diagnostics:
+        config["DIAGNOSTICS"] = {str(k).upper(): v for k, v in phreeqc_diagnostics.items()}
 
     # Convert to formatted JSON string
     json_string = json.dumps(config, indent=4)

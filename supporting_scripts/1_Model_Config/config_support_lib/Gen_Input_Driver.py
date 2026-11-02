@@ -1160,6 +1160,7 @@ def Gen_Input_Driver(
             phreeqc_component_h2o=phreeqc_component_h2o,
             phreeqc_temperature_mapping=phreeqc_temperature_mapping,
             phreeqc_pressure_mapping=phreeqc_pressure_mapping,
+            phreeqc_diagnostics=kwargs.get("phreeqc_diagnostics"),
         )
     elif bgc_module_name == "NATIVE_BGC_FLEX":
         # Copy the selected BGC framework file

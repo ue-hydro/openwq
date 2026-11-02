@@ -222,7 +222,9 @@ plant_uptake_amm
 # ---------------------------------------------------------------------
 soil_o2_exchange
 -start
-10 o2sat = EXP(-139.34411 + 1.575701E5 / TK - 6.642308E7 / TK^2 + 1.2438E10 / TK^3 - 8.621949E11 / TK^4)
+5 tks = TK
+6 IF tks < 273.15 THEN tks = 273.15   # saturation at 0 C or above (fitted range; liquid water below 0 C with MIN_C < 0)
+10 o2sat = EXP(-139.34411 + 1.575701E5 / tks - 6.642308E7 / tks^2 + 1.2438E10 / tks^3 - 8.621949E11 / tks^4)
 30 o2 = TOT("Oxg") * 31998
 40 dm = CALC_VALUE("k_o2") / 31998 / 86400 * (o2sat - o2) * TOT("water") * TIME
 50 IF dm < -TOT("Oxg") * TOT("water") THEN dm = -TOT("Oxg") * TOT("water")
@@ -230,7 +232,9 @@ soil_o2_exchange
 -end
 river_reaeration
 -start
-10 o2sat = EXP(-139.34411 + 1.575701E5 / TK - 6.642308E7 / TK^2 + 1.2438E10 / TK^3 - 8.621949E11 / TK^4)
+5 tks = TK
+6 IF tks < 273.15 THEN tks = 273.15   # saturation at 0 C or above (fitted range; liquid water below 0 C with MIN_C < 0)
+10 o2sat = EXP(-139.34411 + 1.575701E5 / tks - 6.642308E7 / tks^2 + 1.2438E10 / tks^3 - 8.621949E11 / tks^4)
 30 o2 = TOT("Oxg") * 31998
 40 dm = CALC_VALUE("k_rea") / 31998 / 86400 * (o2sat - o2) * TOT("water") * TIME
 50 IF dm < -TOT("Oxg") * TOT("water") THEN dm = -TOT("Oxg") * TOT("water")
@@ -294,7 +298,7 @@ EXCHANGE 1  Soil cation exchanger (mol X per kg of soil water)
     -equilibrate 1
 KINETICS 1  Soil
 decomposition
-    -formula  Doc 1.0  AmmH+ 0.0715
+    -formula  Doc 1.0  Amm 0.0715   # ammonia released by mineralization, protonated by the speciation (net charge 0: PHREEQC adds elements only)
     -m        1e10
 respiration
     -formula  Doc -1  Oxg -1  CO2 1

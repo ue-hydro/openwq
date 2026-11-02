@@ -32,6 +32,10 @@ Top-level keys that identify the simulation.
 +----------------------+-------------------------------------------------------------------------------------+
 | ``USE_NUM_THREADS``  | ``"all"`` or integer number of threads to use (e.g., ``4``)                         |
 +----------------------+-------------------------------------------------------------------------------------+
+| ``SUNDIALS_RELTOL``  | Optional. Relative tolerance of CVode (SUNDIALS solver), default ``1e-2``           |
++----------------------+-------------------------------------------------------------------------------------+
+| ``SUNDIALS_ABSTOL``  | Optional. Absolute tolerance of CVode, in g of chemical mass per cell, default 1e-4 |
++----------------------+-------------------------------------------------------------------------------------+
 
 
 ``SOLVER``

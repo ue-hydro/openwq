@@ -408,6 +408,13 @@ class OpenWQ_wqconfig
             
         bool debug_mode = false;        // set to true if debug mode is requested
 
+        // CVODE tolerances of the SUNDIALS solver (COMPUTATIONAL_SETTINGS SUNDIALS_RELTOL and
+        // SUNDIALS_ABSTOL). The defaults are the values used before they could be set: a 1 %
+        // relative tolerance leaves integration errors of ~0.1-1 % in batch tests (verification
+        // case 3); 1e-6 reproduces the numerical reference to ~1e-5.
+        double sundials_reltol = 1e-2;
+        double sundials_abstol = 1e-4;     // g (chemass) per cell
+
         // chemicals, compartments and cells/elements to export
         std::vector<int> chem2print;
         std::vector<int> compt2print;
@@ -791,6 +798,48 @@ class OpenWQ_wqconfig::CH_model_::PHREEQC_{
     // (CreateMapping), which also keeps transient pools with almost no water
     // (surface runoff, canopy, snow) from being solved at absurd concentrations.
     std::vector<int> cell_active;
+
+    // Charge, hydrogen and oxygen carried by each mobile component. OpenWQ
+    // transports element totals only. When it writes a transported total back
+    // into a PhreeqcRM cell, the charge balance and the excess H and O that the
+    // species of that element carry must move with it: PHREEQC adds elements
+    // without charge, so a bare element total (nitrate written as "Nit") is
+    // absorbed by redox of the cell water (it acted as nitric acid and consumed
+    // the cell water). Carriers of a component are its aqueous species made of
+    // that element and H and O only (Nit-; AmmH+ and Amm), weighted by their
+    // concentrations in the cell after the previous RunCells.
+    struct carrier_species { int s; double nu, h, o, z; };
+    std::vector<std::vector<carrier_species>> carriers;   // [mobile ordinal]
+    int comp_H = -1, comp_O = -1, comp_Charge = -1;       // component indices
+
+    // Renewal of the chemistry OpenWQ does not transport (RENEWAL of a
+    // compartment in BIOGEOCHEMISTRY_CONFIGURATION): every component of a
+    // cell relaxes towards a reference SOLUTION of the .pqi file with time
+    // scale tau, c += (1 - exp(-dt/tau)) (c_ref - c), before the mobile
+    // components are written. Mixing in component space conserves charge, H
+    // and O (a KINETICS formula cannot: it adds elements only).
+    bool coupling_ready = false;
+    std::vector<double> renewal_tau_s;                    // [cell], 0 = none
+    std::vector<int> renewal_ref;                         // [cell] -> renewal_ref_c
+    std::vector<std::vector<double>> renewal_ref_c;       // [ref][component] mol/L
+
+    // Read-out components (DIAGNOSTICS of the PHREEQC module JSON, e.g.
+    // {"Phx": "pH", "Nhx": "Amm"}): after every RunCells the component is set,
+    // in each cell that runs PHREEQC, to a property of the speciated solution:
+    // "pH" gives -log10 a(H+) (the component's mg/L then equal the pH), the name
+    // of an aqueous species gives its molality. The component takes no part in
+    // the chemistry (it is written to PhreeqcRM as 0) and needs no KINETICS; it
+    // must be in BGC_GENERAL_MOBILE_SPECIES to be an OpenWQ output, and nonzero in
+    // a SOLUTION of the .pqi to be a PhreeqcRM component. Names are matched
+    // without regard to case; write the keys upper-case (the JSON reader renames
+    // mixed-case keys of nested objects and can lose values). Exact at the
+    // end of the time step, unlike a KINETICS tracer relaxing towards the value
+    // (whose read-out depends on the integration substeps and which made the
+    // reach chemistry ~8 times slower).
+    struct diagnostic_comp { int comp; int species; };    // species -1 = pH
+    std::vector<diagnostic_comp> diagnostics;
+    std::vector<char> is_diagnostic;                      // [component]
+    int species_Hplus = -1;
 
     // PHREEQC
     std::unique_ptr<PhreeqcRM> phreeqcrm;

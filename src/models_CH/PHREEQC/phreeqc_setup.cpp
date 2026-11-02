@@ -118,6 +118,11 @@ void OpenWQ_CH_model::phreeqc_setup(
     // Units: 1 = mg/kgw, 2 = mol/kgw, 3 = kg/kgs
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetUnitsSolution(2);  // 2 = mol/kgw (PHREEQC default)
 
+    // Keep the aqueous species of every cell after each RunCells: phreeqc_run
+    // uses them to move the charge, H and O carried by the mobile components
+    // (must be set before FindComponents).
+    OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetSpeciesSaveOn(true);
+
     // FindComponents must be called on the production PhreeqcRM instance
     int ncomp = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->FindComponents();
     msg_string = "<OpenWQ> PHREEQC FindComponents returned: " + std::to_string(ncomp);
