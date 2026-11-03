@@ -2185,8 +2185,11 @@ def generate_interactive_setup(
     <code>netCDF4</code>, <code>SALib</code>&hellip;). This block builds a virtual env
     from the <code>requirements.txt</code> already in your cloned openWQ &mdash; on the
     <strong>login node</strong>, because compute nodes usually have no internet for
-    <code>pip</code>. It prints the exact <em>Modules to load</em> line to paste back
-    into the Execution tab.
+    <code>pip</code>. It builds <code>$HPC_BASE/calib_venv</code>, which
+    <strong>the job auto-activates</strong> when your <em>Modules to load</em> line
+    doesn't activate an env of its own &mdash; so once you run this, the job uses the
+    exact same env. If the deps are missing at run time the job stops immediately with
+    a pointer back to this step (no silent skips, no deep crash).
   </div>
   <div style="position:relative;margin:.2rem 0 .7rem;">
     <button onclick="copyHpcRun(this,'hpcRunEnv')"
@@ -3197,7 +3200,11 @@ def _build_interactive_execution_section(
                      "built).  The .sif is dependency-only, so the binary is run from "
                      "here.  This is the only per-coupling path the tool can't guess; "
                      "everything else (inputs, .sif, calibration_lib) is automatic.  "
-                     "Exported as OWQ_EXEC_PATH.",
+                     "Exported as OWQ_EXEC_PATH.  Build with "
+                     "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON so the binary finds its "
+                     "own libsumma.so / libPhreeqcRM.so, and keep the build UNDER the "
+                     "HPC working dir so those libs are visible inside the .sif (the "
+                     "job otherwise auto-discovers and binds them near this path).",
                 placeholder="$HPC_BASE/.../bin/summa_openwq_Release", wrap=True)}
         </div>
 
@@ -6568,6 +6575,14 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('#                                              # calibration deps (numpy, scipy, ...)');
     }
     L.push('');
+    L.push('# If nothing was activated above, fall back to the venv that step 3.2 built');
+    L.push('# at $HPC_BASE/calib_venv (from requirements.txt), so the job uses the SAME');
+    L.push('# env the one-time setup created and activation cannot be mis-wired.');
+    L.push('if [ -z "${VIRTUAL_ENV:-}" ] && [ -z "${CONDA_PREFIX:-}" ] && [ -f "$HPC_BASE/calib_venv/bin/activate" ]; then');
+    L.push('  echo "Activating calibration venv: $HPC_BASE/calib_venv"');
+    L.push('  source "$HPC_BASE/calib_venv/bin/activate"');
+    L.push('fi');
+    L.push('');
     L.push('# calibration_lib + config_support_lib: PREFER the copies shipped with this run');
     L.push('# at $HPC_BASE/_owq_calib_code.  That bundle is created by the copy/deploy step');
     L.push('# (step 3.3 in the setup report, which rsyncs the 3 support libs there) so the');
@@ -6621,29 +6636,31 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('');
     L.push('# ── Host libraries the binary links at RUNTIME ───────────────────────');
     L.push('# A host-compiled binary needs host .so files (e.g. libsumma.so,');
-    L.push('# libPhreeqcRM.so) that are NOT inside the .sif.  List the dirs that');
-    L.push('# hold them: the job puts them on LD_LIBRARY_PATH and mirrors that into');
-    L.push('# the container, and model_runner binds each dir into the container too.');
-    var _libs = (s.hpc_host_libs || '').trim();
-    if (_libs)
-      L.push('export OWQ_HOST_LIBS="' + _libs + '"');
-    else
-      L.push('export OWQ_HOST_LIBS=""   # <-- EDIT (if the binary needs host .so files): colon-separated dirs, e.g. "$HPC_BASE/summa-mizuroute_build:$HPC_BASE/_deps/phreeqcrm-install/lib"');
+    L.push('# libPhreeqcRM.so) that are NOT inside the .sif.  Best practice is to');
+    L.push('# build with -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON (the binary then finds');
+    L.push('# its own libs) and keep the build UNDER $HPC_BASE so those dirs are');
+    L.push('# visible inside the container.  As a safety net the job also auto-finds');
+    L.push('# the lib dirs next to the executable; model_runner binds them into the');
+    L.push('# .sif.  (Override by exporting OWQ_HOST_LIBS before submitting.)');
+    L.push('export OWQ_HOST_LIBS="${OWQ_HOST_LIBS:-}"');
+    L.push('if [ -z "$OWQ_HOST_LIBS" ] && [ -n "$OWQ_EXEC_PATH" ] && [ -e "$OWQ_EXEC_PATH" ]; then');
+    L.push('  # Auto-discover the .so dirs by searching near the compiled executable');
+    L.push('  # (bounded depth).  Duplicate dirs on the path are harmless.');
+    L.push('  _owq_exe_dir="$(cd "$(dirname "$OWQ_EXEC_PATH")" && pwd)"');
+    L.push('  _owq_libset="$_owq_exe_dir"');
+    L.push('  for _so in libsumma.so libPhreeqcRM.so libopenwq.so; do');
+    L.push('    _hit="$(find "$_owq_exe_dir/.." -maxdepth 5 -name "$_so" -print -quit 2>/dev/null)"');
+    L.push('    [ -n "$_hit" ] && _owq_libset="$_owq_libset:$(cd "$(dirname "$_hit")" && pwd)"');
+    L.push('  done');
+    L.push('  export OWQ_HOST_LIBS="$_owq_libset"');
+    L.push('  echo "[sbatch] auto-discovered OWQ_HOST_LIBS=$OWQ_HOST_LIBS"');
+    L.push('fi');
     L.push('if [ -n "$OWQ_HOST_LIBS" ]; then');
     L.push('  export LD_LIBRARY_PATH="$OWQ_HOST_LIBS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"');
     L.push('  # Mirror into the container (Apptainer/Singularity native injection).');
     L.push('  export SINGULARITYENV_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"');
     L.push('  export APPTAINERENV_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"');
     L.push('fi');
-    L.push('');
-    L.push('# ── Fallback PYTHONPATH when a node-dependent conda env does not expose');
-    L.push('#    its site-packages on the compute node (geopandas/fiona/SALib import');
-    L.push('#    errors in Gen_*_Driver / sensitivity / map generation) ─────────────');
-    var _pysite = (s.hpc_python_site || '').trim();
-    if (_pysite)
-      L.push('export PYTHONPATH="' + _pysite + '${PYTHONPATH:+:$PYTHONPATH}"');
-    else
-      L.push('# export PYTHONPATH="/path/to/conda_env/lib/pythonX.Y/site-packages${PYTHONPATH:+:$PYTHONPATH}"   # <-- UNCOMMENT if geopandas/fiona/SALib import fails on the compute node');
     L.push('');
     L.push('RUN="$HPC_BASE' + runLocal + '"');
     L.push('if [ ! -f "$RUN" ]; then');
@@ -6656,6 +6673,16 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('# Use python3 if present, else fall back to python (conda envs provide both).');
     L.push('PY="$(command -v python3 || command -v python)"');
     L.push(': "${PY:?No python3/python on PATH - load a Python module or activate a conda env above (see the EDIT line near the top)}"');
+    L.push('# Fail fast (and legibly) if the calibration Python deps are missing, so');
+    L.push('# a broken env stops here with a one-line fix instead of crashing deep in');
+    L.push('# the run (geopandas/fiona/SALib power the LULC maps + Morris/Sobol).');
+    L.push('if ! "$PY" -c "import importlib.util as u,sys; sys.exit(0 if all(u.find_spec(m) for m in sys.argv[1:]) else 1)" geopandas fiona SALib 2>/dev/null; then');
+    L.push('  echo "ERROR: $PY cannot import geopandas/fiona/SALib - your Python env is incomplete." >&2');
+    L.push('  echo "       Build it from requirements.txt: run the ONE-TIME env setup (step 3.2 in the" >&2');
+    L.push('  echo "       setup report) to create $HPC_BASE/calib_venv, which this job then activates." >&2');
+    L.push('  echo "       (If you activate your own env in the Modules-to-load line, install the deps there.)" >&2');
+    L.push('  exit 1');
+    L.push('fi');
     L.push('"$PY" "$(basename "$RUN")" --clean');
     L.push('');
     return L.join('\n');
