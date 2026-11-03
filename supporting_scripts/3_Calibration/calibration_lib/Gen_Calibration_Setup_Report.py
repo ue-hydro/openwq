@@ -6541,7 +6541,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('#SBATCH --cpus-per-task=' + (s.slurm_cpus || 4) + '               # >= n_parallel');
     L.push('#SBATCH --mem=' + (s.slurm_mem || '16G'));
     L.push('#SBATCH --output=' + (s.slurm_job_name || 'openwq_calib') + '_%j.out');
-    L.push('set -euo pipefail');
+    L.push('set -eo pipefail');   // NOT -u: conda/geotiff activation scripts reference unbound vars (e.g. GEOTIFF_CSV)
     L.push('# HPC_BASE = the root every baked path below is relative to.  The submit');
     L.push('# helper passes it (sbatch --export=ALL,HPC_BASE=...).  If you submit this');
     L.push('# file directly WITHOUT it, fall back to the directory you ran sbatch from');
@@ -6618,6 +6618,32 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('# and the run script left apptainer_sif_path / apptainer_bind_path unset.');
       L.push('export OWQ_APPTAINER_SIF="' + s.sif_hpc + '"');
     }
+    L.push('');
+    L.push('# ── Host libraries the binary links at RUNTIME ───────────────────────');
+    L.push('# A host-compiled binary needs host .so files (e.g. libsumma.so,');
+    L.push('# libPhreeqcRM.so) that are NOT inside the .sif.  List the dirs that');
+    L.push('# hold them: the job puts them on LD_LIBRARY_PATH and mirrors that into');
+    L.push('# the container, and model_runner binds each dir into the container too.');
+    var _libs = (s.hpc_host_libs || '').trim();
+    if (_libs)
+      L.push('export OWQ_HOST_LIBS="' + _libs + '"');
+    else
+      L.push('export OWQ_HOST_LIBS=""   # <-- EDIT (if the binary needs host .so files): colon-separated dirs, e.g. "$HPC_BASE/summa-mizuroute_build:$HPC_BASE/_deps/phreeqcrm-install/lib"');
+    L.push('if [ -n "$OWQ_HOST_LIBS" ]; then');
+    L.push('  export LD_LIBRARY_PATH="$OWQ_HOST_LIBS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"');
+    L.push('  # Mirror into the container (Apptainer/Singularity native injection).');
+    L.push('  export SINGULARITYENV_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"');
+    L.push('  export APPTAINERENV_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"');
+    L.push('fi');
+    L.push('');
+    L.push('# ── Fallback PYTHONPATH when a node-dependent conda env does not expose');
+    L.push('#    its site-packages on the compute node (geopandas/fiona/SALib import');
+    L.push('#    errors in Gen_*_Driver / sensitivity / map generation) ─────────────');
+    var _pysite = (s.hpc_python_site || '').trim();
+    if (_pysite)
+      L.push('export PYTHONPATH="' + _pysite + '${PYTHONPATH:+:$PYTHONPATH}"');
+    else
+      L.push('# export PYTHONPATH="/path/to/conda_env/lib/pythonX.Y/site-packages${PYTHONPATH:+:$PYTHONPATH}"   # <-- UNCOMMENT if geopandas/fiona/SALib import fails on the compute node');
     L.push('');
     L.push('RUN="$HPC_BASE' + runLocal + '"');
     L.push('if [ ! -f "$RUN" ]; then');
@@ -6751,7 +6777,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('  owq_login() { ssh "$HPC_USER@$HPC_HOST" "HPC_BASE=\'$HPC_BASE\' OWQ_REPO=\'$OWQ_REPO\' bash -l -s"; }');
     L.push('fi');
     L.push('owq_login <<\'EOF\'');
-    L.push('set -euo pipefail');
+    L.push('set -eo pipefail');   // NOT -u: conda/geotiff activation scripts reference unbound vars (e.g. GEOTIFF_CSV)
     L.push('# Remove any stale venv FIRST.  If the modules line below activates an old');
     L.push('# venv (e.g. one built earlier with python 3.6), its python would shadow the');
     L.push('# module python and the version guard would wrongly see the old version.');
@@ -6945,7 +6971,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
       L.push('  owq_sh() { ssh "$HPC_USER@$HPC_HOST" "HPC_BASE=\'$HPC_BASE\' SIF_HPC=\'$SIF_HPC\' bash -s"; }');
       L.push('fi');
       L.push('owq_sh <<\'EOF\'');
-      L.push('set -euo pipefail');
+      L.push('set -eo pipefail');   // NOT -u: conda/geotiff activation scripts reference unbound vars (e.g. GEOTIFF_CSV)
       L.push('ROOT="' + (HPC.common_root || '') + '"');
       L.push('RUN="$HPC_BASE' + _owqRelToRoot(HPC.run_local || '') + '"');
       L.push('MC="$HPC_BASE' + _owqRelToRoot(HPC.mc_path || '') + '"');
@@ -7087,7 +7113,7 @@ def _build_interactive_js(model_config_path, calibration_work_dir,
     L.push('#    model) - just like a local "' + _run + ' --report" in a second terminal.');
     L.push('OWQ_REPO="' + _owqDir + '"' + (s.hpc_openwq_dir ? '' : '   # <-- EDIT: your cloned openWQ'));
     L.push('ssh "$HPC_USER@$HPC_HOST" "HPC_BASE=\'$HPC_BASE\' OWQ_REPO=\'$OWQ_REPO\' bash -l -s" <<\'EOF\'');
-    L.push('set -euo pipefail');
+    L.push('set -eo pipefail');   // NOT -u: conda/geotiff activation scripts reference unbound vars (e.g. GEOTIFF_CSV)
     if (s.slurm_modules) {
       L.push('# Same python your job uses (Execution-tab "Modules to load"):');
       L.push(_owqCondaSafe(s.slurm_modules));
