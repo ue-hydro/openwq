@@ -904,6 +904,36 @@ class ModelRunner:
             mpi_prefix = ["mpirun", "-np", _ranks, "--oversubscribe",
                           "-x", "master_json", "-x", "OMP_NUM_THREADS"]
 
+        # ── Host shared libraries the binary needs INSIDE the container ──────
+        # A host-compiled binary dynamically links host .so files (e.g.
+        # libsumma.so, libPhreeqcRM.so) that are NOT inside the .sif.  For it to
+        # load them we must both (a) BIND each directory in, and (b) put those
+        # directories on the container's LD_LIBRARY_PATH.  Read them from the
+        # host LD_LIBRARY_PATH (the .sbatch sets it — see the setup report),
+        # identity-bind every dir not already under a bound tree, and forward the
+        # path via the runtime's native SINGULARITYENV_/APPTAINERENV_ injection
+        # (higher precedence than --env; survives --cleanenv and a restricted
+        # apptainer.conf).  Identity binds keep host == container paths so the
+        # value resolves unchanged inside the container.
+        _bound = [os.path.normpath(host_path)] if host_path else []
+        for _bi in range(len(extra_binds) - 1):
+            if extra_binds[_bi] == "--bind":
+                _bound.append(os.path.normpath(
+                    extra_binds[_bi + 1].split(":", 1)[0]))
+        for _ld in (os.environ.get("LD_LIBRARY_PATH", "") or "").split(os.pathsep):
+            _ld = _ld.strip()
+            if not _ld or not os.path.isdir(_ld):
+                continue
+            _nd = os.path.normpath(_ld)
+            if any(_nd == b or _nd.startswith(b + os.sep) for b in _bound):
+                continue
+            extra_binds += ["--bind", _ld]
+            _bound.append(_nd)
+        _ldp = os.environ.get("LD_LIBRARY_PATH")
+        if _ldp:
+            os.environ["SINGULARITYENV_LD_LIBRARY_PATH"] = _ldp
+            os.environ["APPTAINERENV_LD_LIBRARY_PATH"] = _ldp
+
         # cwd = the eval dir so openWQ's relative RESULTS_FOLDERPATH (openwq_out/)
         # lands in this evaluation's folder.
         cmd = [
@@ -1263,7 +1293,6 @@ class ModelRunner:
                     f"{Path(ss_path).name}: {e}")
 
     @staticmethod
-    @staticmethod
     def _simulation_completed(result) -> bool:
         """True when the model log shows the time loop ran to its end (SUMMA's
         final message, or the OpenWQ coupler's end-of-run water check)."""
@@ -1271,6 +1300,7 @@ class ModelRunner:
         return ("finished simulation successfully" in text
                 or "water check over the run" in text)
 
+    @staticmethod
     def _oom_message(returncode, stderr) -> Optional[str]:
         """If a failure matches a KNOWN failure mode (out-of-memory kill or a
         model-side segmentation fault), return an actionable message; otherwise

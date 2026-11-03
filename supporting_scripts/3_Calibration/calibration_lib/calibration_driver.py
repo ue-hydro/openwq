@@ -1272,6 +1272,59 @@ def run_calibration(
 
     eval_counter = [start_eval]
 
+    # ── Fail-fast guard ──────────────────────────────────────────────────
+    # A broken binary / wrong .so-load / missing host library makes EVERY
+    # evaluation fail, yet the old flow just returned the penalty (1e10) for
+    # each one and still printed "CALIBRATION COMPLETE, best = 1e10" after
+    # burning the whole budget.  Abort early instead, pointing at the eval's
+    # model_output.log.  Seed the success count from any prior run on disk so a
+    # --resume whose earlier evals already succeeded is never aborted just
+    # because the first RESUMED eval fails for parameter reasons.
+    _prior_success = 0
+    try:
+        for _ot in work_dir.glob("evaluations/eval_*/objective.txt"):
+            try:
+                if "success: True" in _ot.read_text():
+                    _prior_success += 1
+            except OSError:
+                pass
+    except Exception:
+        pass
+    # Abort once this many model runs have FAILED with ZERO successes so far.
+    # 1 = abort on the first failed evaluation (eval 0 uses the initial
+    # parameters, which should always run).  Set OWQ_ABORT_AFTER_FAILURES=0 to
+    # disable (tolerate parameter-induced failures for the whole budget).
+    try:
+        _abort_after = int(os.environ.get("OWQ_ABORT_AFTER_FAILURES", "1") or 0)
+    except ValueError:
+        _abort_after = 1
+    _run_stats = {"attempts": 0, "successes": _prior_success}
+
+    def _register_eval_outcome(success, eval_id, eval_dir, error):
+        """Count run outcomes and hard-abort when the model NEVER runs (broken
+        binary / wrong path / missing host libs), so the run doesn't silently
+        return the penalty for every eval and exit 'CALIBRATION COMPLETE'."""
+        _run_stats["attempts"] += 1
+        if success:
+            _run_stats["successes"] += 1
+            return
+        if (_abort_after and _run_stats["successes"] == 0
+                and _run_stats["attempts"] >= _abort_after):
+            _log = Path(eval_dir) / "model_output.log"
+            msg = (
+                "CALIBRATION ABORTED — the model produced no usable output on "
+                f"the first {_run_stats['attempts']} run(s) and none succeeded.\n"
+                f"  Last failure (evaluation {eval_id}): {error}\n"
+                f"  Full model log: {_log}\n"
+                "  This is almost always a broken binary, a wrong executable/SIF "
+                "path, or host libraries missing from LD_LIBRARY_PATH — not the "
+                "parameter values (evaluation 0 uses the initial parameters, "
+                "which should run).  Fix the setup and re-run.\n"
+                "  To tolerate early failures instead, set "
+                "OWQ_ABORT_AFTER_FAILURES to a higher number (or 0 to disable).")
+            logger.error("=" * 70 + "\n" + msg + "\n" + "=" * 70)
+            raise SystemExit(msg)
+
     def _append_all_simulated(eval_id):
         """Append this eval's simulated series (target reach(es), objective
         species) to results/all_simulated.csv so the report can draw a light-
@@ -1359,6 +1412,7 @@ def run_calibration(
         success, runtime, error = model_runner.run_single_evaluation(
             eval_dir, master_json, eval_id
         )
+        _register_eval_outcome(success, eval_id, eval_dir, error)
 
         if not success:
             logger.warning(f"Evaluation {eval_id} failed: {error}")
@@ -1459,6 +1513,7 @@ def run_calibration(
                 idx = cfg["_idx"]
                 eval_id, params_real = real_by_idx[idx]
                 ok, rt, err = by_id.get(cfg["eval_id"], (False, 0.0, "no result"))
+                _register_eval_outcome(ok, eval_id, cfg["eval_dir"], err)
                 if ok:
                     obj_val = obj_func.compute(cfg["eval_dir"] / "openwq_out")
                     _append_all_simulated(eval_id)
