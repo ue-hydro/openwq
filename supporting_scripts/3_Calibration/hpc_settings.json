@@ -68,7 +68,15 @@
     "                          \"module load Python/3.11 && source $HPC_BASE/calib_venv/bin/activate\".",
     "                          The container CLI (apptainer/singularity) is auto-detected",
     "                          at run time, so you usually do NOT need to load it here.",
-    "                          Leave \"\" if Python is already on PATH by default."
+    "                          Leave \"\" if Python is already on PATH by default.",
+    "",
+    "NOTE: the calibration Python deps (geopandas/fiona/SALib/...) come from the",
+    "one-time env setup (step 3.2), which builds $HPC_BASE/calib_venv from",
+    "requirements.txt; the job auto-activates that venv when nothing else is active.",
+    "The model's own host .so files (libsumma.so/libPhreeqcRM.so) are handled",
+    "automatically too (build with -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON and keep",
+    "the build under hpc_working_dir; the job also auto-discovers + binds them). So",
+    "there are NO library-path or PYTHONPATH fields to fill here."
   ],
   "hpc_username": "",
   "hpc_login_hostname": "",
