@@ -95,6 +95,27 @@ To compile OpenWQ or a coupled model using the container:
     cmake -DHOST_MODEL_TARGET=mizuroute_lakes_cslm_openwq -DCMAKE_BUILD_TYPE=fast .
     make -j 2
 
+For the SUMMA targets (``summa_openwq``, ``summa-mizuroute_openwq``) the OpenWQ clone sits inside the SUMMA tree
+(``<summa>/build/source/openwq/openwq``) and the build needs the whole tree, so bind the tree and configure from
+inside it (the error "is not a SUMMA tree with the internal mizuRoute coupling" means only ``openwq/openwq`` was bound):
+
+.. code-block:: bash
+
+    cd <summa>
+    apptainer shell --bind $(pwd):/code/summa build/source/openwq/openwq/containers/openwq.sif
+    cd /code/summa/build/source/openwq/openwq
+    rm -f CMakeCache.txt; rm -rf CMakeFiles
+    cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq -DCMAKE_BUILD_TYPE=Release .
+    make -j 2
+    # run (from the case folder): same tree bind as the build, because the executable
+    # keeps the build paths of libsumma.so and libPhreeqcRM.so
+    apptainer exec --bind <summa>:/code/summa --bind $(pwd):/case --pwd /case <summa>/build/source/openwq/openwq/containers/openwq.sif \
+        /code/summa/build/source/openwq/openwq/bin/summa-mizuroute_openwq_Release -m fileManager.txt -c mizuroute.toml
+
+SUMMA is built as a shared library and cannot link the container's static PhreeqcRM: the target builds a shared
+PhreeqcRM once into ``<summa>/build/source/openwq/_deps`` (from ``/opt/phreeqcrm`` in the image), or use
+``-DSUMMA_PHREEQCRM_DIR=<cmake folder of a shared install>``.
+
 .. note::
 
    Compilation requires at least **16 GB of RAM** due to heavy C++ template instantiation

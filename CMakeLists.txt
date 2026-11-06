@@ -61,6 +61,64 @@ set(VALID_COMPILE_TARGETS "crhm_openwq" "summa_openwq"
                           "mizuroute_openwq" "mizuroute_lakes_openwq" "mizuroute_lakes_cslm_openwq" "fluxos_openwq"
                           "summa-mizuroute_openwq" "python_openwq")
 
+# Shared PhreeqcRM, built once into <deps_dir>/phreeqcrm-install: a host model built
+# as a shared library (SUMMA) cannot link the usual static, non-PIC PhreeqcRM of the
+# containers. Source: -DPHREEQCRM_SOURCE_DIR, else the containers' copy
+# (/opt/phreeqcrm/phreeqcrm-master in the Docker image, /opt/phreeqcrm in the
+# Apptainer image), else a git clone. Sets <out_cmake_dir> to the install's cmake folder.
+MACRO(OPENWQ_SHARED_PHREEQCRM deps_dir out_cmake_dir)
+    SET(_owq_prefix ${deps_dir}/phreeqcrm-install)
+    FILE(GLOB_RECURSE _owq_cfg ${_owq_prefix}/*/PhreeqcRMConfig.cmake)
+    if(NOT _owq_cfg)
+        if(DEFINED PHREEQCRM_SOURCE_DIR AND EXISTS ${PHREEQCRM_SOURCE_DIR}/CMakeLists.txt)
+            SET(_owq_src ${PHREEQCRM_SOURCE_DIR})
+        elseif(EXISTS /opt/phreeqcrm/phreeqcrm-master/CMakeLists.txt)
+            SET(_owq_src /opt/phreeqcrm/phreeqcrm-master)
+        elseif(EXISTS /opt/phreeqcrm/CMakeLists.txt)
+            SET(_owq_src /opt/phreeqcrm)
+        else()
+            SET(_owq_src ${deps_dir}/phreeqcrm-src)
+            if(NOT EXISTS ${_owq_src}/CMakeLists.txt)
+                MESSAGE(STATUS "** OpenWQ **: cloning usgs-coupled/phreeqcrm into ${_owq_src}")
+                execute_process(COMMAND git clone --depth 1 https://github.com/usgs-coupled/phreeqcrm.git ${_owq_src}
+                                RESULT_VARIABLE _owq_rc)
+                if(NOT _owq_rc EQUAL 0)
+                    MESSAGE(FATAL_ERROR "could not clone PhreeqcRM (no network?): pass -DPHREEQCRM_SOURCE_DIR=<source> "
+                                        "or point to an existing SHARED PhreeqcRM install")
+                endif()
+            endif()
+        endif()
+        SET(_owq_args -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+                      -DPHREEQCRM_BUILD_TESTS=OFF -DPHREEQCRM_FORTRAN_TESTING=OFF
+                      -DPHREEQCRM_BUILD_MPI=OFF -DPHREEQCRM_BUILD_PYTHON=OFF
+                      -DCMAKE_INSTALL_PREFIX=${_owq_prefix})
+        if(CMAKE_CXX_COMPILER)
+            LIST(APPEND _owq_args -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
+        endif()
+        if(CMAKE_C_COMPILER)
+            LIST(APPEND _owq_args -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER})
+        endif()
+        MESSAGE(STATUS "** OpenWQ **: building a shared PhreeqcRM once from ${_owq_src} into ${_owq_prefix} (a few minutes)")
+        execute_process(COMMAND ${CMAKE_COMMAND} -S ${_owq_src} -B ${deps_dir}/phreeqcrm-build ${_owq_args}
+                        RESULT_VARIABLE _owq_rc OUTPUT_QUIET)
+        if(_owq_rc EQUAL 0)
+            execute_process(COMMAND ${CMAKE_COMMAND} --build ${deps_dir}/phreeqcrm-build -j 4
+                            RESULT_VARIABLE _owq_rc OUTPUT_QUIET)
+        endif()
+        if(_owq_rc EQUAL 0)
+            execute_process(COMMAND ${CMAKE_COMMAND} --install ${deps_dir}/phreeqcrm-build
+                            RESULT_VARIABLE _owq_rc OUTPUT_QUIET)
+        endif()
+        FILE(GLOB_RECURSE _owq_cfg ${_owq_prefix}/*/PhreeqcRMConfig.cmake)
+        if(NOT _owq_rc EQUAL 0 OR NOT _owq_cfg)
+            MESSAGE(FATAL_ERROR "the shared PhreeqcRM build in ${deps_dir} failed; see ${deps_dir}/phreeqcrm-build, "
+                                "or point to an existing SHARED PhreeqcRM install")
+        endif()
+    endif()
+    LIST(GET _owq_cfg 0 _owq_cfg)
+    get_filename_component(${out_cmake_dir} ${_owq_cfg} DIRECTORY)
+ENDMACRO()
+
 if(NOT HOST_MODEL_TARGET)
    message(FATAL_ERROR "Need to set -DHOST_MODEL_TARGET. Options are ${VALID_COMPILE_TARGETS}")
 else()
@@ -1506,14 +1564,22 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa-mizuroute_openwq")
     INCLUDE(ExternalProject)
 
     SET(exec_name "${COMPILE_TARGET}_${COMPILE_MODE}")
-    get_filename_component(SUMMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../.. ABSOLUTE)
+    # the SUMMA tree: -DSUMMA_DIR=<path>, else four levels up (<summa>/build/source/openwq/openwq)
+    if(DEFINED SUMMA_DIR AND NOT "${SUMMA_DIR}" STREQUAL "")
+        get_filename_component(SUMMA_DIR ${SUMMA_DIR} ABSOLUTE)
+    else()
+        get_filename_component(SUMMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../.. ABSOLUTE)
+    endif()
     SET(EXEC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bin)
     SET(SUMMA_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/summa-mizuroute_build)
 
     if(NOT EXISTS ${SUMMA_DIR}/build/source/mizuroute/CMakeLists.txt)
         MESSAGE(FATAL_ERROR "summa-mizuroute_openwq: ${SUMMA_DIR} is not a SUMMA tree with the internal "
                             "mizuRoute coupling (build/source/mizuroute missing). This folder must be "
-                            "<summa>/build/source/openwq/openwq of the CH-Earth/summa develop branch.")
+                            "<summa>/build/source/openwq/openwq of the CH-Earth/summa develop branch, with the "
+                            "WHOLE SUMMA tree visible: inside a container bind the tree, e.g. "
+                            "'apptainer shell --bind <summa>:/code/summa openwq.sif' and configure from "
+                            "/code/summa/build/source/openwq/openwq, or pass -DSUMMA_DIR=<summa>.")
     endif()
     if(NOT EXISTS ${SUMMA_DIR}/external/mizuRoute/route/build/src/dataTypes.f90
        OR NOT EXISTS ${SUMMA_DIR}/external/toml-f/CMakeLists.txt)
@@ -1539,14 +1605,20 @@ ELSEIF("${COMPILE_TARGET}" STREQUAL "summa-mizuroute_openwq")
         -DCMAKE_BUILD_TYPE=${COMPILE_MODE}
         -DCMAKE_Fortran_COMPILER=${CMAKE_Fortran_COMPILER}
         -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
-    # PhreeqcRM: SUMMA_PHREEQCRM_DIR, else the shared build under _deps, else the one found above
+    # PhreeqcRM: SUMMA is a shared library, so it needs a SHARED PhreeqcRM:
+    # -DSUMMA_PHREEQCRM_DIR=<cmake folder of a shared install>, else one is built
+    # once into <summa>/build/source/openwq/_deps (or -DSUMMA_OPENWQ_DEPS_DIR)
     if(DEFINED SUMMA_PHREEQCRM_DIR)
         LIST(APPEND SUMMA_CMAKE_ARGS -DPhreeqcRM_DIR=${SUMMA_PHREEQCRM_DIR})
-    elseif(EXISTS ${SUMMA_DIR}/build/source/openwq/_deps/phreeqcrm-install/lib/cmake/PhreeqcRM)
-        LIST(APPEND SUMMA_CMAKE_ARGS
-             -DPhreeqcRM_DIR=${SUMMA_DIR}/build/source/openwq/_deps/phreeqcrm-install/lib/cmake/PhreeqcRM)
-    elseif(DEFINED PhreeqcRM_DIR)
-        LIST(APPEND SUMMA_CMAKE_ARGS -DPhreeqcRM_DIR=${PhreeqcRM_DIR})
+    else()
+        if(DEFINED SUMMA_OPENWQ_DEPS_DIR AND NOT "${SUMMA_OPENWQ_DEPS_DIR}" STREQUAL "")
+            SET(SUMMA_DEPS_DIR ${SUMMA_OPENWQ_DEPS_DIR})
+        else()
+            SET(SUMMA_DEPS_DIR ${SUMMA_DIR}/build/source/openwq/_deps)
+        endif()
+        OPENWQ_SHARED_PHREEQCRM(${SUMMA_DEPS_DIR} SUMMA_PHREEQCRM_CMAKE_DIR)
+        LIST(APPEND SUMMA_CMAKE_ARGS -DPhreeqcRM_DIR=${SUMMA_PHREEQCRM_CMAKE_DIR})
+        MESSAGE(STATUS "** OpenWQ **: PhreeqcRM (shared) ${SUMMA_PHREEQCRM_CMAKE_DIR}")
     endif()
     if(DEFINED SUNDIALS_DIR)
         LIST(APPEND SUMMA_CMAKE_ARGS -DSUNDIALS_DIR=${SUNDIALS_DIR})

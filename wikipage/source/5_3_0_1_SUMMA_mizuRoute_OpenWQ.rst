@@ -61,16 +61,23 @@ Build and run
 
     git clone -b develop --recurse-submodules https://github.com/CH-Earth/summa.git
     cd summa/build/source/openwq
-    git clone -b develop https://github.com/ue-hydro/openwq.git
+    git clone https://github.com/ue-hydro/openwq.git      # default branch (the target is not on develop yet)
     cd openwq
     cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq -DCMAKE_BUILD_TYPE=Release .
     make -j 2
     # bin/summa-mizuroute_openwq_Release
     cd <folder with openWQ_master.json>
     summa-mizuroute_openwq_Release -m fileManager.txt -c mizuroute.toml
+    # Apptainer: run with the same tree bind as the build (the executable keeps
+    # the build paths of libsumma.so and libPhreeqcRM.so)
+    apptainer exec --bind <summa>:/code/summa --bind $(pwd):/case --pwd /case openwq.sif \
+        /code/summa/build/source/openwq/openwq/bin/summa-mizuroute_openwq_Release -m fileManager.txt -c mizuroute.toml
 
 The target builds the SUMMA tree as an external project (``-DUSE_OPENWQ=ON -DUSE_MIZUROUTE=ON``, SUNDIALS according to
-``SOLVER_TYPE``) and needs a shared PhreeqcRM (``build/source/openwq/_deps`` or ``-DSUMMA_PHREEQCRM_DIR``). The TOML must set
+``SOLVER_TYPE``). SUMMA is a shared library, so a shared PhreeqcRM is built once into ``build/source/openwq/_deps``
+(or give ``-DSUMMA_PHREEQCRM_DIR``). Inside an Apptainer or Singularity container bind the whole SUMMA tree
+(``apptainer shell --bind <summa>:/code/summa openwq.sif``) and configure from ``/code/summa/build/source/openwq/openwq``;
+``-DSUMMA_DIR=<summa>`` overrides the tree location. The TOML must set
 ``[simulation] use_mizuroute = true``; the internal coupling offers the kinematic wave, Muskingum-Cunge and diffusive wave
 methods. The run is a single process. ``build/source/openwq/README.md`` in the SUMMA tree has the details.
 

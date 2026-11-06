@@ -164,9 +164,9 @@ RUNNING SUMMA-OPENWQ WITH THE CONTAINER:
 SUMMA's `develop` branch runs mizuRoute inside its own time loop and carries the OpenWQ coupling for that pair (one OpenWQ instance for the land compartments and the river reaches; merged in October 2026).
 
  1. Clone SUMMA with its submodules: `git clone -b develop --recurse-submodules https://github.com/CH-Earth/summa.git` (ue-hydro fork: [summa-mizuroute-openwq](https://github.com/ue-hydro/summa-mizuroute-openwq))
- 2. `cd summa/build/source/openwq` and clone OpenWQ: `git clone -b develop https://github.com/ue-hydro/openwq.git`
- 3. `cd openwq` and build with the dedicated target: `cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq -DCMAKE_BUILD_TYPE=Release . && make -j 2` (a shared PhreeqcRM is needed, see `build/source/openwq/README.md` in the SUMMA tree)
- 4. Run from the folder holding `openWQ_master.json`, as a single process: `bin/summa-mizuroute_openwq_Release -m fileManager.txt -c mizuroute.toml` (the TOML sets `[simulation] use_mizuroute = true`)
+ 2. `cd summa/build/source/openwq` and clone OpenWQ (default branch; the target is not on `develop` yet): `git clone https://github.com/ue-hydro/openwq.git`
+ 3. `cd openwq` and build with the dedicated target: `cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq -DCMAKE_BUILD_TYPE=Release . && make -j 2` (SUMMA is a shared library: a shared PhreeqcRM is built once into `build/source/openwq/_deps`, or pass `-DSUMMA_PHREEQCRM_DIR`). In an Apptainer/Singularity container bind the WHOLE SUMMA tree, `apptainer shell --bind <summa>:/code/summa openwq.sif`, and configure from `/code/summa/build/source/openwq/openwq`
+ 4. Run from the folder holding `openWQ_master.json`, as a single process: `bin/summa-mizuroute_openwq_Release -m fileManager.txt -c mizuroute.toml` (the TOML sets `[simulation] use_mizuroute = true`). With Apptainer run with the same tree bind as the build (`apptainer exec --bind <summa>:/code/summa --bind $(pwd):/case --pwd /case openwq.sif /code/summa/build/source/openwq/openwq/bin/summa-mizuroute_openwq_Release -m ... -c ...`): the executable keeps the build paths of `libsumma.so` and `libPhreeqcRM.so`
  5. In the configuration template use `hostmodel = "summa-mizuroute"` with `mizuroute_config_path`
 
 ## Execution
