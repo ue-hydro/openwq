@@ -437,6 +437,10 @@
                             <pre style="font-size: 0.7rem; padding: 12px;">
 <span class="comment"># SUMMA (land surface hydrology)</span>
 git clone -b develop https://github.com/ue-hydro/summa_ashleymedin.git
+<span class="comment"># SUMMA with internal mizuRoute (land + river, one executable;</span>
+<span class="comment"># target summa-mizuroute_openwq): submodules are required</span>
+git clone -b openwq-coupling --recurse-submodules \
+    https://github.com/ue-hydro/summa-mizuroute-openwq.git summa
 
 <span class="comment"># mizuRoute (river routing)</span>
 git clone https://github.com/ue-hydro/mizuRoute_ESCOMP_withOpenWQlink.git
@@ -460,6 +464,10 @@ cd .../route/build/openwq
 
 <span class="comment"># Clone OpenWQ (use develop branch)</span>
 git clone -b develop https://github.com/ue-hydro/openwq.git
+<span class="comment"># SUMMA with internal mizuRoute: OpenWQ goes in summa/build/source/openwq</span>
+<span class="comment"># and uses the default branch (the target is not on develop yet)</span>
+cd summa/build/source/openwq
+git clone https://github.com/ue-hydro/openwq.git
                             </pre>
                         </div>
                         <div class="highlight-box info" style="margin-top: 15px;">
