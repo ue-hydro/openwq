@@ -18,7 +18,7 @@
 
 #include "global/OpenWQ_param.hpp"
 #include "global/OpenWQ_ML.hpp"
-#include "global/OpenWQ_hostModelconfig.hpp"
+#include "global/OpenWQ_hostModelConfig.hpp"
 #include "readjson/headerfile_nlohmann.hpp"
 #include <vector>
 #include <fstream>

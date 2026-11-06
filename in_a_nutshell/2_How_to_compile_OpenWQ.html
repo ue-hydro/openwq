@@ -755,9 +755,10 @@ git clone -b develop --recurse-submodules \
     https://github.com/CH-Earth/summa.git
 <span class="comment">#    (ue-hydro fork: github.com/ue-hydro/summa-mizuroute-openwq)</span>
 
-<span class="comment"># 2. OpenWQ inside the SUMMA tree (git-ignored there)</span>
+<span class="comment"># 2. OpenWQ inside the SUMMA tree (git-ignored there); default branch:</span>
+<span class="comment">#    the target is not on the develop branch of OpenWQ yet</span>
 cd summa/build/source/openwq
-git clone -b develop https://github.com/ue-hydro/openwq.git
+git clone https://github.com/ue-hydro/openwq.git
 
 <span class="comment"># 3. Build from OpenWQ's CMake (SUMMA tree = ExternalProject)</span>
 cd openwq
@@ -766,10 +767,20 @@ cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq \
 make -j 2
 <span class="comment"># -&gt; bin/summa-mizuroute_openwq_Release</span>
 
+<span class="comment">#    (Apptainer: bind the whole tree, --bind &lt;summa&gt;:/code/summa, and</span>
+<span class="comment">#     configure from /code/summa/build/source/openwq/openwq; the shared</span>
+<span class="comment">#     PhreeqcRM is built once into _deps automatically)</span>
+
 <span class="comment"># 4. Run: one process, SUMMA file manager + mizuRoute TOML</span>
 cd &lt;folder with openWQ_master.json&gt;
 summa-mizuroute_openwq_Release -m fileManager.txt \
                                -c mizuroute.toml
+<span class="comment">#    Apptainer: the executable keeps the build paths of libsumma.so and</span>
+<span class="comment">#    libPhreeqcRM.so, so run with the SAME tree bind as the build:</span>
+apptainer exec --bind &lt;summa&gt;:/code/summa --bind $(pwd):/case \
+    --pwd /case &lt;summa&gt;/build/source/openwq/openwq/containers/openwq.sif \
+    /code/summa/build/source/openwq/openwq/bin/summa-mizuroute_openwq_Release \
+    -m fileManager.txt -c mizuroute.toml
                         </pre>
                     </div>
                     <div class="column">
@@ -841,6 +852,12 @@ scp openwq.sif user@hpc:/path/to/containers/
 apptainer shell --bind $(pwd):/code openwq.sif
 <span class="comment"># or</span>
 singularity shell --bind $(pwd):/code openwq.sif
+<span class="comment"># SUMMA targets (summa_openwq, summa-mizuroute_openwq): bind the WHOLE</span>
+<span class="comment"># SUMMA tree, not only openwq/openwq, and configure from inside it:</span>
+cd &lt;summa&gt;
+apptainer shell --bind $(pwd):/code/summa \
+    build/source/openwq/openwq/containers/openwq.sif
+cd /code/summa/build/source/openwq/openwq
                         </pre>
                     </div>
                     <div class="column">
@@ -896,6 +913,13 @@ cmake -DHOST_MODEL_TARGET=summa_openwq \
       -DCMAKE_PREFIX_PATH="/usr/local/phreeqcrm;/usr/local/sundials" .
 
 cmake -DHOST_MODEL_TARGET=mizuroute_openwq \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH="/usr/local/phreeqcrm;/usr/local/sundials" .
+
+<span class="comment"># SUMMA with internal mizuRoute: whole SUMMA tree bound (--bind &lt;summa&gt;:/code/summa),</span>
+<span class="comment"># run from /code/summa/build/source/openwq/openwq; the shared PhreeqcRM that</span>
+<span class="comment"># SUMMA needs is built once into build/source/openwq/_deps automatically</span>
+cmake -DHOST_MODEL_TARGET=summa-mizuroute_openwq \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_PREFIX_PATH="/usr/local/phreeqcrm;/usr/local/sundials" .
 
