@@ -100,6 +100,20 @@ void OpenWQ_LE_model::native_BoundMix(
         const unsigned int num_mobile_species = OpenWQ_wqconfig.cached_num_mobile_species;
         const std::vector<unsigned int>& mobile_species = *OpenWQ_wqconfig.cached_mobile_species_ptr;
 
+        // Shares of the two cells that take part in the exchange: the upper cell exchanges
+        // the share K*Q of its water and the lower cell the SAME VOLUME of water, i.e. the
+        // share K*Q*V_upper/V_lower of its own. The same share on both sides (as before)
+        // exchanged unequal water volumes whenever the cells hold different volumes, which
+        // pumps solute into the smaller one: with Q in m3 over a whole HRU (K*Q of order
+        // 0.5 in a storm hour) the surface water became many times more concentrated than
+        // the soil layer it mixes with (179 mg/L DO over a soil at 12 mg/L).
+        const double v_upper = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+            input_upper_compartment_index, ix_s, iy_s, iz_s);
+        const double v_lower = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(
+            input_lower_compartment_index, xyz_lowerComp[0], xyz_lowerComp[1], xyz_lowerComp[2]);
+        const double frac_upper = (v_upper > 0.0) ? std::fmin(input_k_val * wflux_s2r, 1.0) : 0.0;
+        const double frac_lower = (v_lower > 0.0) ? std::fmin(frac_upper * v_upper / v_lower, 1.0) : 0.0;
+
         // Loop over mobile species
         for (unsigned int chemi=0;chemi<num_mobile_species;chemi++){
 
@@ -113,16 +127,14 @@ void OpenWQ_LE_model::native_BoundMix(
             // the pool (which would create mass via the end-of-step clamp).
             chemass_exchange_upper_comprt =
                 fmin(
-                    input_k_val
-                    * wflux_s2r
+                    frac_upper
                     * (*OpenWQ_vars.chemass)(input_upper_compartment_index)(chemi_mob)(ix_s,iy_s,iz_s),
                     std::fmax(OpenWQ_vars.live_mass(
                         input_upper_compartment_index, chemi_mob, ix_s,iy_s,iz_s), 0.0));
 
             chemass_exchange_lower_comprt =
                 fmin(
-                    input_k_val
-                    * wflux_s2r
+                    frac_lower
                     * (*OpenWQ_vars.chemass)(input_lower_compartment_index)(chemi_mob)(xyz_lowerComp[0],xyz_lowerComp[1],xyz_lowerComp[2]),
                     std::fmax(OpenWQ_vars.live_mass(
                         input_lower_compartment_index, chemi_mob,

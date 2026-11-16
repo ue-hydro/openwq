@@ -1,6 +1,8 @@
 #include "models_CH/headerfile_CH.hpp"
 #include "IPhreeqc.hpp"
 #include <cmath>  // for isnan, isinf
+#include <cstdio>  // fprintf (OPENWQ_DEBUG_VOLR)
+#include <cstdlib> // getenv
 #include <algorithm>
 #include <cctype>
 #include <map>
@@ -71,6 +73,7 @@ static void phreeqc_prepare_coupling(
         if (comps[j] == "H") P.comp_H = (int)j;
         else if (comps[j] == "O") P.comp_O = (int)j;
         else if (comps[j] == "Charge") P.comp_Charge = (int)j;
+        else if (comps[j] == "H2O") P.comp_H2O = (int)j;
     }
     if (P.comp_H < 0 || P.comp_O < 0 || P.comp_Charge < 0) {
         msg_string = "<OpenWQ> ERROR: PHREEQC components H, O and Charge not found.";
@@ -100,6 +103,30 @@ static void phreeqc_prepare_coupling(
             if (!other) simple.push_back({(int)s, nu, h, o, z});
         }
         P.carriers[m] = simple.empty() ? all : simple;
+        // Optional carriers named in the module JSON, "CARRIERS": {"C": ["CO2"]}.
+        // The default weights the carriers by the species of the destination
+        // cell, which is exact for a component whose charge does not depend on
+        // the speciation (nitrate). Inorganic carbon arrives from the soil as
+        // CO2 but is weighted as HCO3- in a stream at pH 8, which adds a charge
+        // that the water did not bring and raises the pH. Carried as CO2, the
+        // carbon moves without charge, the alkalinity moves with the charged
+        // components (Ca+2), and each cell speciates its carbon from its own
+        // charge balance (transport of DIC and alkalinity).
+        if (OpenWQ_json.BGC_module.contains("CARRIERS")) {
+            for (const auto& it : OpenWQ_json.BGC_module["CARRIERS"].items()) {
+                if (!phreeqc_same_name(it.key(), elt)) continue;
+                std::decay_t<decltype(P.carriers)>::value_type named;
+                for (const auto& v : it.value())
+                    for (const auto& cs : all)
+                        if (phreeqc_same_name(sp_names[cs.s], v.get<std::string>())) named.push_back(cs);
+                if (named.empty()) {
+                    msg_string = "<OpenWQ> ERROR: PHREEQC CARRIERS of " + elt + ": none of the named species contains " + elt;
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    exit(EXIT_FAILURE);
+                }
+                P.carriers[m] = named;
+            }
+        }
         msg_string = "<OpenWQ> PHREEQC: mobile component " + elt + " carries";
         if (simple.empty()) msg_string += " (no simple species, all its species)";
         for (const auto& cs : P.carriers[m])
@@ -110,9 +137,45 @@ static void phreeqc_prepare_coupling(
         OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
     }
 
+    P.neutral_carriers = OpenWQ_json.BGC_module.contains("NEUTRAL_CARRIERS")
+        && OpenWQ_json.BGC_module["NEUTRAL_CARRIERS"].get<bool>();
+    if (P.neutral_carriers) {
+        msg_string = "<OpenWQ> PHREEQC: NEUTRAL_CARRIERS: every mobile component moves as the neutral formula of its "
+            "species (charge balanced with OH- or H+); exact transport of electroneutral water when all charged "
+            "components are mobile";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
+
+    // RESET_WATER: the water of a cell is the host's and is not transported, so the water that the reactions and the
+    // carriers produce in a cell stays there when nothing renews the cell (a reach that loses CO2 while the transport
+    // refills its carbon as H2CO3 gains one H2O per mol). With "RESET_WATER": true the H2O component of every cell is
+    // set back to its value at the first call before each RunCells; the excess H, O and charge are kept.
+    {
+        const auto& bm = OpenWQ_json.BGC_module;
+        P.reset_water = bm.contains("RESET_WATER") && bm["RESET_WATER"].is_boolean() && bm["RESET_WATER"].get<bool>();
+    }
+    if (P.reset_water) {
+        if (P.comp_H2O < 0) {
+            msg_string = "<OpenWQ> ERROR: PHREEQC RESET_WATER needs the H2O component (COMPONENT_H2O true).";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+            exit(EXIT_FAILURE);
+        }
+        msg_string = "<OpenWQ> PHREEQC: RESET_WATER: the water (H2O component) of every cell is set to its initial value "
+            "before each RunCells (the water of the host volume)";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+    }
+
     // (2) renewal
     P.renewal_tau_s.assign(nxyz, 0.0);
     P.renewal_ref.assign(nxyz, -1);
+    P.renewal_ref2.assign(nxyz, -1);
+    P.renewal_mobile.assign(nxyz, 0);
+    P.renewal_tracer.assign(nxyz, -1);
+    P.renewal_g0.assign(nxyz, 0.0);
+    P.renewal_g1.assign(nxyz, 1.0);
+    P.renewal_age_tracer.assign(nxyz, -1);
+    P.renewal_age_unit_s.assign(nxyz, 0.0);
+    P.renewal_age_min_s.assign(nxyz, 0.0);
     P.renewal_ref_c.clear();
     std::map<int, int> ref_of_solution;
     const std::string database = phreeqc_resolve_path(OpenWQ_json.BGC_module["DATABASE"].get<std::string>());
@@ -129,10 +192,35 @@ static void phreeqc_prepare_coupling(
             int sol = -1;
             double tau = 0.0;
             std::string tau_label;
+            // TIME_SCALE {"TRACER": <component>, "UNIT_S": s, "MIN_S": s}: the time scale of
+            // each cell is the concentration of a transported age tracer (mg/L) x UNIT_S,
+            // at least MIN_S. With a tracer produced at one unit per UNIT_S in the reaches
+            // and absent from their inflows (the time the water has spent in the river
+            // network), the renewal is the replacement of the reach water by its inflow at
+            // the rate of a well-mixed reach, 1 / residence time: young water at high flow
+            // stays close to the composition of its inflow, old water at low flow has had
+            // the time to exchange CO2 with the atmosphere and to photosynthesize.
+            int age_tracer = -1;
+            double age_unit = 0.0, age_min = 0.0;
             try {
                 sol = ren.at("SOLUTION").get<int>();
                 const json& ts = ren.at("TIME_SCALE");
-                if (ts.is_number()) {
+                if (ts.is_object()) {
+                    const std::string aname = ts.at("TRACER").get<std::string>();
+                    age_unit = ts.at("UNIT_S").get<double>();
+                    age_min = ts.contains("MIN_S") ? ts["MIN_S"].get<double>() : 60.0;
+                    for (size_t j = 0; j < comps.size(); j++)
+                        if (phreeqc_same_name(comps[j], aname)) age_tracer = (int)j;
+                    if (age_tracer < 0 || !(age_unit > 0.0) || !(age_min > 0.0)) {
+                        msg_string = "<OpenWQ> ERROR: RENEWAL of " + cname + ": TIME_SCALE TRACER " + aname
+                            + " is not a component, or UNIT_S / MIN_S are not > 0";
+                        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                        exit(EXIT_FAILURE);
+                    }
+                    tau = age_min;
+                    tau_label = "age tracer " + comps[age_tracer] + " x " + std::to_string(age_unit) + " s per mg/L (at least "
+                        + std::to_string(age_min) + " s)";
+                } else if (ts.is_number()) {
                     tau = ts.get<double>();
                     tau_label = std::to_string(tau) + " s";
                 } else {
@@ -169,12 +257,83 @@ static void phreeqc_prepare_coupling(
                 ref_of_solution[sol] = (int)P.renewal_ref_c.size();
                 P.renewal_ref_c.push_back(cref);
             }
+            // Optional end-member mixing, "MIX": {"SOLUTION": <id2>, "TRACER": <component>}:
+            // the reference becomes (1 - g) SOLUTION + g SOLUTION id2, with g the
+            // concentration of the tracer (a transported conservative component,
+            // e.g. a ground-water tracer held at its value of SOLUTION id2 in the
+            // aquifer) relative to its value in SOLUTION id2, bounded to [0, 1].
+            // A mixture of two solutions in component space is a solution (PHREEQC
+            // MIX), so that the reach chemistry follows the mixing of the waters
+            // that the host model routes to it.
+            int ref2 = -1, tracer = -1;
+            double g0 = 0.0, g1 = 1.0;
+            std::string mix_label;
+            if (ren.contains("MIX")) {
+                int sol2 = -1;
+                std::string tname;
+                try {
+                    sol2 = ren["MIX"].at("SOLUTION").get<int>();
+                    tname = ren["MIX"].at("TRACER").get<std::string>();
+                } catch (...) {
+                    msg_string = "<OpenWQ> ERROR: RENEWAL of " + cname
+                        + ": MIX needs {\"SOLUTION\": <id>, \"TRACER\": <component>}";
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    exit(EXIT_FAILURE);
+                }
+                for (size_t j = 0; j < comps.size(); j++)
+                    if (phreeqc_same_name(comps[j], tname)) tracer = (int)j;
+                if (!ref_of_solution.count(sol2)) {
+                    std::vector<double> cref2;
+                    std::vector<int> bc2(1, sol2);
+                    if (rm.InitialPhreeqc2Concentrations(cref2, bc2) != IRM_OK
+                            || cref2.size() != comps.size()) {
+                        msg_string = "<OpenWQ> ERROR: RENEWAL of " + cname + ": MIX SOLUTION "
+                            + std::to_string(sol2) + " not found in " + pqi;
+                        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                        exit(EXIT_FAILURE);
+                    }
+                    ref_of_solution[sol2] = (int)P.renewal_ref_c.size();
+                    P.renewal_ref_c.push_back(cref2);
+                }
+                ref2 = ref_of_solution[sol2];
+                if (tracer < 0 || !(P.renewal_ref_c[ref2][tracer] > 0.0)) {
+                    msg_string = "<OpenWQ> ERROR: RENEWAL of " + cname + ": MIX TRACER " + tname
+                        + " is not a component or is zero in SOLUTION " + std::to_string(sol2);
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    exit(EXIT_FAILURE);
+                }
+                // Optional "RANGE": [g0, g1]: tracer fractions taken as the first and
+                // the second end-member (the tracer of a reach never reaches 0 or 1
+                // when it is a contact-time tracer of mixed waters)
+                if (ren["MIX"].contains("RANGE")) {
+                    try {
+                        g0 = ren["MIX"]["RANGE"].at(0).get<double>();
+                        g1 = ren["MIX"]["RANGE"].at(1).get<double>();
+                    } catch (...) { g0 = 0.0; g1 = 0.0; }
+                    if (!(g1 > g0)) {
+                        msg_string = "<OpenWQ> ERROR: RENEWAL of " + cname + ": MIX RANGE needs [g0, g1] with g1 > g0";
+                        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                        exit(EXIT_FAILURE);
+                    }
+                }
+                mix_label = ", mixed with SOLUTION " + std::to_string(sol2) + " by the fraction of " + comps[tracer]
+                    + " (fractions " + std::to_string(g0) + " to " + std::to_string(g1) + " of its value there)";
+            }
             for (int i = 0; i < ncell; i++) {
                 P.renewal_tau_s[cell0 + i] = tau;
                 P.renewal_ref[cell0 + i] = ref_of_solution[sol];
+                P.renewal_ref2[cell0 + i] = ref2;
+                P.renewal_tracer[cell0 + i] = tracer;
+                P.renewal_g0[cell0 + i] = g0;
+                P.renewal_g1[cell0 + i] = g1;
+                P.renewal_age_tracer[cell0 + i] = age_tracer;
+                P.renewal_age_unit_s[cell0 + i] = age_unit;
+                P.renewal_age_min_s[cell0 + i] = age_min;
+                P.renewal_mobile[cell0 + i] = (ren.contains("MOBILE") && ren["MOBILE"].get<bool>()) ? 1 : 0;
             }
             msg_string = "<OpenWQ> PHREEQC: RENEWAL of " + cname + " towards SOLUTION "
-                + std::to_string(sol) + ", time scale " + tau_label;
+                + std::to_string(sol) + mix_label + ", time scale " + tau_label
+                + ((ren.contains("MOBILE") && ren["MOBILE"].get<bool>()) ? " (MOBILE: transported components too)" : "");
             OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
         }
         cell0 += ncell;
@@ -228,6 +387,36 @@ static void phreeqc_prepare_coupling(
             OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
         }
     }
+    // (4) host inputs (HOST_INPUTS): components set from host variables before every RunCells
+    P.host_inputs.clear();
+    if (OpenWQ_json.BGC_module.contains("HOST_INPUTS")) {
+        const json& hi = OpenWQ_json.BGC_module["HOST_INPUTS"];
+        for (auto it = hi.begin(); it != hi.end(); ++it) {
+            int jc = -1;
+            for (size_t j = 0; j < comps.size(); j++)
+                if (phreeqc_same_name(comps[j], it.key())) jc = (int)j;
+            // flat form, as DIAGNOSTICS: {"<component>": "RELATIVE_VOLUME"}; the time scale of the running mean is
+            // the top-level "HOST_INPUTS_TAU_DAYS" (365 days by default)
+            std::string var;
+            double tau_d = 365.0;
+            try { var = it.value().get<std::string>(); } catch (...) { var.clear(); }
+            try {
+                if (OpenWQ_json.BGC_module.contains("HOST_INPUTS_TAU_DAYS"))
+                    tau_d = OpenWQ_json.BGC_module["HOST_INPUTS_TAU_DAYS"].get<double>();
+            } catch (...) { tau_d = 365.0; }
+            if (jc < 0 || !phreeqc_same_name(var, "RELATIVE_VOLUME") || !(tau_d > 0.0)) {
+                msg_string = "<OpenWQ> ERROR: PHREEQC HOST_INPUTS " + it.key() + ": the component must be nonzero in a SOLUTION"
+                    " of the .pqi file, and the value RELATIVE_VOLUME ({\"<component>\": \"RELATIVE_VOLUME\"})";
+                OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                exit(EXIT_FAILURE);
+            }
+            P.host_inputs.push_back({jc, tau_d * 86400.0});
+            msg_string = "<OpenWQ> PHREEQC: host input component " + comps[jc] + " = water volume / its running geometric mean ("
+                + std::to_string(tau_d) + " days), set before each RunCells";
+            OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        }
+    }
+    P.host_vol_mean.assign(nxyz, 0.0);
     P.coupling_ready = true;
 }
 
@@ -343,16 +532,46 @@ void OpenWQ_CH_model::phreeqc_run(
             }
         }
     }
+    // NEUTRAL_CARRIERS: the charge of the carrier balanced with OH- (cations: H and O + z) or H+ (anions: H + |z|).
+    // Every species of an element then carries the same formula up to water, whatever the speciation of the cell.
+    if (P.neutral_carriers) {
+        for (size_t q = 0; q < carry_z.size(); q++) {
+            const double z = carry_z[q];
+            carry_h[q] += std::fabs(z);
+            carry_o[q] += std::max(z, 0.0);
+            carry_z[q] = 0.0;
+        }
+    }
 
     // Renewal of the non-transported chemistry (all components; the mobile
     // ones are overwritten below, carrying their charge, H and O, so that the
     // result equals renewing the non-transported part only).
     if (OpenWQ_hostModelconfig.get_time_step() > 0 && !P.renewal_ref_c.empty()) {
         const double dt = OpenWQ_hostModelconfig.get_time_step();
+        const std::vector<double>& gfw_r = OpenWQ_wqconfig.CH_model->PHREEQC->gfw;
+        const bool has_gfw_r = (gfw_r.size() >= (size_t)nc);
         for (int i = 0; i < nxyz; i++) {
             if (!active_cell(i) || P.renewal_ref[i] < 0) continue;
-            const double f = 1.0 - std::exp(-dt / P.renewal_tau_s[i]);
+            double tau_i = P.renewal_tau_s[i];
+            if (P.renewal_age_tracer[i] >= 0) {
+                // time scale from the age tracer of the cell (mol/L -> mg/L with its GFW)
+                const int ka = P.renewal_age_tracer[i];
+                const double gfw_a = (has_gfw_r && gfw_r[ka] > 0.0) ? gfw_r[ka] : 1.0;
+                tau_i = std::max(P.renewal_age_min_s[i], c[(size_t)ka * nxyz + i] * gfw_a * 1000.0 * P.renewal_age_unit_s[i]);
+            }
+            const double f = 1.0 - std::exp(-dt / tau_i);
             const std::vector<double>& cref = P.renewal_ref_c[P.renewal_ref[i]];
+            if (P.renewal_ref2[i] >= 0) {
+                // MIX: fraction of the second end-member from the tracer of the
+                // cell (its transported value of the previous step)
+                const std::vector<double>& cref2 = P.renewal_ref_c[P.renewal_ref2[i]];
+                const int k = P.renewal_tracer[i];
+                const double g = std::min(1.0, std::max(0.0,
+                    (c[(size_t)k * nxyz + i] / cref2[k] - P.renewal_g0[i]) / (P.renewal_g1[i] - P.renewal_g0[i])));
+                for (int j = 0; j < nc; j++)
+                    c[(size_t)j * nxyz + i] += f * ((1.0 - g) * cref[j] + g * cref2[j] - c[(size_t)j * nxyz + i]);
+                continue;
+            }
             for (int j = 0; j < nc; j++)
                 c[(size_t)j * nxyz + i] += f * (cref[j] - c[(size_t)j * nxyz + i]);
         }
@@ -367,6 +586,7 @@ void OpenWQ_CH_model::phreeqc_run(
     // Lowest temperature passed to PHREEQC in each cell (C): 0 C unless the
     // compartment's TEMPERATURE entry sets "MIN_C" (see the clamp below).
     std::vector<double> temperatures_min(nxyz, 0.0);
+    if (P.temp_tau_s.size() != (size_t)nxyz) { P.temp_tau_s.assign(nxyz, 0.0); P.temp_mean.assign(nxyz, std::nan("")); }
 
     // First pass: collect volumes, temperatures, pressures
     for (unsigned int icmp=0;icmp<OpenWQ_hostModelconfig.get_num_HydroComp();icmp++){
@@ -380,7 +600,7 @@ void OpenWQ_CH_model::phreeqc_run(
         // or a linear relation to one, {"DEPENDENCY": "Tair_K", "LINEAR": [a, b]}
         // for T = a + b * variable (C), e.g. stream temperature from air
         // temperature. Below 0 C it is set to 0 C further down.
-        double temp_a = 0.0, temp_b = 1.0, temp_min = 0.0;
+        double temp_a = 0.0, temp_b = 1.0, temp_min = 0.0, temp_tau = 0.0;
         try {
             const json& temp_map = OpenWQ_json.BGC_module["TEMPERATURE"][compName_icmp];
             if (temp_map.is_object()) {
@@ -391,6 +611,8 @@ void OpenWQ_CH_model::phreeqc_run(
                 }
                 if (temp_map.contains("MIN_C"))
                     temp_min = temp_map["MIN_C"].get<double>();
+                if (temp_map.contains("SMOOTH_HOURS"))
+                    temp_tau = 3600.0 * temp_map["SMOOTH_HOURS"].get<double>();
             } else {
                 dependancy = temp_map.get<std::string>();
             }
@@ -417,8 +639,23 @@ void OpenWQ_CH_model::phreeqc_run(
             temperature_indx = -1;
         }
 
+        // Pressure of the compartment (atm): a host variable, or a linear relation
+        // to one, {"DEPENDENCY": "SWrad_Wm2", "LINEAR": [a, b]} for P = a + b * variable.
+        // With a = 1 and a small b it carries a host variable that PHREEQC has no
+        // other access to (e.g. light for in-stream photosynthesis, read in RATES as
+        // (PRESSURE - a) / b) while changing the equilibrium constants negligibly.
+        double press_a = 0.0, press_b = 1.0;
         try {
-            dependancy = OpenWQ_json.BGC_module["PRESSURE"][compName_icmp];
+            const json& press_map = OpenWQ_json.BGC_module["PRESSURE"][compName_icmp];
+            if (press_map.is_object()) {
+                dependancy = press_map.at("DEPENDENCY").get<std::string>();
+                if (press_map.contains("LINEAR")) {
+                    press_a = press_map["LINEAR"].at(0).get<double>();
+                    press_b = press_map["LINEAR"].at(1).get<double>();
+                }
+            } else {
+                dependancy = press_map.get<std::string>();
+            }
             pressure_indx = -1;
             for (ndep = 0; ndep < OpenWQ_hostModelconfig.get_num_HydroDepend(); ndep ++) {
                 if (phreeqc_same_name(OpenWQ_hostModelconfig.get_HydroDepend_name_at(ndep), dependancy)) pressure_indx = ndep;
@@ -463,8 +700,9 @@ void OpenWQ_CH_model::phreeqc_run(
                         temperatures[indx] = temp_a + temp_b * temp_val;
                     }
                     temperatures_min[indx] = temp_min;
+                    P.temp_tau_s[indx] = (temperature_indx != -1) ? temp_tau : 0.0;
                     if (pressure_indx != -1) {
-                        pressures[indx] = OpenWQ_hostModelconfig.get_dependVar_at(pressure_indx, ix, iy, iz);
+                        pressures[indx] = press_a + press_b * OpenWQ_hostModelconfig.get_dependVar_at(pressure_indx, ix, iy, iz);
                     }
                     indx++;
 
@@ -550,6 +788,62 @@ void OpenWQ_CH_model::phreeqc_run(
         }
     }
 
+    // HOST_INPUTS: water volume of the cell / its running mean (mg/L of the component = the ratio, GFW 1)
+    if (!P.host_inputs.empty()) {
+        const double dt = OpenWQ_hostModelconfig.get_time_step();
+        for (const auto& hin : P.host_inputs) {
+            const double w = (dt > 0) ? 1.0 - std::exp(-dt / hin.tau_s) : 0.0;
+            for (int i = 0; i < nxyz; i++) {
+                if (!active_cell(i)) continue;
+                const double v = volumes[i];
+                if (!(v > 0.0) || !std::isfinite(v)) continue;
+                // running GEOMETRIC mean (the typical volume): the volume of a reach is skewed by floods, and an
+                // arithmetic mean sits far above the volume of most days
+                double& m = P.host_vol_mean[i];
+                if (!(m > 0.0)) m = v; else m = std::exp(std::log(m) + w * (std::log(v) - std::log(m)));
+                {
+                    static const bool dbg = std::getenv("OPENWQ_DEBUG_VOLR") != nullptr;
+                    const long step = OpenWQ_hostModelconfig.get_interaction_step();
+                    if (dbg && (step <= 24 || step % 2000 == 0))
+                        std::fprintf(stderr, "VOLR phreeqc %ld %.10e %.10e %.10e\n", step, v / 1000.0, m / 1000.0, v / m);
+                }
+                c[(size_t)hin.comp * nxyz + i] = (v / m) / 1000.0;
+            }
+        }
+    }
+
+    // RENEWAL "MOBILE": every component, the transported ones included, relaxes towards the reference solution
+    // after the transported values are written (boundary compartments: the water of precipitation)
+    if (OpenWQ_hostModelconfig.get_time_step() > 0 && !P.renewal_ref_c.empty() && !P.renewal_mobile.empty()) {
+        const double dt = OpenWQ_hostModelconfig.get_time_step();
+        for (int i = 0; i < nxyz; i++) {
+            if (!active_cell(i) || P.renewal_ref[i] < 0 || !P.renewal_mobile[i]) continue;
+            const double f = 1.0 - std::exp(-dt / P.renewal_tau_s[i]);
+            const std::vector<double>& cref = P.renewal_ref_c[P.renewal_ref[i]];
+            for (int j = 0; j < nc; j++) {
+                if (P.is_diagnostic.size() > (size_t)j && P.is_diagnostic[j]) continue;
+                c[(size_t)j * nxyz + i] += f * (cref[j] - c[(size_t)j * nxyz + i]);
+            }
+        }
+    }
+
+    // RESET_WATER (phreeqc_prepare_coupling): the H2O component back to its value at the first call
+    if (P.reset_water) {
+        if (P.h2o_ref.empty()) {
+            P.h2o_ref.assign(nxyz, 0.0);
+            for (int i = 0; i < nxyz; i++) P.h2o_ref[i] = c[(size_t)P.comp_H2O * nxyz + i];
+        }
+        static const bool dbg_h2o = std::getenv("OPENWQ_DEBUG_H2O") != nullptr;
+        const long step = OpenWQ_hostModelconfig.get_interaction_step();
+        for (int i = 0; i < nxyz; i++) {
+            if (!active_cell(i)) continue;
+            double& w = c[(size_t)P.comp_H2O * nxyz + i];
+            if (dbg_h2o && i < 3 && (step <= 3 || step % 2000 == 0))
+                std::fprintf(stderr, "H2O cell %d step %ld before %.10e ref %.10e\n", i, step, w, P.h2o_ref[i]);
+            w = P.h2o_ref[i];
+        }
+    }
+
     indx = 0;
 
     // Validate and fix temperatures - PHREEQC needs reasonable values (0-100°C typical)
@@ -569,6 +863,19 @@ void OpenWQ_CH_model::phreeqc_run(
         // frozen soil, so that rate laws with a temperature factor see the
         // host temperature (rate laws that use a gas solubility should then
         // bound the temperature of that solubility themselves).
+        // TEMPERATURE "SMOOTH_HOURS": exponential running mean of the mapped temperature (damped diel cycle)
+        if (P.temp_tau_s[i] > 0.0 && OpenWQ_hostModelconfig.get_time_step() > 0) {
+            double& m = P.temp_mean[i];
+            if (!std::isfinite(m)) m = temperatures[i];
+            else m += (1.0 - std::exp(-OpenWQ_hostModelconfig.get_time_step() / P.temp_tau_s[i])) * (temperatures[i] - m);
+            {
+                static const bool dbg = std::getenv("OPENWQ_DEBUG_TSM") != nullptr;
+                const long step = OpenWQ_hostModelconfig.get_interaction_step();
+                if (dbg && (step <= 24 || step % 2000 == 0))
+                    std::fprintf(stderr, "TSM phreeqc %ld %.10e %.10e\n", step, temperatures[i], m);
+            }
+            temperatures[i] = m;
+        }
         if (temperatures[i] < temperatures_min[i]) temperatures[i] = temperatures_min[i];
     }
 

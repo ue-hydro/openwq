@@ -16,7 +16,9 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "models_CH/headerfile_CH.hpp"
-#include <cstdlib>   // exit(), EXIT_FAILURE (fatal-stop on empty/unknown BGC framework)
+#include <cstdlib>   // exit(), EXIT_FAILURE (fatal-stop on empty/unknown BGC framework); getenv
+#include <cmath>     // exp, log (running geometric mean of the volume)
+#include <cstdio>    // fprintf (OPENWQ_DEBUG_VOLR)
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -55,6 +57,65 @@ void OpenWQ_CH_model::bgc_flex_transform(
     const double time_step = OpenWQ_hostModelconfig.get_time_step();
     const unsigned int num_depend = OpenWQ_hostModelconfig.get_num_HydroDepend();
     const bool use_parallel = nativeFlex->thread_local_ready && (nx * ny * nz > 1);
+
+    // Smoothed host dependencies (symbols <name>_sm): exponential running mean of the dependency per cell, updated
+    // once per host time step, started at the first value; the raw value while the time step is 0. The PHREEQC
+    // TEMPERATURE "SMOOTH_HOURS" (phreeqc_run.cpp), so that both engines see the same damped temperature.
+    const unsigned int num_sm = nativeFlex->sm_names.size();
+    if (num_sm > 0){
+        if (nativeFlex->dep_sm_mean.size() <= icmp){
+            nativeFlex->dep_sm_mean.resize(OpenWQ_hostModelconfig.get_num_HydroComp());
+            nativeFlex->dep_sm_step.resize(OpenWQ_hostModelconfig.get_num_HydroComp(), -1);
+        }
+        std::vector<arma::Cube<double>>& sm = nativeFlex->dep_sm_mean[icmp];
+        if (sm.size() != num_sm) sm.assign(num_sm, arma::Cube<double>());
+        const long step = OpenWQ_hostModelconfig.get_interaction_step();
+        if (nativeFlex->dep_sm_step[icmp] != step){
+            nativeFlex->dep_sm_step[icmp] = step;
+            static const bool dbg = std::getenv("OPENWQ_DEBUG_TSM") != nullptr;
+            for (unsigned int k = 0; k < num_sm; k++){
+                if (sm[k].n_elem != nx * ny * nz){ sm[k].set_size(nx, ny, nz); sm[k].fill(arma::datum::nan); }
+                if (!(time_step > 0)) continue;
+                const double w = 1.0 - std::exp(-time_step / nativeFlex->sm_tau_s[k]);
+                for (unsigned int iz = 0; iz < nz; iz++)
+                for (unsigned int iy = 0; iy < ny; iy++)
+                for (unsigned int ix = 0; ix < nx; ix++){
+                    const double x = OpenWQ_hostModelconfig.get_dependVar_at(nativeFlex->sm_dep_index[k], ix, iy, iz);
+                    double& m = sm[k](ix, iy, iz);
+                    if (!std::isfinite(m)) m = x; else m += w * (x - m);
+                    if (dbg && (step <= 24 || step % 2000 == 0))
+                        std::fprintf(stderr, "TSM native %ld %.10e %.10e\n", step, x, m);
+                }
+            }
+        }
+    }
+
+    // Relative water volume (symbol Volr): running GEOMETRIC mean of the cell volume, updated once per host time
+    // step (the rates are evaluated many times per step inside CVode), as the PHREEQC HOST_INPUTS RELATIVE_VOLUME
+    if (nativeFlex->volr_gmean.size() <= icmp){
+        nativeFlex->volr_gmean.resize(OpenWQ_hostModelconfig.get_num_HydroComp());
+        nativeFlex->volr_step.resize(OpenWQ_hostModelconfig.get_num_HydroComp(), -1);
+    }
+    {
+        arma::Cube<double>& gm = nativeFlex->volr_gmean[icmp];
+        if (gm.n_elem != nx * ny * nz) gm.zeros(nx, ny, nz);
+        const long step = OpenWQ_hostModelconfig.get_interaction_step();
+        if (nativeFlex->volr_step[icmp] != step){
+            nativeFlex->volr_step[icmp] = step;
+            const double w = (time_step > 0) ? 1.0 - std::exp(-time_step / nativeFlex->volr_tau_s) : 0.0;
+            static const bool dbg = std::getenv("OPENWQ_DEBUG_VOLR") != nullptr;
+            for (unsigned int iz = 0; iz < nz; iz++)
+            for (unsigned int iy = 0; iy < ny; iy++)
+            for (unsigned int ix = 0; ix < nx; ix++){
+                const double v = OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
+                if (!(v > 0.0) || !std::isfinite(v)) continue;
+                double& m = gm(ix, iy, iz);
+                if (!(m > 0.0)) m = v; else m = std::exp(std::log(m) + w * (std::log(v) - std::log(m)));
+                if (dbg && (step <= 24 || step % 2000 == 0))
+                    std::fprintf(stderr, "VOLR native %ld %.10e %.10e %.10e\n", step, v, m, v / m);
+            }
+        }
+    }
 
     // Get cycling_frameworks for compartment icomp
     try{
@@ -196,6 +257,16 @@ void OpenWQ_CH_model::bgc_flex_transform(
                             // Water volume of the cell (symbol Vw_m3)
                             nativeFlex->thread_cell_watervol_m3[tid] =
                                 OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
+                            {   // relative water volume (symbol Volr)
+                                const double vv = nativeFlex->thread_cell_watervol_m3[tid];
+                                const double mm = nativeFlex->volr_gmean[icmp](ix, iy, iz);
+                                nativeFlex->thread_cell_volr[tid] = (vv > 0.0 && mm > 0.0) ? vv / mm : 1.0;
+                            }
+                            for (unsigned int k = 0; k < num_sm; k++){   // smoothed dependencies (symbols <name>_sm)
+                                const double mk = nativeFlex->dep_sm_mean[icmp][k](ix, iy, iz);
+                                nativeFlex->thread_dep_sm[tid][k] = (time_step > 0 && std::isfinite(mk)) ? mk
+                                    : OpenWQ_hostModelconfig.get_dependVar_at(nativeFlex->sm_dep_index[k], ix, iy, iz);
+                            }
 
                             // Fill thread-local SPATIAL parameter values (no-op
                             // when this expression has only global params)
@@ -260,6 +331,16 @@ void OpenWQ_CH_model::bgc_flex_transform(
                                 // Water volume of the cell (symbol Vw_m3)
                                 nativeFlex->cell_watervol_m3 =
                                     OpenWQ_hostModelconfig.get_waterVol_hydromodel_at(icmp, ix, iy, iz);
+                                {   // relative water volume (symbol Volr)
+                                    const double vv = nativeFlex->cell_watervol_m3;
+                                    const double mm = nativeFlex->volr_gmean[icmp](ix, iy, iz);
+                                    nativeFlex->cell_volr = (vv > 0.0 && mm > 0.0) ? vv / mm : 1.0;
+                                }
+                                for (unsigned int k = 0; k < num_sm; k++){   // smoothed dependencies (symbols <name>_sm)
+                                    const double mk = nativeFlex->dep_sm_mean[icmp][k](ix, iy, iz);
+                                    nativeFlex->cell_dep_sm[k] = (time_step > 0 && std::isfinite(mk)) ? mk
+                                        : OpenWQ_hostModelconfig.get_dependVar_at(nativeFlex->sm_dep_index[k], ix, iy, iz);
+                                }
 
                                 // Update SPATIAL parameter values for this cell
                                 // (no-op when only global params are present)

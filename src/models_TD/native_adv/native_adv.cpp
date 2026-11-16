@@ -82,8 +82,21 @@ void OpenWQ_TD_model::Adv(
         // oscillations. Using chemass only gives the standard explicit upwind
         // scheme: order-independent, mass-conservative, stable for any CFL.
         // Mass advances at most one reach per timestep.
-        double current_mass = std::fmax(
-            chemass_source(ichem_mob)(ix_s,iy_s,iz_s), 0.0);
+        //
+        // Exception (adv_source_includes_inflow, set by the host): a
+        // through-flow cell that the host visits in upstream-to-downstream
+        // order within the step (a river reach, a routing pool). Its source
+        // mass then includes what it has received so far in this step, so
+        // that the solute leaves with the water it entered with: the host's
+        // own water budget lets water cross such a cell within one step, and
+        // a start-of-step-only export would strand that water's solute in a
+        // cell whose water has gone (the low-flow concentration spikes).
+        double current_mass = chemass_source(ichem_mob)(ix_s,iy_s,iz_s);
+        if (OpenWQ_wqconfig.adv_source_includes_inflow)
+            current_mass += d_transp_source(ichem_mob)(ix_s,iy_s,iz_s)
+                + (*OpenWQ_vars.d_chemass_ss)(source)(ichem_mob)(ix_s,iy_s,iz_s)
+                + (*OpenWQ_vars.d_chemass_ewf)(source)(ichem_mob)(ix_s,iy_s,iz_s);
+        current_mass = std::fmax(current_mass, 0.0);
 
         // Chemical mass flux between source and recipient (Advection).
         // Flux magnitude is set by the start-of-step source mass (order-

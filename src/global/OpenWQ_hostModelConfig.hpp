@@ -216,6 +216,8 @@ class OpenWQ_hostModelconfig
         void increment_interaction_step();
         // Return True if interaction step is 0, False otherwise
         bool is_first_interaction_step();
+        // Number of interaction steps so far (once per host time step)
+        long get_interaction_step();
 
         /*
         * time_step methods

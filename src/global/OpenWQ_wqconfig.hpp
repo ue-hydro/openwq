@@ -454,6 +454,14 @@ class OpenWQ_wqconfig
         unsigned int cached_num_chem = 0;
         const std::vector<std::string>* cached_chem_species_list_ptr = nullptr;
 
+        // Set by the host coupler around a flux call whose source is a
+        // through-flow cell visited in upstream-to-downstream order (river
+        // reach, routing pool, surface water): the advected mass is then taken
+        // from the mass the cell holds including what it received earlier in
+        // this step, instead of its start-of-step mass only (see
+        // OpenWQ_TD_model::Adv).
+        bool adv_source_includes_inflow = false;
+
         // Pre-built BGC lookup: cycling framework name -> vector of indices into BGCexpressions_info
         std::unordered_map<std::string, std::vector<unsigned int>> bgc_cycle_to_transf_indices;
 
@@ -766,6 +774,34 @@ class OpenWQ_wqconfig::CH_model_::NativeFlex_{
     double cell_watervol_m3 = 0.0;                    // serial path
     std::vector<double> thread_cell_watervol_m3;      // parallel path [thread_id]
 
+    // ########################################
+    // Relative water volume of the cell, available to every expression as
+    // the symbol Volr = V / running geometric mean of V (time scale
+    // volr_tau_s, module key VOLR_TAU_DAYS, default 365 d), updated once per
+    // host time step: the PHREEQC HOST_INPUTS RELATIVE_VOLUME, so that
+    // depth-dependent rates are the same in both engines. 1 for a dry cell.
+    // ########################################
+    double cell_volr = 1.0;                            // serial path
+    std::vector<double> thread_cell_volr;             // parallel path [thread_id]
+    std::vector<arma::Cube<double>> volr_gmean;       // [compartment] running geometric mean of V
+    std::vector<long> volr_step;                      // [compartment] step of the last update
+    double volr_tau_s = 365.0 * 86400.0;
+
+    // ########################################
+    // Smoothed host dependencies, available to every expression as the
+    // symbol <name>_sm = exponential running mean of the dependency <name>
+    // of the cell (module key SMOOTHED_DEPENDENCIES {"<name>": hours}),
+    // updated once per host time step: the PHREEQC TEMPERATURE
+    // "SMOOTH_HOURS", e.g. a damped diel stream temperature.
+    // ########################################
+    std::vector<unsigned int> sm_dep_index;           // [k] index of the host dependency
+    std::vector<double> sm_tau_s;                     // [k] time scale (s)
+    std::vector<std::string> sm_names;                // [k] symbol name <name>_sm
+    std::vector<double> cell_dep_sm;                  // serial path [k]
+    std::vector<std::vector<double>> thread_dep_sm;   // parallel path [thread_id][k]
+    std::vector<std::vector<arma::Cube<double>>> dep_sm_mean;   // [compartment][k] running mean
+    std::vector<long> dep_sm_step;                    // [compartment] step of the last update
+
 };
 // Module CH_model -> PHREEQC
 
@@ -819,9 +855,25 @@ class OpenWQ_wqconfig::CH_model_::PHREEQC_{
     // components are written. Mixing in component space conserves charge, H
     // and O (a KINETICS formula cannot: it adds elements only).
     bool coupling_ready = false;
+    bool neutral_carriers = false;                        // "NEUTRAL_CARRIERS": mobile components move as neutral formulas
+    bool reset_water = false;                             // "RESET_WATER": H2O of every cell set to its first value before each RunCells
+    int comp_H2O = -1;                                    // component index of H2O (SetComponentH2O)
+    std::vector<double> h2o_ref;                          // [cell] H2O component at the first call (mol/L)
     std::vector<double> renewal_tau_s;                    // [cell], 0 = none
     std::vector<int> renewal_ref;                         // [cell] -> renewal_ref_c
     std::vector<std::vector<double>> renewal_ref_c;       // [ref][component] mol/L
+    std::vector<int> renewal_ref2;                        // [cell] -> renewal_ref_c of the second end-member (MIX), -1 none
+    std::vector<int> renewal_tracer;                      // [cell] component whose fraction of its value in the second
+                                                          // end-member weights the mixture (MIX), -1 none
+    std::vector<double> renewal_g0, renewal_g1;           // [cell] tracer fractions mapped to 0 and 1 (MIX RANGE; 0, 1 default)
+    std::vector<int> renewal_age_tracer;                  // [cell] component giving the time scale (TIME_SCALE TRACER), -1 none
+    std::vector<double> renewal_age_unit_s, renewal_age_min_s; // [cell] seconds per mg/L of that tracer, lowest time scale
+    std::vector<char> renewal_mobile;                     // [cell] RENEWAL "MOBILE": the transported components are renewed too
+    struct host_input { int comp; double tau_s; };        // HOST_INPUTS: component <- water volume / its running mean
+    std::vector<host_input> host_inputs;
+    std::vector<double> host_vol_mean;                    // [cell] running mean of the water volume (L)
+    std::vector<double> temp_tau_s;                       // [cell] TEMPERATURE "SMOOTH_HOURS" as seconds (0 = none)
+    std::vector<double> temp_mean;                        // [cell] running mean of the mapped temperature (C)
 
     // Read-out components (DIAGNOSTICS of the PHREEQC module JSON, e.g.
     // {"Phx": "pH", "Nhx": "Amm"}): after every RunCells the component is set,

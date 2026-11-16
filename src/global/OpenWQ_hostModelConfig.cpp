@@ -527,6 +527,11 @@ bool OpenWQ_hostModelconfig::is_first_interaction_step()
     return (this->interaction_step == 1);
 }
 
+long OpenWQ_hostModelconfig::get_interaction_step()
+{
+    return this->interaction_step;
+}
+
 
 /**************
 time methods

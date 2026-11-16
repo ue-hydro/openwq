@@ -106,6 +106,42 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
     // Number of BCG cycles defined
     num_BGCcycles = OpenWQ_json.BGC_module["CYCLING_FRAMEWORKS"].size();
 
+    // time scale of the running mean behind the symbol Volr
+    if (OpenWQ_json.BGC_module.contains("VOLR_TAU_DAYS"))
+        OpenWQ_wqconfig.CH_model->NativeFlex->volr_tau_s =
+            OpenWQ_json.BGC_module["VOLR_TAU_DAYS"].get<double>() * 86400.0;
+
+    // smoothed host dependencies (symbols <name>_sm), sized once here: the symbol tables bind their elements
+    {
+        auto* nf = OpenWQ_wqconfig.CH_model->NativeFlex;
+        nf->sm_dep_index.clear(); nf->sm_tau_s.clear(); nf->sm_names.clear();
+        if (OpenWQ_json.BGC_module.contains("SMOOTHED_DEPENDENCIES")){
+            for (auto& it : OpenWQ_json.BGC_module["SMOOTHED_DEPENDENCIES"].items()){
+                // the JSON loader keeps the original-case key with a null value next to the upper-cased one
+                if (it.value().is_null()) continue;
+                // keys arrive upper-cased from the JSON loader: match the host name case-insensitively and
+                // name the symbol after the host dependency (Tair_K -> Tair_K_sm)
+                auto upper = [](std::string x){ for (auto& c : x) c = (char)std::toupper((unsigned char)c); return x; };
+                int found = -1;
+                for (unsigned int depi = 0; depi < OpenWQ_hostModelconfig.get_num_HydroDepend(); depi++)
+                    if (upper(OpenWQ_hostModelconfig.get_HydroDepend_name_at(depi)) == upper(it.key())) found = (int)depi;
+                const double hours = it.value().get<double>();
+                if (found < 0 || !(hours > 0.0)){
+                    msg_string = "<OpenWQ> ERROR: SMOOTHED_DEPENDENCIES entry '" + it.key()
+                        + "' is not a host dependency or its time scale (hours) is not positive.";
+                    OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+                    exit(EXIT_FAILURE);
+                }
+                if (std::find(nf->sm_dep_index.begin(), nf->sm_dep_index.end(), (unsigned int)found) != nf->sm_dep_index.end()) continue;
+                nf->sm_dep_index.push_back((unsigned int)found);
+                nf->sm_tau_s.push_back(3600.0 * hours);
+                nf->sm_names.push_back(OpenWQ_hostModelconfig.get_HydroDepend_name_at((unsigned int)found) + "_sm");
+            }
+        }
+        nf->cell_dep_sm.assign(nf->sm_names.size(), 0.0);
+        nf->dep_sm_mean.clear(); nf->dep_sm_step.clear();
+    }
+
     // Reset SPATIAL-parameter storage (exprtk refactor). These stay empty /
     // max==0 for all-GLOBAL configs, keeping the expression strings and the
     // symbol tables byte-identical to the historical (literal-substituted) code.
@@ -392,6 +428,15 @@ void OpenWQ_CH_model::bgc_flex_setBGCexpressions(
             // Water volume of the cell [m3] (see Vw_m3 in OpenWQ_wqconfig.hpp)
             symbol_table.add_variable(
                 "Vw_m3", OpenWQ_wqconfig.CH_model->NativeFlex->cell_watervol_m3);
+
+            // Relative water volume of the cell (symbol Volr, see OpenWQ_wqconfig.hpp)
+            symbol_table.add_variable(
+                "Volr", OpenWQ_wqconfig.CH_model->NativeFlex->cell_volr);
+
+            // Smoothed host dependencies (symbols <name>_sm, see OpenWQ_wqconfig.hpp)
+            for (size_t k = 0; k < OpenWQ_wqconfig.CH_model->NativeFlex->sm_names.size(); k++)
+                symbol_table.add_variable(OpenWQ_wqconfig.CH_model->NativeFlex->sm_names[k],
+                                          OpenWQ_wqconfig.CH_model->NativeFlex->cell_dep_sm[k]);
             
             // Create Object
             expression_t expression;

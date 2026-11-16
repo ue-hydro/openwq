@@ -67,6 +67,24 @@ void OpenWQ_couplercalls::RunSpaceStep(
     // Mass transport with water (mobile material only)
     // #################################################
 
+    // Lateral exchange (boundary mixing) before the advection: the exchange with the
+    // compartment below happens before the water leaves, so that a source exporting
+    // what it holds in the step (adv_source_includes_inflow) carries the exchanged
+    // mass with this flux instead of keeping it in a cell whose water has gone.
+    // For sources exporting their start-of-step mass the order does not matter.
+    if (OpenWQ_wqconfig.is_LE_enabled) {
+
+        OpenWQ_LE_model.LE_driver_run(
+            OpenWQ_hostModelconfig,
+            OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
+            OpenWQ_vars,
+            OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
+            source, ix_s, iy_s, iz_s,
+            recipient, ix_r, iy_r, iz_r,
+            wflux_s2r, wmass_source);
+
+    }
+
     // OPTIMIZED: use cached bool instead of string comparison
     if (OpenWQ_wqconfig.is_TD_enabled) {
 
@@ -79,20 +97,6 @@ void OpenWQ_couplercalls::RunSpaceStep(
             recipient, ix_r, iy_r, iz_r,
             wflux_s2r, wmass_source);
     
-    }
-
-    // OPTIMIZED: use cached bool instead of string comparison
-    if (OpenWQ_wqconfig.is_LE_enabled) {
-
-        OpenWQ_LE_model.LE_driver_run(
-            OpenWQ_hostModelconfig,
-            OpenWQ_wqconfig,               // create OpenWQ_wqconfig object
-            OpenWQ_vars,
-            OpenWQ_output,                               // simulation time in seconds since seconds since 00:00 hours, Jan 1, 1970 UTC
-            source, ix_s, iy_s, iz_s,
-            recipient, ix_r, iy_r, iz_r,
-            wflux_s2r, wmass_source);
-
     }
 
     // OPTIMIZED: use cached bool instead of string comparison

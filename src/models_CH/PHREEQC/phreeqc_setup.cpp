@@ -114,6 +114,22 @@ void OpenWQ_CH_model::phreeqc_setup(
     msg_string = "<OpenWQ> PHREEQC: Input file executed successfully";
     OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
 
+    // The input file also runs in the workers (they need its RATES, CALCULATE_VALUES
+    // and species), where it creates its numbered reactants (SOLUTION 1, EXCHANGE 1,
+    // KINETICS 1, ...) in the worker cells of the same numbers. InitialPhreeqc2Module
+    // replaces only the blocks that a compartment sets, so a cell whose compartment
+    // has no EXCHANGE (index -1) kept the file's EXCHANGE n when its cell number was
+    // n (chemistry cell 1, soil layer 2, kept the exchanger with "EXCHANGE" removed
+    // from the configuration). Delete them in the workers: every cell then holds
+    // only the blocks of its compartment.
+    status = OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->RunString(true, false, false, "DELETE\n    -all\n");
+    if (status != IRM_OK) {
+        msg_string = "<OpenWQ> ERROR: PHREEQC could not delete the reactants of the input file in the workers"
+            " (error code: " + std::to_string(status) + ")";
+        OpenWQ_output.ConsoleLog(OpenWQ_wqconfig, msg_string, true, true);
+        exit(EXIT_FAILURE);
+    }
+
     // Set units BEFORE FindComponents
     // Units: 1 = mg/kgw, 2 = mol/kgw, 3 = kg/kgs
     OpenWQ_wqconfig.CH_model->PHREEQC->phreeqcrm->SetUnitsSolution(2);  // 2 = mol/kgw (PHREEQC default)
